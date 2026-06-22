@@ -7,10 +7,10 @@
     "hive": "dist/hive.js"
   },
   "scripts": {
-    "dev": "tsx watch src/hive.ts",
+    "dev": "node --import tsx --env-file=.env --watch src/hive.ts",
     "build": "tsc",
-    "start": "node dist/hive.js",
-    "test": "node --import tsx --test src/**/*.test.ts"
+    "start": "node --env-file=.env dist/hive.js",
+    "test": "node --import tsx --env-file=.env --test src/**/*.test.ts"
   },
   "dependencies": {
     "fastify": "^5.3.2",

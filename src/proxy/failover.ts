@@ -1,31 +1,37 @@
-import { PassThrough } from 'node:stream'
-import { routeRequest } from './route-request.js'
-import { mutateRequest } from './mutate-request.js'
-import { telemetryRecorder } from '../telemetry/recorder.js'
-import type { Provider } from '../providers.js'
-import type { IncomingMessage } from 'node:http'
+import { PassThrough } from "node:stream";
+import { routeRequest } from "./route-request.js";
+import { mutateRequest } from "./mutate-request.js";
+import { telemetryRecorder } from "../telemetry/recorder.js";
+import type { Provider } from "../providers.js";
+import type { IncomingMessage } from "node:http";
+import { logger } from "../hive/shared/logger.js";
 
 export type FailoverResult = {
-  success: boolean
-  provider?: string
-  model?: string
-  stream?: PassThrough
-  statusCode?: number
-}
+  success: boolean;
+  provider?: string;
+  model?: string;
+  stream?: PassThrough;
+  statusCode?: number;
+  errorBody?: string;
+};
 
-const TIMEOUT_MS = 2500
+const TIMEOUT_MS = 10000;
 
 export async function failover(
   providers: Provider[],
-  originalHeaders: IncomingMessage['headers'],
+  originalHeaders: IncomingMessage["headers"],
   originalBody: string,
 ): Promise<FailoverResult> {
   for (const provider of providers) {
-    const model = provider.defaultModel
-    let mutated: ReturnType<typeof mutateRequest>
+    const model = provider.defaultModel;
+    logger.info(`failover: trying ${provider.name} (${model})`);
+    let mutated: ReturnType<typeof mutateRequest>;
     try {
-      mutated = mutateRequest(originalHeaders, originalBody, provider, model)
-    } catch {
+      mutated = mutateRequest(originalHeaders, originalBody, provider, model);
+    } catch (err: any) {
+      logger.error(
+        `failover: mutate request failed for ${provider.name}: ${err.message}`,
+      );
       telemetryRecorder.recordMetric({
         provider: provider.name,
         model,
@@ -33,8 +39,8 @@ export async function failover(
         statusCode: 0,
         success: false,
         timestamp: Date.now(),
-      })
-      continue
+      });
+      continue;
     }
 
     const result = await routeRequest(
@@ -43,7 +49,7 @@ export async function failover(
       TIMEOUT_MS,
       provider.name,
       model,
-    )
+    );
 
     if (result.success && result.statusCode < 400) {
       return {
@@ -52,8 +58,12 @@ export async function failover(
         model,
         stream: result.stream!,
         statusCode: result.statusCode,
-      }
+      };
     }
+
+    logger.error(
+      `failover: ${provider.name} failed — status ${result.statusCode}${result.errorBody ? `: ${result.errorBody.slice(0, 250)}` : ""}${result.errorType ? ` (${result.errorType})` : ""}`,
+    );
 
     telemetryRecorder.recordMetric({
       provider: provider.name,
@@ -62,8 +72,9 @@ export async function failover(
       statusCode: result.statusCode,
       success: false,
       timestamp: Date.now(),
-    })
+    });
   }
 
-  return { success: false, statusCode: 503 }
+  logger.error(`failover: all ${providers.length} providers exhausted`);
+  return { success: false, statusCode: 503 };
 }

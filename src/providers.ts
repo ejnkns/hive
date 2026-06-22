@@ -1,21 +1,23 @@
 export type Provider = {
-  name: string
-  baseUrl: string
-  apiKeyEnvVar: string
-  models: string[]
-  defaultModel: string
-}
+  name: string;
+  baseUrl: string;
+  apiKeyEnvVar: string;
+  models: string[];
+  defaultModel: string;
+};
 
 export type ProviderState = {
-  provider: string
-  model: string
-  enabled: boolean
-  stabilityScore: number
-}
+  provider: string;
+  model: string;
+  enabled: boolean;
+  stabilityScore: number;
+};
 
-import { groq } from './providers/groq.js'
-import { sambanova } from './providers/sambanova.js'
+import { groq } from "./providers/groq.js";
+import { sambanova } from "./providers/sambanova.js";
+import { nvidiaNim } from "./providers/nvidia-nim.js";
+import { opencodeZen } from "./providers/opencode-zen.js";
 
-export const providers: Provider[] = [groq, sambanova]
+export const providers: Provider[] = [groq, sambanova, nvidiaNim, opencodeZen];
 
-export { sortByPriority, updateScore } from './providers/priority-queue.js'
+export { sortByPriority, updateScore } from "./providers/priority-queue.js";
