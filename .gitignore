@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+*.log
+
+contexts/
+*.md
+!README.md
+repomix-output.xml

@@ -1,0 +1,25 @@
+{
+  "name": "hive",
+  "version": "0.1.0",
+  "description": "Lightweight local proxy daemon routing CLI agent traffic to free LLM providers",
+  "type": "module",
+  "bin": {
+    "hive": "dist/hive.js"
+  },
+  "scripts": {
+    "dev": "tsx watch src/hive.ts",
+    "build": "tsc",
+    "start": "node dist/hive.js",
+    "test": "node --import tsx --test src/**/*.test.ts"
+  },
+  "dependencies": {
+    "fastify": "^5.3.2",
+    "http-proxy": "^1.18.1"
+  },
+  "devDependencies": {
+    "@types/http-proxy": "^1.17.16",
+    "@types/node": "^22.15.3",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}
