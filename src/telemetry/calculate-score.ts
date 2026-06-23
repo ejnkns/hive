@@ -1,5 +1,5 @@
-import type { RequestMetrics } from './sliding-window.js'
-import { slidingWindow } from './sliding-window.js'
+import type { RequestMetrics } from './sliding-window'
+import { slidingWindow } from './sliding-window'
 
 const WEIGHTS = {
   p95Latency: 0.3,

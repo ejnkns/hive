@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import { providers } from "./providers.js";
+import { providers } from "./providers";
 
 describe("providers", () => {
   it("registers all 6 providers", () => {

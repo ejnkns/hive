@@ -1,7 +1,7 @@
-import type { RequestMetrics } from "./sliding-window.js";
-import { loadState, saveState } from "./persistence.js";
-import { slidingWindow } from "./sliding-window.js";
-import { calculateScore } from "./calculate-score.js";
+import type { RequestMetrics } from "./sliding-window";
+import { loadState, saveState } from "./persistence";
+import { slidingWindow } from "./sliding-window";
+import { calculateScore } from "./calculate-score";
 
 const FLUSH_INTERVAL_MS = 12_000;
 

@@ -1,4 +1,4 @@
-import type { Provider } from '../providers/registry.js'
+import type { Provider } from '../providers/registry'
 import type { IncomingMessage } from 'node:http'
 
 export type MutatedRequest = {

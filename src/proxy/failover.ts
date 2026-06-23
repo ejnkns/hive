@@ -1,10 +1,10 @@
 import { PassThrough } from "node:stream";
-import { routeRequest } from "./route-request.js";
-import { mutateRequest } from "./mutate-request.js";
-import { telemetryRecorder } from "../telemetry/recorder.js";
-import type { Provider } from "../providers/registry.js";
+import { routeRequest } from "./route-request";
+import { mutateRequest } from "./mutate-request";
+import { telemetryRecorder } from "../telemetry/recorder";
+import type { Provider } from "../providers/registry";
 import type { IncomingMessage } from "node:http";
-import { logger } from "../hive/shared/logger.js";
+import { logger } from "../hive/shared/logger";
 
 export type FailoverResult = {
   success: boolean;

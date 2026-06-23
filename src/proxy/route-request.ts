@@ -2,8 +2,8 @@ import http from "node:http";
 import https from "node:https";
 import { PassThrough } from "node:stream";
 import { URL } from "node:url";
-import type { MutatedRequest } from "./mutate-request.js";
-import { telemetryRecorder } from "../telemetry/recorder.js";
+import type { MutatedRequest } from "./mutate-request";
+import { telemetryRecorder } from "../telemetry/recorder";
 
 export type RouteResult = {
   success: boolean;

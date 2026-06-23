@@ -2,11 +2,11 @@ import Fastify from "fastify";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { logger } from "./shared/logger.js";
-import { hiveCore } from "../engine.js";
-import type { HiveConfig } from "./load-config.js";
-import { loadState } from "../telemetry.js";
-import { telemetryRecorder } from "../telemetry/recorder.js";
+import { logger } from "./shared/logger";
+import { hiveCore } from "../engine";
+import type { HiveConfig } from "./load-config";
+import { loadState } from "../telemetry";
+import { telemetryRecorder } from "../telemetry/recorder";
 
 export function createServer(config: HiveConfig) {
   const server = Fastify({ logger: false });

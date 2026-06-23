@@ -1,9 +1,9 @@
-import { groq } from "./groq.js";
-import { sambanova } from "./sambanova.js";
-import { nvidiaNim } from "./nvidia-nim.js";
-import { opencodeZen } from "./opencode-zen.js";
-import { googleAi } from "./google-ai.js";
-import { githubModels } from "./github-models.js";
+import { groq } from "./groq";
+import { sambanova } from "./sambanova";
+import { nvidiaNim } from "./nvidia-nim";
+import { opencodeZen } from "./opencode-zen";
+import { googleAi } from "./google-ai";
+import { githubModels } from "./github-models";
 
 export type Provider = {
   name: string;

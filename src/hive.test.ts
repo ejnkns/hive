@@ -5,7 +5,7 @@ describe('hive', () => {
   let mod: any
 
   it('loads without error', async () => {
-    mod = await import('./hive.js')
+    mod = await import('./hive')
     assert.ok(mod.server)
   })
 

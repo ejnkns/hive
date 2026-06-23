@@ -3,7 +3,7 @@ import assert from 'node:assert'
 
 describe('telemetry', () => {
   it('exports expected api', async () => {
-    const mod = await import('./telemetry.js')
+    const mod = await import('./telemetry')
     assert.ok(typeof mod.calculateScore === 'function')
     assert.ok(typeof mod.startHeartbeat === 'function')
     assert.ok(typeof mod.loadState === 'function')

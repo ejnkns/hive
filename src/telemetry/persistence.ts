@@ -1,5 +1,5 @@
-import type { ProviderState } from '../providers/registry.js'
-import type { RequestMetrics } from './sliding-window.js'
+import type { ProviderState } from '../providers/registry'
+import type { RequestMetrics } from './sliding-window'
 
 export type TelemetryState = {
   metrics: RequestMetrics[]

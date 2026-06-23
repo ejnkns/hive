@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert";
-import { HiveCore } from "./engine.js";
+import { HiveCore } from "./engine";
 
 describe("HiveCore", () => {
   let core: HiveCore;

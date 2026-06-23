@@ -1,7 +1,7 @@
 import { describe, it, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert'
-import { TelemetryRecorder } from './recorder.js'
-import { loadState } from './persistence.js'
+import { TelemetryRecorder } from './recorder'
+import { loadState } from './persistence'
 
 describe('TelemetryRecorder', () => {
   let recorder: TelemetryRecorder

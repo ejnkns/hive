@@ -1,7 +1,7 @@
-import { hiveCore } from "./engine.js";
-import { createServer, listen } from "./hive/create-server.js";
-import { loadConfig } from "./hive/load-config.js";
-import { printBanner } from "./hive/shared/logger.js";
+import { hiveCore } from "./engine";
+import { createServer, listen } from "./hive/create-server";
+import { loadConfig } from "./hive/load-config";
+import { printBanner } from "./hive/shared/logger";
 
 const config = loadConfig();
 const server = createServer(config);

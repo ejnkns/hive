@@ -1,14 +1,14 @@
 import type { IncomingHttpHeaders } from "node:http";
 import { PassThrough } from "node:stream";
-import type { Provider } from "./providers/registry.js";
-import { loadConfig } from "./hive/load-config.js";
-import { telemetryRecorder } from "./telemetry/recorder.js";
-import { failover } from "./proxy/failover.js";
-import { startHeartbeat } from "./telemetry/heartbeat.js";
-import { loadState, calculateScore } from "./telemetry.js";
-import { sortByPriority } from "./providers.js";
-import { mutateRequest } from "./proxy/mutate-request.js";
-import { routeRequest } from "./proxy/route-request.js";
+import type { Provider } from "./providers/registry";
+import { loadConfig } from "./hive/load-config";
+import { telemetryRecorder } from "./telemetry/recorder";
+import { failover } from "./proxy/failover";
+import { startHeartbeat } from "./telemetry/heartbeat";
+import { loadState, calculateScore } from "./telemetry";
+import { sortByPriority } from "./providers";
+import { mutateRequest } from "./proxy/mutate-request";
+import { routeRequest } from "./proxy/route-request";
 
 export type ProviderUIState = {
   provider: string;

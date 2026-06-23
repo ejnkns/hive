@@ -1,5 +1,5 @@
-import { allProviders } from "../providers/registry.js";
-import { Provider } from "../providers/registry.js";
+import { allProviders } from "../providers/registry";
+import { Provider } from "../providers/registry";
 
 export type HiveConfig = {
   port: number;
