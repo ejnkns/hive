@@ -53,9 +53,30 @@ const DEFAULT_PROVIDERS: ProviderConfig[] = [
       "deepseek-v4-flash-free",
       "qwen3.6-plus-free",
     ],
-    defaultModel: "gpt-5.5",
-  },
-];
+      defaultModel: "gpt-5.5",
+    },
+    {
+      name: "google-ai",
+      baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+      apiKeyEnvVar: "GOOGLE_API_KEY",
+      models: ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash-exp"],
+      defaultModel: "gemini-2.0-flash-exp",
+    },
+    {
+      name: "github-models",
+      baseUrl: "https://models.inference.ai.azure.com",
+      apiKeyEnvVar: "GITHUB_TOKEN",
+      models: [
+        "gpt-4o",
+        "gpt-4o-mini",
+        "o1",
+        "claude-3-5-sonnet",
+        "llama-3.3-70b-instruct",
+      ],
+      defaultModel: "gpt-4o",
+    },
+  ];
+
 
 export function loadConfig(): HiveConfig {
   return {
