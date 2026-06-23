@@ -79,7 +79,7 @@ Add the custom Hive proxy in your local (`./opencode.json`) or global (`~/.confi
 
 Set custom base configurations inside clients supporting OpenAI integrations:
 
-- **Authorisation Key:** `any-arbitrary-string` (authenticators bypass this as local validation, relying on server-side configurations)
+- **Authorisation Key:** Any arbitrary string. Authentication is handled server-side by the provider API keys in your `.env` file.
 - **Base Endpoint:** `http://127.0.0.1:19280`
 
 ---
