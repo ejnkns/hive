@@ -1,16 +1,17 @@
- <mark style="color:black;white-space:pre-wrap;font-family:monospace;background:#708097;line-height:0.7">
+ <pre style="color:black;white-space:pre-wrap;font-family:monospace;background:#708097;line-height:0.8;letter-spacing:-4px;font-size:2em">
                              <span style="color:yellow"><b>h i v e</b></span> 
     ,-. <span style="color:white">     .' '.        .`         </span>
     \_/ <span style="color:white">     .   .       .           </span>
  <span style="color:yellow"><b>:</span>>(<span style="color:yellow">|</span>|<span style="color:yellow">|</span>}</b><span style="color:white">.      .        .            </span>
     / \  <span style="color:white">'. . ' ' . . '              </span>
     `-'                              
-</mark>
+</pre>
 
 ---
 
 [ **h i v e** ]
 
+<!--
 _The queen provides,_
 
 _not all bees thrive,_
@@ -18,6 +19,7 @@ _not all bees thrive,_
 _sting and they die,_
 
 _replaced with the alive._
+-->
 
 A lightweight OpenAI-compatible proxy daemon that provides <!--seamless--> LLM routing and automatic failover, masking the volatility of free LLM endpoints by <!--instantly--> replacing dead providers with active ones<!-- behind the scenes-->.
 
