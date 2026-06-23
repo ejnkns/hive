@@ -89,12 +89,12 @@ Configuration is loaded synchronously from `.env` or from exported system variab
 | Variable               | Target Provider  | Base URL Endpoint                                         | Baseline Fallback Model         |
 | ---------------------- | ---------------- | --------------------------------------------------------- | ------------------------------- |
 | `GROQ_API_KEY`         | Groq             | `https://api.groq.com/openai`                             | `deepseek-r1-distill-llama-70b` |
-| `SAMBA_NOVA_API_KEY`   | SambaNova        | `https://api.sambanova.ai/v1`                             | `DeepSeek-R1`                   |
+| `SAMBA_NOVA_API_KEY`   | SambaNova        | `https://api.sambanova.ai`                                | `DeepSeek-R1`                   |
 | `GOOGLE_API_KEY`       | Google AI Studio | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-2.0-flash-exp`          |
 | `NVIDIA_NIM_API_KEY`   | NVIDIA NIM       | `https://integrate.api.nvidia.com`                        | `meta/llama-3.3-70b-instruct`   |
 | `GITHUB_TOKEN`         | GitHub Models    | `https://models.inference.ai.azure.com`                   | `gpt-4o`                        |
-| `CEREBRAS_API_KEY`     | Cerebras         | `https://api.cerebras.ai/v1`                              | `llama-3.3-70b`                 |
-| `MISTRAL_API_KEY`      | Mistral          | `https://api.mistral.ai/v1`                               | `codestral-latest`              |
+| `CEREBRAS_API_KEY`     | Cerebras         | `https://api.cerebras.ai`                                 | `llama-3.3-70b`                 |
+| `MISTRAL_API_KEY`      | Mistral          | `https://api.mistral.ai`                                  | `codestral-latest`              |
 | `OPENCODE_ZEN_API_KEY` | OpenCode Zen     | `https://opencode.ai/zen`                                 | `gpt-5.5`                       |
 
 ---

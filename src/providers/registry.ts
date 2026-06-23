@@ -31,4 +31,7 @@ export const allProviders: Provider[] = [
   githubModels,
   cerebras,
   mistral,
-];
+].map((p) => ({
+  ...p,
+  baseUrl: p.baseUrl.replace(/\/+$/, ""),
+}));

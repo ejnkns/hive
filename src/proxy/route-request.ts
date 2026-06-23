@@ -62,6 +62,7 @@ export function routeRequest(
         ttft = Date.now() - start;
         initialByteReceived = true;
         passThrough.write(chunk);
+        res.pipe(passThrough);
         resolve({
           success: true,
           statusCode,
@@ -99,9 +100,16 @@ export function routeRequest(
           success: true,
           timestamp: Date.now(),
         });
-      });
 
-      res.pipe(passThrough);
+        if (!initialByteReceived) {
+          resolve({
+            success: true,
+            statusCode,
+            stream: passThrough,
+            ttft: Date.now() - start,
+          });
+        }
+      });
     });
 
     req.on("timeout", () => {

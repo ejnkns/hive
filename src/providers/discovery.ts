@@ -58,11 +58,13 @@ export const PROVIDER_PREFERENCES: Record<string, string[]> = {
     "mistral-small-latest",
   ],
   "opencode-zen": [
+    "deepseek-v4-flash-free",
+    "qwen3.6-plus-free",
+    "mimo-v2.5-free",
+    "minimax-m3-free",
     "gpt-5.5",
     "gpt-5.5-pro",
     "gpt-5.4-mini",
-    "deepseek-v4-flash-free",
-    "qwen3.6-plus-free",
   ],
 };
 
@@ -127,8 +129,36 @@ export function selectDefaultModel(
     return fallbackDefault;
   }
 
-  // Otherwise, return the first fetched model, or fallbackDefault if fetched is empty
-  return fetchedModels[0] || fallbackDefault;
+  // Otherwise, score the fetched models to select the most capable, non-utility chat model
+  if (fetchedModels.length === 0) {
+    return fallbackDefault;
+  }
+
+  let bestModel = fetchedModels[0];
+  let highestScore = -Infinity;
+
+  for (const m of fetchedModels) {
+    const lower = m.toLowerCase();
+    let score = 0;
+
+    // Heavily penalize non-chat utility/specialized models to avoid severe failures
+    if (["guard", "embed", "moderation", "ocr", "translate", "vision"].some(kw => lower.includes(kw))) {
+      score -= 1000;
+    }
+    // Prioritize high-capacity / free flagship models
+    if (["120b", "405b"].some(kw => lower.includes(kw))) score += 100;
+    if (lower.includes("70b")) score += 80;
+    if (lower.includes("-free")) score += 50;
+    if (["large", "pro", "instruct", "r1", "plus"].some(kw => lower.includes(kw))) score += 20;
+    // Deprioritize small models
+    if (["8b", "7b", "3b", "1b", "mini", "small", "flash", "lite"].some(kw => lower.includes(kw))) score -= 40;
+
+    if (score > highestScore) {
+      highestScore = score;
+      bestModel = m;
+    }
+  }
+  return bestModel;
 }
 
 export async function fetchProviderModels(
@@ -142,14 +172,9 @@ export async function fetchProviderModels(
 
   logger.debug(`API key '${apiKeyEnvVar}' found in environment for baseUrl: ${baseUrl}`);
 
-  let url = baseUrl;
-  if (url.endsWith("/")) {
-    url = url.slice(0, -1);
-  }
-
-  const modelsEndpoint = url.endsWith("/v1")
-    ? `${url}/models`
-    : `${url}/v1/models`;
+  const modelsEndpoint = baseUrl.endsWith("/v1")
+    ? `${baseUrl}/models`
+    : `${baseUrl}/v1/models`;
 
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), 8000); // 8 second timeout
