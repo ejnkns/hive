@@ -1,6 +1,7 @@
 import type { IncomingHttpHeaders } from "node:http";
 import { PassThrough } from "node:stream";
 import type { Provider } from "./providers/registry";
+import { buildChatEndpoint } from "./providers/registry";
 import { loadConfig } from "./hive/load-config";
 import { telemetryRecorder } from "./telemetry/recorder";
 import { failover } from "./proxy/failover";
@@ -72,6 +73,7 @@ export class HiveCore {
 
   async handleChatCompletion(
     body: string | Record<string, unknown>,
+    incomingHeaders: Record<string, any> = {},
   ): Promise<ChatCompletionResult> {
     const parsed = typeof body === "string" ? JSON.parse(body) : body;
 
@@ -107,7 +109,16 @@ export class HiveCore {
       .map((ps) => qualified.find((p) => p.name === ps.provider))
       .filter((p): p is Provider => p !== undefined);
 
-    const headers: IncomingHttpHeaders = {};
+    // Forward client headers, but drop ones that would conflict with
+    // the provider-specific auth/transport headers set by mutateRequest
+    const headers: IncomingHttpHeaders = Object.fromEntries(
+      Object.entries(incomingHeaders).filter(
+        ([key]) =>
+          !["authorization", "host", "content-length", "content-type"].includes(
+            key.toLowerCase(),
+          ),
+      ),
+    );
     const result = await failover(sorted, headers, JSON.stringify(parsed));
 
     if (!result.success) {
@@ -178,7 +189,7 @@ export class HiveCore {
             provider.defaultModel,
           );
           await routeRequest(
-            `${provider.baseUrl}/v1/chat/completions`,
+            buildChatEndpoint(provider.baseUrl),
             mutated,
             5000,
             provider.name,

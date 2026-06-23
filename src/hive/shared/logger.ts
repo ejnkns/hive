@@ -10,11 +10,11 @@ export const logger = {
   warn: (msg: string) => console.warn(bzz(msg)),
   error: (msg: string) => console.error(bzz(msg)),
   debug: (msg: string) => {
-    if (process.env.DEBUG) console.log(bzz(msg, "bzz"));
+    if (process.env.DEBUG) console.log(bzz(msg, DEBUG_PREFIX));
   },
 };
 
-const DEBUG_PREFIX = `[${YELLOW}debug${RESET}]`;
+const DEBUG_PREFIX = `${YELLOW}bzz:debug${RESET}`;
 
 function bzz(msg: string, prefix = "bzz") {
   return `[${YELLOW}${prefix}${RESET}] ${msg}`;

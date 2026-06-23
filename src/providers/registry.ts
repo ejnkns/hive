@@ -35,3 +35,17 @@ export const allProviders: Provider[] = [
   ...p,
   baseUrl: p.baseUrl.replace(/\/+$/, ""),
 }));
+
+export function buildChatEndpoint(baseUrl: string): string {
+  if (/\/v\d/.test(baseUrl)) {
+    return `${baseUrl}/chat/completions`;
+  }
+  return `${baseUrl}/v1/chat/completions`;
+}
+
+export function buildModelsEndpoint(baseUrl: string): string {
+  if (/\/v\d/.test(baseUrl)) {
+    return `${baseUrl}/models`;
+  }
+  return `${baseUrl}/v1/models`;
+}

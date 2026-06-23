@@ -8,13 +8,27 @@ import type { HiveConfig } from "./load-config";
 import { loadState } from "../telemetry";
 import { telemetryRecorder } from "../telemetry/recorder";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = join(__filename, "..");
+const indexPath = join(__dirname, "index.html");
+
 export function createServer(config: HiveConfig) {
   const server = Fastify({ logger: false });
+
+  server.get("/", async (_request, reply) => {
+    if (existsSync(indexPath)) {
+      const html = readFileSync(indexPath, "utf-8");
+      reply.type("text/html");
+      return reply.send(html);
+    }
+    return reply.status(404).send({ error: "Dashboard not found" });
+  });
 
   server.post("/v1/chat/completions", async (request, reply) => {
     logger.info(`POST /v1/chat/completions`);
     const result = await hiveCore.handleChatCompletion(
       request.body as Record<string, unknown>,
+      request.headers,
     );
 
     if (!result.success) {

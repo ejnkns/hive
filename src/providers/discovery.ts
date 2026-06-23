@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promises as fs, readFileSync } from "node:fs";
-import { allProviders } from "./registry";
+import { allProviders, buildModelsEndpoint } from "./registry";
 import { logger } from "../hive/shared/logger";
 
 export type CachedProvider = {
@@ -172,9 +172,7 @@ export async function fetchProviderModels(
 
   logger.debug(`API key '${apiKeyEnvVar}' found in environment for baseUrl: ${baseUrl}`);
 
-  const modelsEndpoint = baseUrl.endsWith("/v1")
-    ? `${baseUrl}/models`
-    : `${baseUrl}/v1/models`;
+  const modelsEndpoint = buildModelsEndpoint(baseUrl);
 
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), 8000); // 8 second timeout
