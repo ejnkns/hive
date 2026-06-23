@@ -1,0 +1,835 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hive Daemon Dashboard</title>
+    <style>
+      :root {
+        --bg-main: #000100;
+        --bg-card: #0f1007;
+        --bg-header: var(--bg-card);
+        --border-color: #f8ff37;
+        --text-main: #f1f5f9;
+        --text-muted: #aeb894;
+        --accent: #6bffd3;
+        --accent-hover: #fffc5a;
+        --success: #22c54e;
+        --warning: #eab308;
+        --error: #ef6144;
+        --disabled: #545147;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: monospace;
+        background-color: var(--bg-main);
+        color: var(--text-main);
+        line-height: 1.5;
+      }
+
+      header {
+        background-color: var(--bg-header);
+        border-bottom: 1px solid var(--border-color);
+        padding: 1rem 2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        position: sticky;
+        top: 0;
+        z-index: 50;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+
+      .logo {
+        background: linear-gradient(135deg, var(--accent), #6366f1);
+        width: 2rem;
+        height: 2rem;
+        border-radius: 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        color: var(--bg-main);
+      }
+
+      .brand h1 {
+        font-size: 1.25rem;
+        font-weight: 700;
+        letter-spacing: -0.025em;
+      }
+
+      .server-status {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.875rem;
+        background-color: rgba(34, 197, 94, 0.1);
+        color: var(--success);
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-weight: 500;
+        border: 1px solid rgba(34, 197, 94, 0.2);
+      }
+
+      .server-status.offline {
+        background-color: rgba(239, 68, 68, 0.1);
+        color: var(--error);
+        border-color: rgba(239, 68, 68, 0.2);
+      }
+
+      .status-dot {
+        width: 0.5rem;
+        height: 0.5rem;
+        background-color: currentColor;
+        border-radius: 50%;
+        display: inline-block;
+        animation: pulse 2s infinite;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.4;
+        }
+      }
+
+      main {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 2rem;
+        display: flex;
+        flex-direction: column;
+        gap: 2rem;
+      }
+
+      .panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+      }
+
+      .panel-header h2 {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      /* Stats Banner */
+      .stats-banner {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1.5rem;
+      }
+
+      /* Octagon Styles */
+      .octagon-bounds {
+        position: relative;
+        overflow: visible !important;
+        filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.05));
+        transition: filter 0.2s ease;
+      }
+
+      .octagon-border {
+        --oct-cut: 12px;
+        background: var(--border-color);
+        padding: 1.5px;
+        box-sizing: border-box;
+        width: 100%;
+        height: 100%;
+        clip-path: polygon(
+          var(--oct-cut) 0,
+          calc(100% - var(--oct-cut)) 0,
+          100% var(--oct-cut),
+          100% calc(100% - var(--oct-cut)),
+          calc(100% - var(--oct-cut)) 100%,
+          var(--oct-cut) 100%,
+          0 calc(100% - var(--oct-cut)),
+          0 var(--oct-cut)
+        );
+        transition: background-color 0.2s ease;
+      }
+
+      .octagon-bg {
+        background: var(--bg-card);
+        box-sizing: border-box;
+        width: 100%;
+        height: 100%;
+        clip-path: polygon(
+          var(--oct-cut) 0,
+          calc(100% - var(--oct-cut)) 0,
+          100% var(--oct-cut),
+          100% calc(100% - var(--oct-cut)),
+          calc(100% - var(--oct-cut)) 100%,
+          var(--oct-cut) 100%,
+          0 calc(100% - var(--oct-cut)),
+          0 var(--oct-cut)
+        );
+      }
+
+      /* Hover states */
+      .octagon-bounds:hover {
+        filter: drop-shadow(0 0 8px var(--accent));
+      }
+
+      .octagon-bounds:hover .octagon-border {
+        background: var(--accent);
+      }
+
+      .stat-card {
+        --oct-cut: 8px;
+      }
+
+      .stat-card .octagon-bg {
+        padding: 1.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+      }
+
+      .stat-card .label {
+        font-size: 0.875rem;
+        color: var(--text-muted);
+      }
+
+      .stat-card .value {
+        font-size: 1.5rem;
+        font-weight: 700;
+      }
+
+      /* Providers Grid */
+      .providers-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 1.5rem;
+      }
+
+      .provider-card {
+        transition: opacity 0.2s;
+      }
+
+      .provider-card .octagon-bg {
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .provider-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+      }
+
+      .provider-info h3 {
+        font-size: 1.25rem;
+        font-weight: 700;
+        text-transform: capitalize;
+      }
+
+      .provider-url {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        word-break: break-all;
+      }
+
+      .key-badge {
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.375rem;
+        text-transform: uppercase;
+      }
+
+      .key-badge.active {
+        background-color: rgba(34, 197, 94, 0.1);
+        color: var(--success);
+        border: 1px solid rgba(34, 197, 94, 0.2);
+      }
+
+      .key-badge.inactive {
+        background-color: rgba(71, 85, 105, 0.1);
+        color: var(--disabled);
+        border: 1px solid rgba(71, 85, 105, 0.2);
+      }
+
+      .metric-row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        background-color: rgba(0, 0, 0, 0.15);
+        padding: 0.75rem;
+        border-radius: 0.5rem;
+        text-align: center;
+      }
+
+      .metric-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+      }
+
+      .metric-label {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+      }
+
+      .metric-val {
+        font-size: 1rem;
+        font-weight: 700;
+      }
+
+      .stability-bar-container {
+        display: flex;
+        flex-direction: column;
+        gap: 0.375rem;
+      }
+
+      .stability-header {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.875rem;
+      }
+
+      .stability-bar {
+        height: 0.5rem;
+        background-color: var(--border-color);
+        border-radius: 9999px;
+        overflow: hidden;
+      }
+
+      .stability-fill {
+        height: 100%;
+        border-radius: 9999px;
+        transition:
+          width 0.5s ease-in-out,
+          background-color 0.5s;
+      }
+
+      .provider-models {
+        font-size: 0.8125rem;
+        border-top: 1px solid var(--border-color);
+        padding-top: 0.75rem;
+      }
+
+      .models-title {
+        font-weight: 600;
+        color: var(--text-muted);
+        margin-bottom: 0.375rem;
+      }
+
+      .models-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.375rem;
+      }
+
+      .model-tag {
+        background-color: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        color: var(--text-muted);
+        padding: 0.125rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+      }
+
+      .model-tag.default {
+        background-color: rgba(56, 189, 248, 0.08);
+        border-color: rgba(56, 189, 248, 0.2);
+        color: var(--accent);
+        font-weight: 500;
+      }
+
+      /* Priority Ranking */
+      .priority-panel {
+        /* Outer layout wrapper */
+      }
+
+      .priority-panel .octagon-bg {
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .priority-list {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+      }
+
+      .priority-node {
+        background-color: rgba(255, 255, 255, 0.03);
+        border: 1px solid var(--border-color);
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        font-weight: 600;
+      }
+
+      .priority-index {
+        background-color: var(--accent);
+        color: var(--bg-main);
+        width: 1.5rem;
+        height: 1.5rem;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+      }
+
+      .priority-score {
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+        font-weight: normal;
+      }
+
+      .priority-arrow {
+        color: var(--text-muted);
+        font-weight: bold;
+      }
+
+      /* Logs/Metrics Section */
+      .activity-panel {
+        /* Outer layout wrapper */
+      }
+
+      .activity-panel .octagon-bg {
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .table-container {
+        width: 100%;
+        overflow-x: auto;
+        max-height: 450px;
+        overflow-y: auto;
+        border-radius: 0.5rem;
+        border: 1px solid var(--border-color);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        text-align: left;
+        font-size: 0.875rem;
+      }
+
+      th {
+        background-color: rgba(0, 0, 0, 0.2);
+        padding: 0.75rem 1rem;
+        font-weight: 600;
+        color: var(--text-muted);
+        border-bottom: 1px solid var(--border-color);
+        position: sticky;
+        top: 0;
+      }
+
+      td {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--border-color);
+      }
+
+      tr:last-child td {
+        border-bottom: none;
+      }
+
+      tr:hover td {
+        background-color: rgba(255, 255, 255, 0.02);
+      }
+
+      .badge {
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 0.125rem 0.375rem;
+        border-radius: 0.25rem;
+        text-transform: uppercase;
+        display: inline-block;
+      }
+
+      .badge.success {
+        background-color: rgba(34, 197, 94, 0.1);
+        color: var(--success);
+      }
+
+      .badge.error {
+        background-color: rgba(239, 68, 68, 0.1);
+        color: var(--error);
+      }
+
+      .badge.neutral {
+        background-color: rgba(148, 163, 184, 0.1);
+        color: var(--text-muted);
+      }
+
+      .no-data {
+        padding: 2rem;
+        text-align: center;
+        color: var(--text-muted);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <div class="logo">H</div>
+        <div>
+          <h1>Hive Daemon</h1>
+          <p style="font-size: 0.75rem; color: var(--text-muted)">
+            Local Multi-Provider LLM Router
+          </p>
+        </div>
+      </div>
+      <div id="connectionStatus" class="server-status">
+        <span class="status-dot"></span>
+        <span id="connectionText">ONLINE</span>
+      </div>
+    </header>
+
+    <main>
+      <!-- Stats Row -->
+      <div class="stats-banner">
+        <div class="stat-card octagon-bounds">
+          <div class="octagon-border">
+            <div class="octagon-bg">
+              <span class="label">Total Proxy Requests</span>
+              <span id="statRequests" class="value">—</span>
+            </div>
+          </div>
+        </div>
+        <div class="stat-card octagon-bounds">
+          <div class="octagon-border">
+            <div class="octagon-bg">
+              <span class="label">Proxy Health Status</span>
+              <span id="statSuccessRate" class="value">—</span>
+            </div>
+          </div>
+        </div>
+        <div class="stat-card octagon-bounds">
+          <div class="octagon-border">
+            <div class="octagon-bg">
+              <span class="label">Pending Telemetry Metrics</span>
+              <span id="statPending" class="value">—</span>
+            </div>
+          </div>
+        </div>
+        <div class="stat-card octagon-bounds">
+          <div class="octagon-border">
+            <div class="octagon-bg">
+              <span class="label">Proxy Endpoint</span>
+              <span
+                id="statAddress"
+                class="value"
+                style="
+                  font-size: 1.125rem;
+                  font-family: monospace;
+                  word-break: break-all;
+                  margin-top: 0.25rem;
+                "
+                >—</span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Active Priority List -->
+      <div class="priority-panel octagon-bounds">
+        <div class="octagon-border">
+          <div class="octagon-bg">
+            <div class="panel-header">
+              <h2>Failover Priority Queue</h2>
+            </div>
+            <div id="priorityList" class="priority-list">
+              <!-- Dynamic Priority Nodes -->
+              <span class="no-data">Loading priority schema...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Providers Grid -->
+      <div>
+        <div class="panel-header">
+          <h2>Configured Providers</h2>
+        </div>
+        <div id="providersGrid" class="providers-grid">
+          <!-- Dynamic Provider Cards -->
+        </div>
+      </div>
+
+      <!-- Activity Panel -->
+      <div class="activity-panel octagon-bounds">
+        <div class="octagon-border">
+          <div class="octagon-bg">
+            <div class="panel-header">
+              <h2>Live Request Telemetry</h2>
+            </div>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Provider</th>
+                    <th>Model</th>
+                    <th>Status</th>
+                    <th>TTFT (Latency)</th>
+                    <th>Result</th>
+                  </tr>
+                </thead>
+                <tbody id="activityBody">
+                  <tr>
+                    <td colspan="6" class="no-data">
+                      Loading telemetry streams...
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      const POLL_INTERVAL = 3000;
+
+      function getStabilityColor(score) {
+        if (score >= 80) return "var(--success)";
+        if (score >= 50) return "var(--warning)";
+        return "var(--error)";
+      }
+
+      function formatTime(timestamp) {
+        const date = new Date(timestamp);
+        return date.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        });
+      }
+
+      async function fetchDashboard() {
+        const connStatus = document.getElementById("connectionStatus");
+        const connText = document.getElementById("connectionText");
+
+        try {
+          const [provRes, metrRes] = await Promise.all([
+            fetch("/api/providers"),
+            fetch("/api/metrics"),
+          ]);
+
+          if (!provRes.ok || !metrRes.ok) {
+            throw new Error("Server returned error");
+          }
+
+          const providersData = await provRes.json();
+          const metricsData = await metrRes.json();
+
+          // Update Connection Status
+          connStatus.className = "server-status";
+          connText.innerText = "ONLINE";
+
+          renderStats(providersData, metricsData);
+          renderPriority(providersData);
+          renderProviders(providersData);
+          renderMetrics(metricsData);
+        } catch (err) {
+          console.error("Failed to poll dashboard data:", err);
+          connStatus.className = "server-status offline";
+          connText.innerText = "OFFLINE";
+        }
+      }
+
+      function renderStats(providersData, metricsData) {
+        const metrics = metricsData.metrics || [];
+        const totalRequests = metrics.length;
+
+        const successCount = metrics.filter((m) => m.success).length;
+        const successRate =
+          totalRequests > 0
+            ? Math.round((successCount / totalRequests) * 100)
+            : 100;
+
+        document.getElementById("statRequests").innerText = totalRequests;
+        document.getElementById("statSuccessRate").innerText =
+          `${successRate}%`;
+        document.getElementById("statPending").innerText =
+          metricsData.pending || 0;
+        document.getElementById("statAddress").innerText =
+          `http://${providersData.serverHost}:${providersData.serverPort}`;
+      }
+
+      function renderPriority(providersData) {
+        const container = document.getElementById("priorityList");
+        const qualified = providersData.providers.filter(
+          (p) => p.keyConfigured,
+        );
+
+        if (qualified.length === 0) {
+          container.innerHTML = `<span class="no-data" style="color: var(--error)">No active providers configured with API keys.</span>`;
+          return;
+        }
+
+        // Sort by stability score descending
+        const sorted = [...qualified].sort(
+          (a, b) => b.stabilityScore - a.stabilityScore,
+        );
+
+        let html = "";
+        sorted.forEach((p, idx) => {
+          html += `
+          <div class="priority-node">
+            <span class="priority-index">${idx + 1}</span>
+            <span>${p.name}</span>
+            <span class="priority-score" style="color: ${getStabilityColor(p.stabilityScore)}">${p.stabilityScore}%</span>
+          </div>
+        `;
+          if (idx < sorted.length - 1) {
+            html += `<span class="priority-arrow">→</span>`;
+          }
+        });
+
+        container.innerHTML = html;
+      }
+
+      function renderProviders(providersData) {
+        const container = document.getElementById("providersGrid");
+
+        let html = "";
+        providersData.providers.forEach((p) => {
+          const isConfigured = p.keyConfigured;
+          const barColor = getStabilityColor(p.stabilityScore);
+
+          let modelsHtml = "";
+          p.models.forEach((m) => {
+            const isDefault = m === p.defaultModel;
+            modelsHtml += `<span class="model-tag ${isDefault ? "default" : ""}">${m}</span>`;
+          });
+
+          html += `
+          <div class="provider-card octagon-bounds" style="opacity: ${isConfigured ? "1" : "0.5"}">
+            <div class="octagon-border">
+              <div class="octagon-bg">
+                <div class="provider-header">
+                  <div class="provider-info">
+                    <h3>${p.name}</h3>
+                    <span class="provider-url">${p.baseUrl}</span>
+                  </div>
+                  <span class="key-badge ${isConfigured ? "active" : "inactive"}">
+                    ${isConfigured ? "active" : "no key"}
+                  </span>
+                </div>
+
+                <div class="stability-bar-container">
+                  <div class="stability-header">
+                    <span>Stability Score</span>
+                    <span style="font-weight: bold; color: ${barColor}">${p.stabilityScore}%</span>
+                  </div>
+                  <div class="stability-bar">
+                    <div class="stability-fill" style="width: ${p.stabilityScore}%; background-color: ${barColor};"></div>
+                  </div>
+                </div>
+
+                <div class="metric-row">
+                  <div class="metric-item">
+                    <span class="metric-label">Latency (p95)</span>
+                    <span class="metric-val">${isConfigured && p.p95Latency ? p.p95Latency + "ms" : "—"}</span>
+                  </div>
+                  <div class="metric-item">
+                    <span class="metric-label">Success Rate</span>
+                    <span class="metric-val">${isConfigured && p.recentSuccessRate ? Math.round(p.recentSuccessRate * 100) + "%" : "—"}</span>
+                  </div>
+                  <div class="metric-item">
+                    <span class="metric-label">Total Calls</span>
+                    <span class="metric-val">${p.requestCount || 0}</span>
+                  </div>
+                </div>
+
+                <div class="provider-models">
+                  <div class="models-title">Available Models</div>
+                  <div class="models-list">
+                    ${modelsHtml}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+        });
+
+        container.innerHTML = html;
+      }
+
+      function renderMetrics(metricsData) {
+        const body = document.getElementById("activityBody");
+        const metrics = metricsData.metrics || [];
+
+        if (metrics.length === 0) {
+          body.innerHTML = `
+          <tr>
+            <td colspan="6" class="no-data">No active telemetry logs available yet. Make a request to start monitoring!</td>
+          </tr>
+        `;
+          return;
+        }
+
+        // Sort by timestamp descending
+        const sorted = [...metrics]
+          .sort((a, b) => b.timestamp - a.timestamp)
+          .slice(0, 50);
+
+        let html = "";
+        sorted.forEach((m) => {
+          const isSuccess = m.success;
+          const statusBadge = isSuccess ? "success" : "error";
+          const resultText = isSuccess ? "SUCCESS" : "FAILED";
+
+          html += `
+          <tr>
+            <td style="font-family: monospace;">${formatTime(m.timestamp)}</td>
+            <td style="font-weight: 600; text-transform: capitalize;">${m.provider}</td>
+            <td style="font-family: monospace; font-size: 0.8125rem;">${m.model}</td>
+            <td>
+              <span class="badge ${m.statusCode < 400 ? "success" : "error"}">${m.statusCode || "ERROR"}</span>
+            </td>
+            <td style="font-weight: 500;">${isSuccess ? m.ttft + " ms" : "—"}</td>
+            <td>
+              <span class="badge ${statusBadge}">${resultText}</span>
+            </td>
+          </tr>
+        `;
+        });
+
+        body.innerHTML = html;
+      }
+
+      // Initial load and begin polling
+      fetchDashboard();
+      setInterval(fetchDashboard, POLL_INTERVAL);
+    </script>
+  </body>
+</html>

@@ -5,22 +5,24 @@ const GRAY = "\x1b[90m";
 const BLACK = "\x1b[40m";
 const width = process.stdout.columns || 80;
 
-const PREFIX = `[${YELLOW}bzz${RESET}]`;
-const beeSays = (msg: string) =>
-  width > 64
+const DEBUG_PREFIX = `[${YELLOW}debug${RESET}]`;
+function beeSays(msg: string, widthOverride?: number) {
+  const w = widthOverride ?? process.stdout.columns ?? 80;
+  return w > 64
     ? `  ,-.
   \\_/
 ${YELLOW}${BOLD}{${RESET}${BLACK}${BOLD}h${RESET}${YELLOW}${BOLD}i${RESET}${BLACK}${BOLD}v${RESET}${YELLOW}${BOLD}e)${RESET}${BLACK}<${RESET}${YELLOW}:${RESET} ${msg}
   / \\
   \`-'`
     : `[${YELLOW}bzz${RESET}] ${msg}`;
+}
 
 export const logger = {
   info: (msg: string) => console.log(beeSays(msg)),
   warn: (msg: string) => console.warn(beeSays(msg)),
   error: (msg: string) => console.error(beeSays(msg)),
   debug: (msg: string) => {
-    if (process.env.DEBUG) console.log(`${PREFIX} DEBUG ${msg}`);
+    if (process.env.DEBUG) console.log(beeSays(`${DEBUG_PREFIX} ${msg}`, 0));
   },
 };
 

@@ -1,13 +1,14 @@
 import { describe, it, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert'
 import { TelemetryRecorder } from './recorder'
-import { loadState } from './persistence'
+import { loadState, saveState } from './persistence'
 
 describe('TelemetryRecorder', () => {
   let recorder: TelemetryRecorder
 
-  beforeEach(() => {
+  beforeEach(async () => {
     recorder = new TelemetryRecorder()
+    await saveState({ metrics: [], providerStates: [] })
   })
 
   afterEach(() => {

@@ -9,6 +9,7 @@ import { loadState, calculateScore } from "./telemetry";
 import { sortByPriority } from "./providers";
 import { mutateRequest } from "./proxy/mutate-request";
 import { routeRequest } from "./proxy/route-request";
+import { discoverAndCacheModels } from "./providers/discovery";
 
 export type ProviderUIState = {
   provider: string;
@@ -32,6 +33,7 @@ export class HiveCore {
   private providers: Provider[] = [];
   private config: ReturnType<typeof loadConfig>;
   private heartbeatTimer: NodeJS.Timeout | null = null;
+  private discoveryTimer: NodeJS.Timeout | null = null;
 
   constructor() {
     this.config = loadConfig();
@@ -47,6 +49,25 @@ export class HiveCore {
   start(): void {
     telemetryRecorder.start();
     this.startHeartbeat();
+    this.triggerBackgroundDiscovery();
+    this.discoveryTimer = setInterval(() => {
+      this.triggerBackgroundDiscovery();
+    }, 60 * 60 * 1000);
+  }
+
+  private async triggerBackgroundDiscovery(): Promise<void> {
+    try {
+      const cache = await discoverAndCacheModels();
+      for (const p of this.providers) {
+        const cached = cache.providers.find((cp) => cp.name === p.name);
+        if (cached) {
+          p.models = [...cached.models];
+          p.defaultModel = cached.defaultModel;
+        }
+      }
+    } catch {
+      // Background discovery is non-blocking and non-fatal
+    }
   }
 
   async handleChatCompletion(
@@ -175,6 +196,10 @@ export class HiveCore {
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
+    }
+    if (this.discoveryTimer) {
+      clearInterval(this.discoveryTimer);
+      this.discoveryTimer = null;
     }
   }
 
