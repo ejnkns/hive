@@ -2,7 +2,7 @@ import { PassThrough } from "node:stream";
 import { routeRequest } from "./route-request.js";
 import { mutateRequest } from "./mutate-request.js";
 import { telemetryRecorder } from "../telemetry/recorder.js";
-import type { Provider } from "../providers.js";
+import type { Provider } from "../providers/registry.js";
 import type { IncomingMessage } from "node:http";
 import { logger } from "../hive/shared/logger.js";
 

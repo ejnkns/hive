@@ -1,6 +1,6 @@
 import type { IncomingHttpHeaders } from "node:http";
 import { PassThrough } from "node:stream";
-import type { Provider } from "./providers.js";
+import type { Provider } from "./providers/registry.js";
 import { loadConfig } from "./hive/load-config.js";
 import { telemetryRecorder } from "./telemetry/recorder.js";
 import { failover } from "./proxy/failover.js";

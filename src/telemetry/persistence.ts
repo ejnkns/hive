@@ -1,4 +1,4 @@
-import type { ProviderState } from '../providers.js'
+import type { ProviderState } from '../providers/registry.js'
 import type { RequestMetrics } from './sliding-window.js'
 
 export type TelemetryState = {
