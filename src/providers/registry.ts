@@ -4,6 +4,8 @@ import { nvidiaNim } from "./nvidia-nim";
 import { opencodeZen } from "./opencode-zen";
 import { googleAi } from "./google-ai";
 import { githubModels } from "./github-models";
+import { cerebras } from "./cerebras";
+import { mistral } from "./mistral";
 
 export type Provider = {
   name: string;
@@ -27,4 +29,6 @@ export const allProviders: Provider[] = [
   opencodeZen,
   googleAi,
   githubModels,
+  cerebras,
+  mistral,
 ];
