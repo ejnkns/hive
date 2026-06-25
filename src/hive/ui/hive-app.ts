@@ -12,7 +12,7 @@ import "./hive-providers";
 import "./hive-activity-tabs";
 import "./hive-detail-overlay";
 
-const POLL_MS = 3000;
+const POLL_MS = 5000;
 
 interface HeaderEl extends HTMLElement {
   data: HeaderData;
