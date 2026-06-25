@@ -10,9 +10,30 @@ import { loadCache, telemetryRecorder, conversationStore } from "../telemetry";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = join(__filename, "..");
 const indexPath = join(__dirname, "index.html");
+const assetsDir = join(__dirname, "assets");
+
+const MIME_TYPES: Record<string, string> = {
+  js: "text/javascript",
+  css: "text/css",
+  html: "text/html",
+  json: "application/json",
+  svg: "image/svg+xml",
+  png: "image/png",
+  jpg: "image/jpeg",
+  woff2: "font/woff2",
+};
 
 export function createServer(config: HiveConfig) {
   const server = Fastify({ logger: false });
+
+  server.get("/assets/*", async (request, reply) => {
+    const filename = (request.params as Record<string, string>)["*"];
+    const filePath = join(assetsDir, filename);
+    if (!existsSync(filePath)) return reply.status(404).send();
+    const ext = filename.split(".").pop()?.toLowerCase() || "";
+    reply.type(MIME_TYPES[ext] || "application/octet-stream");
+    return reply.send(readFileSync(filePath));
+  });
 
   server.get("/", async (_request, reply) => {
     if (existsSync(indexPath)) {
@@ -20,19 +41,19 @@ export function createServer(config: HiveConfig) {
       reply.type("text/html");
       return reply.send(html);
     }
-    return reply.status(404).send({ error: "Dashboard not found" });
+    return reply.status(404).send({ error: "UI not found" });
   });
 
   server.post("/v1/chat/completions", async (request, reply) => {
     logger.info(`POST /v1/chat/completions`);
     const result = await hiveCore.handleChatCompletion(
       request.body as Record<string, unknown>,
-      request.headers,
+      request.headers
     );
 
     if (!result.success) {
       logger.error(
-        `chat completion failed: ${result.error} (${result.statusCode})`,
+        `chat completion failed: ${result.error} (${result.statusCode})`
       );
       return reply
         .status(result.statusCode ?? 500)
@@ -40,7 +61,7 @@ export function createServer(config: HiveConfig) {
     }
 
     logger.info(
-      `chat completion success → routing via ${result.provider} (model: ${result.model})`,
+      `chat completion success → routing via ${result.provider} (model: ${result.model})`
     );
     reply.header("Content-Type", "text/event-stream");
     return reply.send(result.stream);
@@ -115,7 +136,7 @@ export function createServer(config: HiveConfig) {
 
 export function listen(
   server: ReturnType<typeof createServer>,
-  config: HiveConfig,
+  config: HiveConfig
 ): void {
   server.listen({ port: config.port, host: config.host }, (err) => {
     if (err) {

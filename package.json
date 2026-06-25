@@ -8,7 +8,8 @@
   },
   "scripts": {
     "dev": "node --import tsx --env-file=.env --watch src/hive.ts",
-    "build": "tsc",
+    "dev:front": "vite",
+    "build": "tsc && vite build",
     "start": "node --env-file=.env dist/hive.js",
     "test": "node --import tsx --env-file=.env --test src/**/*.test.ts",
     "typecheck": "tsc --noEmit",
@@ -31,6 +32,7 @@
     "prettier": "^3.8.4",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3",
-    "typescript-eslint": "^8.62.0"
+    "typescript-eslint": "^8.62.0",
+    "vite": "^8.1.0"
   }
 }
