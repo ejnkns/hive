@@ -1,7 +1,6 @@
 import { PassThrough } from "node:stream";
 import { routeRequest } from "./route-request";
 import { mutateRequest } from "./mutate-request";
-import { telemetryRecorder } from "../telemetry/recorder";
 import type { Provider } from "../providers/registry";
 import { buildChatEndpoint } from "../providers/registry";
 import type { IncomingMessage } from "node:http";
@@ -26,8 +25,6 @@ function sanitizePayloadForProvider(
 
   if (!cloned.messages || !Array.isArray(cloned.messages)) return cloned;
 
-  // Strip reasoning_content from assistant messages for providers that reject it
-  // opencode-zen (DeepSeek) requires it; all others reject it as an unsupported field
   if (providerName !== "opencode-zen") {
     cloned.messages = cloned.messages.map((msg: any) => {
       if (msg.role === "assistant" && "reasoning_content" in msg) {
@@ -60,9 +57,6 @@ export async function failover(
     const model = provider.defaultModel;
     logger.info(`failover: trying ${provider.name} (${model})`);
 
-    // Pre-flight: skip Groq if payload exceeds its ~12k token limit
-    // TODO: make token limit configurable per-provider; current estimate is
-    // a rough heuristic based on character count, not actual tokenization
     if (provider.name === "groq") {
       const estimatedTokens = (parsedBody.messages?.length
         ? JSON.stringify(parsedBody.messages).length
@@ -75,9 +69,6 @@ export async function failover(
       }
     }
 
-    // Pre-flight: skip NVIDIA NIM when multi-tool calls are detected
-    // NVIDIA NIM only supports single tool calls per turn
-    // TODO: consider truncating to one tool call instead of full skip
     if (
       provider.name === "nvidia-nim" &&
       parsedBody.messages?.some(
@@ -90,7 +81,6 @@ export async function failover(
       continue;
     }
 
-    // Sanitize payload for provider-specific constraints
     const sanitized = sanitizePayloadForProvider(provider.name, parsedBody);
 
     let mutated: ReturnType<typeof mutateRequest>;
@@ -105,14 +95,6 @@ export async function failover(
       logger.error(
         `failover: mutate request failed for ${provider.name}: ${err.message}`,
       );
-      telemetryRecorder.recordMetric({
-        provider: provider.name,
-        model,
-        ttft: TIMEOUT_MS,
-        statusCode: 0,
-        success: false,
-        timestamp: Date.now(),
-      });
       continue;
     }
 
@@ -138,15 +120,6 @@ export async function failover(
     logger.error(
       `failover: ${provider.name} failed — status ${result.statusCode}${result.errorBody ? `: ${result.errorBody.slice(0, 250)}` : ""}${result.errorType ? ` (${result.errorType})` : ""}`,
     );
-
-    telemetryRecorder.recordMetric({
-      provider: provider.name,
-      model,
-      ttft: result.ttft,
-      statusCode: result.statusCode,
-      success: false,
-      timestamp: Date.now(),
-    });
   }
 
   logger.error(`failover: all ${providers.length} providers exhausted`);
