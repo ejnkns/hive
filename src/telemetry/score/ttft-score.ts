@@ -1,7 +1,5 @@
-import type { RequestMetric } from "../request-metric"
-import { computeDerivedMetrics } from "../derived-metrics"
+import type { DerivedMetrics } from "../derived-metrics";
 
-export function ttftScore(metrics: RequestMetric[]): number {
-  const d = computeDerivedMetrics(metrics)
-  return Math.max(0, 100 - d.p95Ttft / 50)
+export function ttftScore(d: DerivedMetrics): number {
+  return Math.max(0, 100 - d.p95Ttft / 50);
 }

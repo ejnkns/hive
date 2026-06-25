@@ -105,7 +105,7 @@ export function createServer(config: HiveConfig) {
           p95Latency: 0,
           recentSuccessRate: 0,
           requestCount: 0,
-          meanTokensPerSecond: 0,
+          meanTokensPerSecond: null,
         },
       ];
     });

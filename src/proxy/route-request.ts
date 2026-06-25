@@ -1,36 +1,49 @@
-import http from "node:http"
-import https from "node:https"
-import { PassThrough } from "node:stream"
-import { URL } from "node:url"
-import type { MutatedRequest } from "./mutate-request"
-import { telemetryRecorder, createStreamCounter, classifyError, detectRefusal, conversationStore } from "../telemetry"
+import http from "node:http";
+import https from "node:https";
+import { PassThrough } from "node:stream";
+import { URL } from "node:url";
+import type { MutatedRequest } from "./mutate-request";
+import {
+  telemetryRecorder,
+  createStreamCounter,
+  classifyError,
+  detectRefusal,
+  conversationStore,
+} from "../telemetry";
 
 type RouteRequestOptions = {
-  upstreamUrl: string
-  mutated: MutatedRequest
-  timeoutMs: number
-  providerName: string
-  modelName: string
-  requestId: string
-}
+  upstreamUrl: string;
+  mutated: MutatedRequest;
+  timeoutMs: number;
+  providerName: string;
+  modelName: string;
+  requestId: string;
+};
 
 type RouteResult = {
-  success: boolean
-  statusCode: number
-  stream?: PassThrough
-  ttft: number
-  errorType?: string
-  errorBody?: string
-  requestId: string
-}
+  success: boolean;
+  statusCode: number;
+  stream?: PassThrough;
+  ttft: number;
+  errorType?: string;
+  errorBody?: string;
+  requestId: string;
+};
 
 export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
-  const { upstreamUrl, mutated, timeoutMs, providerName, modelName, requestId } = opts
+  const {
+    upstreamUrl,
+    mutated,
+    timeoutMs,
+    providerName,
+    modelName,
+    requestId,
+  } = opts;
   return new Promise((resolve) => {
-    const url = new URL(upstreamUrl)
-    const start = Date.now()
+    const url = new URL(upstreamUrl);
+    const start = Date.now();
 
-    const bodyBuffer = Buffer.from(mutated.body)
+    const bodyBuffer = Buffer.from(mutated.body);
 
     const requestOptions: https.RequestOptions = {
       hostname: url.hostname,
@@ -42,7 +55,7 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
         "Content-Length": bodyBuffer.length.toString(),
       },
       timeout: timeoutMs,
-    }
+    };
 
     const record = (
       ttft: number,
@@ -51,11 +64,23 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
       errorBody?: string,
       errorType?: string,
       outputBody?: string,
-      stats?: { outputChars: number; thinkingChars: number; thinkingStart: number | null; finishReason: string | null; responseText: string },
+      stats?: {
+        outputChars: number;
+        thinkingChars: number;
+        thinkingStart: number | null;
+        thinkingEnd: number | null;
+        thinkingTime: number | null;
+        finishReason: string | null;
+        responseText: string;
+        inputTokens: number | null;
+        outputTokensFromUsage: number | null;
+      }
     ) => {
-      const totalLatency = Date.now() - start
-      const outputTokens = stats ? Math.round(stats.outputChars / 4) : null
-      const inputTokens = null
+      const totalLatency = Date.now() - start;
+      const outputTokens =
+        stats?.outputTokensFromUsage ??
+        (stats ? Math.round(stats.outputChars / 4) : null);
+      const inputTokens = stats?.inputTokens ?? null;
 
       telemetryRecorder.recordMetric({
         requestId,
@@ -66,46 +91,56 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
         totalLatency,
         inputTokens,
         outputTokens,
-        thinkingTime: stats?.thinkingStart ?? null,
+        thinkingTime: stats?.thinkingTime ?? null,
         finishReason: (stats?.finishReason as any) ?? null,
-        refused: outputBody ? detectRefusal(outputBody) : false,
+        refused: outputBody
+          ? detectRefusal(outputBody)
+          : stats?.responseText
+            ? detectRefusal(stats.responseText)
+            : false,
         statusCode,
         errorType: classifyError(statusCode, errorType),
         success,
         source: "user",
-      })
-    }
+      });
+    };
 
-    const requester = url.protocol === "https:" ? https : http
+    const requester = url.protocol === "https:" ? https : http;
     const req = requester.request(requestOptions, (res) => {
-      const statusCode = res.statusCode ?? 500
+      const statusCode = res.statusCode ?? 500;
 
       if (statusCode >= 400) {
-        let errorBody = ""
+        let errorBody = "";
         res.on("data", (chunk: Buffer) => {
-          errorBody += chunk.toString()
-        })
+          errorBody += chunk.toString();
+        });
         res.on("end", () => {
-          record(timeoutMs, false, statusCode, errorBody)
-          resolve({ success: false, statusCode, ttft: timeoutMs, errorBody, requestId })
-        })
-        return
+          record(timeoutMs, false, statusCode, errorBody);
+          resolve({
+            success: false,
+            statusCode,
+            ttft: timeoutMs,
+            errorBody,
+            requestId,
+          });
+        });
+        return;
       }
 
-      const passThrough = new PassThrough()
-      let ttft = timeoutMs
-      let initialByteReceived = false
-      let streamErrored = false
-      const counter = createStreamCounter(start)
+      const passThrough = new PassThrough();
+      let ttft = timeoutMs;
+      let initialByteReceived = false;
+      let streamErrored = false;
+      const counter = createStreamCounter(start);
 
       res.once("data", (chunk: Buffer) => {
-        ttft = Date.now() - start
-        initialByteReceived = true
+        ttft = Date.now() - start;
+        initialByteReceived = true;
 
-        const { transform } = counter
-        transform.write(chunk)
-        res.pipe(transform)
-        transform.pipe(passThrough)
+        const { transform } = counter;
+        transform.write(chunk);
+        res.pipe(transform);
+        transform.pipe(passThrough);
 
         resolve({
           success: true,
@@ -113,13 +148,21 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
           stream: passThrough,
           ttft,
           requestId,
-        })
-      })
+        });
+      });
 
       res.on("error", () => {
-        streamErrored = true
-        const stats = counter.getStats()
-        record(Date.now() - start, false, 500, undefined, "STREAM_ERROR", undefined, stats)
+        streamErrored = true;
+        const stats = counter.getStats();
+        record(
+          Date.now() - start,
+          false,
+          500,
+          undefined,
+          "STREAM_ERROR",
+          undefined,
+          stats
+        );
 
         if (!initialByteReceived) {
           resolve({
@@ -128,14 +171,22 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
             ttft: Date.now() - start,
             errorType: "STREAM_ERROR",
             requestId,
-          })
+          });
         }
-      })
+      });
 
       res.on("end", () => {
-        const stats = counter.getStats()
-        const effectiveTtft = initialByteReceived ? ttft : Date.now() - start
-        record(effectiveTtft, true, statusCode, undefined, undefined, undefined, stats)
+        const stats = counter.getStats();
+        const effectiveTtft = initialByteReceived ? ttft : Date.now() - start;
+        record(
+          effectiveTtft,
+          true,
+          statusCode,
+          undefined,
+          undefined,
+          undefined,
+          stats
+        );
 
         if (!streamErrored) {
           conversationStore.completeConversation(requestId, {
@@ -149,7 +200,7 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
             outputTokens: stats ? Math.round(stats.outputChars / 4) : null,
             finishReason: stats.finishReason,
             refused: detectRefusal(stats.responseText),
-          })
+          });
         }
 
         if (!initialByteReceived) {
@@ -159,36 +210,36 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
             stream: passThrough,
             ttft: effectiveTtft,
             requestId,
-          })
+          });
         }
-      })
-    })
+      });
+    });
 
     req.on("timeout", () => {
-      req.destroy()
-      record(timeoutMs, false, 0, undefined, "TIMEOUT")
+      req.destroy();
+      record(timeoutMs, false, 0, undefined, "TIMEOUT");
       resolve({
         success: false,
         statusCode: 0,
         ttft: timeoutMs,
         errorType: "TIMEOUT",
         requestId,
-      })
-    })
+      });
+    });
 
     req.on("error", () => {
-      const elapsed = Date.now() - start
-      record(elapsed, false, 0, undefined, "NETWORK_ERROR")
+      const elapsed = Date.now() - start;
+      record(elapsed, false, 0, undefined, "NETWORK_ERROR");
       resolve({
         success: false,
         statusCode: 0,
         ttft: elapsed,
         errorType: "NETWORK_ERROR",
         requestId,
-      })
-    })
+      });
+    });
 
-    req.write(bodyBuffer)
-    req.end()
-  })
+    req.write(bodyBuffer);
+    req.end();
+  });
 }

@@ -1,7 +1,5 @@
-import type { RequestMetric } from "../request-metric"
-import { computeDerivedMetrics } from "../derived-metrics"
+import type { DerivedMetrics } from "../derived-metrics";
 
-export function qualityScore(metrics: RequestMetric[]): number {
-  const d = computeDerivedMetrics(metrics)
-  return (1 - d.truncationRate - d.refusalRate) * 100
+export function qualityScore(d: DerivedMetrics): number {
+  return (1 - d.truncationRate - d.refusalRate) * 100;
 }

@@ -1,7 +1,5 @@
-import type { RequestMetric } from "../request-metric"
-import { computeDerivedMetrics } from "../derived-metrics"
+import type { DerivedMetrics } from "../derived-metrics";
 
-export function jitterScore(metrics: RequestMetric[]): number {
-  const d = computeDerivedMetrics(metrics)
-  return Math.max(0, 100 - d.jitterTtft / 50)
+export function jitterScore(d: DerivedMetrics): number {
+  return Math.max(0, 100 - d.jitterTtft / 50);
 }

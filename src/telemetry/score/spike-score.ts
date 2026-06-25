@@ -1,7 +1,5 @@
-import type { RequestMetric } from "../request-metric"
-import { computeDerivedMetrics } from "../derived-metrics"
+import type { DerivedMetrics } from "../derived-metrics";
 
-export function spikeScore(metrics: RequestMetric[]): number {
-  const d = computeDerivedMetrics(metrics)
-  return (1 - d.spikeRate) * 100
+export function spikeScore(d: DerivedMetrics): number {
+  return (1 - d.spikeRate) * 100;
 }
