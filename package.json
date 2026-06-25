@@ -7,8 +7,9 @@
     "hive": "dist/hive.js"
   },
   "scripts": {
-    "dev": "node --import tsx --env-file=.env --watch src/hive.ts",
-    "dev:front": "vite",
+    "hive": "node --import tsx --env-file=.env --watch src/hive.ts",
+    "ui": "vite",
+    "dev": "npm run hive & npm run ui",
     "build": "tsc && vite build",
     "start": "node --env-file=.env dist/hive.js",
     "test": "node --import tsx --env-file=.env --test src/**/*.test.ts",
