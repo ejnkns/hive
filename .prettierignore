@@ -1,0 +1,5 @@
+dist/
+node_modules/
+repomix-output.xml
+contexts/
+package-lock.json
