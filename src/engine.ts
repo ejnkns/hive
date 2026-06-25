@@ -20,7 +20,7 @@ import {
 } from "./proxy/execute-proxy-request";
 import { selectBestNode } from "./proxy/node-selector";
 import { circuitBreaker } from "./proxy/circuit-breaker";
-import { sessionTracker } from "./proxy/session-tracker";
+import { sessionRegistry } from "./proxy/session-registry";
 import { empiricalDisabledFeatures } from "./proxy/feature-discovery";
 import { ProxyResponse } from "./proxy/proxy-response";
 
@@ -28,7 +28,7 @@ export {
   selectBestNode,
   executeProxyRequest,
   circuitBreaker,
-  sessionTracker,
+  sessionRegistry,
   empiricalDisabledFeatures,
 };
 export type { FailoverContext, ProviderModelNode };
@@ -218,7 +218,7 @@ export class HiveCore {
       });
 
       if (response.isOk()) {
-        const lastKey = sessionTracker.sessions.get(sessionId);
+        const lastKey = sessionRegistry.get(sessionId);
         this.lastProvider =
           nodes.find((n) => lastKey === `${n.providerName}:${n.modelName}`)
             ?.providerName ?? null;

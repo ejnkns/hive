@@ -7,7 +7,7 @@ import {
   executeProxyRequest,
   circuitBreaker,
   empiricalDisabledFeatures,
-  sessionTracker,
+  sessionRegistry,
   type FailoverContext,
   type ProviderModelNode,
 } from "./engine";
@@ -67,7 +67,7 @@ describe("Hive Core Router Interception Loop", () => {
   beforeEach(() => {
     circuitBreaker.clear();
     empiricalDisabledFeatures.clear();
-    sessionTracker.sessions.clear();
+    sessionRegistry.clear();
     process.env.HIVE_ROUTING_STRATEGY = "balanced";
     process.env.HIVE_MIN_TOKEN_TELEMETRY = "200";
   });
@@ -155,7 +155,7 @@ describe("Hive Core Router Interception Loop", () => {
 
   it("should apply warm-path sticky session bias across consecutive calls", () => {
     const sessionId = "test-session";
-    sessionTracker.sessions.set(sessionId, "sambanova:llama-3");
+    sessionRegistry.set(sessionId, "sambanova:llama-3");
 
     let sambaCount = 0;
     for (let i = 0; i < 50; i++) {
@@ -194,7 +194,7 @@ describe("Hive Core Router Interception Loop", () => {
 
   it("should manage fast pre-stream circuit isolation and replay payloads transparently", async () => {
     const sessionId = "circuit-test";
-    sessionTracker.sessions.set(sessionId, "groq:llama-3");
+    sessionRegistry.set(sessionId, "groq:llama-3");
 
     let groqCalled = false;
     let sambaCalled = false;

@@ -1,7 +1,7 @@
 import { calculateNodeScore, type ProviderModelNode } from "../telemetry/score";
 import type { RequestMetric } from "../telemetry/request-metric";
 import { circuitBreaker } from "./circuit-breaker";
-import { sessionTracker } from "./session-tracker";
+import { sessionRegistry } from "./session-registry";
 import { empiricalDisabledFeatures } from "./feature-discovery";
 
 export type HiveRoutingConfig = {
@@ -48,7 +48,7 @@ export function selectBestNode(
       config.minTokenThreshold
     );
 
-    if (sessionId && sessionTracker.sessions.get(sessionId) === compoundKey) {
+    if (sessionId && sessionRegistry.get(sessionId) === compoundKey) {
       score *= 1.1;
     }
 
@@ -73,7 +73,7 @@ export function selectBestNode(
     selectionRoll -= weight;
     if (selectionRoll <= 0) {
       if (sessionId) {
-        sessionTracker.sessions.set(sessionId, candidate.compoundKey);
+        sessionRegistry.set(sessionId, candidate.compoundKey);
       }
       return candidate.node;
     }

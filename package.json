@@ -22,7 +22,8 @@
   },
   "dependencies": {
     "fastify": "^5.3.2",
-    "http-proxy": "^1.18.1"
+    "http-proxy": "^1.18.1",
+    "lru-cache": "^11.5.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
