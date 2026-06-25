@@ -5,6 +5,57 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Hive</title>
     <style>
+      @property --bg {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #0c0a00;
+      }
+      @property --card {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #0d0c06;
+      }
+      @property --surface {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #231c06;
+      }
+      @property --border {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #45370c;
+      }
+      @property --accent {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #f5b342;
+      }
+      @property --text {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #f5e6c8;
+      }
+      @property --muted {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #8a7a5c;
+      }
+      @property --success {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #7cb342;
+      }
+      @property --error {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #d4451a;
+      }
+      @property --warning {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #d4a017;
+      }
+
       * {
         box-sizing: border-box;
       }
@@ -17,7 +68,23 @@
         line-height: 1.5;
       }
 
+      :root,
+      html.light {
+        transition:
+          --bg var(--duration) ease-in-out,
+          --card var(--duration) ease-in-out,
+          --surface var(--duration) ease-in-out,
+          --border var(--duration) ease-in-out,
+          --accent var(--duration) ease-in-out,
+          --text var(--duration) ease-in-out,
+          --muted var(--duration) ease-in-out,
+          --success var(--duration) ease-in-out,
+          --error var(--duration) ease-in-out,
+          --warning var(--duration) ease-in-out;
+      }
+
       :root {
+        --duration: 0.2s;
         --bg: #0c0a00;
         --card: #0d0c06;
         --surface: #231c06;
