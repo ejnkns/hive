@@ -3,31 +3,36 @@ import https from "node:https"
 import { PassThrough } from "node:stream"
 import { URL } from "node:url"
 import type { MutatedRequest } from "./mutate-request"
-import { telemetryRecorder, createStreamCounter, classifyError, detectRefusal } from "../telemetry"
+import { telemetryRecorder, createStreamCounter, classifyError, detectRefusal, conversationStore } from "../telemetry"
 
-export type RouteResult = {
+type RouteRequestOptions = {
+  upstreamUrl: string
+  mutated: MutatedRequest
+  timeoutMs: number
+  providerName: string
+  modelName: string
+  requestId: string
+}
+
+type RouteResult = {
   success: boolean
   statusCode: number
   stream?: PassThrough
   ttft: number
   errorType?: string
   errorBody?: string
+  requestId: string
 }
 
-export function routeRequest(
-  upstreamUrl: string,
-  mutated: MutatedRequest,
-  timeoutMs: number,
-  providerName: string,
-  modelName: string,
-): Promise<RouteResult> {
+export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
+  const { upstreamUrl, mutated, timeoutMs, providerName, modelName, requestId } = opts
   return new Promise((resolve) => {
     const url = new URL(upstreamUrl)
     const start = Date.now()
 
     const bodyBuffer = Buffer.from(mutated.body)
 
-    const options: https.RequestOptions = {
+    const requestOptions: https.RequestOptions = {
       hostname: url.hostname,
       port: url.port || undefined,
       path: url.pathname + url.search,
@@ -46,13 +51,14 @@ export function routeRequest(
       errorBody?: string,
       errorType?: string,
       outputBody?: string,
-      stats?: { outputChars: number; thinkingChars: number; thinkingStart: number | null; finishReason: string | null },
+      stats?: { outputChars: number; thinkingChars: number; thinkingStart: number | null; finishReason: string | null; responseText: string },
     ) => {
       const totalLatency = Date.now() - start
       const outputTokens = stats ? Math.round(stats.outputChars / 4) : null
       const inputTokens = null
 
       telemetryRecorder.recordMetric({
+        requestId,
         provider: providerName,
         model: modelName,
         timestamp: Date.now(),
@@ -71,7 +77,7 @@ export function routeRequest(
     }
 
     const requester = url.protocol === "https:" ? https : http
-    const req = requester.request(options, (res) => {
+    const req = requester.request(requestOptions, (res) => {
       const statusCode = res.statusCode ?? 500
 
       if (statusCode >= 400) {
@@ -81,7 +87,7 @@ export function routeRequest(
         })
         res.on("end", () => {
           record(timeoutMs, false, statusCode, errorBody)
-          resolve({ success: false, statusCode, ttft: timeoutMs, errorBody })
+          resolve({ success: false, statusCode, ttft: timeoutMs, errorBody, requestId })
         })
         return
       }
@@ -89,6 +95,7 @@ export function routeRequest(
       const passThrough = new PassThrough()
       let ttft = timeoutMs
       let initialByteReceived = false
+      let streamErrored = false
       const counter = createStreamCounter(start)
 
       res.once("data", (chunk: Buffer) => {
@@ -105,10 +112,12 @@ export function routeRequest(
           statusCode,
           stream: passThrough,
           ttft,
+          requestId,
         })
       })
 
       res.on("error", () => {
+        streamErrored = true
         const stats = counter.getStats()
         record(Date.now() - start, false, 500, undefined, "STREAM_ERROR", undefined, stats)
 
@@ -118,6 +127,7 @@ export function routeRequest(
             statusCode: 500,
             ttft: Date.now() - start,
             errorType: "STREAM_ERROR",
+            requestId,
           })
         }
       })
@@ -127,12 +137,28 @@ export function routeRequest(
         const effectiveTtft = initialByteReceived ? ttft : Date.now() - start
         record(effectiveTtft, true, statusCode, undefined, undefined, undefined, stats)
 
+        if (!streamErrored) {
+          conversationStore.completeConversation(requestId, {
+            provider: providerName,
+            model: modelName,
+            ttft: effectiveTtft,
+            totalLatency: Date.now() - start,
+            statusCode,
+            success: true,
+            responseText: stats.responseText,
+            outputTokens: stats ? Math.round(stats.outputChars / 4) : null,
+            finishReason: stats.finishReason,
+            refused: detectRefusal(stats.responseText),
+          })
+        }
+
         if (!initialByteReceived) {
           resolve({
             success: true,
             statusCode,
             stream: passThrough,
             ttft: effectiveTtft,
+            requestId,
           })
         }
       })
@@ -146,6 +172,7 @@ export function routeRequest(
         statusCode: 0,
         ttft: timeoutMs,
         errorType: "TIMEOUT",
+        requestId,
       })
     })
 
@@ -157,6 +184,7 @@ export function routeRequest(
         statusCode: 0,
         ttft: elapsed,
         errorType: "NETWORK_ERROR",
+        requestId,
       })
     })
 

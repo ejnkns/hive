@@ -6,12 +6,15 @@ export type MutatedRequest = {
   body: string
 }
 
-export function mutateRequest(
-  originalHeaders: IncomingMessage['headers'],
-  originalBody: string,
-  targetProvider: Provider,
-  targetModel: string,
-): MutatedRequest {
+type MutateRequestOptions = {
+  originalHeaders: IncomingMessage['headers']
+  originalBody: string
+  targetProvider: Provider
+  targetModel: string
+}
+
+export function mutateRequest(opts: MutateRequestOptions): MutatedRequest {
+  const { originalHeaders, originalBody, targetProvider, targetModel } = opts
   const apiKey = process.env[targetProvider.apiKeyEnvVar]
   if (!apiKey) {
     throw new Error(`missing API key: ${targetProvider.apiKeyEnvVar}`)

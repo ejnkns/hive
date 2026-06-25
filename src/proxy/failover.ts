@@ -5,14 +5,17 @@ import type { Provider } from "../providers/registry";
 import { buildChatEndpoint } from "../providers/registry";
 import type { IncomingMessage } from "node:http";
 import { logger } from "../hive/shared/logger";
+import { conversationStore } from "../telemetry";
+import { generateId } from "../id";
 
-export type FailoverResult = {
+type FailoverResult = {
   success: boolean;
   provider?: string;
   model?: string;
   stream?: PassThrough;
   statusCode?: number;
   errorBody?: string;
+  requestId?: string;
 };
 
 const TIMEOUT_MS = 10000;
@@ -53,6 +56,10 @@ export async function failover(
     return { success: false, statusCode: 400 };
   }
 
+  const requestId = generateId()
+  const prompt = parsedBody.messages || []
+  conversationStore.startConversation(requestId, prompt)
+
   for (const provider of providers) {
     const model = provider.defaultModel;
     logger.info(`failover: trying ${provider.name} (${model})`);
@@ -85,12 +92,12 @@ export async function failover(
 
     let mutated: ReturnType<typeof mutateRequest>;
     try {
-      mutated = mutateRequest(
+      mutated = mutateRequest({
         originalHeaders,
-        JSON.stringify(sanitized),
-        provider,
-        model,
-      );
+        originalBody: JSON.stringify(sanitized),
+        targetProvider: provider,
+        targetModel: model,
+      });
     } catch (err: any) {
       logger.error(
         `failover: mutate request failed for ${provider.name}: ${err.message}`,
@@ -99,21 +106,26 @@ export async function failover(
     }
 
     const endpoint = buildChatEndpoint(provider.baseUrl);
-    const result = await routeRequest(
-      endpoint,
+    const result = await routeRequest({
+      upstreamUrl: endpoint,
       mutated,
-      TIMEOUT_MS,
-      provider.name,
-      model,
-    );
+      timeoutMs: TIMEOUT_MS,
+      providerName: provider.name,
+      modelName: model,
+      requestId,
+    });
 
     if (result.success && result.statusCode < 400) {
+      logger.info(
+        `failover: ${provider.name} succeeded (requestId=${requestId})`,
+      );
       return {
         success: true,
         provider: provider.name,
         model,
         stream: result.stream!,
         statusCode: result.statusCode,
+        requestId,
       };
     }
 

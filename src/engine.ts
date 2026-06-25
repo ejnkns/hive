@@ -9,8 +9,9 @@ import { sortByPriority } from "./providers";
 import { mutateRequest } from "./proxy/mutate-request";
 import { routeRequest } from "./proxy/route-request";
 import { discoverAndCacheModels } from "./providers/discovery";
+import { generateId } from "./id";
 
-export type ChatCompletionResult = {
+type ChatCompletionResult = {
   success: boolean;
   stream?: PassThrough;
   provider?: string;
@@ -157,19 +158,20 @@ export class HiveCore {
             max_tokens: 1,
           });
 
-          const mutated = mutateRequest(
-            {} as IncomingHttpHeaders,
-            body,
-            provider,
-            provider.defaultModel,
-          );
-          await routeRequest(
-            buildChatEndpoint(provider.baseUrl),
+          const mutated = mutateRequest({
+            originalHeaders: {} as IncomingHttpHeaders,
+            originalBody: body,
+            targetProvider: provider,
+            targetModel: provider.defaultModel,
+          });
+          await routeRequest({
+            upstreamUrl: buildChatEndpoint(provider.baseUrl),
             mutated,
-            5000,
-            provider.name,
-            provider.defaultModel,
-          );
+            timeoutMs: 5000,
+            providerName: provider.name,
+            modelName: provider.defaultModel,
+            requestId: generateId(),
+          });
         } catch {
           // Heartbeat failures are non-fatal
         }
