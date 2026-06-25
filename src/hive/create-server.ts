@@ -5,8 +5,7 @@ import { fileURLToPath } from "node:url";
 import { logger } from "./shared/logger";
 import { hiveCore } from "../engine";
 import type { HiveConfig } from "./load-config";
-import { loadState } from "../telemetry";
-import { telemetryRecorder } from "../telemetry/recorder";
+import { loadCache, telemetryRecorder } from "../telemetry";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = join(__filename, "..");
@@ -55,28 +54,39 @@ export function createServer(config: HiveConfig) {
     const states = await hiveCore.getProviderStates();
     const configProviders = hiveCore.getProviders();
 
-    const providers = configProviders.map((p) => {
-      const state = states.find((s) => s.provider === p.name);
+    const providers = configProviders.flatMap((p) => {
+      const matchingStates = states.filter((s) => s.provider === p.name);
       const keyConfigured = !!process.env[p.apiKeyEnvVar];
 
-      return {
-        name: p.name,
-        baseUrl: p.baseUrl,
-        defaultModel: p.defaultModel,
-        models: p.models,
-        keyConfigured,
-        stabilityScore: state?.stabilityScore ?? 0,
-        p95Latency: state?.p95Latency ?? 0,
-        recentSuccessRate: state?.recentSuccessRate ?? 0,
-        requestCount: 0,
-      };
-    });
+      if (matchingStates.length > 0) {
+        return matchingStates.map((s) => ({
+          name: s.provider,
+          baseUrl: p.baseUrl,
+          model: s.model,
+          models: p.models,
+          keyConfigured,
+          stabilityScore: s.stabilityScore,
+          p95Latency: s.p95Latency,
+          recentSuccessRate: s.recentSuccessRate,
+          requestCount: s.requestCount,
+          meanTokensPerSecond: s.meanTokensPerSecond,
+        }));
+      }
 
-    const state = await loadState();
-    providers.forEach((p) => {
-      p.requestCount = state.metrics.filter(
-        (m) => m.provider === p.name,
-      ).length;
+      return [
+        {
+          name: p.name,
+          baseUrl: p.baseUrl,
+          model: p.defaultModel,
+          models: p.models,
+          keyConfigured,
+          stabilityScore: 0,
+          p95Latency: 0,
+          recentSuccessRate: 0,
+          requestCount: 0,
+          meanTokensPerSecond: 0,
+        },
+      ];
     });
 
     reply.send({
@@ -87,9 +97,9 @@ export function createServer(config: HiveConfig) {
   });
 
   server.get("/api/metrics", async (_request, reply) => {
-    const state = await loadState();
+    const cache = await loadCache();
     reply.send({
-      metrics: state.metrics,
+      metrics: cache.metrics,
       pending: telemetryRecorder.getPendingCount(),
     });
   });

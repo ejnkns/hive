@@ -596,13 +596,15 @@
                     <th>Provider</th>
                     <th>Model</th>
                     <th>Status</th>
-                    <th>TTFT (Latency)</th>
+                    <th>TTFT</th>
+                    <th>Total</th>
+                    <th>Tokens</th>
                     <th>Result</th>
                   </tr>
                 </thead>
                 <tbody id="activityBody">
                   <tr>
-                    <td colspan="6" class="no-data">
+                    <td colspan="8" class="no-data">
                       Loading telemetry streams...
                     </td>
                   </tr>
@@ -623,6 +625,12 @@
         return "var(--error)";
       }
 
+      function getErrorColor(errorType) {
+        if (!errorType) return "var(--success)";
+        if (errorType === "rate-limited") return "var(--warning)";
+        return "var(--error)";
+      }
+
       function formatTime(timestamp) {
         const date = new Date(timestamp);
         return date.toLocaleTimeString([], {
@@ -630,6 +638,11 @@
           minute: "2-digit",
           second: "2-digit",
         });
+      }
+
+      function formatTokens(val) {
+        if (val === null || val === undefined) return "—";
+        return val.toFixed(1);
       }
 
       async function fetchDashboard() {
@@ -719,62 +732,85 @@
       function renderProviders(providersData) {
         const container = document.getElementById("providersGrid");
 
-        let html = "";
+        // Group per-model entries by provider name
+        const grouped = {};
         providersData.providers.forEach((p) => {
-          const isConfigured = p.keyConfigured;
-          const barColor = getStabilityColor(p.stabilityScore);
+          if (!grouped[p.name]) {
+            grouped[p.name] = {
+              name: p.name,
+              baseUrl: p.baseUrl,
+              keyConfigured: p.keyConfigured,
+              models: p.models,
+              defaultModel: p.model,
+              entries: [],
+            };
+          }
+          grouped[p.name].entries.push(p);
+        });
+
+        let html = "";
+        Object.values(grouped).forEach((g) => {
+          const barColor = getStabilityColor(g.entries[0]?.stabilityScore ?? 0);
 
           let modelsHtml = "";
-          p.models.forEach((m) => {
-            const isDefault = m === p.defaultModel;
+          g.models.forEach((m) => {
+            const isDefault = m === g.defaultModel;
             modelsHtml += `<span class="model-tag ${isDefault ? "default" : ""}">${m}</span>`;
           });
 
+          let entryRowsHtml = "";
+          g.entries.forEach((e) => {
+            const entryColor = getStabilityColor(e.stabilityScore);
+            entryRowsHtml += `
+              <div style="border-top: 1px solid var(--border-color); padding-top: 0.5rem; margin-top: 0.5rem;">
+                <div style="font-size: 0.8125rem; color: var(--accent); font-weight: 600; margin-bottom: 0.375rem;">${e.model}</div>
+                <div class="metric-row" style="grid-template-columns: repeat(4, 1fr);">
+                  <div class="metric-item">
+                    <span class="metric-label">Score</span>
+                    <span class="metric-val" style="color: ${entryColor}">${e.stabilityScore}%</span>
+                  </div>
+                  <div class="metric-item">
+                    <span class="metric-label">p95</span>
+                    <span class="metric-val">${e.p95Latency ? e.p95Latency + "ms" : "—"}</span>
+                  </div>
+                  <div class="metric-item">
+                    <span class="metric-label">Throughput</span>
+                    <span class="metric-val">${e.meanTokensPerSecond ? formatTokens(e.meanTokensPerSecond) + " t/s" : "—"}</span>
+                  </div>
+                  <div class="metric-item">
+                    <span class="metric-label">Calls</span>
+                    <span class="metric-val">${e.requestCount || 0}</span>
+                  </div>
+                </div>
+                <div style="display: flex; gap: 0.75rem; margin-top: 0.375rem; font-size: 0.75rem;">
+                  <span style="color: var(--text-muted);">Success: ${e.recentSuccessRate ? Math.round(e.recentSuccessRate * 100) + "%" : "—"}</span>
+                </div>
+              </div>
+            `;
+          });
+
           html += `
-          <div class="provider-card octagon-bounds" style="opacity: ${isConfigured ? "1" : "0.5"}">
+          <div class="provider-card octagon-bounds" style="opacity: ${g.keyConfigured ? "1" : "0.5"}">
             <div class="octagon-border">
               <div class="octagon-bg">
                 <div class="provider-header">
                   <div class="provider-info">
-                    <h3>${p.name}</h3>
-                    <span class="provider-url">${p.baseUrl}</span>
+                    <h3>${g.name}</h3>
+                    <span class="provider-url">${g.baseUrl}</span>
                   </div>
-                  <span class="key-badge ${isConfigured ? "active" : "inactive"}">
-                    ${isConfigured ? "active" : "no key"}
+                  <span class="key-badge ${g.keyConfigured ? "active" : "inactive"}">
+                    ${g.keyConfigured ? "active" : "no key"}
                   </span>
                 </div>
 
-                <div class="stability-bar-container">
-                  <div class="stability-header">
-                    <span>Stability Score</span>
-                    <span style="font-weight: bold; color: ${barColor}">${p.stabilityScore}%</span>
-                  </div>
-                  <div class="stability-bar">
-                    <div class="stability-fill" style="width: ${p.stabilityScore}%; background-color: ${barColor};"></div>
-                  </div>
-                </div>
-
-                <div class="metric-row">
-                  <div class="metric-item">
-                    <span class="metric-label">Latency (p95)</span>
-                    <span class="metric-val">${isConfigured && p.p95Latency ? p.p95Latency + "ms" : "—"}</span>
-                  </div>
-                  <div class="metric-item">
-                    <span class="metric-label">Success Rate</span>
-                    <span class="metric-val">${isConfigured && p.recentSuccessRate ? Math.round(p.recentSuccessRate * 100) + "%" : "—"}</span>
-                  </div>
-                  <div class="metric-item">
-                    <span class="metric-label">Total Calls</span>
-                    <span class="metric-val">${p.requestCount || 0}</span>
-                  </div>
-                </div>
-
-                <div class="provider-models">
-                  <div class="models-title">Available Models</div>
-                  <div class="models-list">
+                <div class="provider-models" style="border-top: none; padding-top: 0;">
+                  <div class="models-title">Models</div>
+                  <div class="models-list" style="margin-bottom: 0.75rem;">
                     ${modelsHtml}
                   </div>
                 </div>
+
+                ${entryRowsHtml}
               </div>
             </div>
           </div>
@@ -791,13 +827,12 @@
         if (metrics.length === 0) {
           body.innerHTML = `
           <tr>
-            <td colspan="6" class="no-data">No active telemetry logs available yet. Make a request to start monitoring!</td>
+            <td colspan="8" class="no-data">No active telemetry logs available yet. Make a request to start monitoring!</td>
           </tr>
         `;
           return;
         }
 
-        // Sort by timestamp descending
         const sorted = [...metrics]
           .sort((a, b) => b.timestamp - a.timestamp)
           .slice(0, 50);
@@ -805,8 +840,8 @@
         let html = "";
         sorted.forEach((m) => {
           const isSuccess = m.success;
-          const statusBadge = isSuccess ? "success" : "error";
-          const resultText = isSuccess ? "SUCCESS" : "FAILED";
+          const errorType = m.errorType || null;
+          const tokens = m.outputTokens !== null && m.outputTokens !== undefined ? m.outputTokens : null;
 
           html += `
           <tr>
@@ -814,11 +849,13 @@
             <td style="font-weight: 600; text-transform: capitalize;">${m.provider}</td>
             <td style="font-family: monospace; font-size: 0.8125rem;">${m.model}</td>
             <td>
-              <span class="badge ${m.statusCode < 400 ? "success" : "error"}">${m.statusCode || "ERROR"}</span>
+              <span class="badge ${isSuccess ? "success" : "error"}" style="${errorType ? `background-color: ${getErrorColor(errorType)}22; border-color: ${getErrorColor(errorType)}44;` : ""}">${m.statusCode || "ERR"}${errorType ? " (" + errorType + ")" : ""}</span>
             </td>
             <td style="font-weight: 500;">${isSuccess ? m.ttft + " ms" : "—"}</td>
+            <td style="font-weight: 500;">${isSuccess ? m.totalLatency + " ms" : "—"}</td>
+            <td style="font-weight: 500;">${tokens !== null ? tokens : "—"}</td>
             <td>
-              <span class="badge ${statusBadge}">${resultText}</span>
+              <span class="badge ${isSuccess ? "success" : "error"}">${isSuccess ? "SUCCESS" : "FAILED"}</span>
             </td>
           </tr>
         `;
