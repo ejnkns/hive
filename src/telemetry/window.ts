@@ -1,11 +1,11 @@
 import type { RequestMetric } from "./request-metric"
 
-export type WindowConfig = {
+type WindowConfig = {
   maxEntries: number
   maxAgeMs: number
 }
 
-export const DEFAULT_WINDOW: WindowConfig = {
+const DEFAULT_WINDOW: WindowConfig = {
   maxEntries: 100,
   maxAgeMs: 24 * 60 * 60 * 1000,
 }

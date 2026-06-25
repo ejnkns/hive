@@ -13,7 +13,7 @@ export type ModelScore = {
   updatedAt: number
 }
 
-export type TelemetryCache = {
+type TelemetryCache = {
   metrics: RequestMetric[]
   scores: ModelScore[]
 }

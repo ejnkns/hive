@@ -1,4 +1,4 @@
-import type { RequestMetric, ErrorType } from "./request-metric"
+import type { RequestMetric } from "./request-metric"
 
 export type DerivedMetrics = {
   requestCount: number

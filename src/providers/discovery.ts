@@ -4,7 +4,7 @@ import { promises as fs, readFileSync } from "node:fs";
 import { allProviders, buildModelsEndpoint } from "./registry";
 import { logger } from "../hive/shared/logger";
 
-export type CachedProvider = {
+type CachedProvider = {
   name: string;
   baseUrl: string;
   apiKeyEnvVar: string;
@@ -15,12 +15,12 @@ export type CachedProvider = {
   lastCheckError?: string | null;
 };
 
-export type ModelCache = {
+type ModelCache = {
   lastCheckTime: number;
   providers: CachedProvider[];
 };
 
-export const PROVIDER_PREFERENCES: Record<string, string[]> = {
+const PROVIDER_PREFERENCES: Record<string, string[]> = {
   groq: [
     "deepseek-r1-distill-llama-70b",
     "llama-3.3-70b-versatile",
@@ -71,7 +71,7 @@ export const PROVIDER_PREFERENCES: Record<string, string[]> = {
 const HIVE_DIR = join(homedir(), ".hive");
 const MODELS_CACHE_PATH = join(HIVE_DIR, "models-cache.json");
 
-export async function loadModelCache(): Promise<ModelCache | null> {
+async function loadModelCache(): Promise<ModelCache | null> {
   try {
     logger.debug(`Reading model cache from: ${MODELS_CACHE_PATH}`);
     const data = await fs.readFile(MODELS_CACHE_PATH, "utf-8");
@@ -97,7 +97,7 @@ export function loadModelCacheSync(): ModelCache | null {
   }
 }
 
-export async function saveModelCache(cache: ModelCache): Promise<void> {
+async function saveModelCache(cache: ModelCache): Promise<void> {
   try {
     logger.debug(`Creating/ensuring directory exists for models cache: ${HIVE_DIR}`);
     await fs.mkdir(HIVE_DIR, { recursive: true });
@@ -161,7 +161,7 @@ export function selectDefaultModel(
   return bestModel;
 }
 
-export async function fetchProviderModels(
+async function fetchProviderModels(
   baseUrl: string,
   apiKeyEnvVar: string,
 ): Promise<string[]> {
