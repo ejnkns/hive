@@ -11,7 +11,12 @@ const LOGO = [
 
 export class HiveHeader extends HTMLElement {
   private shadow: ShadowRoot;
-  private _data: HeaderData = { online: false, serverAddr: "—" };
+  private _data: HeaderData = {
+    online: false,
+    serverAddr: "—",
+    lastProvider: null,
+    lastModel: null,
+  };
 
   constructor() {
     super();
@@ -47,7 +52,8 @@ export class HiveHeader extends HTMLElement {
   }
 
   private render() {
-    const { online, serverAddr } = this._data;
+    const { online, serverAddr, lastProvider, lastModel } = this._data;
+    const showCurrent = lastProvider && lastModel;
     this.shadow.innerHTML = `
       <style>
         :host {
@@ -62,7 +68,7 @@ export class HiveHeader extends HTMLElement {
         .header-inner {
           display: flex;
           justify-content: space-between;
-          align-items: flex-start;
+          align-items: stretch;
           max-width: 1200px;
           margin: 0 auto;
         }
@@ -117,13 +123,25 @@ export class HiveHeader extends HTMLElement {
           border-color: var(--accent);
           color: var(--accent);
         }
+        .current-use {
+          font-size: 0.625rem;
+          margin-top: auto;
+        }
+        .current-use .prov {
+          text-transform: capitalize;
+        }
+        .current-use .model {
+          font-family: monospace;
+          color: var(--accent);
+        }
       </style>
+      <button class="theme-btn">dark</button>
       <div class="header-inner">
         <pre>${LOGO}</pre>
         <div class="header-meta">
           <span class="badge-status ${online ? "on" : "off"}">${online ? "ONLINE" : "OFFLINE"}</span>
-          <button class="theme-btn">dark</button>
           <span class="server-addr">${serverAddr}</span>
+          ${showCurrent ? `<span class="current-use"><span class="prov">${lastProvider}</span> / <span class="model">${lastModel}</span></span>` : ""}
         </div>
       </div>
     `;

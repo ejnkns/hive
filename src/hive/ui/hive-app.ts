@@ -109,6 +109,8 @@ export class HiveApp extends HTMLElement {
         header.data = {
           online: true,
           serverAddr: p.serverHost + ":" + p.serverPort,
+          lastProvider: p.lastProvider ?? null,
+          lastModel: p.lastModel ?? null,
         };
       }
 
@@ -168,7 +170,12 @@ export class HiveApp extends HTMLElement {
         "hive-header"
       ) as HeaderEl | null;
       if (header) {
-        header.data = { online: false, serverAddr: "—" };
+        header.data = {
+          online: false,
+          serverAddr: "—",
+          lastProvider: null,
+          lastModel: null,
+        };
       }
     }
   }

@@ -58,4 +58,6 @@ export type StatsData = {
 export type HeaderData = {
   online: boolean;
   serverAddr: string;
+  lastProvider: string | null;
+  lastModel: string | null;
 };
