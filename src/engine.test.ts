@@ -5,13 +5,6 @@ import { HiveCore } from "./engine";
 describe("HiveCore", () => {
   let core: HiveCore;
 
-  const KEY_VARS = [
-    "GROQ_API_KEY",
-    "SAMBA_NOVA_API_KEY",
-    "NVIDIA_NIM_API_KEY",
-    "OPENCODE_ZEN_API_KEY",
-  ];
-
   const saved: Record<string, string | undefined> = {};
 
   beforeEach(() => {
@@ -35,7 +28,11 @@ describe("HiveCore", () => {
   });
 
   it("returns error when no API keys are set", async () => {
-    for (const v of KEY_VARS) {
+    const providers = core.getProviders();
+    const envVars = providers.map((p) => p.apiKeyEnvVar);
+    const unique = [...new Set(envVars)];
+
+    for (const v of unique) {
       saved[v] = process.env[v];
       delete process.env[v];
     }
@@ -48,7 +45,7 @@ describe("HiveCore", () => {
     assert.strictEqual(result.statusCode, 503);
     assert.ok(result.error!.includes("No configured providers"));
 
-    for (const v of KEY_VARS) {
+    for (const v of unique) {
       if (saved[v] !== undefined) process.env[v] = saved[v];
     }
   });

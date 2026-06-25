@@ -3,23 +3,12 @@ import { PassThrough } from "node:stream";
 import type { Provider } from "./providers/registry";
 import { buildChatEndpoint } from "./providers/registry";
 import { loadConfig } from "./hive/load-config";
-import { telemetryRecorder } from "./telemetry/recorder";
+import { telemetryRecorder, startHeartbeat, loadCache } from "./telemetry";
 import { failover } from "./proxy/failover";
-import { startHeartbeat } from "./telemetry/heartbeat";
-import { loadState, calculateScore } from "./telemetry";
 import { sortByPriority } from "./providers";
 import { mutateRequest } from "./proxy/mutate-request";
 import { routeRequest } from "./proxy/route-request";
 import { discoverAndCacheModels } from "./providers/discovery";
-
-export type ProviderUIState = {
-  provider: string;
-  model: string;
-  enabled: boolean;
-  stabilityScore: number;
-  p95Latency: number;
-  recentSuccessRate: number;
-};
 
 export type ChatCompletionResult = {
   success: boolean;
@@ -51,9 +40,12 @@ export class HiveCore {
     telemetryRecorder.start();
     this.startHeartbeat();
     this.triggerBackgroundDiscovery();
-    this.discoveryTimer = setInterval(() => {
-      this.triggerBackgroundDiscovery();
-    }, 60 * 60 * 1000);
+    this.discoveryTimer = setInterval(
+      () => {
+        this.triggerBackgroundDiscovery();
+      },
+      60 * 60 * 1000,
+    );
   }
 
   private async triggerBackgroundDiscovery(): Promise<void> {
@@ -90,27 +82,27 @@ export class HiveCore {
       };
     }
 
-    const state = await loadState();
-    const providerStates = qualified.map((p) => {
-      const providerMetrics = state.metrics.filter(
-        (m) => m.provider === p.name,
-      );
-      return {
-        provider: p.name,
-        model: p.defaultModel,
-        enabled: true,
-        stabilityScore: calculateScore(providerMetrics),
-      };
-    });
+    const cache = await loadCache();
+    const modelScores = cache.scores;
 
-    const prioritized = sortByPriority(providerStates);
+    const prioritized = sortByPriority(
+      qualified.map((p) => {
+        const ms = modelScores.find(
+          (s) => s.provider === p.name && s.model === p.defaultModel,
+        );
+        return {
+          provider: p.name,
+          model: p.defaultModel,
+          enabled: true,
+          stabilityScore: ms?.score ?? 50,
+        };
+      }),
+    );
 
     const sorted = prioritized
       .map((ps) => qualified.find((p) => p.name === ps.provider))
       .filter((p): p is Provider => p !== undefined);
 
-    // Forward client headers, but drop ones that would conflict with
-    // the provider-specific auth/transport headers set by mutateRequest
     const headers: IncomingHttpHeaders = Object.fromEntries(
       Object.entries(incomingHeaders).filter(
         ([key]) =>
@@ -138,35 +130,18 @@ export class HiveCore {
     };
   }
 
-  async getProviderStates(): Promise<ProviderUIState[]> {
-    const state = await loadState();
-
-    return this.providers.map((p) => {
-      const providerMetrics = state.metrics.filter(
-        (m) => m.provider === p.name,
-      );
-      const recentSuccess =
-        providerMetrics.length > 0
-          ? providerMetrics.filter((m) => m.success).length /
-            providerMetrics.length
-          : 0;
-      const latencies = providerMetrics
-        .map((m) => m.ttft)
-        .sort((a, b) => a - b);
-      const p95 =
-        latencies.length > 0
-          ? latencies[Math.floor(latencies.length * 0.95)]
-          : 0;
-
-      return {
-        provider: p.name,
-        model: p.defaultModel,
-        enabled: true,
-        stabilityScore: calculateScore(providerMetrics),
-        p95Latency: p95,
-        recentSuccessRate: recentSuccess,
-      };
-    });
+  async getProviderStates() {
+    const cache = await loadCache();
+    return cache.scores.map((s) => ({
+      provider: s.provider,
+      model: s.model,
+      enabled: true,
+      stabilityScore: s.score,
+      p95Latency: s.derived.p95Ttft,
+      recentSuccessRate: s.derived.successRate,
+      requestCount: s.derived.requestCount,
+      meanTokensPerSecond: s.derived.meanTokensPerSecond,
+    }));
   }
 
   private startHeartbeat(): void {
