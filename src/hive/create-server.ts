@@ -110,10 +110,14 @@ export function createServer(config: HiveConfig) {
       ];
     });
 
+    const lastUsed = hiveCore.getLastUsed();
+
     reply.send({
       providers,
       serverPort: config.port,
       serverHost: config.host,
+      lastProvider: lastUsed.provider,
+      lastModel: lastUsed.model,
     });
   });
 

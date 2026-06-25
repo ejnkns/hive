@@ -25,6 +25,8 @@ export class HiveCore {
   private config: ReturnType<typeof loadConfig>;
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private discoveryTimer: NodeJS.Timeout | null = null;
+  private lastProvider: string | null = null;
+  private lastModel: string | null = null;
 
   constructor() {
     this.config = loadConfig();
@@ -40,13 +42,29 @@ export class HiveCore {
   start(): void {
     telemetryRecorder.start();
     this.startHeartbeat();
+    this.loadLastUsed();
     this.triggerBackgroundDiscovery();
     this.discoveryTimer = setInterval(
       () => {
         this.triggerBackgroundDiscovery();
       },
-      60 * 60 * 1000,
+      60 * 60 * 1000
     );
+  }
+
+  private async loadLastUsed(): Promise<void> {
+    try {
+      const cache = await loadCache();
+      const latest = cache.metrics
+        .filter((m) => m.success && m.source === "user")
+        .sort((a, b) => b.timestamp - a.timestamp)[0];
+      if (latest) {
+        this.lastProvider = latest.provider;
+        this.lastModel = latest.model;
+      }
+    } catch {
+      // Cache load failure is non-fatal
+    }
   }
 
   private async triggerBackgroundDiscovery(): Promise<void> {
@@ -66,7 +84,7 @@ export class HiveCore {
 
   async handleChatCompletion(
     body: string | Record<string, unknown>,
-    incomingHeaders: Record<string, any> = {},
+    incomingHeaders: Record<string, any> = {}
   ): Promise<ChatCompletionResult> {
     const parsed = typeof body === "string" ? JSON.parse(body) : body;
 
@@ -89,7 +107,7 @@ export class HiveCore {
     const prioritized = sortByPriority(
       qualified.map((p) => {
         const ms = modelScores.find(
-          (s) => s.provider === p.name && s.model === p.defaultModel,
+          (s) => s.provider === p.name && s.model === p.defaultModel
         );
         return {
           provider: p.name,
@@ -97,7 +115,7 @@ export class HiveCore {
           enabled: true,
           stabilityScore: ms?.score ?? 50,
         };
-      }),
+      })
     );
 
     const sorted = prioritized
@@ -108,9 +126,9 @@ export class HiveCore {
       Object.entries(incomingHeaders).filter(
         ([key]) =>
           !["authorization", "host", "content-length", "content-type"].includes(
-            key.toLowerCase(),
-          ),
-      ),
+            key.toLowerCase()
+          )
+      )
     );
     const result = await failover(sorted, headers, JSON.stringify(parsed));
 
@@ -121,6 +139,9 @@ export class HiveCore {
         error: "All providers failed",
       };
     }
+
+    this.lastProvider = result.provider!;
+    this.lastModel = result.model!;
 
     return {
       success: true,
@@ -193,6 +214,10 @@ export class HiveCore {
 
   getProviders(): Provider[] {
     return this.providers;
+  }
+
+  getLastUsed(): { provider: string | null; model: string | null } {
+    return { provider: this.lastProvider, model: this.lastModel };
   }
 }
 
