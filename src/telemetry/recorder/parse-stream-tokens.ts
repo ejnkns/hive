@@ -18,6 +18,7 @@ export function createStreamCounter(startTime: number) {
   let thinkingStart: number | null = null;
   let thinkingEnd: number | null = null;
   let hasReceivedContent = false;
+  let isAbruptDisconnect = true;
   let finishReason: string | null = null;
   let responseText = "";
   let inputTokens: number | null = null;
@@ -37,7 +38,10 @@ export function createStreamCounter(startTime: number) {
         if (!trimmed.startsWith("data: ")) continue;
 
         const jsonStr = trimmed.slice(6);
-        if (jsonStr === "[DONE]") continue;
+        if (jsonStr === "[DONE]") {
+          isAbruptDisconnect = false;
+          continue;
+        }
 
         try {
           const parsed = JSON.parse(jsonStr);
@@ -46,6 +50,7 @@ export function createStreamCounter(startTime: number) {
 
           if (finish) {
             finishReason = finish;
+            isAbruptDisconnect = false;
           }
 
           if (parsed.usage) {
@@ -85,7 +90,9 @@ export function createStreamCounter(startTime: number) {
   const getStats = (): StreamStats => {
     let thinkingTime: number | null = null;
     if (thinkingStart !== null) {
-      const end = thinkingEnd ?? Date.now() - startTime;
+      const end =
+        thinkingEnd ??
+        (isAbruptDisconnect ? thinkingStart : Date.now() - startTime);
       thinkingTime = end - thinkingStart;
     }
 

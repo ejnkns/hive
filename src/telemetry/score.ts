@@ -1,78 +1,158 @@
 import type { RequestMetric } from "./request-metric";
-import type { DerivedMetrics } from "./derived-metrics";
 import { applyWindow } from "./window";
-import { computeDerivedMetrics } from "./derived-metrics";
-import { SUB_WEIGHTS } from "./weights";
-import { ttftScore } from "./score/ttft-score";
-import { throughputScore } from "./score/throughput-score";
-import { jitterScore } from "./score/jitter-score";
-import { reliabilityScore } from "./score/reliability-score";
-import { thinkingScore } from "./score/thinking-score";
-import { spikeScore } from "./score/spike-score";
-import { qualityScore } from "./score/quality-score";
+import { ERROR_PENALTIES } from "./weights";
 
-type ScoreFn = (d: DerivedMetrics) => number;
-type ScoredSubScore = { name: string; fn: ScoreFn; weight: number };
+export type { RequestMetric };
 
-const ALL_SUB_SCORES: ScoredSubScore[] = [
-  { name: "ttftScore", fn: ttftScore, weight: SUB_WEIGHTS.ttftScore },
-  {
-    name: "throughputScore",
-    fn: throughputScore,
-    weight: SUB_WEIGHTS.throughputScore,
-  },
-  { name: "jitterScore", fn: jitterScore, weight: SUB_WEIGHTS.jitterScore },
-  {
-    name: "reliabilityScore",
-    fn: reliabilityScore,
-    weight: SUB_WEIGHTS.reliabilityScore,
-  },
-  {
-    name: "thinkingScore",
-    fn: thinkingScore,
-    weight: SUB_WEIGHTS.thinkingScore,
-  },
-  { name: "spikeScore", fn: spikeScore, weight: SUB_WEIGHTS.spikeScore },
-  { name: "qualityScore", fn: qualityScore, weight: SUB_WEIGHTS.qualityScore },
-];
+export type ProviderModelNode = {
+  providerName: string;
+  modelName: string;
+};
 
-const REASONING_PATTERNS = ["deepseek-r1", "o1", "o3", "thinking", "reasoning"];
+export type ScoreWeights = {
+  ttft: number;
+  throughput: number;
+  reliability: number;
+  quality: number;
+};
 
-function isReasoningModel(modelName: string): boolean {
-  const lower = modelName.toLowerCase();
-  return REASONING_PATTERNS.some((p) => lower.includes(p));
+export const ROUTING_STRATEGIES: Record<string, ScoreWeights> = {
+  balanced: { ttft: 0.3, throughput: 0.3, reliability: 0.4, quality: 0.0 },
+  latency: { ttft: 0.55, throughput: 0.15, reliability: 0.3, quality: 0.0 },
+  quality: { ttft: 0.1, throughput: 0.1, reliability: 0.4, quality: 0.4 },
+};
+
+const DECAY_HALF_LIFE_MS = 30 * 60 * 1000;
+
+function percentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  const idx = Math.max(
+    0,
+    Math.min(sorted.length - 1, Math.floor(sorted.length * p))
+  );
+  return sorted[idx];
 }
 
-export function calculateScore(metrics: RequestMetric[]): number {
-  const window = applyWindow(metrics);
-  if (window.length === 0) return 50;
+function getFailureWeight(m: RequestMetric): number {
+  if (m.success) return 0;
+  if (m.errorType) {
+    return ERROR_PENALTIES[m.errorType as keyof typeof ERROR_PENALTIES] ?? 1.0;
+  }
+  return 1.0;
+}
 
-  const hasThinking = window.some((m) => m.thinkingTime !== null);
-  const isReasoning =
-    window.some((m) => isReasoningModel(m.model)) || hasThinking;
-  const derived = computeDerivedMetrics(window);
+export function calculateNodeScore(
+  node: ProviderModelNode,
+  metrics: RequestMetric[],
+  strategyName: string = "balanced",
+  minTokenThreshold: number = 200
+): number {
+  const strategy =
+    ROUTING_STRATEGIES[strategyName] || ROUTING_STRATEGIES.balanced;
 
-  const active = ALL_SUB_SCORES.filter((s) => {
-    if (s.name === "thinkingScore" && !hasThinking) return false;
-    if (s.name === "throughputScore" && derived.meanTokensPerSecond === null)
-      return false;
-    if (s.name === "ttftScore" && isReasoning) return false;
-    if (
-      (s.name === "ttftScore" || s.name === "jitterScore") &&
-      !derived.hasSuccessMetrics
-    )
-      return false;
-    return s.weight > 0;
-  });
+  const performanceMetrics = metrics.filter(
+    (m) => m.source === "user" && (m.inputTokens ?? 0) >= minTokenThreshold
+  );
 
-  const totalWeight = active.reduce((sum, s) => sum + s.weight, 0);
-  if (totalWeight === 0) return 50;
+  const totalRequests = metrics.length;
+  let consecutiveAuthErrors = 0;
+  let totalErrors = 0;
 
-  let score = 0;
-  for (const sub of active) {
-    const subValue = sub.fn(derived);
-    score += subValue * (sub.weight / totalWeight);
+  const chronologicalMetrics = [...metrics].sort(
+    (a, b) => b.timestamp - a.timestamp
+  );
+
+  for (const m of chronologicalMetrics) {
+    if (!m.success) {
+      totalErrors++;
+      if (
+        m.statusCode === 401 ||
+        m.statusCode === 403 ||
+        m.errorType === "auth-error"
+      ) {
+        consecutiveAuthErrors++;
+      }
+    } else {
+      break;
+    }
   }
 
-  return Math.round(score);
+  if (
+    consecutiveAuthErrors >= 2 ||
+    (totalRequests > 0 && totalErrors === totalRequests)
+  ) {
+    return 0;
+  }
+
+  const windowedMetrics = applyWindow(metrics);
+  const now = Date.now();
+  let totalPenaltyPoints = 0;
+  let maxPossiblePoints = 0;
+
+  for (const m of windowedMetrics) {
+    const age = now - m.timestamp;
+    const decay = Math.exp(-age / DECAY_HALF_LIFE_MS);
+    const severity = getFailureWeight(m);
+
+    totalPenaltyPoints += severity * decay;
+    maxPossiblePoints += Math.max(severity, 1.0) * decay;
+  }
+
+  const penaltyRate =
+    maxPossiblePoints > 0 ? totalPenaltyPoints / maxPossiblePoints : 0;
+  const reliabilityScore = Math.max(0, 100 - penaltyRate * 100);
+
+  if (performanceMetrics.length === 0) {
+    return (
+      reliabilityScore * strategy.reliability +
+      (strategy.ttft + strategy.throughput + strategy.quality) * 50
+    );
+  }
+
+  const validTtfts = performanceMetrics
+    .map((m) => m.ttft)
+    .sort((a, b) => a - b);
+  const p95Ttft = percentile(validTtfts, 0.95) || 500;
+
+  let cumulativeTps = 0;
+  let validTpsCount = 0;
+  for (const m of performanceMetrics) {
+    if (m.outputTokens && m.totalLatency) {
+      const streamSeconds =
+        m.ttft === m.totalLatency
+          ? m.totalLatency / 1000
+          : (m.totalLatency - m.ttft) / 1000;
+
+      if (streamSeconds > 0) {
+        cumulativeTps += m.outputTokens / streamSeconds;
+        validTpsCount++;
+      }
+    }
+  }
+  const meanTps = validTpsCount > 0 ? cumulativeTps / validTpsCount : 30;
+
+  const isReasoningModel = node.modelName
+    .toLowerCase()
+    .match(/(r1|o1|o3|thinking|reasoning)/);
+
+  const ttftHalfLife = isReasoningModel ? 8000 : 1500;
+  const ttftScore = Math.exp(-p95Ttft / ttftHalfLife) * 100;
+
+  const targetTps = isReasoningModel ? 25 : 80;
+  const throughputScore = Math.min(100, (meanTps / targetTps) * 100);
+
+  const functionalFaults = performanceMetrics.filter(
+    (m) => m.refused || m.finishReason === "length"
+  ).length;
+  const qualityScore = Math.max(
+    0,
+    100 - (functionalFaults / performanceMetrics.length) * 100
+  );
+
+  return (
+    ttftScore * strategy.ttft +
+    throughputScore * strategy.throughput +
+    reliabilityScore * strategy.reliability +
+    qualityScore * strategy.quality
+  );
 }

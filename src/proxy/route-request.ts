@@ -10,6 +10,7 @@ import {
   detectRefusal,
   conversationStore,
 } from "../telemetry";
+import { ProxyResponse } from "./proxy-response";
 
 type RouteRequestOptions = {
   upstreamUrl: string;
@@ -21,12 +22,8 @@ type RouteRequestOptions = {
 };
 
 type RouteResult = {
-  success: boolean;
-  statusCode: number;
-  stream?: PassThrough;
+  proxyResponse: ProxyResponse;
   ttft: number;
-  errorType?: string;
-  errorBody?: string;
   requestId: string;
 };
 
@@ -117,10 +114,8 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
         res.on("end", () => {
           record(timeoutMs, false, statusCode, errorBody);
           resolve({
-            success: false,
-            statusCode,
+            proxyResponse: ProxyResponse.error(statusCode, errorBody),
             ttft: timeoutMs,
-            errorBody,
             requestId,
           });
         });
@@ -143,9 +138,7 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
         transform.pipe(passThrough);
 
         resolve({
-          success: true,
-          statusCode,
-          stream: passThrough,
+          proxyResponse: ProxyResponse.ok(statusCode, passThrough),
           ttft,
           requestId,
         });
@@ -166,10 +159,8 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
 
         if (!initialByteReceived) {
           resolve({
-            success: false,
-            statusCode: 500,
+            proxyResponse: ProxyResponse.error(500, ""),
             ttft: Date.now() - start,
-            errorType: "STREAM_ERROR",
             requestId,
           });
         }
@@ -205,9 +196,7 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
 
         if (!initialByteReceived) {
           resolve({
-            success: true,
-            statusCode,
-            stream: passThrough,
+            proxyResponse: ProxyResponse.ok(statusCode, passThrough),
             ttft: effectiveTtft,
             requestId,
           });
@@ -219,10 +208,8 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
       req.destroy();
       record(timeoutMs, false, 0, undefined, "TIMEOUT");
       resolve({
-        success: false,
-        statusCode: 0,
+        proxyResponse: ProxyResponse.error(0, "TIMEOUT"),
         ttft: timeoutMs,
-        errorType: "TIMEOUT",
         requestId,
       });
     });
@@ -231,10 +218,8 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
       const elapsed = Date.now() - start;
       record(elapsed, false, 0, undefined, "NETWORK_ERROR");
       resolve({
-        success: false,
-        statusCode: 0,
+        proxyResponse: ProxyResponse.error(0, "NETWORK_ERROR"),
         ttft: elapsed,
-        errorType: "NETWORK_ERROR",
         requestId,
       });
     });

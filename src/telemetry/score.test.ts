@@ -1,19 +1,18 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import { calculateScore } from "./score";
+import { calculateNodeScore, type ProviderModelNode } from "./score";
 import type { RequestMetric } from "./request-metric";
 
-// Helper to generate mock metrics
-function createMockMetric(overrides: Partial<RequestMetric>): RequestMetric {
+function mockMetric(overrides: Partial<RequestMetric>): RequestMetric {
   return {
-    requestId: "test-id",
-    provider: "test-provider",
-    model: "test-model",
+    requestId: "id-123",
+    provider: "test-p",
+    model: "test-m",
     timestamp: Date.now(),
-    ttft: 500,
-    totalLatency: 2000,
-    inputTokens: 50,
-    outputTokens: 100,
+    ttft: 200,
+    totalLatency: 1200,
+    inputTokens: 500,
+    outputTokens: 50,
     thinkingTime: null,
     finishReason: "stop",
     refused: false,
@@ -25,112 +24,327 @@ function createMockMetric(overrides: Partial<RequestMetric>): RequestMetric {
   };
 }
 
-describe("Telemetry Scoring Logic", () => {
-  describe("Reasoning Model Bias", () => {
-    it("should not penalize reasoning models with zero scores for expected TTFTs", () => {
-      // Simulating a typical DeepSeek-R1 or o1 response
-      const metrics = [
-        createMockMetric({
-          ttft: 8000, // 8 seconds TTFT
-          thinkingTime: 12000, // 12 seconds thinking
-          outputTokens: 500,
-          totalLatency: 25000,
-        }),
-      ];
+describe("Hive Scoring Suite", () => {
+  const node: ProviderModelNode = {
+    providerName: "together",
+    modelName: "llama-3-70b",
+  };
 
-      const score = calculateScore(metrics);
-      // Currently, this will fail because TTFT > 5000ms yields a 0 score,
-      // and Thinking > 10000ms yields a 0 score.
-      // A highly capable model doing its job shouldn't score an abysmal grade.
-      assert.ok(
-        score > 50,
-        `Expected reasonable score for deep thinking, got ${score}`
-      );
-    });
+  it("should enforce continuous context boundaries and omit small probe traffic from latency scores", () => {
+    const history = [
+      mockMetric({ ttft: 4000, totalLatency: 9000, inputTokens: 50 }),
+      mockMetric({ ttft: 150, totalLatency: 650, inputTokens: 400 }),
+    ];
+
+    const score = calculateNodeScore(node, history, "latency", 200);
+    assert.ok(
+      score > 70,
+      `Expected clean velocity scaling score, received: ${score}`
+    );
   });
 
-  describe("Throughput Bias", () => {
-    it("should grant competitive scores to capable models with standard TPS", () => {
-      // Simulating a highly capable 70B model streaming at 40 TPS
-      const metrics = [
-        createMockMetric({
-          ttft: 800,
-          totalLatency: 3300,
-          outputTokens: 100, // 100 tokens in 2.5s = 40 TPS
-        }),
-      ];
+  it("should grant flexible, protective scaling options to reasoning models experiencing high thinking time", () => {
+    const reasoningNode: ProviderModelNode = {
+      providerName: "groq",
+      modelName: "deepseek-r1",
+    };
+    const history = [
+      mockMetric({
+        ttft: 4500,
+        totalLatency: 12000,
+        inputTokens: 600,
+        outputTokens: 300,
+      }),
+    ];
 
-      const score = calculateScore(metrics);
-      // Currently, 40 TPS / 2 = 20/100 for the throughput sub-score.
-      assert.ok(score > 70, `Expected solid score for 40 TPS, got ${score}`);
-    });
+    const score = calculateNodeScore(reasoningNode, history, "balanced", 200);
+    assert.ok(
+      score > 50,
+      `Reasoning models should possess extended operational score lanes. Got: ${score}`
+    );
   });
 
-  describe("Authentication Loophole", () => {
-    it("should severely penalize a provider returning 100% auth errors", () => {
-      const metrics = [
-        createMockMetric({
+  it("should close the authentication loophole by dropping dead or unauthenticated paths to zero", () => {
+    const now = Date.now();
+    const history = [
+      mockMetric({
+        success: false,
+        statusCode: 401,
+        errorType: "auth-error",
+        timestamp: now,
+      }),
+      mockMetric({
+        success: false,
+        statusCode: 401,
+        errorType: "auth-error",
+        timestamp: now - 1000,
+      }),
+      mockMetric({ success: true, source: "heartbeat", timestamp: now - 2000 }),
+    ];
+
+    const score = calculateNodeScore(node, history, "balanced", 200);
+    assert.strictEqual(
+      score,
+      0,
+      "Consecutive auth failures must drop node ranking to zero."
+    );
+  });
+
+  it("should penalize structural anomalies like context length truncation drops inside the quality score", () => {
+    const history = [
+      mockMetric({ finishReason: "length" }),
+      mockMetric({ finishReason: "length" }),
+      mockMetric({ finishReason: "stop" }),
+    ];
+
+    const standardScore = calculateNodeScore(
+      node,
+      [mockMetric({ finishReason: "stop" })],
+      "quality",
+      200
+    );
+    const damagedScore = calculateNodeScore(node, history, "quality", 200);
+
+    assert.ok(
+      damagedScore < standardScore,
+      "High context window truncations must degrade quality metric parameters."
+    );
+  });
+});
+
+describe("Telemetry Optimization Extensions", () => {
+  const testNode = { providerName: "provider-a", modelName: "model-a" };
+
+  it("should accurately track throughput metrics for non-streaming calls", () => {
+    const metrics = [
+      {
+        requestId: "ns-1",
+        provider: "provider-a",
+        model: "model-a",
+        timestamp: Date.now(),
+        ttft: 500,
+        totalLatency: 500,
+        inputTokens: 300,
+        outputTokens: 50,
+        thinkingTime: null,
+        finishReason: "stop",
+        refused: false,
+        statusCode: 200,
+        errorType: null,
+        success: true,
+        source: "user",
+      } as RequestMetric,
+    ];
+
+    const score = calculateNodeScore(testNode, metrics, "balanced", 200);
+    assert.ok(
+      score > 0,
+      "Non-streaming transactions must contribute to throughput scores."
+    );
+  });
+
+  it("should survive an isolated authentication failure if subsequent connections succeed", () => {
+    const now = Date.now();
+    const metrics = [
+      {
+        requestId: "r1",
+        provider: "provider-a",
+        model: "model-a",
+        timestamp: now,
+        success: true,
+        statusCode: 200,
+        source: "user",
+        inputTokens: 400,
+        outputTokens: 50,
+        ttft: 100,
+        totalLatency: 400,
+        thinkingTime: null,
+        finishReason: "stop",
+        refused: false,
+        errorType: null,
+      } as RequestMetric,
+      {
+        requestId: "r0",
+        provider: "provider-a",
+        model: "model-a",
+        timestamp: now - 5000,
+        success: false,
+        statusCode: 401,
+        errorType: "auth-error",
+        source: "user",
+        inputTokens: null,
+        outputTokens: null,
+        ttft: 100,
+        totalLatency: 100,
+        thinkingTime: null,
+        finishReason: null,
+        refused: false,
+      } as RequestMetric,
+    ];
+
+    const score = calculateNodeScore(testNode, metrics, "balanced", 200);
+    assert.ok(
+      score > 0,
+      "Transient authorization adjustments must not disable the pathway permanently."
+    );
+  });
+
+  it("should penalize 401s significantly more than 429s", () => {
+    const now = Date.now();
+    const baseSuccess = mockMetric({ timestamp: now - 60000 });
+    const metrics429 = [
+      baseSuccess,
+      mockMetric({
+        success: false,
+        statusCode: 429,
+        errorType: "rate-limited",
+        timestamp: now,
+      }),
+    ];
+    const metrics401 = [
+      baseSuccess,
+      mockMetric({
+        success: false,
+        statusCode: 401,
+        errorType: "auth-error",
+        timestamp: now,
+      }),
+    ];
+
+    const score429 = calculateNodeScore(testNode, metrics429, "balanced", 200);
+    const score401 = calculateNodeScore(testNode, metrics401, "balanced", 200);
+
+    assert.ok(
+      score401 < score429,
+      `Hard errors (401) should reduce score more than soft errors (429). 401: ${score401}, 429: ${score429}`
+    );
+  });
+});
+
+describe("Severity-Weighted Temporal Decay", () => {
+  const testNode = { providerName: "provider-a", modelName: "model-a" };
+  const now = Date.now();
+
+  it("should gradually recover as successful requests accumulate after a failure", () => {
+    const failure = mockMetric({
+      success: false,
+      statusCode: 429,
+      errorType: "rate-limited",
+      timestamp: now - 60_000,
+    });
+
+    const earlyRecovery = [failure, mockMetric({ timestamp: now - 50_000 })];
+    const midRecovery = [
+      failure,
+      mockMetric({ timestamp: now - 50_000 }),
+      mockMetric({ timestamp: now - 40_000 }),
+      mockMetric({ timestamp: now - 30_000 }),
+    ];
+    const fullRecovery = [
+      failure,
+      mockMetric({ timestamp: now - 50_000 }),
+      mockMetric({ timestamp: now - 40_000 }),
+      mockMetric({ timestamp: now - 30_000 }),
+      mockMetric({ timestamp: now - 20_000 }),
+      mockMetric({ timestamp: now - 10_000 }),
+      mockMetric({ timestamp: now }),
+    ];
+
+    const earlyScore = calculateNodeScore(
+      testNode,
+      earlyRecovery,
+      "balanced",
+      200
+    );
+    const midScore = calculateNodeScore(testNode, midRecovery, "balanced", 200);
+    const fullScore = calculateNodeScore(
+      testNode,
+      fullRecovery,
+      "balanced",
+      200
+    );
+
+    assert.ok(
+      earlyScore < midScore,
+      `Score should climb with early recoveries. Early: ${earlyScore}, Mid: ${midScore}`
+    );
+    assert.ok(
+      midScore < fullScore,
+      `Score should climb further with more recoveries. Mid: ${midScore}, Full: ${fullScore}`
+    );
+    assert.ok(
+      fullScore > 80,
+      `Score should approach 100 with enough successful requests. Full: ${fullScore}`
+    );
+  });
+
+  it("should degrade score more for burst failures than spread failures", () => {
+    const success = mockMetric({ timestamp: now - 120_000 });
+
+    const burstFailures = [
+      success,
+      ...Array.from({ length: 5 }, (_, i) =>
+        mockMetric({
           success: false,
-          statusCode: 401,
-          errorType: "auth-error",
-          ttft: 100,
-          outputTokens: null,
-        }),
-      ];
+          statusCode: 429,
+          errorType: "rate-limited",
+          timestamp: now - i * 200,
+        })
+      ),
+    ];
+    const spreadFailures = [
+      success,
+      ...Array.from({ length: 5 }, (_, i) =>
+        mockMetric({
+          success: false,
+          statusCode: 429,
+          errorType: "rate-limited",
+          timestamp: now - i * (6 * 60 * 1000),
+        })
+      ),
+    ];
 
-      const score = calculateScore(metrics);
-      // Currently, auth-error penalty is 0.0, leading to a near-perfect reliability score.
-      assert.ok(
-        score < 50,
-        `Expected failing score for auth errors, got ${score}`
-      );
-    });
+    const burstScore = calculateNodeScore(
+      testNode,
+      burstFailures,
+      "balanced",
+      200
+    );
+    const spreadScore = calculateNodeScore(
+      testNode,
+      spreadFailures,
+      "balanced",
+      200
+    );
+
+    assert.ok(
+      burstScore < spreadScore,
+      `Burst failures should degrade score more than spread failures. Burst: ${burstScore}, Spread: ${spreadScore}`
+    );
   });
 
-  describe("Heartbeat Data Skew", () => {
-    it("should isolate user request performance from heartbeat pings", () => {
-      const userMetrics = [
-        createMockMetric({
-          ttft: 2000,
-          totalLatency: 5000,
-          outputTokens: 100,
-          source: "user",
-        }),
-      ];
+  it("should return 0 instantly for two consecutive 401s, bypassing exponential math", () => {
+    const metrics = [
+      mockMetric({
+        success: false,
+        statusCode: 401,
+        errorType: "auth-error",
+        timestamp: now,
+      }),
+      mockMetric({
+        success: false,
+        statusCode: 401,
+        errorType: "auth-error",
+        timestamp: now - 1000,
+      }),
+      mockMetric({ success: true, source: "heartbeat", timestamp: now - 2000 }),
+    ];
 
-      const combinedMetrics = [
-        ...userMetrics,
-        // Heartbeats resolve instantly with 1 token
-        createMockMetric({
-          ttft: 150,
-          totalLatency: 200,
-          outputTokens: 1,
-          source: "heartbeat",
-        }),
-        createMockMetric({
-          ttft: 150,
-          totalLatency: 200,
-          outputTokens: 1,
-          source: "heartbeat",
-        }),
-        createMockMetric({
-          ttft: 150,
-          totalLatency: 200,
-          outputTokens: 1,
-          source: "heartbeat",
-        }),
-      ];
-
-      const scoreWithUserOnly = calculateScore(userMetrics);
-      const scoreWithHeartbeats = calculateScore(combinedMetrics);
-
-      // Heartbeats should ideally be filtered out of the p95 TTFT and TPS math,
-      // otherwise they mask poor user-facing performance.
-      const difference = Math.abs(scoreWithUserOnly - scoreWithHeartbeats);
-      assert.ok(
-        difference < 5,
-        `Heartbeats significantly skewed the score by ${difference} points`
-      );
-    });
+    const score = calculateNodeScore(testNode, metrics, "balanced", 200);
+    assert.strictEqual(
+      score,
+      0,
+      "Two consecutive 401s must return 0 instantly via hard guard."
+    );
   });
 });

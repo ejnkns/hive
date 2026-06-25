@@ -20,10 +20,7 @@ type FailoverResult = {
 
 const TIMEOUT_MS = 10000;
 
-function sanitizePayloadForProvider(
-  providerName: string,
-  body: any,
-): any {
+function sanitizePayloadForProvider(providerName: string, body: any): any {
   const cloned = JSON.parse(JSON.stringify(body));
 
   if (!cloned.messages || !Array.isArray(cloned.messages)) return cloned;
@@ -46,7 +43,7 @@ function sanitizePayloadForProvider(
 export async function failover(
   providers: Provider[],
   originalHeaders: IncomingMessage["headers"],
-  originalBody: string,
+  originalBody: string
 ): Promise<FailoverResult> {
   let parsedBody: any;
   try {
@@ -56,21 +53,22 @@ export async function failover(
     return { success: false, statusCode: 400 };
   }
 
-  const requestId = generateId()
-  const prompt = parsedBody.messages || []
-  conversationStore.startConversation(requestId, prompt)
+  const requestId = generateId();
+  const prompt = parsedBody.messages || [];
+  conversationStore.startConversation(requestId, prompt);
 
   for (const provider of providers) {
     const model = provider.defaultModel;
     logger.info(`failover: trying ${provider.name} (${model})`);
 
     if (provider.name === "groq") {
-      const estimatedTokens = (parsedBody.messages?.length
-        ? JSON.stringify(parsedBody.messages).length
-        : JSON.stringify(parsedBody).length) / 4;
+      const estimatedTokens =
+        (parsedBody.messages?.length
+          ? JSON.stringify(parsedBody.messages).length
+          : JSON.stringify(parsedBody).length) / 4;
       if (estimatedTokens > 11500) {
         logger.info(
-          `failover: skipping ${provider.name} — payload too large (est. ${Math.round(estimatedTokens)} tokens, limit ~11500)`,
+          `failover: skipping ${provider.name} — payload too large (est. ${Math.round(estimatedTokens)} tokens, limit ~11500)`
         );
         continue;
       }
@@ -79,11 +77,11 @@ export async function failover(
     if (
       provider.name === "nvidia-nim" &&
       parsedBody.messages?.some(
-        (m: any) => m.tool_calls && m.tool_calls.length > 1,
+        (m: any) => m.tool_calls && m.tool_calls.length > 1
       )
     ) {
       logger.info(
-        `failover: skipping ${provider.name} — multi-tool calls not supported`,
+        `failover: skipping ${provider.name} — multi-tool calls not supported`
       );
       continue;
     }
@@ -100,7 +98,7 @@ export async function failover(
       });
     } catch (err: any) {
       logger.error(
-        `failover: mutate request failed for ${provider.name}: ${err.message}`,
+        `failover: mutate request failed for ${provider.name}: ${err.message}`
       );
       continue;
     }
@@ -115,22 +113,23 @@ export async function failover(
       requestId,
     });
 
-    if (result.success && result.statusCode < 400) {
+    if (result.proxyResponse.isOk()) {
       logger.info(
-        `failover: ${provider.name} succeeded (requestId=${requestId})`,
+        `failover: ${provider.name} succeeded (requestId=${requestId})`
       );
       return {
         success: true,
         provider: provider.name,
         model,
-        stream: result.stream!,
-        statusCode: result.statusCode,
+        stream: result.proxyResponse.getStream() as PassThrough,
+        statusCode: result.proxyResponse.status,
         requestId,
       };
     }
 
+    const errBody = await result.proxyResponse.getBodyAsString();
     logger.error(
-      `failover: ${provider.name} failed — status ${result.statusCode}${result.errorBody ? `: ${result.errorBody.slice(0, 250)}` : ""}${result.errorType ? ` (${result.errorType})` : ""}`,
+      `failover: ${provider.name} failed — status ${result.proxyResponse.status}${errBody ? `: ${errBody.slice(0, 250)}` : ""}`
     );
   }
 

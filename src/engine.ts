@@ -10,15 +10,63 @@ import { mutateRequest } from "./proxy/mutate-request";
 import { routeRequest } from "./proxy/route-request";
 import { discoverAndCacheModels } from "./providers/discovery";
 import { generateId } from "./id";
+import { applyWindow } from "./telemetry/window";
+import { conversationStore } from "./telemetry";
+import type { ProviderModelNode } from "./telemetry/score";
+import type { RequestMetric } from "./telemetry/request-metric";
+import {
+  executeProxyRequest,
+  type FailoverContext,
+} from "./proxy/execute-proxy-request";
+import { selectBestNode } from "./proxy/node-selector";
+import { circuitBreaker } from "./proxy/circuit-breaker";
+import { sessionTracker } from "./proxy/session-tracker";
+import { empiricalDisabledFeatures } from "./proxy/feature-discovery";
+import { ProxyResponse } from "./proxy/proxy-response";
+
+export {
+  selectBestNode,
+  executeProxyRequest,
+  circuitBreaker,
+  sessionTracker,
+  empiricalDisabledFeatures,
+};
+export type { FailoverContext, ProviderModelNode };
 
 type ChatCompletionResult = {
   success: boolean;
   stream?: PassThrough;
   provider?: string;
+
   model?: string;
   statusCode?: number;
   error?: string;
 };
+
+function sanitizePayloadForProvider(providerName: string, body: any): any {
+  const cloned = JSON.parse(JSON.stringify(body));
+  if (!cloned.messages || !Array.isArray(cloned.messages)) return cloned;
+  if (providerName !== "opencode-zen") {
+    cloned.messages = cloned.messages.map((msg: any) => {
+      if (msg.role === "assistant" && "reasoning_content" in msg) {
+        if (msg.reasoning_content && typeof msg.content === "string") {
+          msg.content = `[Thought: ${msg.reasoning_content}]\n\n${msg.content}`;
+        }
+        delete msg.reasoning_content;
+      }
+      return msg;
+    });
+  }
+  return cloned;
+}
+
+function extractRequiredFeatures(parsed: any): string[] {
+  const features: string[] = [];
+  if (parsed.tools || parsed.messages?.some((m: any) => m.tool_calls)) {
+    features.push("tools");
+  }
+  return features;
+}
 
 export class HiveCore {
   private providers: Provider[] = [];
@@ -102,25 +150,18 @@ export class HiveCore {
     }
 
     const cache = await loadCache();
-    const modelScores = cache.scores;
+    const payloadStr = JSON.stringify(parsed);
+    const requestId = generateId();
+    const sessionId = requestId;
+    const prompt = parsed.messages || [];
+    conversationStore.startConversation(requestId, prompt);
 
-    const prioritized = sortByPriority(
-      qualified.map((p) => {
-        const ms = modelScores.find(
-          (s) => s.provider === p.name && s.model === p.defaultModel
-        );
-        return {
-          provider: p.name,
-          model: p.defaultModel,
-          enabled: true,
-          stabilityScore: ms?.score ?? 50,
-        };
-      })
-    );
+    const nodes: ProviderModelNode[] = qualified.map((p) => ({
+      providerName: p.name,
+      modelName: p.defaultModel,
+    }));
 
-    const sorted = prioritized
-      .map((ps) => qualified.find((p) => p.name === ps.provider))
-      .filter((p): p is Provider => p !== undefined);
+    const requiredFeatures = extractRequiredFeatures(parsed);
 
     const headers: IncomingHttpHeaders = Object.fromEntries(
       Object.entries(incomingHeaders).filter(
@@ -130,26 +171,82 @@ export class HiveCore {
           )
       )
     );
-    const result = await failover(sorted, headers, JSON.stringify(parsed));
 
-    if (!result.success) {
+    const getMetricsForNode = (compoundKey: string): RequestMetric[] => {
+      const all = cache.metrics.filter(
+        (m) => `${m.provider}:${m.model}` === compoundKey
+      );
+      return applyWindow(all);
+    };
+
+    const dispatchRequest = async (
+      node: ProviderModelNode,
+      _payload: string
+    ): Promise<ProxyResponse> => {
+      const provider = qualified.find((p) => p.name === node.providerName);
+      if (!provider) return ProxyResponse.error(500, "config-error");
+
+      const sanitized = sanitizePayloadForProvider(node.providerName, parsed);
+
+      const mutated = mutateRequest({
+        originalHeaders: headers,
+        originalBody: JSON.stringify(sanitized),
+        targetProvider: provider,
+        targetModel: node.modelName,
+      });
+
+      const result = await routeRequest({
+        upstreamUrl: buildChatEndpoint(provider.baseUrl),
+        mutated,
+        timeoutMs: 10000,
+        providerName: node.providerName,
+        modelName: node.modelName,
+        requestId,
+      });
+
+      return result.proxyResponse;
+    };
+
+    try {
+      const response = await executeProxyRequest({
+        nodes,
+        originalPayload: payloadStr,
+        requiredFeatures,
+        getMetricsForNode,
+        dispatchRequest,
+        sessionId,
+      });
+
+      if (response.isOk()) {
+        const lastKey = sessionTracker.sessions.get(sessionId);
+        this.lastProvider =
+          nodes.find((n) => lastKey === `${n.providerName}:${n.modelName}`)
+            ?.providerName ?? null;
+        this.lastModel =
+          nodes.find((n) => lastKey === `${n.providerName}:${n.modelName}`)
+            ?.modelName ?? null;
+
+        return {
+          success: true,
+          stream: response.getStream() as PassThrough,
+          provider: this.lastProvider ?? undefined,
+          model: this.lastModel ?? undefined,
+          statusCode: response.status,
+        };
+      }
+
       return {
         success: false,
-        statusCode: result.statusCode ?? 503,
+        statusCode: response.status,
+        error: "Upstream returned no stream",
+      };
+    } catch {
+      return {
+        success: false,
+        statusCode: 503,
         error: "All providers failed",
       };
     }
-
-    this.lastProvider = result.provider!;
-    this.lastModel = result.model!;
-
-    return {
-      success: true,
-      stream: result.stream!,
-      provider: result.provider!,
-      model: result.model!,
-      statusCode: result.statusCode,
-    };
   }
 
   async getProviderStates() {
