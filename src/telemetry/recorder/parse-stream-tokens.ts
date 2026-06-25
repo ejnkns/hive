@@ -10,6 +10,7 @@ type StreamStats = {
   responseText: string;
   inputTokens: number | null;
   outputTokensFromUsage: number | null;
+  isAbruptDisconnect: boolean;
 };
 
 export function createStreamCounter(startTime: number) {
@@ -106,6 +107,7 @@ export function createStreamCounter(startTime: number) {
       responseText,
       inputTokens,
       outputTokensFromUsage,
+      isAbruptDisconnect,
     };
   };
 

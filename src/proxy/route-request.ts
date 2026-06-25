@@ -171,7 +171,7 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
         const effectiveTtft = initialByteReceived ? ttft : Date.now() - start;
         record(
           effectiveTtft,
-          true,
+          !stats.isAbruptDisconnect,
           statusCode,
           undefined,
           undefined,
@@ -179,7 +179,7 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
           stats
         );
 
-        if (!streamErrored) {
+        if (!streamErrored && !stats.isAbruptDisconnect) {
           conversationStore.completeConversation(requestId, {
             provider: providerName,
             model: modelName,
