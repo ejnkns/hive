@@ -1,69 +1,68 @@
-import type { RequestMetrics } from "./sliding-window";
-import { loadState, saveState } from "./persistence";
-import { slidingWindow } from "./sliding-window";
-import { calculateScore } from "./calculate-score";
+import type { RequestMetric } from "./request-metric"
+import { loadCache, saveCache, type ModelScore } from "./persist"
+import { applyWindow } from "./window"
+import { calculateScore } from "./score"
+import { computeDerivedMetrics } from "./derived-metrics"
 
-const FLUSH_INTERVAL_MS = 12_000;
+const FLUSH_INTERVAL_MS = 12_000
 
 export class TelemetryRecorder {
-  private buffer: RequestMetrics[] = [];
-  private flushTimer: ReturnType<typeof setInterval> | null = null;
+  private buffer: RequestMetric[] = []
+  private flushTimer: ReturnType<typeof setInterval> | null = null
 
-  recordMetric(metric: RequestMetrics): void {
-    this.buffer.push(metric);
+  recordMetric(metric: RequestMetric): void {
+    this.buffer.push(metric)
   }
 
   start(): void {
-    if (this.flushTimer) return;
-    this.flushTimer = setInterval(() => this.flush(), FLUSH_INTERVAL_MS);
+    if (this.flushTimer) return
+    this.flushTimer = setInterval(() => this.flush(), FLUSH_INTERVAL_MS)
   }
 
   async flush(): Promise<void> {
-    if (this.buffer.length === 0) return;
+    if (this.buffer.length === 0) return
 
-    const state = await loadState();
-    const combined = [...state.metrics, ...this.buffer];
+    const cache = await loadCache()
+    const combined = [...cache.metrics, ...this.buffer]
 
-    const providerMap = new Map<string, RequestMetrics[]>();
+    const providerMap = new Map<string, RequestMetric[]>()
     for (const m of combined) {
-      const key = `${m.provider}:${m.model}`;
-      if (!providerMap.has(key)) providerMap.set(key, []);
-      providerMap.get(key)!.push(m);
+      const key = `${m.provider}:${m.model}`
+      if (!providerMap.has(key)) providerMap.set(key, [])
+      providerMap.get(key)!.push(m)
     }
 
-    const retained: RequestMetrics[] = [];
-    for (const [, ms] of providerMap) {
-      retained.push(...slidingWindow(ms));
-    }
+    const retained: RequestMetric[] = []
+    const scores: ModelScore[] = []
 
-    state.metrics = retained;
+    for (const [key, ms] of providerMap) {
+      const windowed = applyWindow(ms)
+      retained.push(...windowed)
 
-    const providerKeys = [...providerMap.keys()];
-    state.providerStates = providerKeys.map((key) => {
-      const [provider, model] = key.split(":");
-      const metrics = providerMap.get(key)!;
-      return {
+      const [provider, model] = key.split(":")
+      scores.push({
         provider,
         model,
-        enabled: true,
-        stabilityScore: calculateScore(metrics),
-      };
-    });
+        score: calculateScore(windowed),
+        derived: computeDerivedMetrics(windowed),
+        updatedAt: Date.now(),
+      })
+    }
 
-    await saveState(state);
-    this.buffer = [];
+    await saveCache({ metrics: retained, scores })
+    this.buffer = []
   }
 
   getPendingCount(): number {
-    return this.buffer.length;
+    return this.buffer.length
   }
 
   stop(): void {
     if (this.flushTimer) {
-      clearInterval(this.flushTimer);
-      this.flushTimer = null;
+      clearInterval(this.flushTimer)
+      this.flushTimer = null
     }
   }
 }
 
-export const telemetryRecorder = new TelemetryRecorder();
+export const telemetryRecorder = new TelemetryRecorder()

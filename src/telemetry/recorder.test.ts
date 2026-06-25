@@ -1,14 +1,14 @@
 import { describe, it, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert'
 import { TelemetryRecorder } from './recorder'
-import { loadState, saveState } from './persistence'
+import { loadCache, saveCache } from './persist'
 
 describe('TelemetryRecorder', () => {
   let recorder: TelemetryRecorder
 
   beforeEach(async () => {
     recorder = new TelemetryRecorder()
-    await saveState({ metrics: [], providerStates: [] })
+    await saveCache({ metrics: [], scores: [] })
   })
 
   afterEach(() => {
@@ -19,36 +19,52 @@ describe('TelemetryRecorder', () => {
     recorder.recordMetric({
       provider: 'test',
       model: 'test-model',
-      ttft: 100,
-      statusCode: 200,
-      success: true,
       timestamp: Date.now(),
+      ttft: 100,
+      totalLatency: 500,
+      inputTokens: 10,
+      outputTokens: 50,
+      thinkingTime: null,
+      finishReason: null,
+      refused: false,
+      statusCode: 200,
+      errorType: null,
+      success: true,
+      source: 'user',
     })
 
     assert.strictEqual((recorder as any).buffer.length, 1)
   })
 
-  it('flush persists to state and clears buffer', async () => {
+  it('flush persists to cache and clears buffer', async () => {
     recorder.recordMetric({
       provider: 'test',
       model: 'test-model',
-      ttft: 100,
-      statusCode: 200,
-      success: true,
       timestamp: Date.now(),
+      ttft: 100,
+      totalLatency: 500,
+      inputTokens: 10,
+      outputTokens: 50,
+      thinkingTime: null,
+      finishReason: null,
+      refused: false,
+      statusCode: 200,
+      errorType: null,
+      success: true,
+      source: 'user',
     })
 
     await recorder.flush()
 
-    const state = await loadState()
-    assert.strictEqual(state.metrics.length, 1)
+    const cache = await loadCache()
+    assert.strictEqual(cache.metrics.length, 1)
     assert.strictEqual((recorder as any).buffer.length, 0)
   })
 
   it('empty buffer does not write on flush', async () => {
-    const stateBefore = await loadState()
+    const cacheBefore = await loadCache()
     await recorder.flush()
-    const stateAfter = await loadState()
-    assert.strictEqual(stateAfter.metrics.length, stateBefore.metrics.length)
+    const cacheAfter = await loadCache()
+    assert.strictEqual(cacheAfter.metrics.length, cacheBefore.metrics.length)
   })
 })
