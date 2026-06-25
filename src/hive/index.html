@@ -3,23 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Hive Daemon Dashboard</title>
+    <title>Hive</title>
     <style>
-      :root {
-        --bg-main: #000100;
-        --bg-card: #0f1007;
-        --bg-header: var(--bg-card);
-        --border-color: #f8ff37;
-        --text-main: #f1f5f9;
-        --text-muted: #aeb894;
-        --accent: #6bffd3;
-        --accent-hover: #fffc5a;
-        --success: #22c54e;
-        --warning: #eab308;
-        --error: #ef6144;
-        --disabled: #545147;
-      }
-
       * {
         box-sizing: border-box;
         margin: 0;
@@ -28,845 +13,1377 @@
 
       body {
         font-family: monospace;
-        background-color: var(--bg-main);
-        color: var(--text-main);
+        background: var(--bg);
+        color: var(--text);
         line-height: 1.5;
       }
 
+      :root {
+        --bg: #0c0a00;
+        --card: #0d0c06;
+        --border: #3a2e0a;
+        --border-rgb: 58, 46, 10;
+        --accent: #f5b342;
+        --accent-rgb: 245, 179, 66;
+        --text: #f5e6c8;
+        --muted: #8a7a5c;
+        --success: #7cb342;
+        --success-rgb: 124, 179, 66;
+        --error: #d4451a;
+        --error-rgb: 212, 69, 26;
+        --warning: #d4a017;
+      }
+
+      html.light {
+        --bg: #f5f0e3;
+        --card: #fdfaef;
+        --border: #d4c5a0;
+        --border-rgb: 212, 197, 160;
+        --accent: #1f1902;
+        --accent-rgb: 31, 25, 2;
+        --text: #2c2410;
+        --muted: #8a7a5c;
+        --success: #4a7c2e;
+        --success-rgb: 74, 124, 46;
+        --error: #b71c1c;
+        --error-rgb: 183, 28, 28;
+        --warning: #bd9223;
+      }
+
       header {
-        background-color: var(--bg-header);
-        border-bottom: 1px solid var(--border-color);
-        padding: 1rem 2rem;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+        border-bottom: 1px solid var(--border);
+        background: var(--card);
         position: sticky;
         top: 0;
         z-index: 50;
+        padding: 0.5rem 1.25rem 0.375rem;
       }
 
-      .brand {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-      }
-
-      .logo {
-        background: linear-gradient(135deg, var(--accent), #6366f1);
-        width: 2rem;
-        height: 2rem;
-        border-radius: 0.5rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: bold;
-        color: var(--bg-main);
-      }
-
-      .brand h1 {
-        font-size: 1.25rem;
-        font-weight: 700;
-        letter-spacing: -0.025em;
-      }
-
-      .server-status {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        font-size: 0.875rem;
-        background-color: rgba(34, 197, 94, 0.1);
-        color: var(--success);
-        padding: 0.25rem 0.75rem;
-        border-radius: 9999px;
-        font-weight: 500;
-        border: 1px solid rgba(34, 197, 94, 0.2);
-      }
-
-      .server-status.offline {
-        background-color: rgba(239, 68, 68, 0.1);
-        color: var(--error);
-        border-color: rgba(239, 68, 68, 0.2);
-      }
-
-      .status-dot {
-        width: 0.5rem;
-        height: 0.5rem;
-        background-color: currentColor;
-        border-radius: 50%;
-        display: inline-block;
-        animation: pulse 2s infinite;
-      }
-
-      @keyframes pulse {
-        0%,
-        100% {
-          opacity: 1;
-        }
-        50% {
-          opacity: 0.4;
-        }
-      }
-
-      main {
-        max-width: 1400px;
-        margin: 0 auto;
-        padding: 2rem;
-        display: flex;
-        flex-direction: column;
-        gap: 2rem;
-      }
-
-      .panel-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 1rem;
-      }
-
-      .panel-header h2 {
-        font-size: 1.125rem;
-        font-weight: 600;
-        color: var(--text-muted);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-      }
-
-      /* Stats Banner */
-      .stats-banner {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 1.5rem;
-      }
-
-      /* Octagon Styles */
-      .octagon-bounds {
-        position: relative;
-        overflow: visible !important;
-        filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.05));
-        transition: filter 0.2s ease;
-      }
-
-      .octagon-border {
-        --oct-cut: 12px;
-        background: var(--border-color);
-        padding: 1.5px;
-        box-sizing: border-box;
-        width: 100%;
-        height: 100%;
-        clip-path: polygon(
-          var(--oct-cut) 0,
-          calc(100% - var(--oct-cut)) 0,
-          100% var(--oct-cut),
-          100% calc(100% - var(--oct-cut)),
-          calc(100% - var(--oct-cut)) 100%,
-          var(--oct-cut) 100%,
-          0 calc(100% - var(--oct-cut)),
-          0 var(--oct-cut)
-        );
-        transition: background-color 0.2s ease;
-      }
-
-      .octagon-bg {
-        background: var(--bg-card);
-        box-sizing: border-box;
-        width: 100%;
-        height: 100%;
-        clip-path: polygon(
-          var(--oct-cut) 0,
-          calc(100% - var(--oct-cut)) 0,
-          100% var(--oct-cut),
-          100% calc(100% - var(--oct-cut)),
-          calc(100% - var(--oct-cut)) 100%,
-          var(--oct-cut) 100%,
-          0 calc(100% - var(--oct-cut)),
-          0 var(--oct-cut)
-        );
-      }
-
-      /* Hover states */
-      .octagon-bounds:hover {
-        filter: drop-shadow(0 0 8px var(--accent));
-      }
-
-      .octagon-bounds:hover .octagon-border {
-        background: var(--accent);
-      }
-
-      .stat-card {
-        --oct-cut: 8px;
-      }
-
-      .stat-card .octagon-bg {
-        padding: 1.25rem;
-        display: flex;
-        flex-direction: column;
-        gap: 0.25rem;
-      }
-
-      .stat-card .label {
-        font-size: 0.875rem;
-        color: var(--text-muted);
-      }
-
-      .stat-card .value {
-        font-size: 1.5rem;
-        font-weight: 700;
-      }
-
-      /* Providers Grid */
-      .providers-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-        gap: 1.5rem;
-      }
-
-      .provider-card {
-        transition: opacity 0.2s;
-      }
-
-      .provider-card .octagon-bg {
-        padding: 1.5rem;
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-      }
-
-      .provider-header {
+      .header-inner {
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
+        max-width: 1200px;
+        margin: 0 auto;
       }
 
-      .provider-info h3 {
+      header pre {
+        font-family: monospace;
+        font-size: 0.625rem;
+        line-height: 1.3;
+        color: var(--accent);
+        margin: 0;
+        white-space: pre;
+      }
+
+      .header-meta {
+        text-align: right;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0.375rem;
+      }
+
+      .server-addr {
+        font-size: 0.625rem;
+        color: var(--muted);
+      }
+
+      .badge-status {
+        font-size: 0.625rem;
+        font-weight: 700;
+        padding: 0.125rem 0.5rem;
+        border-radius: 0;
+        display: inline-block;
+      }
+      .badge-status.on {
+        background: rgba(var(--success-rgb), 0.12);
+        color: var(--success);
+        border: 1px solid var(--success);
+      }
+      .badge-status.off {
+        background: rgba(var(--error-rgb), 0.12);
+        color: var(--error);
+        border: 1px solid var(--error);
+      }
+
+      main {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 1.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+      }
+
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.625rem;
+      }
+      .stat {
+        background: var(--card);
+        border: 1px solid var(--border);
+        padding: 0.625rem 0.875rem;
+      }
+      .stat-label {
+        font-size: 0.625rem;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .stat-value {
         font-size: 1.25rem;
+        font-weight: 700;
+        margin-top: 0.125rem;
+      }
+
+      .swarm {
+        background: var(--card);
+        border: 1px solid var(--border);
+        padding: 0.5rem 0.875rem;
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        font-size: 0.8125rem;
+        flex-wrap: wrap;
+      }
+      .swarm-label {
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-size: 0.625rem;
+        font-weight: 700;
+      }
+      .swarm-node {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.125rem 0.5rem;
+        background: rgba(var(--accent-rgb), 0.06);
+        font-weight: 600;
+      }
+      .swarm-node .sc {
+        font-weight: 400;
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+      .swarm-arr {
+        color: var(--muted);
+        font-size: 0.6875rem;
+      }
+
+      .section-head {
+        font-size: 0.625rem;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+      }
+
+      .workers {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 0.75rem;
+      }
+      .worker {
+        background: var(--card);
+        border: 1px solid var(--border);
+        padding: 0.875rem;
+      }
+      .worker-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.625rem;
+      }
+      .worker-name {
+        font-size: 1rem;
         font-weight: 700;
         text-transform: capitalize;
       }
-
-      .provider-url {
-        font-size: 0.75rem;
-        color: var(--text-muted);
-        word-break: break-all;
-      }
-
       .key-badge {
-        font-size: 0.75rem;
-        font-weight: 600;
-        padding: 0.25rem 0.5rem;
-        border-radius: 0.375rem;
-        text-transform: uppercase;
+        font-size: 0.5625rem;
+        padding: 0.0625rem 0.375rem;
+        /* text-transform: uppercase; */
+        font-weight: 700;
+        border: 1px solid currentColor;
       }
-
       .key-badge.active {
-        background-color: rgba(34, 197, 94, 0.1);
         color: var(--success);
-        border: 1px solid rgba(34, 197, 94, 0.2);
+        border-color: var(--success);
+        background: rgba(var(--success-rgb), 0.08);
+      }
+      .key-badge.no-key {
+        color: var(--muted);
+        border-color: var(--border);
+        background: transparent;
       }
 
-      .key-badge.inactive {
-        background-color: rgba(71, 85, 105, 0.1);
-        color: var(--disabled);
-        border: 1px solid rgba(71, 85, 105, 0.2);
-      }
-
-      .metric-row {
+      .wmet {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
-        gap: 1rem;
-        background-color: rgba(0, 0, 0, 0.15);
-        padding: 0.75rem;
-        border-radius: 0.5rem;
+        gap: 0.5rem;
         text-align: center;
+        margin-bottom: 0.75rem;
       }
-
-      .metric-item {
+      .wmet-item {
         display: flex;
         flex-direction: column;
-        gap: 0.25rem;
+        gap: 0.125rem;
       }
-
-      .metric-label {
-        font-size: 0.75rem;
-        color: var(--text-muted);
+      .wmet-item .l {
+        font-size: 0.5625rem;
+        color: var(--muted);
         text-transform: uppercase;
       }
-
-      .metric-val {
-        font-size: 1rem;
-        font-weight: 700;
+      .wmet-item .v {
+        font-size: 0.875rem;
+        font-weight: 600;
       }
 
-      .stability-bar-container {
-        display: flex;
-        flex-direction: column;
-        gap: 0.375rem;
+      .bar-text {
+        font-family: monospace;
+        font-size: 0.75rem;
+        letter-spacing: 0.05em;
+        line-height: 1;
       }
 
-      .stability-header {
+      .mrows {
+        border-top: 1px solid var(--border);
+        padding-top: 0.5rem;
+        margin-top: 0.25rem;
+      }
+      .mrow {
         display: flex;
         justify-content: space-between;
-        font-size: 0.875rem;
-      }
-
-      .stability-bar {
-        height: 0.5rem;
-        background-color: var(--border-color);
-        border-radius: 9999px;
-        overflow: hidden;
-      }
-
-      .stability-fill {
-        height: 100%;
-        border-radius: 9999px;
-        transition:
-          width 0.5s ease-in-out,
-          background-color 0.5s;
-      }
-
-      .provider-models {
-        font-size: 0.8125rem;
-        border-top: 1px solid var(--border-color);
-        padding-top: 0.75rem;
-      }
-
-      .models-title {
-        font-weight: 600;
-        color: var(--text-muted);
-        margin-bottom: 0.375rem;
-      }
-
-      .models-list {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.375rem;
-      }
-
-      .model-tag {
-        background-color: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        color: var(--text-muted);
-        padding: 0.125rem 0.5rem;
-        border-radius: 0.25rem;
         font-size: 0.75rem;
+        padding: 0.25rem 0;
       }
-
-      .model-tag.default {
-        background-color: rgba(56, 189, 248, 0.08);
-        border-color: rgba(56, 189, 248, 0.2);
+      .mrow + .mrow {
+        border-top: 1px solid rgba(var(--border-rgb), 0.3);
+      }
+      .mname {
         color: var(--accent);
+        font-family: monospace;
+        font-size: 0.6875rem;
         font-weight: 500;
       }
-
-      /* Priority Ranking */
-      .priority-panel {
-        /* Outer layout wrapper */
-      }
-
-      .priority-panel .octagon-bg {
-        padding: 1.5rem;
+      .mstats {
         display: flex;
-        flex-direction: column;
-        gap: 1rem;
-      }
-
-      .priority-list {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        flex-wrap: wrap;
-      }
-
-      .priority-node {
-        background-color: rgba(255, 255, 255, 0.03);
-        border: 1px solid var(--border-color);
-        padding: 0.5rem 1rem;
-        border-radius: 0.5rem;
-        display: flex;
-        align-items: center;
         gap: 0.75rem;
-        font-weight: 600;
+        color: var(--muted);
+        font-size: 0.625rem;
+      }
+      .mstats span {
+        white-space: nowrap;
       }
 
-      .priority-index {
-        background-color: var(--accent);
-        color: var(--bg-main);
-        width: 1.5rem;
-        height: 1.5rem;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.75rem;
+      .log-wrap {
+        background: var(--card);
+        border: 1px solid var(--border);
+        overflow: hidden;
       }
-
-      .priority-score {
-        font-size: 0.8125rem;
-        color: var(--text-muted);
-        font-weight: normal;
-      }
-
-      .priority-arrow {
-        color: var(--text-muted);
-        font-weight: bold;
-      }
-
-      /* Logs/Metrics Section */
-      .activity-panel {
-        /* Outer layout wrapper */
-      }
-
-      .activity-panel .octagon-bg {
-        padding: 1.5rem;
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-      }
-
-      .table-container {
-        width: 100%;
+      .log-scroll {
         overflow-x: auto;
-        max-height: 450px;
+        max-height: 400px;
         overflow-y: auto;
-        border-radius: 0.5rem;
-        border: 1px solid var(--border-color);
       }
 
       table {
         width: 100%;
         border-collapse: collapse;
-        text-align: left;
-        font-size: 0.875rem;
+        font-size: 0.8125rem;
       }
-
       th {
-        background-color: rgba(0, 0, 0, 0.2);
-        padding: 0.75rem 1rem;
-        font-weight: 600;
-        color: var(--text-muted);
-        border-bottom: 1px solid var(--border-color);
+        background: rgba(0, 0, 0, 0.2);
+        padding: 0.375rem 0.75rem;
+        font-size: 0.625rem;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        text-align: left;
+        border-bottom: 2px solid var(--border);
         position: sticky;
         top: 0;
+        font-weight: 700;
       }
-
       td {
-        padding: 0.75rem 1rem;
-        border-bottom: 1px solid var(--border-color);
+        padding: 0.375rem 0.75rem;
+        border-bottom: 1px solid rgba(var(--border-rgb), 0.3);
       }
-
       tr:last-child td {
         border-bottom: none;
       }
-
       tr:hover td {
-        background-color: rgba(255, 255, 255, 0.02);
+        background: rgba(var(--accent-rgb), 0.03);
       }
 
       .badge {
-        font-size: 0.75rem;
-        font-weight: 600;
-        padding: 0.125rem 0.375rem;
-        border-radius: 0.25rem;
-        text-transform: uppercase;
         display: inline-block;
+        font-size: 0.625rem;
+        font-weight: 700;
+        padding: 0.0625rem 0.375rem;
+        text-transform: uppercase;
       }
-
-      .badge.success {
-        background-color: rgba(34, 197, 94, 0.1);
+      .badge.ok {
+        background: rgba(var(--success-rgb), 0.1);
         color: var(--success);
       }
-
-      .badge.error {
-        background-color: rgba(239, 68, 68, 0.1);
+      .badge.err {
+        background: rgba(var(--error-rgb), 0.1);
         color: var(--error);
       }
 
-      .badge.neutral {
-        background-color: rgba(148, 163, 184, 0.1);
-        color: var(--text-muted);
+      .no-data {
+        padding: 1.5rem;
+        text-align: center;
+        color: var(--muted);
+        font-size: 0.8125rem;
       }
 
-      .no-data {
-        padding: 2rem;
-        text-align: center;
-        color: var(--text-muted);
+      .info-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1rem;
+        height: 1rem;
+        border: 1px solid var(--muted);
+        background: transparent;
+        color: var(--muted);
+        font-size: 0.5625rem;
+        cursor: pointer;
+        border-radius: 50%;
+        font: inherit;
+        line-height: 1;
+        padding: 0;
+        vertical-align: middle;
+        margin-left: 0.25rem;
+        flex-shrink: 0;
+        text-transform: none;
+        letter-spacing: 0;
+      }
+      .info-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .info-popover {
+        border: 1px solid var(--border);
+        background: var(--card);
+        color: var(--text);
+        font-size: 0.75rem;
+        padding: 0.5rem 0.75rem;
+        max-width: 260px;
+        line-height: 1.4;
+        font-family: monospace;
+        position: fixed;
+        top: anchor(bottom);
+        left: anchor(center);
+        translate: -50% 0;
+        margin-top: 0.375rem;
+      }
+
+      .tab-bar {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 0.5rem;
+      }
+      .tab {
+        font-size: 0.625rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-weight: 700;
+        cursor: pointer;
+        padding-bottom: 0.25rem;
+        color: var(--muted);
+        border-bottom: 2px solid transparent;
+      }
+      .tab:hover {
+        color: var(--text);
+      }
+      .tab.active {
+        color: var(--accent);
+        border-bottom-color: var(--accent);
+      }
+
+      .detail-overlay {
+        border: 1px solid var(--border);
+        background: var(--card);
+        color: var(--text);
+        font-family: monospace;
+        font-size: 0.75rem;
+        padding: 1rem;
+        max-width: 600px;
+        width: 90vw;
+        max-height: 80vh;
+        overflow-y: auto;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        translate: -50% -50%;
+      }
+      .detail-overlay::backdrop {
+        background: rgba(0, 0, 0, 0.6);
+      }
+      .detail-overlay h3 {
+        font-size: 0.875rem;
+        margin-bottom: 0.75rem;
+        color: var(--accent);
+      }
+      .detail-grid {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 0.25rem 0.75rem;
+        font-size: 0.6875rem;
+        margin-bottom: 1rem;
+      }
+      .detail-grid .label {
+        color: var(--muted);
+      }
+      .detail-grid .value {
+        font-weight: 600;
+      }
+      .detail-close {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.75rem;
+        background: none;
+        border: 1px solid var(--border);
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 0.75rem;
+        padding: 0.125rem 0.5rem;
+        font-family: inherit;
+      }
+      .detail-close:hover {
+        color: var(--accent);
+        border-color: var(--accent);
+      }
+      .detail-chain {
+        border-top: 1px solid var(--border);
+        padding-top: 0.75rem;
+        margin-top: 0.5rem;
+      }
+      .detail-chain h4 {
+        font-size: 0.6875rem;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 0.375rem;
+      }
+      .detail-chain-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.25rem 0;
+        font-size: 0.6875rem;
+      }
+      .detail-chain-item + .detail-chain-item {
+        border-top: 1px solid rgba(var(--border-rgb), 0.3);
+      }
+
+      .conv-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        padding: 0.75rem;
+        margin-bottom: 0.75rem;
+      }
+      .conv-card:last-child {
+        margin-bottom: 0;
+      }
+      .conv-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+        font-size: 0.6875rem;
+      }
+      .conv-header .provider {
+        font-weight: 700;
+        text-transform: capitalize;
+      }
+      .conv-header .model {
+        font-family: monospace;
+        color: var(--accent);
+      }
+      .conv-header .time {
+        color: var(--muted);
+        font-size: 0.625rem;
+      }
+      .conv-block {
+        margin-bottom: 0.5rem;
+      }
+      .conv-block:last-child {
+        margin-bottom: 0;
+      }
+      .conv-block .label {
+        font-size: 0.5625rem;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 0.25rem;
+      }
+      .conv-block pre {
+        font-size: 0.6875rem;
+        color: var(--text);
+        background: rgba(0, 0, 0, 0.15);
+        padding: 0.5rem;
+        max-height: 200px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .conv-toggle {
+        cursor: pointer;
+        color: var(--muted);
+        font-size: 0.625rem;
+        text-decoration: underline;
+        text-decoration-style: dotted;
+      }
+      .conv-toggle:hover {
+        color: var(--accent);
+      }
+      .conv-footer {
+        display: flex;
+        gap: 1rem;
+        font-size: 0.625rem;
+        color: var(--muted);
+        margin-top: 0.375rem;
+        padding-top: 0.375rem;
+        border-top: 1px solid rgba(var(--border-rgb), 0.3);
+      }
+
+      @media (max-width: 640px) {
+        .stats {
+          grid-template-columns: repeat(2, 1fr);
+        }
+        .workers {
+          grid-template-columns: 1fr;
+        }
+        header pre {
+          display: none;
+        }
+      }
+      .theme-btn {
+        font-family: inherit;
+        font-size: 0.5625rem;
+        padding: 0.125rem 0.5rem;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .theme-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
       }
     </style>
+    <script>
+      (function () {
+        var t = localStorage.getItem("theme");
+        if (!t)
+          t = matchMedia("(prefers-color-scheme:light)").matches
+            ? "light"
+            : "dark";
+        if (t === "light") document.documentElement.classList.add("light");
+      })();
+    </script>
   </head>
   <body>
     <header>
-      <div class="brand">
-        <div class="logo">H</div>
-        <div>
-          <h1>Hive Daemon</h1>
-          <p style="font-size: 0.75rem; color: var(--text-muted)">
-            Local Multi-Provider LLM Router
-          </p>
+      <div class="header-inner">
+        <pre>
+                            h i v e
+   ,-.      .' '.        .`
+   \_/      .   .       .
+:>(|||} .    ` .       .
+   / \   '. . '  ' . '
+   `-'  </pre
+        >
+        <div class="header-meta">
+          <span id="status" class="badge-status on">ONLINE</span>
+          <button id="themeToggle" class="theme-btn">dark</button>
+          <span id="serverAddr" class="server-addr">—</span>
         </div>
-      </div>
-      <div id="connectionStatus" class="server-status">
-        <span class="status-dot"></span>
-        <span id="connectionText">ONLINE</span>
       </div>
     </header>
 
     <main>
-      <!-- Stats Row -->
-      <div class="stats-banner">
-        <div class="stat-card octagon-bounds">
-          <div class="octagon-border">
-            <div class="octagon-bg">
-              <span class="label">Total Proxy Requests</span>
-              <span id="statRequests" class="value">—</span>
-            </div>
+      <div class="stats">
+        <div class="stat">
+          <span class="stat-label">
+            Traffic
+            <button
+              popovertarget="info-traffic"
+              type="button"
+              class="info-btn"
+              aria-label="More info"
+              style="anchor-name: --info-traffic"
+            >
+              i
+            </button>
+          </span>
+          <span id="statTraffic" class="stat-value">—</span>
+          <div
+            id="info-traffic"
+            popover="auto"
+            class="info-popover"
+            role="tooltip"
+            style="position-anchor: --info-traffic"
+          >
+            Total API requests in tracking window
           </div>
         </div>
-        <div class="stat-card octagon-bounds">
-          <div class="octagon-border">
-            <div class="octagon-bg">
-              <span class="label">Proxy Health Status</span>
-              <span id="statSuccessRate" class="value">—</span>
-            </div>
+        <div class="stat">
+          <span class="stat-label">
+            Success
+            <button
+              popovertarget="info-success"
+              type="button"
+              class="info-btn"
+              aria-label="More info"
+              style="anchor-name: --info-success"
+            >
+              i
+            </button>
+          </span>
+          <span id="statHoney" class="stat-value">—</span>
+          <div
+            id="info-success"
+            popover="auto"
+            class="info-popover"
+            role="tooltip"
+            style="position-anchor: --info-success"
+          >
+            % of requests completed without error
           </div>
         </div>
-        <div class="stat-card octagon-bounds">
-          <div class="octagon-border">
-            <div class="octagon-bg">
-              <span class="label">Pending Telemetry Metrics</span>
-              <span id="statPending" class="value">—</span>
-            </div>
+        <div class="stat">
+          <span class="stat-label">
+            Providers
+            <button
+              popovertarget="info-providers"
+              type="button"
+              class="info-btn"
+              aria-label="More info"
+              style="anchor-name: --info-providers"
+            >
+              i
+            </button>
+          </span>
+          <span id="statWorkers" class="stat-value">—</span>
+          <div
+            id="info-providers"
+            popover="auto"
+            class="info-popover"
+            role="tooltip"
+            style="position-anchor: --info-providers"
+          >
+            Providers with an API key configured
           </div>
         </div>
-        <div class="stat-card octagon-bounds">
-          <div class="octagon-border">
-            <div class="octagon-bg">
-              <span class="label">Proxy Endpoint</span>
-              <span
-                id="statAddress"
-                class="value"
-                style="
-                  font-size: 1.125rem;
-                  font-family: monospace;
-                  word-break: break-all;
-                  margin-top: 0.25rem;
-                "
-                >—</span
-              >
-            </div>
+        <div class="stat">
+          <span class="stat-label">
+            Latency
+            <button
+              popovertarget="info-latency-stat"
+              type="button"
+              class="info-btn"
+              aria-label="More info"
+              style="anchor-name: --info-latency-stat"
+            >
+              i
+            </button>
+          </span>
+          <span id="statFlight" class="stat-value">—</span>
+          <div
+            id="info-latency-stat"
+            popover="auto"
+            class="info-popover"
+            role="tooltip"
+            style="position-anchor: --info-latency-stat"
+          >
+            Average time-to-first-token (TTFT)
           </div>
         </div>
       </div>
 
-      <!-- Active Priority List -->
-      <div class="priority-panel octagon-bounds">
-        <div class="octagon-border">
-          <div class="octagon-bg">
-            <div class="panel-header">
-              <h2>Failover Priority Queue</h2>
-            </div>
-            <div id="priorityList" class="priority-list">
-              <!-- Dynamic Priority Nodes -->
-              <span class="no-data">Loading priority schema...</span>
-            </div>
-          </div>
+      <div id="swarm" class="swarm">
+        <span class="swarm-label">
+          Priority
+          <button
+            popovertarget="info-priority"
+            type="button"
+            class="info-btn"
+            aria-label="More info"
+            style="anchor-name: --info-priority"
+          >
+            i
+          </button>
+        </span>
+        <div
+          id="info-priority"
+          popover="auto"
+          class="info-popover"
+          role="tooltip"
+          style="position-anchor: --info-priority"
+        >
+          Providers sorted by stability score descending
         </div>
+        <span class="no-data" style="border: none; padding: 0">Loading...</span>
       </div>
 
-      <!-- Providers Grid -->
       <div>
-        <div class="panel-header">
-          <h2>Configured Providers</h2>
-        </div>
-        <div id="providersGrid" class="providers-grid">
-          <!-- Dynamic Provider Cards -->
-        </div>
+        <div class="section-head">Providers</div>
+        <div id="workers" class="workers"></div>
       </div>
 
-      <!-- Activity Panel -->
-      <div class="activity-panel octagon-bounds">
-        <div class="octagon-border">
-          <div class="octagon-bg">
-            <div class="panel-header">
-              <h2>Live Request Telemetry</h2>
+      <div>
+        <div class="section-head tab-bar">
+          <span id="tabActivity" class="tab active">Activity</span>
+          <span id="tabConversations" class="tab">Conversations</span>
+        </div>
+        <div class="log-wrap">
+          <div id="activityView" class="log-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Provider</th>
+                  <th>Model</th>
+                  <th>
+                    Status
+                    <button
+                      popovertarget="info-table-status"
+                      type="button"
+                      class="info-btn"
+                      aria-label="More info"
+                      style="anchor-name: --info-table-status"
+                    >
+                      i
+                    </button>
+                  </th>
+                  <th>
+                    Latency
+                    <button
+                      popovertarget="info-table-latency"
+                      type="button"
+                      class="info-btn"
+                      aria-label="More info"
+                      style="anchor-name: --info-table-latency"
+                    >
+                      i
+                    </button>
+                  </th>
+                  <th>
+                    Tokens
+                    <button
+                      popovertarget="info-table-tokens"
+                      type="button"
+                      class="info-btn"
+                      aria-label="More info"
+                      style="anchor-name: --info-table-tokens"
+                    >
+                      i
+                    </button>
+                  </th>
+                </tr>
+              </thead>
+              <tbody id="logBody">
+                <tr>
+                  <td colspan="6" class="no-data">Awaiting requests...</td>
+                </tr>
+              </tbody>
+            </table>
+            <div
+              id="info-table-status"
+              popover="auto"
+              class="info-popover"
+              role="tooltip"
+              style="position-anchor: --info-table-status"
+            >
+              HTTP status code or error type
             </div>
-            <div class="table-container">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Time</th>
-                    <th>Provider</th>
-                    <th>Model</th>
-                    <th>Status</th>
-                    <th>TTFT</th>
-                    <th>Total</th>
-                    <th>Tokens</th>
-                    <th>Result</th>
-                  </tr>
-                </thead>
-                <tbody id="activityBody">
-                  <tr>
-                    <td colspan="8" class="no-data">
-                      Loading telemetry streams...
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+            <div
+              id="info-table-latency"
+              popover="auto"
+              class="info-popover"
+              role="tooltip"
+              style="position-anchor: --info-table-latency"
+            >
+              Time-to-first-token (TTFT) per request
+            </div>
+            <div
+              id="info-table-tokens"
+              popover="auto"
+              class="info-popover"
+              role="tooltip"
+              style="position-anchor: --info-table-tokens"
+            >
+              Output tokens generated per request
             </div>
           </div>
+          <div
+            id="conversationsView"
+            class="log-scroll"
+            style="display: none"
+          ></div>
+        </div>
+      </div>
+      <div id="detailOverlay" popover="auto" class="detail-overlay">
+        <button
+          class="detail-close"
+          popovertarget="detailOverlay"
+          popovertargetaction="hide"
+        >
+          x
+        </button>
+        <h3>Request Detail</h3>
+        <div class="detail-grid" id="detailGrid"></div>
+        <div class="detail-chain" id="detailChain">
+          <h4>Request Chain</h4>
+          <div id="detailChainBody"></div>
         </div>
       </div>
     </main>
 
     <script>
-      const POLL_INTERVAL = 3000;
+      var POLL = 3000;
 
-      function getStabilityColor(score) {
-        if (score >= 80) return "var(--success)";
-        if (score >= 50) return "var(--warning)";
-        return "var(--error)";
+      function toggleTheme() {
+        var light = document.documentElement.classList.toggle("light");
+        var theme = light ? "light" : "dark";
+        localStorage.setItem("theme", theme);
+        document.getElementById("themeToggle").textContent = light
+          ? "dark"
+          : "light";
       }
 
-      function getErrorColor(errorType) {
-        if (!errorType) return "var(--success)";
-        if (errorType === "rate-limited") return "var(--warning)";
-        return "var(--error)";
+      document.getElementById("themeToggle").onclick = toggleTheme;
+      document.getElementById("themeToggle").textContent =
+        document.documentElement.classList.contains("light") ? "dark" : "light";
+
+      var activeTab = "activity";
+      function switchTab(tab) {
+        activeTab = tab;
+        var a = document.getElementById("tabActivity");
+        var c = document.getElementById("tabConversations");
+        var av = document.getElementById("activityView");
+        var cv = document.getElementById("conversationsView");
+        if (tab === "activity") {
+          a.className = "tab active";
+          c.className = "tab";
+          av.style.display = "";
+          cv.style.display = "none";
+        } else {
+          a.className = "tab";
+          c.className = "tab active";
+          av.style.display = "none";
+          cv.style.display = "";
+          if (lastConversations) renderConversations(lastConversations);
+        }
+      }
+      document.getElementById("tabActivity").onclick = function () {
+        switchTab("activity");
+      };
+      document.getElementById("tabConversations").onclick = function () {
+        switchTab("conversations");
+      };
+
+      function sc(c) {
+        return c >= 80
+          ? "var(--success)"
+          : c >= 50
+            ? "var(--warning)"
+            : "var(--error)";
       }
 
-      function formatTime(timestamp) {
-        const date = new Date(timestamp);
-        return date.toLocaleTimeString([], {
+      function ft(ts) {
+        return new Date(ts).toLocaleTimeString([], {
           hour: "2-digit",
           minute: "2-digit",
           second: "2-digit",
         });
       }
 
-      function formatTokens(val) {
-        if (val === null || val === undefined) return "—";
-        return val.toFixed(1);
+      function fv(v, suf) {
+        if (v == null || isNaN(v)) return "—";
+        if (suf === "ms")
+          return v >= 1000 ? (v / 1000).toFixed(1) + "s" : v + "ms";
+        return String(v);
       }
 
-      async function fetchDashboard() {
-        const connStatus = document.getElementById("connectionStatus");
-        const connText = document.getElementById("connectionText");
+      function bar(pct) {
+        var f = Math.max(0, Math.min(10, Math.round(pct / 10)));
+        return "\u2588".repeat(f) + "\u2591".repeat(10 - f);
+      }
 
+      function showDetail(r, allMetrics) {
+        var grid = document.getElementById("detailGrid");
+        var fields = [
+          ["Provider", r.provider],
+          ["Model", r.model],
+          ["Time", new Date(r.timestamp).toLocaleString()],
+          ["Status", r.statusCode + (r.errorType ? " " + r.errorType : "")],
+          ["TTFT", r.ttft != null ? fv(r.ttft, "ms") : "—"],
+          [
+            "Total Latency",
+            r.totalLatency != null ? fv(r.totalLatency, "ms") : "—",
+          ],
+          ["Input Tokens", r.inputTokens != null ? r.inputTokens : "—"],
+          ["Output Tokens", r.outputTokens != null ? r.outputTokens : "—"],
+          [
+            "Thinking Time",
+            r.thinkingTime != null ? fv(r.thinkingTime, "ms") : "—",
+          ],
+          ["Finish Reason", r.finishReason || "—"],
+          ["Refused", r.refused ? "Yes" : "No"],
+          ["Source", r.source || "—"],
+          ["Success", r.success ? "Yes" : "No"],
+        ];
+        var html = "";
+        fields.forEach(function (f) {
+          html +=
+            '<span class="label">' +
+            f[0] +
+            '</span><span class="value">' +
+            f[1] +
+            "</span>";
+        });
+        grid.innerHTML = html;
+
+        var chainBody = document.getElementById("detailChainBody");
+        var chain = r.requestId
+          ? allMetrics.filter(function (m) {
+              return m.requestId === r.requestId;
+            })
+          : [];
+        if (chain.length > 1) {
+          var ch = "";
+          chain.forEach(function (m) {
+            var ok = m.success && m.statusCode < 400;
+            ch +=
+              '<div class="detail-chain-item">' +
+              '<span style="text-transform:capitalize;font-weight:600;">' +
+              m.provider +
+              " " +
+              m.model +
+              "</span>" +
+              '<span style="color:' +
+              (ok ? "var(--success)" : "var(--error)") +
+              '">' +
+              (m.statusCode || "ERR") +
+              (m.errorType ? " " + m.errorType : "") +
+              " " +
+              (ok ? "ok" : "fail") +
+              "</span></div>";
+          });
+          chainBody.innerHTML = ch;
+        } else {
+          chainBody.innerHTML =
+            '<div style="font-size:0.6875rem;color:var(--muted);">Single attempt</div>';
+        }
+
+        document.getElementById("detailOverlay").showPopover();
+      }
+
+      var lastConversations = null;
+      async function tick() {
+        var se = document.getElementById("status");
         try {
-          const [provRes, metrRes] = await Promise.all([
-            fetch("/api/providers"),
-            fetch("/api/metrics"),
-          ]);
+          var pr = fetch("/api/providers");
+          var mr = fetch("/api/metrics");
+          var cr = fetch("/api/conversations");
+          var results = await Promise.all([pr, mr, cr]);
+          if (!results[0].ok || !results[1].ok || !results[2].ok)
+            throw new Error("fetch failed");
 
-          if (!provRes.ok || !metrRes.ok) {
-            throw new Error("Server returned error");
+          var p = await results[0].json();
+          var m = await results[1].json();
+          lastConversations = await results[2].json();
+
+          se.className = "badge-status on";
+          se.textContent = "ONLINE";
+          document.getElementById("serverAddr").textContent =
+            p.serverHost + ":" + p.serverPort;
+
+          var metrics = m.metrics || [];
+          var total = metrics.length;
+          var ok = metrics.filter(function (r) {
+            return r.success;
+          }).length;
+          var rate = total > 0 ? Math.round((ok / total) * 100) : 100;
+          var workers = new Set(
+            p.providers
+              .filter(function (x) {
+                return x.keyConfigured;
+              })
+              .map(function (x) {
+                return x.name;
+              }),
+          ).size;
+          var flights = metrics
+            .filter(function (r) {
+              return r.success && r.ttft != null;
+            })
+            .map(function (r) {
+              return r.ttft;
+            });
+          var avgFlight =
+            flights.length > 0
+              ? Math.round(
+                  flights.reduce(function (a, b) {
+                    return a + b;
+                  }, 0) / flights.length,
+                )
+              : null;
+
+          document.getElementById("statTraffic").textContent = total;
+          document.getElementById("statHoney").textContent = rate + "%";
+          document.getElementById("statHoney").style.color = sc(rate);
+          document.getElementById("statWorkers").textContent = workers;
+          document.getElementById("statFlight").textContent = fv(
+            avgFlight,
+            "ms",
+          );
+
+          renderSwarm(p);
+          renderWorkers(p);
+          renderLog(metrics);
+          if (activeTab === "conversations" && lastConversations) {
+            renderConversations(lastConversations);
           }
-
-          const providersData = await provRes.json();
-          const metricsData = await metrRes.json();
-
-          // Update Connection Status
-          connStatus.className = "server-status";
-          connText.innerText = "ONLINE";
-
-          renderStats(providersData, metricsData);
-          renderPriority(providersData);
-          renderProviders(providersData);
-          renderMetrics(metricsData);
-        } catch (err) {
-          console.error("Failed to poll dashboard data:", err);
-          connStatus.className = "server-status offline";
-          connText.innerText = "OFFLINE";
+        } catch (e) {
+          se.className = "badge-status off";
+          se.textContent = "OFFLINE";
         }
       }
 
-      function renderStats(providersData, metricsData) {
-        const metrics = metricsData.metrics || [];
-        const totalRequests = metrics.length;
-
-        const successCount = metrics.filter((m) => m.success).length;
-        const successRate =
-          totalRequests > 0
-            ? Math.round((successCount / totalRequests) * 100)
-            : 100;
-
-        document.getElementById("statRequests").innerText = totalRequests;
-        document.getElementById("statSuccessRate").innerText =
-          `${successRate}%`;
-        document.getElementById("statPending").innerText =
-          metricsData.pending || 0;
-        document.getElementById("statAddress").innerText =
-          `http://${providersData.serverHost}:${providersData.serverPort}`;
-      }
-
-      function renderPriority(providersData) {
-        const container = document.getElementById("priorityList");
-        const qualified = providersData.providers.filter(
-          (p) => p.keyConfigured,
-        );
-
+      function renderSwarm(p) {
+        var el = document.getElementById("swarm");
+        var qualified = p.providers.filter(function (x) {
+          return x.keyConfigured;
+        });
         if (qualified.length === 0) {
-          container.innerHTML = `<span class="no-data" style="color: var(--error)">No active providers configured with API keys.</span>`;
+          el.innerHTML =
+            '<span class="swarm-label">Priority</span><span style="color:var(--muted);font-size:0.75rem;">No active providers</span>';
           return;
         }
-
-        // Sort by stability score descending
-        const sorted = [...qualified].sort(
-          (a, b) => b.stabilityScore - a.stabilityScore,
-        );
-
-        let html = "";
-        sorted.forEach((p, idx) => {
-          html += `
-          <div class="priority-node">
-            <span class="priority-index">${idx + 1}</span>
-            <span>${p.name}</span>
-            <span class="priority-score" style="color: ${getStabilityColor(p.stabilityScore)}">${p.stabilityScore}%</span>
-          </div>
-        `;
-          if (idx < sorted.length - 1) {
-            html += `<span class="priority-arrow">→</span>`;
-          }
+        var best = {};
+        qualified.forEach(function (x) {
+          if (!best[x.name] || x.stabilityScore > best[x.name].stabilityScore)
+            best[x.name] = x;
+        });
+        var sorted = Object.values(best).sort(function (a, b) {
+          return b.stabilityScore - a.stabilityScore;
         });
 
-        container.innerHTML = html;
+        var html = '<span class="swarm-label">Priority</span>';
+        sorted.forEach(function (x, i) {
+          if (i > 0) html += '<span class="swarm-arr">&gt;</span>';
+          var sid = "info-swan-" + x.name.replace(/[^a-zA-Z0-9-_]/g, "-");
+          html +=
+            '<span class="swarm-node">' +
+            x.name +
+            ' <span class="sc" style="color:' +
+            sc(x.stabilityScore) +
+            '">' +
+            x.stabilityScore +
+            "%</span>" +
+            '<button popovertarget="' +
+            sid +
+            '" type="button" class="info-btn" aria-label="More info" style="anchor-name:--' +
+            sid +
+            '">i</button>' +
+            "</span>" +
+            '<div id="' +
+            sid +
+            '" popover="auto" class="info-popover" role="tooltip" style="position-anchor:--' +
+            sid +
+            '">Stability score: composite of success rate and latency</div>';
+        });
+        el.innerHTML = html;
       }
 
-      function renderProviders(providersData) {
-        const container = document.getElementById("providersGrid");
-
-        // Group per-model entries by provider name
-        const grouped = {};
-        providersData.providers.forEach((p) => {
-          if (!grouped[p.name]) {
-            grouped[p.name] = {
-              name: p.name,
-              baseUrl: p.baseUrl,
-              keyConfigured: p.keyConfigured,
-              models: p.models,
-              defaultModel: p.model,
-              entries: [],
-            };
-          }
-          grouped[p.name].entries.push(p);
+      function renderWorkers(p) {
+        var el = document.getElementById("workers");
+        var grouped = {};
+        p.providers.forEach(function (x) {
+          if (!grouped[x.name]) grouped[x.name] = [];
+          grouped[x.name].push(x);
         });
 
-        let html = "";
-        Object.values(grouped).forEach((g) => {
-          const barColor = getStabilityColor(g.entries[0]?.stabilityScore ?? 0);
+        var html = "";
+        for (var name in grouped) {
+          var entries = grouped[name];
+          var f = entries[0];
+          var score = f.stabilityScore;
+          var conf = f.keyConfigured;
 
-          let modelsHtml = "";
-          g.models.forEach((m) => {
-            const isDefault = m === g.defaultModel;
-            modelsHtml += `<span class="model-tag ${isDefault ? "default" : ""}">${m}</span>`;
+          var mh = "";
+          entries.forEach(function (e) {
+            mh +=
+              '<div class="mrow">' +
+              '<span class="mname">' +
+              e.model +
+              "</span>" +
+              '<span class="mstats">' +
+              '<span style="color:' +
+              sc(e.stabilityScore) +
+              '" title="Composite stability score">' +
+              e.stabilityScore +
+              "%</span>" +
+              '<span title="95th percentile latency">' +
+              fv(e.p95Latency, "ms") +
+              "</span>" +
+              '<span title="Mean output tokens per second">' +
+              fv(e.meanTokensPerSecond) +
+              " t/s</span>" +
+              '<span title="Request count in tracking window">' +
+              (e.requestCount || 0) +
+              "c</span>" +
+              "</span></div>";
           });
 
-          let entryRowsHtml = "";
-          g.entries.forEach((e) => {
-            const entryColor = getStabilityColor(e.stabilityScore);
-            entryRowsHtml += `
-              <div style="border-top: 1px solid var(--border-color); padding-top: 0.5rem; margin-top: 0.5rem;">
-                <div style="font-size: 0.8125rem; color: var(--accent); font-weight: 600; margin-bottom: 0.375rem;">${e.model}</div>
-                <div class="metric-row" style="grid-template-columns: repeat(4, 1fr);">
-                  <div class="metric-item">
-                    <span class="metric-label">Score</span>
-                    <span class="metric-val" style="color: ${entryColor}">${e.stabilityScore}%</span>
-                  </div>
-                  <div class="metric-item">
-                    <span class="metric-label">p95</span>
-                    <span class="metric-val">${e.p95Latency ? e.p95Latency + "ms" : "—"}</span>
-                  </div>
-                  <div class="metric-item">
-                    <span class="metric-label">Throughput</span>
-                    <span class="metric-val">${e.meanTokensPerSecond ? formatTokens(e.meanTokensPerSecond) + " t/s" : "—"}</span>
-                  </div>
-                  <div class="metric-item">
-                    <span class="metric-label">Calls</span>
-                    <span class="metric-val">${e.requestCount || 0}</span>
-                  </div>
-                </div>
-                <div style="display: flex; gap: 0.75rem; margin-top: 0.375rem; font-size: 0.75rem;">
-                  <span style="color: var(--text-muted);">Success: ${e.recentSuccessRate ? Math.round(e.recentSuccessRate * 100) + "%" : "—"}</span>
-                </div>
-              </div>
-            `;
-          });
+          var barHtml =
+            '<span class="bar-text" style="color:' +
+            sc(score) +
+            '">' +
+            bar(score) +
+            "</span>";
 
-          html += `
-          <div class="provider-card octagon-bounds" style="opacity: ${g.keyConfigured ? "1" : "0.5"}">
-            <div class="octagon-border">
-              <div class="octagon-bg">
-                <div class="provider-header">
-                  <div class="provider-info">
-                    <h3>${g.name}</h3>
-                    <span class="provider-url">${g.baseUrl}</span>
-                  </div>
-                  <span class="key-badge ${g.keyConfigured ? "active" : "inactive"}">
-                    ${g.keyConfigured ? "active" : "no key"}
-                  </span>
-                </div>
-
-                <div class="provider-models" style="border-top: none; padding-top: 0;">
-                  <div class="models-title">Models</div>
-                  <div class="models-list" style="margin-bottom: 0.75rem;">
-                    ${modelsHtml}
-                  </div>
-                </div>
-
-                ${entryRowsHtml}
-              </div>
-            </div>
-          </div>
-        `;
-        });
-
-        container.innerHTML = html;
+          html +=
+            '<div class="worker" style="opacity:' +
+            (conf ? 1 : 0.4) +
+            '">' +
+            '<div class="worker-head">' +
+            '<span class="worker-name">' +
+            name +
+            "</span>" +
+            '<span class="key-badge ' +
+            (conf ? "active" : "no-key") +
+            '">' +
+            (conf ? "active" : "no key") +
+            ' <button popovertarget="info-key-' +
+            name.replace(/[^a-zA-Z0-9-_]/g, "-") +
+            '" type="button" class="info-btn" aria-label="More info" style="anchor-name:--info-key-' +
+            name.replace(/[^a-zA-Z0-9-_]/g, "-") +
+            '">i</button></span>' +
+            "</div>" +
+            '<div class="sbar" style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;">' +
+            '<span style="font-size:0.75rem;font-weight:700;color:' +
+            sc(score) +
+            ';min-width:2.5rem;">' +
+            score +
+            '% <button popovertarget="info-score-' +
+            name.replace(/[^a-zA-Z0-9-_]/g, "-") +
+            '" type="button" class="info-btn" aria-label="More info" style="anchor-name:--info-score-' +
+            name.replace(/[^a-zA-Z0-9-_]/g, "-") +
+            '">i</button></span>' +
+            barHtml +
+            "</div>" +
+            '<div class="wmet">' +
+            '<div class="wmet-item"><span class="l">Latency <button popovertarget="info-lat-' +
+            name.replace(/[^a-zA-Z0-9-_]/g, "-") +
+            '" type="button" class="info-btn" aria-label="More info" style="anchor-name:--info-lat-' +
+            name.replace(/[^a-zA-Z0-9-_]/g, "-") +
+            '">i</button></span><span class="v">' +
+            fv(f.p95Latency, "ms") +
+            "</span></div>" +
+            '<div class="wmet-item"><span class="l">Output <button popovertarget="info-out-' +
+            name.replace(/[^a-zA-Z0-9-_]/g, "-") +
+            '" type="button" class="info-btn" aria-label="More info" style="anchor-name:--info-out-' +
+            name.replace(/[^a-zA-Z0-9-_]/g, "-") +
+            '">i</button></span><span class="v">' +
+            fv(f.meanTokensPerSecond) +
+            " t/s</span></div>" +
+            '<div class="wmet-item"><span class="l">Calls <button popovertarget="info-call-' +
+            name.replace(/[^a-zA-Z0-9-_]/g, "-") +
+            '" type="button" class="info-btn" aria-label="More info" style="anchor-name:--info-call-' +
+            name.replace(/[^a-zA-Z0-9-_]/g, "-") +
+            '">i</button></span><span class="v">' +
+            (f.requestCount || 0) +
+            "</span></div>" +
+            "</div>" +
+            (entries.length > 0 ? '<div class="mrows">' + mh + "</div>" : "") +
+            '<div id="info-key-' +
+            name.replace(/[^a-zA-Z0-9-_]/g, "-") +
+            '" popover="auto" class="info-popover" role="tooltip" style="position-anchor:--info-key-' +
+            name.replace(/[^a-zA-Z0-9-_]/g, "-") +
+            '">' +
+            (conf ? "API key configured" : "No API key configured") +
+            "</div>" +
+            '<div id="info-score-' +
+            name.replace(/[^a-zA-Z0-9-_]/g, "-") +
+            '" popover="auto" class="info-popover" role="tooltip" style="position-anchor:--info-score-' +
+            name.replace(/[^a-zA-Z0-9-_]/g, "-") +
+            '">Composite stability score based on recent success rate and latency</div>' +
+            '<div id="info-lat-' +
+            name.replace(/[^a-zA-Z0-9-_]/g, "-") +
+            '" popover="auto" class="info-popover" role="tooltip" style="position-anchor:--info-lat-' +
+            name.replace(/[^a-zA-Z0-9-_]/g, "-") +
+            '">95th percentile latency</div>' +
+            '<div id="info-out-' +
+            name.replace(/[^a-zA-Z0-9-_]/g, "-") +
+            '" popover="auto" class="info-popover" role="tooltip" style="position-anchor:--info-out-' +
+            name.replace(/[^a-zA-Z0-9-_]/g, "-") +
+            '">Mean output tokens per second</div>' +
+            '<div id="info-call-' +
+            name.replace(/[^a-zA-Z0-9-_]/g, "-") +
+            '" popover="auto" class="info-popover" role="tooltip" style="position-anchor:--info-call-' +
+            name.replace(/[^a-zA-Z0-9-_]/g, "-") +
+            '">Requests in current tracking window</div>' +
+            "</div>";
+        }
+        el.innerHTML =
+          html ||
+          '<div class="no-data" style="grid-column:1/-1;">No providers registered</div>';
       }
 
-      function renderMetrics(metricsData) {
-        const body = document.getElementById("activityBody");
-        const metrics = metricsData.metrics || [];
-
+      function renderLog(metrics) {
+        var body = document.getElementById("logBody");
         if (metrics.length === 0) {
-          body.innerHTML = `
-          <tr>
-            <td colspan="8" class="no-data">No active telemetry logs available yet. Make a request to start monitoring!</td>
-          </tr>
-        `;
+          body.innerHTML =
+            '<tr><td colspan="6" class="no-data">Awaiting requests...</td></tr>';
           return;
         }
-
-        const sorted = [...metrics]
-          .sort((a, b) => b.timestamp - a.timestamp)
+        var sorted = [...metrics]
+          .sort(function (a, b) {
+            return b.timestamp - a.timestamp;
+          })
           .slice(0, 50);
-
-        let html = "";
-        sorted.forEach((m) => {
-          const isSuccess = m.success;
-          const errorType = m.errorType || null;
-          const tokens = m.outputTokens !== null && m.outputTokens !== undefined ? m.outputTokens : null;
-
-          html += `
-          <tr>
-            <td style="font-family: monospace;">${formatTime(m.timestamp)}</td>
-            <td style="font-weight: 600; text-transform: capitalize;">${m.provider}</td>
-            <td style="font-family: monospace; font-size: 0.8125rem;">${m.model}</td>
-            <td>
-              <span class="badge ${isSuccess ? "success" : "error"}" style="${errorType ? `background-color: ${getErrorColor(errorType)}22; border-color: ${getErrorColor(errorType)}44;` : ""}">${m.statusCode || "ERR"}${errorType ? " (" + errorType + ")" : ""}</span>
-            </td>
-            <td style="font-weight: 500;">${isSuccess ? m.ttft + " ms" : "—"}</td>
-            <td style="font-weight: 500;">${isSuccess ? m.totalLatency + " ms" : "—"}</td>
-            <td style="font-weight: 500;">${tokens !== null ? tokens : "—"}</td>
-            <td>
-              <span class="badge ${isSuccess ? "success" : "error"}">${isSuccess ? "SUCCESS" : "FAILED"}</span>
-            </td>
-          </tr>
-        `;
+        var html = "";
+        sorted.forEach(function (r) {
+          var ok = r.success;
+          var tokens = r.outputTokens != null ? r.outputTokens : null;
+          html +=
+            '<tr onclick="showDetail(metrics.find(function(m){return m.timestamp===' +
+            r.timestamp +
+            "&&m.provider==='" +
+            r.provider.replace(/'/g, "\\'") +
+            '\'}), metrics)" style="cursor:pointer;">' +
+            '<td style="font-family:monospace;font-size:0.6875rem;">' +
+            ft(r.timestamp) +
+            "</td>" +
+            '<td style="text-transform:capitalize;font-weight:600;">' +
+            r.provider +
+            "</td>" +
+            '<td style="font-family:monospace;font-size:0.6875rem;color:var(--accent);">' +
+            r.model +
+            "</td>" +
+            '<td><span class="badge ' +
+            (ok ? "ok" : "err") +
+            '" title="HTTP status and error type">' +
+            (r.statusCode || "ERR") +
+            (r.errorType ? " " + r.errorType : "") +
+            "</span></td>" +
+            '<td style="font-weight:500;" title="Time-to-first-token (TTFT)">' +
+            (ok ? fv(r.ttft, "ms") : "—") +
+            "</td>" +
+            '<td title="Output tokens generated">' +
+            (tokens != null ? tokens : "—") +
+            "</td>" +
+            "</tr>";
         });
-
         body.innerHTML = html;
       }
 
-      // Initial load and begin polling
-      fetchDashboard();
-      setInterval(fetchDashboard, POLL_INTERVAL);
+      function renderConversations(data) {
+        var el = document.getElementById("conversationsView");
+        var convs = data.conversations || [];
+        if (convs.length === 0) {
+          el.innerHTML = '<div class="no-data">Awaiting conversations...</div>';
+          return;
+        }
+        var html = "";
+        convs.forEach(function (c) {
+          var promptHtml = "";
+          (c.prompt || []).forEach(function (msg) {
+            promptHtml +=
+              '<div class="conv-block">' +
+              '<span class="label">' +
+              msg.role +
+              "</span>" +
+              "<pre>" +
+              esc(normalizeContent(msg.content)) +
+              "</pre></div>";
+          });
+
+          html +=
+            '<div class="conv-card">' +
+            '<div class="conv-header">' +
+            '<span><span class="provider">' +
+            c.provider +
+            '</span> <span class="model">' +
+            c.model +
+            "</span></span>" +
+            '<span class="time">' +
+            new Date(c.timestamp).toLocaleString() +
+            "</span>" +
+            "</div>" +
+            '<div class="conv-block">' +
+            "<span class=\"label\">Prompt <span class=\"conv-toggle\" onclick=\"var p=this.parentNode.parentNode.querySelector('.conv-prompt');p.style.display=p.style.display==='none'?'':'none';this.textContent=p.style.display==='none'?'show':'hide'\">hide</span></span>" +
+            '<div class="conv-prompt">' +
+            promptHtml +
+            "</div>" +
+            "</div>" +
+            '<div class="conv-block">' +
+            '<span class="label">Response</span>' +
+            "<pre>" +
+            esc(c.responseText || "(empty)") +
+            "</pre>" +
+            "</div>" +
+            '<div class="conv-footer">' +
+            "<span>TTFT: " +
+            fv(c.ttft, "ms") +
+            "</span>" +
+            "<span>Latency: " +
+            fv(c.totalLatency, "ms") +
+            "</span>" +
+            "<span>Tokens: " +
+            (c.outputTokens != null ? c.outputTokens : "—") +
+            "</span>" +
+            "<span>Finish: " +
+            (c.finishReason || "—") +
+            "</span>" +
+            '<span class="badge ' +
+            (c.success ? "ok" : "err") +
+            '">' +
+            c.statusCode +
+            "</span>" +
+            "</div>" +
+            "</div>";
+        });
+        el.innerHTML = html;
+      }
+
+      function normalizeContent(content) {
+        if (typeof content === "string") return content;
+        if (Array.isArray(content)) {
+          return content
+            .map(function (part) {
+              if (typeof part === "string") return part;
+              if (part && part.text) return part.text;
+              if (part && part.type) return "[" + part.type + "]";
+              return "";
+            })
+            .join("\n");
+        }
+        return String(content);
+      }
+
+      function esc(s) {
+        if (typeof s !== "string") s = String(s);
+        return s
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+
+      tick();
+      setInterval(tick, POLL);
     </script>
   </body>
 </html>

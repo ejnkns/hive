@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { logger } from "./shared/logger";
 import { hiveCore } from "../engine";
 import type { HiveConfig } from "./load-config";
-import { loadCache, telemetryRecorder } from "../telemetry";
+import { loadCache, telemetryRecorder, conversationStore } from "../telemetry";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = join(__filename, "..");
@@ -101,6 +101,12 @@ export function createServer(config: HiveConfig) {
     reply.send({
       metrics: cache.metrics,
       pending: telemetryRecorder.getPendingCount(),
+    });
+  });
+
+  server.get("/api/conversations", async (_request, reply) => {
+    reply.send({
+      conversations: conversationStore.getConversations(),
     });
   });
 
