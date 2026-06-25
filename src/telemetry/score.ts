@@ -36,16 +36,31 @@ const ALL_SUB_SCORES: ScoredSubScore[] = [
   { name: "qualityScore", fn: qualityScore, weight: SUB_WEIGHTS.qualityScore },
 ];
 
+const REASONING_PATTERNS = ["deepseek-r1", "o1", "o3", "thinking", "reasoning"];
+
+function isReasoningModel(modelName: string): boolean {
+  const lower = modelName.toLowerCase();
+  return REASONING_PATTERNS.some((p) => lower.includes(p));
+}
+
 export function calculateScore(metrics: RequestMetric[]): number {
   const window = applyWindow(metrics);
   if (window.length === 0) return 50;
 
   const hasThinking = window.some((m) => m.thinkingTime !== null);
+  const isReasoning =
+    window.some((m) => isReasoningModel(m.model)) || hasThinking;
   const derived = computeDerivedMetrics(window);
 
   const active = ALL_SUB_SCORES.filter((s) => {
     if (s.name === "thinkingScore" && !hasThinking) return false;
     if (s.name === "throughputScore" && derived.meanTokensPerSecond === null)
+      return false;
+    if (s.name === "ttftScore" && isReasoning) return false;
+    if (
+      (s.name === "ttftScore" || s.name === "jitterScore") &&
+      !derived.hasSuccessMetrics
+    )
       return false;
     return s.weight > 0;
   });
