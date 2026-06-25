@@ -1,5 +1,5 @@
  <pre style="color:black;white-space:pre-wrap;font-family:monospace;background:#708097;line-height:0.8;letter-spacing:-4px;font-size:2em">
-                             <span style="color:yellow"><b>h i v e</b></span> 
+                             <span style="color:yellow"> <b>[ h i v e ]</b></span> 
     ,-. <span style="color:white">     .' '.        .`         </span>
     \_/ <span style="color:white">     .   .       .           </span>
  <span style="color:yellow"><b>:</span>>(<span style="color:yellow">|</span>|<span style="color:yellow">|</span>}</b><span style="color:white">.      .        .            </span>
@@ -21,7 +21,7 @@ _sting and they die,_
 _replaced with the alive._
 -->
 
-A lightweight OpenAI-compatible proxy daemon that provides <!--seamless--> LLM routing and automatic failover, masking the volatility of free LLM endpoints by <!--instantly--> replacing dead providers with active ones<!-- behind the scenes-->.
+A lightweight OpenAI-compatible proxy daemon with LLM routing and automatic failover, hiding the volatility of free LLM endpoints by continuously monitoring quality and swapping providers and models automatically, according to your preferences.
 
 ```
 [Coding CLI (OpenCode, Claude, Gemini, etc.)]
@@ -34,26 +34,50 @@ A lightweight OpenAI-compatible proxy daemon that provides <!--seamless--> LLM r
      ├──> Mutate headers (inject model provider API keys)
      │
      v
-[hive:Prioritised Model] ──> Stream Working?───(Yes)──> Pipe back to client
-     │                  ^                  │
-     │                  │                  v
-     │         Next priority model <──────(No)
-     │                  ^
-     v                  │
-[hive:Failover] ────────┘
+[hive:Node Selector] ──> Score & select best provider:model
+     │
+     v
+[hive:Upstream Stream] ──> Stream OK? ───(Yes)──> Pipe back to client
+     │                       │
+     │                     (No)
+     │                       │
+     │                       v
+     │              Normalize error
+     │                       │
+     │              ┌────────┴────────┐
+     │              v                 v
+     │    unsupported-feature    rate-limit / 5xx / auth
+     │         │                      │
+     │    mark disabled           trip circuit breaker
+     │         │                      │
+     v         v                      v
+[hive:Failover] ────> retry next node (max 3 attempts)
 ```
 
-### Dynamic Model Routing Loop
+### Dynamic Model Routing
 
-Hive intercepts incoming requests and discards the model field. It dynamically routes the stream to the prioritised provider model, based on a **stability score** (WIP).
+- Discards the client's model field; routes to the best-scoring provider:model based on real-time telemetry (TTFT, throughput, error rate)
+- Session affinity: consecutive requests from the same session stick to the same `provider:model` node, unless a better-scoring one exists
+- Circuit breaker: failing providers returning `429`/`503`/`401` are temporarily taken out of rotation
+- Feature discovery: learns which `provider:model` nodes don't support features like `tools` or `response_format`, stops sending incompatible requests
+- Failover: on failure, transparently retries the next best `provider:model` node
 
-If the first model provider fails to reply, times out, or returns an HTTP error code (e.g. `429`, `500`), the proxy intercepts the failure before returning it to the agent client, automatically rewrites the payload headers with the next model provider's API key, and routes the request to that provider's designated `defaultModel`.
+### Telemetry
+
+- Metrics recorded in-memory, persisted to `~/.hive/telemetry-cache.json`
+- Scoring uses a 100-entry, 24h window per node with exponential TTFT decay and severity-weighted error penalties (auth 2.5x, server 1.0x, rate-limit 0.5x)
+- Providers recover score gradually as successful requests accumulate (30min half-life decay)
+- Truncated streams (missing `[DONE]` / `finish_reason`) are counted as failures, not successes
+
+### Browser Dashboard
+
+A lightweight Web Components dashboard is served at `http://localhost:5173` showing live provider states, stability scores, activity metrics, and transient conversation history.
 
 ## Client Integration
 
 ### OpenCode
 
-Add the custom Hive proxy in your local (`./opencode.json`) or global (`~/.config/opencode/opencode.json`) file:
+Add the custom [ **h i v e** ] proxy in your local (`./opencode.json`) or global (`~/.config/opencode/opencode.json`) file:
 
 ```json
 {
@@ -94,9 +118,13 @@ Configuration is loaded synchronously from `.env` or from exported system variab
 | `SAMBA_NOVA_API_KEY`   | SambaNova        | `https://api.sambanova.ai`                                | `DeepSeek-R1`                   |
 | `GOOGLE_API_KEY`       | Google AI Studio | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-2.0-flash-exp`          |
 | `NVIDIA_NIM_API_KEY`   | NVIDIA NIM       | `https://integrate.api.nvidia.com`                        | `meta/llama-3.3-70b-instruct`   |
-| `GITHUB_TOKEN`         | GitHub Models    | `https://models.inference.ai.azure.com`                   | `gpt-4o`                        |
+| `GITHUB_TOKEN`         | GitHub Models    | `https://models.github.ai/inference`                      | `gpt-4o`                        |
 | `CEREBRAS_API_KEY`     | Cerebras         | `https://api.cerebras.ai`                                 | `llama-3.3-70b`                 |
 | `MISTRAL_API_KEY`      | Mistral          | `https://api.mistral.ai`                                  | `codestral-latest`              |
 | `OPENCODE_ZEN_API_KEY` | OpenCode Zen     | `https://opencode.ai/zen`                                 | `gpt-5.5`                       |
+
+### Model Discovery
+
+On startup, [ **h i v e** ] fetches the live model list from each provider's `/models` endpoint and caches it to `~/.hive/models-cache.json`. A preference list per provider prioritises models - the first available preferred model becomes the default. Falls back to a hardcoded default if no preferred model is found.
 
 ---
