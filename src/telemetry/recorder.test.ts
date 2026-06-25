@@ -17,6 +17,7 @@ describe('TelemetryRecorder', () => {
 
   it('records metrics in memory buffer', () => {
     recorder.recordMetric({
+      requestId: 'test-id',
       provider: 'test',
       model: 'test-model',
       timestamp: Date.now(),
@@ -38,6 +39,7 @@ describe('TelemetryRecorder', () => {
 
   it('flush persists to cache and clears buffer', async () => {
     recorder.recordMetric({
+      requestId: 'test-id',
       provider: 'test',
       model: 'test-model',
       timestamp: Date.now(),

@@ -1,10 +1,11 @@
 import { Transform } from "node:stream"
 
-export type StreamStats = {
+type StreamStats = {
   outputChars: number
   thinkingChars: number
   thinkingStart: number | null
   finishReason: string | null
+  responseText: string
 }
 
 export function createStreamCounter(startTime: number) {
@@ -12,6 +13,7 @@ export function createStreamCounter(startTime: number) {
   let thinkingChars = 0
   let thinkingStart: number | null = null
   let finishReason: string | null = null
+  let responseText = ""
   let buffer = ""
 
   const transform = new Transform({
@@ -43,10 +45,12 @@ export function createStreamCounter(startTime: number) {
               thinkingStart = Date.now() - startTime
             }
             thinkingChars += delta.reasoning_content.length
+            responseText += delta.reasoning_content
           }
 
           if (delta?.content) {
             outputChars += delta.content.length
+            responseText += delta.content
           }
         } catch {
           // skip unparseable chunks
@@ -62,6 +66,7 @@ export function createStreamCounter(startTime: number) {
     thinkingChars,
     thinkingStart,
     finishReason,
+    responseText,
   })
 
   return { transform, getStats }

@@ -1,4 +1,4 @@
-export type FinishReason = "stop" | "length" | "content-filter" | null
+type FinishReason = "stop" | "length" | "content-filter" | null
 
 export type ErrorType =
   | "rate-limited"
@@ -9,9 +9,10 @@ export type ErrorType =
   | "invalid-request"
   | null
 
-export type MetricSource = "user" | "heartbeat"
+type MetricSource = "user" | "heartbeat"
 
 export type RequestMetric = {
+  requestId: string
   provider: string
   model: string
   timestamp: number
