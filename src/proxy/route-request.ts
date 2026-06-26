@@ -12,6 +12,7 @@ import {
   conversationStore,
 } from "../telemetry";
 import { ProxyResponse } from "./proxy-response";
+import { logger } from "../hive/shared/logger";
 
 type RouteRequestOptions = {
   upstreamUrl: string;
@@ -108,6 +109,9 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
       const statusCode = res.statusCode ?? 500;
 
       if (statusCode >= 400) {
+        logger.debug(
+          `upstream ${providerName}:${modelName} — error response ${String(statusCode)}`
+        );
         let errorBody = "";
         res.on("data", (chunk: Buffer) => {
           errorBody += chunk.toString();
@@ -138,6 +142,10 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
         res.pipe(transform);
         transform.pipe(passThrough);
 
+        logger.debug(
+          `upstream ${providerName}:${modelName} — first byte in ${String(ttft)}ms`
+        );
+
         resolve({
           proxyResponse: ProxyResponse.ok(statusCode, passThrough),
           ttft,
@@ -145,8 +153,11 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
         });
       });
 
-      res.on("error", () => {
+      res.on("error", (err: Error) => {
         streamErrored = true;
+        logger.debug(
+          `upstream ${providerName}:${modelName} — stream error: ${err.message}`
+        );
         const stats = counter.getStats();
         record(
           Date.now() - start,
@@ -180,6 +191,10 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
           stats
         );
 
+        logger.debug(
+          `upstream ${providerName}:${modelName} — stream complete (${String(stats.outputChars)} chars, abrupt=${String(stats.isAbruptDisconnect)})`
+        );
+
         if (!streamErrored && !stats.isAbruptDisconnect) {
           conversationStore.completeConversation(requestId, {
             provider: providerName,
@@ -206,6 +221,9 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
     });
 
     req.on("timeout", () => {
+      logger.debug(
+        `upstream ${providerName}:${modelName} — timeout after ${String(timeoutMs)}ms`
+      );
       req.destroy();
       record(timeoutMs, false, 0, undefined, "TIMEOUT");
       resolve({
@@ -215,8 +233,11 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
       });
     });
 
-    req.on("error", () => {
+    req.on("error", (err: Error) => {
       const elapsed = Date.now() - start;
+      logger.debug(
+        `upstream ${providerName}:${modelName} — network error: ${err.message}`
+      );
       record(elapsed, false, 0, undefined, "NETWORK_ERROR");
       resolve({
         proxyResponse: ProxyResponse.error(0, "NETWORK_ERROR"),

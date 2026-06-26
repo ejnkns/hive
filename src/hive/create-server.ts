@@ -45,7 +45,8 @@ export function createServer(config: HiveConfig) {
   });
 
   server.post("/v1/chat/completions", async (request, reply) => {
-    logger.info(`POST /v1/chat/completions`);
+    const requestId = crypto.randomUUID();
+    logger.info(`request ${requestId} — handling chat completion`);
     const result = await hiveCore.handleChatCompletion(
       request.body as Record<string, unknown>,
       request.headers
@@ -53,7 +54,7 @@ export function createServer(config: HiveConfig) {
 
     if (!result.success) {
       logger.error(
-        `chat completion failed: ${result.error ?? ""} (${String(result.statusCode ?? "")})`
+        `request ${requestId} — chat completion failed: ${result.error ?? ""} (${String(result.statusCode ?? "")})`
       );
       return reply
         .status(result.statusCode ?? 500)
@@ -61,7 +62,7 @@ export function createServer(config: HiveConfig) {
     }
 
     logger.info(
-      `chat completion success → routing via ${result.provider ?? ""} (model: ${result.model ?? ""})`
+      `request ${requestId} — chat completion success → routing via ${result.provider ?? ""} (model: ${result.model ?? ""})`
     );
     reply.header("Content-Type", "text/event-stream");
     return reply.send(result.stream);

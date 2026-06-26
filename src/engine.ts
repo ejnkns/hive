@@ -21,6 +21,7 @@ import {
 } from "./proxy";
 import { discoverAndCacheModels } from "./providers/discovery";
 import { generateId } from "./id";
+import { logger } from "./hive/shared/logger";
 
 type ChatCompletionResult = {
   success: boolean;
@@ -118,8 +119,10 @@ export class HiveCore {
         this.lastProvider = latest.provider;
         this.lastModel = latest.model;
       }
-    } catch {
-      // Cache load failure is non-fatal
+    } catch (err: unknown) {
+      logger.debug(
+        `loadLastUsed: ${err instanceof Error ? err.message : String(err)}`
+      );
     }
   }
 
@@ -133,8 +136,10 @@ export class HiveCore {
           p.defaultModel = cached.defaultModel;
         }
       }
-    } catch {
-      // Background discovery is non-blocking and non-fatal
+    } catch (err: unknown) {
+      logger.debug(
+        `triggerBackgroundDiscovery: ${err instanceof Error ? err.message : String(err)}`
+      );
     }
   }
 
@@ -155,6 +160,9 @@ export class HiveCore {
     });
 
     if (qualified.length === 0) {
+      logger.debug(
+        "no configured providers available — set a provider API key"
+      );
       return {
         success: false,
         statusCode: 503,
@@ -167,6 +175,13 @@ export class HiveCore {
     const requestId = generateId();
     const sessionId = requestId;
     const messages = (parsed as Record<string, unknown>).messages ?? [];
+
+    const requiredFeatures = extractRequiredFeatures(parsed);
+
+    logger.debug(
+      `request ${requestId} — ${String(qualified.length)} qualified providers, ${requiredFeatures.length > 0 ? `required features: [${requiredFeatures.join(", ")}]` : "no required features"}`
+    );
+
     conversationStore.startConversation(
       requestId,
       Array.isArray(messages)
@@ -178,8 +193,6 @@ export class HiveCore {
       providerName: p.name,
       modelName: p.defaultModel,
     }));
-
-    const requiredFeatures = extractRequiredFeatures(parsed);
 
     const headers: IncomingHttpHeaders = Object.fromEntries(
       Object.entries(incomingHeaders).filter(
@@ -202,7 +215,12 @@ export class HiveCore {
       payload: string
     ): Promise<ProxyResponse> => {
       const provider = qualified.find((p) => p.name === node.providerName);
-      if (!provider) return ProxyResponse.error(500, "config-error");
+      if (!provider) {
+        logger.debug(
+          `dispatch: provider config not found for ${node.providerName}`
+        );
+        return ProxyResponse.error(500, "config-error");
+      }
 
       const sanitized = sanitizePayloadForProvider(
         node.providerName,
@@ -224,6 +242,10 @@ export class HiveCore {
         modelName: node.modelName,
         requestId,
       });
+
+      logger.debug(
+        `dispatch → ${node.providerName}:${node.modelName} — status ${String(result.proxyResponse.status)}, ttft ${String(result.ttft)}ms`
+      );
 
       return result.proxyResponse;
     };
@@ -247,6 +269,10 @@ export class HiveCore {
           nodes.find((n) => lastKey === `${n.providerName}:${n.modelName}`)
             ?.modelName ?? null;
 
+        logger.debug(
+          `request ${requestId} — success via ${this.lastProvider ?? "??"}:${this.lastModel ?? "??"}`
+        );
+
         return {
           success: true,
           stream: response.getStream() as PassThrough,
@@ -256,12 +282,19 @@ export class HiveCore {
         };
       }
 
+      logger.debug(
+        `request ${requestId} — upstream returned no stream (status ${String(response.status)})`
+      );
+
       return {
         success: false,
         statusCode: response.status,
         error: "Upstream returned no stream",
       };
-    } catch {
+    } catch (err: unknown) {
+      logger.error(
+        `request ${requestId} — all providers failed: ${err instanceof Error ? err.message : String(err)}`
+      );
       return {
         success: false,
         statusCode: 503,
@@ -311,8 +344,10 @@ export class HiveCore {
             modelName: provider.defaultModel,
             requestId: generateId(),
           });
-        } catch {
-          // Heartbeat failures are non-fatal
+        } catch (err: unknown) {
+          logger.debug(
+            `heartbeat: ${provider.name} failed: ${err instanceof Error ? err.message : String(err)}`
+          );
         }
       }
     });

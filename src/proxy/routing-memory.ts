@@ -2,6 +2,7 @@ import { CircuitBreaker } from "./routing-memory/circuit-breaker";
 import { FeatureDiscovery } from "./routing-memory/feature-discovery";
 import { SessionRegistry } from "./routing-memory/session-registry";
 import type { NormalizedErrorType } from "../utils/error-normalizer";
+import { logger } from "../hive/shared/logger";
 
 const CIRCUIT_BREAKER_COOLDOWN_MS = 30_000;
 
@@ -17,9 +18,16 @@ export class RoutingMemory {
   private sessions = new SessionRegistry();
 
   isNodeEligible(compoundKey: string, requiredFeatures: string[]): boolean {
-    if (this.breaker.isTripped(compoundKey)) return false;
-    if (this.features.hasDisabledFeatures(compoundKey, requiredFeatures))
+    if (this.breaker.isTripped(compoundKey)) {
+      logger.debug(`${compoundKey} — ineligible: circuit breaker tripped`);
       return false;
+    }
+    if (this.features.hasDisabledFeatures(compoundKey, requiredFeatures)) {
+      logger.debug(
+        `${compoundKey} — ineligible: features [${requiredFeatures.join(", ")}] unsupported`
+      );
+      return false;
+    }
     return true;
   }
 
@@ -29,15 +37,24 @@ export class RoutingMemory {
     requiredFeatures: string[]
   ): void {
     if (errorType === "unsupported-feature") {
+      logger.debug(
+        `${compoundKey} — marked unsupported features: [${requiredFeatures.join(", ")}]`
+      );
       this.features.markUnsupported(compoundKey, requiredFeatures);
       return;
     }
     if (BREAKER_TRIGGERS.has(errorType)) {
+      logger.debug(
+        `${compoundKey} — circuit breaker tripped (${errorType}, ${String(CIRCUIT_BREAKER_COOLDOWN_MS)}ms cooldown)`
+      );
       this.breaker.trip(compoundKey, CIRCUIT_BREAKER_COOLDOWN_MS);
     }
   }
 
   recordNetworkFailure(compoundKey: string): void {
+    logger.debug(
+      `${compoundKey} — circuit breaker tripped (network failure, ${String(CIRCUIT_BREAKER_COOLDOWN_MS)}ms cooldown)`
+    );
     this.breaker.trip(compoundKey, CIRCUIT_BREAKER_COOLDOWN_MS);
   }
 

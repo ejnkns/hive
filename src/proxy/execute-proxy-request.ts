@@ -3,6 +3,7 @@ import { routingMemory } from "./routing-memory";
 import type { ProviderModelNode } from "../telemetry";
 import type { RequestMetric } from "../telemetry";
 import { ProxyResponse } from "./proxy-response";
+import { logger } from "../hive/shared/logger";
 
 export type FailoverContext = {
   nodes: ProviderModelNode[];
@@ -27,7 +28,12 @@ export async function executeProxyRequest(
     const availableNodes = ctx.nodes.filter(
       (n) => !tried.has(`${n.providerName}:${n.modelName}`)
     );
-    if (availableNodes.length === 0) break;
+    if (availableNodes.length === 0) {
+      logger.debug(
+        `attempt ${String(attempts)}/${String(maxAttempts)} — no untried nodes remaining`
+      );
+      break;
+    }
 
     const node = selectBestNode(
       availableNodes,
@@ -35,7 +41,12 @@ export async function executeProxyRequest(
       ctx.requiredFeatures,
       ctx.sessionId
     );
-    if (!node) break;
+    if (!node) {
+      logger.debug(
+        `attempt ${String(attempts)}/${String(maxAttempts)} — selectBestNode returned null`
+      );
+      break;
+    }
 
     const compoundKey = `${node.providerName}:${node.modelName}`;
     tried.add(compoundKey);
@@ -46,6 +57,9 @@ export async function executeProxyRequest(
 
       if (!response.isOk()) {
         const normalized = await response.getNormalizedError();
+        logger.debug(
+          `attempt ${String(attempts)}/${String(maxAttempts)} — ${compoundKey} upstream error: ${normalized.type} (status ${String(response.status)})`
+        );
         routingMemory.recordUpstreamError(
           compoundKey,
           normalized.type,
@@ -54,8 +68,14 @@ export async function executeProxyRequest(
         continue;
       }
 
+      logger.debug(
+        `attempt ${String(attempts)}/${String(maxAttempts)} — ${compoundKey} succeeded (status ${String(response.status)})`
+      );
       return response;
-    } catch {
+    } catch (err: unknown) {
+      logger.debug(
+        `attempt ${String(attempts)}/${String(maxAttempts)} — ${compoundKey} network failure: ${err instanceof Error ? err.message : String(err)}`
+      );
       routingMemory.recordNetworkFailure(compoundKey);
       continue;
     }

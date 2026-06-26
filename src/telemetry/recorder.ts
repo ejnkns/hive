@@ -3,6 +3,7 @@ import { loadCache, saveCache, type ModelScore } from "./persist";
 import { applyWindow } from "./window";
 import { calculateNodeScore } from "./score";
 import { computeDerivedMetrics } from "./derived-metrics";
+import { logger } from "../hive/shared/logger";
 
 const FLUSH_INTERVAL_MS = 12_000;
 
@@ -15,12 +16,20 @@ export class TelemetryRecorder {
   }
 
   start(): void {
-    if (this.flushTimer) return;
+    if (this.flushTimer) {
+      logger.debug("recorder: already started");
+      return;
+    }
+    logger.debug("recorder: started");
     this.flushTimer = setInterval(() => void this.flush(), FLUSH_INTERVAL_MS);
   }
 
   async flush(): Promise<void> {
-    if (this.buffer.length === 0) return;
+    if (this.buffer.length === 0) {
+      logger.debug("recorder: flush — buffer empty");
+      return;
+    }
+    const count = this.buffer.length;
 
     const cache = await loadCache();
     const combined = [...cache.metrics, ...this.buffer];
@@ -54,6 +63,7 @@ export class TelemetryRecorder {
 
     await saveCache({ metrics: retained, scores });
     this.buffer = [];
+    logger.debug(`recorder: flush — saved ${String(count)} metrics to cache`);
   }
 
   getPendingCount(): number {
@@ -62,6 +72,7 @@ export class TelemetryRecorder {
 
   stop(): void {
     if (this.flushTimer) {
+      logger.debug("recorder: stopping");
       clearInterval(this.flushTimer);
       this.flushTimer = null;
     }

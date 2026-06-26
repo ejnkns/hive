@@ -26,7 +26,7 @@ async function ensureHiveDir(): Promise<void> {
     await fs.mkdir(HIVE_DIR, { recursive: true });
   } catch (err: unknown) {
     logger.debug(
-      `Failed to create telemetry directory: ${err instanceof Error ? err.message : String(err)}`
+      `persist: failed to create telemetry directory: ${err instanceof Error ? err.message : String(err)}`
     );
   }
 }
@@ -40,7 +40,11 @@ export async function loadCache(): Promise<TelemetryCache> {
       // cast justified: we validated the shape at runtime
       return parsed as TelemetryCache;
     }
-  } catch {
+    logger.debug(`persist: loadCache — invalid shape, starting fresh`);
+  } catch (err: unknown) {
+    logger.debug(
+      `persist: loadCache — not found or parse error: ${err instanceof Error ? err.message : String(err)}`
+    );
     // file doesn't exist or invalid — start fresh
   }
   return { metrics: [], scores: [] };
@@ -50,9 +54,12 @@ export async function saveCache(cache: TelemetryCache): Promise<void> {
   try {
     await ensureHiveDir();
     await fs.writeFile(TELEMETRY_PATH, JSON.stringify(cache, null, 2), "utf-8");
+    logger.debug(
+      `persist: saveCache — wrote ${String(cache.metrics.length)} metrics, ${String(cache.scores.length)} scores`
+    );
   } catch (err: unknown) {
     logger.debug(
-      `Failed to write telemetry cache: ${err instanceof Error ? err.message : String(err)}`
+      `persist: saveCache — failed to write: ${err instanceof Error ? err.message : String(err)}`
     );
   }
 }

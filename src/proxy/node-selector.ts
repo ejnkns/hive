@@ -1,6 +1,7 @@
 import { calculateNodeScore, type ProviderModelNode } from "../telemetry";
 import type { RequestMetric } from "../telemetry";
 import { routingMemory } from "./routing-memory";
+import { logger } from "../hive/shared/logger";
 
 export type HiveRoutingConfig = {
   strategy: string;
@@ -33,7 +34,12 @@ export function selectBestNode(
   for (const node of nodes) {
     const compoundKey = `${node.providerName}:${node.modelName}`;
 
-    if (!routingMemory.isNodeEligible(compoundKey, requiredFeatures)) continue;
+    if (!routingMemory.isNodeEligible(compoundKey, requiredFeatures)) {
+      logger.debug(
+        `node ${compoundKey} — ineligible (circuit breaker or unsupported features)`
+      );
+      continue;
+    }
 
     const metrics = getMetricsForNode(compoundKey);
     let score = calculateNodeScore(
@@ -45,13 +51,21 @@ export function selectBestNode(
 
     if (sessionId && routingMemory.getNodeAffinity(sessionId) === compoundKey) {
       score *= 1.1;
+      logger.debug(
+        `node ${compoundKey} — session affinity applied (×1.1) → ${score.toFixed(1)}`
+      );
+    } else {
+      logger.debug(`node ${compoundKey} — score ${score.toFixed(1)}`);
     }
 
     const normalizedScore = Math.max(0, score);
     candidates.push({ node, score: normalizedScore, compoundKey });
   }
 
-  if (candidates.length === 0) return null;
+  if (candidates.length === 0) {
+    logger.debug(`no eligible candidates from ${String(nodes.length)} nodes`);
+    return null;
+  }
 
   const maxScore = Math.max(...candidates.map((c) => c.score));
   const poolThreshold = maxScore - 5;
@@ -70,9 +84,13 @@ export function selectBestNode(
       if (sessionId) {
         routingMemory.setNodeAffinity(sessionId, candidate.compoundKey);
       }
+      logger.debug(
+        `selected ${candidate.compoundKey} (score ${candidate.score.toFixed(1)}, weight ${weight.toFixed(1)}, roll ${selectionRoll.toFixed(1)}/${totalWeight.toFixed(1)})`
+      );
       return candidate.node;
     }
   }
 
+  logger.debug(`fallback to top candidate ${qualifiedPool[0].compoundKey}`);
   return qualifiedPool[0].node;
 }

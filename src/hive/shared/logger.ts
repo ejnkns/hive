@@ -1,4 +1,5 @@
 const YELLOW = "\x1b[33m";
+const RED = "\x1b[31m";
 const BOLD = "\x1b[1m";
 const RESET = "\x1b[0m";
 const GRAY = "\x1b[90m";
@@ -7,23 +8,21 @@ const width = process.stdout.columns || 80;
 
 export const logger = {
   info: (msg: string) => {
-    console.log(bzz(msg));
+    console.log(bzz(msg, `${YELLOW}bzz:info${RESET}`));
   },
   warn: (msg: string) => {
-    console.warn(bzz(msg));
+    console.warn(bzz(msg, `${YELLOW}bzz:warn${RESET}`));
   },
   error: (msg: string) => {
-    console.error(bzz(msg));
+    console.error(bzz(msg, `${RED}bzz:error${RESET}`));
   },
   debug: (msg: string) => {
-    if (process.env.DEBUG) console.log(bzz(msg, DEBUG_PREFIX));
+    if (process.env.DEBUG) console.log(bzz(msg, `${GRAY}bzz:debug${RESET}`));
   },
 };
 
-const DEBUG_PREFIX = `${YELLOW}bzz:debug${RESET}`;
-
-function bzz(msg: string, prefix = "bzz") {
-  return `[${YELLOW}${prefix}${RESET}] ${msg}`;
+function bzz(msg: string, prefix: string) {
+  return `[${prefix}] ${msg}`;
 }
 
 export function printBanner() {
