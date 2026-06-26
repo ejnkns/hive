@@ -53,7 +53,7 @@ export function createServer(config: HiveConfig) {
 
     if (!result.success) {
       logger.error(
-        `chat completion failed: ${result.error} (${result.statusCode})`
+        `chat completion failed: ${result.error ?? ""} (${String(result.statusCode ?? "")})`
       );
       return reply
         .status(result.statusCode ?? 500)
@@ -61,7 +61,7 @@ export function createServer(config: HiveConfig) {
     }
 
     logger.info(
-      `chat completion success → routing via ${result.provider} (model: ${result.model})`
+      `chat completion success → routing via ${result.provider ?? ""} (model: ${result.model ?? ""})`
     );
     reply.header("Content-Type", "text/event-stream");
     return reply.send(result.stream);
@@ -147,6 +147,6 @@ export function listen(
       logger.error(`failed to start server: ${err.message}`);
       process.exit(1);
     }
-    logger.info(`listening on http://${config.host}:${config.port}`);
+    logger.info(`listening on http://${config.host}:${String(config.port)}`);
   });
 }

@@ -3,7 +3,7 @@ import { createServer, listen } from "./hive/create-server";
 import { loadConfig } from "./hive/load-config";
 import { printBanner } from "./hive/shared/logger";
 
-await printBanner();
+printBanner();
 
 const config = loadConfig();
 const server = createServer(config);

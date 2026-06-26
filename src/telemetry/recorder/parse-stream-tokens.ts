@@ -1,5 +1,23 @@
 import { Transform } from "node:stream";
 
+type StreamDelta = {
+  content?: string;
+  reasoning_content?: string;
+};
+
+type StreamChoice = {
+  delta?: StreamDelta;
+  finish_reason?: string | null;
+};
+
+type StreamChunk = {
+  choices?: StreamChoice[];
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+  };
+};
+
 type StreamStats = {
   outputChars: number;
   thinkingChars: number;
@@ -45,7 +63,7 @@ export function createStreamCounter(startTime: number) {
         }
 
         try {
-          const parsed = JSON.parse(jsonStr);
+          const parsed = JSON.parse(jsonStr) as StreamChunk;
           const delta = parsed.choices?.[0]?.delta;
           const finish = parsed.choices?.[0]?.finish_reason;
 

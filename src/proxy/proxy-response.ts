@@ -51,7 +51,7 @@ export class ProxyResponse {
     this.bodyConsumed = true;
     const chunks: Buffer[] = [];
     for await (const chunk of this.body) {
-      chunks.push(Buffer.from(chunk));
+      chunks.push(Buffer.from(chunk as Uint8Array));
     }
     this.cachedBody = Buffer.concat(chunks).toString("utf-8");
     return this.cachedBody;

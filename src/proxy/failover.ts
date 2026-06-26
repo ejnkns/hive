@@ -8,6 +8,18 @@ import { logger } from "../hive/shared/logger";
 import { conversationStore } from "../telemetry";
 import { generateId } from "../id";
 
+type ChatMessage = {
+  role: string;
+  content?: string;
+  reasoning_content?: string;
+  tool_calls?: unknown[];
+};
+
+type ChatBody = {
+  messages?: ChatMessage[];
+  model?: string;
+};
+
 type FailoverResult = {
   success: boolean;
   provider?: string;
@@ -20,13 +32,16 @@ type FailoverResult = {
 
 const TIMEOUT_MS = 10000;
 
-function sanitizePayloadForProvider(providerName: string, body: any): any {
-  const cloned = JSON.parse(JSON.stringify(body));
+function sanitizePayloadForProvider(
+  providerName: string,
+  body: ChatBody
+): ChatBody {
+  const cloned = JSON.parse(JSON.stringify(body)) as ChatBody;
 
   if (!cloned.messages || !Array.isArray(cloned.messages)) return cloned;
 
   if (providerName !== "opencode-zen") {
-    cloned.messages = cloned.messages.map((msg: any) => {
+    cloned.messages = cloned.messages.map((msg) => {
       if (msg.role === "assistant" && "reasoning_content" in msg) {
         if (msg.reasoning_content && typeof msg.content === "string") {
           msg.content = `[Thought: ${msg.reasoning_content}]\n\n${msg.content}`;
@@ -45,17 +60,25 @@ export async function failover(
   originalHeaders: IncomingMessage["headers"],
   originalBody: string
 ): Promise<FailoverResult> {
-  let parsedBody: any;
+  let parsedBody: ChatBody;
   try {
-    parsedBody = JSON.parse(originalBody);
+    parsedBody = JSON.parse(originalBody) as ChatBody;
   } catch {
     logger.error("failover: failed to parse request body");
     return { success: false, statusCode: 400 };
   }
 
   const requestId = generateId();
-  const prompt = parsedBody.messages || [];
-  conversationStore.startConversation(requestId, prompt);
+  const prompt = parsedBody.messages ?? [];
+  conversationStore.startConversation(
+    requestId,
+    prompt as {
+      role: string;
+      content:
+        | string
+        | { type: string; text?: string; image_url?: { url: string } }[];
+    }[]
+  );
 
   for (const provider of providers) {
     const model = provider.defaultModel;
@@ -68,7 +91,7 @@ export async function failover(
           : JSON.stringify(parsedBody).length) / 4;
       if (estimatedTokens > 11500) {
         logger.info(
-          `failover: skipping ${provider.name} — payload too large (est. ${Math.round(estimatedTokens)} tokens, limit ~11500)`
+          `failover: skipping ${provider.name} — payload too large (est. ${String(Math.round(estimatedTokens))} tokens, limit ~11500)`
         );
         continue;
       }
@@ -76,9 +99,7 @@ export async function failover(
 
     if (
       provider.name === "nvidia-nim" &&
-      parsedBody.messages?.some(
-        (m: any) => m.tool_calls && m.tool_calls.length > 1
-      )
+      parsedBody.messages?.some((m) => m.tool_calls && m.tool_calls.length > 1)
     ) {
       logger.info(
         `failover: skipping ${provider.name} — multi-tool calls not supported`
@@ -96,9 +117,10 @@ export async function failover(
         targetProvider: provider,
         targetModel: model,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
       logger.error(
-        `failover: mutate request failed for ${provider.name}: ${err.message}`
+        `failover: mutate request failed for ${provider.name}: ${msg}`
       );
       continue;
     }
@@ -129,10 +151,10 @@ export async function failover(
 
     const errBody = await result.proxyResponse.getBodyAsString();
     logger.error(
-      `failover: ${provider.name} failed — status ${result.proxyResponse.status}${errBody ? `: ${errBody.slice(0, 250)}` : ""}`
+      `failover: ${provider.name} failed — status ${String(result.proxyResponse.status)}${errBody ? `: ${errBody.slice(0, 250)}` : ""}`
     );
   }
 
-  logger.error(`failover: all ${providers.length} providers exhausted`);
+  logger.error(`failover: all ${String(providers.length)} providers exhausted`);
   return { success: false, statusCode: 503 };
 }

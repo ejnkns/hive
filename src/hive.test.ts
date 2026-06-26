@@ -1,18 +1,23 @@
-import { describe, it, after } from 'node:test'
-import assert from 'node:assert'
+import { describe, it, after } from "node:test";
+import assert from "node:assert";
 
-describe('hive', () => {
-  let mod: any
+type HiveModule = {
+  server: { close(): void };
+  hiveCore: { shutdown(): void };
+};
 
-  it('loads without error', async () => {
-    mod = await import('./hive')
-    assert.ok(mod.server)
-  })
+await describe("hive", async () => {
+  let mod: HiveModule | undefined;
+
+  await it("loads without error", async () => {
+    mod = await import("./hive");
+    assert.ok(mod.server);
+  });
 
   after(() => {
     if (mod) {
-      mod.server.close()
-      mod.hiveCore.shutdown()
+      mod.server.close();
+      mod.hiveCore.shutdown();
     }
-  })
-})
+  });
+});

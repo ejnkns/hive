@@ -1,8 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
 
-describe("telemetry", () => {
-  it("exports expected api from barrel", async () => {
+await describe("telemetry", async () => {
+  await it("exports expected api from barrel", async () => {
     const telemetry = await import("./telemetry");
     assert.ok(typeof telemetry.calculateNodeScore === "function");
     assert.ok(typeof telemetry.loadCache === "function");

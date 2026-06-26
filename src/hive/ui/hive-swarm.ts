@@ -50,19 +50,20 @@ export class HiveSwarm extends HTMLElement {
       return;
     }
 
-    const best: Record<string, ProviderData> = {};
+    const best = new Map<string, ProviderData>();
     qualified.forEach((x) => {
-      if (!best[x.name] || x.stabilityScore > best[x.name].stabilityScore)
-        best[x.name] = x;
+      const existing = best.get(x.name);
+      if (!existing || x.stabilityScore > existing.stabilityScore)
+        best.set(x.name, x);
     });
-    const sorted = Object.values(best).sort(
+    const sorted = Array.from(best.values()).sort(
       (a, b) => b.stabilityScore - a.stabilityScore
     );
 
     let nodes = "";
     sorted.forEach((x, i) => {
       if (i > 0) nodes += '<span class="swarm-arr">&gt;</span>';
-      nodes += `<span class="swarm-node">${x.name} <span class="sc" style="color:${sc(x.stabilityScore)}">${x.stabilityScore}%</span><hive-info>Stability score: composite of success rate and latency</hive-info></span>`;
+      nodes += `<span class="swarm-node">${x.name} <span class="sc" style="color:${sc(x.stabilityScore)}">${String(x.stabilityScore)}%</span><hive-info>Stability score: composite of success rate and latency</hive-info></span>`;
     });
 
     this.shadow.innerHTML = `

@@ -1,4 +1,4 @@
-export class CircuitBreakerManager {
+export class CircuitBreaker {
   private registry = new Map<string, number>();
 
   isTripped(compoundKey: string): boolean {
@@ -11,7 +11,7 @@ export class CircuitBreakerManager {
     return true;
   }
 
-  trip(compoundKey: string, durationMs = 30000): void {
+  trip(compoundKey: string, durationMs: number): void {
     this.registry.set(compoundKey, Date.now() + durationMs);
   }
 
@@ -19,5 +19,3 @@ export class CircuitBreakerManager {
     this.registry.clear();
   }
 }
-
-export const circuitBreaker = new CircuitBreakerManager();

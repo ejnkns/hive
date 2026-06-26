@@ -6,9 +6,15 @@ const BLACK = "\x1b[40m";
 const width = process.stdout.columns || 80;
 
 export const logger = {
-  info: (msg: string) => console.log(bzz(msg)),
-  warn: (msg: string) => console.warn(bzz(msg)),
-  error: (msg: string) => console.error(bzz(msg)),
+  info: (msg: string) => {
+    console.log(bzz(msg));
+  },
+  warn: (msg: string) => {
+    console.warn(bzz(msg));
+  },
+  error: (msg: string) => {
+    console.error(bzz(msg));
+  },
   debug: (msg: string) => {
     if (process.env.DEBUG) console.log(bzz(msg, DEBUG_PREFIX));
   },
@@ -36,7 +42,7 @@ export function printBanner() {
            \`-=-=-=-=-\`
                                   ^^${RESET}`;
   const title = `${YELLOW}${BOLD}h i v e${RESET}`;
-  const version = `${GRAY}v${process.env.npm_package_version}${RESET}`;
+  const version = `${GRAY}v${process.env.npm_package_version ?? ""}${RESET}`;
   const hr = `${GRAY}${(() => "─".repeat(width))()}${RESET}`;
   const flyPath = `                            ${YELLOW}${BOLD}h i v e${RESET}
    ,-.      .' '.        .\` 

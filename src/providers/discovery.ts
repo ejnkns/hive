@@ -4,6 +4,10 @@ import { promises as fs, readFileSync } from "node:fs";
 import { allProviders, buildModelsEndpoint } from "./registry";
 import { logger } from "../hive/shared/logger";
 
+type ModelListResponse = {
+  data: Array<{ id: string }>;
+};
+
 type CachedProvider = {
   name: string;
   baseUrl: string;
@@ -20,7 +24,7 @@ type ModelCache = {
   providers: CachedProvider[];
 };
 
-const PROVIDER_PREFERENCES: Record<string, string[]> = {
+const PROVIDER_PREFERENCES: Record<string, string[] | undefined> = {
   groq: [
     "deepseek-r1-distill-llama-70b",
     "llama-3.3-70b-versatile",
@@ -32,10 +36,7 @@ const PROVIDER_PREFERENCES: Record<string, string[]> = {
     "gemini-1.5-flash",
     "gemini-2.0-flash-exp",
   ],
-  sambanova: [
-    "DeepSeek-R1",
-    "Meta-Llama-3.3-70B-Instruct",
-  ],
+  sambanova: ["DeepSeek-R1", "Meta-Llama-3.3-70B-Instruct"],
   "nvidia-nim": [
     "meta/llama-3.3-70b-instruct",
     "deepseek-ai/deepseek-r1",
@@ -48,15 +49,8 @@ const PROVIDER_PREFERENCES: Record<string, string[]> = {
     "claude-3-5-sonnet",
     "llama-3.3-70b-instruct",
   ],
-  cerebras: [
-    "llama-3.3-70b",
-    "llama-3.1-8b",
-  ],
-  mistral: [
-    "codestral-latest",
-    "mistral-large-latest",
-    "mistral-small-latest",
-  ],
+  cerebras: ["llama-3.3-70b", "llama-3.1-8b"],
+  mistral: ["codestral-latest", "mistral-large-latest", "mistral-small-latest"],
   "opencode-zen": [
     "deepseek-v4-flash-free",
     "qwen3.6-plus-free",
@@ -75,44 +69,59 @@ async function loadModelCache(): Promise<ModelCache | null> {
   try {
     logger.debug(`Reading model cache from: ${MODELS_CACHE_PATH}`);
     const data = await fs.readFile(MODELS_CACHE_PATH, "utf-8");
-    const parsed = JSON.parse(data);
+    // JSON.parse returns unknown at runtime; cast justified by file format
+    const parsed = JSON.parse(data) as ModelCache;
     logger.debug("Successfully loaded model cache from disk");
     return parsed;
-  } catch (err: any) {
-    logger.debug(`Model cache not found or failed to parse on disk: ${err.message}`);
+  } catch (err: unknown) {
+    logger.debug(
+      `Model cache not found or failed to parse on disk: ${err instanceof Error ? err.message : String(err)}`
+    );
     return null;
   }
 }
 
 export function loadModelCacheSync(): ModelCache | null {
   try {
-    logger.debug(`Synchronously reading model cache from: ${MODELS_CACHE_PATH}`);
+    logger.debug(
+      `Synchronously reading model cache from: ${MODELS_CACHE_PATH}`
+    );
     const data = readFileSync(MODELS_CACHE_PATH, "utf-8");
-    const parsed = JSON.parse(data);
+    const parsed = JSON.parse(data) as ModelCache;
     logger.debug("Successfully loaded model cache synchronously from disk");
     return parsed;
-  } catch (err: any) {
-    logger.debug(`Model cache not found or failed to parse synchronously on disk: ${err.message}`);
+  } catch (err: unknown) {
+    logger.debug(
+      `Model cache not found or failed to parse synchronously on disk: ${err instanceof Error ? err.message : String(err)}`
+    );
     return null;
   }
 }
 
 async function saveModelCache(cache: ModelCache): Promise<void> {
   try {
-    logger.debug(`Creating/ensuring directory exists for models cache: ${HIVE_DIR}`);
+    logger.debug(
+      `Creating/ensuring directory exists for models cache: ${HIVE_DIR}`
+    );
     await fs.mkdir(HIVE_DIR, { recursive: true });
     logger.debug(`Writing model cache to: ${MODELS_CACHE_PATH}`);
-    await fs.writeFile(MODELS_CACHE_PATH, JSON.stringify(cache, null, 2), "utf-8");
+    await fs.writeFile(
+      MODELS_CACHE_PATH,
+      JSON.stringify(cache, null, 2),
+      "utf-8"
+    );
     logger.debug("Successfully wrote model cache to disk");
-  } catch (err: any) {
-    logger.debug(`Failed to write model cache to disk: ${err.message}`);
+  } catch (err: unknown) {
+    logger.debug(
+      `Failed to write model cache to disk: ${err instanceof Error ? err.message : String(err)}`
+    );
   }
 }
 
 export function selectDefaultModel(
   providerName: string,
   fetchedModels: string[],
-  fallbackDefault: string,
+  fallbackDefault: string
 ): string {
   const preferences = PROVIDER_PREFERENCES[providerName];
   if (!preferences) return fallbackDefault;
@@ -142,16 +151,30 @@ export function selectDefaultModel(
     let score = 0;
 
     // Heavily penalize non-chat utility/specialized models to avoid severe failures
-    if (["guard", "embed", "moderation", "ocr", "translate", "vision"].some(kw => lower.includes(kw))) {
+    if (
+      ["guard", "embed", "moderation", "ocr", "translate", "vision"].some(
+        (kw) => lower.includes(kw)
+      )
+    ) {
       score -= 1000;
     }
     // Prioritize high-capacity / free flagship models
-    if (["120b", "405b"].some(kw => lower.includes(kw))) score += 100;
+    if (["120b", "405b"].some((kw) => lower.includes(kw))) score += 100;
     if (lower.includes("70b")) score += 80;
     if (lower.includes("-free")) score += 50;
-    if (["large", "pro", "instruct", "r1", "plus"].some(kw => lower.includes(kw))) score += 20;
+    if (
+      ["large", "pro", "instruct", "r1", "plus"].some((kw) =>
+        lower.includes(kw)
+      )
+    )
+      score += 20;
     // Deprioritize small models
-    if (["8b", "7b", "3b", "1b", "mini", "small", "flash", "lite"].some(kw => lower.includes(kw))) score -= 40;
+    if (
+      ["8b", "7b", "3b", "1b", "mini", "small", "flash", "lite"].some((kw) =>
+        lower.includes(kw)
+      )
+    )
+      score -= 40;
 
     if (score > highestScore) {
       highestScore = score;
@@ -163,19 +186,23 @@ export function selectDefaultModel(
 
 async function fetchProviderModels(
   baseUrl: string,
-  apiKeyEnvVar: string,
+  apiKeyEnvVar: string
 ): Promise<string[]> {
   const apiKey = process.env[apiKeyEnvVar];
   if (!apiKey) {
     throw new Error(`API key missing: ${apiKeyEnvVar}`);
   }
 
-  logger.debug(`API key '${apiKeyEnvVar}' found in environment for baseUrl: ${baseUrl}`);
+  logger.debug(
+    `API key '${apiKeyEnvVar}' found in environment for baseUrl: ${baseUrl}`
+  );
 
   const modelsEndpoint = buildModelsEndpoint(baseUrl);
 
   const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+  const id = setTimeout(() => {
+    controller.abort();
+  }, 8000); // 8 second timeout
 
   try {
     logger.debug(`Fetching models from endpoint: ${modelsEndpoint}`);
@@ -192,28 +219,35 @@ async function fetchProviderModels(
 
     if (!response.ok) {
       const text = await response.text().catch(() => "");
-      throw new Error(`HTTP ${response.status}: ${text || response.statusText}`);
+      throw new Error(
+        `HTTP ${String(response.status)}: ${text || response.statusText}`
+      );
     }
 
-    const data = (await response.json()) as any;
-    if (data && Array.isArray(data.data)) {
+    const data: ModelListResponse =
+      (await response.json()) as ModelListResponse;
+    if (Array.isArray(data.data)) {
       const models = data.data
-        .map((m: any) => m.id)
-        .filter((id: any) => typeof id === "string");
-      logger.debug(`Successfully fetched ${models.length} models from baseUrl: ${baseUrl}`);
+        .map((m) => m.id)
+        .filter((id): id is string => typeof id === "string");
+      logger.debug(
+        `Successfully fetched ${String(models.length)} models from baseUrl: ${baseUrl}`
+      );
       return models;
     }
 
     throw new Error("Invalid response format: 'data' array not found");
-  } catch (error: any) {
+  } catch (error: unknown) {
     clearTimeout(id);
-    logger.debug(`Failed to fetch models from baseUrl ${baseUrl}: ${error.message}`);
+    logger.debug(
+      `Failed to fetch models from baseUrl ${baseUrl}: ${error instanceof Error ? error.message : String(error)}`
+    );
     throw error;
   }
 }
 
 export async function discoverAndCacheModels(
-  force = false,
+  force = false
 ): Promise<ModelCache> {
   const currentCache = await loadModelCache();
   const now = Date.now();
@@ -224,7 +258,9 @@ export async function discoverAndCacheModels(
     currentCache &&
     now - currentCache.lastCheckTime < 10 * 60 * 1000
   ) {
-    logger.debug("Model cache is fresh (less than 10 mins old). Skipping discovery.");
+    logger.debug(
+      "Model cache is fresh (less than 10 mins old). Skipping discovery."
+    );
     return currentCache;
   }
 
@@ -233,31 +269,34 @@ export async function discoverAndCacheModels(
 
   for (const provider of allProviders) {
     const key = process.env[provider.apiKeyEnvVar];
-    const cached = currentCache?.providers.find((p) => p.name === provider.name);
+    const cached = currentCache?.providers.find(
+      (p) => p.name === provider.name
+    );
 
     if (key && key.length > 0) {
       try {
         const fetchedModels = await fetchProviderModels(
           provider.baseUrl,
-          provider.apiKeyEnvVar,
+          provider.apiKeyEnvVar
         );
         const bestDefault = selectDefaultModel(
           provider.name,
           fetchedModels,
-          provider.defaultModel,
+          provider.defaultModel
         );
 
         updatedProviders.push({
           name: provider.name,
           baseUrl: provider.baseUrl,
           apiKeyEnvVar: provider.apiKeyEnvVar,
-          models: fetchedModels.length > 0 ? fetchedModels : [...provider.models],
+          models:
+            fetchedModels.length > 0 ? fetchedModels : [...provider.models],
           defaultModel: bestDefault,
           lastChecked: new Date().toISOString(),
           lastCheckStatus: "success",
           lastCheckError: null,
         });
-      } catch (err: any) {
+      } catch (err: unknown) {
         updatedProviders.push({
           name: provider.name,
           baseUrl: provider.baseUrl,
@@ -266,11 +305,13 @@ export async function discoverAndCacheModels(
           defaultModel: cached?.defaultModel || provider.defaultModel,
           lastChecked: new Date().toISOString(),
           lastCheckStatus: "failed",
-          lastCheckError: err.message || String(err),
+          lastCheckError: err instanceof Error ? err.message : String(err),
         });
       }
     } else {
-      logger.debug(`No API key found in env for provider '${provider.name}' (${provider.apiKeyEnvVar}). Skipping discovery.`);
+      logger.debug(
+        `No API key found in env for provider '${provider.name}' (${provider.apiKeyEnvVar}). Skipping discovery.`
+      );
       updatedProviders.push({
         name: provider.name,
         baseUrl: provider.baseUrl,

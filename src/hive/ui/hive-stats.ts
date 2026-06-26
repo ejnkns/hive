@@ -22,9 +22,9 @@ export class HiveStats extends HTMLElement {
 
   private render() {
     const d = this._data;
-    const traffic = d?.traffic ?? "—";
+    const traffic = String(d?.traffic ?? "—");
     const rate = d?.successRate ?? 100;
-    const providers = d?.providers ?? "—";
+    const providers = String(d?.providers ?? "—");
     const latency = d ? fv(d.avgLatency, "ms") : "—";
 
     this.shadow.innerHTML = `
@@ -60,7 +60,7 @@ export class HiveStats extends HTMLElement {
       </div>
       <div class="stat">
         <span class="stat-label">Success <hive-info>% of requests completed without error</hive-info></span>
-        <span class="stat-value" style="color:${sc(rate)}">${rate}%</span>
+        <span class="stat-value" style="color:${sc(rate)}">${String(rate)}%</span>
       </div>
       <div class="stat">
         <span class="stat-label">Providers <hive-info>Providers with an API key configured</hive-info></span>

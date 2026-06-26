@@ -1,6 +1,5 @@
 import { selectBestNode } from "./node-selector";
-import { circuitBreaker } from "./circuit-breaker";
-import { empiricalDisabledFeatures } from "./feature-discovery";
+import { routingMemory } from "./routing-memory";
 import type { ProviderModelNode } from "../telemetry/score";
 import type { RequestMetric } from "../telemetry/request-metric";
 import { ProxyResponse } from "./proxy-response";
@@ -47,30 +46,17 @@ export async function executeProxyRequest(
 
       if (!response.isOk()) {
         const normalized = await response.getNormalizedError();
-
-        if (normalized.type === "unsupported-feature") {
-          if (!empiricalDisabledFeatures.has(compoundKey)) {
-            empiricalDisabledFeatures.set(compoundKey, new Set());
-          }
-          ctx.requiredFeatures.forEach((f) =>
-            empiricalDisabledFeatures.get(compoundKey)!.add(f)
-          );
-        }
-
-        if (
-          normalized.type === "rate-limit" ||
-          normalized.type === "server-error" ||
-          normalized.type === "auth-error"
-        ) {
-          circuitBreaker.trip(compoundKey, 30000);
-        }
-
+        routingMemory.recordUpstreamError(
+          compoundKey,
+          normalized.type,
+          ctx.requiredFeatures
+        );
         continue;
       }
 
       return response;
     } catch {
-      circuitBreaker.trip(compoundKey, 30000);
+      routingMemory.recordNetworkFailure(compoundKey);
       continue;
     }
   }

@@ -24,13 +24,13 @@ function mockMetric(overrides: Partial<RequestMetric>): RequestMetric {
   };
 }
 
-describe("Hive Scoring Suite", () => {
+await describe("Hive Scoring Suite", async () => {
   const node: ProviderModelNode = {
     providerName: "together",
     modelName: "llama-3-70b",
   };
 
-  it("should enforce continuous context boundaries and omit small probe traffic from latency scores", () => {
+  await it("should enforce continuous context boundaries and omit small probe traffic from latency scores", () => {
     const history = [
       mockMetric({ ttft: 4000, totalLatency: 9000, inputTokens: 50 }),
       mockMetric({ ttft: 150, totalLatency: 650, inputTokens: 400 }),
@@ -39,11 +39,11 @@ describe("Hive Scoring Suite", () => {
     const score = calculateNodeScore(node, history, "latency", 200);
     assert.ok(
       score > 70,
-      `Expected clean velocity scaling score, received: ${score}`
+      `Expected clean velocity scaling score, received: ${String(score)}`
     );
   });
 
-  it("should grant flexible, protective scaling options to reasoning models experiencing high thinking time", () => {
+  await it("should grant flexible, protective scaling options to reasoning models experiencing high thinking time", () => {
     const reasoningNode: ProviderModelNode = {
       providerName: "groq",
       modelName: "deepseek-r1",
@@ -60,11 +60,11 @@ describe("Hive Scoring Suite", () => {
     const score = calculateNodeScore(reasoningNode, history, "balanced", 200);
     assert.ok(
       score > 50,
-      `Reasoning models should possess extended operational score lanes. Got: ${score}`
+      `Reasoning models should possess extended operational score lanes. Got: ${String(score)}`
     );
   });
 
-  it("should close the authentication loophole by dropping dead or unauthenticated paths to zero", () => {
+  await it("should close the authentication loophole by dropping dead or unauthenticated paths to zero", () => {
     const now = Date.now();
     const history = [
       mockMetric({
@@ -90,7 +90,7 @@ describe("Hive Scoring Suite", () => {
     );
   });
 
-  it("should penalize structural anomalies like context length truncation drops inside the quality score", () => {
+  await it("should penalize structural anomalies like context length truncation drops inside the quality score", () => {
     const history = [
       mockMetric({ finishReason: "length" }),
       mockMetric({ finishReason: "length" }),
@@ -112,10 +112,10 @@ describe("Hive Scoring Suite", () => {
   });
 });
 
-describe("Telemetry Optimization Extensions", () => {
+await describe("Telemetry Optimization Extensions", async () => {
   const testNode = { providerName: "provider-a", modelName: "model-a" };
 
-  it("should accurately track throughput metrics for non-streaming calls", () => {
+  await it("should accurately track throughput metrics for non-streaming calls", () => {
     const metrics = [
       {
         requestId: "ns-1",
@@ -143,7 +143,7 @@ describe("Telemetry Optimization Extensions", () => {
     );
   });
 
-  it("should survive an isolated authentication failure if subsequent connections succeed", () => {
+  await it("should survive an isolated authentication failure if subsequent connections succeed", () => {
     const now = Date.now();
     const metrics = [
       {
@@ -189,7 +189,7 @@ describe("Telemetry Optimization Extensions", () => {
     );
   });
 
-  it("should penalize 401s significantly more than 429s", () => {
+  await it("should penalize 401s significantly more than 429s", () => {
     const now = Date.now();
     const baseSuccess = mockMetric({ timestamp: now - 60000 });
     const metrics429 = [
@@ -216,16 +216,16 @@ describe("Telemetry Optimization Extensions", () => {
 
     assert.ok(
       score401 < score429,
-      `Hard errors (401) should reduce score more than soft errors (429). 401: ${score401}, 429: ${score429}`
+      `Hard errors (401) should reduce score more than soft errors (429). 401: ${String(score401)}, 429: ${String(score429)}`
     );
   });
 });
 
-describe("Severity-Weighted Temporal Decay", () => {
+await describe("Severity-Weighted Temporal Decay", async () => {
   const testNode = { providerName: "provider-a", modelName: "model-a" };
   const now = Date.now();
 
-  it("should gradually recover as successful requests accumulate after a failure", () => {
+  await it("should gradually recover as successful requests accumulate after a failure", () => {
     const failure = mockMetric({
       success: false,
       statusCode: 429,
@@ -266,19 +266,19 @@ describe("Severity-Weighted Temporal Decay", () => {
 
     assert.ok(
       earlyScore < midScore,
-      `Score should climb with early recoveries. Early: ${earlyScore}, Mid: ${midScore}`
+      `Score should climb with early recoveries. Early: ${String(earlyScore)}, Mid: ${String(midScore)}`
     );
     assert.ok(
       midScore < fullScore,
-      `Score should climb further with more recoveries. Mid: ${midScore}, Full: ${fullScore}`
+      `Score should climb further with more recoveries. Mid: ${String(midScore)}, Full: ${String(fullScore)}`
     );
     assert.ok(
       fullScore > 80,
-      `Score should approach 100 with enough successful requests. Full: ${fullScore}`
+      `Score should approach 100 with enough successful requests. Full: ${String(fullScore)}`
     );
   });
 
-  it("should degrade score more for burst failures than spread failures", () => {
+  await it("should degrade score more for burst failures than spread failures", () => {
     const success = mockMetric({ timestamp: now - 120_000 });
 
     const burstFailures = [
@@ -319,11 +319,11 @@ describe("Severity-Weighted Temporal Decay", () => {
 
     assert.ok(
       burstScore < spreadScore,
-      `Burst failures should degrade score more than spread failures. Burst: ${burstScore}, Spread: ${spreadScore}`
+      `Burst failures should degrade score more than spread failures. Burst: ${String(burstScore)}, Spread: ${String(spreadScore)}`
     );
   });
 
-  it("should return 0 instantly for two consecutive 401s, bypassing exponential math", () => {
+  await it("should return 0 instantly for two consecutive 401s, bypassing exponential math", () => {
     const metrics = [
       mockMetric({
         success: false,

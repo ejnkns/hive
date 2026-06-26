@@ -15,7 +15,9 @@ export class HiveDetailOverlay extends HTMLElement {
 
   show(metric: MetricData, allMetrics: MetricData[]): void {
     this.render(metric, allMetrics);
-    const overlay = this.shadow.querySelector("#overlay") as HTMLElement | null;
+    const overlay = this.shadow.querySelector(
+      "#overlay"
+    ) as unknown as HTMLElement | null;
     overlay?.showPopover();
   }
 
@@ -28,13 +30,11 @@ export class HiveDetailOverlay extends HTMLElement {
         ["Time", new Date(metric.timestamp).toLocaleString()],
         [
           "Status",
-          metric.statusCode + (metric.errorType ? " " + metric.errorType : ""),
+          String(metric.statusCode) +
+            (metric.errorType ? " " + metric.errorType : ""),
         ],
-        ["TTFT", metric.ttft != null ? fv(metric.ttft, "ms") : "—"],
-        [
-          "Total Latency",
-          metric.totalLatency != null ? fv(metric.totalLatency, "ms") : "—",
-        ],
+        ["TTFT", fv(metric.ttft, "ms")],
+        ["Total Latency", fv(metric.totalLatency, "ms")],
         [
           "Input Tokens",
           metric.inputTokens != null ? String(metric.inputTokens) : "—",
@@ -65,7 +65,7 @@ export class HiveDetailOverlay extends HTMLElement {
       if (chain.length > 1) {
         chain.forEach((m) => {
           const ok = m.success && m.statusCode < 400;
-          chainHtml += `<div class="detail-chain-item"><span class="prov">${m.provider} ${m.model}</span><span style="color:${ok ? "var(--success)" : "var(--error)"}">${m.statusCode || "ERR"}${m.errorType ? " " + m.errorType : ""} ${ok ? "ok" : "fail"}</span></div>`;
+          chainHtml += `<div class="detail-chain-item"><span class="prov">${m.provider} ${m.model}</span><span style="color:${ok ? "var(--success)" : "var(--error)"}">${m.statusCode ? String(m.statusCode) : "ERR"}${m.errorType ? " " + m.errorType : ""} ${ok ? "ok" : "fail"}</span></div>`;
         });
       } else {
         chainHtml = '<div class="single">Single attempt</div>';

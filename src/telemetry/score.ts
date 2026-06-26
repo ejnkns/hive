@@ -36,7 +36,7 @@ function percentile(sorted: number[], p: number): number {
 function getFailureWeight(m: RequestMetric): number {
   if (m.success) return 0;
   if (m.errorType) {
-    return ERROR_PENALTIES[m.errorType as keyof typeof ERROR_PENALTIES] ?? 1.0;
+    return ERROR_PENALTIES[m.errorType] ?? 1.0;
   }
   return 1.0;
 }
@@ -48,7 +48,7 @@ export function calculateNodeScore(
   minTokenThreshold: number = 200
 ): number {
   const strategy =
-    ROUTING_STRATEGIES[strategyName] || ROUTING_STRATEGIES.balanced;
+    ROUTING_STRATEGIES[strategyName] ?? ROUTING_STRATEGIES.balanced;
 
   const performanceMetrics = metrics.filter(
     (m) => m.source === "user" && (m.inputTokens ?? 0) >= minTokenThreshold

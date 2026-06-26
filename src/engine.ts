@@ -4,8 +4,6 @@ import type { Provider } from "./providers/registry";
 import { buildChatEndpoint } from "./providers/registry";
 import { loadConfig } from "./hive/load-config";
 import { telemetryRecorder, startHeartbeat, loadCache } from "./telemetry";
-import { failover } from "./proxy/failover";
-import { sortByPriority } from "./providers";
 import { mutateRequest } from "./proxy/mutate-request";
 import { routeRequest } from "./proxy/route-request";
 import { discoverAndCacheModels } from "./providers/discovery";
@@ -18,19 +16,9 @@ import {
   executeProxyRequest,
   type FailoverContext,
 } from "./proxy/execute-proxy-request";
-import { selectBestNode } from "./proxy/node-selector";
-import { circuitBreaker } from "./proxy/circuit-breaker";
-import { sessionRegistry } from "./proxy/session-registry";
-import { empiricalDisabledFeatures } from "./proxy/feature-discovery";
+import { routingMemory } from "./proxy";
 import { ProxyResponse } from "./proxy/proxy-response";
 
-export {
-  selectBestNode,
-  executeProxyRequest,
-  circuitBreaker,
-  sessionRegistry,
-  empiricalDisabledFeatures,
-};
 export type { FailoverContext, ProviderModelNode };
 
 type ChatCompletionResult = {
@@ -43,26 +31,44 @@ type ChatCompletionResult = {
   error?: string;
 };
 
-function sanitizePayloadForProvider(providerName: string, body: any): any {
-  const cloned = JSON.parse(JSON.stringify(body));
-  if (!cloned.messages || !Array.isArray(cloned.messages)) return cloned;
+type Message = {
+  role: string;
+  content: string;
+  reasoning_content?: string;
+  tool_calls?: unknown[];
+};
+
+function sanitizePayloadForProvider(
+  providerName: string,
+  body: Record<string, unknown>
+): Record<string, unknown> {
+  const cloned = JSON.parse(JSON.stringify(body)) as Record<string, unknown>;
+  const msgs = cloned.messages;
+  if (!Array.isArray(msgs)) return cloned;
   if (providerName !== "opencode-zen") {
-    cloned.messages = cloned.messages.map((msg: any) => {
-      if (msg.role === "assistant" && "reasoning_content" in msg) {
-        if (msg.reasoning_content && typeof msg.content === "string") {
-          msg.content = `[Thought: ${msg.reasoning_content}]\n\n${msg.content}`;
+    cloned.messages = msgs.map((msg: unknown) => {
+      const m = msg as Message;
+      if (m.role === "assistant" && "reasoning_content" in m) {
+        if (m.reasoning_content && typeof m.content === "string") {
+          m.content = `[Thought: ${m.reasoning_content}]\n\n${m.content}`;
         }
-        delete msg.reasoning_content;
+        delete m.reasoning_content;
       }
-      return msg;
+      return m;
     });
   }
   return cloned;
 }
 
-function extractRequiredFeatures(parsed: any): string[] {
+function extractRequiredFeatures(parsed: Record<string, unknown>): string[] {
   const features: string[] = [];
-  if (parsed.tools || parsed.messages?.some((m: any) => m.tool_calls)) {
+  if (
+    parsed.tools ||
+    (Array.isArray(parsed.messages) &&
+      (parsed.messages as Array<Record<string, unknown>>).some(
+        (m) => m.tool_calls
+      ))
+  ) {
     features.push("tools");
   }
   return features;
@@ -90,11 +96,11 @@ export class HiveCore {
   start(): void {
     telemetryRecorder.start();
     this.startHeartbeat();
-    this.loadLastUsed();
-    this.triggerBackgroundDiscovery();
+    void this.loadLastUsed();
+    void this.triggerBackgroundDiscovery();
     this.discoveryTimer = setInterval(
       () => {
-        this.triggerBackgroundDiscovery();
+        void this.triggerBackgroundDiscovery();
       },
       60 * 60 * 1000
     );
@@ -105,8 +111,9 @@ export class HiveCore {
       const cache = await loadCache();
       const latest = cache.metrics
         .filter((m) => m.success && m.source === "user")
-        .sort((a, b) => b.timestamp - a.timestamp)[0];
-      if (latest) {
+        .sort((a, b) => b.timestamp - a.timestamp)
+        .at(0);
+      if (latest !== undefined) {
         this.lastProvider = latest.provider;
         this.lastModel = latest.model;
       }
@@ -132,9 +139,14 @@ export class HiveCore {
 
   async handleChatCompletion(
     body: string | Record<string, unknown>,
-    incomingHeaders: Record<string, any> = {}
+    incomingHeaders: Record<string, string | string[] | undefined> = {}
   ): Promise<ChatCompletionResult> {
-    const parsed = typeof body === "string" ? JSON.parse(body) : body;
+    const parsed:
+      | Record<string, unknown>
+      | { messages?: Array<Record<string, unknown>> } =
+      typeof body === "string"
+        ? (JSON.parse(body) as Record<string, unknown>)
+        : body;
 
     const qualified = this.providers.filter((p) => {
       const key = process.env[p.apiKeyEnvVar];
@@ -153,8 +165,13 @@ export class HiveCore {
     const payloadStr = JSON.stringify(parsed);
     const requestId = generateId();
     const sessionId = requestId;
-    const prompt = parsed.messages || [];
-    conversationStore.startConversation(requestId, prompt);
+    const messages = (parsed as Record<string, unknown>).messages ?? [];
+    conversationStore.startConversation(
+      requestId,
+      Array.isArray(messages)
+        ? (messages as { role: string; content: string }[])
+        : []
+    );
 
     const nodes: ProviderModelNode[] = qualified.map((p) => ({
       providerName: p.name,
@@ -181,12 +198,15 @@ export class HiveCore {
 
     const dispatchRequest = async (
       node: ProviderModelNode,
-      _payload: string
+      payload: string
     ): Promise<ProxyResponse> => {
       const provider = qualified.find((p) => p.name === node.providerName);
       if (!provider) return ProxyResponse.error(500, "config-error");
 
-      const sanitized = sanitizePayloadForProvider(node.providerName, parsed);
+      const sanitized = sanitizePayloadForProvider(
+        node.providerName,
+        JSON.parse(payload) as Record<string, unknown>
+      );
 
       const mutated = mutateRequest({
         originalHeaders: headers,
@@ -218,7 +238,7 @@ export class HiveCore {
       });
 
       if (response.isOk()) {
-        const lastKey = sessionRegistry.get(sessionId);
+        const lastKey = routingMemory.getNodeAffinity(sessionId);
         this.lastProvider =
           nodes.find((n) => lastKey === `${n.providerName}:${n.modelName}`)
             ?.providerName ?? null;
@@ -277,7 +297,7 @@ export class HiveCore {
           });
 
           const mutated = mutateRequest({
-            originalHeaders: {} as IncomingHttpHeaders,
+            originalHeaders: {},
             originalBody: body,
             targetProvider: provider,
             targetModel: provider.defaultModel,

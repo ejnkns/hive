@@ -2,6 +2,9 @@ import type { MetricData, ConversationData } from "./types";
 import "./hive-activity-log";
 import "./hive-conversations";
 
+type ActivityLogEl = HTMLElement & { data: MetricData[] };
+type ConversationsEl = HTMLElement & { data: ConversationData[] };
+
 export class HiveActivityTabs extends HTMLElement {
   private shadow: ShadowRoot;
   private _metrics: MetricData[] = [];
@@ -98,8 +101,10 @@ export class HiveActivityTabs extends HTMLElement {
   }
 
   private updateChildren() {
-    const log = this.shadow.querySelector("hive-activity-log");
-    if (log) (log as any).data = this._metrics;
+    const log = this.shadow.querySelector(
+      "hive-activity-log"
+    ) as unknown as ActivityLogEl | null;
+    if (log) log.data = this._metrics;
 
     if (this._activeTab === "conversations") {
       this.updateConversations();
@@ -107,8 +112,10 @@ export class HiveActivityTabs extends HTMLElement {
   }
 
   private updateConversations() {
-    const conv = this.shadow.querySelector("hive-conversations");
-    if (conv) (conv as any).data = this._conversations;
+    const conv = this.shadow.querySelector(
+      "hive-conversations"
+    ) as unknown as ConversationsEl | null;
+    if (conv) conv.data = this._conversations;
   }
 }
 

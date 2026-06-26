@@ -1,4 +1,4 @@
-type FinishReason = "stop" | "length" | "content-filter" | null
+export type FinishReason = "stop" | "length" | "content-filter" | null;
 
 export type ErrorType =
   | "rate-limited"
@@ -7,30 +7,30 @@ export type ErrorType =
   | "timeout"
   | "network-error"
   | "invalid-request"
-  | null
+  | null;
 
-type MetricSource = "user" | "heartbeat"
+type MetricSource = "user" | "heartbeat";
 
 export type RequestMetric = {
-  requestId: string
-  provider: string
-  model: string
-  timestamp: number
+  requestId: string;
+  provider: string;
+  model: string;
+  timestamp: number;
 
-  ttft: number
-  totalLatency: number
+  ttft: number;
+  totalLatency: number;
 
-  inputTokens: number | null
-  outputTokens: number | null
+  inputTokens: number | null;
+  outputTokens: number | null;
 
-  thinkingTime: number | null
+  thinkingTime: number | null;
 
-  finishReason: FinishReason
-  refused: boolean
+  finishReason: FinishReason;
+  refused: boolean;
 
-  statusCode: number
-  errorType: ErrorType
-  success: boolean
+  statusCode: number;
+  errorType: ErrorType;
+  success: boolean;
 
-  source: MetricSource
-}
+  source: MetricSource;
+};

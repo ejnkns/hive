@@ -2,8 +2,8 @@ import { describe, it } from "node:test";
 import assert from "node:assert";
 import { providers } from "./providers";
 
-describe("providers", () => {
-  it("registers all 8 providers", () => {
+await describe("providers", async () => {
+  await it("registers all 8 providers", () => {
     assert.strictEqual(providers.length, 8);
     assert.strictEqual(providers[0].name, "groq");
     assert.strictEqual(providers[1].name, "sambanova");

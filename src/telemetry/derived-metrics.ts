@@ -87,8 +87,7 @@ export function computeDerivedMetrics(
   let weightedErrors = 0;
   for (const m of metrics) {
     if (m.errorType) {
-      weightedErrors +=
-        ERROR_PENALTIES[m.errorType as keyof typeof ERROR_PENALTIES] ?? 1.0;
+      weightedErrors += ERROR_PENALTIES[m.errorType] ?? 1.0;
     }
   }
   const weightedErrorRate = n > 0 ? weightedErrors / n : 0;

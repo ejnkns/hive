@@ -40,9 +40,9 @@ export class HiveActivityLog extends HTMLElement {
         <td class="mono">${ft(r.timestamp)}</td>
         <td class="prov">${r.provider}</td>
         <td class="model">${r.model}</td>
-        <td><span class="badge ${ok ? "ok" : "err"}">${r.statusCode || "ERR"}${r.errorType ? " " + r.errorType : ""}</span></td>
+        <td><span class="badge ${ok ? "ok" : "err"}">${r.statusCode ? String(r.statusCode) : "ERR"}${r.errorType ? " " + r.errorType : ""}</span></td>
         <td>${ok ? fv(r.ttft, "ms") : "—"}</td>
-        <td>${tokens != null ? tokens : "—"}</td>
+        <td>${tokens != null ? String(tokens) : "—"}</td>
       </tr>`;
     });
 

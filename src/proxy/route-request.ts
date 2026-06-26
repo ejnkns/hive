@@ -3,6 +3,7 @@ import https from "node:https";
 import { PassThrough } from "node:stream";
 import { URL } from "node:url";
 import type { MutatedRequest } from "./mutate-request";
+import type { FinishReason } from "../telemetry/request-metric";
 import {
   telemetryRecorder,
   createStreamCounter,
@@ -89,7 +90,7 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
         inputTokens,
         outputTokens,
         thinkingTime: stats?.thinkingTime ?? null,
-        finishReason: (stats?.finishReason as any) ?? null,
+        finishReason: (stats?.finishReason as FinishReason) ?? null,
         refused: outputBody
           ? detectRefusal(outputBody)
           : stats?.responseText
@@ -188,7 +189,7 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
             statusCode,
             success: true,
             responseText: stats.responseText,
-            outputTokens: stats ? Math.round(stats.outputChars / 4) : null,
+            outputTokens: Math.round(stats.outputChars / 4),
             finishReason: stats.finishReason,
             refused: detectRefusal(stats.responseText),
           });

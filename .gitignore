@@ -7,3 +7,5 @@ contexts/
 *.md
 !README.md
 repomix-output.xml
+
+architecture-review-*.html

@@ -16,7 +16,8 @@ export function ft(ts: number): string {
 
 export function fv(v: number | null, suf?: string): string {
   if (v == null || isNaN(v)) return "—";
-  if (suf === "ms") return v >= 1000 ? (v / 1000).toFixed(1) + "s" : v + "ms";
+  if (suf === "ms")
+    return v >= 1000 ? (v / 1000).toFixed(1) + "s" : String(v) + "ms";
   return String(v);
 }
 
@@ -34,10 +35,13 @@ export function normalizeContent(content: unknown): string {
   if (typeof content === "string") return content;
   if (Array.isArray(content)) {
     return content
-      .map((part: any) => {
+      .map((part: unknown) => {
         if (typeof part === "string") return part;
-        if (part && part.text) return part.text;
-        if (part && part.type) return "[" + part.type + "]";
+        if (typeof part === "object" && part != null) {
+          const obj = part as Record<string, unknown>;
+          if (typeof obj.text === "string") return obj.text;
+          if (typeof obj.type === "string") return "[" + obj.type + "]";
+        }
         return "";
       })
       .join("\n");

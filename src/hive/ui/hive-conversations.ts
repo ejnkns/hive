@@ -28,7 +28,7 @@ export class HiveConversations extends HTMLElement {
     let html = "";
     this._data.forEach((c) => {
       let promptHtml = "";
-      (c.prompt || []).forEach((msg) => {
+      c.prompt.forEach((msg) => {
         promptHtml += `<div class="conv-block"><span class="label">${msg.role}</span><pre>${esc(normalizeContent(msg.content))}</pre></div>`;
       });
 
@@ -48,9 +48,9 @@ export class HiveConversations extends HTMLElement {
         <div class="conv-footer">
           <span>TTFT: ${fv(c.ttft, "ms")}</span>
           <span>Latency: ${fv(c.totalLatency, "ms")}</span>
-          <span>Tokens: ${c.outputTokens != null ? c.outputTokens : "—"}</span>
+          <span>Tokens: ${c.outputTokens != null ? String(c.outputTokens) : "—"}</span>
           <span>Finish: ${c.finishReason || "—"}</span>
-          <span class="badge ${c.success ? "ok" : "err"}">${c.statusCode}</span>
+          <span class="badge ${c.success ? "ok" : "err"}">${String(c.statusCode)}</span>
         </div>
       </div>`;
     });

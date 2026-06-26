@@ -16,7 +16,7 @@ export class TelemetryRecorder {
 
   start(): void {
     if (this.flushTimer) return;
-    this.flushTimer = setInterval(() => this.flush(), FLUSH_INTERVAL_MS);
+    this.flushTimer = setInterval(() => void this.flush(), FLUSH_INTERVAL_MS);
   }
 
   async flush(): Promise<void> {
@@ -29,7 +29,7 @@ export class TelemetryRecorder {
     for (const m of combined) {
       const key = `${m.provider}:${m.model}`;
       if (!providerMap.has(key)) providerMap.set(key, []);
-      providerMap.get(key)!.push(m);
+      providerMap.get(key)?.push(m);
     }
 
     const retained: RequestMetric[] = [];

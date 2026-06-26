@@ -1,5 +1,5 @@
 import type { ProviderData } from "./types";
-import { sc, fv, bar, safeId } from "./utils";
+import { sc, fv, bar } from "./utils";
 import "./hive-info";
 
 export class HiveProviders extends HTMLElement {
@@ -21,13 +21,17 @@ export class HiveProviders extends HTMLElement {
   }
 
   private render() {
-    const grouped: Record<string, ProviderData[]> = {};
+    const grouped = new Map<string, ProviderData[]>();
     this._data.forEach((x) => {
-      if (!grouped[x.name]) grouped[x.name] = [];
-      grouped[x.name].push(x);
+      const arr = grouped.get(x.name);
+      if (arr) {
+        arr.push(x);
+      } else {
+        grouped.set(x.name, [x]);
+      }
     });
 
-    if (Object.keys(grouped).length === 0) {
+    if (grouped.size === 0) {
       this.shadow.innerHTML = `
         <style>
           :host {
@@ -43,25 +47,23 @@ export class HiveProviders extends HTMLElement {
     }
 
     let html = "";
-    for (const name in grouped) {
-      const entries = grouped[name];
+    for (const [name, entries] of grouped) {
       const f = entries[0];
       const score = f.stabilityScore;
       const conf = f.keyConfigured;
-      const sid = safeId(name);
 
       let mh = "";
       entries.forEach((e) => {
-        mh += `<div class="mrow"><span class="mname">${e.model}</span><span class="mstats"><span style="color:${sc(e.stabilityScore)}">${e.stabilityScore}%</span><span>${fv(e.p95Latency, "ms")}</span><span>${fv(e.meanTokensPerSecond)} t/s</span><span>${e.requestCount || 0}c</span></span></div>`;
+        mh += `<div class="mrow"><span class="mname">${e.model}</span><span class="mstats"><span style="color:${sc(e.stabilityScore)}">${String(e.stabilityScore)}%</span><span>${fv(e.p95Latency, "ms")}</span><span>${fv(e.meanTokensPerSecond)} t/s</span><span>${String(e.requestCount)}c</span></span></div>`;
       });
 
-      html += `<div class="worker" style="opacity:${conf ? 1 : 0.4}">
+      html += `<div class="worker" style="opacity:${conf ? "1" : "0.4"}">
         <div class="worker-head"><span class="worker-name">${name}</span><span class="key-badge ${conf ? "active" : "no-key"}">${conf ? "active" : "no key"} <hive-info>${conf ? "API key configured" : "No API key configured"}</hive-info></span></div>
-        <div class="sbar"><span class="score" style="color:${sc(score)}">${score}% <hive-info>Composite stability score based on recent success rate and latency</hive-info></span><span class="bar-text" style="color:${sc(score)}">${bar(score)}</span></div>
+        <div class="sbar"><span class="score" style="color:${sc(score)}">${String(score)}% <hive-info>Composite stability score based on recent success rate and latency</hive-info></span><span class="bar-text" style="color:${sc(score)}">${bar(score)}</span></div>
         <div class="wmet">
           <div class="wmet-item"><span class="l">Latency <hive-info>95th percentile latency</hive-info></span><span class="v">${fv(f.p95Latency, "ms")}</span></div>
           <div class="wmet-item"><span class="l">Output <hive-info>Mean output tokens per second</hive-info></span><span class="v">${fv(f.meanTokensPerSecond)} t/s</span></div>
-          <div class="wmet-item"><span class="l">Calls <hive-info>Requests in current tracking window</hive-info></span><span class="v">${f.requestCount || 0}</span></div>
+          <div class="wmet-item"><span class="l">Calls <hive-info>Requests in current tracking window</hive-info></span><span class="v">${String(f.requestCount)}</span></div>
         </div>
         ${entries.length > 0 ? `<div class="mrows">${mh}</div>` : ""}
       </div>`;

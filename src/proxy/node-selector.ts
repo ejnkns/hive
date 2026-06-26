@@ -1,8 +1,6 @@
 import { calculateNodeScore, type ProviderModelNode } from "../telemetry/score";
 import type { RequestMetric } from "../telemetry/request-metric";
-import { circuitBreaker } from "./circuit-breaker";
-import { sessionRegistry } from "./session-registry";
-import { empiricalDisabledFeatures } from "./feature-discovery";
+import { routingMemory } from "./routing-memory";
 
 export type HiveRoutingConfig = {
   strategy: string;
@@ -35,10 +33,7 @@ export function selectBestNode(
   for (const node of nodes) {
     const compoundKey = `${node.providerName}:${node.modelName}`;
 
-    if (circuitBreaker.isTripped(compoundKey)) continue;
-
-    const forbidden = empiricalDisabledFeatures.get(compoundKey);
-    if (forbidden && requiredFeatures.some((f) => forbidden.has(f))) continue;
+    if (!routingMemory.isNodeEligible(compoundKey, requiredFeatures)) continue;
 
     const metrics = getMetricsForNode(compoundKey);
     let score = calculateNodeScore(
@@ -48,7 +43,7 @@ export function selectBestNode(
       config.minTokenThreshold
     );
 
-    if (sessionId && sessionRegistry.get(sessionId) === compoundKey) {
+    if (sessionId && routingMemory.getNodeAffinity(sessionId) === compoundKey) {
       score *= 1.1;
     }
 
@@ -73,7 +68,7 @@ export function selectBestNode(
     selectionRoll -= weight;
     if (selectionRoll <= 0) {
       if (sessionId) {
-        sessionRegistry.set(sessionId, candidate.compoundKey);
+        routingMemory.setNodeAffinity(sessionId, candidate.compoundKey);
       }
       return candidate.node;
     }

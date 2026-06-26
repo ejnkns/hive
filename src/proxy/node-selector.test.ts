@@ -1,9 +1,7 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert";
 import { selectBestNode } from "./node-selector";
-import { sessionRegistry, SessionRegistry } from "./session-registry";
-import { circuitBreaker } from "./circuit-breaker";
-import { empiricalDisabledFeatures } from "./feature-discovery";
+import { routingMemory } from "./routing-memory";
 import type { RequestMetric } from "../telemetry/request-metric";
 
 function createMockMetric(overrides: Partial<RequestMetric>): RequestMetric {
@@ -27,16 +25,14 @@ function createMockMetric(overrides: Partial<RequestMetric>): RequestMetric {
   };
 }
 
-describe("Hive Routing Engine Verification", () => {
+await describe("Hive Routing Engine Verification", async () => {
   beforeEach(() => {
-    circuitBreaker.clear();
-    empiricalDisabledFeatures.clear();
-    sessionRegistry.clear();
+    routingMemory.reset();
     process.env.HIVE_ROUTING_STRATEGY = "balanced";
     process.env.HIVE_MIN_TOKEN_TELEMETRY = "200";
   });
 
-  it("should isolate session affinity across independent concurrent session IDs", () => {
+  await it("should isolate session affinity across independent concurrent session IDs", () => {
     const nodes = [
       { providerName: "p1", modelName: "m1" },
       { providerName: "p2", modelName: "m2" },
@@ -44,8 +40,8 @@ describe("Hive Routing Engine Verification", () => {
 
     const getMetrics = () => [createMockMetric({})];
 
-    sessionRegistry.set("user-session-alpha", "p1:m1");
-    sessionRegistry.set("user-session-beta", "p2:m2");
+    routingMemory.setNodeAffinity("user-session-alpha", "p1:m1");
+    routingMemory.setNodeAffinity("user-session-beta", "p2:m2");
 
     const matchAlpha = selectBestNode(
       nodes,
@@ -64,7 +60,7 @@ describe("Hive Routing Engine Verification", () => {
     assert.strictEqual(matchBeta?.providerName, "p2");
   });
 
-  it("should apply relative gradient probabilities rather than flat absolute scores", () => {
+  await it("should apply relative gradient probabilities rather than flat absolute scores", () => {
     const nodes = [
       { providerName: "high-tier", modelName: "best" },
       { providerName: "low-tier", modelName: "worst" },
@@ -85,28 +81,29 @@ describe("Hive Routing Engine Verification", () => {
 
     assert.ok(
       highTierSelections > 75,
-      `Expected dominant selection curve. Got: ${highTierSelections}/100`
+      `Expected dominant selection curve. Got: ${String(highTierSelections)}/100`
     );
   });
 
-  it("should evict oldest session when exceeding max entries", () => {
-    const registry = new SessionRegistry();
-    registry.set("session-0", "node-0");
-    for (let i = 1; i <= 1000; i++) {
-      registry.set(`session-${i}`, `node-${i}`);
+  await it("should evict oldest session when exceeding max entries", () => {
+    for (let i = 0; i <= 1000; i++) {
+      routingMemory.setNodeAffinity(
+        `session-${String(i)}`,
+        `node-${String(i)}`
+      );
     }
     assert.strictEqual(
-      registry.get("session-0"),
+      routingMemory.getNodeAffinity("session-0"),
       undefined,
       "Oldest session should be evicted after exceeding max 1000 entries"
     );
     assert.ok(
-      registry.get("session-1000"),
+      routingMemory.getNodeAffinity("session-1000"),
       "Newest session should still be present"
     );
   });
 
-  it("should maintain affinity for a session across multiple selections", () => {
+  await it("should maintain affinity for a session across multiple selections", () => {
     const nodes = [
       { providerName: "p1", modelName: "m1" },
       { providerName: "p2", modelName: "m2" },
@@ -115,12 +112,14 @@ describe("Hive Routing Engine Verification", () => {
     const sessionId = "persistent-session";
 
     const first = selectBestNode(nodes, getMetrics, [], sessionId);
-    const firstKey = `${first!.providerName}:${first!.modelName}`;
+    if (!first) throw new Error("Expected a node to be selected");
+    const firstKey = `${first.providerName}:${first.modelName}`;
 
     for (let i = 0; i < 10; i++) {
       const selected = selectBestNode(nodes, getMetrics, [], sessionId);
+      if (!selected) throw new Error("Expected a node to be selected");
       assert.strictEqual(
-        `${selected!.providerName}:${selected!.modelName}`,
+        `${selected.providerName}:${selected.modelName}`,
         firstKey,
         "Session affinity should persist across multiple selections"
       );

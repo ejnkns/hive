@@ -1,14 +1,13 @@
 import { LRUCache } from "lru-cache";
 
-export class SessionRegistry {
-  private cache: LRUCache<string, string>;
+const SESSION_MAX = 1000;
+const SESSION_TTL_MS = 60 * 60 * 1000;
 
-  constructor() {
-    this.cache = new LRUCache<string, string>({
-      max: 1000,
-      ttl: 1000 * 60 * 60,
-    });
-  }
+export class SessionRegistry {
+  private cache = new LRUCache<string, string>({
+    max: SESSION_MAX,
+    ttl: SESSION_TTL_MS,
+  });
 
   get(sessionId: string): string | undefined {
     return this.cache.get(sessionId);
@@ -22,5 +21,3 @@ export class SessionRegistry {
     this.cache.clear();
   }
 }
-
-export const sessionRegistry = new SessionRegistry();
