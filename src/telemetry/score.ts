@@ -1,6 +1,7 @@
 import type { RequestMetric } from "./request-metric";
 import { applyWindow } from "./window";
 import { ERROR_PENALTIES } from "./weights";
+import { percentile } from "./stats";
 
 export type { RequestMetric };
 
@@ -23,15 +24,6 @@ export const ROUTING_STRATEGIES: Record<string, ScoreWeights> = {
 };
 
 const DECAY_HALF_LIFE_MS = 30 * 60 * 1000;
-
-function percentile(sorted: number[], p: number): number {
-  if (sorted.length === 0) return 0;
-  const idx = Math.max(
-    0,
-    Math.min(sorted.length - 1, Math.floor(sorted.length * p))
-  );
-  return sorted[idx];
-}
 
 function getFailureWeight(m: RequestMetric): number {
   if (m.success) return 0;

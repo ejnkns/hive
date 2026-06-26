@@ -1,5 +1,6 @@
 import type { RequestMetric } from "./request-metric";
 import { ERROR_PENALTIES } from "./weights";
+import { percentile, mean } from "./stats";
 
 export type DerivedMetrics = {
   requestCount: number;
@@ -28,17 +29,6 @@ export type DerivedMetrics = {
 
 function sortedLatencies(metrics: RequestMetric[]): number[] {
   return metrics.map((m) => m.ttft).sort((a, b) => a - b);
-}
-
-function percentile(sorted: number[], p: number): number {
-  if (sorted.length === 0) return 0;
-  const idx = Math.floor(sorted.length * p);
-  return sorted[Math.min(idx, sorted.length - 1)];
-}
-
-function mean(values: number[]): number {
-  if (values.length === 0) return 0;
-  return values.reduce((a, b) => a + b, 0) / values.length;
 }
 
 export function computeDerivedMetrics(
