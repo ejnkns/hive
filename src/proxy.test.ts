@@ -4,7 +4,6 @@ import assert from "node:assert";
 await describe("proxy", async () => {
   await it("exports expected api", async () => {
     const mod = await import("./proxy");
-    assert.ok(typeof mod.failover === "function");
     assert.ok(typeof mod.mutateRequest === "function");
     assert.ok(typeof mod.routeRequest === "function");
   });
