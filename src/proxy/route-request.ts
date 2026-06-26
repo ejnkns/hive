@@ -3,7 +3,7 @@ import https from "node:https";
 import { PassThrough } from "node:stream";
 import { URL } from "node:url";
 import type { MutatedRequest } from "./mutate-request";
-import type { FinishReason } from "../telemetry/request-metric";
+import type { FinishReason } from "../telemetry";
 import {
   telemetryRecorder,
   createStreamCounter,

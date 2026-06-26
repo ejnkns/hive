@@ -3,23 +3,24 @@ import { PassThrough } from "node:stream";
 import type { Provider } from "./providers/registry";
 import { buildChatEndpoint } from "./providers/registry";
 import { loadConfig } from "./hive/load-config";
-import { telemetryRecorder, startHeartbeat, loadCache } from "./telemetry";
-import { mutateRequest } from "./proxy/mutate-request";
-import { routeRequest } from "./proxy/route-request";
+import {
+  telemetryRecorder,
+  startHeartbeat,
+  loadCache,
+  applyWindow,
+  conversationStore,
+  type ProviderModelNode,
+  type RequestMetric,
+} from "./telemetry";
+import {
+  mutateRequest,
+  routeRequest,
+  executeProxyRequest,
+  routingMemory,
+  ProxyResponse,
+} from "./proxy";
 import { discoverAndCacheModels } from "./providers/discovery";
 import { generateId } from "./id";
-import { applyWindow } from "./telemetry/window";
-import { conversationStore } from "./telemetry";
-import type { ProviderModelNode } from "./telemetry/score";
-import type { RequestMetric } from "./telemetry/request-metric";
-import {
-  executeProxyRequest,
-  type FailoverContext,
-} from "./proxy/execute-proxy-request";
-import { routingMemory } from "./proxy";
-import { ProxyResponse } from "./proxy/proxy-response";
-
-export type { FailoverContext, ProviderModelNode };
 
 type ChatCompletionResult = {
   success: boolean;

@@ -1,5 +1,5 @@
-import { calculateNodeScore, type ProviderModelNode } from "../telemetry/score";
-import type { RequestMetric } from "../telemetry/request-metric";
+import { calculateNodeScore, type ProviderModelNode } from "../telemetry";
+import type { RequestMetric } from "../telemetry";
 import { routingMemory } from "./routing-memory";
 
 export type HiveRoutingConfig = {

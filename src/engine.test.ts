@@ -1,16 +1,15 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert";
 import { PassThrough } from "node:stream";
+import { HiveCore } from "./engine";
+import type { ProviderModelNode, RequestMetric } from "./telemetry";
 import {
-  HiveCore,
+  ProxyResponse,
+  routingMemory,
+  selectBestNode,
+  executeProxyRequest,
   type FailoverContext,
-  type ProviderModelNode,
-} from "./engine";
-import type { RequestMetric } from "./telemetry/request-metric";
-import { ProxyResponse } from "./proxy/proxy-response";
-import { routingMemory } from "./proxy";
-import { selectBestNode } from "./proxy/node-selector";
-import { executeProxyRequest } from "./proxy/execute-proxy-request";
+} from "./proxy";
 
 await describe("HiveCore", async () => {
   let core: HiveCore;

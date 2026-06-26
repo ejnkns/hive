@@ -2,7 +2,7 @@ import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert";
 import { selectBestNode } from "./node-selector";
 import { routingMemory } from "./routing-memory";
-import type { RequestMetric } from "../telemetry/request-metric";
+import type { RequestMetric } from "../telemetry";
 
 function createMockMetric(overrides: Partial<RequestMetric>): RequestMetric {
   return {

@@ -1,7 +1,7 @@
 import { selectBestNode } from "./node-selector";
 import { routingMemory } from "./routing-memory";
-import type { ProviderModelNode } from "../telemetry/score";
-import type { RequestMetric } from "../telemetry/request-metric";
+import type { ProviderModelNode } from "../telemetry";
+import type { RequestMetric } from "../telemetry";
 import { ProxyResponse } from "./proxy-response";
 
 export type FailoverContext = {
