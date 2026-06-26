@@ -10,14 +10,14 @@ export type ProviderModelNode = {
   modelName: string;
 };
 
-export type ScoreWeights = {
+type ScoreWeights = {
   ttft: number;
   throughput: number;
   reliability: number;
   quality: number;
 };
 
-export const ROUTING_STRATEGIES: Record<string, ScoreWeights> = {
+const ROUTING_STRATEGIES: Record<string, ScoreWeights> = {
   balanced: { ttft: 0.3, throughput: 0.3, reliability: 0.4, quality: 0.0 },
   latency: { ttft: 0.55, throughput: 0.15, reliability: 0.3, quality: 0.0 },
   quality: { ttft: 0.1, throughput: 0.1, reliability: 0.4, quality: 0.4 },
