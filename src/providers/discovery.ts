@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promises as fs, readFileSync } from "node:fs";
-import { allProviders, buildModelsEndpoint } from "./registry";
+import { buildModelsEndpoint, type Provider } from "./registry";
 import { logger } from "../hive/shared/logger";
 
 type ModelListResponse = {
@@ -22,44 +22,6 @@ type CachedProvider = {
 type ModelCache = {
   lastCheckTime: number;
   providers: CachedProvider[];
-};
-
-const PROVIDER_PREFERENCES: Record<string, string[] | undefined> = {
-  groq: [
-    "deepseek-r1-distill-llama-70b",
-    "llama-3.3-70b-versatile",
-    "mixtral-8x7b-32768",
-  ],
-  "google-ai": [
-    "gemini-2.0-flash",
-    "gemini-1.5-pro",
-    "gemini-1.5-flash",
-    "gemini-2.0-flash-exp",
-  ],
-  sambanova: ["DeepSeek-R1", "Meta-Llama-3.3-70B-Instruct"],
-  "nvidia-nim": [
-    "meta/llama-3.3-70b-instruct",
-    "deepseek-ai/deepseek-r1",
-    "meta/llama-3.1-405b-instruct",
-  ],
-  "github-models": [
-    "gpt-4o",
-    "gpt-4o-mini",
-    "o1",
-    "claude-3-5-sonnet",
-    "llama-3.3-70b-instruct",
-  ],
-  cerebras: ["llama-3.3-70b", "llama-3.1-8b"],
-  mistral: ["codestral-latest", "mistral-large-latest", "mistral-small-latest"],
-  "opencode-zen": [
-    "deepseek-v4-flash-free",
-    "qwen3.6-plus-free",
-    "mimo-v2.5-free",
-    "minimax-m3-free",
-    "gpt-5.5",
-    "gpt-5.5-pro",
-    "gpt-5.4-mini",
-  ],
 };
 
 const HIVE_DIR = join(homedir(), ".hive");
@@ -119,12 +81,11 @@ async function saveModelCache(cache: ModelCache): Promise<void> {
 }
 
 export function selectDefaultModel(
-  providerName: string,
   fetchedModels: string[],
-  fallbackDefault: string
+  fallbackDefault: string,
+  preferences?: string[]
 ): string {
-  const preferences = PROVIDER_PREFERENCES[providerName];
-  if (!preferences) return fallbackDefault;
+  if (!preferences || preferences.length === 0) return fallbackDefault;
 
   // Find the first model in our prioritized preference list that exists in the fetched list
   for (const preferred of preferences) {
@@ -247,6 +208,7 @@ async function fetchProviderModels(
 }
 
 export async function discoverAndCacheModels(
+  providers: Provider[],
   force = false
 ): Promise<ModelCache> {
   const currentCache = await loadModelCache();
@@ -267,7 +229,7 @@ export async function discoverAndCacheModels(
   logger.debug("Triggering background model discovery across providers...");
   const updatedProviders: CachedProvider[] = [];
 
-  for (const provider of allProviders) {
+  for (const provider of providers) {
     const key = process.env[provider.apiKeyEnvVar];
     const cached = currentCache?.providers.find(
       (p) => p.name === provider.name
@@ -280,9 +242,9 @@ export async function discoverAndCacheModels(
           provider.apiKeyEnvVar
         );
         const bestDefault = selectDefaultModel(
-          provider.name,
           fetchedModels,
-          provider.defaultModel
+          provider.defaultModel,
+          provider.modelPreferences
         );
 
         updatedProviders.push({

@@ -8,4 +8,9 @@ export const nvidiaNim = {
     "meta/llama-3.1-70b-instruct",
   ],
   defaultModel: "meta/llama-3.3-70b-instruct",
+  modelPreferences: [
+    "meta/llama-3.3-70b-instruct",
+    "deepseek-ai/deepseek-r1",
+    "meta/llama-3.1-405b-instruct",
+  ],
 };

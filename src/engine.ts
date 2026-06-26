@@ -1,7 +1,7 @@
 import type { IncomingHttpHeaders } from "node:http";
 import { PassThrough } from "node:stream";
 import type { Provider } from "./providers/registry";
-import { buildChatEndpoint } from "./providers/registry";
+import { allProviders, buildChatEndpoint } from "./providers/registry";
 import { loadConfig } from "./hive/load-config";
 import {
   telemetryRecorder,
@@ -125,7 +125,7 @@ export class HiveCore {
 
   private async triggerBackgroundDiscovery(): Promise<void> {
     try {
-      const cache = await discoverAndCacheModels();
+      const cache = await discoverAndCacheModels(allProviders);
       for (const p of this.providers) {
         const cached = cache.providers.find((cp) => cp.name === p.name);
         if (cached) {

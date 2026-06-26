@@ -13,6 +13,7 @@ export type Provider = {
   apiKeyEnvVar: string;
   models: string[];
   defaultModel: string;
+  modelPreferences?: string[];
 };
 
 export type ProviderState = {
