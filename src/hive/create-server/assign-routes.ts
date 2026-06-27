@@ -30,6 +30,7 @@ export function assignRoutes(server: FastifyServer) {
           const compKey = `${s.provider}:${s.model}`;
           return {
             name: s.provider,
+            displayName: p.displayName,
             baseUrl: p.baseUrl,
             model: s.model,
             models: p.models,
@@ -49,6 +50,7 @@ export function assignRoutes(server: FastifyServer) {
       return [
         {
           name: p.name,
+          displayName: p.displayName,
           baseUrl: p.baseUrl,
           model: p.defaultModel,
           models: p.models,
@@ -120,6 +122,7 @@ export function assignRoutes(server: FastifyServer) {
     void (async () => {
       try {
         const initPayload = await getTelemetryPayload();
+        console.log(initPayload.data.providers);
         socket.send(JSON.stringify({ ...initPayload, type: "init" }));
 
         // Send recent logs
@@ -131,8 +134,6 @@ export function assignRoutes(server: FastifyServer) {
         logger.error("failed to send initial ws payload", err);
       }
     })();
-
-    socket.send("hello");
 
     socket.on("close", () => {
       activeSockets.delete(socket);
@@ -203,6 +204,7 @@ export function assignRoutes(server: FastifyServer) {
       if (matchingStates.length > 0) {
         return matchingStates.map((s) => ({
           name: s.provider,
+          displayName: p.displayName,
           baseUrl: p.baseUrl,
           model: s.model,
           models: p.models,
@@ -218,6 +220,7 @@ export function assignRoutes(server: FastifyServer) {
       return [
         {
           name: p.name,
+          displayName: p.displayName,
           baseUrl: p.baseUrl,
           model: p.defaultModel,
           models: p.models,

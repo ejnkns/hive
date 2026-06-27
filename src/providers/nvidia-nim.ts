@@ -1,5 +1,8 @@
+import type { Provider } from "./registry";
+
 export const nvidiaNim = {
   name: "nvidia-nim",
+  displayName: "NVIDIA NIM",
   baseUrl: "https://integrate.api.nvidia.com",
   apiKeyEnvVar: "NVIDIA_NIM_API_KEY",
   models: [
@@ -13,4 +16,4 @@ export const nvidiaNim = {
     "deepseek-ai/deepseek-r1",
     "meta/llama-3.1-405b-instruct",
   ],
-};
+} satisfies Provider;

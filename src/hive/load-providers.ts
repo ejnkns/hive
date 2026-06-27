@@ -1,5 +1,4 @@
-import { allProviders } from "../providers/registry";
-import { Provider } from "../providers/registry";
+import { allProviders, type Provider } from "../providers/registry";
 import { loadModelCacheSync } from "../providers/discovery";
 
 export function loadProviders(): ReadonlyArray<Provider> {
@@ -8,6 +7,7 @@ export function loadProviders(): ReadonlyArray<Provider> {
     const cached = cache?.providers.find((cp) => cp.name === p.name);
     return {
       name: p.name,
+      displayName: p.displayName,
       baseUrl: p.baseUrl,
       apiKeyEnvVar: p.apiKeyEnvVar,
       models: cached ? [...cached.models] : [...p.models],

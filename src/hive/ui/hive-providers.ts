@@ -52,8 +52,10 @@ export class HiveProviders extends HTMLElement {
       ([name, entries]) => {
         const maxScore = Math.max(...entries.map((e) => e.stabilityScore));
         const keyConfigured = entries.some((e) => e.keyConfigured);
+        const displayName = entries[0].displayName || name;
         return {
           name,
+          displayName,
           entries,
           maxScore,
           keyConfigured,
@@ -85,7 +87,7 @@ export class HiveProviders extends HTMLElement {
 
     let html = "";
     providerGroups.forEach((group) => {
-      const { name, entries, maxScore, keyConfigured } = group;
+      const { name, displayName, entries, maxScore, keyConfigured } = group;
       const f = entries[0];
       const isExpanded = this.expandedConsoles.has(name);
       const activeTab = this.activeTabs.get(name) || "activity";
@@ -105,26 +107,26 @@ export class HiveProviders extends HTMLElement {
             ? `<span class="badge unsupported">no-${e.disabledFeatures.join(", ")}</span>`
             : "";
 
-        mh += `<div class="mrow"><span class="mname">${e.model}${trippedBadge}${featuresBadge}</span><span class="mstats"><span style="color:${sc(e.stabilityScore)}">${String(e.stabilityScore)}%</span><span>${fv(e.p95Latency, "ms")}</span><span>${fv(e.meanTokensPerSecond)} t/s</span><span>${String(e.requestCount)}c</span></span></div>`;
+        mh += `<div class="mrow"><span class="mname">${e.model}${trippedBadge}${featuresBadge}</span><span class="mstats"><span style="color:${sc(e.stabilityScore)}">${e.stabilityScore.toFixed(2)}%</span><span>${fv(e.p95Latency, "ms")}</span><span>${fv(e.meanTokensPerSecond)} t/s</span><span>${String(e.requestCount)}c</span></span></div>`;
       });
 
       html += `
         <div class="worker" style="opacity:${keyConfigured ? "1" : "0.4"}">
           <div class="worker-summary">
             <div class="worker-identity">
-              <span class="worker-name">${name}</span>
+              <span class="worker-name">${displayName}</span>
               <span class="key-badge ${keyConfigured ? "active" : "no-key"}">${keyConfigured ? "active" : "no key"} <hive-info>${keyConfigured ? "API key configured" : "No API key configured"}</hive-info></span>
             </div>
             
             <div class="sbar">
-              <span class="score" style="color:${sc(maxScore)}">${String(maxScore)}% <hive-info>Composite stability score based on recent success rate and latency</hive-info></span>
+              <span class="score" style="color:${sc(maxScore)}">${maxScore.toFixed(2)}% <hive-info>Composite stability score based on recent success rate and latency</hive-info></span>
               <span class="bar-text" style="color:${sc(maxScore)}">${bar(maxScore)}</span>
             </div>
             
             <div class="wmet">
               <div class="wmet-item"><span class="l">Latency <hive-info>95th percentile latency</hive-info></span><span class="v">${fv(f.p95Latency, "ms")}</span></div>
               <div class="wmet-item"><span class="l">Output <hive-info>Mean output tokens per second</hive-info></span><span class="v">${fv(f.meanTokensPerSecond)} t/s</span></div>
-              <div class="wmet-item"><span class="l">Calls <hive-info>Requests in current tracking window</hive-info></span><span class="v">${String(f.requestCount)}</span></div>
+              <div class="wmet-item"><span class="l">Calls <hive-info>Requests in current tracking window</hive-info></span><span class="v">${f.requestCount.toString()}</span></div>
             </div>
           </div>
 
@@ -191,7 +193,6 @@ export class HiveProviders extends HTMLElement {
         .worker-name {
           font-size: 1.125rem;
           font-weight: 700;
-          text-transform: capitalize;
         }
         .key-badge {
           font-size: 0.5625rem;

@@ -1,5 +1,6 @@
 export type ProviderData = {
   name: string;
+  displayName: string;
   model: string;
   keyConfigured: boolean;
   stabilityScore: number;

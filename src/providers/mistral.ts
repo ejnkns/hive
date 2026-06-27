@@ -1,5 +1,8 @@
+import type { Provider } from "./registry";
+
 export const mistral = {
   name: "mistral",
+  displayName: "Mistral",
   baseUrl: "https://api.mistral.ai",
   apiKeyEnvVar: "MISTRAL_API_KEY",
   models: ["mistral-large-latest", "mistral-small-latest", "codestral-latest"],
@@ -9,4 +12,4 @@ export const mistral = {
     "mistral-large-latest",
     "mistral-small-latest",
   ],
-};
+} satisfies Provider;

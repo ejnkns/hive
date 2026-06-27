@@ -1,5 +1,8 @@
+import type { Provider } from "./registry";
+
 export const groq = {
   name: "groq",
+  displayName: "Groq",
   baseUrl: "https://api.groq.com/openai",
   apiKeyEnvVar: "GROQ_API_KEY",
   models: [
@@ -13,4 +16,4 @@ export const groq = {
     "llama-3.3-70b-versatile",
     "mixtral-8x7b-32768",
   ],
-};
+} satisfies Provider;

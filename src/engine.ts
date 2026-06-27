@@ -88,6 +88,7 @@ export class HiveCore {
     this.initialProviders = loadProviders();
     this.providers = this.initialProviders.map((p) => ({
       name: p.name,
+      displayName: p.displayName,
       baseUrl: p.baseUrl,
       apiKeyEnvVar: p.apiKeyEnvVar,
       models: [...p.models],

@@ -13,6 +13,7 @@ type WebSocketType = typeof WebSocket.prototype;
 
 type ProviderPayload = {
   name: string;
+  displayName: string;
   model: string;
   keyConfigured: boolean;
   stabilityScore: number;
@@ -247,6 +248,7 @@ export class HiveApp extends HTMLElement {
 
     const providers: ProviderData[] = data.providers.map((x) => ({
       name: x.name,
+      displayName: x.displayName,
       model: x.model,
       keyConfigured: x.keyConfigured,
       stabilityScore: x.stabilityScore,

@@ -1,5 +1,8 @@
+import type { Provider } from "./registry";
+
 export const opencodeZen = {
   name: "opencode-zen",
+  displayName: "Zen",
   baseUrl: "https://opencode.ai/zen",
   apiKeyEnvVar: "OPENCODE_ZEN_API_KEY",
   models: [
@@ -19,4 +22,4 @@ export const opencodeZen = {
     "gpt-5.5-pro",
     "gpt-5.4-mini",
   ],
-};
+} satisfies Provider;

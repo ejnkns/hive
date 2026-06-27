@@ -9,6 +9,7 @@ import { mistral } from "./mistral";
 
 export type Provider = {
   name: string;
+  displayName: string;
   baseUrl: string;
   apiKeyEnvVar: string;
   models: string[];
