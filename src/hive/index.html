@@ -8,7 +8,7 @@
       @property --bg {
         syntax: "<color>";
         inherits: true;
-        initial-value: #0c0a00;
+        initial-value: #1b1601;
       }
       @property --card {
         syntax: "<color>";
@@ -23,12 +23,22 @@
       @property --border {
         syntax: "<color>";
         inherits: true;
-        initial-value: #45370c;
+        initial-value: #2e2508;
+      }
+      @property --border-rgb {
+        syntax: "<number>#";
+        inherits: true;
+        initial-value: 58, 46, 10;
       }
       @property --accent {
         syntax: "<color>";
         inherits: true;
         initial-value: #f5b342;
+      }
+      @property --accent-rgb {
+        syntax: "<number>#";
+        inherits: true;
+        initial-value: 245, 179, 66;
       }
       @property --text {
         syntax: "<color>";
@@ -45,15 +55,30 @@
         inherits: true;
         initial-value: #7cb342;
       }
+      @property --success-rgb {
+        syntax: "<number>#";
+        inherits: true;
+        initial-value: 124, 179, 66;
+      }
       @property --error {
         syntax: "<color>";
         inherits: true;
         initial-value: #d4451a;
       }
+      @property --error-rgb {
+        syntax: "<number>#";
+        inherits: true;
+        initial-value: 212, 69, 26;
+      }
       @property --warning {
         syntax: "<color>";
         inherits: true;
         initial-value: #d4a017;
+      }
+      @property --logo-text {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #ff0;
       }
 
       * {
@@ -71,29 +96,29 @@
       :root,
       html.light {
         transition:
-          --bg var(--duration) ease-in-out,
-          --card var(--duration) ease-in-out,
-          --surface var(--duration) ease-in-out,
-          --border var(--duration) ease-in-out,
-          --border-rgb var(--duration) ease-in-out,
-          --accent var(--duration) ease-in-out,
-          --accent-rgb var(--duration) ease-in-out,
-          --text var(--duration) ease-in-out,
-          --muted var(--duration) ease-in-out,
-          --success var(--duration) ease-in-out,
-          --success-rgb var(--duration) ease-in-out,
-          --error var(--duration) ease-in-out,
-          --error-tgb var(--duration) ease-in-out,
-          --warning var(--duration) ease-in-out,
-          --logo-text var(--duration) ease-in-out;
+          --bg var(--duration) ease-out,
+          --card var(--duration) ease-out,
+          --surface var(--duration) ease-out,
+          --border var(--duration) ease-out,
+          --border-rgb var(--duration) ease-out,
+          --accent var(--duration) ease-out,
+          --accent-rgb var(--duration) ease-out,
+          --text var(--duration) ease-out,
+          --muted var(--duration) ease-out,
+          --success var(--duration) ease-out,
+          --success-rgb var(--duration) ease-out,
+          --error var(--duration) ease-out,
+          --error-rgb var(--duration) ease-out,
+          --warning var(--duration) ease-out,
+          --logo-text var(--duration) ease-out;
       }
 
       :root {
-        --duration: 0.2s;
-        --bg: #0c0a00;
+        --duration: 0.4s;
+        --bg: #1b1601;
         --card: #0d0c06;
         --surface: #231c06;
-        --border: #45370c;
+        --border: #2e2508;
         --border-rgb: 58, 46, 10;
         --accent: #f5b342;
         --accent-rgb: 245, 179, 66;
@@ -104,14 +129,14 @@
         --error: #d4451a;
         --error-rgb: 212, 69, 26;
         --warning: #d4a017;
-        --logo-text: yellow;
+        --logo-text: #ff0;
       }
 
       html.light {
         --bg: #f5f0e3;
         --card: #fdfaef;
         --surface: #f5f0e3;
-        --border: #d4c5a0;
+        --border: #ebe0c4;
         --border-rgb: 212, 197, 160;
         --accent: #c9a100;
         --accent-rgb: 201, 161, 0;
@@ -122,7 +147,7 @@
         --error: #b71c1c;
         --error-rgb: 183, 28, 28;
         --warning: #bd9223;
-        --logo-text: black;
+        --logo-text: #000000;
       }
     </style>
     <script>
