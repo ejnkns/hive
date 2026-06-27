@@ -10,9 +10,28 @@ const FLUSH_INTERVAL_MS = 12_000;
 export class TelemetryRecorder {
   private buffer: RequestMetric[] = [];
   private flushTimer: ReturnType<typeof setInterval> | null = null;
+  private listeners = new Set<() => void>();
+
+  onChange(listener: () => void) {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  private notify() {
+    for (const cb of this.listeners) {
+      try {
+        cb();
+      } catch {
+        // ignore
+      }
+    }
+  }
 
   recordMetric(metric: RequestMetric): void {
     this.buffer.push(metric);
+    this.notify();
   }
 
   start(): void {
@@ -64,6 +83,7 @@ export class TelemetryRecorder {
     await saveCache({ metrics: retained, scores });
     this.buffer = [];
     logger.debug(`recorder: flush — saved ${String(count)} metrics to cache`);
+    this.notify();
   }
 
   getPendingCount(): number {

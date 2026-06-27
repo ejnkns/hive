@@ -2,7 +2,7 @@ import type { IncomingHttpHeaders } from "node:http";
 import { PassThrough } from "node:stream";
 import type { Provider } from "./providers/registry";
 import { allProviders, buildChatEndpoint } from "./providers/registry";
-import { loadConfig } from "./hive/load-config";
+import { loadProviders } from "./hive/load-providers";
 import {
   telemetryRecorder,
   startHeartbeat,
@@ -77,16 +77,16 @@ function extractRequiredFeatures(parsed: Record<string, unknown>): string[] {
 }
 
 export class HiveCore {
-  private providers: Provider[] = [];
-  private config: ReturnType<typeof loadConfig>;
+  private initialProviders: ReadonlyArray<Provider>;
+  private providers: ReturnType<typeof loadProviders>;
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private discoveryTimer: NodeJS.Timeout | null = null;
   private lastProvider: string | null = null;
   private lastModel: string | null = null;
 
   constructor() {
-    this.config = loadConfig();
-    this.providers = this.config.providers.map((p) => ({
+    this.initialProviders = loadProviders();
+    this.providers = this.initialProviders.map((p) => ({
       name: p.name,
       baseUrl: p.baseUrl,
       apiKeyEnvVar: p.apiKeyEnvVar,
@@ -292,9 +292,7 @@ export class HiveCore {
         error: "Upstream returned no stream",
       };
     } catch (err: unknown) {
-      logger.error(
-        `request ${requestId} — all providers failed: ${err instanceof Error ? err.message : String(err)}`
-      );
+      logger.error(`request ${requestId} — all providers failed`, err);
       return {
         success: false,
         statusCode: 503,
@@ -365,7 +363,7 @@ export class HiveCore {
     }
   }
 
-  getProviders(): Provider[] {
+  getProviders(): ReadonlyArray<Provider> {
     return this.providers;
   }
 

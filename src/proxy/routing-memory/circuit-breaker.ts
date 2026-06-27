@@ -18,4 +18,15 @@ export class CircuitBreaker {
   clear(): void {
     this.registry.clear();
   }
+
+  getActiveBreakers(): Record<string, number> {
+    const active: Record<string, number> = {};
+    const now = Date.now();
+    for (const [key, exp] of this.registry.entries()) {
+      if (exp > now) {
+        active[key] = exp;
+      }
+    }
+    return active;
+  }
 }

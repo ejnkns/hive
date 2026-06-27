@@ -1,36 +1,44 @@
 import type { ProviderData, MetricData, ConversationData } from "./types";
+import { logger, type LogEntry } from "../shared/logger";
 import "./hive-header";
 import "./hive-stats";
-import "./hive-swarm";
 import "./hive-providers";
-import "./hive-activity-tabs";
 import "./hive-detail-overlay";
+import "./hive-logs";
+import { SERVER_CONFIG } from "../server-config";
 
-const POLL_MS = 5000;
+type WebSocketType = typeof WebSocket.prototype;
 
-type ProvidersResponse = {
+// ─── Shared payload types (mirror server-side shape) ───────────────────────
+
+type ProviderPayload = {
+  name: string;
+  model: string;
+  keyConfigured: boolean;
+  stabilityScore: number;
+  p95Latency: number | null;
+  meanTokensPerSecond: number | null;
+  requestCount: number;
+  trippedUntil: number | null;
+  disabledFeatures: string[];
+};
+
+type TelemetryData = {
+  providers: ProviderPayload[];
   serverHost: string;
   serverPort: string;
   lastProvider: string | null;
   lastModel: string | null;
-  providers?: Array<{
-    name: string;
-    model: string;
-    keyConfigured: boolean;
-    stabilityScore: number;
-    p95Latency: number | null;
-    meanTokensPerSecond: number | null;
-    requestCount: number;
-  }>;
+  metrics: MetricData[];
+  pending: number;
+  conversations: ConversationData[];
 };
 
-type MetricsResponse = {
-  metrics?: MetricData[];
-};
+type WsMessage =
+  | { type: "init" | "update"; data: TelemetryData }
+  | { type: "log"; data: LogEntry };
 
-type ConversationsResponse = {
-  conversations?: ConversationData[];
-};
+// ─── Element type helpers ───────────────────────────────────────────────────
 
 type HeaderEl = HTMLElement & {
   data: {
@@ -48,17 +56,24 @@ type StatsEl = HTMLElement & {
     avgLatency: number | null;
   };
 };
-type SwarmEl = HTMLElement & { data: ProviderData[] };
-type ProvidersEl = HTMLElement & { data: ProviderData[] };
-type TabsEl = HTMLElement & {
-  data: { metrics: MetricData[]; conversations: ConversationData[] };
+type ProvidersEl = HTMLElement & {
+  data: ProviderData[];
+  metrics: MetricData[];
+  conversations: ConversationData[];
 };
+type LogsEl = HTMLElement & { addLog(log: LogEntry): void };
 type DetailOverlayEl = HTMLElement & {
   show(metric: MetricData, allMetrics: MetricData[]): void;
 };
 
+// ─── Component ─────────────────────────────────────────────────────────────
+
 export class HiveApp extends HTMLElement {
   private shadow: ShadowRoot;
+  private ws: WebSocketType | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectDelay = 1000; // start at 1s, backs off to 30s
+  private lastMetrics: MetricData[] = [];
 
   constructor() {
     super();
@@ -68,9 +83,7 @@ export class HiveApp extends HTMLElement {
   connectedCallback() {
     this.shadow.innerHTML = `
       <style>
-        :host {
-          display: block;
-        }
+        :host { display: block; }
         .content {
           display: flex;
           flex-direction: column;
@@ -91,12 +104,11 @@ export class HiveApp extends HTMLElement {
       <hive-header></hive-header>
       <div class="content">
         <hive-stats></hive-stats>
-        <hive-swarm></hive-swarm>
         <div>
           <div class="section-head">Providers</div>
           <hive-providers></hive-providers>
         </div>
-        <hive-activity-tabs></hive-activity-tabs>
+        <hive-logs></hive-logs>
       </div>
       <hive-detail-overlay></hive-detail-overlay>
     `;
@@ -114,101 +126,164 @@ export class HiveApp extends HTMLElement {
       overlay?.show(metric, allMetrics);
     });
 
-    void this.tick();
-    setInterval(() => {
-      void this.tick();
-    }, POLL_MS);
+    this.connect();
   }
 
-  private async tick() {
+  disconnectedCallback() {
+    this.close();
+  }
+
+  // ── WebSocket lifecycle ─────────────────────────────────────────────────
+
+  private connect() {
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
+    const protocol = window.location.protocol === "http:" ? "ws:" : "wss:";
+    const url = `${protocol}//${SERVER_CONFIG.host}:${String(SERVER_CONFIG.port)}/ws`;
+
     try {
-      const [pr, mr, cr] = await Promise.all([
-        fetch("/api/providers"),
-        fetch("/api/metrics"),
-        fetch("/api/conversations"),
-      ]);
-      if (!pr.ok || !mr.ok || !cr.ok) throw new Error("fetch failed");
+      this.ws = new WebSocket(url);
+    } catch (e) {
+      logger.error(
+        `Couldn't create a new WebSocket on the client. URL: ${url}`,
+        e
+      );
+      this.scheduleReconnect();
+      return;
+    }
 
-      const p = (await pr.json()) as ProvidersResponse;
-      const m = (await mr.json()) as MetricsResponse;
-      const c = (await cr.json()) as ConversationsResponse;
+    this.ws.onopen = () => {
+      this.reconnectDelay = 1000;
+    };
 
-      const header = this.shadow.querySelector(
-        "hive-header"
-      ) as unknown as HeaderEl | null;
-      if (header) {
-        header.data = {
-          online: true,
-          serverAddr: p.serverHost + ":" + p.serverPort,
-          lastProvider: p.lastProvider ?? null,
-          lastModel: p.lastModel ?? null,
-        };
+    this.ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(String(e.data)) as WsMessage;
+        this.handleMessage(msg);
+      } catch {
+        // ignore malformed frames
       }
+    };
 
-      const metrics: MetricData[] = m.metrics ?? [];
-      const conversations: ConversationData[] = c.conversations ?? [];
+    this.ws.onclose = () => {
+      this.setOnline(false);
+      this.scheduleReconnect();
+    };
 
-      const total = metrics.length;
-      const okCount = metrics.filter((r) => r.success).length;
-      const rate = total > 0 ? Math.round((okCount / total) * 100) : 100;
-      const providersList = p.providers ?? [];
-      const providersCount = new Set(
-        providersList.filter((x) => x.keyConfigured).map((x) => x.name)
-      ).size;
-      const flights = metrics.filter((r) => r.success).map((r) => r.ttft);
-      const avgFlight =
-        flights.length > 0
-          ? Math.round(flights.reduce((a, b) => a + b, 0) / flights.length)
-          : null;
+    this.ws.onerror = () => {
+      // onclose fires after onerror — let that handler schedule reconnect
+    };
+  }
 
-      const stats = this.shadow.querySelector(
-        "hive-stats"
-      ) as unknown as StatsEl | null;
-      if (stats) {
-        stats.data = {
-          traffic: total,
-          successRate: rate,
-          providers: providersCount,
-          avgLatency: avgFlight,
-        };
-      }
+  private close() {
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.ws?.close();
+    this.ws = null;
+  }
 
-      const providers: ProviderData[] = (p.providers ?? []).map((x) => ({
-        name: x.name,
-        model: x.model,
-        keyConfigured: x.keyConfigured,
-        stabilityScore: x.stabilityScore,
-        p95Latency: x.p95Latency,
-        meanTokensPerSecond: x.meanTokensPerSecond,
-        requestCount: x.requestCount,
-      }));
+  private scheduleReconnect() {
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30_000);
+      this.connect();
+    }, this.reconnectDelay);
+  }
 
-      const swarm = this.shadow.querySelector(
-        "hive-swarm"
-      ) as unknown as SwarmEl | null;
-      if (swarm) swarm.data = providers;
+  // ── Message dispatch ────────────────────────────────────────────────────
 
-      const providersEl = this.shadow.querySelector(
-        "hive-providers"
-      ) as unknown as ProvidersEl | null;
-      if (providersEl) providersEl.data = providers;
+  private handleMessage(msg: WsMessage) {
+    if (msg.type === "log") {
+      const logsEl = this.shadow.querySelector(
+        "hive-logs"
+      ) as unknown as LogsEl | null;
+      logsEl?.addLog(msg.data);
+      return;
+    }
 
-      const tabs = this.shadow.querySelector(
-        "hive-activity-tabs"
-      ) as unknown as TabsEl | null;
-      if (tabs) tabs.data = { metrics, conversations };
-    } catch {
-      const header = this.shadow.querySelector(
-        "hive-header"
-      ) as unknown as HeaderEl | null;
-      if (header) {
-        header.data = {
-          online: false,
-          serverAddr: "—",
-          lastProvider: null,
-          lastModel: null,
-        };
-      }
+    // "init" or "update"
+    this.applyTelemetry(msg.data);
+  }
+
+  private applyTelemetry(data: TelemetryData) {
+    this.setOnline(
+      true,
+      data.serverHost,
+      data.serverPort,
+      data.lastProvider,
+      data.lastModel
+    );
+
+    this.lastMetrics = data.metrics;
+
+    const total = data.metrics.length;
+    const okCount = data.metrics.filter((r) => r.success).length;
+    const rate = total > 0 ? Math.round((okCount / total) * 100) : 100;
+    const configuredNames = new Set(
+      data.providers.filter((x) => x.keyConfigured).map((x) => x.name)
+    );
+    const providersCount = configuredNames.size;
+    const flights = data.metrics.filter((r) => r.success).map((r) => r.ttft);
+    const avgFlight =
+      flights.length > 0
+        ? Math.round(flights.reduce((a, b) => a + b, 0) / flights.length)
+        : null;
+
+    const statsElement = this.shadow.querySelector(
+      "hive-stats"
+    ) as unknown as StatsEl | null;
+    if (statsElement) {
+      statsElement.data = {
+        traffic: total,
+        successRate: rate,
+        providers: providersCount,
+        avgLatency: avgFlight,
+      };
+    }
+
+    const providers: ProviderData[] = data.providers.map((x) => ({
+      name: x.name,
+      model: x.model,
+      keyConfigured: x.keyConfigured,
+      stabilityScore: x.stabilityScore,
+      p95Latency: x.p95Latency,
+      meanTokensPerSecond: x.meanTokensPerSecond,
+      requestCount: x.requestCount,
+      trippedUntil: x.trippedUntil,
+      disabledFeatures: x.disabledFeatures,
+    }));
+
+    const providersElement = this.shadow.querySelector(
+      "hive-providers"
+    ) as unknown as ProvidersEl | null;
+    if (providersElement) {
+      providersElement.metrics = data.metrics;
+      providersElement.conversations = data.conversations;
+      providersElement.data = providers;
+    }
+  }
+
+  private setOnline(
+    online: boolean,
+    host = "—",
+    port = "",
+    lastProvider: string | null = null,
+    lastModel: string | null = null
+  ) {
+    const header = this.shadow.querySelector(
+      "hive-header"
+    ) as unknown as HeaderEl | null;
+    if (header) {
+      header.data = {
+        online,
+        serverAddr: online ? `${host}:${port}` : "—",
+        lastProvider,
+        lastModel,
+      };
     }
   }
 }

@@ -6,6 +6,8 @@ export type ProviderData = {
   p95Latency: number | null;
   meanTokensPerSecond: number | null;
   requestCount: number;
+  trippedUntil: number | null;
+  disabledFeatures: string[] | null;
 };
 
 export type MetricData = {

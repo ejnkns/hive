@@ -38,7 +38,6 @@ export class HiveActivityLog extends HTMLElement {
       const tokens = r.outputTokens != null ? r.outputTokens : null;
       rows += `<tr data-request-id="${r.requestId}" style="cursor:pointer;">
         <td class="mono">${ft(r.timestamp)}</td>
-        <td class="prov">${r.provider}</td>
         <td class="model">${r.model}</td>
         <td><span class="badge ${ok ? "ok" : "err"}">${r.statusCode ? String(r.statusCode) : "ERR"}${r.errorType ? " " + r.errorType : ""}</span></td>
         <td>${ok ? fv(r.ttft, "ms") : "—"}</td>
@@ -74,12 +73,12 @@ export class HiveActivityLog extends HTMLElement {
         table {
           width: 100%;
           border-collapse: collapse;
-          font-size: 0.8125rem;
+          font-size: 0.75rem;
         }
         th {
-          background: var(--border);
-          padding: 0.375rem 0.75rem;
-          font-size: 0.625rem;
+          background: var(--surface);
+          padding: 0.25rem 0.5rem;
+          font-size: 0.5625rem;
           color: var(--muted);
           text-transform: uppercase;
           letter-spacing: 0.05em;
@@ -88,32 +87,43 @@ export class HiveActivityLog extends HTMLElement {
           position: sticky;
           top: 0;
           font-weight: 700;
+          z-index: 1;
         }
         td {
-          padding: 0.375rem 0.75rem;
+          padding: 0.25rem 0.5rem;
           border-bottom: 1px solid rgba(var(--border-rgb), 0.3);
         }
         tr:last-child td { border-bottom: none; }
         tr:hover td { background: rgba(var(--accent-rgb), 0.03); }
-        .mono { font-family: monospace; font-size: 0.6875rem; }
+        .mono { font-family: monospace; font-size: 0.625rem; }
         .prov { text-transform: capitalize; font-weight: 600; }
-        .model { font-family: monospace; font-size: 0.6875rem; color: var(--accent); }
+        .model { font-family: monospace; font-size: 0.625rem; color: var(--accent); }
+        tbody th {
+          color: var(--muted);
+        }
         .badge {
           display: inline-block;
-          font-size: 0.625rem;
+          font-size: 0.5625rem;
           font-weight: 700;
-          padding: 0.0625rem 0.375rem;
+          padding: 0.0625rem 0.25rem;
           text-transform: uppercase;
         }
-        .badge.ok { background: rgba(var(--success-rgb), 0.1); color: var(--success); }
-        .badge.err { background: rgba(var(--error-rgb), 0.1); color: var(--error); }
-        .no-data { padding: 1.5rem; text-align: center; color: var(--muted); font-size: 0.8125rem; }
+        .badge.ok {
+          background: var(--success-rgb) / 12%;
+          color: var(--text);
+          border: 1px solid var(--success);
+        }
+        .badge.err {
+          background: var(--error-rgb) / 12%;
+          color: var(--text);
+          border: 1px solid var(--error);
+        }
+        .no-data { padding: 1rem; text-align: center; color: var(--muted); font-size: 0.75rem; }
       </style>
       <table>
         <thead>
           <tr>
             <th>Time</th>
-            <th>Provider</th>
             <th>Model</th>
             <th>Status <hive-info>HTTP status code or error type</hive-info></th>
             <th>Latency <hive-info>Time-to-first-token (TTFT) per request</hive-info></th>

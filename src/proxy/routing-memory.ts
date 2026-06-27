@@ -71,6 +71,13 @@ export class RoutingMemory {
     this.features.clear();
     this.sessions.clear();
   }
+
+  getStates() {
+    return {
+      trippedBreakers: this.breaker.getActiveBreakers(),
+      disabledFeatures: this.features.getDisabledFeatures(),
+    };
+  }
 }
 
 export const routingMemory = new RoutingMemory();

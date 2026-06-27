@@ -1,14 +1,13 @@
 import { hiveCore } from "./engine";
 import { createServer, listen } from "./hive/create-server";
-import { loadConfig } from "./hive/load-config";
+import { SERVER_CONFIG } from "./hive/server-config";
 import { printBanner } from "./hive/shared/logger";
 
 printBanner();
 
-const config = loadConfig();
-const server = createServer(config);
+const server = await createServer();
+listen(server, SERVER_CONFIG);
 
-listen(server, config);
 hiveCore.start();
 
 process.on("SIGINT", () => {

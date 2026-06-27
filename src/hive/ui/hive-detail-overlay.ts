@@ -60,15 +60,29 @@ export class HiveDetailOverlay extends HTMLElement {
     let chainHtml = "";
     if (metric) {
       const chain = metric.requestId
-        ? allMetrics.filter((m) => m.requestId === metric.requestId)
+        ? allMetrics
+            .filter((m) => m.requestId === metric.requestId)
+            .sort((a, b) => a.timestamp - b.timestamp)
         : [];
-      if (chain.length > 1) {
-        chain.forEach((m) => {
+      if (chain.length > 0) {
+        chain.forEach((m, idx) => {
           const ok = m.success && m.statusCode < 400;
-          chainHtml += `<div class="detail-chain-item"><span class="prov">${m.provider} ${m.model}</span><span style="color:${ok ? "var(--success)" : "var(--error)"}">${m.statusCode ? String(m.statusCode) : "ERR"}${m.errorType ? " " + m.errorType : ""} ${ok ? "ok" : "fail"}</span></div>`;
+          const label = `Attempt #${String(idx + 1)}`;
+          const latencyStr = m.totalLatency
+            ? `${String(m.totalLatency)}ms`
+            : m.ttft
+              ? `${String(m.ttft)}ms (ttft)`
+              : "—";
+          chainHtml += `<div class="detail-chain-item">
+            <div><span class="attempt-num">${label}:</span><span class="prov">${m.provider} (${m.model})</span></div>
+            <span style="color:${ok ? "var(--success)" : "var(--error)"}">
+              ${m.statusCode ? String(m.statusCode) : "ERR"}${m.errorType ? " " + m.errorType : ""} 
+              (${ok ? "ok" : "fail"}) in ${latencyStr}
+            </span>
+          </div>`;
         });
       } else {
-        chainHtml = '<div class="single">Single attempt</div>';
+        chainHtml = '<div class="single">No attempt data</div>';
       }
     }
 
@@ -134,6 +148,7 @@ export class HiveDetailOverlay extends HTMLElement {
         }
         .detail-chain-item + .detail-chain-item { border-top: 1px solid rgba(var(--border-rgb), 0.3); }
         .prov { text-transform: capitalize; font-weight: 600; }
+        .attempt-num { color: var(--muted); font-weight: bold; margin-right: 0.5rem; }
         .single { font-size: 0.6875rem; color: var(--muted); }
       </style>
       <div id="overlay" popover="auto" class="overlay">

@@ -59,7 +59,7 @@ export class HiveConversations extends HTMLElement {
       <style>
         :host { display: block; padding: 0.5rem 1rem; }
         .conv-card {
-          background: var(--card);
+          background: var(--bg);
           border: 1px solid var(--border);
           padding: 0.75rem;
           margin-bottom: 0.75rem;
@@ -79,7 +79,7 @@ export class HiveConversations extends HTMLElement {
         .conv-block:last-child { margin-bottom: 0; }
         .conv-block .label {
           font-size: 0.5625rem;
-          color: var(--muted);
+          color: var(--text);
           text-transform: uppercase;
           letter-spacing: 0.05em;
           margin-bottom: 0.25rem;
@@ -103,12 +103,12 @@ export class HiveConversations extends HTMLElement {
           text-decoration: underline;
           text-decoration-style: dotted;
         }
-        .conv-toggle:hover { color: var(--accent); }
+        .conv-toggle:hover { color: var(--text); }
         .conv-footer {
           display: flex;
           gap: 1rem;
           font-size: 0.625rem;
-          color: var(--muted);
+          color: var(--text);
           margin-top: 0.375rem;
           padding-top: 0.375rem;
           border-top: 1px solid rgba(var(--border-rgb), 0.3);
@@ -120,8 +120,16 @@ export class HiveConversations extends HTMLElement {
           padding: 0.0625rem 0.375rem;
           text-transform: uppercase;
         }
-        .badge.ok { background: rgba(var(--success-rgb), 0.1); color: var(--success); }
-        .badge.err { background: rgba(var(--error-rgb), 0.1); color: var(--error); }
+        .badge.ok {
+          background: var(--success-rgb) / 12%;
+          color: var(--text);
+          border: 1px solid var(--success);
+        }
+        .badge.err {
+          background: var(--error-rgb) / 12%;
+          color: var(--text);
+          border: 1px solid var(--error);
+        }
       </style>
       ${html}
     `;

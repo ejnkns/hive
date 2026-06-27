@@ -20,4 +20,12 @@ export class FeatureDiscovery {
   clear(): void {
     this.disabled.clear();
   }
+
+  getDisabledFeatures(): Record<string, string[]> {
+    const res: Record<string, string[]> = {};
+    for (const [key, set] of this.disabled.entries()) {
+      res[key] = Array.from(set);
+    }
+    return res;
+  }
 }

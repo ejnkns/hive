@@ -7,11 +7,21 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
+    hmr: {
+      server: undefined,
+      port: 5173,
+      clientPort: 5173,
+    },
     port: 5173,
     proxy: {
-      "/api": "http://localhost:19280",
-      "/v1": "http://localhost:19280",
-      "/health": "http://localhost:19280",
+      "/ws": {
+        target: "ws://127.0.0.1:8153",
+        changeOrigin: true,
+        ws: true,
+      },
+      "/api": "http://localhost:8153",
+      "/v1": "http://localhost:8153",
+      "/health": "http://localhost:8153",
     },
   },
 });
