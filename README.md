@@ -1,5 +1,5 @@
  <pre style="color:black;white-space:pre-wrap;font-family:monospace;background:#708097;line-height:0.8;letter-spacing:-4px;font-size:2em">
-                             <span style="color:yellow"> <b>[ h i v e ]</b></span> 
+                             <span style="color:yellow">[ <b>h i v e</b> ]</span> 
     ,-. <span style="color:white">     .' '.        .`         </span>
     \_/ <span style="color:white">     .   .       .           </span>
  <span style="color:yellow"><b>:</span>>(<span style="color:yellow">|</span>|<span style="color:yellow">|</span>}</b><span style="color:white">.      .        .            </span>
@@ -87,7 +87,7 @@ Add the custom [ **h i v e** ] proxy in your local (`./opencode.json`) or global
       "npm": "@ai-sdk/openai-compatible",
       "name": "hive",
       "options": {
-        "baseURL": "http://127.0.0.1:19280/v1",
+        "baseURL": "http://127.0.0.1:8153/v1",
         "apiKey": "{env:HIVE_API_KEY}"
       },
       "models": {
@@ -104,7 +104,7 @@ Add the custom [ **h i v e** ] proxy in your local (`./opencode.json`) or global
 Set custom base configurations inside clients supporting OpenAI integrations:
 
 - **Authorisation Key:** Any arbitrary string. Authentication is handled server-side by the provider API keys in your `.env` file.
-- **Base Endpoint:** `http://127.0.0.1:19280`
+- **Base Endpoint:** `http://127.0.0.1:8153`
 
 ---
 

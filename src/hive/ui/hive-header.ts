@@ -1,7 +1,6 @@
 import type { HeaderData } from "./types";
 
 const LOGO = [
-  "                            h i v e",
   "   ,-.      .' '.        .`",
   "   \\_/      .   .       .",
   ":>(|||} .    ` .       .",
@@ -134,10 +133,20 @@ export class HiveHeader extends HTMLElement {
           font-family: monospace;
           color: var(--accent);
         }
+        .logo {
+          display: flex;
+          align-items: top;
+        }
+        .logo-text {
+          color: var(--logo-text); 
+        }
       </style>
       <button class="theme-btn">dark</button>
       <div class="header-inner">
-        <pre>${LOGO}</pre>
+        <div class="logo">
+          <pre>${LOGO}</pre>
+          <span class="logo-text">[ <b>h i v e</b> ]</span>
+        </div>
         <div class="header-meta">
           <span class="badge-status ${online ? "on" : "off"}">${online ? "ONLINE" : "OFFLINE"}</span>
           <span class="server-addr">${serverAddr}</span>
