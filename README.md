@@ -112,16 +112,21 @@ Set custom base configurations inside clients supporting OpenAI integrations:
 
 Configuration is loaded synchronously from `.env` or from exported system variables during initialisation:
 
-| Variable               | Target Provider  | Base URL Endpoint                                         | Baseline Fallback Model         |
-| ---------------------- | ---------------- | --------------------------------------------------------- | ------------------------------- |
-| `GROQ_API_KEY`         | Groq             | `https://api.groq.com/openai`                             | `deepseek-r1-distill-llama-70b` |
-| `SAMBA_NOVA_API_KEY`   | SambaNova        | `https://api.sambanova.ai`                                | `DeepSeek-R1`                   |
-| `GOOGLE_API_KEY`       | Google AI Studio | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-2.0-flash-exp`          |
-| `NVIDIA_NIM_API_KEY`   | NVIDIA NIM       | `https://integrate.api.nvidia.com`                        | `meta/llama-3.3-70b-instruct`   |
-| `GITHUB_TOKEN`         | GitHub Models    | `https://models.github.ai/inference`                      | `gpt-4o`                        |
-| `CEREBRAS_API_KEY`     | Cerebras         | `https://api.cerebras.ai`                                 | `llama-3.3-70b`                 |
-| `MISTRAL_API_KEY`      | Mistral          | `https://api.mistral.ai`                                  | `codestral-latest`              |
-| `OPENCODE_ZEN_API_KEY` | OpenCode Zen     | `https://opencode.ai/zen`                                 | `gpt-5.5`                       |
+| Variable               | Target Provider  | Base URL Endpoint                                         |
+| ---------------------- | ---------------- | --------------------------------------------------------- |
+| `GROQ_API_KEY`         | Groq             | `https://api.groq.com/openai`                             |
+| `SAMBA_NOVA_API_KEY`   | SambaNova        | `https://api.sambanova.ai`                                |
+| `GOOGLE_API_KEY`       | Google AI Studio | `https://generativelanguage.googleapis.com/v1beta/openai` |
+| `NVIDIA_NIM_API_KEY`   | NVIDIA NIM       | `https://integrate.api.nvidia.com`                        |
+| `GITHUB_TOKEN`         | GitHub Models    | `https://models.github.ai/inference`                      |
+| `CEREBRAS_API_KEY`     | Cerebras         | `https://api.cerebras.ai`                                 |
+| `MISTRAL_API_KEY`      | Mistral          | `https://api.mistral.ai`                                  |
+| `OPENCODE_ZEN_API_KEY` | OpenCode Zen     | `https://opencode.ai/zen`                                 |
+| `OLLAMA_API_KEY`\*     | Ollama           | `http://127.0.0.1:11434/v1` or `OLLAMA_HOST` in `.env`    |
+| `OMLX_API_KEY`\*       | oMLX             | `http://127.0.0.1:8000/v1` or `OMLX_HOST` in `.env`       |
+| `LM_STUDIO_API_KEY`\*  | LM Studio        | `http://127.0.0.1:1234/v1` or `OMLX_HOST` in `.env`       |
+
+\* not required unless configured in the provider.
 
 ### Model Discovery
 

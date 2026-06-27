@@ -6,6 +6,9 @@ import { googleAi } from "./google-ai";
 import { githubModels } from "./github-models";
 import { cerebras } from "./cerebras";
 import { mistral } from "./mistral";
+import { omlx } from "./omlx";
+import { ollama } from "./ollama";
+import { lmStudio } from "./lm-studio";
 
 export type Provider = {
   name: string;
@@ -33,6 +36,9 @@ export const allProviders: Provider[] = [
   githubModels,
   cerebras,
   mistral,
+  omlx,
+  ollama,
+  lmStudio,
 ].map((p) => ({
   ...p,
   baseUrl: p.baseUrl.replace(/\/+$/, ""),
