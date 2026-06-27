@@ -22,6 +22,7 @@ import {
 import { discoverAndCacheModels } from "./providers/discovery";
 import { generateId } from "./id";
 import { logger } from "./hive/shared/logger";
+import { getOverride } from "./hive/manual-override";
 
 type ChatCompletionResult = {
   success: boolean;
@@ -251,8 +252,47 @@ export class HiveCore {
       return result.proxyResponse;
     };
 
+    // Try manual override first — single-node attempt, fall back to auto-routing if it fails
+    const override = getOverride();
+    const overrideNode =
+      override && qualified.some((p) => p.name === override.provider)
+        ? { providerName: override.provider, modelName: override.model }
+        : null;
+
+    let response: ProxyResponse | null;
+    if (overrideNode) {
+      logger.debug(
+        `request ${requestId} — trying override node ${overrideNode.providerName}:${overrideNode.modelName}`
+      );
+      try {
+        response = await dispatchRequest(overrideNode, payloadStr);
+        if (response.isOk()) {
+          this.lastProvider = overrideNode.providerName;
+          this.lastModel = overrideNode.modelName;
+          logger.debug(
+            `request ${requestId} — override success via ${this.lastProvider}:${this.lastModel}`
+          );
+          return {
+            success: true,
+            stream: response.getStream() as PassThrough,
+            provider: this.lastProvider,
+            model: this.lastModel,
+            statusCode: response.status,
+          };
+        } else {
+          logger.debug(
+            `request ${requestId} — override node failed (status ${String(response.status)}), falling back to auto-routing`
+          );
+        }
+      } catch (err: unknown) {
+        logger.debug(
+          `request ${requestId} — override node threw: ${err instanceof Error ? err.message : String(err)}, falling back to auto-routing`
+        );
+      }
+    }
+
     try {
-      const response = await executeProxyRequest({
+      response = await executeProxyRequest({
         nodes,
         originalPayload: payloadStr,
         requiredFeatures,
@@ -260,38 +300,6 @@ export class HiveCore {
         dispatchRequest,
         sessionId,
       });
-
-      if (response.isOk()) {
-        const lastKey = routingMemory.getNodeAffinity(sessionId);
-        this.lastProvider =
-          nodes.find((n) => lastKey === `${n.providerName}:${n.modelName}`)
-            ?.providerName ?? null;
-        this.lastModel =
-          nodes.find((n) => lastKey === `${n.providerName}:${n.modelName}`)
-            ?.modelName ?? null;
-
-        logger.debug(
-          `request ${requestId} — success via ${this.lastProvider ?? "??"}:${this.lastModel ?? "??"}`
-        );
-
-        return {
-          success: true,
-          stream: response.getStream() as PassThrough,
-          provider: this.lastProvider ?? undefined,
-          model: this.lastModel ?? undefined,
-          statusCode: response.status,
-        };
-      }
-
-      logger.debug(
-        `request ${requestId} — upstream returned no stream (status ${String(response.status)})`
-      );
-
-      return {
-        success: false,
-        statusCode: response.status,
-        error: "Upstream returned no stream",
-      };
     } catch (err: unknown) {
       logger.error(`request ${requestId} — all providers failed`, err);
       return {
@@ -300,6 +308,37 @@ export class HiveCore {
         error: "All providers failed",
       };
     }
+
+    if (response.isOk()) {
+      const lastKey = routingMemory.getNodeAffinity(sessionId);
+      const usedNode =
+        nodes.find((n) => lastKey === `${n.providerName}:${n.modelName}`) ??
+        null;
+      this.lastProvider = usedNode?.providerName ?? null;
+      this.lastModel = usedNode?.modelName ?? null;
+
+      logger.debug(
+        `request ${requestId} — success via ${this.lastProvider ?? "??"}:${this.lastModel ?? "??"}`
+      );
+
+      return {
+        success: true,
+        stream: response.getStream() as PassThrough,
+        provider: this.lastProvider ?? undefined,
+        model: this.lastModel ?? undefined,
+        statusCode: response.status,
+      };
+    }
+
+    logger.debug(
+      `request ${requestId} — upstream returned no stream (status ${String(response.status)})`
+    );
+
+    return {
+      success: false,
+      statusCode: response.status,
+      error: "Upstream returned no stream",
+    };
   }
 
   async getProviderStates() {

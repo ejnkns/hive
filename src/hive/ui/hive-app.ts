@@ -1,4 +1,10 @@
-import type { ProviderData, MetricData, ConversationData } from "./types";
+import type {
+  ProviderData,
+  MetricData,
+  ConversationData,
+  AvailableProvider,
+  OverrideState,
+} from "./types";
 import { logger, type LogEntry } from "../shared/logger";
 import "./hive-header";
 import "./hive-stats";
@@ -30,9 +36,16 @@ type TelemetryData = {
   serverPort: string;
   lastProvider: string | null;
   lastModel: string | null;
+  overrideActive: boolean;
+  overrideProvider: string | null;
+  overrideModel: string | null;
+  availableProviders: AvailableProvider[];
   metrics: MetricData[];
   pending: number;
   conversations: ConversationData[];
+  bestProvider: string | null;
+  bestModel: string | null;
+  bestScore: number | null;
 };
 
 type WsMessage =
@@ -47,6 +60,11 @@ type HeaderEl = HTMLElement & {
     serverAddr: string;
     lastProvider: string | null;
     lastModel: string | null;
+    override: OverrideState;
+    availableProviders: AvailableProvider[];
+    bestProvider: string | null;
+    bestModel: string | null;
+    bestScore: number | null;
   };
 };
 type StatsEl = HTMLElement & {
@@ -61,6 +79,7 @@ type ProvidersEl = HTMLElement & {
   data: ProviderData[];
   metrics: MetricData[];
   conversations: ConversationData[];
+  overrideKey: string | null;
 };
 type LogsEl = HTMLElement & { addLog(log: LogEntry): void };
 type DetailOverlayEl = HTMLElement & {
@@ -75,6 +94,12 @@ export class HiveApp extends HTMLElement {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectDelay = 1000; // start at 1s, backs off to 30s
   private lastMetrics: MetricData[] = [];
+  private _override: OverrideState = {
+    active: false,
+    provider: null,
+    model: null,
+  };
+  private _availableProviders: AvailableProvider[] = [];
 
   constructor() {
     super();
@@ -125,6 +150,16 @@ export class HiveApp extends HTMLElement {
         "hive-detail-overlay"
       ) as unknown as DetailOverlayEl | null;
       overlay?.show(metric, allMetrics);
+    });
+
+    this.addEventListener("override-set", ((
+      e: CustomEvent<{ provider: string; model: string }>
+    ) => {
+      this.setOverride(e.detail.provider, e.detail.model);
+    }) as EventListener);
+
+    this.addEventListener("override-clear", () => {
+      this.clearOverride();
     });
 
     this.connect();
@@ -211,12 +246,39 @@ export class HiveApp extends HTMLElement {
   }
 
   private applyTelemetry(data: TelemetryData) {
+    this._override = {
+      active: data.overrideActive,
+      provider: data.overrideProvider,
+      model: data.overrideModel,
+    };
+    this._availableProviders = data.availableProviders;
+
+    const bestEntry =
+      data.providers
+        .filter((p) => p.keyConfigured)
+        .sort((a, b) => b.stabilityScore - a.stabilityScore)[0] ?? null;
+
+    let bestProvider: string | null = null;
+    let bestModel: string | null = null;
+    let bestScore: number | null = null;
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    if (bestEntry) {
+      bestProvider = bestEntry.name;
+      bestModel = bestEntry.model;
+      bestScore = bestEntry.stabilityScore;
+    }
+
     this.setOnline(
       true,
       data.serverHost,
       data.serverPort,
       data.lastProvider,
-      data.lastModel
+      data.lastModel,
+      this._override,
+      this._availableProviders,
+      bestProvider,
+      bestModel,
+      bestScore
     );
 
     this.lastMetrics = data.metrics;
@@ -266,6 +328,10 @@ export class HiveApp extends HTMLElement {
       providersElement.metrics = data.metrics;
       providersElement.conversations = data.conversations;
       providersElement.data = providers;
+      providersElement.overrideKey =
+        this._override.active && this._override.provider && this._override.model
+          ? `${this._override.provider}:${this._override.model}`
+          : null;
     }
   }
 
@@ -274,7 +340,12 @@ export class HiveApp extends HTMLElement {
     host = "—",
     port = "",
     lastProvider: string | null = null,
-    lastModel: string | null = null
+    lastModel: string | null = null,
+    override: OverrideState = { active: false, provider: null, model: null },
+    availableProviders: AvailableProvider[] = [],
+    bestProvider: string | null = null,
+    bestModel: string | null = null,
+    bestScore: number | null = null
   ) {
     const header = this.shadow.querySelector(
       "hive-header"
@@ -285,7 +356,28 @@ export class HiveApp extends HTMLElement {
         serverAddr: online ? `${host}:${port}` : "—",
         lastProvider,
         lastModel,
+        override,
+        availableProviders,
+        bestProvider,
+        bestModel,
+        bestScore,
       };
+    }
+  }
+
+  // ── Override commands ────────────────────────────────────────────────────
+
+  setOverride(provider: string, model: string): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "override", provider, model }));
+    }
+  }
+
+  clearOverride(): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(
+        JSON.stringify({ type: "override", provider: null, model: null })
+      );
     }
   }
 }

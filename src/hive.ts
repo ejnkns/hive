@@ -1,7 +1,7 @@
 import { hiveCore } from "./engine";
 import { createServer, listen } from "./hive/create-server";
 import { SERVER_CONFIG } from "./hive/server-config";
-import { printBanner } from "./hive/shared/logger";
+import { printBanner } from "./hive/shared/logger/ascii-banner";
 
 printBanner();
 

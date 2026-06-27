@@ -12,8 +12,14 @@ export class HiveProviders extends HTMLElement {
   private _data: ProviderData[] = [];
   private _metrics: MetricData[] = [];
   private _conversations: ConversationData[] = [];
+  private _overrideKey: string | null = null;
   private expandedConsoles = new Set<string>();
   private activeTabs = new Map<string, "activity" | "conversations">();
+
+  set overrideKey(value: string | null) {
+    this._overrideKey = value;
+    this.render();
+  }
 
   constructor() {
     super();
@@ -106,8 +112,12 @@ export class HiveProviders extends HTMLElement {
           e.disabledFeatures && e.disabledFeatures.length > 0
             ? `<span class="badge unsupported">no-${e.disabledFeatures.join(", ")}</span>`
             : "";
+        const isPinned = this._overrideKey === `${e.name}:${e.model}`;
+        const pinnedBadge = isPinned
+          ? `<span class="badge pinned">pinned</span>`
+          : "";
 
-        mh += `<div class="mrow"><span class="mname">${e.model}${trippedBadge}${featuresBadge}</span><span class="mstats"><span style="color:${sc(e.stabilityScore)}">${e.stabilityScore.toFixed(2)}%</span><span>${formatNumber(e.p95Latency, "ms")}</span><span>${formatNumber(e.meanTokensPerSecond)} t/s</span><span>${String(e.requestCount)}c</span></span></div>`;
+        mh += `<div class="mrow${isPinned ? " pinned" : ""}"><span class="mname">${e.model}${pinnedBadge}${trippedBadge}${featuresBadge}</span><span class="mstats"><span style="color:${sc(e.stabilityScore)}">${e.stabilityScore.toFixed(2)}%</span><span>${formatNumber(e.p95Latency, "ms")}</span><span>${formatNumber(e.meanTokensPerSecond)} t/s</span><span>${String(e.requestCount)}c</span></span></div>`;
       });
 
       html += `
@@ -261,6 +271,15 @@ export class HiveProviders extends HTMLElement {
         .badge.unsupported {
           background: rgba(var(--accent-rgb), 0.15);
           color: var(--accent);
+        }
+        .badge.pinned {
+          background: rgba(var(--accent-rgb), 0.15);
+          color: var(--accent);
+          border: 1px solid var(--accent);
+        }
+        .mrow.pinned {
+          outline: 1px solid var(--accent);
+          outline-offset: -1px;
         }
 
         /* Collapsible Console Styles */

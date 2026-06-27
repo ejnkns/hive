@@ -1,10 +1,9 @@
-const YELLOW = "\x1b[33m";
-const RED = "\x1b[31m";
-const BOLD = "\x1b[1m";
-const RESET = "\x1b[0m";
-const GRAY = "\x1b[90m";
-const BLACK = "\x1b[40m";
-const width: number = 80; //process.stdout.columns || 80;
+export const YELLOW = "\x1b[33m";
+export const RED = "\x1b[31m";
+export const BOLD = "\x1b[1m";
+export const RESET = "\x1b[0m";
+export const GRAY = "\x1b[90m";
+export const BLACK = "\x1b[40m";
 
 export type LogEntry = {
   level: "info" | "warn" | "error" | "debug";
@@ -72,61 +71,12 @@ export const logger = {
   },
   debug: (msg: string) => {
     bufferAndEmit("debug", msg);
-    // if (process.env.DEBUG) {
-    console.log(bzz(msg, `${GRAY}bzz:debug${RESET}`));
-    // }
+    if (process.env.DEBUG) {
+      console.log(bzz(msg, `${GRAY}bzz:debug${RESET}`));
+    }
   },
 };
 
 function bzz(msg: string, prefix: string) {
   return `[${prefix}] ${msg}`;
-}
-
-export function printBanner() {
-  const beeHive = `${YELLOW}     ^^     .-=-=-=-.  ^^
-^^        (\`-=-=-=-=-\`)         ^^
-        (\`-=-=-=-=-=-=-\`)  ^^         ^^
-  ^^   (\`-=-=-=-=-=-=-=-\`)   ^^                            ^^
-      ( \`-=-=-=-(@)-=-=-\` )      ^^
-      (\`-=-=-=-=-=-=-=-=-\`)  ^^
-      (\`-=-=-=-=-=-=-=-=-\`)              ^^
-      (\`-=-=-=-=-=-=-=-=-\`)                      ^^
-      (\`-=-=-=-=-=-=-=-=-\`)  ^^
-       (\`-=-=-=-=-=-=-=-\`)          ^^
-        (\`-=-=-=-=-=-=-\`)  ^^                 ^^
-          (\`-=-=-=-=-\`)
-           \`-=-=-=-=-\`
-                                  ^^${RESET}`;
-  const title = `${YELLOW}${BOLD}h i v e${RESET}`;
-  const version = ""; //`${GRAY}v${process.env.npm_package_version ?? ""}${RESET}`;
-  const hr = `${GRAY}${(() => "─".repeat(width))()}${RESET}`;
-  const flyPath = `                            ${YELLOW}${BOLD}h i v e${RESET}
-   ,-.      .' '.        .\` 
-   \\_/      .   .       .
-${YELLOW}:${RESET}${BLACK}>${YELLOW}(${RESET}${BLACK}|${RESET}${YELLOW}|${RESET}${BLACK}|${RESET}${BLACK}${RESET}${YELLOW}}${RESET}.      .        .
-   / \\  '. . ' ' . . '
-   \`-'
-`;
-
-  const wide = `${beeHive}
-             ${title}
-${version}                    ${YELLOW}^^${RESET}`;
-
-  const narrow = `${flyPath}
-${version}`;
-
-  if (width > 64) {
-    console.log(wide);
-  } else if (width > 50) {
-    console.log(narrow);
-  } else {
-    const middle = Math.round(width / 2) - 4;
-    console.log(`
-${" ".repeat(middle)}${title}
-
-${version}
-`);
-  }
-
-  console.log(hr);
 }

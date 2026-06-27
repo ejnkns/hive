@@ -11,6 +11,11 @@ import {
 } from "../../telemetry";
 import { routingMemory } from "../../proxy";
 import { SERVER_CONFIG } from "../server-config";
+import {
+  getOverride,
+  setOverride as setManualOverride,
+  clearOverride as clearManualOverride,
+} from "../manual-override";
 import type { WebSocket } from "ws";
 
 export function assignRoutes(server: FastifyServer) {
@@ -70,6 +75,27 @@ export function assignRoutes(server: FastifyServer) {
     const cache = await loadCache();
     const conversations = conversationStore.getConversations();
 
+    const overrideState = getOverride();
+
+    const availableProviders = configProviders.map((p) => ({
+      name: p.name,
+      displayName: p.displayName,
+      models: [...p.models],
+      keyConfigured: !!process.env[p.apiKeyEnvVar],
+    }));
+
+    const bestEntry =
+      providers
+        .filter((p) => p.keyConfigured)
+        .sort((a, b) => b.stabilityScore - a.stabilityScore)[0] ?? null;
+
+    const bestProvider = bestEntry.name;
+    const bestModel = bestEntry.model;
+    const bestScore = bestEntry.stabilityScore;
+
+    const overrideProvider = overrideState ? overrideState.provider : null;
+    const overrideModel = overrideState ? overrideState.model : null;
+
     return {
       type: "update",
       data: {
@@ -78,9 +104,16 @@ export function assignRoutes(server: FastifyServer) {
         serverHost: SERVER_CONFIG.host,
         lastProvider: lastUsed.provider,
         lastModel: lastUsed.model,
+        overrideActive: overrideState !== null,
+        overrideProvider,
+        overrideModel,
+        availableProviders,
         metrics: cache.metrics,
         pending: telemetryRecorder.getPendingCount(),
         conversations,
+        bestProvider,
+        bestModel,
+        bestScore,
       },
     };
   };
@@ -122,7 +155,6 @@ export function assignRoutes(server: FastifyServer) {
     void (async () => {
       try {
         const initPayload = await getTelemetryPayload();
-        console.log(initPayload.data.providers);
         socket.send(JSON.stringify({ ...initPayload, type: "init" }));
 
         // Send recent logs
@@ -140,9 +172,31 @@ export function assignRoutes(server: FastifyServer) {
     });
 
     socket.on("message", (msg) => {
-      logger.debug(
-        `received WS message: ${typeof msg === "object" ? JSON.stringify(msg) : String(msg)}`
-      );
+      try {
+        const text =
+          typeof msg === "string"
+            ? msg
+            : Buffer.isBuffer(msg)
+              ? msg.toString()
+              : JSON.stringify(msg);
+        const parsed = JSON.parse(text) as Record<string, unknown> | null;
+        if (parsed?.type === "override") {
+          const provider = parsed.provider;
+          const model = parsed.model;
+          if (typeof provider === "string" && typeof model === "string") {
+            setManualOverride(provider, model);
+            logger.debug(`override set: ${provider} / ${model}`);
+          } else {
+            clearManualOverride();
+            logger.debug("override cleared");
+          }
+          void broadcastTelemetry();
+        }
+      } catch {
+        logger.debug(
+          `received WS message: ${typeof msg === "string" ? msg : JSON.stringify(msg)}`
+        );
+      }
     });
   });
 

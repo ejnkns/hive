@@ -51,6 +51,19 @@ export type ConversationData = {
   refused: boolean;
 };
 
+export type AvailableProvider = {
+  name: string;
+  displayName: string;
+  models: string[];
+  keyConfigured: boolean;
+};
+
+export type OverrideState = {
+  active: boolean;
+  provider: string | null;
+  model: string | null;
+};
+
 export type StatsData = {
   traffic: number;
   successRate: number;
@@ -63,4 +76,9 @@ export type HeaderData = {
   serverAddr: string;
   lastProvider: string | null;
   lastModel: string | null;
+  override: OverrideState;
+  availableProviders: AvailableProvider[];
+  bestProvider: string | null;
+  bestModel: string | null;
+  bestScore: number | null;
 };
