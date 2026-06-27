@@ -1,5 +1,5 @@
 import type { ConversationData } from "./types";
-import { fv, esc, normalizeContent } from "./utils";
+import { formatNumber, esc, normalizeContent } from "./utils";
 
 export class HiveConversations extends HTMLElement {
   private shadow: ShadowRoot;
@@ -46,8 +46,8 @@ export class HiveConversations extends HTMLElement {
           <pre>${esc(c.responseText || "(empty)")}</pre>
         </div>
         <div class="conv-footer">
-          <span>TTFT: ${fv(c.ttft, "ms")}</span>
-          <span>Latency: ${fv(c.totalLatency, "ms")}</span>
+          <span>TTFT: ${formatNumber(c.ttft, "ms")}</span>
+          <span>Latency: ${formatNumber(c.totalLatency, "ms")}</span>
           <span>Tokens: ${c.outputTokens != null ? String(c.outputTokens) : "—"}</span>
           <span>Finish: ${c.finishReason || "—"}</span>
           <span class="badge ${c.success ? "ok" : "err"}">${String(c.statusCode)}</span>

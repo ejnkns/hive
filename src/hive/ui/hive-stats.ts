@@ -1,5 +1,5 @@
 import type { StatsData } from "./types";
-import { sc, fv } from "./utils";
+import { sc, formatNumber } from "./utils";
 import "./hive-info";
 
 export class HiveStats extends HTMLElement {
@@ -25,7 +25,7 @@ export class HiveStats extends HTMLElement {
     const traffic = String(d?.traffic ?? "—");
     const rate = d?.successRate ?? 100;
     const providers = String(d?.providers ?? "—");
-    const latency = d ? fv(d.avgLatency, "ms") : "—";
+    const latency = d ? formatNumber(d.avgLatency, "ms") : "—";
 
     this.shadow.innerHTML = `
       <style>

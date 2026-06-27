@@ -1,5 +1,5 @@
 import type { ProviderData, MetricData, ConversationData } from "./types";
-import { sc, fv, bar } from "./utils";
+import { sc, formatNumber, bar } from "./utils";
 import "./hive-info";
 import "./hive-activity-log";
 import "./hive-conversations";
@@ -107,7 +107,7 @@ export class HiveProviders extends HTMLElement {
             ? `<span class="badge unsupported">no-${e.disabledFeatures.join(", ")}</span>`
             : "";
 
-        mh += `<div class="mrow"><span class="mname">${e.model}${trippedBadge}${featuresBadge}</span><span class="mstats"><span style="color:${sc(e.stabilityScore)}">${e.stabilityScore.toFixed(2)}%</span><span>${fv(e.p95Latency, "ms")}</span><span>${fv(e.meanTokensPerSecond)} t/s</span><span>${String(e.requestCount)}c</span></span></div>`;
+        mh += `<div class="mrow"><span class="mname">${e.model}${trippedBadge}${featuresBadge}</span><span class="mstats"><span style="color:${sc(e.stabilityScore)}">${e.stabilityScore.toFixed(2)}%</span><span>${formatNumber(e.p95Latency, "ms")}</span><span>${formatNumber(e.meanTokensPerSecond)} t/s</span><span>${String(e.requestCount)}c</span></span></div>`;
       });
 
       html += `
@@ -124,8 +124,8 @@ export class HiveProviders extends HTMLElement {
             </div>
             
             <div class="wmet">
-              <div class="wmet-item"><span class="l">Latency <hive-info>95th percentile latency</hive-info></span><span class="v">${fv(f.p95Latency, "ms")}</span></div>
-              <div class="wmet-item"><span class="l">Output <hive-info>Mean output tokens per second</hive-info></span><span class="v">${fv(f.meanTokensPerSecond)} t/s</span></div>
+              <div class="wmet-item"><span class="l">Latency <hive-info>95th percentile latency</hive-info></span><span class="v">${formatNumber(f.p95Latency, "ms")}</span></div>
+              <div class="wmet-item"><span class="l">Output <hive-info>Mean output tokens per second</hive-info></span><span class="v">${formatNumber(f.meanTokensPerSecond)} t/s</span></div>
               <div class="wmet-item"><span class="l">Calls <hive-info>Requests in current tracking window</hive-info></span><span class="v">${f.requestCount.toString()}</span></div>
             </div>
           </div>

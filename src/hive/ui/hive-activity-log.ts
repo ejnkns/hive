@@ -1,5 +1,5 @@
 import type { MetricData } from "./types";
-import { ft, fv } from "./utils";
+import { formatTime, formatNumber } from "./utils";
 import "./hive-info";
 
 export class HiveActivityLog extends HTMLElement {
@@ -37,10 +37,10 @@ export class HiveActivityLog extends HTMLElement {
       const ok = r.success;
       const tokens = r.outputTokens != null ? r.outputTokens : null;
       rows += `<tr data-request-id="${r.requestId}" style="cursor:pointer;">
-        <td class="mono">${ft(r.timestamp)}</td>
+        <td class="mono">${formatTime(r.timestamp)}</td>
         <td class="model">${r.model}</td>
         <td><span class="badge ${ok ? "ok" : "err"}">${r.statusCode ? String(r.statusCode) : "ERR"}${r.errorType ? " " + r.errorType : ""}</span></td>
-        <td>${ok ? fv(r.ttft, "ms") : "—"}</td>
+        <td>${ok ? formatNumber(r.ttft, "ms") : "—"}</td>
         <td>${tokens != null ? String(tokens) : "—"}</td>
       </tr>`;
     });

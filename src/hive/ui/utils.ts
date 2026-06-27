@@ -6,7 +6,7 @@ export function sc(c: number): string {
       : "var(--error)";
 }
 
-export function ft(ts: number): string {
+export function formatTime(ts: number): string {
   return new Date(ts).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
@@ -14,11 +14,11 @@ export function ft(ts: number): string {
   });
 }
 
-export function fv(v: number | null, suf?: string): string {
+export function formatNumber(v: number | null, suf?: string): string {
   if (v == null || isNaN(v)) return "—";
   if (suf === "ms")
     return v >= 1000 ? (v / 1000).toFixed(1) + "s" : String(v) + "ms";
-  return String(v);
+  return v.toFixed(2) + (suf ? " " + suf : "");
 }
 
 export function bar(pct: number): string {

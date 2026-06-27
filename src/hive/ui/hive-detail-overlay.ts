@@ -1,5 +1,5 @@
 import type { MetricData } from "./types";
-import { fv } from "./utils";
+import { formatNumber } from "./utils";
 
 export class HiveDetailOverlay extends HTMLElement {
   private shadow: ShadowRoot;
@@ -33,8 +33,8 @@ export class HiveDetailOverlay extends HTMLElement {
           String(metric.statusCode) +
             (metric.errorType ? " " + metric.errorType : ""),
         ],
-        ["TTFT", fv(metric.ttft, "ms")],
-        ["Total Latency", fv(metric.totalLatency, "ms")],
+        ["TTFT", formatNumber(metric.ttft, "ms")],
+        ["Total Latency", formatNumber(metric.totalLatency, "ms")],
         [
           "Input Tokens",
           metric.inputTokens != null ? String(metric.inputTokens) : "—",
@@ -45,7 +45,9 @@ export class HiveDetailOverlay extends HTMLElement {
         ],
         [
           "Thinking Time",
-          metric.thinkingTime != null ? fv(metric.thinkingTime, "ms") : "—",
+          metric.thinkingTime != null
+            ? formatNumber(metric.thinkingTime, "ms")
+            : "—",
         ],
         ["Finish Reason", metric.finishReason || "—"],
         ["Refused", metric.refused ? "Yes" : "No"],
