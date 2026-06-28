@@ -1,5 +1,4 @@
 import type { RequestMetric } from "./request-metric";
-import { applyWindow } from "./window";
 import { ERROR_PENALTIES } from "./weights";
 import { percentile } from "./stats";
 
@@ -47,6 +46,7 @@ export function calculateNodeScore(
   );
 
   const totalRequests = metrics.length;
+  let previousWasAuthError = false;
   let consecutiveAuthErrors = 0;
   let totalErrors = 0;
 
@@ -62,7 +62,12 @@ export function calculateNodeScore(
         m.statusCode === 403 ||
         m.errorType === "auth-error"
       ) {
-        consecutiveAuthErrors++;
+        if (previousWasAuthError) {
+          consecutiveAuthErrors++;
+        } else {
+          previousWasAuthError = true;
+          consecutiveAuthErrors = 1;
+        }
       }
     } else {
       break;
@@ -76,12 +81,11 @@ export function calculateNodeScore(
     return 0;
   }
 
-  const windowedMetrics = applyWindow(metrics);
   const now = Date.now();
   let totalPenaltyPoints = 0;
   let maxPossiblePoints = 0;
 
-  for (const m of windowedMetrics) {
+  for (const m of metrics) {
     const age = now - m.timestamp;
     const decay = Math.exp(-age / DECAY_HALF_LIFE_MS);
     const severity = getFailureWeight(m);
@@ -110,8 +114,14 @@ export function calculateNodeScore(
   let validTpsCount = 0;
   for (const m of performanceMetrics) {
     if (m.outputTokens && m.totalLatency) {
+      console.log(
+        "***check if ttft and totalLatency are almost equal, update varianceLimit ***",
+        m.ttft,
+        m.totalLatency
+      );
+      const varianceLimit = 0.01;
       const streamSeconds =
-        m.ttft === m.totalLatency
+        Math.abs(m.ttft - m.totalLatency) < varianceLimit
           ? m.totalLatency / 1000
           : (m.totalLatency - m.ttft) / 1000;
 
