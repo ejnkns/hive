@@ -21,55 +21,43 @@ import type { WebSocket } from "ws";
 export function assignRoutes(server: FastifyServer) {
   const activeSockets = new Set<WebSocket>();
 
-  const getTelemetryPayload = async () => {
-    const states = await hiveCore.getProviderStates();
+  async function buildProvidersPayload() {
     const configProviders = hiveCore.getProviders();
     const routingStates = routingMemory.getStates();
 
-    const providers = configProviders.flatMap((p) => {
-      const matchingStates = states.filter((s) => s.provider === p.name);
+    const states = await hiveCore.getProviderStates();
+    return configProviders.flatMap((p) => {
       const keyConfigured = !!process.env[p.apiKeyEnvVar];
+      const providerModels = p.models.length > 0 ? p.models : [p.defaultModel];
 
-      if (matchingStates.length > 0) {
-        return matchingStates.map((s) => {
-          const compKey = `${s.provider}:${s.model}`;
-          return {
-            name: s.provider,
-            displayName: p.displayName,
-            baseUrl: p.baseUrl,
-            model: s.model,
-            models: p.models,
-            keyConfigured,
-            stabilityScore: s.stabilityScore,
-            p95Latency: s.p95Latency,
-            recentSuccessRate: s.recentSuccessRate,
-            requestCount: s.requestCount,
-            meanTokensPerSecond: s.meanTokensPerSecond,
-            trippedUntil: routingStates.trippedBreakers[compKey] || null,
-            disabledFeatures: routingStates.disabledFeatures[compKey],
-          };
-        });
-      }
+      return providerModels.map((model) => {
+        const matchingState =
+          states.find((s) => s.provider === p.name && s.model === model) ??
+          null;
+        const compKey = `${p.name}:${model}`;
 
-      const fallbackCompKey = `${p.name}:${p.defaultModel}`;
-      return [
-        {
+        return {
           name: p.name,
           displayName: p.displayName,
           baseUrl: p.baseUrl,
-          model: p.defaultModel,
+          model,
           models: p.models,
           keyConfigured,
-          stabilityScore: 0,
-          p95Latency: 0,
-          recentSuccessRate: 0,
-          requestCount: 0,
-          meanTokensPerSecond: null,
-          trippedUntil: routingStates.trippedBreakers[fallbackCompKey] || null,
-          disabledFeatures: routingStates.disabledFeatures[fallbackCompKey],
-        },
-      ];
+          stabilityScore: matchingState?.stabilityScore ?? 0,
+          p95Latency: matchingState?.p95Latency ?? 0,
+          recentSuccessRate: matchingState?.recentSuccessRate ?? 0,
+          requestCount: matchingState?.requestCount ?? 0,
+          meanTokensPerSecond: matchingState?.meanTokensPerSecond ?? null,
+          trippedUntil: routingStates.trippedBreakers[compKey] || null,
+          disabledFeatures: routingStates.disabledFeatures[compKey],
+        };
+      });
     });
+  }
+
+  const getTelemetryPayload = async () => {
+    const configProviders = hiveCore.getProviders();
+    const providers = await buildProvidersPayload();
 
     const lastUsed = hiveCore.getLastUsed();
     const cache = await loadCache();
@@ -248,45 +236,7 @@ export function assignRoutes(server: FastifyServer) {
   });
 
   server.get("/api/providers", async (_request, reply) => {
-    const states = await hiveCore.getProviderStates();
-    const configProviders = hiveCore.getProviders();
-
-    const providers = configProviders.flatMap((p) => {
-      const matchingStates = states.filter((s) => s.provider === p.name);
-      const keyConfigured = !!process.env[p.apiKeyEnvVar];
-
-      if (matchingStates.length > 0) {
-        return matchingStates.map((s) => ({
-          name: s.provider,
-          displayName: p.displayName,
-          baseUrl: p.baseUrl,
-          model: s.model,
-          models: p.models,
-          keyConfigured,
-          stabilityScore: s.stabilityScore,
-          p95Latency: s.p95Latency,
-          recentSuccessRate: s.recentSuccessRate,
-          requestCount: s.requestCount,
-          meanTokensPerSecond: s.meanTokensPerSecond,
-        }));
-      }
-
-      return [
-        {
-          name: p.name,
-          displayName: p.displayName,
-          baseUrl: p.baseUrl,
-          model: p.defaultModel,
-          models: p.models,
-          keyConfigured,
-          stabilityScore: 0,
-          p95Latency: 0,
-          recentSuccessRate: 0,
-          requestCount: 0,
-          meanTokensPerSecond: null,
-        },
-      ];
-    });
+    const providers = await buildProvidersPayload();
 
     const lastUsed = hiveCore.getLastUsed();
 
