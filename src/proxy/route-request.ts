@@ -98,6 +98,7 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
             ? detectRefusal(stats.responseText)
             : false,
         statusCode,
+        errorBody,
         errorType: classifyError(statusCode, errorType),
         success,
         source: "user",

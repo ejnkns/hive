@@ -25,6 +25,7 @@ export type MetricData = {
   refused: boolean;
   statusCode: number;
   errorType: string | null;
+  errorBody?: string;
   success: boolean;
   source: string;
 };

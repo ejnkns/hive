@@ -53,6 +53,12 @@ export class HiveDetailOverlay extends HTMLElement {
         ["Refused", metric.refused ? "Yes" : "No"],
         ["Source", metric.source || "—"],
         ["Success", metric.success ? "Yes" : "No"],
+        [
+          "Error Body",
+          metric.errorBody
+            ? JSON.stringify(JSON.parse(metric.errorBody), null, 2)
+            : "—",
+        ],
       ];
       fields.forEach(([label, value]) => {
         gridHtml += `<span class="label">${label}</span><span class="value">${value}</span>`;
@@ -116,7 +122,7 @@ export class HiveDetailOverlay extends HTMLElement {
           margin-bottom: 1rem;
         }
         .detail-grid .label { color: var(--muted); }
-        .detail-grid .value { font-weight: 600; }
+        .detail-grid .value { font-weight: 600; white-space: pre;  }
         .detail-close {
           position: absolute;
           top: 0.5rem;
