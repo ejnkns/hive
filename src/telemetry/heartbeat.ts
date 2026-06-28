@@ -1,4 +1,4 @@
-import { logger } from "../hive/shared/logger";
+import { logger } from "../shared/logger";
 
 const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;
 

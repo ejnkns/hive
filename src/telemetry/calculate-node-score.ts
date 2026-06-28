@@ -8,7 +8,7 @@ import { isReasoningModel } from "./calculate-node-score/shared/is-reasoning-mod
 
 export type { RequestMetric };
 
-export type ProviderModelNode = {
+export type Node = {
   providerName: string;
   modelName: string;
 };
@@ -27,7 +27,7 @@ const ROUTING_STRATEGIES: Record<string, ScoreWeights> = {
 };
 
 export function calculateNodeScore(
-  node: ProviderModelNode,
+  node: Node,
   metrics: RequestMetric[],
   strategyName: string = "balanced",
   minTokenThreshold: number = 200

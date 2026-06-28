@@ -1,9 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import {
-  calculateNodeScore,
-  type ProviderModelNode,
-} from "./calculate-node-score";
+import { calculateNodeScore, type Node } from "./calculate-node-score";
 import type { RequestMetric } from "./request-metric";
 
 function mockMetric(overrides: Partial<RequestMetric>): RequestMetric {
@@ -28,7 +25,7 @@ function mockMetric(overrides: Partial<RequestMetric>): RequestMetric {
 }
 
 await describe("Hive Scoring Suite", async () => {
-  const node: ProviderModelNode = {
+  const node: Node = {
     providerName: "together",
     modelName: "llama-3-70b",
   };
@@ -47,7 +44,7 @@ await describe("Hive Scoring Suite", async () => {
   });
 
   await it("should grant flexible, protective scaling options to reasoning models experiencing high thinking time", () => {
-    const reasoningNode: ProviderModelNode = {
+    const reasoningNode: Node = {
       providerName: "groq",
       modelName: "deepseek-r1",
     };

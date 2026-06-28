@@ -1,14 +1,14 @@
-import { groq } from "./groq";
-import { sambanova } from "./sambanova";
-import { nvidiaNim } from "./nvidia-nim";
-import { opencodeZen } from "./opencode-zen";
-import { googleAi } from "./google-ai";
-import { githubModels } from "./github-models";
-import { cerebras } from "./cerebras";
-import { mistral } from "./mistral";
-import { omlx } from "./omlx";
-import { ollama } from "./ollama";
-import { lmStudio } from "./lm-studio";
+import { groq } from "./registry/groq";
+import { sambanova } from "./registry/sambanova";
+import { nvidiaNim } from "./registry/nvidia-nim";
+import { opencodeZen } from "./registry/opencode-zen";
+import { googleAi } from "./registry/google-ai";
+import { githubModels } from "./registry/github-models";
+import { mistral } from "./registry/mistral";
+import { omlx } from "./registry/omlx";
+import { ollama } from "./registry/ollama";
+import { lmStudio } from "./registry/lm-studio";
+import { cerebras } from "./registry/cerebras";
 
 export type Provider = {
   name: string;

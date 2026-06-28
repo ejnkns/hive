@@ -7,5 +7,6 @@ contexts/
 *.md
 !README.md
 repomix-output.xml
+vault
 
 architecture-review-*.html

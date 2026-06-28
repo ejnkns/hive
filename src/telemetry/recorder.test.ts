@@ -1,7 +1,7 @@
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert";
 import { TelemetryRecorder } from "./recorder";
-import { loadCache, saveCache } from "./persist";
+import { loadCache, saveCache } from "./cache";
 
 await describe("TelemetryRecorder", async () => {
   let recorder: TelemetryRecorder;

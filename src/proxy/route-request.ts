@@ -12,7 +12,7 @@ import {
   conversationStore,
 } from "../telemetry";
 import { ProxyResponse } from "./proxy-response";
-import { logger } from "../hive/shared/logger";
+import { logger } from "../shared/logger";
 
 type RouteRequestOptions = {
   upstreamUrl: string;

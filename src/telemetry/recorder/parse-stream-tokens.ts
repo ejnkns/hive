@@ -1,5 +1,5 @@
 import { Transform } from "node:stream";
-import { logger } from "../../hive/shared/logger";
+import { logger } from "../../shared/logger";
 
 type StreamDelta = {
   content?: string;

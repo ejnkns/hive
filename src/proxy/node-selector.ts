@@ -1,7 +1,7 @@
-import { calculateNodeScore, type ProviderModelNode } from "../telemetry";
+import { calculateNodeScore, type Node } from "../telemetry";
 import type { RequestMetric } from "../telemetry";
 import { routingMemory } from "./routing-memory";
-import { logger } from "../hive/shared/logger";
+import { logger } from "../shared/logger";
 
 export type HiveRoutingConfig = {
   strategy: string;
@@ -19,14 +19,14 @@ export function getHiveConfig(): HiveRoutingConfig {
 }
 
 export function selectBestNode(
-  nodes: ProviderModelNode[],
+  nodes: Node[],
   getMetricsForNode: (compoundKey: string) => RequestMetric[],
   requiredFeatures: string[] = [],
   sessionId?: string
-): ProviderModelNode | null {
+): Node | null {
   const config = getHiveConfig();
   const candidates: {
-    node: ProviderModelNode;
+    node: Node;
     score: number;
     compoundKey: string;
   }[] = [];

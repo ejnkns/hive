@@ -1,8 +1,5 @@
 import { PassThrough, Readable } from "node:stream";
-import {
-  normalizeError,
-  type NormalizedError,
-} from "../utils/error-normalizer";
+import { normalizeError, type NormalizedError } from "./error-normalizer";
 
 const MAX_ERROR_BODY = 10_000;
 

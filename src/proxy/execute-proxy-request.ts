@@ -1,19 +1,16 @@
 import { selectBestNode } from "./node-selector";
 import { routingMemory } from "./routing-memory";
-import type { ProviderModelNode } from "../telemetry";
+import type { Node } from "../telemetry";
 import type { RequestMetric } from "../telemetry";
 import { ProxyResponse } from "./proxy-response";
-import { logger } from "../hive/shared/logger";
+import { logger } from "../shared/logger";
 
 export type FailoverContext = {
-  nodes: ProviderModelNode[];
+  nodes: Node[];
   originalPayload: string;
   requiredFeatures: string[];
   getMetricsForNode: (compoundKey: string) => RequestMetric[];
-  dispatchRequest: (
-    node: ProviderModelNode,
-    payload: string
-  ) => Promise<ProxyResponse>;
+  dispatchRequest: (node: Node, payload: string) => Promise<ProxyResponse>;
   sessionId?: string;
 };
 

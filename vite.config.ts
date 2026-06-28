@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  root: "src/hive",
+  root: "src/",
   build: {
     outDir: "../../dist/hive",
     emptyOutDir: true,

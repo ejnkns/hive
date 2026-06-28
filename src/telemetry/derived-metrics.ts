@@ -1,5 +1,5 @@
 import type { RequestMetric } from "./request-metric";
-import { ERROR_PENALTIES } from "./weights";
+import { ERROR_PENALTIES } from "./error-penalties";
 import { percentile, mean } from "./stats";
 
 export type DerivedMetrics = {

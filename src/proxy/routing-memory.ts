@@ -1,8 +1,8 @@
 import { CircuitBreaker } from "./routing-memory/circuit-breaker";
 import { FeatureDiscovery } from "./routing-memory/feature-discovery";
 import { SessionRegistry } from "./routing-memory/session-registry";
-import type { NormalizedErrorType } from "../utils/error-normalizer";
-import { logger } from "../hive/shared/logger";
+import type { NormalizedErrorType } from "./error-normalizer";
+import { logger } from "../shared/logger";
 
 const CIRCUIT_BREAKER_COOLDOWN_MS = 30_000;
 

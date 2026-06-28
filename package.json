@@ -4,14 +4,16 @@
   "description": "Lightweight local proxy daemon routing CLI agent traffic to free LLM providers",
   "type": "module",
   "bin": {
-    "hive": "dist/hive.js"
+    "hive": "dist/main.js"
   },
   "scripts": {
-    "hive": "node --import tsx --env-file=.env --watch src/hive.ts",
+    "hive": "node --import tsx --env-file=.env --watch src/main.ts",
     "ui": "vite",
     "dev": "npm run hive & npm run ui",
-    "build": "tsc && vite build",
-    "start": "node --env-file=.env dist/hive.js",
+    "build:tsc": "tsc",
+    "build:ui": "vite build",
+    "build": "npm run build:tsc && npm run build:ui",
+    "start": "node --env-file=.env dist/main.js",
     "test": "node --import tsx --env-file=.env --test src/**/*.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
