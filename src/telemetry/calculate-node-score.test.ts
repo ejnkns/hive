@@ -1,6 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import { calculateNodeScore, type ProviderModelNode } from "./score";
+import {
+  calculateNodeScore,
+  type ProviderModelNode,
+} from "./calculate-node-score";
 import type { RequestMetric } from "./request-metric";
 
 function mockMetric(overrides: Partial<RequestMetric>): RequestMetric {

@@ -1,7 +1,7 @@
 import type { RequestMetric } from "./request-metric";
 import { loadCache, saveCache, type ModelScore } from "./persist";
 import { applyWindow } from "./window";
-import { calculateNodeScore } from "./score";
+import { calculateNodeScore } from "./calculate-node-score";
 import { computeDerivedMetrics } from "./derived-metrics";
 import { logger } from "../hive/shared/logger";
 

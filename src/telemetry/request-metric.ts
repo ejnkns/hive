@@ -30,6 +30,7 @@ export type RequestMetric = {
 
   statusCode: number;
   errorType: ErrorType;
+  errorBody?: string;
   success: boolean;
 
   source: MetricSource;
