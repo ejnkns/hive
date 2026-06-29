@@ -1,5 +1,4 @@
-import { allProviders, type Provider } from "../providers/registry";
-import { loadModelCacheSync } from "../providers/model-discovery";
+import { providers as allProviders, loadModelCacheSync, type Provider } from "../providers";
 
 export function loadProviders(): ReadonlyArray<Provider> {
   const cache = loadModelCacheSync();

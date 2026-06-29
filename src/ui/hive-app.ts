@@ -1,11 +1,5 @@
-import type {
-  ProviderData,
-  MetricData,
-  ConversationData,
-  AvailableProvider,
-  OverrideState,
-} from "./types";
-import { logger, type LogEntry } from "../shared/logger";
+import { type LogEntry, logger } from "../shared/logger";
+import type { AvailableProvider, ConversationData, MetricData, OverrideState, ProviderData } from "./types";
 import "./hive-header";
 import "./hive-stats";
 import "./hive-providers";
@@ -48,9 +42,7 @@ type TelemetryData = {
   bestScore: number | null;
 };
 
-type WsMessage =
-  | { type: "init" | "update"; data: TelemetryData }
-  | { type: "log"; data: LogEntry };
+type WsMessage = { type: "init" | "update"; data: TelemetryData } | { type: "log"; data: LogEntry };
 
 // ─── Element type helpers ───────────────────────────────────────────────────
 
@@ -146,15 +138,11 @@ export class HiveApp extends HTMLElement {
           allMetrics: MetricData[];
         }>
       ).detail;
-      const overlay = this.shadow.querySelector(
-        "hive-detail-overlay"
-      ) as unknown as DetailOverlayEl | null;
+      const overlay = this.shadow.querySelector("hive-detail-overlay") as DetailOverlayEl | null;
       overlay?.show(metric, allMetrics);
     });
 
-    this.addEventListener("override-set", ((
-      e: CustomEvent<{ provider: string; model: string }>
-    ) => {
+    this.addEventListener("override-set", ((e: CustomEvent<{ provider: string; model: string }>) => {
       this.setOverride(e.detail.provider, e.detail.model);
     }) as EventListener);
 
@@ -183,10 +171,7 @@ export class HiveApp extends HTMLElement {
     try {
       this.ws = new WebSocket(url);
     } catch (e) {
-      logger.error(
-        `Couldn't create a new WebSocket on the client. URL: ${url}`,
-        e
-      );
+      logger.error(`Couldn't create a new WebSocket on the client. URL: ${url}`, e);
       this.scheduleReconnect();
       return;
     }
@@ -234,9 +219,7 @@ export class HiveApp extends HTMLElement {
 
   private handleMessage(msg: WsMessage) {
     if (msg.type === "log") {
-      const logsEl = this.shadow.querySelector(
-        "hive-logs"
-      ) as unknown as LogsEl | null;
+      const logsEl = this.shadow.querySelector("hive-logs") as LogsEl | null;
       logsEl?.addLog(msg.data);
       return;
     }
@@ -254,9 +237,7 @@ export class HiveApp extends HTMLElement {
     this._availableProviders = data.availableProviders;
 
     const bestEntry =
-      data.providers
-        .filter((p) => p.keyConfigured)
-        .sort((a, b) => b.stabilityScore - a.stabilityScore)[0] ?? null;
+      data.providers.filter((p) => p.keyConfigured).sort((a, b) => b.stabilityScore - a.stabilityScore)[0] ?? null;
 
     let bestProvider: string | null = null;
     let bestModel: string | null = null;
@@ -286,19 +267,12 @@ export class HiveApp extends HTMLElement {
     const total = data.metrics.length;
     const okCount = data.metrics.filter((r) => r.success).length;
     const rate = total > 0 ? Math.round((okCount / total) * 100) : 100;
-    const configuredNames = new Set(
-      data.providers.filter((x) => x.keyConfigured).map((x) => x.name)
-    );
+    const configuredNames = new Set(data.providers.filter((x) => x.keyConfigured).map((x) => x.name));
     const providersCount = configuredNames.size;
     const flights = data.metrics.filter((r) => r.success).map((r) => r.ttft);
-    const avgFlight =
-      flights.length > 0
-        ? Math.round(flights.reduce((a, b) => a + b, 0) / flights.length)
-        : null;
+    const avgFlight = flights.length > 0 ? Math.round(flights.reduce((a, b) => a + b, 0) / flights.length) : null;
 
-    const statsElement = this.shadow.querySelector(
-      "hive-stats"
-    ) as unknown as StatsEl | null;
+    const statsElement = this.shadow.querySelector("hive-stats") as unknown as StatsEl | null;
     if (statsElement) {
       statsElement.data = {
         traffic: total,
@@ -321,9 +295,7 @@ export class HiveApp extends HTMLElement {
       disabledFeatures: x.disabledFeatures,
     }));
 
-    const providersElement = this.shadow.querySelector(
-      "hive-providers"
-    ) as unknown as ProvidersEl | null;
+    const providersElement = this.shadow.querySelector("hive-providers") as unknown as ProvidersEl | null;
     if (providersElement) {
       providersElement.metrics = data.metrics;
       providersElement.conversations = data.conversations;
@@ -347,9 +319,7 @@ export class HiveApp extends HTMLElement {
     bestModel: string | null = null,
     bestScore: number | null = null
   ) {
-    const header = this.shadow.querySelector(
-      "hive-header"
-    ) as unknown as HeaderEl | null;
+    const header = this.shadow.querySelector("hive-header") as unknown as HeaderEl | null;
     if (header) {
       header.data = {
         online,
@@ -375,9 +345,7 @@ export class HiveApp extends HTMLElement {
 
   clearOverride(): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(
-        JSON.stringify({ type: "override", provider: null, model: null })
-      );
+      this.ws.send(JSON.stringify({ type: "override", provider: null, model: null }));
     }
   }
 }

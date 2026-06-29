@@ -1,12 +1,13 @@
-import type { RequestMetric } from "./request-metric";
-import { loadCache, saveCache, type ModelScore } from "./cache";
-import { applyWindow } from "./sliding-window";
+import { logger } from "../shared/logger";
+import { loadCache, type ModelScore, saveCache } from "./cache";
 import { calculateNodeScore } from "./calculate-node-score";
 import { computeDerivedMetrics } from "./derived-metrics";
-import { logger } from "../shared/logger";
+import type { RequestMetric } from "./request-metric";
+import { applyWindow } from "./sliding-window";
 
 const FLUSH_INTERVAL_MS = 12_000;
 
+/** @package */
 export class TelemetryRecorder {
   private buffer: RequestMetric[] = [];
   private flushTimer: ReturnType<typeof setInterval> | null = null;
@@ -71,10 +72,7 @@ export class TelemetryRecorder {
       scores.push({
         provider,
         model,
-        score: calculateNodeScore(
-          { providerName: provider, modelName: model },
-          windowed
-        ),
+        score: calculateNodeScore({ providerName: provider, modelName: model }, windowed),
         derived: computeDerivedMetrics(windowed),
         updatedAt: Date.now(),
       });

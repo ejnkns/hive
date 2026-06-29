@@ -1,6 +1,9 @@
 export {
+  discoverAndCacheModels,
+  loadModelCacheSync,
+} from "./providers/model-discovery";
+export {
   allProviders as providers,
-  type Provider,
   buildChatEndpoint,
+  type Provider,
 } from "./providers/registry";
-export { discoverAndCacheModels } from "./providers/model-discovery";

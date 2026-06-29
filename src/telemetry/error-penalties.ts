@@ -1,3 +1,4 @@
+/** @package */
 export const ERROR_PENALTIES: Record<string, number | undefined> = {
   "rate-limited": 0.5,
   "server-error": 1.0,

@@ -1,5 +1,5 @@
-import type { Provider } from "../providers/registry";
 import type { IncomingMessage } from "node:http";
+import type { Provider } from "../providers";
 
 export type MutatedRequest = {
   headers: Record<string, string>;

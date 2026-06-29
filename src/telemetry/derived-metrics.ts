@@ -1,7 +1,8 @@
-import type { RequestMetric } from "./request-metric";
 import { ERROR_PENALTIES } from "./error-penalties";
-import { percentile, mean } from "./stats";
+import type { RequestMetric } from "./request-metric";
+import { mean, percentile } from "./stats";
 
+/** @package */
 export type DerivedMetrics = {
   requestCount: number;
 
@@ -31,16 +32,12 @@ function sortedLatencies(metrics: RequestMetric[]): number[] {
   return metrics.map((m) => m.ttft).sort((a, b) => a - b);
 }
 
-export function computeDerivedMetrics(
-  metrics: RequestMetric[]
-): DerivedMetrics {
+/** @package */
+export function computeDerivedMetrics(metrics: RequestMetric[]): DerivedMetrics {
   const n = metrics.length;
 
-  const perfMetrics = metrics.filter(
-    (m) => m.success && m.source !== "heartbeat"
-  );
-  const successMetrics =
-    perfMetrics.length > 0 ? perfMetrics : metrics.filter((m) => m.success);
+  const perfMetrics = metrics.filter((m) => m.success && m.source !== "heartbeat");
+  const successMetrics = perfMetrics.length > 0 ? perfMetrics : metrics.filter((m) => m.success);
   const hasSuccessMetrics = successMetrics.length > 0;
 
   const latencies = sortedLatencies(successMetrics);
@@ -58,9 +55,7 @@ export function computeDerivedMetrics(
     })
     .sort((a, b) => a - b);
 
-  const thinkingTimes = successMetrics
-    .filter((m) => m.thinkingTime !== null)
-    .map((m) => m.thinkingTime as number);
+  const thinkingTimes = successMetrics.filter((m) => m.thinkingTime !== null).map((m) => m.thinkingTime as number);
 
   const successful = metrics.filter((m) => m.success).length;
 
@@ -82,9 +77,7 @@ export function computeDerivedMetrics(
   }
   const weightedErrorRate = n > 0 ? weightedErrors / n : 0;
 
-  const truncated = successMetrics.filter(
-    (m) => m.finishReason === "length"
-  ).length;
+  const truncated = successMetrics.filter((m) => m.finishReason === "length").length;
   const refused = successMetrics.filter((m) => m.refused).length;
   const successCount = successMetrics.length;
 
@@ -100,8 +93,7 @@ export function computeDerivedMetrics(
     meanTtft,
     jitterTtft,
     meanTokensPerSecond: throughputs.length > 0 ? mean(throughputs) : null,
-    p50TokensPerSecond:
-      throughputs.length > 0 ? percentile(throughputs, 0.5) : null,
+    p50TokensPerSecond: throughputs.length > 0 ? percentile(throughputs, 0.5) : null,
     successRate: n > 0 ? successful / n : 0,
     errorRateByType,
     weightedErrorRate,

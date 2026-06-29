@@ -1,10 +1,11 @@
+import { promises as fs } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { promises as fs } from "node:fs";
-import type { RequestMetric } from "./request-metric";
-import type { DerivedMetrics } from "./derived-metrics";
 import { logger } from "../shared/logger";
+import type { DerivedMetrics } from "./derived-metrics";
+import type { RequestMetric } from "./request-metric";
 
+/** @package */
 export type ModelScore = {
   provider: string;
   model: string;
@@ -25,9 +26,7 @@ async function ensureHiveDir(): Promise<void> {
   try {
     await fs.mkdir(HIVE_DIR, { recursive: true });
   } catch (err: unknown) {
-    logger.debug(
-      `cache: failed to create telemetry directory: ${err instanceof Error ? err.message : String(err)}`
-    );
+    logger.debug(`cache: failed to create telemetry directory: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -42,9 +41,7 @@ export async function loadCache(): Promise<TelemetryCache> {
     }
     logger.debug(`cache: loadCache — invalid shape, starting fresh`);
   } catch (err: unknown) {
-    logger.debug(
-      `cache: loadCache — not found or parse error: ${err instanceof Error ? err.message : String(err)}`
-    );
+    logger.debug(`cache: loadCache — not found or parse error: ${err instanceof Error ? err.message : String(err)}`);
     // file doesn't exist or invalid — start fresh
   }
   return { metrics: [], scores: [] };
@@ -58,8 +55,6 @@ export async function saveCache(cache: TelemetryCache): Promise<void> {
       `cache: saveCache — wrote ${String(cache.metrics.length)} metrics, ${String(cache.scores.length)} scores`
     );
   } catch (err: unknown) {
-    logger.debug(
-      `cache: saveCache — failed to write: ${err instanceof Error ? err.message : String(err)}`
-    );
+    logger.debug(`cache: saveCache — failed to write: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
