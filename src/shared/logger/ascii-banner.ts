@@ -18,9 +18,10 @@ export function printBanner() {
            \`-=-=-=-=-\`
                                   ^^${RESET}`;
   const title = `${YELLOW}[ ${BOLD}h i v e${RESET}${YELLOW} ]${RESET}`;
-  const version = ""; //`${GRAY}v${process.env.npm_package_version ?? ""}${RESET}`;
+  const version = `${GRAY}v${process.env.npm_package_version ?? "0.1.0"}${RESET}`;
   const hr = `${GRAY}${(() => "─".repeat(width))()}${RESET}`;
-  const flyPath = `                            ${YELLOW}${BOLD}h i v e${RESET}
+  const flyPath = `
+                             ${YELLOW}[ ${BOLD}h i v e${RESET} ${YELLOW}]${RESET}
    ,-.      .' '.        .\` 
    \\_/      .   .       .
 ${YELLOW}:${RESET}${BLACK}>${YELLOW}(${RESET}${BLACK}|${RESET}${YELLOW}|${RESET}${BLACK}|${RESET}${BLACK}${RESET}${YELLOW}}${RESET}.      .        .
@@ -32,8 +33,7 @@ ${YELLOW}:${RESET}${BLACK}>${YELLOW}(${RESET}${BLACK}|${RESET}${YELLOW}|${RESET}
              ${title}
 ${version}                         ${YELLOW}^^${RESET}`;
 
-  const narrow = `${flyPath}
-${version}`;
+  const narrow = `${flyPath}${version}`;
 
   if (width > 64) {
     console.log(wide);
