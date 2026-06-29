@@ -4,16 +4,16 @@
   "description": "Lightweight local proxy daemon routing CLI agent traffic to free LLM providers",
   "type": "module",
   "bin": {
-    "hive": "dist/main.js"
+    "hive": "dist/main.mjs"
   },
   "scripts": {
-    "hive": "node --import tsx --env-file=.env --watch src/main.ts",
-    "ui": "vite",
-    "dev": "npm run hive & npm run ui",
-    "build:tsc": "tsc",
+    "dev:ui": "vite",
+    "dev:server": "tsdown --watch --on-success \"node --env-file=.env dist/main.mjs\"",
+    "dev": "npm run server:dev & npm run ui:dev",
+    "build:server": "tsdown",
     "build:ui": "vite build",
-    "build": "npm run build:tsc && npm run build:ui",
-    "start": "node --env-file=.env dist/main.js",
+    "build": "npm run build:server && npm run build:ui",
+    "start": "node --env-file=.env dist/main.mjs",
     "test": "node --import tsx --env-file=.env --test src/**/*.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
@@ -26,17 +26,16 @@
     "@fastify/websocket": "^11.2.0",
     "fastify": "^5.9.0",
     "httpxy": "^0.5.3",
-    "lru-cache": "^11.5.1",
-    "ws": "^8.21.0"
+    "lru-cache": "^11.5.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@fastify/vite": "^9.1.0",
     "@types/node": "^26.0.1",
     "@types/ws": "^8.18.1",
     "eslint": "^10.5.0",
     "lefthook": "^2.1.9",
     "prettier": "^3.8.4",
+    "tsdown": "^0.22.3",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.62.0",

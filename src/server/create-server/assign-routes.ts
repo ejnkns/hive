@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { FastifyServer } from "../create-server";
 import { addLogListener, getRecentLogs, logger } from "../../shared/logger";
@@ -266,10 +266,10 @@ export function assignRoutes(server: FastifyServer) {
 }
 
 const __filename = fileURLToPath(import.meta.url);
-
-const __dirname = join(__filename, "..");
-const indexPath = join(__dirname, "index.html");
-const assetsDir = join(__dirname, "assets");
+const __dirname = dirname(__filename);
+const uiBuildDir = join(__dirname, "ui");
+const indexPath = join(uiBuildDir, "index.html");
+const assetsDir = join(uiBuildDir, "assets");
 
 const MIME_TYPES: Record<string, string> = {
   js: "text/javascript",
