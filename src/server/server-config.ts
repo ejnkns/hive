@@ -6,7 +6,11 @@ export type ServerConfig = {
 const DEFAULT_PORT = 8153;
 const DEFAULT_HOST = "127.0.0.1";
 
-export const SERVER_CONFIG: ServerConfig = {
-  port: DEFAULT_PORT,
-  host: DEFAULT_HOST,
-};
+export function getServerConfig(overrides?: Partial<ServerConfig>): ServerConfig {
+  return {
+    port: overrides?.port ?? (Number(process.env.HIVE_PORT) || DEFAULT_PORT),
+    host: overrides?.host ?? (process.env.HIVE_HOST || DEFAULT_HOST),
+  };
+}
+
+export const SERVER_CONFIG: ServerConfig = getServerConfig();

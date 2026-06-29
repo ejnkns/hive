@@ -1,22 +1,18 @@
-import { hiveCore } from "./hive-core";
-import { createServer, listen, SERVER_CONFIG } from "./server";
-import { printBanner } from "./shared/logger/ascii-banner";
+import "dotenv/config";
+import { cac } from "cac";
+import { startServer } from "./main/start-server";
 
-printBanner();
+const cli = cac("hive");
 
-const server = await createServer();
-listen(server, SERVER_CONFIG);
+cli
+  .command("start", "Start the hive proxy (default)")
+  .option("--port <port>", "Port to listen on")
+  .option("--host <host>", "Host to bind to")
+  .action((options) => {
+    const port = options.port ? Number(options.port) : undefined;
+    const host = options.host as string | undefined;
+    startServer({ port, host });
+  });
 
-hiveCore.start();
-
-process.on("SIGINT", () => {
-  hiveCore.shutdown();
-  server.close(() => process.exit(0));
-});
-
-process.on("SIGTERM", () => {
-  hiveCore.shutdown();
-  server.close(() => process.exit(0));
-});
-
-export { server as _server, hiveCore as _hiveCore };
+cli.help();
+cli.parse();
