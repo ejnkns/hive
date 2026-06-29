@@ -1,7 +1,27 @@
 {
   "name": "hive",
   "version": "0.1.0",
-  "description": "Lightweight local proxy daemon routing CLI agent traffic to free LLM providers",
+  "description": "Lightweight local proxy daemon routing OpenAI-compatible agent traffic to free model providers",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ejnkns/hive.git"
+  },
+  "homepage": "https://github.com/ejnkns/hive.git",
+  "keywords": [
+    "proxy",
+    "llm",
+    "openai-compatible",
+    "routing",
+    "failover"
+  ],
+  "engines": {
+    "node": ">=22.18.0"
+  },
   "type": "module",
   "bin": {
     "hive": "dist/main.mjs"
@@ -9,7 +29,7 @@
   "scripts": {
     "dev:ui": "vite",
     "dev:server": "tsdown --watch --on-success \"node --env-file=.env dist/main.mjs\"",
-    "dev": "npm run server:dev & npm run ui:dev",
+    "dev": "npm run dev:server & npm run dev:ui",
     "build:server": "tsdown",
     "build:ui": "vite build",
     "build": "npm run build:server && npm run build:ui",
@@ -20,10 +40,13 @@
     "lint:fix": "biome lint --write .",
     "format": "biome format --write .",
     "format:check": "biome format .",
+    "prepublishOnly": "npm run build",
     "prepare": "lefthook install"
   },
   "dependencies": {
     "@fastify/websocket": "^11.2.0",
+    "cac": "^6.7.14",
+    "dotenv": "^16.5.0",
     "fastify": "^5.9.0",
     "httpxy": "^0.5.3",
     "lru-cache": "^11.5.1"

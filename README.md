@@ -21,42 +21,13 @@ _sting and they die,_
 _replaced with the alive._
 -->
 
-A lightweight OpenAI-compatible proxy daemon with LLM routing and automatic failover, hiding the volatility of free LLM endpoints by continuously monitoring quality and swapping providers and models automatically, according to your preferences.
+Automatically route OpenAI-compatible agent traffic to free model providers.
 
-```
-[Coding CLI (OpenCode, Claude, Gemini, etc.)]
-     │
-     v
-[hive:Proxy]
-     │
-     ├──> Parses incoming payload
-     │
-     ├──> Mutate headers (inject model provider API keys)
-     │
-     v
-[hive:Node Selector] ──> Score & select best provider:model
-     │
-     v
-[hive:Upstream Stream] ──> Stream OK? ───(Yes)──> Pipe back to client
-     │                       │
-     │                     (No)
-     │                       │
-     │                       v
-     │              Normalize error
-     │                       │
-     │              ┌────────┴────────┐
-     │              v                 v
-     │    unsupported-feature    rate-limit / 5xx / auth
-     │         │                      │
-     │    mark disabled           trip circuit breaker
-     │         │                      │
-     v         v                      v
-[hive:Failover] ────> retry next node (max 3 attempts)
-```
+A lightweight proxy daemon with agent routing and automatic failover, hiding the volatility of free model providers by continuously monitoring quality and swapping providers and models automatically.
 
 ### Dynamic Model Routing
 
-- Discards the client's model field; routes to the best-scoring provider:model based on real-time telemetry (TTFT, throughput, error rate)
+- Discards the client's model field; routes to the best scoring `provider:model` based on real-time telemetry (TTFT, throughput, error rate)
 - Session affinity: consecutive requests from the same session stick to the same `provider:model` node, unless a better-scoring one exists
 - Circuit breaker: failing providers returning `429`/`503`/`401` are temporarily taken out of rotation
 - Feature discovery: learns which `provider:model` nodes don't support features like `tools` or `response_format`, stops sending incompatible requests

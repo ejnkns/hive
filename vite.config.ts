@@ -9,10 +9,10 @@ export default defineConfig({
   server: {
     hmr: {
       server: undefined,
-      port: 5173,
-      clientPort: 5173,
+      port: 8153,
+      clientPort: 8153,
     },
-    port: 5173,
+    port: 8153,
     proxy: {
       "/ws": {
         target: "ws://127.0.0.1:8153",
