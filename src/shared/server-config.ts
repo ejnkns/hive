@@ -12,5 +12,3 @@ export function getServerConfig(overrides?: Partial<ServerConfig>): ServerConfig
     host: overrides?.host ?? (process.env.HIVE_HOST || DEFAULT_HOST),
   };
 }
-
-export const SERVER_CONFIG: ServerConfig = getServerConfig();

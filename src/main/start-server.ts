@@ -1,6 +1,7 @@
 import { HiveCore } from "../hive-core";
-import { createServer, getServerConfig, listen, type ServerConfig } from "../server";
+import { createServer, listen } from "../server";
 import { printBanner } from "../shared/logger/ascii-banner";
+import { getServerConfig, type ServerConfig } from "../shared/server-config";
 
 export async function startServer(overrides?: Partial<ServerConfig>) {
   printBanner();

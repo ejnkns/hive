@@ -5,7 +5,7 @@ import "./hive-stats";
 import "./hive-providers";
 import "./hive-detail-overlay";
 import "./hive-logs";
-import { SERVER_CONFIG } from "../server/server-config";
+import { getServerConfig } from "../shared/server-config";
 
 type WebSocketType = typeof WebSocket.prototype;
 
@@ -166,7 +166,8 @@ export class HiveApp extends HTMLElement {
     }
 
     const protocol = window.location.protocol === "http:" ? "ws:" : "wss:";
-    const url = `${protocol}//${SERVER_CONFIG.host}:${String(SERVER_CONFIG.port)}/ws`;
+    const cfg = getServerConfig();
+    const url = `${protocol}//${cfg.host}:${String(cfg.port)}/ws`;
 
     try {
       this.ws = new WebSocket(url);

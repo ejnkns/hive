@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import { logger } from "../shared/logger";
+import type { ServerConfig } from "../shared/server-config";
 import { assignRoutes } from "./create-server/assign-routes";
-import { ServerConfig } from "./server-config";
 import { registerPlugins } from "./create-server/register-plugins";
 
 export async function createServer(): Promise<FastifyServer> {

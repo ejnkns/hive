@@ -1,22 +1,14 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { FastifyServer } from "../create-server";
-import { addLogListener, getRecentLogs, logger } from "../../shared/logger";
-import { hiveCore } from "../../hive-core";
-import {
-  loadCache,
-  telemetryRecorder,
-  conversationStore,
-} from "../../telemetry";
-import { routingMemory } from "../../proxy";
-import { SERVER_CONFIG } from "../server-config";
-import {
-  getOverride,
-  setOverride as setOverride,
-  clearOverride as clearOverride,
-} from "../override";
 import type { WebSocket } from "ws";
+import { hiveCore } from "../../hive-core";
+import { routingMemory } from "../../proxy";
+import { addLogListener, getRecentLogs, logger } from "../../shared/logger";
+import { getServerConfig } from "../../shared/server-config";
+import { conversationStore, loadCache, telemetryRecorder } from "../../telemetry";
+import type { FastifyServer } from "../create-server";
+import { clearOverride, getOverride, setOverride } from "../override";
 
 export function assignRoutes(server: FastifyServer) {
   const activeSockets = new Set<WebSocket>();
@@ -31,9 +23,7 @@ export function assignRoutes(server: FastifyServer) {
       const providerModels = p.models.length > 0 ? p.models : [p.defaultModel];
 
       return providerModels.map((model) => {
-        const matchingState =
-          states.find((s) => s.provider === p.name && s.model === model) ??
-          null;
+        const matchingState = states.find((s) => s.provider === p.name && s.model === model) ?? null;
         const compKey = `${p.name}:${model}`;
 
         return {
@@ -73,9 +63,7 @@ export function assignRoutes(server: FastifyServer) {
     }));
 
     const bestEntry =
-      providers
-        .filter((p) => p.keyConfigured)
-        .sort((a, b) => b.stabilityScore - a.stabilityScore)[0] ?? null;
+      providers.filter((p) => p.keyConfigured).sort((a, b) => b.stabilityScore - a.stabilityScore)[0] ?? null;
 
     const bestProvider = bestEntry.name;
     const bestModel = bestEntry.model;
@@ -88,8 +76,8 @@ export function assignRoutes(server: FastifyServer) {
       type: "update",
       data: {
         providers,
-        serverPort: String(SERVER_CONFIG.port),
-        serverHost: SERVER_CONFIG.host,
+        serverPort: String(getServerConfig().port),
+        serverHost: getServerConfig().host,
         lastProvider: lastUsed.provider,
         lastModel: lastUsed.model,
         overrideActive: overrideState !== null,
@@ -161,12 +149,7 @@ export function assignRoutes(server: FastifyServer) {
 
     socket.on("message", (msg) => {
       try {
-        const text =
-          typeof msg === "string"
-            ? msg
-            : Buffer.isBuffer(msg)
-              ? msg.toString()
-              : JSON.stringify(msg);
+        const text = typeof msg === "string" ? msg : Buffer.isBuffer(msg) ? msg.toString() : JSON.stringify(msg);
         const parsed = JSON.parse(text) as Record<string, unknown> | null;
         if (parsed?.type === "override") {
           const provider = parsed.provider;
@@ -181,9 +164,7 @@ export function assignRoutes(server: FastifyServer) {
           void broadcastTelemetry();
         }
       } catch {
-        logger.debug(
-          `received WS message: ${typeof msg === "string" ? msg : JSON.stringify(msg)}`
-        );
+        logger.debug(`received WS message: ${typeof msg === "string" ? msg : JSON.stringify(msg)}`);
       }
     });
   });
@@ -210,19 +191,14 @@ export function assignRoutes(server: FastifyServer) {
   server.post("/v1/chat/completions", async (request, reply) => {
     const requestId = crypto.randomUUID();
     logger.info(`request ${requestId} — handling chat completion`);
-    const result = await hiveCore.handleChatCompletion(
-      request.body as Record<string, unknown>,
-      request.headers
-    );
+    const result = await hiveCore.handleChatCompletion(request.body as Record<string, unknown>, request.headers);
 
     if (!result.success) {
       logger.error(
         `request ${requestId} — chat completion failed`,
         `${result.error ?? ""} (${String(result.statusCode ?? "")})`
       );
-      return reply
-        .status(result.statusCode ?? 500)
-        .send({ error: result.error });
+      return reply.status(result.statusCode ?? 500).send({ error: result.error });
     }
 
     logger.info(
