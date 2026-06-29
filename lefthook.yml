@@ -1,10 +1,8 @@
 pre-commit:
   jobs:
-    - name: prettier
-      run: npx prettier --ignore-unknown --write {staged_files} && git add {staged_files}
-    - name: eslint
-      glob: "*.{ts,js}"
-      run: npx eslint {staged_files} && git add {staged_files}
+    - name: biome
+      glob: "*.{ts,js,tsx,jsx,json,jsonc}"
+      run: npx @biomejs/biome check --write --no-errors-on-unmatched {staged_files} && git add {staged_files}
     - name: typecheck
       glob: "*.{ts,js}"
       run: npm run typecheck
