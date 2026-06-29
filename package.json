@@ -28,7 +28,7 @@
   },
   "scripts": {
     "dev:ui": "vite",
-    "dev:server": "tsdown --watch --on-success \"node --env-file=.env dist/main.mjs\"",
+    "dev:server": "tsdown --watch --on-success \"node --env-file=.env dist/main.mjs start\"",
     "dev": "npm run dev:server & npm run dev:ui",
     "build:server": "tsdown",
     "build:ui": "vite build",
