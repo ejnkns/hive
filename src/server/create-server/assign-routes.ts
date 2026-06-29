@@ -181,7 +181,6 @@ export function assignRoutes(server: FastifyServer) {
   server.get("/", async (_request, reply) => {
     if (existsSync(indexPath)) {
       const html = readFileSync(indexPath, "utf-8");
-      console.log("Serving index.html");
       reply.type("text/html");
       return reply.send(html);
     }

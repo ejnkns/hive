@@ -7,4 +7,5 @@ export default defineConfig({
   format: "esm",
   platform: "node",
   sourcemap: true,
+  banner: "#!/usr/bin/env node",
 });

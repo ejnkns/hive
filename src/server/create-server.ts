@@ -17,7 +17,7 @@ export function listen(server: FastifyServer, config: ServerConfig) {
       logger.error("failed to start server", err);
       process.exit(1);
     }
-    logger.info(`listening on http://${config.host}:${String(config.port)}`);
+    logger.info(`started at: http://${config.host}:${String(config.port)}`);
   });
 }
 
