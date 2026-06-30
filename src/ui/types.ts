@@ -98,4 +98,10 @@ export type HeaderData = {
   bestProvider: string | null;
   bestModel: string | null;
   bestScore: number | null;
+  routingStrategy: string;
+  contextWindowWeight: number;
+  traffic: number;
+  successRate: number;
+  activeProviders: number;
+  avgLatency: number | null;
 };

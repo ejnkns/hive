@@ -20,6 +20,12 @@ export class HiveHeader extends HTMLElement {
     bestProvider: null,
     bestModel: null,
     bestScore: null,
+    routingStrategy: "balanced",
+    contextWindowWeight: 0,
+    traffic: 0,
+    successRate: 100,
+    activeProviders: 0,
+    avgLatency: null,
   };
   private _pendingProvider: string | null = null;
   private _pendingModel: string | null = null;
@@ -56,23 +62,17 @@ export class HiveHeader extends HTMLElement {
   private updateThemeBtn() {
     const btn = this.shadow.querySelector(".theme-btn");
     if (btn) {
-      btn.textContent = document.documentElement.classList.contains("light")
-        ? "dark"
-        : "light";
+      btn.textContent = document.documentElement.classList.contains("light") ? "dark" : "light";
     }
   }
 
   private onProviderChange(): void {
-    const providerSelect =
-      this.shadow.querySelector<HTMLSelectElement>(".provider-select");
+    const providerSelect = this.shadow.querySelector<HTMLSelectElement>(".provider-select");
     if (!providerSelect) return;
     const provider = providerSelect.value;
     if (this._data.override.active) {
-      const modelSelect =
-        this.shadow.querySelector<HTMLSelectElement>(".model-select");
-      const providerData = this._data.availableProviders.find(
-        (p) => p.name === provider
-      );
+      const modelSelect = this.shadow.querySelector<HTMLSelectElement>(".model-select");
+      const providerData = this._data.availableProviders.find((p) => p.name === provider);
       if (providerData && providerData.models.length > 0 && modelSelect) {
         modelSelect.value = providerData.models[0];
       }
@@ -81,11 +81,8 @@ export class HiveHeader extends HTMLElement {
       this._pendingProvider = provider;
       this._pendingModel = null;
       this.render();
-      const modelSelect =
-        this.shadow.querySelector<HTMLSelectElement>(".model-select");
-      const providerData = this._data.availableProviders.find(
-        (p) => p.name === provider
-      );
+      const modelSelect = this.shadow.querySelector<HTMLSelectElement>(".model-select");
+      const providerData = this._data.availableProviders.find((p) => p.name === provider);
       if (modelSelect && providerData && providerData.models.length > 0) {
         modelSelect.value = providerData.models[0];
         this._pendingModel = providerData.models[0];
@@ -98,10 +95,8 @@ export class HiveHeader extends HTMLElement {
   }
 
   private dispatchOverride(): void {
-    const providerSelect =
-      this.shadow.querySelector<HTMLSelectElement>(".provider-select");
-    const modelSelect =
-      this.shadow.querySelector<HTMLSelectElement>(".model-select");
+    const providerSelect = this.shadow.querySelector<HTMLSelectElement>(".provider-select");
+    const modelSelect = this.shadow.querySelector<HTMLSelectElement>(".model-select");
     if (!providerSelect || !modelSelect) return;
     if (!providerSelect.value || !modelSelect.value) return;
     this.dispatchEvent(
@@ -114,10 +109,8 @@ export class HiveHeader extends HTMLElement {
   }
 
   private onClearOverride(): void {
-    const providerSelect =
-      this.shadow.querySelector<HTMLSelectElement>(".provider-select");
-    const modelSelect =
-      this.shadow.querySelector<HTMLSelectElement>(".model-select");
+    const providerSelect = this.shadow.querySelector<HTMLSelectElement>(".provider-select");
+    const modelSelect = this.shadow.querySelector<HTMLSelectElement>(".model-select");
     if (providerSelect?.value) this._pendingProvider = providerSelect.value;
     if (modelSelect?.value) this._pendingModel = modelSelect.value;
     this.dispatchEvent(
@@ -139,20 +132,20 @@ export class HiveHeader extends HTMLElement {
       bestProvider,
       bestModel,
       bestScore,
+      routingStrategy,
+      contextWindowWeight,
+      traffic,
+      successRate,
+      activeProviders,
+      avgLatency,
     } = this._data;
 
     const overrideActive = override.active;
-    const configuredProviders = availableProviders.filter(
-      (p) => p.keyConfigured
-    );
+    const configuredProviders = availableProviders.filter((p) => p.keyConfigured);
 
-    const selectedProvider = overrideActive
-      ? override.provider
-      : (this._pendingProvider ?? lastProvider);
+    const selectedProvider = overrideActive ? override.provider : (this._pendingProvider ?? lastProvider);
 
-    const selectedProviderData = configuredProviders.find(
-      (p) => p.name === selectedProvider
-    );
+    const selectedProviderData = configuredProviders.find((p) => p.name === selectedProvider);
     const models = selectedProviderData?.models ?? [];
 
     let providerOptions = '<option value="">—</option>';
@@ -181,16 +174,19 @@ export class HiveHeader extends HTMLElement {
     }
     let bestLine = "";
     if (bestProvider && bestModel) {
-      const score =
-        bestScore != null
-          ? ` <span class="score">(${bestScore.toFixed(0)}%)</span>`
-          : "";
+      const score = bestScore != null ? ` <span class="score">(${bestScore.toFixed(0)}%)</span>` : "";
       bestLine = `<div class="status-row"><span class="label">Best:</span><span class="prov">${bestProvider}</span><span> / </span><span class="model">${bestModel}</span>${score}</div>`;
     }
     let pinnedLine = "";
     if (overrideActive && override.provider && override.model) {
       pinnedLine = `<div class="status-row"><span class="label">Pinned:</span><span class="prov">${override.provider}</span><span> / </span><span class="model">${override.model}</span></div>`;
     }
+
+    const successColor = successRate < 75 ? "crit" : successRate < 90 ? "warn" : "ok";
+    const trafficStr = traffic > 0 ? String(traffic) : "—";
+    const latencyStr = avgLatency != null ? `${String(avgLatency)}ms` : "—";
+    const strategyLabel =
+      routingStrategy === "latency" ? "LATENCY" : routingStrategy === "quality" ? "QUALITY" : "BALANCED";
 
     this.shadow.innerHTML = `
       <style>
@@ -321,6 +317,39 @@ export class HiveHeader extends HTMLElement {
         .status-row .score {
           color: var(--muted);
         }
+        .badge-strategy {
+          font-size: 0.5625rem;
+          color: var(--accent);
+          background: rgba(var(--accent-rgb), 0.08);
+          padding: 0.125rem 0.375rem;
+          border: 1px solid rgba(var(--accent-rgb), 0.2);
+          margin-left: 0.5rem;
+        }
+        .badge-cw {
+          font-size: 0.5625rem;
+          color: var(--muted);
+          background: rgba(var(--muted-rgb, 120, 120, 120), 0.08);
+          padding: 0.125rem 0.375rem;
+          border: 1px solid rgba(var(--muted-rgb, 120, 120, 120), 0.15);
+        }
+        .stats-bar {
+          display: flex;
+          gap: 0.75rem;
+          font-size: 0.5625rem;
+          color: var(--muted);
+        }
+        .stat b {
+          color: var(--text);
+        }
+        .stat b.crit {
+          color: var(--error);
+        }
+        .stat b.warn {
+          color: var(--warn, #e2a93b);
+        }
+        .stat b.ok {
+          color: var(--success);
+        }
         .logo {
           display: flex;
           align-items: top;
@@ -340,6 +369,14 @@ export class HiveHeader extends HTMLElement {
           <div class="status-row">
             <span class="badge-status ${online ? "on" : "off"}">${online ? "ONLINE" : "OFFLINE"}</span>
             <span class="server-addr">${serverAddr}</span>
+            <span class="badge-strategy">STRATEGY: ${strategyLabel}</span>
+            <span class="badge-cw">CW: ${contextWindowWeight.toFixed(1)}</span>
+          </div>
+          <div class="stats-bar">
+            <span class="stat">TRAFFIC: <b>${trafficStr}</b></span>
+            <span class="stat">SUCCESS: <b class="${successColor}">${String(successRate)}%</b></span>
+            <span class="stat">ACTIVE: <b>${String(activeProviders)}</b></span>
+            <span class="stat">LATENCY: <b>${latencyStr}</b></span>
           </div>
           ${lastLine}
           ${bestLine}
@@ -360,10 +397,8 @@ export class HiveHeader extends HTMLElement {
     this.attachThemeListener();
 
     // Attach override listeners
-    const providerSelect =
-      this.shadow.querySelector<HTMLSelectElement>(".provider-select");
-    const modelSelect =
-      this.shadow.querySelector<HTMLSelectElement>(".model-select");
+    const providerSelect = this.shadow.querySelector<HTMLSelectElement>(".provider-select");
+    const modelSelect = this.shadow.querySelector<HTMLSelectElement>(".model-select");
     const autoBtn = this.shadow.querySelector(".auto-btn");
 
     if (providerSelect) {

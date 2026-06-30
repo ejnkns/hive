@@ -181,6 +181,14 @@ export class HiveApp extends HTMLElement {
       bestScore = bestEntry.stabilityScore;
     }
 
+    const total = data.metrics.length;
+    const okCount = data.metrics.filter((r) => r.success).length;
+    const rate = total > 0 ? Math.round((okCount / total) * 100) : 100;
+    const configuredNames = new Set(data.providers.filter((x) => x.keyConfigured).map((x) => x.name));
+    const providersCount = configuredNames.size;
+    const flights = data.metrics.filter((r) => r.success).map((r) => r.ttft);
+    const avgFlight = flights.length > 0 ? Math.round(flights.reduce((a, b) => a + b, 0) / flights.length) : null;
+
     this.setOnline(
       true,
       data.serverHost,
@@ -191,16 +199,14 @@ export class HiveApp extends HTMLElement {
       this._availableProviders,
       bestProvider,
       bestModel,
-      bestScore
+      bestScore,
+      data.routingStrategy,
+      data.contextWindowWeight,
+      total,
+      rate,
+      providersCount,
+      avgFlight
     );
-
-    const total = data.metrics.length;
-    const okCount = data.metrics.filter((r) => r.success).length;
-    const rate = total > 0 ? Math.round((okCount / total) * 100) : 100;
-    const configuredNames = new Set(data.providers.filter((x) => x.keyConfigured).map((x) => x.name));
-    const providersCount = configuredNames.size;
-    const flights = data.metrics.filter((r) => r.success).map((r) => r.ttft);
-    const avgFlight = flights.length > 0 ? Math.round(flights.reduce((a, b) => a + b, 0) / flights.length) : null;
 
     // shadow DOM template contains hive-stats element
     const statsElement = this.shadow.querySelector("hive-stats") as unknown as StatsEl | null;
@@ -254,7 +260,13 @@ export class HiveApp extends HTMLElement {
     availableProviders: AvailableProvider[] = [],
     bestProvider: string | null = null,
     bestModel: string | null = null,
-    bestScore: number | null = null
+    bestScore: number | null = null,
+    routingStrategy = "balanced",
+    contextWindowWeight = 0,
+    traffic = 0,
+    successRate = 100,
+    activeProviders = 0,
+    avgLatency: number | null = null
   ) {
     // shadow DOM template contains hive-header element
     const header = this.shadow.querySelector("hive-header") as unknown as HeaderEl | null;
@@ -269,6 +281,12 @@ export class HiveApp extends HTMLElement {
         bestProvider,
         bestModel,
         bestScore,
+        routingStrategy,
+        contextWindowWeight,
+        traffic,
+        successRate,
+        activeProviders,
+        avgLatency,
       };
     }
   }
@@ -347,6 +365,12 @@ type HeaderEl = HTMLElement & {
     bestProvider: string | null;
     bestModel: string | null;
     bestScore: number | null;
+    routingStrategy: string;
+    contextWindowWeight: number;
+    traffic: number;
+    successRate: number;
+    activeProviders: number;
+    avgLatency: number | null;
   };
 };
 type StatsEl = HTMLElement & {
