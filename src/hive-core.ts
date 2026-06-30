@@ -3,7 +3,7 @@ import type { PassThrough } from "node:stream";
 import { extractRequiredFeatures } from "./hive-core/extract-required-features";
 import { generateId } from "./hive-core/generateId";
 import { sanitizePayloadForProvider } from "./hive-core/sanitize-payload-for-provider";
-import { buildChatEndpoint, discoverAndCacheModels, type Provider, providers } from "./providers";
+import { buildChatEndpoint, discoverAndCacheModels, getModelId, type Provider, providers } from "./providers";
 import { executeProxyRequest, mutateRequest, ProxyResponse, routeRequest, routingMemory } from "./proxy";
 import { getOverride, loadProviders } from "./server";
 import { logger } from "./shared/logger";
@@ -121,10 +121,14 @@ export class HiveCore {
       Array.isArray(messages) ? (messages as { role: string; content: string }[]) : []
     );
 
-    const nodes: Node[] = qualified.map((p) => ({
-      providerName: p.name,
-      modelName: p.defaultModel,
-    }));
+    const nodes: Node[] = qualified.map((p) => {
+      const defaultEntry = p.models.find((entry) => getModelId(entry) === p.defaultModel);
+      return {
+        providerName: p.name,
+        modelName: p.defaultModel,
+        maxContextTokens: defaultEntry && typeof defaultEntry !== "string" ? defaultEntry.contextLength : undefined,
+      };
+    });
 
     const headers: IncomingHttpHeaders = Object.fromEntries(
       Object.entries(incomingHeaders).filter(
