@@ -1,5 +1,5 @@
-import { describe, it } from "node:test";
 import assert from "node:assert";
+import { describe, it } from "node:test";
 import { calculateNodeScore, type Node } from "./calculate-node-score";
 import type { RequestMetric } from "./request-metric";
 
@@ -20,6 +20,7 @@ function mockMetric(overrides: Partial<RequestMetric>): RequestMetric {
     errorType: null,
     success: true,
     source: "user",
+    toolCallFailed: false,
     ...overrides,
   };
 }
@@ -37,10 +38,7 @@ await describe("Hive Scoring Suite", async () => {
     ];
 
     const score = calculateNodeScore(node, history, "latency", 200);
-    assert.ok(
-      score > 70,
-      `Expected clean velocity scaling score, received: ${String(score)}`
-    );
+    assert.ok(score > 70, `Expected clean velocity scaling score, received: ${String(score)}`);
   });
 
   await it("should grant flexible, protective scaling options to reasoning models experiencing high thinking time", () => {
@@ -58,10 +56,7 @@ await describe("Hive Scoring Suite", async () => {
     ];
 
     const score = calculateNodeScore(reasoningNode, history, "balanced", 200);
-    assert.ok(
-      score > 50,
-      `Reasoning models should possess extended operational score lanes. Got: ${String(score)}`
-    );
+    assert.ok(score > 50, `Reasoning models should possess extended operational score lanes. Got: ${String(score)}`);
   });
 
   await it("should close the authentication loophole by dropping dead or unauthenticated paths to zero", () => {
@@ -83,11 +78,7 @@ await describe("Hive Scoring Suite", async () => {
     ];
 
     const score = calculateNodeScore(node, history, "balanced", 200);
-    assert.strictEqual(
-      score,
-      0,
-      "Consecutive auth failures must drop node ranking to zero."
-    );
+    assert.strictEqual(score, 0, "Consecutive auth failures must drop node ranking to zero.");
   });
 
   await it("should penalize structural anomalies like context length truncation drops inside the quality score", () => {
@@ -97,18 +88,10 @@ await describe("Hive Scoring Suite", async () => {
       mockMetric({ finishReason: "stop" }),
     ];
 
-    const standardScore = calculateNodeScore(
-      node,
-      [mockMetric({ finishReason: "stop" })],
-      "quality",
-      200
-    );
+    const standardScore = calculateNodeScore(node, [mockMetric({ finishReason: "stop" })], "quality", 200);
     const damagedScore = calculateNodeScore(node, history, "quality", 200);
 
-    assert.ok(
-      damagedScore < standardScore,
-      "High context window truncations must degrade quality metric parameters."
-    );
+    assert.ok(damagedScore < standardScore, "High context window truncations must degrade quality metric parameters.");
   });
 });
 
@@ -137,10 +120,7 @@ await describe("Telemetry Optimization Extensions", async () => {
     ];
 
     const score = calculateNodeScore(testNode, metrics, "balanced", 200);
-    assert.ok(
-      score > 0,
-      "Non-streaming transactions must contribute to throughput scores."
-    );
+    assert.ok(score > 0, "Non-streaming transactions must contribute to throughput scores.");
   });
 
   await it("should survive an isolated authentication failure if subsequent connections succeed", () => {
@@ -183,10 +163,7 @@ await describe("Telemetry Optimization Extensions", async () => {
     ];
 
     const score = calculateNodeScore(testNode, metrics, "balanced", 200);
-    assert.ok(
-      score > 0,
-      "Transient authorization adjustments must not disable the pathway permanently."
-    );
+    assert.ok(score > 0, "Transient authorization adjustments must not disable the pathway permanently.");
   });
 
   await it("should penalize 401s significantly more than 429s", () => {
@@ -250,19 +227,9 @@ await describe("Severity-Weighted Temporal Decay", async () => {
       mockMetric({ timestamp: now }),
     ];
 
-    const earlyScore = calculateNodeScore(
-      testNode,
-      earlyRecovery,
-      "balanced",
-      200
-    );
+    const earlyScore = calculateNodeScore(testNode, earlyRecovery, "balanced", 200);
     const midScore = calculateNodeScore(testNode, midRecovery, "balanced", 200);
-    const fullScore = calculateNodeScore(
-      testNode,
-      fullRecovery,
-      "balanced",
-      200
-    );
+    const fullScore = calculateNodeScore(testNode, fullRecovery, "balanced", 200);
 
     assert.ok(
       earlyScore < midScore,
@@ -272,10 +239,7 @@ await describe("Severity-Weighted Temporal Decay", async () => {
       midScore < fullScore,
       `Score should climb further with more recoveries. Mid: ${String(midScore)}, Full: ${String(fullScore)}`
     );
-    assert.ok(
-      fullScore > 80,
-      `Score should approach 100 with enough successful requests. Full: ${String(fullScore)}`
-    );
+    assert.ok(fullScore > 80, `Score should approach 100 with enough successful requests. Full: ${String(fullScore)}`);
   });
 
   await it("should degrade score more for burst failures than spread failures", () => {
@@ -304,18 +268,8 @@ await describe("Severity-Weighted Temporal Decay", async () => {
       ),
     ];
 
-    const burstScore = calculateNodeScore(
-      testNode,
-      burstFailures,
-      "balanced",
-      200
-    );
-    const spreadScore = calculateNodeScore(
-      testNode,
-      spreadFailures,
-      "balanced",
-      200
-    );
+    const burstScore = calculateNodeScore(testNode, burstFailures, "balanced", 200);
+    const spreadScore = calculateNodeScore(testNode, spreadFailures, "balanced", 200);
 
     assert.ok(
       burstScore < spreadScore,
@@ -341,10 +295,6 @@ await describe("Severity-Weighted Temporal Decay", async () => {
     ];
 
     const score = calculateNodeScore(testNode, metrics, "balanced", 200);
-    assert.strictEqual(
-      score,
-      0,
-      "Two consecutive 401s must return 0 instantly via hard guard."
-    );
+    assert.strictEqual(score, 0, "Two consecutive 401s must return 0 instantly via hard guard.");
   });
 });

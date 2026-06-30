@@ -1,7 +1,7 @@
-import { describe, it } from "node:test";
 import assert from "node:assert";
-import { computeReliabilityScore } from "./compute-reliability-score";
+import { describe, it } from "node:test";
 import type { RequestMetric } from "../request-metric";
+import { computeReliabilityScore } from "./compute-reliability-score";
 
 function mockMetric(overrides: Partial<RequestMetric>): RequestMetric {
   return {
@@ -20,16 +20,14 @@ function mockMetric(overrides: Partial<RequestMetric>): RequestMetric {
     errorType: null,
     success: true,
     source: "user",
+    toolCallFailed: false,
     ...overrides,
   };
 }
 
 await describe("computeReliabilityScore", async () => {
   await it("returns 100 for all-success metrics", () => {
-    const metrics = [
-      mockMetric({}),
-      mockMetric({ timestamp: Date.now() - 60_000 }),
-    ];
+    const metrics = [mockMetric({}), mockMetric({ timestamp: Date.now() - 60_000 })];
     const score = computeReliabilityScore(metrics);
     assert.strictEqual(score, 100);
   });
@@ -111,10 +109,7 @@ await describe("computeReliabilityScore", async () => {
     const burst = computeReliabilityScore(burstFailures);
     const spread = computeReliabilityScore(spreadFailures);
 
-    assert.ok(
-      burst < spread,
-      `burst ${String(burst)} < spread ${String(spread)}`
-    );
+    assert.ok(burst < spread, `burst ${String(burst)} < spread ${String(spread)}`);
   });
 
   await it("penalizes auth errors more than rate limits", () => {
@@ -143,9 +138,6 @@ await describe("computeReliabilityScore", async () => {
     const rateScore = computeReliabilityScore(rateLimited);
     const authScore = computeReliabilityScore(authError);
 
-    assert.ok(
-      authScore < rateScore,
-      `auth ${String(authScore)} < rate ${String(rateScore)}`
-    );
+    assert.ok(authScore < rateScore, `auth ${String(authScore)} < rate ${String(rateScore)}`);
   });
 });

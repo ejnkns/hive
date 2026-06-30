@@ -17,6 +17,7 @@ function createMockMetric(overrides: Partial<RequestMetric>): RequestMetric {
     thinkingTime: null,
     finishReason: "stop",
     refused: false,
+    toolCallFailed: false,
     statusCode: 200,
     errorType: null,
     success: true,

@@ -1,7 +1,7 @@
-import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert";
-import { TelemetryRecorder } from "./recorder";
+import { afterEach, beforeEach, describe, it } from "node:test";
 import { loadCache, saveCache } from "./cache";
+import { TelemetryRecorder } from "./recorder";
 
 await describe("TelemetryRecorder", async () => {
   let recorder: TelemetryRecorder;
@@ -32,6 +32,7 @@ await describe("TelemetryRecorder", async () => {
       errorType: null,
       success: true,
       source: "user",
+      toolCallFailed: false,
     });
 
     assert.strictEqual(recorder.getPendingCount(), 1);
@@ -54,6 +55,7 @@ await describe("TelemetryRecorder", async () => {
       errorType: null,
       success: true,
       source: "user",
+      toolCallFailed: false,
     });
 
     await recorder.flush();

@@ -1,15 +1,9 @@
-import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert";
 import { PassThrough } from "node:stream";
+import { beforeEach, describe, it } from "node:test";
 import { HiveCore } from "./hive-core";
+import { executeProxyRequest, type FailoverContext, ProxyResponse, routingMemory, selectBestNode } from "./proxy";
 import type { Node, RequestMetric } from "./telemetry";
-import {
-  ProxyResponse,
-  routingMemory,
-  selectBestNode,
-  executeProxyRequest,
-  type FailoverContext,
-} from "./proxy";
 
 await describe("HiveCore", async () => {
   let core: HiveCore;
@@ -92,6 +86,7 @@ await describe("Hive Core Router Interception Loop", async () => {
           errorType: null,
           success: true,
           source: "user",
+          toolCallFailed: false,
         },
       ];
     }
@@ -113,6 +108,7 @@ await describe("Hive Core Router Interception Loop", async () => {
           errorType: null,
           success: true,
           source: "user",
+          toolCallFailed: false,
         },
       ];
     }
@@ -133,6 +129,7 @@ await describe("Hive Core Router Interception Loop", async () => {
         errorType: null,
         success: true,
         source: "user",
+        toolCallFailed: false,
       },
     ];
   };
@@ -141,10 +138,7 @@ await describe("Hive Core Router Interception Loop", async () => {
     for (let i = 0; i < 20; i++) {
       const selected = selectBestNode(nodes, mockMetricsGenerator);
       assert.ok(selected !== null);
-      assert.ok(
-        selected.providerName === "groq" ||
-          selected.providerName === "sambanova"
-      );
+      assert.ok(selected.providerName === "groq" || selected.providerName === "sambanova");
       assert.notStrictEqual(selected.providerName, "deepinfra");
     }
   });
@@ -155,33 +149,19 @@ await describe("Hive Core Router Interception Loop", async () => {
 
     let sambaCount = 0;
     for (let i = 0; i < 50; i++) {
-      const selected = selectBestNode(
-        nodes,
-        mockMetricsGenerator,
-        [],
-        sessionId
-      );
+      const selected = selectBestNode(nodes, mockMetricsGenerator, [], sessionId);
       if (selected?.providerName === "sambanova") sambaCount++;
     }
-    assert.ok(
-      sambaCount > 25,
-      "Warm paths must lock current interaction channels smoothly."
-    );
+    assert.ok(sambaCount > 25, "Warm paths must lock current interaction channels smoothly.");
   });
 
   await it("should register empirical feature failures dynamically and remove lacking hosts from routing options", () => {
     const requiredFeatures = ["tools"];
 
-    routingMemory.recordUpstreamError("groq:llama-3", "unsupported-feature", [
-      "tools",
-    ]);
+    routingMemory.recordUpstreamError("groq:llama-3", "unsupported-feature", ["tools"]);
 
     for (let i = 0; i < 10; i++) {
-      const selected = selectBestNode(
-        nodes,
-        mockMetricsGenerator,
-        requiredFeatures
-      );
+      const selected = selectBestNode(nodes, mockMetricsGenerator, requiredFeatures);
       assert.ok(selected !== null);
       assert.notStrictEqual(
         selected.providerName,

@@ -60,6 +60,7 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
         responseText: string;
         inputTokens: number | null;
         outputTokensFromUsage: number | null;
+        toolCallFailed: boolean;
       }
     ) => {
       const totalLatency = Date.now() - start;
@@ -88,6 +89,7 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
         errorType: classifyError(statusCode, errorType),
         success,
         source: "user",
+        toolCallFailed: stats?.toolCallFailed ?? false,
       });
     };
 
