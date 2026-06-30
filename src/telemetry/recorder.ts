@@ -69,10 +69,13 @@ export class TelemetryRecorder {
       retained.push(...windowed);
 
       const [provider, model] = key.split(":");
+      const node = { providerName: provider, modelName: model };
+      const result = calculateNodeScore(node, windowed);
       scores.push({
         provider,
         model,
-        score: calculateNodeScore({ providerName: provider, modelName: model }, windowed),
+        score: result.composite,
+        subscores: result.subscores,
         derived: computeDerivedMetrics(windowed),
         updatedAt: Date.now(),
       });

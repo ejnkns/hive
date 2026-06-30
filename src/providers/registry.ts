@@ -1,3 +1,4 @@
+import type { SubScores } from "../telemetry";
 import { cerebras } from "./registry/cerebras";
 import { githubModels } from "./registry/github-models";
 import { googleAi } from "./registry/google-ai";
@@ -31,6 +32,7 @@ export type ProviderState = {
   model: string;
   enabled: boolean;
   stabilityScore: number;
+  subscores: SubScores;
 };
 
 export const allProviders: Provider[] = [

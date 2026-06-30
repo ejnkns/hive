@@ -37,7 +37,7 @@ await describe("Hive Scoring Suite", async () => {
       mockMetric({ ttft: 150, totalLatency: 650, inputTokens: 400 }),
     ];
 
-    const score = calculateNodeScore(node, history, "latency", 200);
+    const score = calculateNodeScore(node, history, "latency", 200).composite;
     assert.ok(score > 70, `Expected clean velocity scaling score, received: ${String(score)}`);
   });
 
@@ -55,7 +55,7 @@ await describe("Hive Scoring Suite", async () => {
       }),
     ];
 
-    const score = calculateNodeScore(reasoningNode, history, "balanced", 200);
+    const score = calculateNodeScore(reasoningNode, history, "balanced", 200).composite;
     assert.ok(score > 50, `Reasoning models should possess extended operational score lanes. Got: ${String(score)}`);
   });
 
@@ -77,7 +77,7 @@ await describe("Hive Scoring Suite", async () => {
       mockMetric({ success: true, source: "heartbeat", timestamp: now - 2000 }),
     ];
 
-    const score = calculateNodeScore(node, history, "balanced", 200);
+    const score = calculateNodeScore(node, history, "balanced", 200).composite;
     assert.strictEqual(score, 0, "Consecutive auth failures must drop node ranking to zero.");
   });
 
@@ -88,8 +88,8 @@ await describe("Hive Scoring Suite", async () => {
       mockMetric({ finishReason: "stop" }),
     ];
 
-    const standardScore = calculateNodeScore(node, [mockMetric({ finishReason: "stop" })], "quality", 200);
-    const damagedScore = calculateNodeScore(node, history, "quality", 200);
+    const standardScore = calculateNodeScore(node, [mockMetric({ finishReason: "stop" })], "quality", 200).composite;
+    const damagedScore = calculateNodeScore(node, history, "quality", 200).composite;
 
     assert.ok(damagedScore < standardScore, "High context window truncations must degrade quality metric parameters.");
   });
@@ -119,7 +119,7 @@ await describe("Telemetry Optimization Extensions", async () => {
       } as RequestMetric,
     ];
 
-    const score = calculateNodeScore(testNode, metrics, "balanced", 200);
+    const score = calculateNodeScore(testNode, metrics, "balanced", 200).composite;
     assert.ok(score > 0, "Non-streaming transactions must contribute to throughput scores.");
   });
 
@@ -162,7 +162,7 @@ await describe("Telemetry Optimization Extensions", async () => {
       } as RequestMetric,
     ];
 
-    const score = calculateNodeScore(testNode, metrics, "balanced", 200);
+    const score = calculateNodeScore(testNode, metrics, "balanced", 200).composite;
     assert.ok(score > 0, "Transient authorization adjustments must not disable the pathway permanently.");
   });
 
@@ -188,8 +188,8 @@ await describe("Telemetry Optimization Extensions", async () => {
       }),
     ];
 
-    const score429 = calculateNodeScore(testNode, metrics429, "balanced", 200);
-    const score401 = calculateNodeScore(testNode, metrics401, "balanced", 200);
+    const score429 = calculateNodeScore(testNode, metrics429, "balanced", 200).composite;
+    const score401 = calculateNodeScore(testNode, metrics401, "balanced", 200).composite;
 
     assert.ok(
       score401 < score429,
@@ -227,9 +227,9 @@ await describe("Severity-Weighted Temporal Decay", async () => {
       mockMetric({ timestamp: now }),
     ];
 
-    const earlyScore = calculateNodeScore(testNode, earlyRecovery, "balanced", 200);
-    const midScore = calculateNodeScore(testNode, midRecovery, "balanced", 200);
-    const fullScore = calculateNodeScore(testNode, fullRecovery, "balanced", 200);
+    const earlyScore = calculateNodeScore(testNode, earlyRecovery, "balanced", 200).composite;
+    const midScore = calculateNodeScore(testNode, midRecovery, "balanced", 200).composite;
+    const fullScore = calculateNodeScore(testNode, fullRecovery, "balanced", 200).composite;
 
     assert.ok(
       earlyScore < midScore,
@@ -268,8 +268,8 @@ await describe("Severity-Weighted Temporal Decay", async () => {
       ),
     ];
 
-    const burstScore = calculateNodeScore(testNode, burstFailures, "balanced", 200);
-    const spreadScore = calculateNodeScore(testNode, spreadFailures, "balanced", 200);
+    const burstScore = calculateNodeScore(testNode, burstFailures, "balanced", 200).composite;
+    const spreadScore = calculateNodeScore(testNode, spreadFailures, "balanced", 200).composite;
 
     assert.ok(
       burstScore < spreadScore,
@@ -294,7 +294,7 @@ await describe("Severity-Weighted Temporal Decay", async () => {
       mockMetric({ success: true, source: "heartbeat", timestamp: now - 2000 }),
     ];
 
-    const score = calculateNodeScore(testNode, metrics, "balanced", 200);
+    const score = calculateNodeScore(testNode, metrics, "balanced", 200).composite;
     assert.strictEqual(score, 0, "Two consecutive 401s must return 0 instantly via hard guard.");
   });
 });

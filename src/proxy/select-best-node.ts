@@ -25,7 +25,7 @@ export function selectBestNode(
     }
 
     const metrics = getMetricsForNode(compoundKey);
-    let score = calculateNodeScore(node, metrics, config.strategy, config.minTokenThreshold);
+    let score = calculateNodeScore(node, metrics, config.strategy, config.minTokenThreshold).composite;
 
     if (sessionId && routingMemory.getNodeAffinity(sessionId) === compoundKey) {
       score *= 1.1;

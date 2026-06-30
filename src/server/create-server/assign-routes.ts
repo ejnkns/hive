@@ -36,6 +36,13 @@ export function assignRoutes(server: FastifyServer) {
           models: p.models.map(getModelId),
           keyConfigured,
           stabilityScore: matchingState?.stabilityScore ?? 0,
+          subscores: matchingState?.subscores ?? {
+            latency: 0,
+            throughput: 0,
+            reliability: 0,
+            quality: 0,
+            contextWindow: 0,
+          },
           p95Latency: matchingState?.p95Latency ?? 0,
           recentSuccessRate: matchingState?.recentSuccessRate ?? 0,
           requestCount: matchingState?.requestCount ?? 0,

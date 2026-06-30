@@ -269,6 +269,7 @@ export class HiveCore {
       model: s.model,
       enabled: true,
       stabilityScore: s.score,
+      subscores: s.subscores,
       p95Latency: s.derived.p95Ttft,
       recentSuccessRate: s.derived.successRate,
       requestCount: s.derived.requestCount,

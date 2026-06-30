@@ -10,6 +10,19 @@ import type { RequestMetric } from "./request-metric";
 export type { RequestMetric };
 export type RoutingStrategy = "balanced" | "latency" | "quality";
 
+export type SubScores = {
+  latency: number;
+  throughput: number;
+  reliability: number;
+  quality: number;
+  contextWindow: number;
+};
+
+export type NodeScoreResult = {
+  composite: number;
+  subscores: SubScores;
+};
+
 export type Node = {
   providerName: string;
   modelName: string;
@@ -30,6 +43,8 @@ const ROUTING_STRATEGIES: Record<RoutingStrategy, ScoreWeights> = {
   quality: { ttft: 0.1, throughput: 0.1, reliability: 0.4, quality: 0.4, contextWindow: 0.0 },
 };
 
+const ZERO_SUBSCORES: SubScores = { latency: 0, throughput: 0, reliability: 0, quality: 0, contextWindow: 0 };
+
 const CONTEXT_WINDOW_WEIGHT_DEFAULT = 0;
 
 function getContextWindowWeight(): number {
@@ -44,18 +59,22 @@ export function calculateNodeScore(
   metrics: RequestMetric[],
   strategyName: RoutingStrategy = "balanced",
   minTokenThreshold: number = 200
-): number {
+): NodeScoreResult {
   const strategy = ROUTING_STRATEGIES[strategyName] ?? ROUTING_STRATEGIES.balanced;
 
   const performanceMetrics = metrics.filter((m) => m.source === "user" && (m.inputTokens ?? 0) >= minTokenThreshold);
 
   const guard = checkAuthGuard(metrics);
-  if (!guard.passed) return guard.score;
+  if (!guard.passed) return { composite: guard.score, subscores: ZERO_SUBSCORES };
 
   const reliabilityScore = computeReliabilityScore(metrics);
 
   if (performanceMetrics.length === 0) {
-    return reliabilityScore * strategy.reliability + (strategy.ttft + strategy.throughput + strategy.quality) * 50;
+    return {
+      composite:
+        reliabilityScore * strategy.reliability + (strategy.ttft + strategy.throughput + strategy.quality) * 50,
+      subscores: { latency: 50, throughput: 50, reliability: reliabilityScore, quality: 50, contextWindow: 0 },
+    };
   }
 
   const isReasoning = isReasoningModel(node.modelName);
@@ -64,7 +83,9 @@ export function calculateNodeScore(
   const throughputScore = computeThroughputScore(performanceMetrics, isReasoning);
   const qualityScore = computeQualityScore(performanceMetrics);
 
-  let baseScore =
+  const cwScore = node.maxContextTokens ? computeContextWindowScore(node.maxContextTokens) : 0;
+
+  let composite =
     ttftScore * strategy.ttft +
     throughputScore * strategy.throughput +
     reliabilityScore * strategy.reliability +
@@ -72,9 +93,17 @@ export function calculateNodeScore(
 
   const contextWindowWeight = getContextWindowWeight();
   if (contextWindowWeight > 0 && node.maxContextTokens) {
-    const cwScore = computeContextWindowScore(node.maxContextTokens);
-    baseScore = baseScore * (1 - contextWindowWeight) + cwScore * contextWindowWeight;
+    composite = composite * (1 - contextWindowWeight) + cwScore * contextWindowWeight;
   }
 
-  return baseScore;
+  return {
+    composite,
+    subscores: {
+      latency: ttftScore,
+      throughput: throughputScore,
+      reliability: reliabilityScore,
+      quality: qualityScore,
+      contextWindow: cwScore,
+    },
+  };
 }
