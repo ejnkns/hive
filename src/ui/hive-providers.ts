@@ -14,6 +14,7 @@ export class HiveProviders extends HTMLElement {
   private _conversations: ConversationData[] = [];
   private _overrideKey: string | null = null;
   private expandedConsoles = new Set<string>();
+  private expandedModels = new Set<string>();
   private activeTabs = new Map<string, "activity" | "conversations">();
 
   set overrideKey(value: string | null) {
@@ -94,6 +95,7 @@ export class HiveProviders extends HTMLElement {
       const { name, displayName, entries, maxScore, keyConfigured } = group;
       const f = entries[0];
       const isExpanded = this.expandedConsoles.has(name);
+      const isModelsExpanded = this.expandedModels.has(name);
       const activeTab = this.activeTabs.get(name) || "activity";
 
       let mh = "";
@@ -131,7 +133,13 @@ export class HiveProviders extends HTMLElement {
             </div>
           </div>
 
-          <div class="mrows">${mh}</div>
+          <div class="models-section">
+            <div class="models-toggle" data-provider="${name}">
+              <span>Models (${entries.length})</span>
+              <span class="toggle-icon">${isModelsExpanded ? "▲" : "▼"}</span>
+            </div>
+            <div class="mrows ${isModelsExpanded ? "" : "collapsed"}">${mh}</div>
+          </div>
 
           ${
             keyConfigured
@@ -273,6 +281,32 @@ export class HiveProviders extends HTMLElement {
           outline-offset: -1px;
         }
 
+        /* Collapsible Models Section */
+        .models-section {
+          border-top: 1px solid var(--border);
+          padding-top: 0.5rem;
+        }
+        .models-toggle {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-size: 0.6875rem;
+          font-weight: 700;
+          color: var(--muted);
+          text-transform: uppercase;
+          cursor: pointer;
+          padding: 0.25rem 0.5rem;
+          background: rgba(var(--border-rgb), 0.15);
+          user-select: none;
+        }
+        .models-toggle:hover {
+          color: var(--accent);
+          background: rgba(var(--border-rgb), 0.25);
+        }
+        .mrows.collapsed {
+          display: none;
+        }
+
         /* Collapsible Console Styles */
         .console-section {
           border-top: 1px solid var(--border);
@@ -347,6 +381,19 @@ export class HiveProviders extends HTMLElement {
           this.expandedConsoles.delete(providerName);
         } else {
           this.expandedConsoles.add(providerName);
+        }
+        this.render();
+      });
+    });
+
+    this.shadow.querySelectorAll(".models-toggle").forEach((toggle) => {
+      toggle.addEventListener("click", () => {
+        const providerName = toggle.getAttribute("data-provider");
+        if (!providerName) return;
+        if (this.expandedModels.has(providerName)) {
+          this.expandedModels.delete(providerName);
+        } else {
+          this.expandedModels.add(providerName);
         }
         this.render();
       });
