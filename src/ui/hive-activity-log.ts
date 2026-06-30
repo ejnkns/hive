@@ -1,5 +1,5 @@
 import type { MetricData } from "./types";
-import { formatTime, formatNumber } from "./utils";
+import { formatNumber, formatTime } from "./utils";
 import "./hive-info";
 
 export class HiveActivityLog extends HTMLElement {
@@ -22,15 +22,11 @@ export class HiveActivityLog extends HTMLElement {
 
   private render() {
     if (this._metrics.length === 0) {
-      this.shadow.innerHTML = this.tableHtml(
-        '<tr><td colspan="6" class="no-data">Awaiting requests...</td></tr>'
-      );
+      this.shadow.innerHTML = this.tableHtml('<tr><td colspan="6" class="no-data">Awaiting requests...</td></tr>');
       return;
     }
 
-    const sorted = [...this._metrics]
-      .sort((a, b) => b.timestamp - a.timestamp)
-      .slice(0, 50);
+    const sorted = [...this._metrics].sort((a, b) => b.timestamp - a.timestamp).slice(0, 50);
 
     let rows = "";
     sorted.forEach((r) => {
@@ -39,7 +35,7 @@ export class HiveActivityLog extends HTMLElement {
       rows += `<tr data-request-id="${r.requestId}" style="cursor:pointer;">
         <td class="mono">${formatTime(r.timestamp)}</td>
         <td class="model">${r.model}</td>
-        <td><span class="badge ${ok ? "ok" : "err"}">${r.statusCode ? String(r.statusCode) : "ERR"}${r.errorType ? " " + r.errorType : ""}</span></td>
+        <td><span class="badge ${ok ? "ok" : "err"}">${r.statusCode ? String(r.statusCode) : "ERR"}${r.errorType ? ` ${r.errorType}` : ""}</span></td>
         <td>${ok ? formatNumber(r.ttft, "ms") : "—"}</td>
         <td>${tokens != null ? String(tokens) : "—"}</td>
       </tr>`;

@@ -12,7 +12,6 @@ export class HiveApp extends HTMLElement {
   private ws: WebSocketType | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectDelay = 1000; // start at 1s, backs off to 30s
-  private lastMetrics: MetricData[] = [];
   private _override: OverrideState = {
     active: false,
     provider: null,
@@ -194,8 +193,6 @@ export class HiveApp extends HTMLElement {
       bestModel,
       bestScore
     );
-
-    this.lastMetrics = data.metrics;
 
     const total = data.metrics.length;
     const okCount = data.metrics.filter((r) => r.success).length;

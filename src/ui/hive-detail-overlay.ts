@@ -29,7 +29,7 @@ export class HiveDetailOverlay extends HTMLElement {
         ["Provider", metric.provider],
         ["Model", metric.model],
         ["Time", new Date(metric.timestamp).toLocaleString()],
-        ["Status", String(metric.statusCode) + (metric.errorType ? " " + metric.errorType : "")],
+        ["Status", String(metric.statusCode) + (metric.errorType ? ` ${metric.errorType}` : "")],
         ["TTFT", formatNumber(metric.ttft, "ms")],
         ["Total Latency", formatNumber(metric.totalLatency, "ms")],
         ["Input Tokens", metric.inputTokens != null ? String(metric.inputTokens) : "—"],
@@ -63,7 +63,7 @@ export class HiveDetailOverlay extends HTMLElement {
           chainHtml += `<div class="detail-chain-item">
             <div><span class="attempt-num">${label}:</span><span class="prov">${m.provider} (${m.model})</span></div>
             <span style="color:${ok ? "var(--success)" : "var(--error)"}">
-              ${m.statusCode ? String(m.statusCode) : "ERR"}${m.errorType ? " " + m.errorType : ""} 
+              ${m.statusCode ? String(m.statusCode) : "ERR"}${m.errorType ? ` ${m.errorType}` : ""} 
               (${ok ? "ok" : "fail"}) in ${latencyStr}
             </span>
           </div>`;

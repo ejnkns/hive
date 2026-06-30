@@ -14,6 +14,7 @@ export class HiveLogs extends HTMLElement {
 
   connectedCallback() {
     this.render();
+    // biome-ignore lint/style/noNonNullAssertion: element exists after synchronous render
     this.logsContainer = this.shadow.querySelector(".log-lines")!;
     this.setupControls();
   }
@@ -25,11 +26,13 @@ export class HiveLogs extends HTMLElement {
   }
 
   private setupControls() {
+    // biome-ignore lint/style/noNonNullAssertion: elements exist after synchronous render
     const clearBtn = this.shadow.querySelector(".btn-clear")!;
     clearBtn.addEventListener("click", () => {
       this.logsContainer.innerHTML = "";
     });
 
+    // biome-ignore lint/style/noNonNullAssertion: elements exist after synchronous render
     const pauseBtn = this.shadow.querySelector(".btn-pause")!;
     pauseBtn.addEventListener("click", () => {
       this.paused = !this.paused;
@@ -37,12 +40,11 @@ export class HiveLogs extends HTMLElement {
       pauseBtn.classList.toggle("paused", this.paused);
     });
 
+    // biome-ignore lint/style/noNonNullAssertion: elements exist after synchronous render
     const scrollBtn = this.shadow.querySelector(".btn-scroll")!;
     scrollBtn.addEventListener("click", () => {
       this.autoScroll = !this.autoScroll;
-      scrollBtn.textContent = this.autoScroll
-        ? "Auto-scroll ON"
-        : "Auto-scroll OFF";
+      scrollBtn.textContent = this.autoScroll ? "Auto-scroll ON" : "Auto-scroll OFF";
       scrollBtn.classList.toggle("active", this.autoScroll);
     });
   }
@@ -63,6 +65,7 @@ export class HiveLogs extends HTMLElement {
 
     // Keep log count under 500 lines to prevent memory bloat
     if (this.logsContainer.children.length > 500) {
+      // biome-ignore lint/style/noNonNullAssertion: children.length > 500 guarantees firstChild exists
       this.logsContainer.removeChild(this.logsContainer.firstChild!);
     }
 

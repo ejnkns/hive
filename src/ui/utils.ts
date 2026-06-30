@@ -11,9 +11,9 @@ export function formatTime(ts: number): string {
 }
 
 export function formatNumber(v: number | null, suf?: string): string {
-  if (v == null || isNaN(v)) return "—";
-  if (suf === "ms") return v >= 1000 ? (v / 1000).toFixed(1) + "s" : String(v) + "ms";
-  return v.toFixed(2) + (suf ? " " + suf : "");
+  if (v == null || Number.isNaN(v)) return "—";
+  if (suf === "ms") return v >= 1000 ? `${(v / 1000).toFixed(1)}s` : `${String(v)}ms`;
+  return v.toFixed(2) + (suf ? ` ${suf}` : "");
 }
 
 export function bar(pct: number): string {
@@ -36,7 +36,7 @@ export function normalizeContent(content: unknown): string {
           // narrowed by typeof check above; content is ContentPart[] known shape
           const obj = part as Record<string, unknown>;
           if (typeof obj.text === "string") return obj.text;
-          if (typeof obj.type === "string") return "[" + obj.type + "]";
+          if (typeof obj.type === "string") return `[${obj.type}]`;
         }
         return "";
       })
