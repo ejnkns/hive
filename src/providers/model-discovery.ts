@@ -1,11 +1,8 @@
 import { logger } from "../shared/logger";
 import { loadModelCache } from "./model-discovery/load-model-cache";
-import { loadModelCacheSync } from "./model-discovery/load-model-cache-sync";
 import { saveModelCache } from "./model-discovery/save-model-cache";
 import { selectDefaultModel } from "./model-discovery/select-default-model";
 import { buildModelsEndpoint, getModelId, type Provider } from "./registry";
-
-export { loadModelCacheSync };
 
 type ModelListResponse = {
   data: Array<{ id: string }>;
