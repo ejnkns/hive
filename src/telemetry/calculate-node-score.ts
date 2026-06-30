@@ -1,4 +1,5 @@
 import { checkAuthGuard } from "./calculate-node-score/check-auth-guard";
+import { computeContextWindowScore } from "./calculate-node-score/compute-context-window-score";
 import { computeLatencyScore } from "./calculate-node-score/compute-latency-score";
 import { computeQualityScore } from "./calculate-node-score/compute-quality-score";
 import { computeReliabilityScore } from "./calculate-node-score/compute-reliability-score";
@@ -20,13 +21,23 @@ type ScoreWeights = {
   throughput: number;
   reliability: number;
   quality: number;
+  contextWindow: number;
 };
 
 const ROUTING_STRATEGIES: Record<RoutingStrategy, ScoreWeights> = {
-  balanced: { ttft: 0.3, throughput: 0.3, reliability: 0.4, quality: 0.0 },
-  latency: { ttft: 0.55, throughput: 0.15, reliability: 0.3, quality: 0.0 },
-  quality: { ttft: 0.1, throughput: 0.1, reliability: 0.4, quality: 0.4 },
+  balanced: { ttft: 0.3, throughput: 0.3, reliability: 0.4, quality: 0.0, contextWindow: 0.0 },
+  latency: { ttft: 0.55, throughput: 0.15, reliability: 0.3, quality: 0.0, contextWindow: 0.0 },
+  quality: { ttft: 0.1, throughput: 0.1, reliability: 0.4, quality: 0.4, contextWindow: 0.0 },
 };
+
+const CONTEXT_WINDOW_WEIGHT_DEFAULT = 0;
+
+function getContextWindowWeight(): number {
+  const raw = process.env.HIVE_CONTEXT_WINDOW_WEIGHT;
+  if (raw === undefined) return CONTEXT_WINDOW_WEIGHT_DEFAULT;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? Math.max(0, Math.min(1, parsed)) : CONTEXT_WINDOW_WEIGHT_DEFAULT;
+}
 
 export function calculateNodeScore(
   node: Node,
@@ -53,10 +64,17 @@ export function calculateNodeScore(
   const throughputScore = computeThroughputScore(performanceMetrics, isReasoning);
   const qualityScore = computeQualityScore(performanceMetrics);
 
-  return (
+  let baseScore =
     ttftScore * strategy.ttft +
     throughputScore * strategy.throughput +
     reliabilityScore * strategy.reliability +
-    qualityScore * strategy.quality
-  );
+    qualityScore * strategy.quality;
+
+  const contextWindowWeight = getContextWindowWeight();
+  if (contextWindowWeight > 0 && node.maxContextTokens) {
+    const cwScore = computeContextWindowScore(node.maxContextTokens);
+    baseScore = baseScore * (1 - contextWindowWeight) + cwScore * contextWindowWeight;
+  }
+
+  return baseScore;
 }
