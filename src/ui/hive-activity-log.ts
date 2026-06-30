@@ -31,13 +31,21 @@ export class HiveActivityLog extends HTMLElement {
     let rows = "";
     sorted.forEach((r) => {
       const ok = r.success;
-      const tokens = r.outputTokens != null ? r.outputTokens : null;
+      const tokenStr =
+        r.inputTokens != null || r.outputTokens != null
+          ? `${r.inputTokens != null ? String(r.inputTokens) : "—"} / ${r.outputTokens != null ? String(r.outputTokens) : "—"}`
+          : "—";
+      const finishBadge =
+        r.finishReason && r.finishReason !== "stop"
+          ? `<span class="badge finish-${r.finishReason}">${r.finishReason}</span>`
+          : "";
+      const toolBadge = r.toolCallFailed ? `<span class="badge tool-err">TOOL-ERR</span>` : "";
       rows += `<tr data-request-id="${r.requestId}" style="cursor:pointer;">
         <td class="mono">${formatTime(r.timestamp)}</td>
         <td class="model">${r.model}</td>
-        <td><span class="badge ${ok ? "ok" : "err"}">${r.statusCode ? String(r.statusCode) : "ERR"}${r.errorType ? ` ${r.errorType}` : ""}</span></td>
+        <td><span class="badge ${ok ? "ok" : "err"}">${r.statusCode ? String(r.statusCode) : "ERR"}${r.errorType ? ` ${r.errorType}` : ""}</span>${finishBadge}${toolBadge}</td>
         <td>${ok ? formatNumber(r.ttft, "ms") : "—"}</td>
-        <td>${tokens != null ? String(tokens) : "—"}</td>
+        <td>${tokenStr}</td>
       </tr>`;
     });
 
@@ -103,15 +111,31 @@ export class HiveActivityLog extends HTMLElement {
           font-weight: 700;
           padding: 0.0625rem 0.25rem;
           text-transform: uppercase;
+          margin-right: 0.125rem;
         }
         .badge.ok {
-          background: var(--success-rgb) / 12%;
-          color: var(--text);
+          background: rgba(var(--success-rgb), 0.12);
+          color: var(--success);
           border: 1px solid var(--success);
         }
         .badge.err {
-          background: var(--error-rgb) / 12%;
-          color: var(--text);
+          background: rgba(var(--error-rgb), 0.12);
+          color: var(--error);
+          border: 1px solid var(--error);
+        }
+        .badge.finish-length {
+          background: rgba(var(--warn-rgb, 226, 169, 59), 0.12);
+          color: var(--warn, #e2a93b);
+          border: 1px solid var(--warn, #e2a93b);
+        }
+        .badge.finish-content-filter {
+          background: rgba(var(--error-rgb), 0.12);
+          color: var(--error);
+          border: 1px solid var(--error);
+        }
+        .badge.tool-err {
+          background: rgba(var(--error-rgb), 0.12);
+          color: var(--error);
           border: 1px solid var(--error);
         }
         .no-data { padding: 1rem; text-align: center; color: var(--muted); font-size: 0.75rem; }
@@ -123,7 +147,7 @@ export class HiveActivityLog extends HTMLElement {
             <th>Model</th>
             <th>Status <hive-info>HTTP status code or error type</hive-info></th>
             <th>Latency <hive-info>Time-to-first-token (TTFT) per request</hive-info></th>
-            <th>Tokens <hive-info>Output tokens generated per request</hive-info></th>
+            <th>Tokens (I/O) <hive-info>Input / output tokens per request</hive-info></th>
           </tr>
         </thead>
         <tbody>${rowsHtml}</tbody>
