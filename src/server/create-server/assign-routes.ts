@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { WebSocket } from "ws";
 import { hiveCore } from "../../hive-core";
+import { getModelId } from "../../providers";
 import { routingMemory } from "../../proxy";
 import { addLogListener, getRecentLogs, logger } from "../../shared/logger";
 import { getServerConfig } from "../../shared/server-config";
@@ -22,7 +23,8 @@ export function assignRoutes(server: FastifyServer) {
       const keyConfigured = !!process.env[p.apiKeyEnvVar];
       const providerModels = p.models.length > 0 ? p.models : [p.defaultModel];
 
-      return providerModels.map((model) => {
+      return providerModels.map((entry) => {
+        const model = getModelId(entry);
         const matchingState = states.find((s) => s.provider === p.name && s.model === model) ?? null;
         const compKey = `${p.name}:${model}`;
 
@@ -31,7 +33,7 @@ export function assignRoutes(server: FastifyServer) {
           displayName: p.displayName,
           baseUrl: p.baseUrl,
           model,
-          models: p.models,
+          models: p.models.map(getModelId),
           keyConfigured,
           stabilityScore: matchingState?.stabilityScore ?? 0,
           p95Latency: matchingState?.p95Latency ?? 0,
@@ -58,7 +60,7 @@ export function assignRoutes(server: FastifyServer) {
     const availableProviders = configProviders.map((p) => ({
       name: p.name,
       displayName: p.displayName,
-      models: [...p.models],
+      models: p.models.map((entry) => getModelId(entry)),
       keyConfigured: !!process.env[p.apiKeyEnvVar],
     }));
 
