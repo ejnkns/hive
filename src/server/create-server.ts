@@ -21,7 +21,7 @@ export function listen(server: FastifyServer, config: ServerConfig) {
   });
 }
 
+export type FastifyServer = Awaited<ReturnType<typeof instantiateServer>>;
 async function instantiateServer() {
   return await Fastify({ logger: false });
 }
-export type FastifyServer = Awaited<ReturnType<typeof instantiateServer>>;

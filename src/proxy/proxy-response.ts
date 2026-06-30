@@ -1,5 +1,7 @@
-import { PassThrough, Readable } from "node:stream";
-import { normalizeError, type NormalizedError } from "./error-normalizer";
+import { type PassThrough, Readable } from "node:stream";
+import { type NormalizedError, type NormalizedErrorType, normalizeError } from "./proxy-response/normalize-error";
+
+export type { NormalizedErrorType };
 
 const MAX_ERROR_BODY = 10_000;
 
@@ -20,10 +22,7 @@ export class ProxyResponse {
   }
 
   static error(status: number, errorBody: string): ProxyResponse {
-    const truncated =
-      errorBody.length > MAX_ERROR_BODY
-        ? errorBody.slice(0, MAX_ERROR_BODY)
-        : errorBody;
+    const truncated = errorBody.length > MAX_ERROR_BODY ? errorBody.slice(0, MAX_ERROR_BODY) : errorBody;
     const stream = new Readable({
       read() {
         this.push(truncated);

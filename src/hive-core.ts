@@ -1,34 +1,21 @@
 import type { IncomingHttpHeaders } from "node:http";
-import { PassThrough } from "node:stream";
-
+import type { PassThrough } from "node:stream";
+import { extractRequiredFeatures } from "./hive-core/extract-required-features";
+import { generateId } from "./hive-core/generateId";
+import { sanitizePayloadForProvider } from "./hive-core/sanitize-payload-for-provider";
+import { buildChatEndpoint, discoverAndCacheModels, type Provider, providers } from "./providers";
+import { executeProxyRequest, mutateRequest, ProxyResponse, routeRequest, routingMemory } from "./proxy";
+import { getOverride, loadProviders } from "./server";
+import { logger } from "./shared/logger";
 import {
-  providers,
-  buildChatEndpoint,
-  type Provider,
-  discoverAndCacheModels,
-} from "./providers";
-import {
-  telemetryRecorder,
-  startHeartbeat,
-  loadCache,
-  applyWindow,
+  applySlidingWindow,
   conversationStore,
+  loadCache,
   type Node,
   type RequestMetric,
+  startHeartbeat,
+  telemetryRecorder,
 } from "./telemetry";
-import {
-  mutateRequest,
-  routeRequest,
-  executeProxyRequest,
-  routingMemory,
-  ProxyResponse,
-} from "./proxy";
-import { getOverride, loadProviders } from "./server";
-
-import { logger } from "./shared/logger";
-import { generateId } from "./hive-core/id";
-import { sanitizePayloadForProvider } from "./hive-core/sanitize-payload-for-provider";
-import { extractRequiredFeatures } from "./hive-core/extract-required-features";
 
 export class HiveCore {
   private initialProviders: ReadonlyArray<Provider>;
@@ -75,9 +62,7 @@ export class HiveCore {
         this.lastModel = latest.model;
       }
     } catch (err: unknown) {
-      logger.debug(
-        `loadLastUsed: ${err instanceof Error ? err.message : String(err)}`
-      );
+      logger.debug(`loadLastUsed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -92,9 +77,7 @@ export class HiveCore {
         }
       }
     } catch (err: unknown) {
-      logger.debug(
-        `triggerBackgroundDiscovery: ${err instanceof Error ? err.message : String(err)}`
-      );
+      logger.debug(`triggerBackgroundDiscovery: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -102,12 +85,8 @@ export class HiveCore {
     body: string | Record<string, unknown>,
     incomingHeaders: Record<string, string | string[] | undefined> = {}
   ): Promise<ChatCompletionResult> {
-    const parsed:
-      | Record<string, unknown>
-      | { messages?: Array<Record<string, unknown>> } =
-      typeof body === "string"
-        ? (JSON.parse(body) as Record<string, unknown>)
-        : body;
+    const parsed: Record<string, unknown> | { messages?: Array<Record<string, unknown>> } =
+      typeof body === "string" ? (JSON.parse(body) as Record<string, unknown>) : body;
 
     const qualified = this.providers.filter((p) => {
       const key = process.env[p.apiKeyEnvVar];
@@ -115,9 +94,7 @@ export class HiveCore {
     });
 
     if (qualified.length === 0) {
-      logger.debug(
-        "no configured providers available — set a provider API key"
-      );
+      logger.debug("no configured providers available — set a provider API key");
       return {
         success: false,
         statusCode: 503,
@@ -139,9 +116,7 @@ export class HiveCore {
 
     conversationStore.startConversation(
       requestId,
-      Array.isArray(messages)
-        ? (messages as { role: string; content: string }[])
-        : []
+      Array.isArray(messages) ? (messages as { role: string; content: string }[]) : []
     );
 
     const nodes: Node[] = qualified.map((p) => ({
@@ -151,36 +126,23 @@ export class HiveCore {
 
     const headers: IncomingHttpHeaders = Object.fromEntries(
       Object.entries(incomingHeaders).filter(
-        ([key]) =>
-          !["authorization", "host", "content-length", "content-type"].includes(
-            key.toLowerCase()
-          )
+        ([key]) => !["authorization", "host", "content-length", "content-type"].includes(key.toLowerCase())
       )
     );
 
     const getMetricsForNode = (compoundKey: string): RequestMetric[] => {
-      const all = cache.metrics.filter(
-        (m) => `${m.provider}:${m.model}` === compoundKey
-      );
-      return applyWindow(all);
+      const all = cache.metrics.filter((m) => `${m.provider}:${m.model}` === compoundKey);
+      return applySlidingWindow(all);
     };
 
-    const dispatchRequest = async (
-      node: Node,
-      payload: string
-    ): Promise<ProxyResponse> => {
+    const dispatchRequest = async (node: Node, payload: string): Promise<ProxyResponse> => {
       const provider = qualified.find((p) => p.name === node.providerName);
       if (!provider) {
-        logger.debug(
-          `dispatch: provider config not found for ${node.providerName}`
-        );
+        logger.debug(`dispatch: provider config not found for ${node.providerName}`);
         return ProxyResponse.error(500, "config-error");
       }
 
-      const sanitized = sanitizePayloadForProvider(
-        node.providerName,
-        JSON.parse(payload) as Record<string, unknown>
-      );
+      const sanitized = sanitizePayloadForProvider(node.providerName, JSON.parse(payload) as Record<string, unknown>);
 
       const mutated = mutateRequest({
         originalHeaders: headers,
@@ -222,9 +184,7 @@ export class HiveCore {
         if (response.isOk()) {
           this.lastProvider = overrideNode.providerName;
           this.lastModel = overrideNode.modelName;
-          logger.debug(
-            `request ${requestId} — override success via ${this.lastProvider}:${this.lastModel}`
-          );
+          logger.debug(`request ${requestId} — override success via ${this.lastProvider}:${this.lastModel}`);
           return {
             success: true,
             stream: response.getStream() as PassThrough,
@@ -264,15 +224,11 @@ export class HiveCore {
 
     if (response.isOk()) {
       const lastKey = routingMemory.getNodeAffinity(sessionId);
-      const usedNode =
-        nodes.find((n) => lastKey === `${n.providerName}:${n.modelName}`) ??
-        null;
+      const usedNode = nodes.find((n) => lastKey === `${n.providerName}:${n.modelName}`) ?? null;
       this.lastProvider = usedNode?.providerName ?? null;
       this.lastModel = usedNode?.modelName ?? null;
 
-      logger.debug(
-        `request ${requestId} — success via ${this.lastProvider ?? "??"}:${this.lastModel ?? "??"}`
-      );
+      logger.debug(`request ${requestId} — success via ${this.lastProvider ?? "??"}:${this.lastModel ?? "??"}`);
 
       return {
         success: true,
@@ -283,9 +239,7 @@ export class HiveCore {
       };
     }
 
-    logger.debug(
-      `request ${requestId} — upstream returned no stream (status ${String(response.status)})`
-    );
+    logger.debug(`request ${requestId} — upstream returned no stream (status ${String(response.status)})`);
 
     return {
       success: false,
@@ -336,9 +290,7 @@ export class HiveCore {
             requestId: generateId(),
           });
         } catch (err: unknown) {
-          logger.debug(
-            `heartbeat: ${provider.name} failed: ${err instanceof Error ? err.message : String(err)}`
-          );
+          logger.debug(`heartbeat: ${provider.name} failed: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
     });

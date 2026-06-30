@@ -60,9 +60,7 @@ export function createStreamCounter(startTime: number) {
         const jsonStr = trimmed.slice(6);
         if (jsonStr === "[DONE]") {
           isAbruptDisconnect = false;
-          logger.debug(
-            "parse-stream: received DONE, stream completed normally"
-          );
+          logger.debug("parse-stream: received DONE, stream completed normally");
           continue;
         }
 
@@ -80,24 +78,18 @@ export function createStreamCounter(startTime: number) {
           if (parsed.usage) {
             if (typeof parsed.usage.prompt_tokens === "number") {
               inputTokens = parsed.usage.prompt_tokens;
-              logger.debug(
-                `parse-stream: prompt_tokens: ${String(inputTokens)}`
-              );
+              logger.debug(`parse-stream: prompt_tokens: ${String(inputTokens)}`);
             }
             if (typeof parsed.usage.completion_tokens === "number") {
               outputTokensFromUsage = parsed.usage.completion_tokens;
-              logger.debug(
-                `parse-stream: completion_tokens: ${String(outputTokensFromUsage)}`
-              );
+              logger.debug(`parse-stream: completion_tokens: ${String(outputTokensFromUsage)}`);
             }
           }
 
           if (delta?.reasoning_content) {
             if (thinkingStart === null) {
               thinkingStart = Date.now() - startTime;
-              logger.debug(
-                `parse-stream: thinking_start: ${String(thinkingStart)}ms`
-              );
+              logger.debug(`parse-stream: thinking_start: ${String(thinkingStart)}ms`);
             }
             thinkingChars += delta.reasoning_content.length;
             responseText += delta.reasoning_content;
@@ -121,9 +113,7 @@ export function createStreamCounter(startTime: number) {
             );
           }
         } catch (err) {
-          logger.debug(
-            `parse-stream: skipped unparseable chunk: ${(err as Error).message}`
-          );
+          logger.debug(`parse-stream: skipped unparseable chunk: ${(err as Error).message}`);
         }
       }
 
@@ -134,9 +124,7 @@ export function createStreamCounter(startTime: number) {
   const getStats = (): StreamStats => {
     let thinkingTime: number | null = null;
     if (thinkingStart !== null) {
-      const end =
-        thinkingEnd ??
-        (isAbruptDisconnect ? thinkingStart : Date.now() - startTime);
+      const end = thinkingEnd ?? (isAbruptDisconnect ? thinkingStart : Date.now() - startTime);
       thinkingTime = end - thinkingStart;
     }
 

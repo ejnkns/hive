@@ -1,10 +1,11 @@
-import { homedir } from "node:os";
-import { join } from "node:path";
-import { readFileSync } from "node:fs";
-import { buildModelsEndpoint, type Provider } from "./registry";
 import { logger } from "../shared/logger";
 import { loadModelCache } from "./model-discovery/load-model-cache";
+import { loadModelCacheSync } from "./model-discovery/load-model-cache-sync";
 import { saveModelCache } from "./model-discovery/save-model-cache";
+import { selectDefaultModel } from "./model-discovery/select-default-model";
+import { buildModelsEndpoint, type Provider } from "./registry";
+
+export { loadModelCacheSync };
 
 type ModelListResponse = {
   data: Array<{ id: string }>;
@@ -26,103 +27,13 @@ export type ModelCache = {
   providers: CachedProvider[];
 };
 
-export const HIVE_DIR = join(homedir(), ".hive");
-export const MODELS_CACHE_PATH = join(HIVE_DIR, "models-cache.json");
-
-export function loadModelCacheSync(): ModelCache | null {
-  try {
-    logger.debug(
-      `Synchronously reading model cache from: ${MODELS_CACHE_PATH}`
-    );
-    const data = readFileSync(MODELS_CACHE_PATH, "utf-8");
-    const parsed = JSON.parse(data) as ModelCache;
-    logger.debug("Successfully loaded model cache synchronously from disk");
-    return parsed;
-  } catch (err: unknown) {
-    logger.debug(
-      `Model cache not found or failed to parse synchronously on disk: ${err instanceof Error ? err.message : String(err)}`
-    );
-    return null;
-  }
-}
-
-export function selectDefaultModel(
-  fetchedModels: string[],
-  fallbackDefault: string,
-  preferences?: string[]
-): string {
-  if (!preferences || preferences.length === 0) return fallbackDefault;
-
-  // Find the first model in our prioritized preference list that exists in the fetched list
-  for (const preferred of preferences) {
-    if (fetchedModels.includes(preferred)) {
-      return preferred;
-    }
-  }
-
-  // If none matched, check if our hardcoded baseline default is in the fetched list
-  if (fetchedModels.includes(fallbackDefault)) {
-    return fallbackDefault;
-  }
-
-  // Otherwise, score the fetched models to select the most capable, non-utility chat model
-  if (fetchedModels.length === 0) {
-    return fallbackDefault;
-  }
-
-  let bestModel = fetchedModels[0];
-  let highestScore = -Infinity;
-
-  for (const m of fetchedModels) {
-    const lower = m.toLowerCase();
-    let score = 0;
-
-    // Heavily penalize non-chat utility/specialized models to avoid severe failures
-    if (
-      ["guard", "embed", "moderation", "ocr", "translate", "vision"].some(
-        (kw) => lower.includes(kw)
-      )
-    ) {
-      score -= 1000;
-    }
-    // Prioritize high-capacity / free flagship models
-    if (["120b", "405b"].some((kw) => lower.includes(kw))) score += 100;
-    if (lower.includes("70b")) score += 80;
-    if (lower.includes("-free")) score += 50;
-    if (
-      ["large", "pro", "instruct", "r1", "plus"].some((kw) =>
-        lower.includes(kw)
-      )
-    )
-      score += 20;
-    // Deprioritize small models
-    if (
-      ["8b", "7b", "3b", "1b", "mini", "small", "flash", "lite"].some((kw) =>
-        lower.includes(kw)
-      )
-    )
-      score -= 40;
-
-    if (score > highestScore) {
-      highestScore = score;
-      bestModel = m;
-    }
-  }
-  return bestModel;
-}
-
-async function fetchProviderModels(
-  baseUrl: string,
-  apiKeyEnvVar: string
-): Promise<string[]> {
+async function fetchProviderModels(baseUrl: string, apiKeyEnvVar: string): Promise<string[]> {
   const apiKey = process.env[apiKeyEnvVar];
   if (!apiKey) {
     throw new Error(`API key missing: ${apiKeyEnvVar}`);
   }
 
-  logger.debug(
-    `API key '${apiKeyEnvVar}' found in environment for baseUrl: ${baseUrl}`
-  );
+  logger.debug(`API key '${apiKeyEnvVar}' found in environment for baseUrl: ${baseUrl}`);
 
   const modelsEndpoint = buildModelsEndpoint(baseUrl);
 
@@ -146,20 +57,13 @@ async function fetchProviderModels(
 
     if (!response.ok) {
       const text = await response.text().catch(() => "");
-      throw new Error(
-        `HTTP ${String(response.status)}: ${text || response.statusText}`
-      );
+      throw new Error(`HTTP ${String(response.status)}: ${text || response.statusText}`);
     }
 
-    const data: ModelListResponse =
-      (await response.json()) as ModelListResponse;
+    const data: ModelListResponse = (await response.json()) as ModelListResponse;
     if (Array.isArray(data.data)) {
-      const models = data.data
-        .map((m) => m.id)
-        .filter((id): id is string => typeof id === "string");
-      logger.debug(
-        `Successfully fetched ${String(models.length)} models from baseUrl: ${baseUrl}`
-      );
+      const models = data.data.map((m) => m.id).filter((id): id is string => typeof id === "string");
+      logger.debug(`Successfully fetched ${String(models.length)} models from baseUrl: ${baseUrl}`);
       return models;
     }
 
@@ -173,22 +77,13 @@ async function fetchProviderModels(
   }
 }
 
-export async function discoverAndCacheModels(
-  providers: Provider[],
-  force = false
-): Promise<ModelCache> {
+export async function discoverAndCacheModels(providers: Provider[], force = false): Promise<ModelCache> {
   const currentCache = await loadModelCache();
   const now = Date.now();
 
   // If cache is fresh and not forced, return it immediately
-  if (
-    !force &&
-    currentCache &&
-    now - currentCache.lastCheckTime < 10 * 60 * 1000
-  ) {
-    logger.debug(
-      "Model cache is fresh (less than 10 mins old). Skipping discovery."
-    );
+  if (!force && currentCache && now - currentCache.lastCheckTime < 10 * 60 * 1000) {
+    logger.debug("Model cache is fresh (less than 10 mins old). Skipping discovery.");
     return currentCache;
   }
 
@@ -197,28 +92,18 @@ export async function discoverAndCacheModels(
 
   for (const provider of providers) {
     const key = process.env[provider.apiKeyEnvVar];
-    const cached = currentCache?.providers.find(
-      (p: CachedProvider) => p.name === provider.name
-    );
+    const cached = currentCache?.providers.find((p: CachedProvider) => p.name === provider.name);
 
     if (key && key.length > 0) {
       try {
-        const fetchedModels = await fetchProviderModels(
-          provider.baseUrl,
-          provider.apiKeyEnvVar
-        );
-        const bestDefault = selectDefaultModel(
-          fetchedModels,
-          provider.defaultModel,
-          provider.modelPreferences
-        );
+        const fetchedModels = await fetchProviderModels(provider.baseUrl, provider.apiKeyEnvVar);
+        const bestDefault = selectDefaultModel(fetchedModels, provider.defaultModel, provider.modelPreferences);
 
         updatedProviders.push({
           name: provider.name,
           baseUrl: provider.baseUrl,
           apiKeyEnvVar: provider.apiKeyEnvVar,
-          models:
-            fetchedModels.length > 0 ? fetchedModels : [...provider.models],
+          models: fetchedModels.length > 0 ? fetchedModels : [...provider.models],
           defaultModel: bestDefault,
           lastChecked: new Date().toISOString(),
           lastCheckStatus: "success",

@@ -1,9 +1,4 @@
-export type NormalizedErrorType =
-  | "unsupported-feature"
-  | "auth-error"
-  | "rate-limit"
-  | "server-error"
-  | "unknown";
+export type NormalizedErrorType = "unsupported-feature" | "auth-error" | "rate-limit" | "server-error" | "unknown";
 
 export type NormalizedError = {
   type: NormalizedErrorType;
@@ -12,16 +7,9 @@ export type NormalizedError = {
 };
 
 export function normalizeError(status: number, body: unknown): NormalizedError {
-  const bodyStr = (
-    typeof body === "string" ? body : JSON.stringify(body ?? "")
-  ).toLowerCase();
+  const bodyStr = (typeof body === "string" ? body : JSON.stringify(body ?? "")).toLowerCase();
 
-  if (
-    status === 401 ||
-    status === 403 ||
-    bodyStr.includes("api key") ||
-    bodyStr.includes("unauthorized")
-  ) {
+  if (status === 401 || status === 403 || bodyStr.includes("api key") || bodyStr.includes("unauthorized")) {
     return {
       type: "auth-error",
       message: "Upstream authentication failed",

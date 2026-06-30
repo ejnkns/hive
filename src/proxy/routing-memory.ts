@@ -1,16 +1,12 @@
+import { logger } from "../shared/logger";
+import type { NormalizedErrorType } from "./proxy-response";
 import { CircuitBreaker } from "./routing-memory/circuit-breaker";
 import { FeatureDiscovery } from "./routing-memory/feature-discovery";
 import { SessionRegistry } from "./routing-memory/session-registry";
-import type { NormalizedErrorType } from "./error-normalizer";
-import { logger } from "../shared/logger";
 
 const CIRCUIT_BREAKER_COOLDOWN_MS = 30_000;
 
-const BREAKER_TRIGGERS = new Set<NormalizedErrorType>([
-  "rate-limit",
-  "server-error",
-  "auth-error",
-]);
+const BREAKER_TRIGGERS = new Set<NormalizedErrorType>(["rate-limit", "server-error", "auth-error"]);
 
 export class RoutingMemory {
   private breaker = new CircuitBreaker();
@@ -23,23 +19,15 @@ export class RoutingMemory {
       return false;
     }
     if (this.features.hasDisabledFeatures(compoundKey, requiredFeatures)) {
-      logger.debug(
-        `${compoundKey} — ineligible: features [${requiredFeatures.join(", ")}] unsupported`
-      );
+      logger.debug(`${compoundKey} — ineligible: features [${requiredFeatures.join(", ")}] unsupported`);
       return false;
     }
     return true;
   }
 
-  recordUpstreamError(
-    compoundKey: string,
-    errorType: NormalizedErrorType,
-    requiredFeatures: string[]
-  ): void {
+  recordUpstreamError(compoundKey: string, errorType: NormalizedErrorType, requiredFeatures: string[]): void {
     if (errorType === "unsupported-feature") {
-      logger.debug(
-        `${compoundKey} — marked unsupported features: [${requiredFeatures.join(", ")}]`
-      );
+      logger.debug(`${compoundKey} — marked unsupported features: [${requiredFeatures.join(", ")}]`);
       this.features.markUnsupported(compoundKey, requiredFeatures);
       return;
     }

@@ -1,9 +1,8 @@
-import { selectBestNode } from "./node-selector";
-import { routingMemory } from "./routing-memory";
-import type { Node } from "../telemetry";
-import type { RequestMetric } from "../telemetry";
-import { ProxyResponse } from "./proxy-response";
 import { logger } from "../shared/logger";
+import type { Node, RequestMetric } from "../telemetry";
+import type { ProxyResponse } from "./proxy-response";
+import { routingMemory } from "./routing-memory";
+import { selectBestNode } from "./select-best-node";
 
 export type FailoverContext = {
   nodes: Node[];
@@ -14,34 +13,21 @@ export type FailoverContext = {
   sessionId?: string;
 };
 
-export async function executeProxyRequest(
-  ctx: FailoverContext
-): Promise<ProxyResponse> {
+export async function executeProxyRequest(ctx: FailoverContext): Promise<ProxyResponse> {
   const maxAttempts = Math.min(3, ctx.nodes.length);
   let attempts = 0;
   const tried = new Set<string>();
 
   while (attempts < maxAttempts) {
-    const availableNodes = ctx.nodes.filter(
-      (n) => !tried.has(`${n.providerName}:${n.modelName}`)
-    );
+    const availableNodes = ctx.nodes.filter((n) => !tried.has(`${n.providerName}:${n.modelName}`));
     if (availableNodes.length === 0) {
-      logger.debug(
-        `attempt ${String(attempts)}/${String(maxAttempts)} — no untried nodes remaining`
-      );
+      logger.debug(`attempt ${String(attempts)}/${String(maxAttempts)} — no untried nodes remaining`);
       break;
     }
 
-    const node = selectBestNode(
-      availableNodes,
-      ctx.getMetricsForNode,
-      ctx.requiredFeatures,
-      ctx.sessionId
-    );
+    const node = selectBestNode(availableNodes, ctx.getMetricsForNode, ctx.requiredFeatures, ctx.sessionId);
     if (!node) {
-      logger.debug(
-        `attempt ${String(attempts)}/${String(maxAttempts)} — selectBestNode returned null`
-      );
+      logger.debug(`attempt ${String(attempts)}/${String(maxAttempts)} — selectBestNode returned null`);
       break;
     }
 
@@ -57,11 +43,7 @@ export async function executeProxyRequest(
         logger.debug(
           `attempt ${String(attempts)}/${String(maxAttempts)} — ${compoundKey} upstream error: ${normalized.type} (status ${String(response.status)})`
         );
-        routingMemory.recordUpstreamError(
-          compoundKey,
-          normalized.type,
-          ctx.requiredFeatures
-        );
+        routingMemory.recordUpstreamError(compoundKey, normalized.type, ctx.requiredFeatures);
         continue;
       }
 
@@ -74,11 +56,8 @@ export async function executeProxyRequest(
         `attempt ${String(attempts)}/${String(maxAttempts)} — ${compoundKey} network failure: ${err instanceof Error ? err.message : String(err)}`
       );
       routingMemory.recordNetworkFailure(compoundKey);
-      continue;
     }
   }
 
-  throw new Error(
-    "Hive Router Error: All qualifying upstream endpoints failed execution."
-  );
+  throw new Error("Hive Router Error: All qualifying upstream endpoints failed execution.");
 }

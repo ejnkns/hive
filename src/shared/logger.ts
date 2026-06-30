@@ -11,38 +11,6 @@ export type LogEntry = {
   timestamp: number;
 };
 
-const logBuffer: LogEntry[] = [];
-const logListeners = new Set<(entry: LogEntry) => void>();
-
-export function addLogListener(listener: (entry: LogEntry) => void) {
-  logListeners.add(listener);
-  return () => {
-    logListeners.delete(listener);
-  };
-}
-
-export function getRecentLogs(): LogEntry[] {
-  return logBuffer;
-}
-
-function bufferAndEmit(
-  level: "info" | "warn" | "error" | "debug",
-  message: string
-) {
-  const entry: LogEntry = { level, message, timestamp: Date.now() };
-  logBuffer.push(entry);
-  if (logBuffer.length > 100) {
-    logBuffer.shift();
-  }
-  for (const listener of logListeners) {
-    try {
-      listener(entry);
-    } catch {
-      // ignore
-    }
-  }
-}
-
 export const logger = {
   info: (msg: string) => {
     bufferAndEmit("info", msg);
@@ -76,6 +44,35 @@ export const logger = {
     }
   },
 };
+
+const logBuffer: LogEntry[] = [];
+const logListeners = new Set<(entry: LogEntry) => void>();
+
+export function addLogListener(listener: (entry: LogEntry) => void) {
+  logListeners.add(listener);
+  return () => {
+    logListeners.delete(listener);
+  };
+}
+
+export function getRecentLogs(): LogEntry[] {
+  return logBuffer;
+}
+
+function bufferAndEmit(level: "info" | "warn" | "error" | "debug", message: string) {
+  const entry: LogEntry = { level, message, timestamp: Date.now() };
+  logBuffer.push(entry);
+  if (logBuffer.length > 100) {
+    logBuffer.shift();
+  }
+  for (const listener of logListeners) {
+    try {
+      listener(entry);
+    } catch {
+      // ignore
+    }
+  }
+}
 
 function bzz(msg: string, prefix: string) {
   return `[${prefix}] ${msg}`;

@@ -8,34 +8,27 @@ export function checkAuthGuard(metrics: RequestMetric[]): AuthGuardResult {
   let consecutiveAuthErrors = 0;
   let totalErrors = 0;
 
-  const chronologicalMetrics = [...metrics].sort(
-    (a, b) => b.timestamp - a.timestamp
-  );
+  const chronologicalMetrics = [...metrics].sort((a, b) => b.timestamp - a.timestamp);
 
   for (const m of chronologicalMetrics) {
     if (!m.success) {
       totalErrors++;
-      if (
-        m.statusCode === 401 ||
-        m.statusCode === 403 ||
-        m.errorType === "auth-error"
-      ) {
+      if (m.statusCode === 401 || m.statusCode === 403 || m.errorType === "auth-error") {
         if (previousWasAuthError) {
           consecutiveAuthErrors++;
         } else {
           previousWasAuthError = true;
           consecutiveAuthErrors = 1;
         }
+      } else {
+        previousWasAuthError = false;
       }
     } else {
       break;
     }
   }
 
-  if (
-    consecutiveAuthErrors >= 2 ||
-    (totalRequests > 0 && totalErrors === totalRequests)
-  ) {
+  if (consecutiveAuthErrors >= 2 || (totalRequests > 0 && totalErrors === totalRequests)) {
     return { passed: false, score: 0 };
   }
 

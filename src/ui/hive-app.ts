@@ -7,79 +7,6 @@ import "./hive-detail-overlay";
 import "./hive-logs";
 import { getServerConfig } from "../shared/server-config";
 
-type WebSocketType = typeof WebSocket.prototype;
-
-// ─── Shared payload types (mirror server-side shape) ───────────────────────
-
-type ProviderPayload = {
-  name: string;
-  displayName: string;
-  model: string;
-  keyConfigured: boolean;
-  stabilityScore: number;
-  p95Latency: number | null;
-  meanTokensPerSecond: number | null;
-  requestCount: number;
-  trippedUntil: number | null;
-  disabledFeatures: string[];
-};
-
-type TelemetryData = {
-  providers: ProviderPayload[];
-  serverHost: string;
-  serverPort: string;
-  lastProvider: string | null;
-  lastModel: string | null;
-  overrideActive: boolean;
-  overrideProvider: string | null;
-  overrideModel: string | null;
-  availableProviders: AvailableProvider[];
-  metrics: MetricData[];
-  pending: number;
-  conversations: ConversationData[];
-  bestProvider: string | null;
-  bestModel: string | null;
-  bestScore: number | null;
-};
-
-type WsMessage = { type: "init" | "update"; data: TelemetryData } | { type: "log"; data: LogEntry };
-
-// ─── Element type helpers ───────────────────────────────────────────────────
-
-type HeaderEl = HTMLElement & {
-  data: {
-    online: boolean;
-    serverAddr: string;
-    lastProvider: string | null;
-    lastModel: string | null;
-    override: OverrideState;
-    availableProviders: AvailableProvider[];
-    bestProvider: string | null;
-    bestModel: string | null;
-    bestScore: number | null;
-  };
-};
-type StatsEl = HTMLElement & {
-  data: {
-    traffic: number;
-    successRate: number;
-    providers: number;
-    avgLatency: number | null;
-  };
-};
-type ProvidersEl = HTMLElement & {
-  data: ProviderData[];
-  metrics: MetricData[];
-  conversations: ConversationData[];
-  overrideKey: string | null;
-};
-type LogsEl = HTMLElement & { addLog(log: LogEntry): void };
-type DetailOverlayEl = HTMLElement & {
-  show(metric: MetricData, allMetrics: MetricData[]): void;
-};
-
-// ─── Component ─────────────────────────────────────────────────────────────
-
 export class HiveApp extends HTMLElement {
   private shadow: ShadowRoot;
   private ws: WebSocketType | null = null;
@@ -352,3 +279,74 @@ export class HiveApp extends HTMLElement {
 }
 
 customElements.define("hive-app", HiveApp);
+
+type WebSocketType = typeof WebSocket.prototype;
+
+// ─── Shared payload types (mirror server-side shape) ───────────────────────
+
+type ProviderPayload = {
+  name: string;
+  displayName: string;
+  model: string;
+  keyConfigured: boolean;
+  stabilityScore: number;
+  p95Latency: number | null;
+  meanTokensPerSecond: number | null;
+  requestCount: number;
+  trippedUntil: number | null;
+  disabledFeatures: string[];
+};
+
+type TelemetryData = {
+  providers: ProviderPayload[];
+  serverHost: string;
+  serverPort: string;
+  lastProvider: string | null;
+  lastModel: string | null;
+  overrideActive: boolean;
+  overrideProvider: string | null;
+  overrideModel: string | null;
+  availableProviders: AvailableProvider[];
+  metrics: MetricData[];
+  pending: number;
+  conversations: ConversationData[];
+  bestProvider: string | null;
+  bestModel: string | null;
+  bestScore: number | null;
+};
+
+type WsMessage = { type: "init" | "update"; data: TelemetryData } | { type: "log"; data: LogEntry };
+
+// ─── Element type helpers ───────────────────────────────────────────────────
+
+type HeaderEl = HTMLElement & {
+  data: {
+    online: boolean;
+    serverAddr: string;
+    lastProvider: string | null;
+    lastModel: string | null;
+    override: OverrideState;
+    availableProviders: AvailableProvider[];
+    bestProvider: string | null;
+    bestModel: string | null;
+    bestScore: number | null;
+  };
+};
+type StatsEl = HTMLElement & {
+  data: {
+    traffic: number;
+    successRate: number;
+    providers: number;
+    avgLatency: number | null;
+  };
+};
+type ProvidersEl = HTMLElement & {
+  data: ProviderData[];
+  metrics: MetricData[];
+  conversations: ConversationData[];
+  overrideKey: string | null;
+};
+type LogsEl = HTMLElement & { addLog(log: LogEntry): void };
+type DetailOverlayEl = HTMLElement & {
+  show(metric: MetricData, allMetrics: MetricData[]): void;
+};

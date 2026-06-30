@@ -1,9 +1,9 @@
 import { logger } from "../shared/logger";
+import { applySlidingWindow } from "./apply-sliding-window";
 import { loadCache, type ModelScore, saveCache } from "./cache";
 import { calculateNodeScore } from "./calculate-node-score";
 import { computeDerivedMetrics } from "./derived-metrics";
 import type { RequestMetric } from "./request-metric";
-import { applyWindow } from "./sliding-window";
 
 const FLUSH_INTERVAL_MS = 12_000;
 
@@ -65,7 +65,7 @@ export class TelemetryRecorder {
     const scores: ModelScore[] = [];
 
     for (const [key, ms] of providerMap) {
-      const windowed = applyWindow(ms);
+      const windowed = applySlidingWindow(ms);
       retained.push(...windowed);
 
       const [provider, model] = key.split(":");

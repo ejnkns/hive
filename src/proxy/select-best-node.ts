@@ -1,22 +1,7 @@
-import { calculateNodeScore, type Node } from "../telemetry";
-import type { RequestMetric } from "../telemetry";
-import { routingMemory } from "./routing-memory";
 import { logger } from "../shared/logger";
-
-export type HiveRoutingConfig = {
-  strategy: string;
-  minTokenThreshold: number;
-};
-
-export function getHiveConfig(): HiveRoutingConfig {
-  return {
-    strategy: process.env.HIVE_ROUTING_STRATEGY || "balanced",
-    minTokenThreshold: parseInt(
-      process.env.HIVE_MIN_TOKEN_TELEMETRY || "200",
-      10
-    ),
-  };
-}
+import type { RequestMetric } from "../telemetry";
+import { calculateNodeScore, type Node } from "../telemetry";
+import { routingMemory } from "./routing-memory";
 
 export function selectBestNode(
   nodes: Node[],
@@ -35,25 +20,16 @@ export function selectBestNode(
     const compoundKey = `${node.providerName}:${node.modelName}`;
 
     if (!routingMemory.isNodeEligible(compoundKey, requiredFeatures)) {
-      logger.debug(
-        `node ${compoundKey} — ineligible (circuit breaker or unsupported features)`
-      );
+      logger.debug(`node ${compoundKey} — ineligible (circuit breaker or unsupported features)`);
       continue;
     }
 
     const metrics = getMetricsForNode(compoundKey);
-    let score = calculateNodeScore(
-      node,
-      metrics,
-      config.strategy,
-      config.minTokenThreshold
-    );
+    let score = calculateNodeScore(node, metrics, config.strategy, config.minTokenThreshold);
 
     if (sessionId && routingMemory.getNodeAffinity(sessionId) === compoundKey) {
       score *= 1.1;
-      logger.debug(
-        `node ${compoundKey} — session affinity applied (×1.1) → ${score.toFixed(1)}`
-      );
+      logger.debug(`node ${compoundKey} — session affinity applied (×1.1) → ${score.toFixed(1)}`);
     } else {
       logger.debug(`node ${compoundKey} — score ${score.toFixed(1)}`);
     }
@@ -71,10 +47,7 @@ export function selectBestNode(
   const poolThreshold = maxScore - 5;
   const qualifiedPool = candidates.filter((c) => c.score >= poolThreshold);
 
-  const totalWeight = qualifiedPool.reduce(
-    (sum, c) => sum + Math.max(1, c.score - poolThreshold + 1),
-    0
-  );
+  const totalWeight = qualifiedPool.reduce((sum, c) => sum + Math.max(1, c.score - poolThreshold + 1), 0);
   let selectionRoll = Math.random() * totalWeight;
 
   for (const candidate of qualifiedPool) {
@@ -93,4 +66,16 @@ export function selectBestNode(
 
   logger.debug(`fallback to top candidate ${qualifiedPool[0].compoundKey}`);
   return qualifiedPool[0].node;
+}
+
+type HiveRoutingConfig = {
+  strategy: string;
+  minTokenThreshold: number;
+};
+
+function getHiveConfig(): HiveRoutingConfig {
+  return {
+    strategy: process.env.HIVE_ROUTING_STRATEGY || "balanced",
+    minTokenThreshold: parseInt(process.env.HIVE_MIN_TOKEN_TELEMETRY || "200", 10),
+  };
 }

@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
+import { HIVE_DIR } from "../shared/hive-dir";
 import { logger } from "../shared/logger";
 import type { DerivedMetrics } from "./derived-metrics";
 import type { RequestMetric } from "./request-metric";
@@ -19,7 +19,6 @@ type TelemetryCache = {
   scores: ModelScore[];
 };
 
-const HIVE_DIR = join(homedir(), ".hive");
 const TELEMETRY_PATH = join(HIVE_DIR, "telemetry-cache.json");
 
 async function ensureHiveDir(): Promise<void> {

@@ -7,13 +7,10 @@ type WindowConfig = {
 
 const DEFAULT_WINDOW: WindowConfig = {
   maxEntries: 100,
-  maxAgeMs: 24 * 60 * 60 * 1000,
+  maxAgeMs: 24 * 60 * 60 * 1000, // 24 hours
 };
 
-export function applyWindow(
-  metrics: RequestMetric[],
-  config: WindowConfig = DEFAULT_WINDOW
-): RequestMetric[] {
+export function applySlidingWindow(metrics: RequestMetric[], config: WindowConfig = DEFAULT_WINDOW): RequestMetric[] {
   const now = Date.now();
   const cutoff = now - config.maxAgeMs;
 

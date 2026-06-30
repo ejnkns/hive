@@ -1,7 +1,7 @@
-import { describe, it } from "node:test";
 import assert from "node:assert";
-import { checkAuthGuard } from "./check-auth-guard";
+import { describe, it } from "node:test";
 import type { RequestMetric } from "../request-metric";
+import { checkAuthGuard } from "./check-auth-guard";
 
 function mockMetric(overrides: Partial<RequestMetric>): RequestMetric {
   return {
@@ -126,6 +126,12 @@ await describe("checkAuthGuard", async () => {
         statusCode: 401,
         errorType: "auth-error",
         timestamp: now - 2000,
+      }),
+      // success at end avoids totalErrors === totalRequests early exit
+      mockMetric({
+        success: true,
+        statusCode: 200,
+        timestamp: now - 3000,
       }),
     ];
     const result = checkAuthGuard(metrics);
