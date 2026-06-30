@@ -1,5 +1,5 @@
 import { type LogEntry, logger } from "../shared/logger";
-import type { AvailableProvider, ConversationData, MetricData, OverrideState, ProviderData } from "./types";
+import type { AvailableProvider, ConversationData, MetricData, OverrideState, ProviderData, SubScores } from "./types";
 import "./hive-header";
 import "./hive-stats";
 import "./hive-providers";
@@ -219,9 +219,14 @@ export class HiveApp extends HTMLElement {
       model: x.model,
       keyConfigured: x.keyConfigured,
       stabilityScore: x.stabilityScore,
+      subscores: x.subscores,
       p95Latency: x.p95Latency,
       meanTokensPerSecond: x.meanTokensPerSecond,
       requestCount: x.requestCount,
+      recentSuccessRate: x.recentSuccessRate,
+      truncationRate: x.truncationRate,
+      refusalRate: x.refusalRate,
+      contentFilterRate: x.contentFilterRate,
       trippedUntil: x.trippedUntil,
       disabledFeatures: x.disabledFeatures,
     }));
@@ -295,9 +300,14 @@ type ProviderPayload = {
   model: string;
   keyConfigured: boolean;
   stabilityScore: number;
+  subscores: SubScores;
   p95Latency: number | null;
   meanTokensPerSecond: number | null;
   requestCount: number;
+  recentSuccessRate: number;
+  truncationRate: number;
+  refusalRate: number;
+  contentFilterRate: number;
   trippedUntil: number | null;
   disabledFeatures: string[];
 };
@@ -318,6 +328,8 @@ type TelemetryData = {
   bestProvider: string | null;
   bestModel: string | null;
   bestScore: number | null;
+  routingStrategy: string;
+  contextWindowWeight: number;
 };
 
 type WsMessage = { type: "init" | "update"; data: TelemetryData } | { type: "log"; data: LogEntry };

@@ -1,14 +1,27 @@
 import type { ErrorType, FinishReason, MetricSource } from "../telemetry";
 
+export type SubScores = {
+  latency: number;
+  throughput: number;
+  reliability: number;
+  quality: number;
+  contextWindow: number;
+};
+
 export type ProviderData = {
   name: string;
   displayName: string;
   model: string;
   keyConfigured: boolean;
   stabilityScore: number;
+  subscores: SubScores;
   p95Latency: number | null;
   meanTokensPerSecond: number | null;
   requestCount: number;
+  recentSuccessRate: number;
+  truncationRate: number;
+  refusalRate: number;
+  contentFilterRate: number;
   trippedUntil: number | null;
   disabledFeatures: string[] | null;
 };
@@ -25,6 +38,7 @@ export type MetricData = {
   thinkingTime: number | null;
   finishReason: FinishReason;
   refused: boolean;
+  toolCallFailed: boolean;
   statusCode: number;
   errorType: ErrorType;
   errorBody?: string;
