@@ -77,8 +77,19 @@ await describe("Hive Scoring Suite", async () => {
       mockMetric({ success: true, source: "heartbeat", timestamp: now - 2000 }),
     ];
 
-    const score = calculateNodeScore(node, history, "balanced", 200).composite;
-    assert.strictEqual(score, 0, "Consecutive auth failures must drop node ranking to zero.");
+    const result = calculateNodeScore(node, history, "balanced", 200);
+    assert.strictEqual(result.composite, 0, "Consecutive auth failures must drop node ranking to zero.");
+    assert.deepStrictEqual(
+      result.subscores,
+      {
+        latency: 0,
+        throughput: 0,
+        reliability: 0,
+        quality: 0,
+        contextWindow: 0,
+      },
+      "Auth guard must zero all subscores."
+    );
   });
 
   await it("should penalize structural anomalies like context length truncation drops inside the quality score", () => {
@@ -93,13 +104,39 @@ await describe("Hive Scoring Suite", async () => {
 
     assert.ok(damagedScore < standardScore, "High context window truncations must degrade quality metric parameters.");
   });
+
+  await it("returns non-zero subscores for clean metrics", () => {
+    const metrics = [mockMetric({ ttft: 100, outputTokens: 100 })];
+    const result = calculateNodeScore(node, metrics, "balanced", 200);
+    assert.ok(result.subscores.latency > 0, "latency subscore should be positive");
+    assert.ok(result.subscores.throughput > 0, "throughput subscore should be positive");
+    assert.ok(result.subscores.reliability > 0, "reliability subscore should be positive");
+    assert.ok(result.subscores.quality > 0, "quality subscore should be positive");
+  });
+
+  await it("returns contextWindow subscore when maxContextTokens is set", () => {
+    const metrics = [mockMetric({})];
+    const nodeWithCtx: Node = {
+      providerName: "p",
+      modelName: "m",
+      maxContextTokens: 128_000,
+    };
+    const result = calculateNodeScore(nodeWithCtx, metrics, "balanced", 200);
+    assert.strictEqual(result.subscores.contextWindow, 100, "128K context should score 100");
+  });
+
+  await it("returns zero contextWindow subscore when maxContextTokens is absent", () => {
+    const metrics = [mockMetric({})];
+    const result = calculateNodeScore(node, metrics, "balanced", 200);
+    assert.strictEqual(result.subscores.contextWindow, 0, "no context tokens should score 0");
+  });
 });
 
 await describe("Telemetry Optimization Extensions", async () => {
   const testNode = { providerName: "provider-a", modelName: "model-a" };
 
   await it("should accurately track throughput metrics for non-streaming calls", () => {
-    const metrics = [
+    const metrics: RequestMetric[] = [
       {
         requestId: "ns-1",
         provider: "provider-a",
@@ -112,11 +149,12 @@ await describe("Telemetry Optimization Extensions", async () => {
         thinkingTime: null,
         finishReason: "stop",
         refused: false,
+        toolCallFailed: false,
         statusCode: 200,
         errorType: null,
         success: true,
         source: "user",
-      } as RequestMetric,
+      },
     ];
 
     const score = calculateNodeScore(testNode, metrics, "balanced", 200).composite;
@@ -125,7 +163,7 @@ await describe("Telemetry Optimization Extensions", async () => {
 
   await it("should survive an isolated authentication failure if subsequent connections succeed", () => {
     const now = Date.now();
-    const metrics = [
+    const metrics: RequestMetric[] = [
       {
         requestId: "r1",
         provider: "provider-a",
@@ -141,8 +179,9 @@ await describe("Telemetry Optimization Extensions", async () => {
         thinkingTime: null,
         finishReason: "stop",
         refused: false,
+        toolCallFailed: false,
         errorType: null,
-      } as RequestMetric,
+      },
       {
         requestId: "r0",
         provider: "provider-a",
@@ -159,7 +198,8 @@ await describe("Telemetry Optimization Extensions", async () => {
         thinkingTime: null,
         finishReason: null,
         refused: false,
-      } as RequestMetric,
+        toolCallFailed: false,
+      },
     ];
 
     const score = calculateNodeScore(testNode, metrics, "balanced", 200).composite;
