@@ -96,9 +96,6 @@ export function createStreamCounter(startTime: number) {
             }
             thinkingChars += delta.reasoning_content.length;
             responseText += delta.reasoning_content;
-            logger.debug(
-              `parse-stream: thinking_chars +${String(delta.reasoning_content.length)} (total: ${String(thinkingChars)})`
-            );
           }
 
           if (delta?.content) {
