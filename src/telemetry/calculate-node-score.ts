@@ -12,6 +12,7 @@ export type RoutingStrategy = "balanced" | "latency" | "quality";
 export type Node = {
   providerName: string;
   modelName: string;
+  maxContextTokens?: number;
 };
 
 type ScoreWeights = {
