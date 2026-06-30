@@ -2,9 +2,17 @@ import { Transform } from "node:stream";
 import { logger } from "../../shared/logger";
 import type { FinishReason } from "../request-metric";
 
+type ToolCallDelta = {
+  function?: { name?: string; arguments?: string };
+  id?: string;
+  index?: number;
+  type?: string;
+};
+
 type StreamDelta = {
   content?: string;
   reasoning_content?: string;
+  tool_calls?: ToolCallDelta[];
 };
 
 type StreamChoice = {
@@ -31,6 +39,7 @@ type StreamStats = {
   inputTokens: number | null;
   outputTokensFromUsage: number | null;
   isAbruptDisconnect: boolean;
+  toolCallFailed: boolean;
 };
 
 export function createStreamCounter(startTime: number) {
@@ -45,6 +54,7 @@ export function createStreamCounter(startTime: number) {
   let inputTokens: number | null = null;
   let outputTokensFromUsage: number | null = null;
   let buffer = "";
+  const toolCallBuffers = new Map<number, string>();
 
   const transform = new Transform({
     transform(chunk: Buffer, _encoding, callback) {
@@ -112,6 +122,15 @@ export function createStreamCounter(startTime: number) {
               `parse-stream: content_chars +${String(delta.content.length)} (total: ${String(outputChars)})`
             );
           }
+
+          if (delta?.tool_calls) {
+            for (const tc of delta.tool_calls) {
+              if (tc.index !== undefined && tc.function?.arguments) {
+                const current = toolCallBuffers.get(tc.index) ?? "";
+                toolCallBuffers.set(tc.index, current + tc.function.arguments);
+              }
+            }
+          }
         } catch (err) {
           // err is caught from JSON.parse — known to be Error
           logger.debug(`parse-stream: skipped unparseable chunk: ${(err as Error).message}`);
@@ -129,10 +148,21 @@ export function createStreamCounter(startTime: number) {
       thinkingTime = end - thinkingStart;
     }
 
+    let toolCallFailed = false;
+    for (const args of toolCallBuffers.values()) {
+      try {
+        JSON.parse(args);
+      } catch {
+        toolCallFailed = true;
+        break;
+      }
+    }
+
     logger.debug(
       `parse-stream: stats — outputChars: ${String(outputChars)}, thinkingChars: ${String(thinkingChars)}, ` +
         `thinkingTime: ${String(thinkingTime ?? "N/A")}, finishReason: ${finishReason ?? "N/A"}, ` +
-        `responseText length: ${String(responseText.length)}, isAbruptDisconnect: ${String(isAbruptDisconnect)}`
+        `responseText length: ${String(responseText.length)}, isAbruptDisconnect: ${String(isAbruptDisconnect)}` +
+        (toolCallFailed ? `, toolCallFailed: true` : "")
     );
 
     return {
@@ -146,6 +176,7 @@ export function createStreamCounter(startTime: number) {
       inputTokens,
       outputTokensFromUsage,
       isAbruptDisconnect,
+      toolCallFailed,
     };
   };
 
