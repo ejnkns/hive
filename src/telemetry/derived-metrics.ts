@@ -22,6 +22,7 @@ export type DerivedMetrics = {
 
   truncationRate: number;
   refusalRate: number;
+  contentFilterRate: number;
 
   spikeRate: number;
 
@@ -81,6 +82,7 @@ export function computeDerivedMetrics(metrics: RequestMetric[]): DerivedMetrics 
 
   const truncated = successMetrics.filter((m) => m.finishReason === "length").length;
   const refused = successMetrics.filter((m) => m.refused).length;
+  const contentFiltered = successMetrics.filter((m) => m.finishReason === "content-filter").length;
   const successCount = successMetrics.length;
 
   const successTtfts = successMetrics.map((m) => m.ttft);
@@ -102,6 +104,7 @@ export function computeDerivedMetrics(metrics: RequestMetric[]): DerivedMetrics 
     meanThinkingTime: thinkingTimes.length > 0 ? mean(thinkingTimes) : null,
     truncationRate: successCount > 0 ? truncated / successCount : 0,
     refusalRate: successCount > 0 ? refused / successCount : 0,
+    contentFilterRate: successCount > 0 ? contentFiltered / successCount : 0,
     spikeRate: successCount > 0 ? spikes / successCount : 0,
     hasSuccessMetrics,
   };
