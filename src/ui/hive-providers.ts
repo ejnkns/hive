@@ -16,6 +16,7 @@ export class HiveProviders extends HTMLElement {
   private expandedConsoles = new Set<string>();
   private expandedModels = new Set<string>();
   private activeTabs = new Map<string, "activity" | "conversations">();
+  private cooldownInterval: ReturnType<typeof setInterval> | null = null;
 
   set overrideKey(value: string | null) {
     this._overrideKey = value;
@@ -42,6 +43,42 @@ export class HiveProviders extends HTMLElement {
 
   connectedCallback() {
     this.render();
+  }
+
+  disconnectedCallback() {
+    if (this.cooldownInterval) {
+      clearInterval(this.cooldownInterval);
+      this.cooldownInterval = null;
+    }
+  }
+
+  private startCooldownTimer() {
+    if (this.cooldownInterval) clearInterval(this.cooldownInterval);
+    const hasTripped = this._data.some((e) => e.trippedUntil && e.trippedUntil > Date.now());
+    if (!hasTripped) return;
+    this.cooldownInterval = setInterval(() => {
+      const badges = this.shadow.querySelectorAll<HTMLElement>("[data-tripped-until]");
+      if (badges.length === 0) {
+        if (this.cooldownInterval) {
+          clearInterval(this.cooldownInterval);
+          this.cooldownInterval = null;
+        }
+        return;
+      }
+      let anyActive = false;
+      badges.forEach((badge) => {
+        const until = Number(badge.getAttribute("data-tripped-until"));
+        const remaining = Math.max(0, Math.round((until - Date.now()) / 1000));
+        badge.textContent = remaining > 0 ? `🛑 ${String(remaining)}s` : "🛑 0s";
+        if (remaining > 0) anyActive = true;
+      });
+      if (!anyActive) {
+        if (this.cooldownInterval) {
+          clearInterval(this.cooldownInterval);
+          this.cooldownInterval = null;
+        }
+      }
+    }, 1000);
   }
 
   private render() {
@@ -100,9 +137,21 @@ export class HiveProviders extends HTMLElement {
 
       let mh = "";
       entries.forEach((e) => {
+        const sub = e.subscores;
+        const subBars = `
+          <div class="sub-bars">
+            <div class="sub-bar"><span class="sub-label">L</span><span class="sub-fill" style="width:${sub.latency.toFixed(0)}%;background:${sc(sub.latency)}"></span></div>
+            <div class="sub-bar"><span class="sub-label">T</span><span class="sub-fill" style="width:${sub.throughput.toFixed(0)}%;background:${sc(sub.throughput)}"></span></div>
+            <div class="sub-bar"><span class="sub-label">R</span><span class="sub-fill" style="width:${sub.reliability.toFixed(0)}%;background:${sc(sub.reliability)}"></span></div>
+            <div class="sub-bar"><span class="sub-label">Q</span><span class="sub-fill" style="width:${sub.quality.toFixed(0)}%;background:${sc(sub.quality)}"></span></div>
+            <div class="sub-bar"><span class="sub-label">C</span><span class="sub-fill" style="width:${sub.contextWindow.toFixed(0)}%;background:${sc(sub.contextWindow)}"></span></div>
+          </div>`;
+
         const tripped = e.trippedUntil && e.trippedUntil > Date.now();
         const cooldownSec = tripped && e.trippedUntil ? Math.round((e.trippedUntil - Date.now()) / 1000) : 0;
-        const trippedBadge = tripped ? `<span class="badge tripped">CB (${String(cooldownSec)}s)</span>` : "";
+        const trippedBadge = tripped
+          ? `<span class="badge tripped" data-tripped-key="${e.name}:${e.model}" data-tripped-until="${String(e.trippedUntil)}">🛑 ${String(cooldownSec)}s</span>`
+          : "";
         const featuresBadge =
           e.disabledFeatures && e.disabledFeatures.length > 0
             ? `<span class="badge unsupported">no-${e.disabledFeatures.join(", ")}</span>`
@@ -110,7 +159,13 @@ export class HiveProviders extends HTMLElement {
         const isPinned = this._overrideKey === `${e.name}:${e.model}`;
         const pinnedBadge = isPinned ? `<span class="badge pinned">pinned</span>` : "";
 
-        mh += `<div class="mrow${isPinned ? " pinned" : ""}"><span class="mname">${e.model}${pinnedBadge}${trippedBadge}${featuresBadge}</span><span class="mstats"><span style="color:${sc(e.stabilityScore)}">${e.stabilityScore.toFixed(2)}%</span><span>${formatNumber(e.p95Latency, "ms")}</span><span>${formatNumber(e.meanTokensPerSecond)} t/s</span><span>${String(e.requestCount)}c</span></span></div>`;
+        mh += `<div class="mrow${isPinned ? " pinned" : ""}${tripped ? " tripped" : ""}">
+          <div class="mrow-top">
+            <span class="mname">${e.model}${pinnedBadge}${trippedBadge}${featuresBadge}</span>
+            <span class="mstats"><span style="color:${sc(e.stabilityScore)}">${e.stabilityScore.toFixed(2)}%</span><span>${formatNumber(e.p95Latency, "ms")}</span><span>${formatNumber(e.meanTokensPerSecond)} t/s</span><span>${String(e.requestCount)}c</span></span>
+          </div>
+          ${subBars}
+        </div>`;
       });
 
       html += `
@@ -245,15 +300,47 @@ export class HiveProviders extends HTMLElement {
         }
         .mrow {
           display: flex;
-          justify-content: space-between;
+          flex-direction: column;
+          gap: 0.25rem;
           font-size: 0.75rem;
           padding: 0.25rem 0.5rem;
           background: rgba(var(--border-rgb), 0.1);
           border: 1px solid rgba(var(--border-rgb), 0.3);
         }
+        .mrow.tripped {
+          background: rgba(var(--error-rgb), 0.06);
+          border-color: rgba(var(--error-rgb), 0.2);
+        }
+        .mrow-top {
+          display: flex;
+          justify-content: space-between;
+        }
         .mname { color: var(--accent); font-family: monospace; font-size: 0.6875rem; font-weight: 500; display: inline-flex; align-items: center; gap: 0.25rem; }
         .mstats { display: flex; gap: 0.75rem; color: var(--muted); font-size: 0.625rem; }
         .mstats span { white-space: nowrap; }
+        .sub-bars {
+          display: flex;
+          gap: 0.25rem;
+        }
+        .sub-bar {
+          display: flex;
+          align-items: center;
+          gap: 0.125rem;
+          flex: 1;
+        }
+        .sub-label {
+          font-size: 0.5rem;
+          font-weight: 700;
+          color: var(--muted);
+          width: 10px;
+          text-align: center;
+        }
+        .sub-fill {
+          height: 4px;
+          border-radius: 0;
+          display: inline-block;
+          transition: width 0.3s;
+        }
         
         .badge {
           display: inline-block;
@@ -433,6 +520,7 @@ export class HiveProviders extends HTMLElement {
         if (convEl) convEl.data = providerConversations;
       }
     });
+    this.startCooldownTimer();
   }
 }
 
