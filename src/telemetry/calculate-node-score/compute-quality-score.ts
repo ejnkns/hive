@@ -6,6 +6,7 @@ const FUNCTIONAL_FAULTS: FaultPredicate[] = [
   (m) => m.refused,
   (m) => m.finishReason === "length",
   (m) => m.finishReason === "content-filter",
+  (m) => m.toolCallFailed,
 ];
 
 export function computeQualityScore(performanceMetrics: RequestMetric[]): number {
