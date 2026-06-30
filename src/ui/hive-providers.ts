@@ -1,5 +1,5 @@
-import type { ProviderData, MetricData, ConversationData } from "./types";
-import { sc, formatNumber, bar } from "./utils";
+import type { ConversationData, MetricData, ProviderData } from "./types";
+import { bar, formatNumber, sc } from "./utils";
 import "./hive-info";
 import "./hive-activity-log";
 import "./hive-conversations";
@@ -54,20 +54,18 @@ export class HiveProviders extends HTMLElement {
       }
     });
 
-    const providerGroups = Array.from(grouped.entries()).map(
-      ([name, entries]) => {
-        const maxScore = Math.max(...entries.map((e) => e.stabilityScore));
-        const keyConfigured = entries.some((e) => e.keyConfigured);
-        const displayName = entries[0].displayName || name;
-        return {
-          name,
-          displayName,
-          entries,
-          maxScore,
-          keyConfigured,
-        };
-      }
-    );
+    const providerGroups = Array.from(grouped.entries()).map(([name, entries]) => {
+      const maxScore = Math.max(...entries.map((e) => e.stabilityScore));
+      const keyConfigured = entries.some((e) => e.keyConfigured);
+      const displayName = entries[0].displayName || name;
+      return {
+        name,
+        displayName,
+        entries,
+        maxScore,
+        keyConfigured,
+      };
+    });
 
     // Sort: Configured first, then by max stability score descending
     providerGroups.sort((a, b) => {
@@ -101,21 +99,14 @@ export class HiveProviders extends HTMLElement {
       let mh = "";
       entries.forEach((e) => {
         const tripped = e.trippedUntil && e.trippedUntil > Date.now();
-        const cooldownSec =
-          tripped && e.trippedUntil
-            ? Math.round((e.trippedUntil - Date.now()) / 1000)
-            : 0;
-        const trippedBadge = tripped
-          ? `<span class="badge tripped">CB (${String(cooldownSec)}s)</span>`
-          : "";
+        const cooldownSec = tripped && e.trippedUntil ? Math.round((e.trippedUntil - Date.now()) / 1000) : 0;
+        const trippedBadge = tripped ? `<span class="badge tripped">CB (${String(cooldownSec)}s)</span>` : "";
         const featuresBadge =
           e.disabledFeatures && e.disabledFeatures.length > 0
             ? `<span class="badge unsupported">no-${e.disabledFeatures.join(", ")}</span>`
             : "";
         const isPinned = this._overrideKey === `${e.name}:${e.model}`;
-        const pinnedBadge = isPinned
-          ? `<span class="badge pinned">pinned</span>`
-          : "";
+        const pinnedBadge = isPinned ? `<span class="badge pinned">pinned</span>` : "";
 
         mh += `<div class="mrow${isPinned ? " pinned" : ""}"><span class="mname">${e.model}${pinnedBadge}${trippedBadge}${featuresBadge}</span><span class="mstats"><span style="color:${sc(e.stabilityScore)}">${e.stabilityScore.toFixed(2)}%</span><span>${formatNumber(e.p95Latency, "ms")}</span><span>${formatNumber(e.meanTokensPerSecond)} t/s</span><span>${String(e.requestCount)}c</span></span></div>`;
       });
@@ -365,9 +356,7 @@ export class HiveProviders extends HTMLElement {
       tab.addEventListener("click", () => {
         const providerName = tab.getAttribute("data-provider");
         if (!providerName) return;
-        const targetTab = tab.getAttribute("data-tab") as
-          | "activity"
-          | "conversations";
+        const targetTab = tab.getAttribute("data-tab") as "activity" | "conversations";
         this.activeTabs.set(providerName, targetTab);
         this.render();
       });
@@ -379,18 +368,18 @@ export class HiveProviders extends HTMLElement {
       if (!keyConfigured || !this.expandedConsoles.has(name)) return;
 
       const providerMetrics = this._metrics.filter((m) => m.provider === name);
-      const providerConversations = this._conversations.filter(
-        (c) => c.provider === name
-      );
+      const providerConversations = this._conversations.filter((c) => c.provider === name);
 
       const activeTab = this.activeTabs.get(name) || "activity";
 
       if (activeTab === "activity") {
+        // shadow DOM includes hive-activity-log child per provider
         const logEl = this.shadow.querySelector(
           `#activity-${name} hive-activity-log`
         ) as unknown as ActivityLogEl | null;
         if (logEl) logEl.data = providerMetrics;
       } else {
+        // shadow DOM includes hive-conversations child per provider
         const convEl = this.shadow.querySelector(
           `#conversations-${name} hive-conversations`
         ) as unknown as ConversationsEl | null;

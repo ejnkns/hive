@@ -10,6 +10,7 @@ cli
   .option("--host <host>", "Host to bind to")
   .action((options) => {
     const port = options.port ? Number(options.port) : undefined;
+    // `cac` types options loosely; host is optional string
     const host = options.host as string | undefined;
     startServer({ port, host });
   });

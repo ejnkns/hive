@@ -60,6 +60,7 @@ async function fetchProviderModels(baseUrl: string, apiKeyEnvVar: string): Promi
       throw new Error(`HTTP ${String(response.status)}: ${text || response.statusText}`);
     }
 
+    // JSON.parse returns unknown; response.json() is typed as any, cast to expected shape
     const data: ModelListResponse = (await response.json()) as ModelListResponse;
     if (Array.isArray(data.data)) {
       const models = data.data.map((m) => m.id).filter((id): id is string => typeof id === "string");

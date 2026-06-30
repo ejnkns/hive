@@ -7,6 +7,7 @@ export function loadModelCacheSync(): ModelCache | null {
   try {
     logger.debug(`Synchronously reading model cache from: ${MODELS_CACHE_PATH}`);
     const data = readFileSync(MODELS_CACHE_PATH, "utf-8");
+    // JSON.parse returns unknown; ModelCache shape matches the file format we write
     const parsed = JSON.parse(data) as ModelCache;
     logger.debug("Successfully loaded model cache synchronously from disk");
     return parsed;

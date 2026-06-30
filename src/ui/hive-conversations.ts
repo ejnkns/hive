@@ -1,5 +1,5 @@
 import type { ConversationData } from "./types";
-import { formatNumber, esc, normalizeContent } from "./utils";
+import { esc, formatNumber, normalizeContent } from "./utils";
 
 export class HiveConversations extends HTMLElement {
   private shadow: ShadowRoot;
@@ -139,6 +139,7 @@ export class HiveConversations extends HTMLElement {
         const block = toggle.closest(".conv-block");
         const prompt = block?.querySelector(
           ".conv-prompt"
+          // closest() returns Element | null; we call qSA on the result
         ) as HTMLElement | null;
         if (!prompt) return;
         const hidden = prompt.style.display === "none";

@@ -150,6 +150,7 @@ export function assignRoutes(server: FastifyServer) {
     socket.on("message", (msg) => {
       try {
         const text = typeof msg === "string" ? msg : Buffer.isBuffer(msg) ? msg.toString() : JSON.stringify(msg);
+        // JSON.parse returns unknown; downstream validates with typeof checks
         const parsed = JSON.parse(text) as Record<string, unknown> | null;
         if (parsed?.type === "override") {
           const provider = parsed.provider;
@@ -170,6 +171,7 @@ export function assignRoutes(server: FastifyServer) {
   });
 
   server.get("/assets/*", async (request, reply) => {
+    // Fastify types params loosely; we know the route pattern has wildcard
     const filename = (request.params as Record<string, string>)["*"];
     const filePath = join(assetsDir, filename);
     if (!existsSync(filePath)) return reply.status(404).send();
@@ -190,6 +192,7 @@ export function assignRoutes(server: FastifyServer) {
   server.post("/v1/chat/completions", async (request, reply) => {
     const requestId = crypto.randomUUID();
     logger.info(`request ${requestId} — handling chat completion`);
+    // Fastify body is typed as unknown; API contract guarantees JSON object
     const result = await hiveCore.handleChatCompletion(request.body as Record<string, unknown>, request.headers);
 
     if (!result.success) {

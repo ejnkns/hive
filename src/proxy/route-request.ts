@@ -76,6 +76,7 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
         inputTokens,
         outputTokens,
         thinkingTime: stats?.thinkingTime ?? null,
+        // finishReason comes from stream counter — always a valid FinishReason or null
         finishReason: (stats?.finishReason as FinishReason) ?? null,
         refused: outputBody
           ? detectRefusal(outputBody)

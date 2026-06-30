@@ -17,6 +17,7 @@ export class HiveDetailOverlay extends HTMLElement {
     this.render(metric, allMetrics);
     const overlay = this.shadow.querySelector(
       "#overlay"
+      // shadow DOM template contains #overlay element
     ) as unknown as HTMLElement | null;
     overlay?.showPopover();
   }
@@ -28,37 +29,17 @@ export class HiveDetailOverlay extends HTMLElement {
         ["Provider", metric.provider],
         ["Model", metric.model],
         ["Time", new Date(metric.timestamp).toLocaleString()],
-        [
-          "Status",
-          String(metric.statusCode) +
-            (metric.errorType ? " " + metric.errorType : ""),
-        ],
+        ["Status", String(metric.statusCode) + (metric.errorType ? " " + metric.errorType : "")],
         ["TTFT", formatNumber(metric.ttft, "ms")],
         ["Total Latency", formatNumber(metric.totalLatency, "ms")],
-        [
-          "Input Tokens",
-          metric.inputTokens != null ? String(metric.inputTokens) : "—",
-        ],
-        [
-          "Output Tokens",
-          metric.outputTokens != null ? String(metric.outputTokens) : "—",
-        ],
-        [
-          "Thinking Time",
-          metric.thinkingTime != null
-            ? formatNumber(metric.thinkingTime, "ms")
-            : "—",
-        ],
+        ["Input Tokens", metric.inputTokens != null ? String(metric.inputTokens) : "—"],
+        ["Output Tokens", metric.outputTokens != null ? String(metric.outputTokens) : "—"],
+        ["Thinking Time", metric.thinkingTime != null ? formatNumber(metric.thinkingTime, "ms") : "—"],
         ["Finish Reason", metric.finishReason || "—"],
         ["Refused", metric.refused ? "Yes" : "No"],
         ["Source", metric.source || "—"],
         ["Success", metric.success ? "Yes" : "No"],
-        [
-          "Error Body",
-          metric.errorBody
-            ? JSON.stringify(JSON.parse(metric.errorBody), null, 2)
-            : "—",
-        ],
+        ["Error Body", metric.errorBody ? JSON.stringify(JSON.parse(metric.errorBody), null, 2) : "—"],
       ];
       fields.forEach(([label, value]) => {
         gridHtml += `<span class="label">${label}</span><span class="value">${value}</span>`;
@@ -68,9 +49,7 @@ export class HiveDetailOverlay extends HTMLElement {
     let chainHtml = "";
     if (metric) {
       const chain = metric.requestId
-        ? allMetrics
-            .filter((m) => m.requestId === metric.requestId)
-            .sort((a, b) => a.timestamp - b.timestamp)
+        ? allMetrics.filter((m) => m.requestId === metric.requestId).sort((a, b) => a.timestamp - b.timestamp)
         : [];
       if (chain.length > 0) {
         chain.forEach((m, idx) => {

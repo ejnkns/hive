@@ -59,16 +59,19 @@ export class HiveApp extends HTMLElement {
     `;
 
     this.addEventListener("row-click", (e) => {
+      // CustomEvent type is not generic in native DOM typings; known shape from dispatch
       const { metric, allMetrics } = (
         e as unknown as CustomEvent<{
           metric: MetricData;
           allMetrics: MetricData[];
         }>
       ).detail;
+      // shadow DOM structure guarantees hive-detail-overlay exists
       const overlay = this.shadow.querySelector("hive-detail-overlay") as DetailOverlayEl | null;
       overlay?.show(metric, allMetrics);
     });
 
+    // addEventListener expects EventListener; lambda is already compatible
     this.addEventListener("override-set", ((e: CustomEvent<{ provider: string; model: string }>) => {
       this.setOverride(e.detail.provider, e.detail.model);
     }) as EventListener);
@@ -110,6 +113,7 @@ export class HiveApp extends HTMLElement {
 
     this.ws.onmessage = (e) => {
       try {
+        // JSON.parse returns unknown; WsMessage shape validated by try/catch
         const msg = JSON.parse(String(e.data)) as WsMessage;
         this.handleMessage(msg);
       } catch {
@@ -147,6 +151,7 @@ export class HiveApp extends HTMLElement {
 
   private handleMessage(msg: WsMessage) {
     if (msg.type === "log") {
+      // shadow DOM structure includes hive-logs
       const logsEl = this.shadow.querySelector("hive-logs") as LogsEl | null;
       logsEl?.addLog(msg.data);
       return;
@@ -200,6 +205,7 @@ export class HiveApp extends HTMLElement {
     const flights = data.metrics.filter((r) => r.success).map((r) => r.ttft);
     const avgFlight = flights.length > 0 ? Math.round(flights.reduce((a, b) => a + b, 0) / flights.length) : null;
 
+    // shadow DOM template contains hive-stats element
     const statsElement = this.shadow.querySelector("hive-stats") as unknown as StatsEl | null;
     if (statsElement) {
       statsElement.data = {
@@ -223,6 +229,7 @@ export class HiveApp extends HTMLElement {
       disabledFeatures: x.disabledFeatures,
     }));
 
+    // shadow DOM template contains hive-providers element
     const providersElement = this.shadow.querySelector("hive-providers") as unknown as ProvidersEl | null;
     if (providersElement) {
       providersElement.metrics = data.metrics;
@@ -247,6 +254,7 @@ export class HiveApp extends HTMLElement {
     bestModel: string | null = null,
     bestScore: number | null = null
   ) {
+    // shadow DOM template contains hive-header element
     const header = this.shadow.querySelector("hive-header") as unknown as HeaderEl | null;
     if (header) {
       header.data = {

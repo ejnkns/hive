@@ -51,10 +51,12 @@ export function computeDerivedMetrics(metrics: RequestMetric[]): DerivedMetrics 
     .filter((m) => m.outputTokens !== null && m.totalLatency > m.ttft)
     .map((m) => {
       const secs = (m.totalLatency - m.ttft) / 1000;
+      // filtered above for outputTokens !== null
       return (m.outputTokens as number) / secs;
     })
     .sort((a, b) => a - b);
 
+  // filtered above for thinkingTime !== null
   const thinkingTimes = successMetrics.filter((m) => m.thinkingTime !== null).map((m) => m.thinkingTime as number);
 
   const successful = metrics.filter((m) => m.success).length;

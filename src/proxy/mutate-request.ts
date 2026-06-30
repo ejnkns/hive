@@ -25,6 +25,7 @@ export function mutateRequest(opts: MutateRequestOptions): MutatedRequest {
     "Content-Type": "application/json",
   };
 
+  // JSON.parse returns unknown; bodyObj.model is set before stringify
   const bodyObj = JSON.parse(originalBody) as Record<string, unknown>;
   bodyObj.model = targetModel;
 

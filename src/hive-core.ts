@@ -86,6 +86,7 @@ export class HiveCore {
     incomingHeaders: Record<string, string | string[] | undefined> = {}
   ): Promise<ChatCompletionResult> {
     const parsed: Record<string, unknown> | { messages?: Array<Record<string, unknown>> } =
+      // JSON.parse returns unknown; body is validated JSON string from HTTP
       typeof body === "string" ? (JSON.parse(body) as Record<string, unknown>) : body;
 
     const qualified = this.providers.filter((p) => {
@@ -106,6 +107,7 @@ export class HiveCore {
     const payloadStr = JSON.stringify(parsed);
     const requestId = generateId();
     const sessionId = requestId;
+    // parsed is already typed as Record<string, unknown> (body variant union)
     const messages = (parsed as Record<string, unknown>).messages ?? [];
 
     const requiredFeatures = extractRequiredFeatures(parsed);
@@ -142,6 +144,7 @@ export class HiveCore {
         return ProxyResponse.error(500, "config-error");
       }
 
+      // payload is JSON-stringified earlier; shape matches body contract
       const sanitized = sanitizePayloadForProvider(node.providerName, JSON.parse(payload) as Record<string, unknown>);
 
       const mutated = mutateRequest({
@@ -187,6 +190,7 @@ export class HiveCore {
           logger.debug(`request ${requestId} — override success via ${this.lastProvider}:${this.lastModel}`);
           return {
             success: true,
+            // getStream returns Readable; ProxyResponse wraps PassThrough
             stream: response.getStream() as PassThrough,
             provider: this.lastProvider,
             model: this.lastModel,
@@ -232,6 +236,7 @@ export class HiveCore {
 
       return {
         success: true,
+        // getStream returns Readable; ProxyResponse wraps PassThrough
         stream: response.getStream() as PassThrough,
         provider: this.lastProvider ?? undefined,
         model: this.lastModel ?? undefined,

@@ -1,9 +1,5 @@
 export function sc(c: number): string {
-  return c >= 80
-    ? "var(--success)"
-    : c >= 50
-      ? "var(--warning)"
-      : "var(--error)";
+  return c >= 80 ? "var(--success)" : c >= 50 ? "var(--warning)" : "var(--error)";
 }
 
 export function formatTime(ts: number): string {
@@ -16,8 +12,7 @@ export function formatTime(ts: number): string {
 
 export function formatNumber(v: number | null, suf?: string): string {
   if (v == null || isNaN(v)) return "—";
-  if (suf === "ms")
-    return v >= 1000 ? (v / 1000).toFixed(1) + "s" : String(v) + "ms";
+  if (suf === "ms") return v >= 1000 ? (v / 1000).toFixed(1) + "s" : String(v) + "ms";
   return v.toFixed(2) + (suf ? " " + suf : "");
 }
 
@@ -38,6 +33,7 @@ export function normalizeContent(content: unknown): string {
       .map((part: unknown) => {
         if (typeof part === "string") return part;
         if (typeof part === "object" && part != null) {
+          // narrowed by typeof check above; content is ContentPart[] known shape
           const obj = part as Record<string, unknown>;
           if (typeof obj.text === "string") return obj.text;
           if (typeof obj.type === "string") return "[" + obj.type + "]";
