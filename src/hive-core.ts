@@ -274,6 +274,9 @@ export class HiveCore {
       recentSuccessRate: s.derived.successRate,
       requestCount: s.derived.requestCount,
       meanTokensPerSecond: s.derived.meanTokensPerSecond,
+      truncationRate: s.derived.truncationRate,
+      refusalRate: s.derived.refusalRate,
+      contentFilterRate: s.derived.contentFilterRate,
     }));
   }
 

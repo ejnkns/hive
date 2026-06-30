@@ -47,6 +47,9 @@ export function assignRoutes(server: FastifyServer) {
           recentSuccessRate: matchingState?.recentSuccessRate ?? 0,
           requestCount: matchingState?.requestCount ?? 0,
           meanTokensPerSecond: matchingState?.meanTokensPerSecond ?? null,
+          truncationRate: matchingState?.truncationRate ?? 0,
+          refusalRate: matchingState?.refusalRate ?? 0,
+          contentFilterRate: matchingState?.contentFilterRate ?? 0,
           trippedUntil: routingStates.trippedBreakers[compKey] || null,
           disabledFeatures: routingStates.disabledFeatures[compKey],
         };
@@ -99,6 +102,8 @@ export function assignRoutes(server: FastifyServer) {
         bestProvider,
         bestModel,
         bestScore,
+        routingStrategy: process.env.HIVE_ROUTING_STRATEGY || "balanced",
+        contextWindowWeight: Number(process.env.HIVE_CONTEXT_WINDOW_WEIGHT) || 0,
       },
     };
   };
