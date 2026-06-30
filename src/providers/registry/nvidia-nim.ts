@@ -6,14 +6,10 @@ export const nvidiaNim = {
   baseUrl: "https://integrate.api.nvidia.com",
   apiKeyEnvVar: "NVIDIA_NIM_API_KEY",
   models: [
-    "meta/llama-3.3-70b-instruct",
-    "nvidia/llama-3.1-nemotron-70b-instruct",
-    "meta/llama-3.1-70b-instruct",
+    { id: "meta/llama-3.3-70b-instruct", contextLength: 128_000 },
+    { id: "nvidia/llama-3.1-nemotron-70b-instruct", contextLength: 128_000 },
+    { id: "meta/llama-3.1-70b-instruct", contextLength: 128_000 },
   ],
   defaultModel: "meta/llama-3.3-70b-instruct",
-  modelPreferences: [
-    "meta/llama-3.3-70b-instruct",
-    "deepseek-ai/deepseek-r1",
-    "meta/llama-3.1-405b-instruct",
-  ],
+  modelPreferences: ["meta/llama-3.3-70b-instruct", "deepseek-ai/deepseek-r1", "meta/llama-3.1-405b-instruct"],
 } satisfies Provider;
