@@ -109,6 +109,8 @@ export class HiveCore {
     const sessionId = requestId;
     // parsed is already typed as Record<string, unknown> (body variant union)
     const messages = (parsed as Record<string, unknown>).messages ?? [];
+    const model = (parsed as Record<string, unknown>).model;
+    const requestedModel = typeof model === "string" ? model : undefined;
 
     const requiredFeatures = extractRequiredFeatures(parsed);
 
@@ -236,6 +238,8 @@ export class HiveCore {
       this.lastProvider = usedNode?.providerName ?? null;
       this.lastModel = usedNode?.modelName ?? null;
 
+      const didFallback = requestedModel !== undefined && this.lastModel !== null && this.lastModel !== requestedModel;
+
       logger.debug(`request ${requestId} — success via ${this.lastProvider ?? "??"}:${this.lastModel ?? "??"}`);
 
       return {
@@ -245,6 +249,7 @@ export class HiveCore {
         provider: this.lastProvider ?? undefined,
         model: this.lastModel ?? undefined,
         statusCode: response.status,
+        didFallback,
       };
     }
 
@@ -330,10 +335,10 @@ type ChatCompletionResult = {
   success: boolean;
   stream?: PassThrough;
   provider?: string;
-
   model?: string;
   statusCode?: number;
   error?: string;
+  didFallback?: boolean;
 };
 
 export type Message = {

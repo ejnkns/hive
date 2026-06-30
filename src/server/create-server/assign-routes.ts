@@ -209,6 +209,9 @@ export function assignRoutes(server: FastifyServer) {
       `request ${requestId} — chat completion success → routing via ${result.provider ?? ""} (model: ${result.model ?? ""})`
     );
     reply.header("Content-Type", "text/event-stream");
+    if (result.didFallback) {
+      reply.header("X-Hive-Fallback", "true");
+    }
     return reply.send(result.stream);
   });
 
