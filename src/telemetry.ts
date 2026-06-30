@@ -1,6 +1,6 @@
 export { applySlidingWindow } from "./telemetry/apply-sliding-window";
 export { loadCache, saveCache } from "./telemetry/cache";
-export type { Node } from "./telemetry/calculate-node-score";
+export type { Node, RoutingStrategy } from "./telemetry/calculate-node-score";
 export { calculateNodeScore } from "./telemetry/calculate-node-score";
 export { conversationStore } from "./telemetry/conversation-store";
 export { telemetryRecorder } from "./telemetry/recorder";
@@ -10,6 +10,7 @@ export { detectRefusal } from "./telemetry/recorder/detect-refusal";
 export type {
   ErrorType,
   FinishReason,
+  MetricSource,
   RequestMetric,
 } from "./telemetry/request-metric";
 export { startHeartbeat } from "./telemetry/start-heartbeat";

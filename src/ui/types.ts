@@ -1,3 +1,5 @@
+import type { ErrorType, FinishReason, MetricSource } from "../telemetry";
+
 export type ProviderData = {
   name: string;
   displayName: string;
@@ -21,17 +23,17 @@ export type MetricData = {
   inputTokens: number | null;
   outputTokens: number | null;
   thinkingTime: number | null;
-  finishReason: string | null;
+  finishReason: FinishReason;
   refused: boolean;
   statusCode: number;
-  errorType: string | null;
+  errorType: ErrorType;
   errorBody?: string;
   success: boolean;
-  source: string;
+  source: MetricSource;
 };
 
 export type ContentPart = {
-  type: string;
+  type: "text" | "image_url";
   text?: string;
   image_url?: { url: string };
 };
@@ -48,7 +50,7 @@ export type ConversationData = {
   prompt: { role: string; content: string | ContentPart[] }[];
   responseText: string;
   outputTokens: number | null;
-  finishReason: string | null;
+  finishReason: FinishReason;
   refused: boolean;
 };
 

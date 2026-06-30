@@ -1,4 +1,6 @@
-type ContentPart = { type: string; text?: string; image_url?: { url: string } };
+import type { FinishReason } from "./request-metric";
+
+type ContentPart = { type: "text" | "image_url"; text?: string; image_url?: { url: string } };
 
 type Conversation = {
   requestId: string;
@@ -12,7 +14,7 @@ type Conversation = {
   prompt: { role: string; content: string | ContentPart[] }[];
   responseText: string;
   outputTokens: number | null;
-  finishReason: string | null;
+  finishReason: FinishReason;
   refused: boolean;
 };
 
@@ -45,7 +47,7 @@ class ConversationStore {
       success: boolean;
       responseText: string;
       outputTokens: number | null;
-      finishReason: string | null;
+      finishReason: FinishReason;
       refused: boolean;
     }
   ): void {

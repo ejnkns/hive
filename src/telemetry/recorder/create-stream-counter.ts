@@ -1,5 +1,6 @@
 import { Transform } from "node:stream";
 import { logger } from "../../shared/logger";
+import type { FinishReason } from "../request-metric";
 
 type StreamDelta = {
   content?: string;
@@ -25,7 +26,7 @@ type StreamStats = {
   thinkingStart: number | null;
   thinkingEnd: number | null;
   thinkingTime: number | null;
-  finishReason: string | null;
+  finishReason: FinishReason;
   responseText: string;
   inputTokens: number | null;
   outputTokensFromUsage: number | null;
@@ -39,7 +40,7 @@ export function createStreamCounter(startTime: number) {
   let thinkingEnd: number | null = null;
   let hasReceivedContent = false;
   let isAbruptDisconnect = true;
-  let finishReason: string | null = null;
+  let finishReason: FinishReason = null;
   let responseText = "";
   let inputTokens: number | null = null;
   let outputTokensFromUsage: number | null = null;
@@ -65,12 +66,14 @@ export function createStreamCounter(startTime: number) {
         }
 
         try {
+          // JSON.parse returns unknown; shape validated by downstream access
           const parsed = JSON.parse(jsonStr) as StreamChunk;
           const delta = parsed.choices?.[0]?.delta;
           const finish = parsed.choices?.[0]?.finish_reason;
 
           if (finish) {
-            finishReason = finish;
+            // API finish_reason values align with FinishReason union
+            finishReason = finish as FinishReason;
             isAbruptDisconnect = false;
             logger.debug(`parse-stream: finish reason: ${finish}`);
           }
@@ -113,6 +116,7 @@ export function createStreamCounter(startTime: number) {
             );
           }
         } catch (err) {
+          // err is caught from JSON.parse — known to be Error
           logger.debug(`parse-stream: skipped unparseable chunk: ${(err as Error).message}`);
         }
       }
