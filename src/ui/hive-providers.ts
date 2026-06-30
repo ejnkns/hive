@@ -81,6 +81,49 @@ export class HiveProviders extends HTMLElement {
     }, 1000);
   }
 
+  private renderPipeline(): string {
+    const chains = new Map<string, { provider: string; model: string; success: boolean }[]>();
+    for (const m of this._metrics) {
+      const existing = chains.get(m.requestId);
+      if (existing) {
+        existing.push({ provider: m.provider, model: m.model, success: m.success });
+      } else {
+        chains.set(m.requestId, [{ provider: m.provider, model: m.model, success: m.success }]);
+      }
+    }
+
+    const fallbacks = Array.from(chains.entries())
+      .filter(([, attempts]) => {
+        const models = new Set(attempts.map((a) => a.model));
+        return models.size > 1;
+      })
+      .sort((a, b) => b[1][0].success.toString().localeCompare(a[1][0].success.toString()));
+    // actually just sort by recency: pick most recent by last attempt
+
+    if (fallbacks.length === 0) return "";
+
+    let html = `<div class="pipeline"><div class="pipeline-title">🔀 Recent Fallbacks</div>`;
+    fallbacks.slice(0, 8).forEach(([, attempts]) => {
+      const models = attempts.map((a) => a.model);
+      const uniqueModels = [...new Set(models)];
+      const successful = attempts.some((a) => a.success);
+      const icon = successful ? "✓" : "✗";
+      const color = successful ? "var(--success)" : "var(--error)";
+      html += `<div class="pipeline-row">
+        <span style="color:${color}">${icon}</span>
+        <span class="pipeline-chain">${uniqueModels
+          .map((m, i) => {
+            const prefix = i === 0 ? "" : '<span class="pipeline-arrow">→</span>';
+            const isFallback = i > 0;
+            return `${prefix}<span class="pipeline-model${isFallback ? " fallback" : ""}">${m}</span>`;
+          })
+          .join("")}</span>
+      </div>`;
+    });
+    html += "</div>";
+    return html;
+  }
+
   private render() {
     const grouped = new Map<string, ProviderData[]>();
     this._data.forEach((x) => {
@@ -127,7 +170,9 @@ export class HiveProviders extends HTMLElement {
       return;
     }
 
-    let html = "";
+    const pipelineHtml = this.renderPipeline();
+
+    let html = pipelineHtml;
     providerGroups.forEach((group) => {
       const { name, displayName, entries, maxScore, keyConfigured } = group;
       const f = entries[0];
@@ -232,6 +277,41 @@ export class HiveProviders extends HTMLElement {
           display: flex;
           flex-direction: column;
           gap: 1rem;
+        }
+        .pipeline {
+          background: var(--card);
+          border: 1px solid var(--border);
+          padding: 0.75rem 1rem;
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+        }
+        .pipeline-title {
+          font-size: 0.6875rem;
+          font-weight: 700;
+          color: var(--muted);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+        }
+        .pipeline-row {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          font-size: 0.6875rem;
+        }
+        .pipeline-chain {
+          font-family: monospace;
+          font-size: 0.625rem;
+        }
+        .pipeline-model {
+          color: var(--accent);
+        }
+        .pipeline-model.fallback {
+          color: var(--warn, #e2a93b);
+        }
+        .pipeline-arrow {
+          color: var(--muted);
+          margin: 0 0.25rem;
         }
         .worker {
           background: var(--card);
