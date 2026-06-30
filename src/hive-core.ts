@@ -302,6 +302,7 @@ export class HiveCore {
             providerName: provider.name,
             modelName: provider.defaultModel,
             requestId: generateId(),
+            source: "heartbeat",
           });
         } catch (err: unknown) {
           logger.debug(`heartbeat: ${provider.name} failed: ${err instanceof Error ? err.message : String(err)}`);
