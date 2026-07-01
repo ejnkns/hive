@@ -169,7 +169,8 @@ export function assignRoutes(server: FastifyServer) {
         if (parsed?.type === "override") {
           const provider = parsed.provider;
           const model = parsed.model;
-          if (typeof provider === "string" && typeof model === "string") {
+          const enabled = parsed.enabled !== false;
+          if (typeof provider === "string" && typeof model === "string" && enabled) {
             setOverride(provider, model);
             logger.debug(`override set: ${provider} / ${model}`);
           } else {
@@ -184,19 +185,10 @@ export function assignRoutes(server: FastifyServer) {
     });
   });
 
-  server.get("/assets/*", async (request, reply) => {
-    // Fastify types params loosely; we know the route pattern has wildcard
-    const filename = (request.params as Record<string, string>)["*"];
-    const filePath = join(assetsDir, filename);
-    if (!existsSync(filePath)) return reply.status(404).send();
-    const ext = filename.split(".").pop()?.toLowerCase() || "";
-    reply.type(MIME_TYPES[ext] || "application/octet-stream");
-    return reply.send(readFileSync(filePath));
-  });
-
   server.get("/", async (_request, reply) => {
-    if (existsSync(indexPath)) {
-      const html = readFileSync(indexPath, "utf-8");
+    console.log(`Serving UI from: ${indexHtmlPath}`);
+    if (existsSync(indexHtmlPath)) {
+      const html = readFileSync(indexHtmlPath, "utf-8");
       reply.type("text/html");
       return reply.send(html);
     }
@@ -221,9 +213,6 @@ export function assignRoutes(server: FastifyServer) {
       `request ${requestId} — chat completion success → routing via ${result.provider ?? ""} (model: ${result.model ?? ""})`
     );
     reply.header("Content-Type", "text/event-stream");
-    if (result.didFallback) {
-      reply.header("X-Hive-Fallback", "true");
-    }
     return reply.send(result.stream);
   });
 
@@ -263,16 +252,4 @@ export function assignRoutes(server: FastifyServer) {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const uiBuildDir = join(__dirname, "ui");
-const indexPath = join(uiBuildDir, "index.html");
-const assetsDir = join(uiBuildDir, "assets");
-
-const MIME_TYPES: Record<string, string> = {
-  js: "text/javascript",
-  css: "text/css",
-  html: "text/html",
-  json: "application/json",
-  svg: "image/svg+xml",
-  png: "image/png",
-  jpg: "image/jpeg",
-  woff2: "font/woff2",
-};
+const indexHtmlPath = join(uiBuildDir, "index.html");

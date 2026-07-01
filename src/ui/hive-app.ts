@@ -295,13 +295,20 @@ export class HiveApp extends HTMLElement {
 
   setOverride(provider: string, model: string): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ type: "override", provider, model }));
+      this.ws.send(JSON.stringify({ type: "override", provider, model, enabled: true }));
     }
   }
 
   clearOverride(): void {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ type: "override", provider: null, model: null }));
+    if (this.ws?.readyState === WebSocket.OPEN && this._override.provider && this._override.model) {
+      this.ws.send(
+        JSON.stringify({
+          type: "override",
+          provider: this._override.provider,
+          model: this._override.model,
+          enabled: false,
+        })
+      );
     }
   }
 }
