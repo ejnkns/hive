@@ -1,5 +1,13 @@
 import { type LogEntry, logger } from "../shared/logger";
-import type { AvailableProvider, ConversationData, MetricData, OverrideState, ProviderData, SubScores } from "./types";
+import type {
+  AvailableProvider,
+  ConversationData,
+  FlowEvent,
+  MetricData,
+  OverrideState,
+  ProviderData,
+  SubScores,
+} from "./types";
 import "./hive-header";
 import "./hive-stats";
 import "./hive-providers";
@@ -18,6 +26,7 @@ export class HiveApp extends HTMLElement {
     model: null,
   };
   private _availableProviders: AvailableProvider[] = [];
+  private _flowEvents: FlowEvent[] = [];
 
   constructor() {
     super();
@@ -149,6 +158,14 @@ export class HiveApp extends HTMLElement {
   // ── Message dispatch ────────────────────────────────────────────────────
 
   private handleMessage(msg: WsMessage) {
+    if (msg.type === "flow") {
+      this._flowEvents.push(msg.data);
+      if (this._flowEvents.length > 100) {
+        this._flowEvents.shift();
+      }
+      return;
+    }
+
     if (msg.type === "log") {
       // shadow DOM structure includes hive-logs
       const logsEl = this.shadow.querySelector("hive-logs") as LogsEl | null;
@@ -357,7 +374,10 @@ type TelemetryData = {
   contextWindowWeight: number;
 };
 
-type WsMessage = { type: "init" | "update"; data: TelemetryData } | { type: "log"; data: LogEntry };
+type WsMessage =
+  | { type: "init" | "update"; data: TelemetryData }
+  | { type: "log"; data: LogEntry }
+  | { type: "flow"; data: FlowEvent };
 
 // ─── Element type helpers ───────────────────────────────────────────────────
 
