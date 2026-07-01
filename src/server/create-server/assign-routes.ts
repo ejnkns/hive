@@ -185,6 +185,15 @@ export function assignRoutes(server: FastifyServer) {
     });
   });
 
+  server.get("/assets/*", async (request, reply) => {
+    const filename = (request.params as Record<string, string>)["*"];
+    const filePath = join(uiBuildDir, "assets", filename);
+    if (!existsSync(filePath)) return reply.status(404).send();
+    const ext = filename.split(".").pop()?.toLowerCase() || "";
+    reply.type(MIME_TYPES[ext] || "application/octet-stream");
+    return reply.send(readFileSync(filePath));
+  });
+
   server.get("/", async (_request, reply) => {
     console.log(`Serving UI from: ${indexHtmlPath}`);
     if (existsSync(indexHtmlPath)) {
@@ -193,6 +202,30 @@ export function assignRoutes(server: FastifyServer) {
       return reply.send(html);
     }
     return reply.status(404).send({ error: "UI not found" });
+  });
+
+  server.get("/api-spec", async (_request, reply) => {
+    console.log(`Serving API spec from: ${specHtmlPath}`);
+    if (!existsSync(specHtmlPath)) {
+      return reply.status(404).send({ error: `API spec not found ${specHtmlPath}` });
+    }
+    const html = readFileSync(specHtmlPath, "utf-8");
+    reply.type("text/html");
+    return reply.send(html);
+  });
+
+  server.get("/api-spec.yaml", async (_request, reply) => {
+    if (!existsSync(specYamlPath)) {
+      return reply.status(404).send({ error: `API spec YAML not found ${specYamlPath}` });
+    }
+    const yaml = readFileSync(specYamlPath, "utf-8");
+    reply.type("application/x-yaml");
+    return reply.send(yaml);
+  });
+
+  // API endpoints
+  server.get("/health", async (_request, reply) => {
+    reply.send({ status: "ok" });
   });
 
   server.post("/v1/chat/completions", async (request, reply) => {
@@ -214,10 +247,6 @@ export function assignRoutes(server: FastifyServer) {
     );
     reply.header("Content-Type", "text/event-stream");
     return reply.send(result.stream);
-  });
-
-  server.get("/health", async (_request, reply) => {
-    reply.send({ status: "ok" });
   });
 
   server.get("/api/providers", async (_request, reply) => {
@@ -253,3 +282,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const uiBuildDir = join(__dirname, "ui");
 const indexHtmlPath = join(uiBuildDir, "index.html");
+const specHtmlPath = join(__dirname, "static", "api-spec.html");
+const specYamlPath = join(__dirname, "static", "api-spec.yaml");
+const MIME_TYPES: Record<string, string> = {
+  js: "text/javascript",
+  css: "text/css",
+  html: "text/html",
+  json: "application/json",
+  svg: "image/svg+xml",
+  png: "image/png",
+  jpg: "image/jpeg",
+  woff2: "font/woff2",
+};

@@ -102,7 +102,7 @@ export class HiveProviders extends HTMLElement {
 
     if (fallbacks.length === 0) return "";
 
-    let html = `<div class="pipeline"><div class="pipeline-title">🔀 Recent Fallbacks</div>`;
+    let html = `<div class="pipeline"><div class="pipeline-title">Recent Fallbacks</div>`;
     fallbacks.slice(0, 8).forEach(([, attempts]) => {
       const models = attempts.map((a) => a.model);
       const uniqueModels = [...new Set(models)];

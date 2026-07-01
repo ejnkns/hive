@@ -1,0 +1,445 @@
+openapi: "3.0.3"
+info:
+  title: Hive API
+  description: |
+    Multi-provider LLM proxy with telemetry-driven routing.
+    Proxies OpenAI-compatible `/v1/chat/completions` through scored provider pools.
+    Includes a management API and real-time WebSocket telemetry stream.
+  version: "0.1.0"
+
+servers:
+  - url: http://127.0.0.1:8153
+    description: Default local server
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      responses:
+        "200":
+          description: Server is running
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+
+  /v1/chat/completions:
+    post:
+      summary: Proxy chat completion
+      description: |
+        Forwards an OpenAI-compatible chat completion request through the scored
+        provider pool. The backend selects the best available (provider, model)
+        node using real-time telemetry, auto-routing around CircuitBreakers and
+        unsupported features. The proxy always routes to each provider's
+        default model — the client's model field is unused.
+
+        Response is a Server-Sent Events stream (text/event-stream).
+      operationId: proxyChatCompletion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [messages]
+              properties:
+                model:
+                  type: string
+                  description: Unused by proxy — routing always uses provider default model
+                messages:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/Message"
+                tools:
+                  type: array
+                  description: Function/tool definitions (triggers feature routing)
+                max_tokens:
+                  type: integer
+                temperature:
+                  type: number
+                stream:
+                  type: boolean
+                  default: false
+      responses:
+        "200":
+          description: SSE stream from routed provider
+          headers:
+            Content-Type:
+              schema:
+                type: string
+                example: text/event-stream
+        "503":
+          description: No configured providers or all providers failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+
+  /api/providers:
+    get:
+      summary: List provider states
+      description: Returns all (provider, model) nodes with their current telemetry scores.
+      operationId: getProviders
+      responses:
+        "200":
+          description: Provider state list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  providers:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ProviderNode"
+                  lastProvider:
+                    type: string
+                    nullable: true
+                  lastModel:
+                    type: string
+                    nullable: true
+
+  /api/metrics:
+    get:
+      summary: Raw telemetry metrics
+      description: Returns all buffered request metrics from the telemetry recorder.
+      operationId: getMetrics
+      responses:
+        "200":
+          description: Raw metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  metrics:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/RequestMetric"
+                  pending:
+                    type: integer
+                    description: Unflushed metrics in memory
+
+  /api/conversations:
+    get:
+      summary: Conversation history
+      description: Returns stored conversation records for completed requests.
+      operationId: getConversations
+      responses:
+        "200":
+          description: Conversation list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversations:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Conversation"
+
+components:
+  schemas:
+    Message:
+      type: object
+      required: [role, content]
+      properties:
+        role:
+          type: string
+          enum: [system, user, assistant, tool]
+        content:
+          type: string
+        tool_calls:
+          type: array
+        tool_call_id:
+          type: string
+
+    SubScores:
+      type: object
+      properties:
+        latency:
+          type: number
+          description: p95 TTFT score (0-100)
+        throughput:
+          type: number
+          description: Mean tokens/sec score (0-100)
+        reliability:
+          type: number
+          description: Severity-weighted error decay score (0-100)
+        quality:
+          type: number
+          description: Refusal/truncation/tool-failure penalty score (0-100)
+        contextWindow:
+          type: number
+          description: ln(token_context) normalized score (0-100)
+
+    ProviderNode:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Provider identifier
+        displayName:
+          type: string
+          description: Human-readable provider name
+        model:
+          type: string
+          description: Model identifier
+        keyConfigured:
+          type: boolean
+        stabilityScore:
+          type: number
+          description: Composite routing score (0-100)
+        subscores:
+          $ref: "#/components/schemas/SubScores"
+        p95Latency:
+          type: number
+          description: p95 time-to-first-token in ms
+        recentSuccessRate:
+          type: number
+          description: Recent request success rate (0-1)
+        requestCount:
+          type: integer
+        meanTokensPerSecond:
+          type: number
+          nullable: true
+        truncationRate:
+          type: number
+        refusalRate:
+          type: number
+        contentFilterRate:
+          type: number
+        trippedUntil:
+          type: number
+          nullable: true
+          description: Unix ms timestamp — CircuitBreaker cooldown end (30s)
+        disabledFeatures:
+          type: array
+          items:
+            type: string
+          nullable: true
+          description: Features empirically unsupported by this node
+
+    RequestMetric:
+      type: object
+      properties:
+        requestId:
+          type: string
+        provider:
+          type: string
+        model:
+          type: string
+        timestamp:
+          type: number
+          description: Unix ms timestamp
+        ttft:
+          type: number
+          description: Time-to-first-token in ms
+        totalLatency:
+          type: number
+        inputTokens:
+          type: integer
+          nullable: true
+        outputTokens:
+          type: integer
+          nullable: true
+        thinkingTime:
+          type: integer
+          nullable: true
+        finishReason:
+          type: string
+          enum: [stop, length, content-filter]
+          nullable: true
+        refused:
+          type: boolean
+          description: Heuristic refusal-pattern match on response text
+        toolCallFailed:
+          type: boolean
+          description: Malformed tool-call JSON detected
+        statusCode:
+          type: integer
+        errorType:
+          type: string
+          enum: [rate-limited, server-error, auth-error, timeout, network-error, invalid-request]
+          nullable: true
+        errorBody:
+          type: string
+        success:
+          type: boolean
+        source:
+          type: string
+          enum: [user, heartbeat]
+
+    Conversation:
+      type: object
+      properties:
+        requestId:
+          type: string
+        provider:
+          type: string
+        model:
+          type: string
+        timestamp:
+          type: number
+        ttft:
+          type: number
+          nullable: true
+        totalLatency:
+          type: number
+          nullable: true
+        statusCode:
+          type: integer
+        success:
+          type: boolean
+        prompt:
+          type: array
+          items:
+            type: object
+            properties:
+              role:
+                type: string
+              content:
+                type: string
+        responseText:
+          type: string
+        outputTokens:
+          type: integer
+          nullable: true
+        finishReason:
+          type: string
+          nullable: true
+        refused:
+          type: boolean
+
+    WebSocketMessage:
+      description: |
+        Server → Client messages are JSON-encoded.
+
+        Types:
+        - `init` — full state snapshot on connect, same shape as `update`
+        - `update` — pushed on every telemetry flush (every 12s)
+        - `log` — pushed on every log event
+      oneOf:
+        - type: object
+          properties:
+            type:
+              type: string
+              enum: [init, update]
+            data:
+              $ref: "#/components/schemas/TelemetryData"
+        - type: object
+          properties:
+            type:
+              type: string
+              enum: [log]
+            data:
+              $ref: "#/components/schemas/LogEntry"
+
+    TelemetryData:
+      type: object
+      description: Full state snapshot sent on WS connect and on every telemetry flush.
+      properties:
+        providers:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProviderNode"
+        serverPort:
+          type: string
+        serverHost:
+          type: string
+        lastProvider:
+          type: string
+          nullable: true
+        lastModel:
+          type: string
+          nullable: true
+        overrideActive:
+          type: boolean
+        overrideProvider:
+          type: string
+          nullable: true
+        overrideModel:
+          type: string
+          nullable: true
+        availableProviders:
+          type: array
+          items:
+            $ref: "#/components/schemas/AvailableProvider"
+        metrics:
+          type: array
+          items:
+            $ref: "#/components/schemas/RequestMetric"
+        pending:
+          type: integer
+        conversations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Conversation"
+        bestProvider:
+          type: string
+          nullable: true
+        bestModel:
+          type: string
+          nullable: true
+        bestScore:
+          type: number
+          nullable: true
+        routingStrategy:
+          type: string
+          enum: [balanced, latency, quality]
+        contextWindowWeight:
+          type: number
+
+    AvailableProvider:
+      type: object
+      properties:
+        name:
+          type: string
+        displayName:
+          type: string
+        models:
+          type: array
+          items:
+            type: string
+        keyConfigured:
+          type: boolean
+
+    LogEntry:
+      type: object
+      properties:
+        level:
+          type: string
+          enum: [info, warn, error, debug]
+        message:
+          type: string
+        timestamp:
+          type: number
+
+    OverrideCommand:
+      description: |
+        Client → Server WebSocket message.
+        Pin routing to a specific (provider, model) node via `enabled: true`,
+        or clear the current override with `enabled: false`.
+      required: [type, provider, model]
+      properties:
+        type:
+          type: string
+          enum: [override]
+        provider:
+          type: string
+          description: Provider name to pin
+        model:
+          type: string
+          description: Model to pin
+        enabled:
+          type: boolean
+          default: true
+          description: true to set override, false to clear it
