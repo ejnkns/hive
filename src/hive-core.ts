@@ -1,5 +1,6 @@
 import type { IncomingHttpHeaders } from "node:http";
 import type { PassThrough } from "node:stream";
+import { detectEditLoop } from "./hive-core/detect-edit-loop";
 import { extractRequiredFeatures } from "./hive-core/extract-required-features";
 import { generateId } from "./hive-core/generateId";
 import { sanitizePayloadForProvider } from "./hive-core/sanitize-payload-for-provider";
@@ -104,11 +105,22 @@ export class HiveCore {
     }
 
     const cache = await loadCache();
-    const payloadStr = JSON.stringify(parsed);
     const requestId = generateId();
     const sessionId = requestId;
     // parsed is already typed as Record<string, unknown> (body variant union)
     const messages = (parsed as Record<string, unknown>).messages ?? [];
+    const typedMessages = Array.isArray(messages) ? (messages as Message[]) : [];
+    const editLoop = detectEditLoop(typedMessages);
+    if (editLoop) {
+      (parsed as Record<string, unknown>).messages = [
+        ...typedMessages,
+        {
+          role: "system",
+          content: `The edit tool failed repeatedly on "${editLoop.filePath}". Use the read tool to refresh the file content before attempting more edits.`,
+        },
+      ];
+    }
+    const payloadStr = JSON.stringify(parsed);
 
     const requiredFeatures = extractRequiredFeatures(parsed);
 
@@ -344,6 +356,7 @@ export type Message = {
   content: string;
   reasoning_content?: string;
   tool_calls?: unknown[];
+  tool_call_id?: string;
 };
 
 export const hiveCore = new HiveCore();
