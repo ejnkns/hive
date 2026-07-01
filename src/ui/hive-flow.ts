@@ -98,13 +98,9 @@ export class HiveFlow extends HTMLElement {
 
     let html = "";
     sorted.forEach(([requestId, req]) => {
-      const hasResponse = Boolean(req.response);
-      const statusColor = hasResponse ? (req.response!.success ? "var(--success)" : "var(--error)") : "var(--muted)";
-      const statusText = hasResponse
-        ? req.response!.success
-          ? `${String(req.response!.statusCode)}`
-          : `${String(req.response!.statusCode)} ERR`
-        : "pending";
+      const r = req.response;
+      const statusColor = r ? (r.success ? "var(--success)" : "var(--error)") : "var(--muted)";
+      const statusText = r ? (r.success ? `${String(r.statusCode)}` : `${String(r.statusCode)} ERR`) : "pending";
 
       let responseHtml = "";
       if (req.response) {
