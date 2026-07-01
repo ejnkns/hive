@@ -3,7 +3,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { WebSocket } from "ws";
 import { hiveCore } from "../../hive-core";
+import { getModelId } from "../../providers";
 import { routingMemory } from "../../proxy";
+import { type FlowEvent, onFlowEvent } from "../../proxy/flow-events";
 import { addLogListener, getRecentLogs, logger } from "../../shared/logger";
 import { getServerConfig } from "../../shared/server-config";
 import { conversationStore, loadCache, telemetryRecorder } from "../../telemetry";
@@ -22,7 +24,8 @@ export function assignRoutes(server: FastifyServer) {
       const keyConfigured = !!process.env[p.apiKeyEnvVar];
       const providerModels = p.models.length > 0 ? p.models : [p.defaultModel];
 
-      return providerModels.map((model) => {
+      return providerModels.map((entry) => {
+        const model = getModelId(entry);
         const matchingState = states.find((s) => s.provider === p.name && s.model === model) ?? null;
         const compKey = `${p.name}:${model}`;
 
@@ -31,13 +34,23 @@ export function assignRoutes(server: FastifyServer) {
           displayName: p.displayName,
           baseUrl: p.baseUrl,
           model,
-          models: p.models,
+          models: p.models.map(getModelId),
           keyConfigured,
           stabilityScore: matchingState?.stabilityScore ?? 0,
+          subscores: matchingState?.subscores ?? {
+            latency: 0,
+            throughput: 0,
+            reliability: 0,
+            quality: 0,
+            contextWindow: 0,
+          },
           p95Latency: matchingState?.p95Latency ?? 0,
           recentSuccessRate: matchingState?.recentSuccessRate ?? 0,
           requestCount: matchingState?.requestCount ?? 0,
           meanTokensPerSecond: matchingState?.meanTokensPerSecond ?? null,
+          truncationRate: matchingState?.truncationRate ?? 0,
+          refusalRate: matchingState?.refusalRate ?? 0,
+          contentFilterRate: matchingState?.contentFilterRate ?? 0,
           trippedUntil: routingStates.trippedBreakers[compKey] || null,
           disabledFeatures: routingStates.disabledFeatures[compKey],
         };
@@ -58,7 +71,7 @@ export function assignRoutes(server: FastifyServer) {
     const availableProviders = configProviders.map((p) => ({
       name: p.name,
       displayName: p.displayName,
-      models: [...p.models],
+      models: p.models.map((entry) => getModelId(entry)),
       keyConfigured: !!process.env[p.apiKeyEnvVar],
     }));
 
@@ -90,6 +103,8 @@ export function assignRoutes(server: FastifyServer) {
         bestProvider,
         bestModel,
         bestScore,
+        routingStrategy: process.env.HIVE_ROUTING_STRATEGY || "balanced",
+        contextWindowWeight: Number(process.env.HIVE_CONTEXT_WINDOW_WEIGHT) || 0,
       },
     };
   };
@@ -124,6 +139,25 @@ export function assignRoutes(server: FastifyServer) {
     }
   });
 
+  const flowEventBuffer: FlowEvent[] = [];
+  const MAX_FLOW_BUFFER = 50;
+
+  onFlowEvent((event) => {
+    flowEventBuffer.push(event);
+    if (flowEventBuffer.length > MAX_FLOW_BUFFER) {
+      flowEventBuffer.shift();
+    }
+    if (activeSockets.size === 0) return;
+    const payload = JSON.stringify({ type: "flow", data: event });
+    for (const socket of activeSockets) {
+      try {
+        socket.send(payload);
+      } catch {
+        // ignore
+      }
+    }
+  });
+
   server.get("/ws", { websocket: true }, (socket) => {
     activeSockets.add(socket);
 
@@ -137,6 +171,11 @@ export function assignRoutes(server: FastifyServer) {
         const recentLogs = getRecentLogs();
         for (const log of recentLogs) {
           socket.send(JSON.stringify({ type: "log", data: log }));
+        }
+
+        // Send buffered flow events
+        for (const event of flowEventBuffer) {
+          socket.send(JSON.stringify({ type: "flow", data: event }));
         }
       } catch (err) {
         logger.error("failed to send initial ws payload", err);
@@ -155,7 +194,8 @@ export function assignRoutes(server: FastifyServer) {
         if (parsed?.type === "override") {
           const provider = parsed.provider;
           const model = parsed.model;
-          if (typeof provider === "string" && typeof model === "string") {
+          const enabled = parsed.enabled !== false;
+          if (typeof provider === "string" && typeof model === "string" && enabled) {
             setOverride(provider, model);
             logger.debug(`override set: ${provider} / ${model}`);
           } else {
@@ -171,9 +211,8 @@ export function assignRoutes(server: FastifyServer) {
   });
 
   server.get("/assets/*", async (request, reply) => {
-    // Fastify types params loosely; we know the route pattern has wildcard
     const filename = (request.params as Record<string, string>)["*"];
-    const filePath = join(assetsDir, filename);
+    const filePath = join(uiBuildDir, "assets", filename);
     if (!existsSync(filePath)) return reply.status(404).send();
     const ext = filename.split(".").pop()?.toLowerCase() || "";
     reply.type(MIME_TYPES[ext] || "application/octet-stream");
@@ -181,12 +220,37 @@ export function assignRoutes(server: FastifyServer) {
   });
 
   server.get("/", async (_request, reply) => {
-    if (existsSync(indexPath)) {
-      const html = readFileSync(indexPath, "utf-8");
+    console.log(`Serving UI from: ${indexHtmlPath}`);
+    if (existsSync(indexHtmlPath)) {
+      const html = readFileSync(indexHtmlPath, "utf-8");
       reply.type("text/html");
       return reply.send(html);
     }
     return reply.status(404).send({ error: "UI not found" });
+  });
+
+  server.get("/api-spec", async (_request, reply) => {
+    console.log(`Serving API spec from: ${specHtmlPath}`);
+    if (!existsSync(specHtmlPath)) {
+      return reply.status(404).send({ error: `API spec not found ${specHtmlPath}` });
+    }
+    const html = readFileSync(specHtmlPath, "utf-8");
+    reply.type("text/html");
+    return reply.send(html);
+  });
+
+  server.get("/api-spec.yaml", async (_request, reply) => {
+    if (!existsSync(specYamlPath)) {
+      return reply.status(404).send({ error: `API spec YAML not found ${specYamlPath}` });
+    }
+    const yaml = readFileSync(specYamlPath, "utf-8");
+    reply.type("application/x-yaml");
+    return reply.send(yaml);
+  });
+
+  // API endpoints
+  server.get("/health", async (_request, reply) => {
+    reply.send({ status: "ok" });
   });
 
   server.post("/v1/chat/completions", async (request, reply) => {
@@ -208,10 +272,6 @@ export function assignRoutes(server: FastifyServer) {
     );
     reply.header("Content-Type", "text/event-stream");
     return reply.send(result.stream);
-  });
-
-  server.get("/health", async (_request, reply) => {
-    reply.send({ status: "ok" });
   });
 
   server.get("/api/providers", async (_request, reply) => {
@@ -246,9 +306,9 @@ export function assignRoutes(server: FastifyServer) {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const uiBuildDir = join(__dirname, "ui");
-const indexPath = join(uiBuildDir, "index.html");
-const assetsDir = join(uiBuildDir, "assets");
-
+const indexHtmlPath = join(uiBuildDir, "index.html");
+const specHtmlPath = join(__dirname, "static", "api-spec.html");
+const specYamlPath = join(__dirname, "static", "api-spec.yaml");
 const MIME_TYPES: Record<string, string> = {
   js: "text/javascript",
   css: "text/css",

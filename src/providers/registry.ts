@@ -1,21 +1,28 @@
-import { groq } from "./registry/groq";
-import { sambanova } from "./registry/sambanova";
-import { nvidiaNim } from "./registry/nvidia-nim";
-import { opencodeZen } from "./registry/opencode-zen";
-import { googleAi } from "./registry/google-ai";
-import { githubModels } from "./registry/github-models";
-import { mistral } from "./registry/mistral";
-import { omlx } from "./registry/omlx";
-import { ollama } from "./registry/ollama";
-import { lmStudio } from "./registry/lm-studio";
+import type { SubScores } from "../telemetry";
 import { cerebras } from "./registry/cerebras";
+import { githubModels } from "./registry/github-models";
+import { googleAi } from "./registry/google-ai";
+import { groq } from "./registry/groq";
+import { lmStudio } from "./registry/lm-studio";
+import { mistral } from "./registry/mistral";
+import { nvidiaNim } from "./registry/nvidia-nim";
+import { ollama } from "./registry/ollama";
+import { omlx } from "./registry/omlx";
+import { opencodeZen } from "./registry/opencode-zen";
+import { sambanova } from "./registry/sambanova";
+
+export type ModelEntry = string | { id: string; contextLength?: number };
+
+export function getModelId(entry: ModelEntry): string {
+  return typeof entry === "string" ? entry : entry.id;
+}
 
 export type Provider = {
   name: string;
   displayName: string;
   baseUrl: string;
   apiKeyEnvVar: string;
-  models: string[];
+  models: ModelEntry[];
   defaultModel: string;
   modelPreferences?: string[];
 };
@@ -25,6 +32,7 @@ export type ProviderState = {
   model: string;
   enabled: boolean;
   stabilityScore: number;
+  subscores: SubScores;
 };
 
 export const allProviders: Provider[] = [

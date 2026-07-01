@@ -1,6 +1,6 @@
 export { applySlidingWindow } from "./telemetry/apply-sliding-window";
 export { loadCache, saveCache } from "./telemetry/cache";
-export type { Node, RoutingStrategy } from "./telemetry/calculate-node-score";
+export type { Node, NodeScoreResult, RoutingStrategy, SubScores } from "./telemetry/calculate-node-score";
 export { calculateNodeScore } from "./telemetry/calculate-node-score";
 export { conversationStore } from "./telemetry/conversation-store";
 export { telemetryRecorder } from "./telemetry/recorder";

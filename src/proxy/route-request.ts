@@ -3,8 +3,9 @@ import https from "node:https";
 import { PassThrough } from "node:stream";
 import { URL } from "node:url";
 import { logger } from "../shared/logger";
-import type { FinishReason } from "../telemetry";
+import type { FinishReason, MetricSource } from "../telemetry";
 import { classifyError, conversationStore, createStreamCounter, detectRefusal, telemetryRecorder } from "../telemetry";
+import { emitFlowEvent } from "./flow-events";
 import type { MutatedRequest } from "./mutate-request";
 import { ProxyResponse } from "./proxy-response";
 
@@ -15,6 +16,7 @@ type RouteRequestOptions = {
   providerName: string;
   modelName: string;
   requestId: string;
+  source?: MetricSource;
 };
 
 type RouteResult = {
@@ -24,12 +26,14 @@ type RouteResult = {
 };
 
 export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
-  const { upstreamUrl, mutated, timeoutMs, providerName, modelName, requestId } = opts;
+  const { upstreamUrl, mutated, timeoutMs, providerName, modelName, requestId, source: metricSource } = opts;
   return new Promise((resolve) => {
     const url = new URL(upstreamUrl);
     const start = Date.now();
 
     const bodyBuffer = Buffer.from(mutated.body);
+
+    emitFlowEvent({ type: "node_dispatched", requestId, provider: providerName, model: modelName, attempt: 0 });
 
     const requestOptions: https.RequestOptions = {
       hostname: url.hostname,
@@ -60,6 +64,7 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
         responseText: string;
         inputTokens: number | null;
         outputTokensFromUsage: number | null;
+        toolCallFailed: boolean;
       }
     ) => {
       const totalLatency = Date.now() - start;
@@ -87,7 +92,23 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
         errorBody,
         errorType: classifyError(statusCode, errorType),
         success,
-        source: "user",
+        source: metricSource ?? "user",
+        toolCallFailed: stats?.toolCallFailed ?? false,
+      });
+
+      emitFlowEvent({
+        type: "response_complete",
+        requestId,
+        provider: providerName,
+        model: modelName,
+        statusCode,
+        success,
+        ttft,
+        totalLatency,
+        outputTokens,
+        finishReason: stats?.finishReason ?? null,
+        toolCallFailed: stats?.toolCallFailed ?? false,
+        errorType: classifyError(statusCode, errorType),
       });
     };
 
@@ -154,7 +175,9 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
       res.on("end", () => {
         const stats = counter.getStats();
         const effectiveTtft = initialByteReceived ? ttft : Date.now() - start;
-        record(effectiveTtft, !stats.isAbruptDisconnect, statusCode, undefined, undefined, undefined, stats);
+        const isHeartbeat = metricSource === "heartbeat";
+        const isSuccess = isHeartbeat ? statusCode < 400 : !stats.isAbruptDisconnect;
+        record(effectiveTtft, isSuccess, statusCode, undefined, undefined, undefined, stats);
 
         logger.debug(
           `upstream ${providerName}:${modelName} — stream complete (${String(stats.outputChars)} chars, abrupt=${String(stats.isAbruptDisconnect)})`

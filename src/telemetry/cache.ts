@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import { join } from "node:path";
 import { HIVE_DIR } from "../shared/hive-dir";
 import { logger } from "../shared/logger";
+import type { SubScores } from "./calculate-node-score";
 import type { DerivedMetrics } from "./derived-metrics";
 import type { RequestMetric } from "./request-metric";
 
@@ -10,6 +11,7 @@ export type ModelScore = {
   provider: string;
   model: string;
   score: number;
+  subscores: SubScores;
   derived: DerivedMetrics;
   updatedAt: number;
 };

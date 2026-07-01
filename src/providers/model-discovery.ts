@@ -1,11 +1,8 @@
 import { logger } from "../shared/logger";
 import { loadModelCache } from "./model-discovery/load-model-cache";
-import { loadModelCacheSync } from "./model-discovery/load-model-cache-sync";
 import { saveModelCache } from "./model-discovery/save-model-cache";
 import { selectDefaultModel } from "./model-discovery/select-default-model";
-import { buildModelsEndpoint, type Provider } from "./registry";
-
-export { loadModelCacheSync };
+import { buildModelsEndpoint, getModelId, type Provider } from "./registry";
 
 type ModelListResponse = {
   data: Array<{ id: string }>;
@@ -104,7 +101,7 @@ export async function discoverAndCacheModels(providers: Provider[], force = fals
           name: provider.name,
           baseUrl: provider.baseUrl,
           apiKeyEnvVar: provider.apiKeyEnvVar,
-          models: fetchedModels.length > 0 ? fetchedModels : [...provider.models],
+          models: fetchedModels.length > 0 ? fetchedModels : provider.models.map(getModelId),
           defaultModel: bestDefault,
           lastChecked: new Date().toISOString(),
           lastCheckStatus: "success",
@@ -115,7 +112,7 @@ export async function discoverAndCacheModels(providers: Provider[], force = fals
           name: provider.name,
           baseUrl: provider.baseUrl,
           apiKeyEnvVar: provider.apiKeyEnvVar,
-          models: cached?.models || [...provider.models],
+          models: cached?.models || provider.models.map(getModelId),
           defaultModel: cached?.defaultModel || provider.defaultModel,
           lastChecked: new Date().toISOString(),
           lastCheckStatus: "failed",
@@ -130,7 +127,7 @@ export async function discoverAndCacheModels(providers: Provider[], force = fals
         name: provider.name,
         baseUrl: provider.baseUrl,
         apiKeyEnvVar: provider.apiKeyEnvVar,
-        models: cached?.models || [...provider.models],
+        models: cached?.models || provider.models.map(getModelId),
         defaultModel: cached?.defaultModel || provider.defaultModel,
         lastChecked: cached?.lastChecked,
         lastCheckStatus: cached?.lastCheckStatus,

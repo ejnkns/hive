@@ -1,7 +1,7 @@
-import { describe, it } from "node:test";
 import assert from "node:assert";
-import { computeLatencyScore } from "./compute-latency-score";
+import { describe, it } from "node:test";
 import type { RequestMetric } from "../request-metric";
+import { computeLatencyScore } from "./compute-latency-score";
 
 function mockMetric(overrides: Partial<RequestMetric>): RequestMetric {
   return {
@@ -20,6 +20,7 @@ function mockMetric(overrides: Partial<RequestMetric>): RequestMetric {
     errorType: null,
     success: true,
     source: "user",
+    toolCallFailed: false,
     ...overrides,
   };
 }
@@ -41,16 +42,11 @@ await describe("computeLatencyScore", async () => {
     const metrics = [mockMetric({ ttft: 4500 })];
     const standard = computeLatencyScore(metrics, false);
     const reasoning = computeLatencyScore(metrics, true);
-    assert.ok(
-      reasoning > standard,
-      `reasoning ${String(reasoning)} > standard ${String(standard)}`
-    );
+    assert.ok(reasoning > standard, `reasoning ${String(reasoning)} > standard ${String(standard)}`);
   });
 
   await it("uses p95 for multiple metrics", () => {
-    const metrics = Array.from({ length: 20 }, (_, i) =>
-      mockMetric({ ttft: i < 19 ? 100 : 5000 })
-    );
+    const metrics = Array.from({ length: 20 }, (_, i) => mockMetric({ ttft: i < 19 ? 100 : 5000 }));
     const score = computeLatencyScore(metrics, false);
     // p95 should be 5000, so score should be low
     assert.ok(score < 10, `score ${String(score)} < 10`);

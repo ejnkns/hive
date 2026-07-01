@@ -1,7 +1,7 @@
-import { describe, it } from "node:test";
 import assert from "node:assert";
-import { computeQualityScore } from "./compute-quality-score";
+import { describe, it } from "node:test";
 import type { RequestMetric } from "../request-metric";
+import { computeQualityScore } from "./compute-quality-score";
 
 function mockMetric(overrides: Partial<RequestMetric>): RequestMetric {
   return {
@@ -20,6 +20,7 @@ function mockMetric(overrides: Partial<RequestMetric>): RequestMetric {
     errorType: null,
     success: true,
     source: "user",
+    toolCallFailed: false,
     ...overrides,
   };
 }
@@ -43,10 +44,7 @@ await describe("computeQualityScore", async () => {
   });
 
   await it("returns 0 when all metrics are faults", () => {
-    const metrics = [
-      mockMetric({ refused: true }),
-      mockMetric({ finishReason: "length" }),
-    ];
+    const metrics = [mockMetric({ refused: true }), mockMetric({ finishReason: "length" })];
     assert.strictEqual(computeQualityScore(metrics), 0);
   });
 });

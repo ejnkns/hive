@@ -29,4 +29,10 @@ export class CircuitBreaker {
     }
     return active;
   }
+
+  getCooldownSec(compoundKey: string): number {
+    const expiration = this.registry.get(compoundKey);
+    if (!expiration) return 0;
+    return Math.max(0, Math.round((expiration - Date.now()) / 1000));
+  }
 }

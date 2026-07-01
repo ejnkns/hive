@@ -1,10 +1,12 @@
 import type { IncomingHttpHeaders } from "node:http";
 import type { PassThrough } from "node:stream";
+import { detectEditLoop } from "./hive-core/detect-edit-loop";
 import { extractRequiredFeatures } from "./hive-core/extract-required-features";
 import { generateId } from "./hive-core/generateId";
 import { sanitizePayloadForProvider } from "./hive-core/sanitize-payload-for-provider";
-import { buildChatEndpoint, discoverAndCacheModels, type Provider, providers } from "./providers";
+import { buildChatEndpoint, discoverAndCacheModels, getModelId, type Provider, providers } from "./providers";
 import { executeProxyRequest, mutateRequest, ProxyResponse, routeRequest, routingMemory } from "./proxy";
+import { emitFlowEvent } from "./proxy/flow-events";
 import { getOverride, loadProviders } from "./server";
 import { logger } from "./shared/logger";
 import {
@@ -104,11 +106,26 @@ export class HiveCore {
     }
 
     const cache = await loadCache();
-    const payloadStr = JSON.stringify(parsed);
     const requestId = generateId();
     const sessionId = requestId;
     // parsed is already typed as Record<string, unknown> (body variant union)
     const messages = (parsed as Record<string, unknown>).messages ?? [];
+    const typedMessages = Array.isArray(messages) ? (messages as Message[]) : [];
+    const editLoop = detectEditLoop(typedMessages);
+    if (editLoop) {
+      (parsed as Record<string, unknown>).messages = [
+        ...typedMessages,
+        {
+          role: "system",
+          content: `The edit tool failed repeatedly on "${editLoop.filePath}". Use the read tool to refresh the file content before attempting more edits.`,
+        },
+      ];
+    }
+    const payloadStr = JSON.stringify(parsed);
+
+    const lastUserMsg = typedMessages.filter((m) => m.role === "user").at(-1);
+    const promptPreview = typeof lastUserMsg?.content === "string" ? lastUserMsg.content.slice(0, 120) : "";
+    emitFlowEvent({ type: "request_received", requestId, timestamp: Date.now(), promptPreview });
 
     const requiredFeatures = extractRequiredFeatures(parsed);
 
@@ -121,10 +138,14 @@ export class HiveCore {
       Array.isArray(messages) ? (messages as { role: string; content: string }[]) : []
     );
 
-    const nodes: Node[] = qualified.map((p) => ({
-      providerName: p.name,
-      modelName: p.defaultModel,
-    }));
+    const nodes: Node[] = qualified.map((p) => {
+      const defaultEntry = p.models.find((entry) => getModelId(entry) === p.defaultModel);
+      return {
+        providerName: p.name,
+        modelName: p.defaultModel,
+        maxContextTokens: defaultEntry && typeof defaultEntry !== "string" ? defaultEntry.contextLength : undefined,
+      };
+    });
 
     const headers: IncomingHttpHeaders = Object.fromEntries(
       Object.entries(incomingHeaders).filter(
@@ -236,7 +257,6 @@ export class HiveCore {
 
       return {
         success: true,
-        // getStream returns Readable; ProxyResponse wraps PassThrough
         stream: response.getStream() as PassThrough,
         provider: this.lastProvider ?? undefined,
         model: this.lastModel ?? undefined,
@@ -260,10 +280,14 @@ export class HiveCore {
       model: s.model,
       enabled: true,
       stabilityScore: s.score,
+      subscores: s.subscores,
       p95Latency: s.derived.p95Ttft,
       recentSuccessRate: s.derived.successRate,
       requestCount: s.derived.requestCount,
       meanTokensPerSecond: s.derived.meanTokensPerSecond,
+      truncationRate: s.derived.truncationRate,
+      refusalRate: s.derived.refusalRate,
+      contentFilterRate: s.derived.contentFilterRate,
     }));
   }
 
@@ -293,6 +317,7 @@ export class HiveCore {
             providerName: provider.name,
             modelName: provider.defaultModel,
             requestId: generateId(),
+            source: "heartbeat",
           });
         } catch (err: unknown) {
           logger.debug(`heartbeat: ${provider.name} failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -326,7 +351,6 @@ type ChatCompletionResult = {
   success: boolean;
   stream?: PassThrough;
   provider?: string;
-
   model?: string;
   statusCode?: number;
   error?: string;
@@ -337,6 +361,7 @@ export type Message = {
   content: string;
   reasoning_content?: string;
   tool_calls?: unknown[];
+  tool_call_id?: string;
 };
 
 export const hiveCore = new HiveCore();

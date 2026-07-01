@@ -1,10 +1,19 @@
 import { type LogEntry, logger } from "../shared/logger";
-import type { AvailableProvider, ConversationData, MetricData, OverrideState, ProviderData } from "./types";
+import type {
+  AvailableProvider,
+  ConversationData,
+  FlowEvent,
+  MetricData,
+  OverrideState,
+  ProviderData,
+  SubScores,
+} from "./types";
 import "./hive-header";
 import "./hive-stats";
 import "./hive-providers";
 import "./hive-detail-overlay";
 import "./hive-logs";
+import "./hive-flow";
 import { getServerConfig } from "../shared/server-config";
 
 export class HiveApp extends HTMLElement {
@@ -18,6 +27,7 @@ export class HiveApp extends HTMLElement {
     model: null,
   };
   private _availableProviders: AvailableProvider[] = [];
+  private _flowEvents: FlowEvent[] = [];
 
   constructor() {
     super();
@@ -51,6 +61,8 @@ export class HiveApp extends HTMLElement {
         <div>
           <div class="section-head">Providers</div>
           <hive-providers></hive-providers>
+          <div class="section-head" style="margin-top:1.5rem">Live Requests</div>
+          <hive-flow></hive-flow>
         </div>
         <hive-logs></hive-logs>
       </div>
@@ -149,6 +161,18 @@ export class HiveApp extends HTMLElement {
   // ── Message dispatch ────────────────────────────────────────────────────
 
   private handleMessage(msg: WsMessage) {
+    if (msg.type === "flow") {
+      this._flowEvents.push(msg.data);
+      if (this._flowEvents.length > 100) {
+        this._flowEvents.shift();
+      }
+      const flowEl = this.shadow.querySelector("hive-flow") as FlowEl | null;
+      if (flowEl) {
+        flowEl.events = [...this._flowEvents];
+      }
+      return;
+    }
+
     if (msg.type === "log") {
       // shadow DOM structure includes hive-logs
       const logsEl = this.shadow.querySelector("hive-logs") as LogsEl | null;
@@ -181,6 +205,14 @@ export class HiveApp extends HTMLElement {
       bestScore = bestEntry.stabilityScore;
     }
 
+    const total = data.metrics.length;
+    const okCount = data.metrics.filter((r) => r.success).length;
+    const rate = total > 0 ? Math.round((okCount / total) * 100) : 100;
+    const configuredNames = new Set(data.providers.filter((x) => x.keyConfigured).map((x) => x.name));
+    const providersCount = configuredNames.size;
+    const flights = data.metrics.filter((r) => r.success).map((r) => r.ttft);
+    const avgFlight = flights.length > 0 ? Math.round(flights.reduce((a, b) => a + b, 0) / flights.length) : null;
+
     this.setOnline(
       true,
       data.serverHost,
@@ -191,16 +223,14 @@ export class HiveApp extends HTMLElement {
       this._availableProviders,
       bestProvider,
       bestModel,
-      bestScore
+      bestScore,
+      data.routingStrategy,
+      data.contextWindowWeight,
+      total,
+      rate,
+      providersCount,
+      avgFlight
     );
-
-    const total = data.metrics.length;
-    const okCount = data.metrics.filter((r) => r.success).length;
-    const rate = total > 0 ? Math.round((okCount / total) * 100) : 100;
-    const configuredNames = new Set(data.providers.filter((x) => x.keyConfigured).map((x) => x.name));
-    const providersCount = configuredNames.size;
-    const flights = data.metrics.filter((r) => r.success).map((r) => r.ttft);
-    const avgFlight = flights.length > 0 ? Math.round(flights.reduce((a, b) => a + b, 0) / flights.length) : null;
 
     // shadow DOM template contains hive-stats element
     const statsElement = this.shadow.querySelector("hive-stats") as unknown as StatsEl | null;
@@ -219,9 +249,14 @@ export class HiveApp extends HTMLElement {
       model: x.model,
       keyConfigured: x.keyConfigured,
       stabilityScore: x.stabilityScore,
+      subscores: x.subscores,
       p95Latency: x.p95Latency,
       meanTokensPerSecond: x.meanTokensPerSecond,
       requestCount: x.requestCount,
+      recentSuccessRate: x.recentSuccessRate,
+      truncationRate: x.truncationRate,
+      refusalRate: x.refusalRate,
+      contentFilterRate: x.contentFilterRate,
       trippedUntil: x.trippedUntil,
       disabledFeatures: x.disabledFeatures,
     }));
@@ -237,6 +272,11 @@ export class HiveApp extends HTMLElement {
           ? `${this._override.provider}:${this._override.model}`
           : null;
     }
+
+    const flowEl = this.shadow.querySelector("hive-flow") as FlowEl | null;
+    if (flowEl && this._flowEvents.length > 0) {
+      flowEl.events = [...this._flowEvents];
+    }
   }
 
   private setOnline(
@@ -249,7 +289,13 @@ export class HiveApp extends HTMLElement {
     availableProviders: AvailableProvider[] = [],
     bestProvider: string | null = null,
     bestModel: string | null = null,
-    bestScore: number | null = null
+    bestScore: number | null = null,
+    routingStrategy = "balanced",
+    contextWindowWeight = 0,
+    traffic = 0,
+    successRate = 100,
+    activeProviders = 0,
+    avgLatency: number | null = null
   ) {
     // shadow DOM template contains hive-header element
     const header = this.shadow.querySelector("hive-header") as unknown as HeaderEl | null;
@@ -264,6 +310,12 @@ export class HiveApp extends HTMLElement {
         bestProvider,
         bestModel,
         bestScore,
+        routingStrategy,
+        contextWindowWeight,
+        traffic,
+        successRate,
+        activeProviders,
+        avgLatency,
       };
     }
   }
@@ -272,13 +324,20 @@ export class HiveApp extends HTMLElement {
 
   setOverride(provider: string, model: string): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ type: "override", provider, model }));
+      this.ws.send(JSON.stringify({ type: "override", provider, model, enabled: true }));
     }
   }
 
   clearOverride(): void {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ type: "override", provider: null, model: null }));
+    if (this.ws?.readyState === WebSocket.OPEN && this._override.provider && this._override.model) {
+      this.ws.send(
+        JSON.stringify({
+          type: "override",
+          provider: this._override.provider,
+          model: this._override.model,
+          enabled: false,
+        })
+      );
     }
   }
 }
@@ -295,9 +354,14 @@ type ProviderPayload = {
   model: string;
   keyConfigured: boolean;
   stabilityScore: number;
+  subscores: SubScores;
   p95Latency: number | null;
   meanTokensPerSecond: number | null;
   requestCount: number;
+  recentSuccessRate: number;
+  truncationRate: number;
+  refusalRate: number;
+  contentFilterRate: number;
   trippedUntil: number | null;
   disabledFeatures: string[];
 };
@@ -318,9 +382,14 @@ type TelemetryData = {
   bestProvider: string | null;
   bestModel: string | null;
   bestScore: number | null;
+  routingStrategy: string;
+  contextWindowWeight: number;
 };
 
-type WsMessage = { type: "init" | "update"; data: TelemetryData } | { type: "log"; data: LogEntry };
+type WsMessage =
+  | { type: "init" | "update"; data: TelemetryData }
+  | { type: "log"; data: LogEntry }
+  | { type: "flow"; data: FlowEvent };
 
 // ─── Element type helpers ───────────────────────────────────────────────────
 
@@ -335,6 +404,12 @@ type HeaderEl = HTMLElement & {
     bestProvider: string | null;
     bestModel: string | null;
     bestScore: number | null;
+    routingStrategy: string;
+    contextWindowWeight: number;
+    traffic: number;
+    successRate: number;
+    activeProviders: number;
+    avgLatency: number | null;
   };
 };
 type StatsEl = HTMLElement & {
@@ -352,6 +427,7 @@ type ProvidersEl = HTMLElement & {
   overrideKey: string | null;
 };
 type LogsEl = HTMLElement & { addLog(log: LogEntry): void };
+type FlowEl = HTMLElement & { events: FlowEvent[] };
 type DetailOverlayEl = HTMLElement & {
   show(metric: MetricData, allMetrics: MetricData[]): void;
 };

@@ -27,6 +27,7 @@ export type RequestMetric = {
 
   finishReason: FinishReason;
   refused: boolean;
+  toolCallFailed: boolean;
 
   statusCode: number;
   errorType: ErrorType;

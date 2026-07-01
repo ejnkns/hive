@@ -5,7 +5,10 @@ export const sambanova = {
   displayName: "SambaNova",
   baseUrl: "https://api.sambanova.ai",
   apiKeyEnvVar: "SAMBA_NOVA_API_KEY",
-  models: ["DeepSeek-R1", "Meta-Llama-3.3-70B-Instruct"],
+  models: [
+    { id: "DeepSeek-R1", contextLength: 128_000 },
+    { id: "Meta-Llama-3.3-70B-Instruct", contextLength: 128_000 },
+  ],
   defaultModel: "DeepSeek-R1",
   modelPreferences: ["DeepSeek-R1", "Meta-Llama-3.3-70B-Instruct"],
 } satisfies Provider;

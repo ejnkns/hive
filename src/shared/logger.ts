@@ -39,7 +39,7 @@ export const logger = {
   },
   debug: (msg: string) => {
     bufferAndEmit("debug", msg);
-    if (process.env.DEBUG) {
+    if (typeof process !== "undefined" && process.env?.DEBUG) {
       console.log(bzz(msg, `${GRAY}bzz:debug${RESET}`));
     }
   },
