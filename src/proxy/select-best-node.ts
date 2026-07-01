@@ -29,6 +29,7 @@ export function selectBestNode(
         score: 0,
         status: "circuit-broken",
         affinity: false,
+        cooldownSec: routingMemory.getCooldownSec(compoundKey),
       });
       logger.debug(`node ${compoundKey} — ineligible (circuit breaker tripped)`);
       continue;
