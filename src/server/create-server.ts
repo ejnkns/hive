@@ -1,13 +1,13 @@
 import Fastify from "fastify";
 import { logger } from "../shared/logger";
 import type { ServerConfig } from "../shared/server-config";
-import { assignRoutes } from "./create-server/assign-routes";
+import { assignRoutes, type RouteDeps } from "./create-server/assign-routes";
 import { registerPlugins } from "./create-server/register-plugins";
 
-export async function createServer(): Promise<FastifyServer> {
+export async function createServer(deps: RouteDeps): Promise<FastifyServer> {
   const server = await instantiateServer();
   await registerPlugins(server);
-  assignRoutes(server);
+  assignRoutes(server, deps);
   return server;
 }
 

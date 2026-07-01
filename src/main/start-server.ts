@@ -7,11 +7,17 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
   printBanner();
 
   const config = getServerConfig(overrides);
-  const server = await createServer();
-  listen(server, config);
 
   const hiveCore = new HiveCore();
   hiveCore.start();
+
+  const server = await createServer({
+    getProviders: () => hiveCore.getProviders(),
+    getProviderStates: () => hiveCore.getProviderStates(),
+    getLastUsed: () => hiveCore.getLastUsed(),
+    handleChatCompletion: (body, headers) => hiveCore.handleChatCompletion(body, headers),
+  });
+  listen(server, config);
 
   process.on("SIGINT", () => {
     hiveCore.shutdown();

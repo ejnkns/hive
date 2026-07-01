@@ -2,7 +2,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { WebSocket } from "ws";
-import { hiveCore } from "../../hive-core";
+import type { ChatCompletionResult, ProviderState } from "../../hive-core";
+import type { Provider } from "../../providers";
 import { getModelId } from "../../providers";
 import { routingMemory } from "../../proxy";
 import { type FlowEvent, onFlowEvent } from "../../proxy/flow-events";
@@ -12,14 +13,24 @@ import { conversationStore, loadCache, telemetryRecorder } from "../../telemetry
 import type { FastifyServer } from "../create-server";
 import { clearOverride, getOverride, setOverride } from "../override";
 
-export function assignRoutes(server: FastifyServer) {
+export type RouteDeps = {
+  getProviders: () => ReadonlyArray<Provider>;
+  getProviderStates: () => Promise<ProviderState[]>;
+  getLastUsed: () => { provider: string | null; model: string | null };
+  handleChatCompletion: (
+    body: Record<string, unknown>,
+    headers: Record<string, string | string[] | undefined>
+  ) => Promise<ChatCompletionResult>;
+};
+
+export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
   const activeSockets = new Set<WebSocket>();
 
   async function buildProvidersPayload() {
-    const configProviders = hiveCore.getProviders();
+    const configProviders = deps.getProviders();
     const routingStates = routingMemory.getStates();
 
-    const states = await hiveCore.getProviderStates();
+    const states = await deps.getProviderStates();
     return configProviders.flatMap((p) => {
       const keyConfigured = !!process.env[p.apiKeyEnvVar];
       const providerModels = p.models.length > 0 ? p.models : [p.defaultModel];
@@ -59,10 +70,10 @@ export function assignRoutes(server: FastifyServer) {
   }
 
   const getTelemetryPayload = async () => {
-    const configProviders = hiveCore.getProviders();
+    const configProviders = deps.getProviders();
     const providers = await buildProvidersPayload();
 
-    const lastUsed = hiveCore.getLastUsed();
+    const lastUsed = deps.getLastUsed();
     const cache = await loadCache();
     const conversations = conversationStore.getConversations();
 
@@ -257,7 +268,7 @@ export function assignRoutes(server: FastifyServer) {
     const requestId = crypto.randomUUID();
     logger.info(`request ${requestId} — handling chat completion`);
     // Fastify body is typed as unknown; API contract guarantees JSON object
-    const result = await hiveCore.handleChatCompletion(request.body as Record<string, unknown>, request.headers);
+    const result = await deps.handleChatCompletion(request.body as Record<string, unknown>, request.headers);
 
     if (!result.success) {
       logger.error(
@@ -277,8 +288,7 @@ export function assignRoutes(server: FastifyServer) {
   server.get("/api/providers", async (_request, reply) => {
     const providers = await buildProvidersPayload();
 
-    const lastUsed = hiveCore.getLastUsed();
-
+    const lastUsed = deps.getLastUsed();
     reply.send({
       providers,
       lastProvider: lastUsed.provider,

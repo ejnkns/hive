@@ -15,6 +15,7 @@ import {
   loadCache,
   type Node,
   type RequestMetric,
+  type SubScores,
   startHeartbeat,
   telemetryRecorder,
 } from "./telemetry";
@@ -273,7 +274,7 @@ export class HiveCore {
     };
   }
 
-  async getProviderStates() {
+  async getProviderStates(): Promise<ProviderState[]> {
     const cache = await loadCache();
     return cache.scores.map((s) => ({
       provider: s.provider,
@@ -347,7 +348,22 @@ export class HiveCore {
   }
 }
 
-type ChatCompletionResult = {
+export type ProviderState = {
+  provider: string;
+  model: string;
+  enabled: boolean;
+  stabilityScore: number;
+  subscores: SubScores;
+  p95Latency: number;
+  recentSuccessRate: number;
+  requestCount: number;
+  meanTokensPerSecond: number | null;
+  truncationRate: number;
+  refusalRate: number;
+  contentFilterRate: number;
+};
+
+export type ChatCompletionResult = {
   success: boolean;
   stream?: PassThrough;
   provider?: string;
