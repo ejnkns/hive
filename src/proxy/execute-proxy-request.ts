@@ -1,5 +1,6 @@
 import { logger } from "../shared/logger";
 import type { Node, RequestMetric } from "../telemetry";
+import { emitFlowEvent } from "./flow-events";
 import type { ProxyResponse } from "./proxy-response";
 import { routingMemory } from "./routing-memory";
 import { selectBestNode } from "./select-best-node";
@@ -44,6 +45,14 @@ export async function executeProxyRequest(ctx: FailoverContext): Promise<ProxyRe
           `attempt ${String(attempts)}/${String(maxAttempts)} — ${compoundKey} upstream error: ${normalized.type} (status ${String(response.status)})`
         );
         routingMemory.recordUpstreamError(compoundKey, normalized.type, ctx.requiredFeatures);
+        emitFlowEvent({
+          type: "failover_attempt",
+          requestId: ctx.sessionId ?? "",
+          failedProvider: node.providerName,
+          failedModel: node.modelName,
+          errorType: normalized.type,
+          attempt: attempts,
+        });
         continue;
       }
 
@@ -56,6 +65,14 @@ export async function executeProxyRequest(ctx: FailoverContext): Promise<ProxyRe
         `attempt ${String(attempts)}/${String(maxAttempts)} — ${compoundKey} network failure: ${err instanceof Error ? err.message : String(err)}`
       );
       routingMemory.recordNetworkFailure(compoundKey);
+      emitFlowEvent({
+        type: "failover_attempt",
+        requestId: ctx.sessionId ?? "",
+        failedProvider: node.providerName,
+        failedModel: node.modelName,
+        errorType: "network-error",
+        attempt: attempts,
+      });
     }
   }
 

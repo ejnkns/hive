@@ -5,6 +5,7 @@ import { URL } from "node:url";
 import { logger } from "../shared/logger";
 import type { FinishReason, MetricSource } from "../telemetry";
 import { classifyError, conversationStore, createStreamCounter, detectRefusal, telemetryRecorder } from "../telemetry";
+import { emitFlowEvent } from "./flow-events";
 import type { MutatedRequest } from "./mutate-request";
 import { ProxyResponse } from "./proxy-response";
 
@@ -31,6 +32,8 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
     const start = Date.now();
 
     const bodyBuffer = Buffer.from(mutated.body);
+
+    emitFlowEvent({ type: "node_dispatched", requestId, provider: providerName, model: modelName, attempt: 0 });
 
     const requestOptions: https.RequestOptions = {
       hostname: url.hostname,
@@ -91,6 +94,21 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
         success,
         source: metricSource ?? "user",
         toolCallFailed: stats?.toolCallFailed ?? false,
+      });
+
+      emitFlowEvent({
+        type: "response_complete",
+        requestId,
+        provider: providerName,
+        model: modelName,
+        statusCode,
+        success,
+        ttft,
+        totalLatency,
+        outputTokens,
+        finishReason: stats?.finishReason ?? null,
+        toolCallFailed: stats?.toolCallFailed ?? false,
+        errorType: classifyError(statusCode, errorType),
       });
     };
 

@@ -6,6 +6,7 @@ import { generateId } from "./hive-core/generateId";
 import { sanitizePayloadForProvider } from "./hive-core/sanitize-payload-for-provider";
 import { buildChatEndpoint, discoverAndCacheModels, getModelId, type Provider, providers } from "./providers";
 import { executeProxyRequest, mutateRequest, ProxyResponse, routeRequest, routingMemory } from "./proxy";
+import { emitFlowEvent } from "./proxy/flow-events";
 import { getOverride, loadProviders } from "./server";
 import { logger } from "./shared/logger";
 import {
@@ -121,6 +122,10 @@ export class HiveCore {
       ];
     }
     const payloadStr = JSON.stringify(parsed);
+
+    const lastUserMsg = typedMessages.filter((m) => m.role === "user").at(-1);
+    const promptPreview = typeof lastUserMsg?.content === "string" ? lastUserMsg.content.slice(0, 120) : "";
+    emitFlowEvent({ type: "request_received", requestId, timestamp: Date.now(), promptPreview });
 
     const requiredFeatures = extractRequiredFeatures(parsed);
 

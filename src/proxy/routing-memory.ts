@@ -25,6 +25,14 @@ export class RoutingMemory {
     return true;
   }
 
+  isCircuitBroken(compoundKey: string): boolean {
+    return this.breaker.isTripped(compoundKey);
+  }
+
+  hasUnsupportedFeatures(compoundKey: string, requiredFeatures: string[]): boolean {
+    return this.features.hasDisabledFeatures(compoundKey, requiredFeatures);
+  }
+
   recordUpstreamError(compoundKey: string, errorType: NormalizedErrorType, requiredFeatures: string[]): void {
     if (errorType === "unsupported-feature") {
       logger.debug(`${compoundKey} — marked unsupported features: [${requiredFeatures.join(", ")}]`);
