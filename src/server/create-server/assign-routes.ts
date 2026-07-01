@@ -5,6 +5,7 @@ import type { WebSocket } from "ws";
 import { hiveCore } from "../../hive-core";
 import { getModelId } from "../../providers";
 import { routingMemory } from "../../proxy";
+import { type FlowEvent, onFlowEvent } from "../../proxy/flow-events";
 import { addLogListener, getRecentLogs, logger } from "../../shared/logger";
 import { getServerConfig } from "../../shared/server-config";
 import { conversationStore, loadCache, telemetryRecorder } from "../../telemetry";
@@ -138,6 +139,25 @@ export function assignRoutes(server: FastifyServer) {
     }
   });
 
+  const flowEventBuffer: FlowEvent[] = [];
+  const MAX_FLOW_BUFFER = 50;
+
+  onFlowEvent((event) => {
+    flowEventBuffer.push(event);
+    if (flowEventBuffer.length > MAX_FLOW_BUFFER) {
+      flowEventBuffer.shift();
+    }
+    if (activeSockets.size === 0) return;
+    const payload = JSON.stringify({ type: "flow", data: event });
+    for (const socket of activeSockets) {
+      try {
+        socket.send(payload);
+      } catch {
+        // ignore
+      }
+    }
+  });
+
   server.get("/ws", { websocket: true }, (socket) => {
     activeSockets.add(socket);
 
@@ -151,6 +171,11 @@ export function assignRoutes(server: FastifyServer) {
         const recentLogs = getRecentLogs();
         for (const log of recentLogs) {
           socket.send(JSON.stringify({ type: "log", data: log }));
+        }
+
+        // Send buffered flow events
+        for (const event of flowEventBuffer) {
+          socket.send(JSON.stringify({ type: "flow", data: event }));
         }
       } catch (err) {
         logger.error("failed to send initial ws payload", err);
