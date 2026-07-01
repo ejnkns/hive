@@ -30,7 +30,7 @@
     "dev:ui": "vite",
     "dev:server": "tsdown --watch --on-success \"node --env-file=.env dist/main.mjs start\"",
     "dev": "npm run dev:server & npm run dev:ui",
-    "build:server": "tsdown",
+    "build:server": "tsdown && cp src/api-spec.html dist/api-spec.html && cp src/api-spec.yaml dist/api-spec.yaml",
     "build:ui": "vite build",
     "build": "npm run build:server && npm run build:ui",
     "start": "node --env-file=.env dist/main.mjs start",
