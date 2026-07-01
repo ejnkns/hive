@@ -1,3 +1,4 @@
+/** @public — proxy module API. Import from here, not from proxy/ directly. */
 export {
   executeProxyRequest,
   type FailoverContext,

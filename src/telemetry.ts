@@ -1,3 +1,4 @@
+/** @public — telemetry module API. Import from here, not from telemetry/ directly. */
 export { applySlidingWindow } from "./telemetry/apply-sliding-window";
 export { loadCache, saveCache } from "./telemetry/cache";
 export type { Node, NodeScoreResult, RoutingStrategy, SubScores } from "./telemetry/calculate-node-score";
