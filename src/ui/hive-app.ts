@@ -13,6 +13,7 @@ import "./hive-stats";
 import "./hive-providers";
 import "./hive-detail-overlay";
 import "./hive-logs";
+import "./hive-flow";
 import { getServerConfig } from "../shared/server-config";
 
 export class HiveApp extends HTMLElement {
@@ -60,6 +61,8 @@ export class HiveApp extends HTMLElement {
         <div>
           <div class="section-head">Providers</div>
           <hive-providers></hive-providers>
+          <div class="section-head" style="margin-top:1.5rem">Live Requests</div>
+          <hive-flow></hive-flow>
         </div>
         <hive-logs></hive-logs>
       </div>
@@ -163,6 +166,10 @@ export class HiveApp extends HTMLElement {
       if (this._flowEvents.length > 100) {
         this._flowEvents.shift();
       }
+      const flowEl = this.shadow.querySelector("hive-flow") as FlowEl | null;
+      if (flowEl) {
+        flowEl.events = [...this._flowEvents];
+      }
       return;
     }
 
@@ -264,6 +271,11 @@ export class HiveApp extends HTMLElement {
         this._override.active && this._override.provider && this._override.model
           ? `${this._override.provider}:${this._override.model}`
           : null;
+    }
+
+    const flowEl = this.shadow.querySelector("hive-flow") as FlowEl | null;
+    if (flowEl && this._flowEvents.length > 0) {
+      flowEl.events = [...this._flowEvents];
     }
   }
 
@@ -415,6 +427,7 @@ type ProvidersEl = HTMLElement & {
   overrideKey: string | null;
 };
 type LogsEl = HTMLElement & { addLog(log: LogEntry): void };
+type FlowEl = HTMLElement & { events: FlowEvent[] };
 type DetailOverlayEl = HTMLElement & {
   show(metric: MetricData, allMetrics: MetricData[]): void;
 };
