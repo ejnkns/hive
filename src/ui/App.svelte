@@ -1,5 +1,287 @@
 <script lang="ts">
+import { onMount, onDestroy } from "svelte";
+import { logger, type LogEntry } from "../shared/logger";
+import { getServerConfig } from "../shared/server-config";
+import type {
+  AvailableProvider,
+  ConversationData,
+  FlowEvent,
+  MetricData,
+  OverrideState,
+  ProviderData,
+  SubScores,
+} from "./types";
 import "../app.css";
+
+// Import custom element modules so they register before template renders
+import "./hive-header";
+import "./hive-stats";
+import "./hive-providers";
+import "./hive-detail-overlay";
+import "./hive-logs";
+import "./hive-flow";
+
+type ProviderPayload = {
+  name: string;
+  displayName: string;
+  model: string;
+  keyConfigured: boolean;
+  stabilityScore: number;
+  subscores: SubScores;
+  p95Latency: number | null;
+  meanTokensPerSecond: number | null;
+  requestCount: number;
+  recentSuccessRate: number;
+  truncationRate: number;
+  refusalRate: number;
+  contentFilterRate: number;
+  trippedUntil: number | null;
+  disabledFeatures: string[];
+};
+
+type TelemetryData = {
+  providers: ProviderPayload[];
+  serverHost: string;
+  serverPort: string;
+  lastProvider: string | null;
+  lastModel: string | null;
+  overrideActive: boolean;
+  overrideProvider: string | null;
+  overrideModel: string | null;
+  availableProviders: AvailableProvider[];
+  metrics: MetricData[];
+  pending: number;
+  conversations: ConversationData[];
+  bestProvider: string | null;
+  bestModel: string | null;
+  bestScore: number | null;
+  routingStrategy: string;
+  contextWindowWeight: number;
+};
+
+type WsMessage =
+  | { type: "init" | "update"; data: TelemetryData }
+  | { type: "log"; data: LogEntry }
+  | { type: "flow"; data: FlowEvent };
+
+let ws: WebSocket | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let reconnectDelay = 1000;
+
+let override: OverrideState = $state({ active: false, provider: null, model: null });
+let availableProviders: AvailableProvider[] = $state([]);
+let flowEvents: FlowEvent[] = $state([]);
+
+let telemetry: TelemetryData | null = $state(null);
+
+let headerEl: HTMLElement;
+let statsEl: HTMLElement;
+let providersEl: HTMLElement;
+let flowEl: HTMLElement;
+let logsEl: HTMLElement;
+let overlayEl: HTMLElement;
+
+function connect() {
+  if (reconnectTimer !== null) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  const protocol = window.location.protocol === "http:" ? "ws:" : "wss:";
+  const cfg = getServerConfig();
+  const url = `${protocol}//${cfg.host}:${String(cfg.port)}/ws`;
+  try {
+    ws = new WebSocket(url);
+  } catch (e) {
+    logger.error("websocket error", e);
+    scheduleReconnect();
+    return;
+  }
+  ws.onopen = () => {
+    reconnectDelay = 1000;
+  };
+  ws.onmessage = (e: MessageEvent) => {
+    try {
+      const msg = JSON.parse(String(e.data)) as WsMessage;
+      handleMessage(msg);
+    } catch {
+      /* ignore malformed frames */
+    }
+  };
+  ws.onclose = () => {
+    scheduleReconnect();
+  };
+}
+
+function scheduleReconnect() {
+  reconnectTimer = setTimeout(() => {
+    reconnectDelay = Math.min(reconnectDelay * 2, 30_000);
+    connect();
+  }, reconnectDelay);
+}
+
+function closeWs() {
+  if (reconnectTimer !== null) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  ws?.close();
+  ws = null;
+}
+
+function handleMessage(msg: WsMessage) {
+  if (msg.type === "flow") {
+    flowEvents.push(msg.data);
+    if (flowEvents.length > 100) flowEvents.shift();
+    if (flowEl) {
+      (flowEl as any).events = [...flowEvents];
+    }
+    return;
+  }
+  if (msg.type === "log") {
+    if (logsEl) {
+      (logsEl as any).addLog(msg.data);
+    }
+    return;
+  }
+  telemetry = msg.data;
+  override = { active: msg.data.overrideActive, provider: msg.data.overrideProvider, model: msg.data.overrideModel };
+  availableProviders = msg.data.availableProviders;
+}
+
+function pushHeader(t: TelemetryData) {
+  if (!headerEl) return;
+  const sorted = t.providers.filter((p) => p.keyConfigured).sort((a, b) => b.stabilityScore - a.stabilityScore);
+  const bestEntry = sorted[0] ?? null;
+  const total = t.metrics.length;
+  const okCount = t.metrics.filter((r) => r.success).length;
+  const rate = total > 0 ? Math.round((okCount / total) * 100) : 100;
+  const names = new Set(t.providers.filter((x) => x.keyConfigured).map((x) => x.name));
+  const flights = t.metrics.filter((r) => r.success).map((r) => r.ttft);
+  const avg = flights.length > 0 ? Math.round(flights.reduce((a, b) => a + b, 0) / flights.length) : null;
+  (headerEl as any).data = {
+    online: true,
+    serverAddr: `${t.serverHost}:${t.serverPort}`,
+    lastProvider: t.lastProvider,
+    lastModel: t.lastModel,
+    override,
+    availableProviders: t.availableProviders,
+    bestProvider: bestEntry?.name ?? null,
+    bestModel: bestEntry?.model ?? null,
+    bestScore: bestEntry?.stabilityScore ?? null,
+    routingStrategy: t.routingStrategy,
+    contextWindowWeight: t.contextWindowWeight,
+    traffic: total,
+    successRate: rate,
+    activeProviders: names.size,
+    avgLatency: avg,
+  };
+}
+
+function pushStats(t: TelemetryData) {
+  if (!statsEl) return;
+  const okCount = t.metrics.filter((r) => r.success).length;
+  const rate = t.metrics.length > 0 ? Math.round((okCount / t.metrics.length) * 100) : 100;
+  const flights = t.metrics.filter((r) => r.success).map((r) => r.ttft);
+  const avg = flights.length > 0 ? Math.round(flights.reduce((a, b) => a + b, 0) / flights.length) : null;
+  (statsEl as any).data = { traffic: t.metrics.length, successRate: rate, providers: 0, avgLatency: avg };
+}
+
+function pushProviders(t: TelemetryData) {
+  if (!providersEl) return;
+  (providersEl as any).data = t.providers.map((x) => ({
+    name: x.name,
+    displayName: x.displayName,
+    model: x.model,
+    keyConfigured: x.keyConfigured,
+    stabilityScore: x.stabilityScore,
+    subscores: x.subscores,
+    p95Latency: x.p95Latency,
+    meanTokensPerSecond: x.meanTokensPerSecond,
+    requestCount: x.requestCount,
+    recentSuccessRate: x.recentSuccessRate,
+    truncationRate: x.truncationRate,
+    refusalRate: x.refusalRate,
+    contentFilterRate: x.contentFilterRate,
+    trippedUntil: x.trippedUntil,
+    disabledFeatures: x.disabledFeatures,
+  }));
+  (providersEl as any).metrics = t.metrics;
+  (providersEl as any).conversations = t.conversations;
+  (providersEl as any).overrideKey =
+    override.active && override.provider && override.model ? `${override.provider}:${override.model}` : null;
+}
+
+$effect(() => {
+  const t = telemetry;
+  if (!t) return;
+  pushHeader(t);
+  pushStats(t);
+  pushProviders(t);
+  if (flowEl && flowEvents.length > 0) (flowEl as any).events = [...flowEvents];
+});
+
+function onRowClick(e: Event) {
+  const { metric, allMetrics } = (e as CustomEvent).detail as { metric: MetricData; allMetrics: MetricData[] };
+  if (overlayEl) (overlayEl as any).show(metric, allMetrics);
+}
+
+function onOverrideSet(e: Event) {
+  const { provider, model } = (e as CustomEvent).detail as { provider: string; model: string };
+  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "override", provider, model, enabled: true }));
+}
+
+function onOverrideClear() {
+  if (ws?.readyState === WebSocket.OPEN && override.provider && override.model) {
+    ws.send(JSON.stringify({ type: "override", provider: override.provider, model: override.model, enabled: false }));
+  }
+}
+
+onMount(() => {
+  connect();
+  document.addEventListener("row-click", onRowClick);
+  document.addEventListener("override-set", onOverrideSet);
+  document.addEventListener("override-clear", onOverrideClear);
+});
+
+onDestroy(() => {
+  closeWs();
+  document.removeEventListener("row-click", onRowClick);
+  document.removeEventListener("override-set", onOverrideSet);
+  document.removeEventListener("override-clear", onOverrideClear);
+});
 </script>
 
-<hive-app></hive-app>
+<div class="app">
+  <hive-header bind:this={headerEl}></hive-header>
+  <div class="content">
+    <hive-stats bind:this={statsEl}></hive-stats>
+    <div>
+      <div class="section-head">Providers</div>
+      <hive-providers bind:this={providersEl}></hive-providers>
+      <div class="section-head" style="margin-top:1.5rem">Live Requests</div>
+      <hive-flow bind:this={flowEl}></hive-flow>
+    </div>
+    <hive-logs bind:this={logsEl}></hive-logs>
+  </div>
+  <hive-detail-overlay bind:this={overlayEl}></hive-detail-overlay>
+</div>
+
+<style>
+  .app { display: block; }
+  .content {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1.25rem;
+  }
+  .section-head {
+    font-size: 0.625rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+  }
+</style>
