@@ -12,12 +12,14 @@ import type {
   SubScores,
 } from "./types";
 import "../app.css";
+import Header from "./Header.svelte";
+import Stats from "./Stats.svelte";
 import Logs from "./Logs.svelte";
 import DetailOverlay from "./DetailOverlay.svelte";
 
-// Import custom element modules so they register before template renders
-import "./hive-header";
-import "./hive-stats";
+// Import remaining custom element modules
+import "./hive-providers";
+import "./hive-flow";
 import "./hive-providers";
 import "./hive-flow";
 
@@ -75,13 +77,52 @@ let logEntries: LogEntry[] = $state([]);
 
 let telemetry: TelemetryData | null = $state(null);
 
-let headerEl: HTMLElement;
-let statsEl: HTMLElement;
 let providersEl: HTMLElement;
 let flowEl: HTMLElement;
 
 let detailMetric: MetricData | null = $state(null);
 let detailAllMetrics: MetricData[] = $state([]);
+
+let headerData = $derived.by(() => {
+  const t = telemetry;
+  if (!t) return null as HeaderData | null;
+  const sorted = t.providers.filter((p) => p.keyConfigured).sort((a, b) => b.stabilityScore - a.stabilityScore);
+  const bestEntry = sorted[0] ?? null;
+  const total = t.metrics.length;
+  const okCount = t.metrics.filter((r) => r.success).length;
+  const rate = total > 0 ? Math.round((okCount / total) * 100) : 100;
+  const names = new Set(t.providers.filter((x) => x.keyConfigured).map((x) => x.name));
+  const flights = t.metrics.filter((r) => r.success).map((r) => r.ttft);
+  const avg = flights.length > 0 ? Math.round(flights.reduce((a, b) => a + b, 0) / flights.length) : null;
+  return {
+    online: true,
+    serverAddr: `${t.serverHost}:${t.serverPort}`,
+    lastProvider: t.lastProvider,
+    lastModel: t.lastModel,
+    override,
+    availableProviders: t.availableProviders,
+    bestProvider: bestEntry?.name ?? null,
+    bestModel: bestEntry?.model ?? null,
+    bestScore: bestEntry?.stabilityScore ?? null,
+    routingStrategy: t.routingStrategy,
+    contextWindowWeight: t.contextWindowWeight,
+    traffic: total,
+    successRate: rate,
+    activeProviders: names.size,
+    avgLatency: avg,
+  };
+});
+
+let statsData = $derived.by(() => {
+  const t = telemetry;
+  if (!t) return null;
+  const okCount = t.metrics.filter((r) => r.success).length;
+  const rate = t.metrics.length > 0 ? Math.round((okCount / t.metrics.length) * 100) : 100;
+  const flights = t.metrics.filter((r) => r.success).map((r) => r.ttft);
+  const avg = flights.length > 0 ? Math.round(flights.reduce((a, b) => a + b, 0) / flights.length) : null;
+  const names = new Set(t.providers.filter((x) => x.keyConfigured).map((x) => x.name));
+  return { traffic: t.metrics.length, successRate: rate, providers: names.size, avgLatency: avg };
+});
 
 function connect() {
   if (reconnectTimer !== null) {
@@ -149,44 +190,6 @@ function handleMessage(msg: WsMessage) {
   availableProviders = msg.data.availableProviders;
 }
 
-function pushHeader(t: TelemetryData) {
-  if (!headerEl) return;
-  const sorted = t.providers.filter((p) => p.keyConfigured).sort((a, b) => b.stabilityScore - a.stabilityScore);
-  const bestEntry = sorted[0] ?? null;
-  const total = t.metrics.length;
-  const okCount = t.metrics.filter((r) => r.success).length;
-  const rate = total > 0 ? Math.round((okCount / total) * 100) : 100;
-  const names = new Set(t.providers.filter((x) => x.keyConfigured).map((x) => x.name));
-  const flights = t.metrics.filter((r) => r.success).map((r) => r.ttft);
-  const avg = flights.length > 0 ? Math.round(flights.reduce((a, b) => a + b, 0) / flights.length) : null;
-  (headerEl as any).data = {
-    online: true,
-    serverAddr: `${t.serverHost}:${t.serverPort}`,
-    lastProvider: t.lastProvider,
-    lastModel: t.lastModel,
-    override,
-    availableProviders: t.availableProviders,
-    bestProvider: bestEntry?.name ?? null,
-    bestModel: bestEntry?.model ?? null,
-    bestScore: bestEntry?.stabilityScore ?? null,
-    routingStrategy: t.routingStrategy,
-    contextWindowWeight: t.contextWindowWeight,
-    traffic: total,
-    successRate: rate,
-    activeProviders: names.size,
-    avgLatency: avg,
-  };
-}
-
-function pushStats(t: TelemetryData) {
-  if (!statsEl) return;
-  const okCount = t.metrics.filter((r) => r.success).length;
-  const rate = t.metrics.length > 0 ? Math.round((okCount / t.metrics.length) * 100) : 100;
-  const flights = t.metrics.filter((r) => r.success).map((r) => r.ttft);
-  const avg = flights.length > 0 ? Math.round(flights.reduce((a, b) => a + b, 0) / flights.length) : null;
-  (statsEl as any).data = { traffic: t.metrics.length, successRate: rate, providers: 0, avgLatency: avg };
-}
-
 function pushProviders(t: TelemetryData) {
   if (!providersEl) return;
   (providersEl as any).data = t.providers.map((x) => ({
@@ -215,8 +218,6 @@ function pushProviders(t: TelemetryData) {
 $effect(() => {
   const t = telemetry;
   if (!t) return;
-  pushHeader(t);
-  pushStats(t);
   pushProviders(t);
   if (flowEl && flowEvents.length > 0) (flowEl as any).events = [...flowEvents];
 });
@@ -227,12 +228,11 @@ function onRowClick(e: Event) {
   detailAllMetrics = allMetrics;
 }
 
-function onOverrideSet(e: Event) {
-  const { provider, model } = (e as CustomEvent).detail as { provider: string; model: string };
+function handleOverrideSet(provider: string, model: string) {
   if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "override", provider, model, enabled: true }));
 }
 
-function onOverrideClear() {
+function handleOverrideClear() {
   if (ws?.readyState === WebSocket.OPEN && override.provider && override.model) {
     ws.send(JSON.stringify({ type: "override", provider: override.provider, model: override.model, enabled: false }));
   }
@@ -241,22 +241,18 @@ function onOverrideClear() {
 onMount(() => {
   connect();
   document.addEventListener("row-click", onRowClick);
-  document.addEventListener("override-set", onOverrideSet);
-  document.addEventListener("override-clear", onOverrideClear);
 });
 
 onDestroy(() => {
   closeWs();
   document.removeEventListener("row-click", onRowClick);
-  document.removeEventListener("override-set", onOverrideSet);
-  document.removeEventListener("override-clear", onOverrideClear);
 });
 </script>
 
 <div class="app">
-  <hive-header bind:this={headerEl}></hive-header>
+  <Header data={headerData} onOverrideSet={handleOverrideSet} onOverrideClear={handleOverrideClear} />
   <div class="content">
-    <hive-stats bind:this={statsEl}></hive-stats>
+    <Stats data={statsData} />
     <div>
       <div class="section-head">Providers</div>
       <hive-providers bind:this={providersEl}></hive-providers>
