@@ -123,7 +123,7 @@ export class HiveFlow extends HTMLElement {
               c.status === "eligible"
                 ? `<span style="color:${sc(c.score)}">${c.score.toFixed(1)}%</span>`
                 : `<span class="badge ineligible">${c.status}</span>`;
-            const affinityMark = c.affinity ? " 📌" : "";
+            const affinityMark = c.affinity ? " " : "";
             return `<div class="flow-row${c.key === req.selected ? " selected" : ""}">
               <span class="flow-prov">${c.provider}</span>
               <span class="flow-model">${c.model}</span>

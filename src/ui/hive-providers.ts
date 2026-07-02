@@ -69,7 +69,7 @@ export class HiveProviders extends HTMLElement {
       badges.forEach((badge) => {
         const until = Number(badge.getAttribute("data-tripped-until"));
         const remaining = Math.max(0, Math.round((until - Date.now()) / 1000));
-        badge.textContent = remaining > 0 ? `🛑 ${String(remaining)}s` : "🛑 0s";
+        badge.textContent = remaining > 0 ? `${String(remaining)}s` : "0s";
         if (remaining > 0) anyActive = true;
       });
       if (!anyActive) {
@@ -195,7 +195,7 @@ export class HiveProviders extends HTMLElement {
         const tripped = e.trippedUntil && e.trippedUntil > Date.now();
         const cooldownSec = tripped && e.trippedUntil ? Math.round((e.trippedUntil - Date.now()) / 1000) : 0;
         const trippedBadge = tripped
-          ? `<span class="badge tripped" data-tripped-key="${e.name}:${e.model}" data-tripped-until="${String(e.trippedUntil)}">🛑 ${String(cooldownSec)}s</span>`
+          ? `<span class="badge tripped" data-tripped-key="${e.name}:${e.model}" data-tripped-until="${String(e.trippedUntil)}">${String(cooldownSec)}s</span>`
           : "";
         const featuresBadge =
           e.disabledFeatures && e.disabledFeatures.length > 0

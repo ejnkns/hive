@@ -1,0 +1,32 @@
+{
+  "/Users/ej/Code/hive/.opencode/package.json": {
+    "size": 65,
+    "mtime_ns": 1782911798609967108,
+    "hash": "5bc6358d9a63d4408adce2a3e5ba0fa87a92a54337af20c23936ceab25d4dae0"
+  },
+  "/Users/ej/Code/hive/biome.json": {
+    "size": 1177,
+    "mtime_ns": 1783181222766481548,
+    "hash": "a120076fc0f107ec07cb6586f6121b56db701ae6e880fa3fe6b0942c2360a0f3"
+  },
+  "/Users/ej/Code/hive/package.json": {
+    "size": 2004,
+    "mtime_ns": 1783181222767427803,
+    "hash": "15084471565f5af45428e298a6262e5b557f06cd90612b1ed4a6df30c5f569e2"
+  },
+  "/Users/ej/Code/hive/tsconfig.json": {
+    "size": 287,
+    "mtime_ns": 1783181222771203739,
+    "hash": "6612a9e92a1c2a8a372d1015ee09580ea9b7fb812d562df1bfdde7a5f0108006"
+  },
+  "/Users/ej/Code/hive/tsconfig.node.json": {
+    "size": 379,
+    "mtime_ns": 1783181222771272697,
+    "hash": "6e1f95d0a0a0f1a98c5df00ee3ad37257cf0d037754d094caec7cc9c14644881"
+  },
+  "/Users/ej/Code/hive/README.md": {
+    "size": 5084,
+    "mtime_ns": 1782714343182648235,
+    "hash": "aefe005552c053760b0e5645cf5e1f12ee8f30fc4b4ccc9a1d5a570c44643e0c"
+  }
+}

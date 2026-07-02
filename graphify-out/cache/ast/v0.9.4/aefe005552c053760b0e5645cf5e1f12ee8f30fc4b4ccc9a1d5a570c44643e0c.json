@@ -1,0 +1,143 @@
+{
+  "nodes": [
+    {
+      "id": "users_ej_code_hive_readme_md",
+      "label": "README.md",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L1"
+    },
+    {
+      "id": "users_ej_code_hive_readme_dynamic_model_routing",
+      "label": "Dynamic Model Routing",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L28"
+    },
+    {
+      "id": "users_ej_code_hive_readme_telemetry",
+      "label": "Telemetry",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L36"
+    },
+    {
+      "id": "users_ej_code_hive_readme_browser_dashboard",
+      "label": "Browser Dashboard",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L43"
+    },
+    {
+      "id": "users_ej_code_hive_readme_client_integration",
+      "label": "Client Integration",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L47"
+    },
+    {
+      "id": "users_ej_code_hive_readme_opencode",
+      "label": "OpenCode",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L49"
+    },
+    {
+      "id": "users_ej_code_hive_readme_general_cli_authentication",
+      "label": "General CLI Authentication",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L73"
+    },
+    {
+      "id": "users_ej_code_hive_readme_model_providers_config",
+      "label": "Model Providers Config",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L82"
+    },
+    {
+      "id": "users_ej_code_hive_readme_model_discovery",
+      "label": "Model Discovery",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L102"
+    }
+  ],
+  "edges": [
+    {
+      "source": "users_ej_code_hive_readme_md",
+      "target": "users_ej_code_hive_readme_dynamic_model_routing",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L28",
+      "weight": 1.0
+    },
+    {
+      "source": "users_ej_code_hive_readme_md",
+      "target": "users_ej_code_hive_readme_telemetry",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L36",
+      "weight": 1.0
+    },
+    {
+      "source": "users_ej_code_hive_readme_md",
+      "target": "users_ej_code_hive_readme_browser_dashboard",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L43",
+      "weight": 1.0
+    },
+    {
+      "source": "users_ej_code_hive_readme_md",
+      "target": "users_ej_code_hive_readme_client_integration",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L47",
+      "weight": 1.0
+    },
+    {
+      "source": "users_ej_code_hive_readme_client_integration",
+      "target": "users_ej_code_hive_readme_opencode",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L49",
+      "weight": 1.0
+    },
+    {
+      "source": "users_ej_code_hive_readme_client_integration",
+      "target": "users_ej_code_hive_readme_general_cli_authentication",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L73",
+      "weight": 1.0
+    },
+    {
+      "source": "users_ej_code_hive_readme_md",
+      "target": "users_ej_code_hive_readme_model_providers_config",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L82",
+      "weight": 1.0
+    },
+    {
+      "source": "users_ej_code_hive_readme_model_providers_config",
+      "target": "users_ej_code_hive_readme_model_discovery",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L102",
+      "weight": 1.0
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

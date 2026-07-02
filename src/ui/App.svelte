@@ -12,13 +12,13 @@ import type {
   SubScores,
 } from "./types";
 import "../app.css";
+import Logs from "./Logs.svelte";
+import DetailOverlay from "./DetailOverlay.svelte";
 
 // Import custom element modules so they register before template renders
 import "./hive-header";
 import "./hive-stats";
 import "./hive-providers";
-import "./hive-detail-overlay";
-import "./hive-logs";
 import "./hive-flow";
 
 type ProviderPayload = {
@@ -71,6 +71,7 @@ let reconnectDelay = 1000;
 let override: OverrideState = $state({ active: false, provider: null, model: null });
 let availableProviders: AvailableProvider[] = $state([]);
 let flowEvents: FlowEvent[] = $state([]);
+let logEntries: LogEntry[] = $state([]);
 
 let telemetry: TelemetryData | null = $state(null);
 
@@ -78,8 +79,9 @@ let headerEl: HTMLElement;
 let statsEl: HTMLElement;
 let providersEl: HTMLElement;
 let flowEl: HTMLElement;
-let logsEl: HTMLElement;
-let overlayEl: HTMLElement;
+
+let detailMetric: MetricData | null = $state(null);
+let detailAllMetrics: MetricData[] = $state([]);
 
 function connect() {
   if (reconnectTimer !== null) {
@@ -138,9 +140,8 @@ function handleMessage(msg: WsMessage) {
     return;
   }
   if (msg.type === "log") {
-    if (logsEl) {
-      (logsEl as any).addLog(msg.data);
-    }
+    logEntries.push(msg.data);
+    if (logEntries.length > 500) logEntries.shift();
     return;
   }
   telemetry = msg.data;
@@ -222,7 +223,8 @@ $effect(() => {
 
 function onRowClick(e: Event) {
   const { metric, allMetrics } = (e as CustomEvent).detail as { metric: MetricData; allMetrics: MetricData[] };
-  if (overlayEl) (overlayEl as any).show(metric, allMetrics);
+  detailMetric = metric;
+  detailAllMetrics = allMetrics;
 }
 
 function onOverrideSet(e: Event) {
@@ -261,9 +263,9 @@ onDestroy(() => {
       <div class="section-head" style="margin-top:1.5rem">Live Requests</div>
       <hive-flow bind:this={flowEl}></hive-flow>
     </div>
-    <hive-logs bind:this={logsEl}></hive-logs>
+    <Logs entries={logEntries} />
   </div>
-  <hive-detail-overlay bind:this={overlayEl}></hive-detail-overlay>
+  <DetailOverlay {detailMetric} {detailAllMetrics} />
 </div>
 
 <style>
