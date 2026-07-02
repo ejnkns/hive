@@ -14,14 +14,10 @@ import type {
 import "../app.css";
 import Header from "./Header.svelte";
 import Stats from "./Stats.svelte";
-import Logs from "./Logs.svelte";
+import Providers from "./Providers.svelte";
 import Flow from "./Flow.svelte";
+import Logs from "./Logs.svelte";
 import DetailOverlay from "./DetailOverlay.svelte";
-
-// Import remaining custom element modules
-import "./hive-providers";
-import "./hive-providers";
-import "./hive-flow";
 
 type ProviderPayload = {
   name: string;
@@ -77,7 +73,6 @@ let logEntries: LogEntry[] = $state([]);
 
 let telemetry: TelemetryData | null = $state(null);
 
-let providersEl: HTMLElement;
 let detailMetric: MetricData | null = $state(null);
 let detailAllMetrics: MetricData[] = $state([]);
 
@@ -121,6 +116,32 @@ let statsData = $derived.by(() => {
   const names = new Set(t.providers.filter((x) => x.keyConfigured).map((x) => x.name));
   return { traffic: t.metrics.length, successRate: rate, providers: names.size, avgLatency: avg };
 });
+
+let providersData = $derived.by(() => {
+  const t = telemetry;
+  if (!t) return [] as ProviderData[];
+  return t.providers.map((x) => ({
+    name: x.name,
+    displayName: x.displayName,
+    model: x.model,
+    keyConfigured: x.keyConfigured,
+    stabilityScore: x.stabilityScore,
+    subscores: x.subscores,
+    p95Latency: x.p95Latency,
+    meanTokensPerSecond: x.meanTokensPerSecond,
+    requestCount: x.requestCount,
+    recentSuccessRate: x.recentSuccessRate,
+    truncationRate: x.truncationRate,
+    refusalRate: x.refusalRate,
+    contentFilterRate: x.contentFilterRate,
+    trippedUntil: x.trippedUntil,
+    disabledFeatures: x.disabledFeatures,
+  }));
+});
+
+let overrideKey = $derived(
+  override.active && override.provider && override.model ? `${override.provider}:${override.model}` : null
+);
 
 function connect() {
   if (reconnectTimer !== null) {
@@ -185,37 +206,6 @@ function handleMessage(msg: WsMessage) {
   availableProviders = msg.data.availableProviders;
 }
 
-function pushProviders(t: TelemetryData) {
-  if (!providersEl) return;
-  (providersEl as any).data = t.providers.map((x) => ({
-    name: x.name,
-    displayName: x.displayName,
-    model: x.model,
-    keyConfigured: x.keyConfigured,
-    stabilityScore: x.stabilityScore,
-    subscores: x.subscores,
-    p95Latency: x.p95Latency,
-    meanTokensPerSecond: x.meanTokensPerSecond,
-    requestCount: x.requestCount,
-    recentSuccessRate: x.recentSuccessRate,
-    truncationRate: x.truncationRate,
-    refusalRate: x.refusalRate,
-    contentFilterRate: x.contentFilterRate,
-    trippedUntil: x.trippedUntil,
-    disabledFeatures: x.disabledFeatures,
-  }));
-  (providersEl as any).metrics = t.metrics;
-  (providersEl as any).conversations = t.conversations;
-  (providersEl as any).overrideKey =
-    override.active && override.provider && override.model ? `${override.provider}:${override.model}` : null;
-}
-
-$effect(() => {
-  const t = telemetry;
-  if (!t) return;
-  pushProviders(t);
-});
-
 function onRowClick(e: Event) {
   const { metric, allMetrics } = (e as CustomEvent).detail as { metric: MetricData; allMetrics: MetricData[] };
   detailMetric = metric;
@@ -249,7 +239,7 @@ onDestroy(() => {
     <Stats data={statsData} />
     <div>
       <div class="section-head">Providers</div>
-      <hive-providers bind:this={providersEl}></hive-providers>
+      <Providers data={providersData} {metrics} {conversations} overrideKey={overrideKey} />
       <div class="section-head" style="margin-top:1.5rem">Live Requests</div>
       <Flow events={flowEvents} />
     </div>
