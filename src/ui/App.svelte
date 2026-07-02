@@ -15,11 +15,11 @@ import "../app.css";
 import Header from "./Header.svelte";
 import Stats from "./Stats.svelte";
 import Logs from "./Logs.svelte";
+import Flow from "./Flow.svelte";
 import DetailOverlay from "./DetailOverlay.svelte";
 
 // Import remaining custom element modules
 import "./hive-providers";
-import "./hive-flow";
 import "./hive-providers";
 import "./hive-flow";
 
@@ -78,8 +78,6 @@ let logEntries: LogEntry[] = $state([]);
 let telemetry: TelemetryData | null = $state(null);
 
 let providersEl: HTMLElement;
-let flowEl: HTMLElement;
-
 let detailMetric: MetricData | null = $state(null);
 let detailAllMetrics: MetricData[] = $state([]);
 
@@ -175,9 +173,6 @@ function handleMessage(msg: WsMessage) {
   if (msg.type === "flow") {
     flowEvents.push(msg.data);
     if (flowEvents.length > 100) flowEvents.shift();
-    if (flowEl) {
-      (flowEl as any).events = [...flowEvents];
-    }
     return;
   }
   if (msg.type === "log") {
@@ -219,7 +214,6 @@ $effect(() => {
   const t = telemetry;
   if (!t) return;
   pushProviders(t);
-  if (flowEl && flowEvents.length > 0) (flowEl as any).events = [...flowEvents];
 });
 
 function onRowClick(e: Event) {
@@ -257,7 +251,7 @@ onDestroy(() => {
       <div class="section-head">Providers</div>
       <hive-providers bind:this={providersEl}></hive-providers>
       <div class="section-head" style="margin-top:1.5rem">Live Requests</div>
-      <hive-flow bind:this={flowEl}></hive-flow>
+      <Flow events={flowEvents} />
     </div>
     <Logs entries={logEntries} />
   </div>
