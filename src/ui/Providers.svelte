@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { ProviderData, MetricData, ConversationData, CandidateInfo } from "./types";
+import type { ConversationData, MetricData, ProviderData } from "./types";
 import { bar, formatNumber, sc } from "./utils";
 import ActivityLog from "./ActivityLog.svelte";
 import Conversations from "./Conversations.svelte";
@@ -11,9 +11,9 @@ let {
   overrideKey = null as string | null,
 } = $props();
 
-let expandedConsoles = $state(new Set<string>());
-let expandedModels = $state(new Set<string>());
-let activeTabs = $state(new Map<string, "activity" | "conversations">());
+let expandedConsoles = $state<Record<string, boolean>>({});
+let expandedModels = $state<Record<string, boolean>>({});
+let activeTabs = $state<Record<string, "activity" | "conversations">>({});
 
 const groups = $derived.by(() => {
   const grouped = new Map<string, ProviderData[]>();
@@ -26,7 +26,13 @@ const groups = $derived.by(() => {
     .map(([name, entries]) => {
       const maxScore = Math.max(...entries.map((e) => e.stabilityScore));
       const keyConfigured = entries.some((e) => e.keyConfigured);
-      return { name, displayName: entries[0].displayName || name, entries, maxScore, keyConfigured };
+      return {
+        name,
+        displayName: entries[0].displayName || name,
+        entries,
+        maxScore,
+        keyConfigured,
+      };
     })
     .sort((a, b) => {
       if (a.keyConfigured && !b.keyConfigured) return -1;
@@ -38,7 +44,9 @@ const groups = $derived.by(() => {
 // Live cooldown ticker
 let tick = $state(0);
 $effect(() => {
-  const hasTripped = data.some((e) => e.trippedUntil && e.trippedUntil > Date.now());
+  const hasTripped = data.some(
+    (e) => e.trippedUntil && e.trippedUntil > Date.now()
+  );
   if (!hasTripped) return;
   const interval = setInterval(() => {
     tick++;
@@ -47,20 +55,15 @@ $effect(() => {
 });
 
 function toggleModels(name: string) {
-  if (expandedModels.has(name)) expandedModels.delete(name);
-  else expandedModels.add(name);
-  expandedModels = expandedModels;
+  expandedModels[name] = !expandedModels[name];
 }
 
 function toggleConsole(name: string) {
-  if (expandedConsoles.has(name)) expandedConsoles.delete(name);
-  else expandedConsoles.add(name);
-  expandedConsoles = expandedConsoles;
+  expandedConsoles[name] = !expandedConsoles[name];
 }
 
 function switchTab(name: string, tab: "activity" | "conversations") {
-  activeTabs.set(name, tab);
-  activeTabs = activeTabs;
+  activeTabs[name] = tab;
 }
 </script>
 
@@ -69,9 +72,9 @@ function switchTab(name: string, tab: "activity" | "conversations") {
 {:else}
   {#each groups as group}
     {@const f = group.entries[0]}
-    {@const isExpanded = expandedConsoles.has(group.name)}
-    {@const isModelsExpanded = expandedModels.has(group.name)}
-    {@const activeTab = activeTabs.get(group.name) || "activity"}
+    {@const isExpanded = expandedConsoles[group.name] ?? false}
+    {@const isModelsExpanded = expandedModels[group.name] ?? false}
+    {@const activeTab = activeTabs[group.name] || "activity"}
     <div class="worker" style="opacity:{group.keyConfigured ? '1' : '0.4'}">
       <div class="worker-summary">
         <div class="worker-identity">
@@ -90,7 +93,7 @@ function switchTab(name: string, tab: "activity" | "conversations") {
       </div>
 
       <div class="models-section">
-        <div class="models-toggle" onclick={() => toggleModels(group.name)}>
+        <div class="models-toggle" role="button" tabindex="0" onclick={() => toggleModels(group.name)} onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && toggleModels(group.name)}>
           <span>Models ({group.entries.length})</span>
           <span class="toggle-icon">{isModelsExpanded ? "▲" : "▼"}</span>
         </div>
@@ -98,7 +101,7 @@ function switchTab(name: string, tab: "activity" | "conversations") {
           <div class="mrows">
             {#each group.entries as e}
               {@const sub = e.subscores}
-              {@const tripped = e.trippedUntil && e.trippedUntil > Date.now()}
+              {@const tripped = e.trippedUntil && e.trippedUntil > Date.now() && tick > -1}
               {@const cooldownSec = tripped && e.trippedUntil ? Math.round((e.trippedUntil - Date.now()) / 1000) : 0}
               {@const isPinned = overrideKey === `{e.name}:{e.model}`}
               <div class="mrow {isPinned ? 'pinned' : ''}">
@@ -135,15 +138,19 @@ function switchTab(name: string, tab: "activity" | "conversations") {
 
       {#if group.keyConfigured}
         <div class="console-section">
-          <div class="console-toggle" onclick={() => toggleConsole(group.name)}>
+          <div class="console-toggle" role="button" tabindex="0" onclick={() => toggleConsole(group.name)} onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && toggleConsole(group.name)}>
             <span>Provider Console</span>
             <span class="toggle-icon">{isExpanded ? "▲" : "▼"}</span>
           </div>
           {#if isExpanded}
             <div class="console-content">
               <div class="tab-bar">
-                <span class="tab {activeTab === 'activity' ? 'active' : ''}" onclick={() => switchTab(group.name, "activity")}>Recent Activity</span>
-                <span class="tab {activeTab === 'conversations' ? 'active' : ''}" onclick={() => switchTab(group.name, "conversations")}>Conversations</span>
+                <span class="tab {activeTab === 'activity' ? 'active' : ''}" role="button" tabindex="0"
+  onclick={() => switchTab(group.name, "activity")}
+  onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && switchTab(group.name, "activity")}>Recent Activity</span>
+                <span class="tab {activeTab === 'conversations' ? 'active' : ''}" role="button" tabindex="0"
+  onclick={() => switchTab(group.name, "conversations")}
+  onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && switchTab(group.name, "conversations")}>Conversations</span>
               </div>
               <div class="tab-content">
                 {#if activeTab === "activity"}
