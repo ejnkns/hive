@@ -3,7 +3,11 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   root: "src/",
-  plugins: [svelte()],
+  plugins: [
+    svelte({
+      configFile: "./svelte.config.ts",
+    }),
+  ],
   build: {
     outDir: "../dist/ui",
     emptyOutDir: true,

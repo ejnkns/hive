@@ -1,7 +1,7 @@
 pre-commit:
   jobs:
     - name: biome
-      glob: "*.{ts,js,tsx,jsx,json,jsonc}"
+      glob: "*.{ts,js,tsx,jsx,json,jsonc,svelte}"
       run: npx @biomejs/biome check --write --no-errors-on-unmatched {staged_files} && git add {staged_files}
     - name: typecheck
       glob: "*.{ts,js}"
