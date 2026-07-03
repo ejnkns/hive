@@ -11,20 +11,22 @@ function close() {
   metric = null;
 }
 
-let backdrop: HTMLDivElement;
+let backdrop = $state<HTMLDivElement>();
 function onBackdropClick(e: MouseEvent) {
   if (e.target === backdrop) close();
 }
 
 const chain = $derived(
   metric && allMetrics.length > 0
-    ? allMetrics.filter((m) => m.requestId === metric.requestId).sort((a, b) => a.timestamp - b.timestamp)
+    ? allMetrics
+        .filter((m) => m.requestId === metric?.requestId)
+        .sort((a, b) => a.timestamp - b.timestamp)
     : []
 );
 </script>
 
 {#if metric}
-  <div class="backdrop" bind:this={backdrop} onclick={onBackdropClick}>
+  <div class="backdrop" bind:this={backdrop} onclick={onBackdropClick} onkeydown={(e) => e.key === 'Escape' && close()} role="dialog" aria-modal="true" tabindex="-1">
     <div class="overlay">
       <div class="header">
         <span class="title">Request Detail</span>

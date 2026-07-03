@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { StatsData } from "./types";
-import { sc, formatNumber } from "./utils";
+import { formatNumber, sc } from "./utils";
 
 let { data }: { data: StatsData | null } = $props();
 </script>

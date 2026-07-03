@@ -1,11 +1,12 @@
 <script lang="ts">
-import { onMount, onDestroy } from "svelte";
-import { logger, type LogEntry } from "../shared/logger";
+import { onDestroy, onMount } from "svelte";
+import { type LogEntry, logger } from "../shared/logger";
 import { getServerConfig } from "../shared/server-config";
 import type {
   AvailableProvider,
   ConversationData,
   FlowEvent,
+  HeaderData,
   MetricData,
   OverrideState,
   ProviderData,
@@ -66,10 +67,15 @@ let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectDelay = 1000;
 
-let override: OverrideState = $state({ active: false, provider: null, model: null });
-let availableProviders: AvailableProvider[] = $state([]);
+let override: OverrideState = $state({
+  active: false,
+  provider: null,
+  model: null,
+});
 let flowEvents: FlowEvent[] = $state([]);
 let logEntries: LogEntry[] = $state([]);
+let metrics: MetricData[] = $state([]);
+let conversations: ConversationData[] = $state([]);
 
 let telemetry: TelemetryData | null = $state(null);
 
@@ -79,14 +85,21 @@ let detailAllMetrics: MetricData[] = $state([]);
 let headerData = $derived.by(() => {
   const t = telemetry;
   if (!t) return null as HeaderData | null;
-  const sorted = t.providers.filter((p) => p.keyConfigured).sort((a, b) => b.stabilityScore - a.stabilityScore);
+  const sorted = t.providers
+    .filter((p) => p.keyConfigured)
+    .sort((a, b) => b.stabilityScore - a.stabilityScore);
   const bestEntry = sorted[0] ?? null;
   const total = t.metrics.length;
   const okCount = t.metrics.filter((r) => r.success).length;
   const rate = total > 0 ? Math.round((okCount / total) * 100) : 100;
-  const names = new Set(t.providers.filter((x) => x.keyConfigured).map((x) => x.name));
+  const names = new Set(
+    t.providers.filter((x) => x.keyConfigured).map((x) => x.name)
+  );
   const flights = t.metrics.filter((r) => r.success).map((r) => r.ttft);
-  const avg = flights.length > 0 ? Math.round(flights.reduce((a, b) => a + b, 0) / flights.length) : null;
+  const avg =
+    flights.length > 0
+      ? Math.round(flights.reduce((a, b) => a + b, 0) / flights.length)
+      : null;
   return {
     online: true,
     serverAddr: `${t.serverHost}:${t.serverPort}`,
@@ -110,11 +123,22 @@ let statsData = $derived.by(() => {
   const t = telemetry;
   if (!t) return null;
   const okCount = t.metrics.filter((r) => r.success).length;
-  const rate = t.metrics.length > 0 ? Math.round((okCount / t.metrics.length) * 100) : 100;
+  const rate =
+    t.metrics.length > 0 ? Math.round((okCount / t.metrics.length) * 100) : 100;
   const flights = t.metrics.filter((r) => r.success).map((r) => r.ttft);
-  const avg = flights.length > 0 ? Math.round(flights.reduce((a, b) => a + b, 0) / flights.length) : null;
-  const names = new Set(t.providers.filter((x) => x.keyConfigured).map((x) => x.name));
-  return { traffic: t.metrics.length, successRate: rate, providers: names.size, avgLatency: avg };
+  const avg =
+    flights.length > 0
+      ? Math.round(flights.reduce((a, b) => a + b, 0) / flights.length)
+      : null;
+  const names = new Set(
+    t.providers.filter((x) => x.keyConfigured).map((x) => x.name)
+  );
+  return {
+    traffic: t.metrics.length,
+    successRate: rate,
+    providers: names.size,
+    avgLatency: avg,
+  };
 });
 
 let providersData = $derived.by(() => {
@@ -140,7 +164,9 @@ let providersData = $derived.by(() => {
 });
 
 let overrideKey = $derived(
-  override.active && override.provider && override.model ? `${override.provider}:${override.model}` : null
+  override.active && override.provider && override.model
+    ? `${override.provider}:${override.model}`
+    : null
 );
 
 function connect() {
@@ -202,23 +228,45 @@ function handleMessage(msg: WsMessage) {
     return;
   }
   telemetry = msg.data;
-  override = { active: msg.data.overrideActive, provider: msg.data.overrideProvider, model: msg.data.overrideModel };
-  availableProviders = msg.data.availableProviders;
+  override = {
+    active: msg.data.overrideActive,
+    provider: msg.data.overrideProvider,
+    model: msg.data.overrideModel,
+  };
+  metrics = msg.data.metrics;
+  conversations = msg.data.conversations;
 }
 
 function onRowClick(e: Event) {
-  const { metric, allMetrics } = (e as CustomEvent).detail as { metric: MetricData; allMetrics: MetricData[] };
+  const { metric, allMetrics } = (e as CustomEvent).detail as {
+    metric: MetricData;
+    allMetrics: MetricData[];
+  };
   detailMetric = metric;
   detailAllMetrics = allMetrics;
 }
 
 function handleOverrideSet(provider: string, model: string) {
-  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "override", provider, model, enabled: true }));
+  if (ws?.readyState === WebSocket.OPEN)
+    ws.send(
+      JSON.stringify({ type: "override", provider, model, enabled: true })
+    );
 }
 
 function handleOverrideClear() {
-  if (ws?.readyState === WebSocket.OPEN && override.provider && override.model) {
-    ws.send(JSON.stringify({ type: "override", provider: override.provider, model: override.model, enabled: false }));
+  if (
+    ws?.readyState === WebSocket.OPEN &&
+    override.provider &&
+    override.model
+  ) {
+    ws.send(
+      JSON.stringify({
+        type: "override",
+        provider: override.provider,
+        model: override.model,
+        enabled: false,
+      })
+    );
   }
 }
 
@@ -234,7 +282,7 @@ onDestroy(() => {
 </script>
 
 <div class="app">
-  <Header data={headerData} onOverrideSet={handleOverrideSet} onOverrideClear={handleOverrideClear} />
+  <Header data={headerData ?? undefined} onOverrideSet={handleOverrideSet} onOverrideClear={handleOverrideClear} />
   <div class="content">
     <Stats data={statsData} />
     <div>

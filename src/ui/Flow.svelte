@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { FlowEvent, CandidateInfo } from "./types";
+import type { CandidateInfo, FlowEvent } from "./types";
 import { formatNumber, formatTime, sc } from "./utils";
 
 let { events = [] as FlowEvent[] } = $props();
@@ -53,7 +53,11 @@ const requests = $derived.by(() => {
         errorType: event.errorType,
       };
     } else if (event.type === "failover_attempt") {
-      req.failovers.push({ provider: event.failedProvider, model: event.failedModel, errorType: event.errorType });
+      req.failovers.push({
+        provider: event.failedProvider,
+        model: event.failedModel,
+        errorType: event.errorType,
+      });
     }
     map.set(event.requestId, req);
   }

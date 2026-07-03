@@ -19,7 +19,7 @@ let {
     activeProviders: 0,
     avgLatency: null,
   } as HeaderData),
-  onOverrideSet = (provider: string, model: string) => {},
+  onOverrideSet = () => {},
   onOverrideClear = () => {},
 } = $props();
 
@@ -29,11 +29,17 @@ let pendingModel: string | null = $state(null);
 const logo =
   "   ,-.      .' '.        .`\n   \\_/      .   .       .\n:>(|||} .    ` .       .\n   / \\   '. . '  ' . '\n   `-'  ";
 
-const configuredProviders = $derived(data.availableProviders.filter((p) => p.keyConfigured));
-const selectedProvider = $derived(
-  data.override.active ? data.override.provider : (pendingProvider ?? data.lastProvider)
+const configuredProviders = $derived(
+  data.availableProviders.filter((p) => p.keyConfigured)
 );
-const selectedProviderData = $derived(configuredProviders.find((p) => p.name === selectedProvider));
+const selectedProvider = $derived(
+  data.override.active
+    ? data.override.provider
+    : (pendingProvider ?? data.lastProvider)
+);
+const selectedProviderData = $derived(
+  configuredProviders.find((p) => p.name === selectedProvider)
+);
 const models = $derived(selectedProviderData?.models ?? []);
 const selectedModel = $derived(
   data.override.active
@@ -45,9 +51,19 @@ const selectedModel = $derived(
         : null
 );
 
-const successColor = $derived(data.successRate < 75 ? "#d4451a" : data.successRate < 90 ? "#e2a93b" : "#7cb342");
+const successColor = $derived(
+  data.successRate < 75
+    ? "#d4451a"
+    : data.successRate < 90
+      ? "#e2a93b"
+      : "#7cb342"
+);
 const strategyLabel = $derived(
-  data.routingStrategy === "latency" ? "LATENCY" : data.routingStrategy === "quality" ? "QUALITY" : "BALANCED"
+  data.routingStrategy === "latency"
+    ? "LATENCY"
+    : data.routingStrategy === "quality"
+      ? "QUALITY"
+      : "BALANCED"
 );
 
 function onProviderChange(e: Event) {
