@@ -4,7 +4,14 @@ import { PassThrough } from "node:stream";
 import { URL } from "node:url";
 import { logger } from "../shared/logger";
 import type { FinishReason, MetricSource } from "../telemetry";
-import { classifyError, conversationStore, createStreamCounter, detectRefusal, telemetryRecorder } from "../telemetry";
+import {
+  classifyError,
+  conversationStore,
+  createStreamCounter,
+  detectRefusal,
+  telemetryRecorder,
+} from "../telemetry";
+import type { StreamPhaseEvent } from "../telemetry/recorder/create-stream-counter";
 import { emitFlowEvent } from "./flow-events";
 import type { MutatedRequest } from "./mutate-request";
 import { ProxyResponse } from "./proxy-response";
@@ -26,14 +33,28 @@ type RouteResult = {
 };
 
 export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
-  const { upstreamUrl, mutated, timeoutMs, providerName, modelName, requestId, source: metricSource } = opts;
+  const {
+    upstreamUrl,
+    mutated,
+    timeoutMs,
+    providerName,
+    modelName,
+    requestId,
+    source: metricSource,
+  } = opts;
   return new Promise((resolve) => {
     const url = new URL(upstreamUrl);
     const start = Date.now();
 
     const bodyBuffer = Buffer.from(mutated.body);
 
-    emitFlowEvent({ type: "node_dispatched", requestId, provider: providerName, model: modelName, attempt: 0 });
+    emitFlowEvent({
+      type: "node_dispatched",
+      requestId,
+      provider: providerName,
+      model: modelName,
+      attempt: 0,
+    });
 
     const requestOptions: https.RequestOptions = {
       hostname: url.hostname,
@@ -68,7 +89,9 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
       }
     ) => {
       const totalLatency = Date.now() - start;
-      const outputTokens = stats?.outputTokensFromUsage ?? (stats ? Math.round(stats.outputChars / 4) : null);
+      const outputTokens =
+        stats?.outputTokensFromUsage ??
+        (stats ? Math.round(stats.outputChars / 4) : null);
       const inputTokens = stats?.inputTokens ?? null;
 
       telemetryRecorder.recordMetric({
@@ -117,7 +140,9 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
       const statusCode = res.statusCode ?? 500;
 
       if (statusCode >= 400) {
-        logger.debug(`upstream ${providerName}:${modelName} — error response ${String(statusCode)}`);
+        logger.debug(
+          `upstream ${providerName}:${modelName} — error response ${String(statusCode)}`
+        );
         let errorBody = "";
         res.on("data", (chunk: Buffer) => {
           errorBody += chunk.toString();
@@ -137,7 +162,50 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
       let ttft = timeoutMs;
       let initialByteReceived = false;
       let streamErrored = false;
-      const counter = createStreamCounter(start);
+      const counter = createStreamCounter(start, (evt: StreamPhaseEvent) => {
+        switch (evt.kind) {
+          case "thinking_started":
+            emitFlowEvent({
+              type: "thinking_started",
+              requestId,
+              provider: providerName,
+              model: modelName,
+            });
+            break;
+          case "streaming_started":
+            emitFlowEvent({
+              type: "streaming_started",
+              requestId,
+              provider: providerName,
+              model: modelName,
+            });
+            break;
+          case "tool_accumulating":
+            emitFlowEvent({
+              type: "tool_accumulating",
+              requestId,
+              provider: providerName,
+              model: modelName,
+              toolIndex: evt.toolIndex,
+            });
+            break;
+          case "token_tick": {
+            const elapsedSec = evt.elapsedMs / 1000;
+            const tps =
+              elapsedSec > 0 ? Math.round(evt.outputChars / elapsedSec) : 0;
+            emitFlowEvent({
+              type: "token_tick",
+              requestId,
+              provider: providerName,
+              model: modelName,
+              outputChars: evt.outputChars,
+              thinkingChars: evt.thinkingChars,
+              tokensPerSecond: tps,
+            });
+            break;
+          }
+        }
+      });
 
       res.once("data", (chunk: Buffer) => {
         ttft = Date.now() - start;
@@ -148,7 +216,9 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
         res.pipe(transform);
         transform.pipe(passThrough);
 
-        logger.debug(`upstream ${providerName}:${modelName} — first byte in ${String(ttft)}ms`);
+        logger.debug(
+          `upstream ${providerName}:${modelName} — first byte in ${String(ttft)}ms`
+        );
 
         resolve({
           proxyResponse: ProxyResponse.ok(statusCode, passThrough),
@@ -159,9 +229,19 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
 
       res.on("error", (err: Error) => {
         streamErrored = true;
-        logger.debug(`upstream ${providerName}:${modelName} — stream error: ${err.message}`);
+        logger.debug(
+          `upstream ${providerName}:${modelName} — stream error: ${err.message}`
+        );
         const stats = counter.getStats();
-        record(Date.now() - start, false, 500, undefined, "STREAM_ERROR", undefined, stats);
+        record(
+          Date.now() - start,
+          false,
+          500,
+          undefined,
+          "STREAM_ERROR",
+          undefined,
+          stats
+        );
 
         if (!initialByteReceived) {
           resolve({
@@ -176,8 +256,18 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
         const stats = counter.getStats();
         const effectiveTtft = initialByteReceived ? ttft : Date.now() - start;
         const isHeartbeat = metricSource === "heartbeat";
-        const isSuccess = isHeartbeat ? statusCode < 400 : !stats.isAbruptDisconnect;
-        record(effectiveTtft, isSuccess, statusCode, undefined, undefined, undefined, stats);
+        const isSuccess = isHeartbeat
+          ? statusCode < 400
+          : !stats.isAbruptDisconnect;
+        record(
+          effectiveTtft,
+          isSuccess,
+          statusCode,
+          undefined,
+          undefined,
+          undefined,
+          stats
+        );
 
         logger.debug(
           `upstream ${providerName}:${modelName} — stream complete (${String(stats.outputChars)} chars, abrupt=${String(stats.isAbruptDisconnect)})`
@@ -209,7 +299,9 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
     });
 
     req.on("timeout", () => {
-      logger.debug(`upstream ${providerName}:${modelName} — timeout after ${String(timeoutMs)}ms`);
+      logger.debug(
+        `upstream ${providerName}:${modelName} — timeout after ${String(timeoutMs)}ms`
+      );
       req.destroy();
       record(timeoutMs, false, 0, undefined, "TIMEOUT");
       resolve({
@@ -221,7 +313,9 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
 
     req.on("error", (err: Error) => {
       const elapsed = Date.now() - start;
-      logger.debug(`upstream ${providerName}:${modelName} — network error: ${err.message}`);
+      logger.debug(
+        `upstream ${providerName}:${modelName} — network error: ${err.message}`
+      );
       record(elapsed, false, 0, undefined, "NETWORK_ERROR");
       resolve({
         proxyResponse: ProxyResponse.error(0, "NETWORK_ERROR"),
