@@ -117,7 +117,12 @@ export type CandidateInfo = {
 };
 
 export type FlowEvent =
-  | { type: "request_received"; requestId: string; timestamp: number; promptPreview: string }
+  | {
+      type: "request_received";
+      requestId: string;
+      timestamp: number;
+      promptPreview: string;
+    }
   | {
       type: "selection_round";
       requestId: string;
@@ -126,7 +131,13 @@ export type FlowEvent =
       selected: string | null;
       poolSize: number;
     }
-  | { type: "node_dispatched"; requestId: string; provider: string; model: string; attempt: number }
+  | {
+      type: "node_dispatched";
+      requestId: string;
+      provider: string;
+      model: string;
+      attempt: number;
+    }
   | {
       type: "response_complete";
       requestId: string;
@@ -148,4 +159,39 @@ export type FlowEvent =
       failedModel: string;
       errorType: string;
       attempt: number;
+    }
+  | {
+      type: "thinking_started";
+      requestId: string;
+      provider: string;
+      model: string;
+    }
+  | {
+      type: "streaming_started";
+      requestId: string;
+      provider: string;
+      model: string;
+    }
+  | {
+      type: "token_tick";
+      requestId: string;
+      provider: string;
+      model: string;
+      outputChars: number;
+      thinkingChars: number;
+      tokensPerSecond: number;
+    }
+  | {
+      type: "tool_accumulating";
+      requestId: string;
+      provider: string;
+      model: string;
+      toolIndex: number;
+    }
+  | {
+      type: "circuit_break";
+      requestId: string;
+      provider: string;
+      model: string;
+      cooldownDurationSec: number;
     };
