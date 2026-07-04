@@ -2,16 +2,13 @@
 import type { MetricData } from "./types";
 import { formatNumber, formatTime } from "./utils";
 
-let { data = [] as MetricData[] } = $props();
-
-function onRowClick(m: MetricData) {
-  const event = new CustomEvent("row-click", {
-    bubbles: true,
-    composed: true,
-    detail: { metric: m, allMetrics: data },
-  });
-  dispatchEvent(event);
-}
+let {
+  data = [] as MetricData[],
+  onRowClick,
+}: {
+  data: MetricData[];
+  onRowClick: (metric: MetricData, allMetrics: MetricData[]) => void;
+} = $props();
 </script>
 
 {#if data.length === 0}
@@ -29,7 +26,7 @@ function onRowClick(m: MetricData) {
     </thead>
     <tbody>
       {#each [...data].sort((a, b) => b.timestamp - a.timestamp).slice(0, 50) as r}
-        <tr onclick={() => onRowClick(r)} style="cursor:pointer">
+        <tr onclick={() => onRowClick(r, data)} style="cursor:pointer">
           <td class="mono">{formatTime(r.timestamp)}</td>
           <td class="model">{r.model}</td>
           <td>
@@ -42,7 +39,7 @@ function onRowClick(m: MetricData) {
             {/if}
           </td>
           <td>{r.success ? formatNumber(r.ttft, "ms") : "—"}</td>
-          <td>{r.inputTokens != null || r.outputTokens != null ? `{r.inputTokens ?? "—"} / {r.outputTokens ?? "—"}` : "—"}</td>
+          <td>{r.inputTokens != null || r.outputTokens != null ? `${r.inputTokens ?? "—"} / ${r.outputTokens ?? "—"}` : "—"}</td>
         </tr>
       {/each}
     </tbody>

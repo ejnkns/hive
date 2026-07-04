@@ -237,11 +237,7 @@ function handleMessage(msg: WsMessage) {
   conversations = msg.data.conversations;
 }
 
-function onRowClick(e: Event) {
-  const { metric, allMetrics } = (e as CustomEvent).detail as {
-    metric: MetricData;
-    allMetrics: MetricData[];
-  };
+function handleMetricClick(metric: MetricData, allMetrics: MetricData[]) {
   detailMetric = metric;
   detailAllMetrics = allMetrics;
 }
@@ -272,12 +268,10 @@ function handleOverrideClear() {
 
 onMount(() => {
   connect();
-  document.addEventListener("row-click", onRowClick);
 });
 
 onDestroy(() => {
   closeWs();
-  document.removeEventListener("row-click", onRowClick);
 });
 </script>
 
@@ -287,7 +281,7 @@ onDestroy(() => {
     <Stats data={statsData} />
     <div>
       <div class="section-head">Providers</div>
-      <Providers data={providersData} {metrics} {conversations} overrideKey={overrideKey} />
+      <Providers data={providersData} {metrics} {conversations} overrideKey={overrideKey} onRowClick={handleMetricClick} />
       <div class="section-head" style="margin-top:1.5rem">Live Requests</div>
       <Flow events={flowEvents} />
     </div>
