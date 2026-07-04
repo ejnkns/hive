@@ -112,8 +112,8 @@ function toggleTheme() {
 
 <div class="header-inner">
   <div class="logo-area">
-    <pre class="logo-ascii">{logo}</pre>
     <span class="logo-text">[ <b>h i v e</b> ]</span>
+    <pre class="logo-ascii">{logo}</pre>
   </div>
   <div class="header-meta">
     <div class="status-row">
@@ -161,14 +161,18 @@ function toggleTheme() {
 
 <style>
   .header-inner {
+    position: sticky;
+    top: 0;
+    background: var(--surface);
     display: flex;
     justify-content: space-between;
     align-items: stretch;
     max-width: 1200px;
     margin: 0 auto;
     padding: 0 1.25rem;
+    z-index: 1;
   }
-  .logo-area { display: flex; align-items: top; }
+  .logo-area { display: flex; flex-direction: column; }
   .logo-ascii {
     font-family: monospace;
     font-size: 0.625rem;
@@ -180,6 +184,8 @@ function toggleTheme() {
   .logo-text {
     color: var(--logo-text);
     white-space: nowrap;
+    width: 248px;
+    text-align: right;
   }
   .header-meta {
     text-align: right;
