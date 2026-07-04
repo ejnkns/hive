@@ -1,5 +1,9 @@
 export function sc(c: number): string {
-  return c >= 80 ? "var(--success)" : c >= 50 ? "var(--warning)" : "var(--error)";
+  return c >= 70
+    ? "var(--success)"
+    : c >= 50
+      ? "var(--warning)"
+      : "var(--error)";
 }
 
 export function formatTime(ts: number): string {
@@ -12,7 +16,8 @@ export function formatTime(ts: number): string {
 
 export function formatNumber(v: number | null, suf?: string): string {
   if (v == null || Number.isNaN(v)) return "—";
-  if (suf === "ms") return v >= 1000 ? `${(v / 1000).toFixed(1)}s` : `${String(v)}ms`;
+  if (suf === "ms")
+    return v >= 1000 ? `${(v / 1000).toFixed(1)}s` : `${String(v)}ms`;
   return v.toFixed(2) + (suf ? ` ${suf}` : "");
 }
 
