@@ -14,21 +14,34 @@ export type FailoverContext = {
   sessionId?: string;
 };
 
-export async function executeProxyRequest(ctx: FailoverContext): Promise<ProxyResponse> {
+export async function executeProxyRequest(
+  ctx: FailoverContext
+): Promise<ProxyResponse> {
   const maxAttempts = Math.min(3, ctx.nodes.length);
   let attempts = 0;
   const tried = new Set<string>();
 
   while (attempts < maxAttempts) {
-    const availableNodes = ctx.nodes.filter((n) => !tried.has(`${n.providerName}:${n.modelName}`));
+    const availableNodes = ctx.nodes.filter(
+      (n) => !tried.has(`${n.providerName}:${n.modelName}`)
+    );
     if (availableNodes.length === 0) {
-      logger.debug(`attempt ${String(attempts)}/${String(maxAttempts)} — no untried nodes remaining`);
+      logger.debug(
+        `attempt ${String(attempts)}/${String(maxAttempts)} — no untried nodes remaining`
+      );
       break;
     }
 
-    const node = selectBestNode(availableNodes, ctx.getMetricsForNode, ctx.requiredFeatures, ctx.sessionId);
+    const node = selectBestNode(
+      availableNodes,
+      ctx.getMetricsForNode,
+      ctx.requiredFeatures,
+      ctx.sessionId
+    );
     if (!node) {
-      logger.debug(`attempt ${String(attempts)}/${String(maxAttempts)} — selectBestNode returned null`);
+      logger.debug(
+        `attempt ${String(attempts)}/${String(maxAttempts)} — selectBestNode returned null`
+      );
       break;
     }
 
@@ -44,7 +57,18 @@ export async function executeProxyRequest(ctx: FailoverContext): Promise<ProxyRe
         logger.debug(
           `attempt ${String(attempts)}/${String(maxAttempts)} — ${compoundKey} upstream error: ${normalized.type} (status ${String(response.status)})`
         );
-        routingMemory.recordUpstreamError(compoundKey, normalized.type, ctx.requiredFeatures);
+        routingMemory.recordUpstreamError(
+          compoundKey,
+          normalized.type,
+          ctx.requiredFeatures
+        );
+        emitFlowEvent({
+          type: "circuit_break",
+          requestId: ctx.sessionId ?? "",
+          provider: node.providerName,
+          model: node.modelName,
+          cooldownDurationSec: 30,
+        });
         emitFlowEvent({
           type: "failover_attempt",
           requestId: ctx.sessionId ?? "",
@@ -66,6 +90,13 @@ export async function executeProxyRequest(ctx: FailoverContext): Promise<ProxyRe
       );
       routingMemory.recordNetworkFailure(compoundKey);
       emitFlowEvent({
+        type: "circuit_break",
+        requestId: ctx.sessionId ?? "",
+        provider: node.providerName,
+        model: node.modelName,
+        cooldownDurationSec: 30,
+      });
+      emitFlowEvent({
         type: "failover_attempt",
         requestId: ctx.sessionId ?? "",
         failedProvider: node.providerName,
@@ -76,5 +107,7 @@ export async function executeProxyRequest(ctx: FailoverContext): Promise<ProxyRe
     }
   }
 
-  throw new Error("Hive Router Error: All qualifying upstream endpoints failed execution.");
+  throw new Error(
+    "Hive Router Error: All qualifying upstream endpoints failed execution."
+  );
 }
