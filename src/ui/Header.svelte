@@ -126,7 +126,7 @@ function toggleTheme() {
       <span class="stat">TRAFFIC: <b>{data.traffic > 0 ? String(data.traffic) : "—"}</b></span>
       <span class="stat">SUCCESS: <b style="color:{successColor}">{String(data.successRate)}%</b></span>
       <span class="stat">ACTIVE: <b>{String(data.activeProviders)}</b></span>
-      <span class="stat">LATENCY: <b>{data.avgLatency != null ? `{data.avgLatency}ms` : "—"}</b></span>
+      <span class="stat">LATENCY: <b>{data.avgLatency != null ? `${data.avgLatency}ms` : "—"}</b></span>
     </div>
     {#if data.lastProvider && data.lastModel}
       <div class="status-row"><span class="label">Last:</span><span class="prov">{data.lastProvider}</span><span> / </span><span class="model">{data.lastModel}</span></div>
@@ -163,13 +163,13 @@ function toggleTheme() {
   .header-inner {
     position: sticky;
     top: 0;
-    background: var(--surface);
+    background: var(--bg);
     display: flex;
     justify-content: space-between;
     align-items: stretch;
     max-width: 1200px;
     margin: 0 auto;
-    padding: 0 1.25rem;
+    padding: 1rem 1.25rem;
     z-index: 1;
   }
   .logo-area { display: flex; flex-direction: column; }

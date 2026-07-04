@@ -103,7 +103,7 @@ const requests = $derived.by(() => {
       {#if req.response}
         <div class="flow-response">
           <span style="color:{req.response.success ? 'var(--success)' : 'var(--error)'}">
-            {req.response.success ? String(req.response.statusCode) : `{String(req.response.statusCode)} ERR`}
+            {req.response.success ? String(req.response.statusCode) : `${String(req.response.statusCode)} ERR`}
           </span>
           <span>{formatNumber(req.response.ttft, "ms")} TTFT</span>
           <span>{req.response.outputTokens != null ? String(req.response.outputTokens) : "—"} tok</span>
