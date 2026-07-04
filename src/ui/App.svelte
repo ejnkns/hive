@@ -17,6 +17,7 @@ import Header from "./Header.svelte";
 import Stats from "./Stats.svelte";
 import Providers from "./Providers.svelte";
 import Flow from "./Flow.svelte";
+import LivePipeline from "./LivePipeline.svelte";
 import Logs from "./Logs.svelte";
 import DetailOverlay from "./DetailOverlay.svelte";
 
@@ -282,6 +283,8 @@ onDestroy(() => {
     <div>
       <div class="section-head">Providers</div>
       <Providers data={providersData} {metrics} {conversations} overrideKey={overrideKey} onRowClick={handleMetricClick} />
+      <div class="section-head" style="margin-top:1.5rem">Pipeline</div>
+      <LivePipeline events={flowEvents} providers={providersData} />
       <div class="section-head" style="margin-top:1.5rem">Live Requests</div>
       <Flow events={flowEvents} />
     </div>
