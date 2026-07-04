@@ -30,7 +30,7 @@ ${YELLOW}:${RESET}${BLACK}>${YELLOW}(${RESET}${BLACK}|${RESET}${YELLOW}|${RESET}
 `;
 
   const wide = `${beeHive}
-             ${title}
+           ${title}
 ${version}                         ${YELLOW}^^${RESET}`;
 
   const narrow = `${flyPath}${version}`;
