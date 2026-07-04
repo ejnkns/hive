@@ -42,7 +42,21 @@ type StreamStats = {
   toolCallFailed: boolean;
 };
 
-export function createStreamCounter(startTime: number) {
+export type StreamPhaseEvent =
+  | { kind: "thinking_started" }
+  | { kind: "streaming_started" }
+  | { kind: "tool_accumulating"; toolIndex: number }
+  | {
+      kind: "token_tick";
+      outputChars: number;
+      thinkingChars: number;
+      elapsedMs: number;
+    };
+
+export function createStreamCounter(
+  startTime: number,
+  onEvent?: (event: StreamPhaseEvent) => void
+) {
   let outputChars = 0;
   let thinkingChars = 0;
   let thinkingStart: number | null = null;
@@ -55,6 +69,8 @@ export function createStreamCounter(startTime: number) {
   let outputTokensFromUsage: number | null = null;
   let buffer = "";
   const toolCallBuffers = new Map<number, string>();
+  let lastTickEmitted = 0;
+  const TICK_THROTTLE_MS = 100;
 
   const transform = new Transform({
     transform(chunk: Buffer, _encoding, callback) {
@@ -71,7 +87,9 @@ export function createStreamCounter(startTime: number) {
         const jsonStr = trimmed.slice(6);
         if (jsonStr === "[DONE]") {
           isAbruptDisconnect = false;
-          logger.debug("parse-stream: received DONE, stream completed normally");
+          logger.debug(
+            "parse-stream: received DONE, stream completed normally"
+          );
           continue;
         }
 
@@ -91,18 +109,25 @@ export function createStreamCounter(startTime: number) {
           if (parsed.usage) {
             if (typeof parsed.usage.prompt_tokens === "number") {
               inputTokens = parsed.usage.prompt_tokens;
-              logger.debug(`parse-stream: prompt_tokens: ${String(inputTokens)}`);
+              logger.debug(
+                `parse-stream: prompt_tokens: ${String(inputTokens)}`
+              );
             }
             if (typeof parsed.usage.completion_tokens === "number") {
               outputTokensFromUsage = parsed.usage.completion_tokens;
-              logger.debug(`parse-stream: completion_tokens: ${String(outputTokensFromUsage)}`);
+              logger.debug(
+                `parse-stream: completion_tokens: ${String(outputTokensFromUsage)}`
+              );
             }
           }
 
           if (delta?.reasoning_content) {
             if (thinkingStart === null) {
               thinkingStart = Date.now() - startTime;
-              logger.debug(`parse-stream: thinking_start: ${String(thinkingStart)}ms`);
+              onEvent?.({ kind: "thinking_started" });
+              logger.debug(
+                `parse-stream: thinking_start: ${String(thinkingStart)}ms`
+              );
             }
             thinkingChars += delta.reasoning_content.length;
             responseText += delta.reasoning_content;
@@ -112,6 +137,7 @@ export function createStreamCounter(startTime: number) {
             if (thinkingStart !== null && !hasReceivedContent) {
               thinkingEnd = Date.now() - startTime;
               hasReceivedContent = true;
+              onEvent?.({ kind: "streaming_started" });
               logger.debug(
                 `parse-stream: thinking_end: ${String(thinkingEnd)}ms, thinking_time: ${String(thinkingEnd - thinkingStart)}ms`
               );
@@ -128,12 +154,29 @@ export function createStreamCounter(startTime: number) {
               if (tc.index !== undefined && tc.function?.arguments) {
                 const current = toolCallBuffers.get(tc.index) ?? "";
                 toolCallBuffers.set(tc.index, current + tc.function.arguments);
+                onEvent?.({ kind: "tool_accumulating", toolIndex: tc.index });
               }
+            }
+          }
+
+          if (onEvent) {
+            const now = Date.now();
+            if (now - lastTickEmitted >= TICK_THROTTLE_MS) {
+              lastTickEmitted = now;
+              const elapsed = now - startTime;
+              onEvent({
+                kind: "token_tick",
+                outputChars,
+                thinkingChars,
+                elapsedMs: elapsed,
+              });
             }
           }
         } catch (err) {
           // err is caught from JSON.parse — known to be Error
-          logger.debug(`parse-stream: skipped unparseable chunk: ${(err as Error).message}`);
+          logger.debug(
+            `parse-stream: skipped unparseable chunk: ${(err as Error).message}`
+          );
         }
       }
 
@@ -144,7 +187,9 @@ export function createStreamCounter(startTime: number) {
   const getStats = (): StreamStats => {
     let thinkingTime: number | null = null;
     if (thinkingStart !== null) {
-      const end = thinkingEnd ?? (isAbruptDisconnect ? thinkingStart : Date.now() - startTime);
+      const end =
+        thinkingEnd ??
+        (isAbruptDisconnect ? thinkingStart : Date.now() - startTime);
       thinkingTime = end - thinkingStart;
     }
 
