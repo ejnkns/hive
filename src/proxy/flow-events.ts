@@ -56,12 +56,57 @@ export type FailoverAttemptEvent = {
   attempt: number;
 };
 
+export type ThinkingStartedEvent = {
+  type: "thinking_started";
+  requestId: string;
+  provider: string;
+  model: string;
+};
+
+export type StreamingStartedEvent = {
+  type: "streaming_started";
+  requestId: string;
+  provider: string;
+  model: string;
+};
+
+export type TokenTickEvent = {
+  type: "token_tick";
+  requestId: string;
+  provider: string;
+  model: string;
+  outputChars: number;
+  thinkingChars: number;
+  tokensPerSecond: number;
+};
+
+export type ToolAccumulatingEvent = {
+  type: "tool_accumulating";
+  requestId: string;
+  provider: string;
+  model: string;
+  toolIndex: number;
+};
+
+export type CircuitBreakEvent = {
+  type: "circuit_break";
+  requestId: string;
+  provider: string;
+  model: string;
+  cooldownDurationSec: number;
+};
+
 export type FlowEvent =
   | RequestReceivedEvent
   | SelectionRoundEvent
   | NodeDispatchedEvent
   | ResponseCompleteEvent
-  | FailoverAttemptEvent;
+  | FailoverAttemptEvent
+  | ThinkingStartedEvent
+  | StreamingStartedEvent
+  | TokenTickEvent
+  | ToolAccumulatingEvent
+  | CircuitBreakEvent;
 
 type FlowEventListener = (event: FlowEvent) => void;
 
