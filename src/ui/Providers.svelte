@@ -9,7 +9,14 @@ let {
   metrics = [] as MetricData[],
   conversations = [] as ConversationData[],
   overrideKey = null as string | null,
-} = $props();
+  onRowClick: onRowClickCallback,
+} = $props<{
+  data?: ProviderData[];
+  metrics?: MetricData[];
+  conversations?: ConversationData[];
+  overrideKey?: string | null;
+  onRowClick?: (metric: MetricData, allMetrics: MetricData[]) => void;
+}>();
 
 let expandedConsoles = $state<Record<string, boolean>>({});
 let expandedModels = $state<Record<string, boolean>>({});
@@ -154,7 +161,7 @@ function switchTab(name: string, tab: "activity" | "conversations") {
               </div>
               <div class="tab-content">
                 {#if activeTab === "activity"}
-                  <ActivityLog data={metrics.filter((m) => m.provider === group.name)} />
+                  <ActivityLog data={metrics.filter((m) => m.provider === group.name)} onRowClick={onRowClickCallback} />
                 {:else}
                   <Conversations data={conversations.filter((c) => c.provider === group.name)} />
                 {/if}
