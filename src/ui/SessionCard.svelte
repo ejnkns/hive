@@ -28,7 +28,7 @@ const requestCount = $derived(session.requests.length);
 const completedRequests = $derived(
   session.requests.filter((r) => r.stage === "complete" || r.stage === "failed")
 );
-const avgTtft = $derived(() => {
+const avgTtft = $derived.by(() => {
   const finished = completedRequests.filter((r) => r.response != null);
   if (finished.length === 0) return null;
   return Math.round(
@@ -100,14 +100,7 @@ let showHistory = $state(false);
     {/if}
   </button>
 {:else}
-  <div
-    class="session-card"
-    role="button"
-    tabindex="0"
-    onclick={onToggle}
-    onkeydown={(e: KeyboardEvent) =>
-      e.key === "Enter" && onToggle?.()}
-  >
+  <div class="session-card">
     <div class="card-top">
       <div class="session-summary">
         <span class="summary-count">{requestCount} request{requestCount !==
@@ -365,7 +358,6 @@ let showHistory = $state(false);
     display: flex;
     flex-direction: column;
     gap: 0.375rem;
-    cursor: pointer;
   }
 
   .card-top {
