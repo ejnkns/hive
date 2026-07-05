@@ -88,7 +88,7 @@ let telemetry: TelemetryData | null = $state(null);
 let detailMetric: MetricData | null = $state(null);
 let detailAllMetrics: MetricData[] = $state([]);
 
-const { sessions, applyPatch, initSessions } = createSessionStore();
+const sessionStore = createSessionStore();
 
 let headerData = $derived.by(() => {
   const t = telemetry;
@@ -236,11 +236,11 @@ function handleMessage(msg: WsMessage) {
     return;
   }
   if (msg.type === "session_state") {
-    applyPatch(msg.data);
+    sessionStore.applyPatch(msg.data);
     return;
   }
   if (msg.type === "session_init") {
-    initSessions(msg.data);
+    sessionStore.initSessions(msg.data);
     return;
   }
   telemetry = msg.data;
@@ -299,7 +299,7 @@ onDestroy(() => {
       <div class="section-head" style="margin-top:1.5rem">Pipeline</div>
       <LivePipeline events={flowEvents} providers={providersData} />
       <div class="section-head" style="margin-top:1.5rem">Live Sessions</div>
-      <Sessions {sessions} />
+      <Sessions sessions={sessionStore.sessions} />
       <ProviderPanel data={providersData} {metrics} {conversations} overrideKey={overrideKey} onRowClick={handleMetricClick} lastProvider={headerData?.lastProvider ?? null} lastModel={headerData?.lastModel ?? null} />
     </div>
     <Logs entries={logEntries} />
