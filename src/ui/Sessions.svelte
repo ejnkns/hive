@@ -23,16 +23,10 @@ const completed = $derived(
 );
 
 let archiveOpen = $state(false);
-let expandedIds = $state(new Set<string>());
+let fullExpandedId = $state<string | null>(null);
 
-function toggleExpanded(sessionId: string) {
-  const next = new Set(expandedIds);
-  if (next.has(sessionId)) {
-    next.delete(sessionId);
-  } else {
-    next.add(sessionId);
-  }
-  expandedIds = next;
+function toggleFullExpand(sessionId: string) {
+  fullExpandedId = fullExpandedId === sessionId ? null : sessionId;
 }
 
 function toggleArchive() {
@@ -47,8 +41,8 @@ function toggleArchive() {
     {#each active as session (session.sessionId)}
       <SessionCard
         {session}
-        collapsed={!expandedIds.has(session.sessionId)}
-        onToggle={() => toggleExpanded(session.sessionId)}
+        fullExpanded={fullExpandedId === session.sessionId}
+        onToggleFull={() => toggleFullExpand(session.sessionId)}
       />
     {/each}
   {/if}
@@ -62,8 +56,8 @@ function toggleArchive() {
       {#each completed as session (session.sessionId)}
         <SessionCard
           {session}
-          collapsed={!expandedIds.has(session.sessionId)}
-          onToggle={() => toggleExpanded(session.sessionId)}
+          fullExpanded={fullExpandedId === session.sessionId}
+          onToggleFull={() => toggleFullExpand(session.sessionId)}
         />
       {/each}
     {/if}
