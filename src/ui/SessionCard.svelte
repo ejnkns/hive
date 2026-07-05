@@ -275,10 +275,6 @@ const elapsed = $derived(formatNumber(elapsedMs, "ms"));
   .dot-error {
     background: var(--error);
   }
-  .dot-active {
-    background: var(--accent);
-    box-shadow: 0 0 4px 1px var(--accent);
-  }
   .dot-empty {
     background: transparent;
     border: 1px solid var(--border);
