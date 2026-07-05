@@ -20,8 +20,6 @@ export function onSessionPatch(listener: SessionPatchListener): () => void {
 
 const sessionMap = new Map<string, SessionState>();
 const MAX_SESSIONS = 100;
-const SESSION_TIMEOUT_MS = 5 * 60 * 1000;
-const TIMEOUT_CHECK_INTERVAL_MS = 30_000;
 
 const STAGE_MAP: Record<string, SessionStage> = {
   request_received: "received",
@@ -111,23 +109,6 @@ function emitPatch(patch: SessionPatch) {
 export function getSessionSnapshot(): SessionState[] {
   return Array.from(sessionMap.values());
 }
-
-function checkTimeouts() {
-  const now = Date.now();
-  for (const session of sessionMap.values()) {
-    const hasActive = session.requests.some(
-      (r) => r.stage !== "complete" && r.stage !== "failed"
-    );
-    if (hasActive) continue;
-    const elapsed = now - session.lastActivity;
-    if (elapsed >= SESSION_TIMEOUT_MS) {
-      sessionMap.delete(session.sessionId);
-      evictIfNeeded();
-    }
-  }
-}
-
-setInterval(checkTimeouts, TIMEOUT_CHECK_INTERVAL_MS);
 
 onFlowEvent((event: FlowEvent) => {
   const sessionId = event.type === "request_received" ? event.sessionId : "";

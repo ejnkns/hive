@@ -9,7 +9,7 @@ let {
 }: {
   session: SessionState;
   collapsed?: boolean;
-  onToggle?: () => void;
+  onToggle: () => void;
 } = $props();
 
 const STAGES: { key: string; label: string }[] = [
@@ -36,6 +36,7 @@ const avgTtft = $derived.by(() => {
       finished.length
   );
 });
+const lastResponse = $derived(currentRequest?.response ?? null);
 
 const stageIndex = $derived(
   currentRequest ? STAGES.findIndex((s) => s.key === currentRequest.stage) : -1
@@ -84,59 +85,63 @@ let showHistory = $state(false);
       1
       ? "s"
       : ""}</span>
-    {#if currentRequest?.response}
+    {#if lastResponse}
       <span
-        style="color:{currentRequest.response.success
+        style="color:{lastResponse.success
           ? 'var(--success)'
           : 'var(--error)'}"
       >
-        {currentRequest.response.success
-          ? String(currentRequest.response.statusCode)
-          : `${String(currentRequest.response.statusCode)} ERR`}
+        {lastResponse.success
+          ? String(lastResponse.statusCode)
+          : `${String(lastResponse.statusCode)} ERR`}
       </span>
-      <span>{formatNumber(currentRequest.response.ttft, "ms")} TTFT</span>
+      <span>{formatNumber(lastResponse.ttft, "ms")}</span>
     {:else}
       <span class="collapsed-pending">active</span>
+    {/if}
+    {#if avgTtft != null}
+      <span class="collapsed-avg">avg: {formatNumber(
+        avgTtft,
+        "ms"
+      )}</span>
     {/if}
   </button>
 {:else}
   <div class="session-card">
-    <div class="card-top">
-      <div class="session-summary">
-        <span class="summary-count">{requestCount} request{requestCount !==
-          1
-          ? "s"
-          : ""}</span>
-        {#if currentRequest?.response}
-          <span
-            style="color:{currentRequest.response.success
-              ? 'var(--success)'
-              : 'var(--error)'}"
-          >
-            &middot; last: {currentRequest.response.success
-              ? String(currentRequest.response.statusCode)
-              : `${String(currentRequest.response.statusCode)} ERR`}
-          </span>
-          <span class="dot-sep">&middot;</span>
-          <span>{formatNumber(
-            currentRequest.response.ttft,
-            "ms"
-          )}</span>
-        {/if}
-        {#if avgTtft != null}
-          <span class="dot-sep">&middot;</span>
-          <span>avg: {formatNumber(avgTtft, "ms")}</span>
-        {/if}
-      </div>
-      <div class="card-right">
+    <button class="collapse-btn" onclick={onToggle}>&minus;</button>
+
+    <div class="summary-bar">
+      <span class="summary-count">{requestCount} request{requestCount !==
+        1
+        ? "s"
+        : ""}</span>
+      {#if lastResponse}
+        <span
+          style="color:{lastResponse.success
+            ? 'var(--success)'
+            : 'var(--error)'}"
+        >
+          &middot; last: {lastResponse.success
+            ? String(lastResponse.statusCode)
+            : `${String(lastResponse.statusCode)} ERR`}
+        </span>
+        <span class="dot-sep">&middot;</span>
+        <span>{formatNumber(lastResponse.ttft, "ms")}</span>
+      {/if}
+      {#if avgTtft != null}
+        <span class="dot-sep">&middot;</span>
+        <span>avg: {formatNumber(avgTtft, "ms")}</span>
+      {/if}
+      <span class="summary-right">
         {#if currentRequest}
-          <div class="provider-badge">
-            {currentRequest.provider ?? "—"}:{currentRequest.model ??
-              "—"}
-          </div>
+          <span class="provider-badge"
+            >{currentRequest.provider ?? "—"}:{currentRequest.model ??
+              "—"}</span
+          >
+          <span class="dot-sep">&middot;</span>
         {/if}
-        <div class="elapsed">{elapsed}</div>
-      </div>
+        <span class="elapsed">{elapsed}</span>
+      </span>
     </div>
 
     {#if currentRequest}
@@ -349,6 +354,9 @@ let showHistory = $state(false);
   .collapsed-pending {
     color: var(--warning);
   }
+  .collapsed-avg {
+    color: var(--muted);
+  }
 
   .session-card {
     background: var(--card);
@@ -358,33 +366,45 @@ let showHistory = $state(false);
     display: flex;
     flex-direction: column;
     gap: 0.375rem;
+    position: relative;
   }
 
-  .card-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
+  .collapse-btn {
+    position: absolute;
+    top: 0.25rem;
+    right: 0.25rem;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-family: monospace;
+    font-size: 0.75rem;
+    cursor: pointer;
+    padding: 0 0.25rem;
+    line-height: 1;
+  }
+  .collapse-btn:hover {
+    color: var(--text);
   }
 
-  .session-summary {
+  .summary-bar {
     display: flex;
     align-items: center;
     gap: 0.375rem;
     font-size: 0.625rem;
     color: var(--muted);
+    padding-right: 1.25rem;
   }
   .summary-count {
     font-weight: 700;
     color: var(--accent);
   }
-
-  .card-right {
+  .summary-right {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    flex-shrink: 0;
+    gap: 0.375rem;
+    margin-left: auto;
   }
+
   .provider-badge {
     color: var(--accent);
     font-family: monospace;

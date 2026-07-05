@@ -17,20 +17,20 @@ const completed = $derived(
 );
 
 let archiveOpen = $state(false);
-let expandedIds = $state(new Set<string>());
+let expandedIds = $state(new Set<string>(active.map((s) => s.sessionId)));
+
+function toggleExpanded(sessionId: string) {
+  const next = new Set(expandedIds);
+  if (next.has(sessionId)) {
+    next.delete(sessionId);
+  } else {
+    next.add(sessionId);
+  }
+  expandedIds = next;
+}
 
 function toggleArchive() {
   archiveOpen = !archiveOpen;
-}
-
-function toggleExpanded(requestId: string) {
-  const next = new Set(expandedIds);
-  if (next.has(requestId)) {
-    next.delete(requestId);
-  } else {
-    next.add(requestId);
-  }
-  expandedIds = next;
 }
 </script>
 
@@ -39,7 +39,11 @@ function toggleExpanded(requestId: string) {
 {:else}
   {#if active.length > 0}
     {#each active as session (session.sessionId)}
-      <SessionCard {session} />
+      <SessionCard
+        {session}
+        collapsed={!expandedIds.has(session.sessionId)}
+        onToggle={() => toggleExpanded(session.sessionId)}
+      />
     {/each}
   {/if}
 
