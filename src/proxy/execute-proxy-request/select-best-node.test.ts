@@ -1,7 +1,7 @@
 import assert from "node:assert";
 import { beforeEach, describe, it } from "node:test";
-import type { RequestMetric } from "../telemetry";
-import { routingMemory } from "./routing-memory";
+import type { RequestMetric } from "../../telemetry";
+import { routingMemory } from "../routing-memory";
 import { selectBestNode } from "./select-best-node";
 
 function createMockMetric(overrides: Partial<RequestMetric>): RequestMetric {
@@ -44,8 +44,18 @@ await describe("Hive Routing Engine Verification", async () => {
     routingMemory.setNodeAffinity("user-session-alpha", "p1:m1");
     routingMemory.setNodeAffinity("user-session-beta", "p2:m2");
 
-    const matchAlpha = selectBestNode(nodes, getMetrics, [], "user-session-alpha");
-    const matchBeta = selectBestNode(nodes, getMetrics, [], "user-session-beta");
+    const matchAlpha = selectBestNode(
+      nodes,
+      getMetrics,
+      [],
+      "user-session-alpha"
+    );
+    const matchBeta = selectBestNode(
+      nodes,
+      getMetrics,
+      [],
+      "user-session-beta"
+    );
 
     assert.strictEqual(matchAlpha?.providerName, "p1");
     assert.strictEqual(matchBeta?.providerName, "p2");
@@ -70,19 +80,28 @@ await describe("Hive Routing Engine Verification", async () => {
       if (selected?.providerName === "high-tier") highTierSelections++;
     }
 
-    assert.ok(highTierSelections > 75, `Expected dominant selection curve. Got: ${String(highTierSelections)}/100`);
+    assert.ok(
+      highTierSelections > 75,
+      `Expected dominant selection curve. Got: ${String(highTierSelections)}/100`
+    );
   });
 
   await it("should evict oldest session when exceeding max entries", () => {
     for (let i = 0; i <= 1000; i++) {
-      routingMemory.setNodeAffinity(`session-${String(i)}`, `node-${String(i)}`);
+      routingMemory.setNodeAffinity(
+        `session-${String(i)}`,
+        `node-${String(i)}`
+      );
     }
     assert.strictEqual(
       routingMemory.getNodeAffinity("session-0"),
       undefined,
       "Oldest session should be evicted after exceeding max 1000 entries"
     );
-    assert.ok(routingMemory.getNodeAffinity("session-1000"), "Newest session should still be present");
+    assert.ok(
+      routingMemory.getNodeAffinity("session-1000"),
+      "Newest session should still be present"
+    );
   });
 
   await it("should maintain affinity for a session across multiple selections", () => {
@@ -122,8 +141,12 @@ await describe("Hive Routing Engine Verification", async () => {
 
   await it("should return null when no node supports required features", () => {
     const nodes = [{ providerName: "p1", modelName: "m1" }];
-    routingMemory.recordUpstreamError("p1:m1", "unsupported-feature", ["tools"]);
-    const result = selectBestNode(nodes, () => [createMockMetric({})], ["tools"]);
+    routingMemory.recordUpstreamError("p1:m1", "unsupported-feature", [
+      "tools",
+    ]);
+    const result = selectBestNode(nodes, () => [createMockMetric({})], [
+      "tools",
+    ]);
     assert.strictEqual(result, null);
   });
 
@@ -143,8 +166,10 @@ await describe("Hive Routing Engine Verification", async () => {
       { providerName: "bad", modelName: "worst" },
     ];
     const getMetrics = (key: string) => {
-      if (key === "good:best") return [createMockMetric({ ttft: 50, totalLatency: 500 })];
-      if (key === "mid:ok") return [createMockMetric({ ttft: 200, totalLatency: 800 })];
+      if (key === "good:best")
+        return [createMockMetric({ ttft: 50, totalLatency: 500 })];
+      if (key === "mid:ok")
+        return [createMockMetric({ ttft: 200, totalLatency: 800 })];
       return [createMockMetric({ ttft: 400, totalLatency: 1500 })];
     };
     let badCount = 0;
@@ -152,7 +177,11 @@ await describe("Hive Routing Engine Verification", async () => {
       const selected = selectBestNode(nodes, getMetrics, []);
       if (selected?.providerName === "bad") badCount++;
     }
-    assert.strictEqual(badCount, 0, "Node ~19 points below max must never enter the qualified pool");
+    assert.strictEqual(
+      badCount,
+      0,
+      "Node ~19 points below max must never enter the qualified pool"
+    );
   });
 
   await it("should still select a node when all scores are zero", () => {
@@ -220,9 +249,18 @@ await describe("Hive Routing Engine Verification", async () => {
       { providerName: "p2", modelName: "m2" },
     ];
     for (let i = 0; i < 10; i++) {
-      const result = selectBestNode(nodes, () => [createMockMetric({})], [], "failing-session");
+      const result = selectBestNode(
+        nodes,
+        () => [createMockMetric({})],
+        [],
+        "failing-session"
+      );
       assert.notStrictEqual(result, null);
-      assert.strictEqual(result?.providerName, "p2", "Must skip breaker-tripped affinity target");
+      assert.strictEqual(
+        result?.providerName,
+        "p2",
+        "Must skip breaker-tripped affinity target"
+      );
     }
   });
 });

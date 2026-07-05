@@ -1,9 +1,9 @@
 import { logger } from "../shared/logger";
 import type { Node, RequestMetric } from "../telemetry";
+import { selectBestNode } from "./execute-proxy-request/select-best-node";
 import { emitFlowEvent } from "./flow-events";
 import type { ProxyResponse } from "./proxy-response";
 import { routingMemory } from "./routing-memory";
-import { selectBestNode } from "./select-best-node";
 
 export type FailoverContext = {
   nodes: Node[];

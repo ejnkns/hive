@@ -1,8 +1,12 @@
-import { logger } from "../shared/logger";
-import type { RequestMetric } from "../telemetry";
-import { calculateNodeScore, type Node, type RoutingStrategy } from "../telemetry";
-import { type CandidateInfo, emitFlowEvent } from "./flow-events";
-import { routingMemory } from "./routing-memory";
+import { logger } from "../../shared/logger";
+import type { RequestMetric } from "../../telemetry";
+import {
+  calculateNodeScore,
+  type Node,
+  type RoutingStrategy,
+} from "../../telemetry";
+import { type CandidateInfo, emitFlowEvent } from "../flow-events";
+import { routingMemory } from "../routing-memory";
 
 export function selectBestNode(
   nodes: Node[],
@@ -31,7 +35,9 @@ export function selectBestNode(
         affinity: false,
         cooldownSec: routingMemory.getCooldownSec(compoundKey),
       });
-      logger.debug(`node ${compoundKey} — ineligible (circuit breaker tripped)`);
+      logger.debug(
+        `node ${compoundKey} — ineligible (circuit breaker tripped)`
+      );
       continue;
     }
 
@@ -44,17 +50,28 @@ export function selectBestNode(
         status: "feature-mismatch",
         affinity: false,
       });
-      logger.debug(`node ${compoundKey} — ineligible: features [${requiredFeatures.join(", ")}] unsupported`);
+      logger.debug(
+        `node ${compoundKey} — ineligible: features [${requiredFeatures.join(", ")}] unsupported`
+      );
       continue;
     }
 
     const metrics = getMetricsForNode(compoundKey);
-    let score = calculateNodeScore(node, metrics, config.strategy, config.minTokenThreshold).composite;
+    let score = calculateNodeScore(
+      node,
+      metrics,
+      config.strategy,
+      config.minTokenThreshold
+    ).composite;
 
-    const hasAffinity = Boolean(sessionId && routingMemory.getNodeAffinity(sessionId) === compoundKey);
+    const hasAffinity = Boolean(
+      sessionId && routingMemory.getNodeAffinity(sessionId) === compoundKey
+    );
     if (hasAffinity) {
       score *= 1.1;
-      logger.debug(`node ${compoundKey} — session affinity applied (×1.1) → ${score.toFixed(1)}`);
+      logger.debug(
+        `node ${compoundKey} — session affinity applied (×1.1) → ${score.toFixed(1)}`
+      );
     } else {
       logger.debug(`node ${compoundKey} — score ${score.toFixed(1)}`);
     }
@@ -90,7 +107,10 @@ export function selectBestNode(
 
   let selectedNode: Node | null = null;
 
-  const totalWeight = qualifiedPool.reduce((sum, c) => sum + Math.max(1, c.score - poolThreshold + 1), 0);
+  const totalWeight = qualifiedPool.reduce(
+    (sum, c) => sum + Math.max(1, c.score - poolThreshold + 1),
+    0
+  );
   let selectionRoll = Math.random() * totalWeight;
 
   for (const candidate of qualifiedPool) {
@@ -118,7 +138,9 @@ export function selectBestNode(
     requestId: sessionId ?? "",
     strategy: config.strategy,
     candidates: allCandidates,
-    selected: selectedNode ? `${selectedNode.providerName}:${selectedNode.modelName}` : null,
+    selected: selectedNode
+      ? `${selectedNode.providerName}:${selectedNode.modelName}`
+      : null,
     poolSize: qualifiedPool.length,
   });
   return selectedNode;
@@ -132,7 +154,11 @@ type HiveRoutingConfig = {
 function getHiveConfig(): HiveRoutingConfig {
   return {
     // env value expected to be one of "balanced", "latency", "quality"
-    strategy: (process.env.HIVE_ROUTING_STRATEGY || "balanced") as RoutingStrategy,
-    minTokenThreshold: parseInt(process.env.HIVE_MIN_TOKEN_TELEMETRY || "200", 10),
+    strategy: (process.env.HIVE_ROUTING_STRATEGY ||
+      "balanced") as RoutingStrategy,
+    minTokenThreshold: parseInt(
+      process.env.HIVE_MIN_TOKEN_TELEMETRY || "200",
+      10
+    ),
   };
 }
