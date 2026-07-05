@@ -34,11 +34,16 @@ function sortedLatencies(metrics: RequestMetric[]): number[] {
 }
 
 /** @package */
-export function computeDerivedMetrics(metrics: RequestMetric[]): DerivedMetrics {
+export function computeDerivedMetrics(
+  metrics: RequestMetric[]
+): DerivedMetrics {
   const n = metrics.length;
 
-  const perfMetrics = metrics.filter((m) => m.success && m.source !== "heartbeat");
-  const successMetrics = perfMetrics.length > 0 ? perfMetrics : metrics.filter((m) => m.success);
+  const perfMetrics = metrics.filter(
+    (m) => m.success && m.source !== "heartbeat"
+  );
+  const successMetrics =
+    perfMetrics.length > 0 ? perfMetrics : metrics.filter((m) => m.success);
   const hasSuccessMetrics = successMetrics.length > 0;
 
   const latencies = sortedLatencies(successMetrics);
@@ -58,7 +63,9 @@ export function computeDerivedMetrics(metrics: RequestMetric[]): DerivedMetrics 
     .sort((a, b) => a - b);
 
   // filtered above for thinkingTime !== null
-  const thinkingTimes = successMetrics.filter((m) => m.thinkingTime !== null).map((m) => m.thinkingTime as number);
+  const thinkingTimes = successMetrics
+    .filter((m) => m.thinkingTime !== null)
+    .map((m) => m.thinkingTime as number);
 
   const successful = metrics.filter((m) => m.success).length;
 
@@ -80,9 +87,13 @@ export function computeDerivedMetrics(metrics: RequestMetric[]): DerivedMetrics 
   }
   const weightedErrorRate = n > 0 ? weightedErrors / n : 0;
 
-  const truncated = successMetrics.filter((m) => m.finishReason === "length").length;
+  const truncated = successMetrics.filter(
+    (m) => m.finishReason === "length"
+  ).length;
   const refused = successMetrics.filter((m) => m.refused).length;
-  const contentFiltered = successMetrics.filter((m) => m.finishReason === "content-filter").length;
+  const contentFiltered = successMetrics.filter(
+    (m) => m.finishReason === "content-filter"
+  ).length;
   const successCount = successMetrics.length;
 
   const successTtfts = successMetrics.map((m) => m.ttft);
@@ -90,14 +101,19 @@ export function computeDerivedMetrics(metrics: RequestMetric[]): DerivedMetrics 
   const dynamicThreshold = successMean * 3;
   const spikes = successMetrics.filter((m) => m.ttft > dynamicThreshold).length;
 
+  const userMetricCount = metrics.filter(
+    (m) => m.source !== "heartbeat"
+  ).length;
+
   return {
-    requestCount: n,
+    requestCount: userMetricCount,
     p95Ttft: percentile(latencies, 0.95),
     p99Ttft: percentile(latencies, 0.99),
     meanTtft,
     jitterTtft,
     meanTokensPerSecond: throughputs.length > 0 ? mean(throughputs) : null,
-    p50TokensPerSecond: throughputs.length > 0 ? percentile(throughputs, 0.5) : null,
+    p50TokensPerSecond:
+      throughputs.length > 0 ? percentile(throughputs, 0.5) : null,
     successRate: n > 0 ? successful / n : 0,
     errorRateByType,
     weightedErrorRate,
