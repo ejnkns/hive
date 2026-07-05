@@ -1,11 +1,24 @@
+import { createHash } from "node:crypto";
 import type { IncomingHttpHeaders } from "node:http";
 import type { PassThrough } from "node:stream";
 import { detectEditLoop } from "./hive-core/detect-edit-loop";
 import { extractRequiredFeatures } from "./hive-core/extract-required-features";
 import { generateId } from "./hive-core/generateId";
 import { sanitizePayloadForProvider } from "./hive-core/sanitize-payload-for-provider";
-import { buildChatEndpoint, discoverAndCacheModels, getModelId, type Provider, providers } from "./providers";
-import { executeProxyRequest, mutateRequest, ProxyResponse, routeRequest, routingMemory } from "./proxy";
+import {
+  buildChatEndpoint,
+  discoverAndCacheModels,
+  getModelId,
+  type Provider,
+  providers,
+} from "./providers";
+import {
+  executeProxyRequest,
+  mutateRequest,
+  ProxyResponse,
+  routeRequest,
+  routingMemory,
+} from "./proxy";
 import { emitFlowEvent } from "./proxy/flow-events";
 import { getOverride, loadProviders } from "./server";
 import { logger } from "./shared/logger";
@@ -65,7 +78,9 @@ export class HiveCore {
         this.lastModel = latest.model;
       }
     } catch (err: unknown) {
-      logger.debug(`loadLastUsed: ${err instanceof Error ? err.message : String(err)}`);
+      logger.debug(
+        `loadLastUsed: ${err instanceof Error ? err.message : String(err)}`
+      );
     }
   }
 
@@ -80,7 +95,9 @@ export class HiveCore {
         }
       }
     } catch (err: unknown) {
-      logger.debug(`triggerBackgroundDiscovery: ${err instanceof Error ? err.message : String(err)}`);
+      logger.debug(
+        `triggerBackgroundDiscovery: ${err instanceof Error ? err.message : String(err)}`
+      );
     }
   }
 
@@ -88,9 +105,13 @@ export class HiveCore {
     body: string | Record<string, unknown>,
     incomingHeaders: Record<string, string | string[] | undefined> = {}
   ): Promise<ChatCompletionResult> {
-    const parsed: Record<string, unknown> | { messages?: Array<Record<string, unknown>> } =
+    const parsed:
+      | Record<string, unknown>
+      | { messages?: Array<Record<string, unknown>> } =
       // JSON.parse returns unknown; body is validated JSON string from HTTP
-      typeof body === "string" ? (JSON.parse(body) as Record<string, unknown>) : body;
+      typeof body === "string"
+        ? (JSON.parse(body) as Record<string, unknown>)
+        : body;
 
     const qualified = this.providers.filter((p) => {
       const key = process.env[p.apiKeyEnvVar];
@@ -98,7 +119,9 @@ export class HiveCore {
     });
 
     if (qualified.length === 0) {
-      logger.debug("no configured providers available — set a provider API key");
+      logger.debug(
+        "no configured providers available — set a provider API key"
+      );
       return {
         success: false,
         statusCode: 503,
@@ -108,10 +131,12 @@ export class HiveCore {
 
     const cache = await loadCache();
     const requestId = generateId();
-    const sessionId = requestId;
-    // parsed is already typed as Record<string, unknown> (body variant union)
     const messages = (parsed as Record<string, unknown>).messages ?? [];
-    const typedMessages = Array.isArray(messages) ? (messages as Message[]) : [];
+    const typedMessages = Array.isArray(messages)
+      ? (messages as Message[])
+      : [];
+
+    const sessionId = resolveSessionId(incomingHeaders, typedMessages);
     const editLoop = detectEditLoop(typedMessages);
     if (editLoop) {
       (parsed as Record<string, unknown>).messages = [
@@ -125,8 +150,17 @@ export class HiveCore {
     const payloadStr = JSON.stringify(parsed);
 
     const lastUserMsg = typedMessages.filter((m) => m.role === "user").at(-1);
-    const promptPreview = typeof lastUserMsg?.content === "string" ? lastUserMsg.content.slice(0, 120) : "";
-    emitFlowEvent({ type: "request_received", requestId, timestamp: Date.now(), promptPreview });
+    const promptPreview =
+      typeof lastUserMsg?.content === "string"
+        ? lastUserMsg.content.slice(0, 120)
+        : "";
+    emitFlowEvent({
+      type: "request_received",
+      requestId,
+      sessionId,
+      timestamp: Date.now(),
+      promptPreview,
+    });
 
     const requiredFeatures = extractRequiredFeatures(parsed);
 
@@ -136,38 +170,58 @@ export class HiveCore {
 
     conversationStore.startConversation(
       requestId,
-      Array.isArray(messages) ? (messages as { role: string; content: string }[]) : []
+      Array.isArray(messages)
+        ? (messages as { role: string; content: string }[])
+        : []
     );
 
     const nodes: Node[] = qualified.map((p) => {
-      const defaultEntry = p.models.find((entry) => getModelId(entry) === p.defaultModel);
+      const defaultEntry = p.models.find(
+        (entry) => getModelId(entry) === p.defaultModel
+      );
       return {
         providerName: p.name,
         modelName: p.defaultModel,
-        maxContextTokens: defaultEntry && typeof defaultEntry !== "string" ? defaultEntry.contextLength : undefined,
+        maxContextTokens:
+          defaultEntry && typeof defaultEntry !== "string"
+            ? defaultEntry.contextLength
+            : undefined,
       };
     });
 
     const headers: IncomingHttpHeaders = Object.fromEntries(
       Object.entries(incomingHeaders).filter(
-        ([key]) => !["authorization", "host", "content-length", "content-type"].includes(key.toLowerCase())
+        ([key]) =>
+          !["authorization", "host", "content-length", "content-type"].includes(
+            key.toLowerCase()
+          )
       )
     );
 
     const getMetricsForNode = (compoundKey: string): RequestMetric[] => {
-      const all = cache.metrics.filter((m) => `${m.provider}:${m.model}` === compoundKey);
+      const all = cache.metrics.filter(
+        (m) => `${m.provider}:${m.model}` === compoundKey
+      );
       return applySlidingWindow(all);
     };
 
-    const dispatchRequest = async (node: Node, payload: string): Promise<ProxyResponse> => {
+    const dispatchRequest = async (
+      node: Node,
+      payload: string
+    ): Promise<ProxyResponse> => {
       const provider = qualified.find((p) => p.name === node.providerName);
       if (!provider) {
-        logger.debug(`dispatch: provider config not found for ${node.providerName}`);
+        logger.debug(
+          `dispatch: provider config not found for ${node.providerName}`
+        );
         return ProxyResponse.error(500, "config-error");
       }
 
       // payload is JSON-stringified earlier; shape matches body contract
-      const sanitized = sanitizePayloadForProvider(node.providerName, JSON.parse(payload) as Record<string, unknown>);
+      const sanitized = sanitizePayloadForProvider(
+        node.providerName,
+        JSON.parse(payload) as Record<string, unknown>
+      );
 
       const mutated = mutateRequest({
         originalHeaders: headers,
@@ -209,7 +263,9 @@ export class HiveCore {
         if (response.isOk()) {
           this.lastProvider = overrideNode.providerName;
           this.lastModel = overrideNode.modelName;
-          logger.debug(`request ${requestId} — override success via ${this.lastProvider}:${this.lastModel}`);
+          logger.debug(
+            `request ${requestId} — override success via ${this.lastProvider}:${this.lastModel}`
+          );
           return {
             success: true,
             // getStream returns Readable; ProxyResponse wraps PassThrough
@@ -250,11 +306,15 @@ export class HiveCore {
 
     if (response.isOk()) {
       const lastKey = routingMemory.getNodeAffinity(sessionId);
-      const usedNode = nodes.find((n) => lastKey === `${n.providerName}:${n.modelName}`) ?? null;
+      const usedNode =
+        nodes.find((n) => lastKey === `${n.providerName}:${n.modelName}`) ??
+        null;
       this.lastProvider = usedNode?.providerName ?? null;
       this.lastModel = usedNode?.modelName ?? null;
 
-      logger.debug(`request ${requestId} — success via ${this.lastProvider ?? "??"}:${this.lastModel ?? "??"}`);
+      logger.debug(
+        `request ${requestId} — success via ${this.lastProvider ?? "??"}:${this.lastModel ?? "??"}`
+      );
 
       return {
         success: true,
@@ -265,7 +325,9 @@ export class HiveCore {
       };
     }
 
-    logger.debug(`request ${requestId} — upstream returned no stream (status ${String(response.status)})`);
+    logger.debug(
+      `request ${requestId} — upstream returned no stream (status ${String(response.status)})`
+    );
 
     return {
       success: false,
@@ -321,7 +383,9 @@ export class HiveCore {
             source: "heartbeat",
           });
         } catch (err: unknown) {
-          logger.debug(`heartbeat: ${provider.name} failed: ${err instanceof Error ? err.message : String(err)}`);
+          logger.debug(
+            `heartbeat: ${provider.name} failed: ${err instanceof Error ? err.message : String(err)}`
+          );
         }
       }
     });
@@ -379,5 +443,46 @@ export type Message = {
   tool_calls?: unknown[];
   tool_call_id?: string;
 };
+
+const SESSION_HEADERS = [
+  "x-session-id",
+  "x-session-affinity",
+  "x-parent-session-id",
+] as const;
+
+function extractSessionHeader(
+  headers: Record<string, string | string[] | undefined>
+): string | null {
+  for (const name of SESSION_HEADERS) {
+    const value = headers[name];
+    if (typeof value === "string" && value.length > 0) return value;
+    if (
+      Array.isArray(value) &&
+      value.length > 0 &&
+      typeof value[0] === "string"
+    )
+      return value[0];
+  }
+  return null;
+}
+
+function computeSessionFingerprint(messages: Message[]): string | null {
+  const systemMsg = messages.find((m) => m.role === "system");
+  const firstUserMsg = messages.find((m) => m.role === "user");
+  if (!systemMsg || !firstUserMsg) return null;
+  const content = `${systemMsg.content}\n${firstUserMsg.content}`;
+  return createHash("sha256").update(content).digest("hex").slice(0, 16);
+}
+
+function resolveSessionId(
+  headers: Record<string, string | string[] | undefined>,
+  messages: Message[]
+): string {
+  const headerId = extractSessionHeader(headers);
+  if (headerId) return headerId;
+  const fingerprint = computeSessionFingerprint(messages);
+  if (fingerprint) return fingerprint;
+  return generateId();
+}
 
 export const hiveCore = new HiveCore();

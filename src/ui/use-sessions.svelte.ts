@@ -1,4 +1,4 @@
-import type { SessionPatch, SessionState } from "./types";
+import type { RequestState, SessionPatch, SessionState } from "./types";
 
 export function createSessionStore() {
   const map = new Map<string, SessionState>();
@@ -6,66 +6,101 @@ export function createSessionStore() {
 
   function rebuild() {
     const all = Array.from(map.values());
-    const active = all.filter(
-      (s) => s.stage !== "complete" && s.stage !== "failed"
+    const active = all.filter((s) =>
+      s.requests.some((r) => r.stage !== "complete" && r.stage !== "failed")
     );
     const completed = all.filter(
-      (s) => s.stage === "complete" || s.stage === "failed"
+      (s) =>
+        !s.requests.some((r) => r.stage !== "complete" && r.stage !== "failed")
     );
-    active.sort((a, b) => b.timestamp - a.timestamp);
-    completed.sort((a, b) => b.timestamp - a.timestamp);
+    active.sort((a, b) => b.lastActivity - a.lastActivity);
+    completed.sort((a, b) => b.lastActivity - a.lastActivity);
     sessions = [...active, ...completed];
   }
 
-  function applyPatch(patch: SessionPatch) {
-    let session = map.get(patch.requestId);
+  function getOrCreateSession(patch: SessionPatch): SessionState | null {
+    let session = map.get(patch.sessionId);
     if (!session) {
-      if (!patch.initial) return;
+      if (!patch.initial) return null;
       session = {
+        sessionId: patch.sessionId,
+        fingerprint: patch.initial.fingerprint,
+        lastActivity: patch.initial.timestamp,
+        requests: [],
+      };
+      map.set(patch.sessionId, session);
+    }
+    if (patch.lastActivity) {
+      session.lastActivity = patch.lastActivity;
+    }
+    return session;
+  }
+
+  function getOrCreateRequest(
+    session: SessionState,
+    patch: SessionPatch
+  ): RequestState | null {
+    if (!patch.requestId) return null;
+    let request = session.requests.find((r) => r.requestId === patch.requestId);
+    if (!request) {
+      if (!patch.requestInitial) return null;
+      request = {
         requestId: patch.requestId,
         stage: "received",
-        timestamp: patch.initial.timestamp,
-        prompt: patch.initial.prompt,
+        timestamp: patch.requestInitial.timestamp,
+        prompt: patch.requestInitial.prompt,
         failovers: [],
       };
-      map.set(patch.requestId, session);
+      session.requests.push(request);
+    }
+    return request;
+  }
+
+  function applyPatch(patch: SessionPatch) {
+    const session = getOrCreateSession(patch);
+    if (!session) return;
+
+    const request = getOrCreateRequest(session, patch);
+    if (!request) {
+      rebuild();
+      return;
     }
 
     if (patch.stage) {
-      session.stage = patch.stage;
+      request.stage = patch.stage;
     }
     if (patch.provider !== undefined) {
-      session.provider = patch.provider;
+      request.provider = patch.provider;
     }
     if (patch.model !== undefined) {
-      session.model = patch.model;
+      request.model = patch.model;
     }
     if (patch.candidates) {
-      session.candidates = patch.candidates;
+      request.candidates = patch.candidates;
     }
     if (patch.selected !== undefined) {
-      session.selected = patch.selected;
+      request.selected = patch.selected;
     }
     if (patch.strategy !== undefined) {
-      session.strategy = patch.strategy;
+      request.strategy = patch.strategy;
     }
     if (patch.poolSize !== undefined) {
-      session.poolSize = patch.poolSize;
+      request.poolSize = patch.poolSize;
     }
     if (patch.outputChars !== undefined) {
-      session.outputChars = patch.outputChars;
+      request.outputChars = patch.outputChars;
     }
     if (patch.thinkingChars !== undefined) {
-      session.thinkingChars = patch.thinkingChars;
+      request.thinkingChars = patch.thinkingChars;
     }
     if (patch.tokensPerSecond !== undefined) {
-      session.tokensPerSecond = patch.tokensPerSecond;
+      request.tokensPerSecond = patch.tokensPerSecond;
     }
     if (patch.response) {
-      session.response = patch.response;
+      request.response = patch.response;
     }
     if (patch.failover) {
-      session.failovers = [...(session.failovers || []), patch.failover];
+      request.failovers = [...(request.failovers || []), patch.failover];
     }
 
     rebuild();
@@ -74,7 +109,7 @@ export function createSessionStore() {
   function initSessions(all: SessionState[]) {
     map.clear();
     for (const s of all) {
-      map.set(s.requestId, s);
+      map.set(s.sessionId, s);
     }
     rebuild();
   }

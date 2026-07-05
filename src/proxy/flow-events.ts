@@ -11,6 +11,7 @@ export type CandidateInfo = {
 export type RequestReceivedEvent = {
   type: "request_received";
   requestId: string;
+  sessionId: string;
   timestamp: number;
   promptPreview: string;
 };
@@ -107,6 +108,13 @@ export type SessionStage =
   | "failed";
 
 export type SessionState = {
+  sessionId: string;
+  fingerprint?: string;
+  lastActivity: number;
+  requests: RequestState[];
+};
+
+export type RequestState = {
   requestId: string;
   stage: SessionStage;
   timestamp: number;
@@ -136,8 +144,11 @@ export type SessionState = {
 };
 
 export type SessionPatch = {
-  requestId: string;
-  initial?: { timestamp: number; prompt?: string };
+  sessionId: string;
+  initial?: { fingerprint?: string; timestamp: number };
+  lastActivity?: number;
+  requestId?: string;
+  requestInitial?: { timestamp: number; prompt?: string };
   stage?: SessionStage;
   provider?: string;
   model?: string;
@@ -149,7 +160,7 @@ export type SessionPatch = {
   thinkingChars?: number;
   tokensPerSecond?: number;
   failover?: { provider: string; model: string; errorType: string };
-  response?: SessionState["response"];
+  response?: RequestState["response"];
 };
 
 export type FlowEvent =

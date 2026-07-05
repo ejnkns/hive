@@ -5,10 +5,15 @@ import SessionCard from "./SessionCard.svelte";
 let { sessions = [] as SessionState[] } = $props();
 
 const active = $derived(
-  sessions.filter((s) => s.stage !== "complete" && s.stage !== "failed")
+  sessions.filter((s) =>
+    s.requests.some((r) => r.stage !== "complete" && r.stage !== "failed")
+  )
 );
 const completed = $derived(
-  sessions.filter((s) => s.stage === "complete" || s.stage === "failed")
+  sessions.filter(
+    (s) =>
+      !s.requests.some((r) => r.stage !== "complete" && r.stage !== "failed")
+  )
 );
 
 let archiveOpen = $state(false);
@@ -33,7 +38,7 @@ function toggleExpanded(requestId: string) {
   <div class="no-data">Awaiting requests...</div>
 {:else}
   {#if active.length > 0}
-    {#each active as session (session.requestId)}
+    {#each active as session (session.sessionId)}
       <SessionCard {session} />
     {/each}
   {/if}
@@ -44,11 +49,11 @@ function toggleExpanded(requestId: string) {
       Previous Sessions ({completed.length})
     </button>
     {#if archiveOpen}
-      {#each completed as session (session.requestId)}
+      {#each completed as session (session.sessionId)}
         <SessionCard
           {session}
-          collapsed={!expandedIds.has(session.requestId)}
-          onToggle={() => toggleExpanded(session.requestId)}
+          collapsed={!expandedIds.has(session.sessionId)}
+          onToggle={() => toggleExpanded(session.sessionId)}
         />
       {/each}
     {/if}

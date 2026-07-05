@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { SessionState } from "./types";
+import type { RequestState, SessionState } from "./types";
 import { formatNumber, formatTime, sc } from "./utils";
 
 let {
@@ -23,24 +23,42 @@ const STAGES: { key: string; label: string }[] = [
   { key: "failed", label: "err" },
 ];
 
-const stageIndex = $derived(STAGES.findIndex((s) => s.key === session.stage));
+const currentRequest = $derived(session.requests.at(-1) ?? null);
+const requestCount = $derived(session.requests.length);
+const completedRequests = $derived(
+  session.requests.filter((r) => r.stage === "complete" || r.stage === "failed")
+);
+const avgTtft = $derived(() => {
+  const finished = completedRequests.filter((r) => r.response != null);
+  if (finished.length === 0) return null;
+  return Math.round(
+    finished.reduce((sum, r) => sum + (r.response?.ttft ?? 0), 0) /
+      finished.length
+  );
+});
+
+const stageIndex = $derived(
+  currentRequest ? STAGES.findIndex((s) => s.key === currentRequest.stage) : -1
+);
 
 let elapsedMs = $state(0);
 let timer: ReturnType<typeof setInterval> | null = null;
 
 $effect(() => {
-  const isDone = session.stage === "complete" || session.stage === "failed";
+  if (!currentRequest) return;
+  const isDone =
+    currentRequest.stage === "complete" || currentRequest.stage === "failed";
   if (isDone) {
     if (timer) {
       clearInterval(timer);
       timer = null;
     }
-    elapsedMs = Date.now() - session.timestamp;
+    elapsedMs = Date.now() - currentRequest.timestamp;
     return;
   }
-  elapsedMs = Date.now() - session.timestamp;
+  elapsedMs = Date.now() - currentRequest.timestamp;
   timer = setInterval(() => {
-    elapsedMs = Date.now() - session.timestamp;
+    elapsedMs = Date.now() - currentRequest.timestamp;
   }, 100);
   return () => {
     if (timer) {
@@ -51,32 +69,88 @@ $effect(() => {
 });
 
 const elapsed = $derived(formatNumber(elapsedMs, "ms"));
+
+let showHistory = $state(false);
 </script>
 
 {#if collapsed}
   <button class="collapsed-row" onclick={onToggle}>
-    <span class="collapsed-time">{formatTime(session.timestamp)}</span>
-    <span class="collapsed-prov">{session.provider ?? "—"}:{session.model ?? "—"}</span>
-    {#if session.response}
+    <span class="collapsed-time">{formatTime(
+      currentRequest?.timestamp ?? 0
+    )}</span>
+    <span class="collapsed-prov">{currentRequest?.provider ??
+      "—"}:{currentRequest?.model ?? "—"}</span>
+    <span class="collapsed-count">{requestCount} req{requestCount !==
+      1
+      ? "s"
+      : ""}</span>
+    {#if currentRequest?.response}
       <span
-        style="color:{session.response.success ? 'var(--success)' : 'var(--error)'}"
+        style="color:{currentRequest.response.success
+          ? 'var(--success)'
+          : 'var(--error)'}"
       >
-        {session.response.success
-          ? String(session.response.statusCode)
-          : `${String(session.response.statusCode)} ERR`}
+        {currentRequest.response.success
+          ? String(currentRequest.response.statusCode)
+          : `${String(currentRequest.response.statusCode)} ERR`}
       </span>
-      <span>{formatNumber(session.response.ttft, "ms")} TTFT</span>
+      <span>{formatNumber(currentRequest.response.ttft, "ms")} TTFT</span>
     {:else}
-      <span class="collapsed-pending">pending</span>
+      <span class="collapsed-pending">active</span>
     {/if}
   </button>
 {:else}
-  <div class="session-card" role="button" tabindex="0" onclick={onToggle} onkeydown={(e: KeyboardEvent) => e.key === "Enter" && onToggle?.()}>
+  <div
+    class="session-card"
+    role="button"
+    tabindex="0"
+    onclick={onToggle}
+    onkeydown={(e: KeyboardEvent) =>
+      e.key === "Enter" && onToggle?.()}
+  >
     <div class="card-top">
+      <div class="session-summary">
+        <span class="summary-count">{requestCount} request{requestCount !==
+          1
+          ? "s"
+          : ""}</span>
+        {#if currentRequest?.response}
+          <span
+            style="color:{currentRequest.response.success
+              ? 'var(--success)'
+              : 'var(--error)'}"
+          >
+            &middot; last: {currentRequest.response.success
+              ? String(currentRequest.response.statusCode)
+              : `${String(currentRequest.response.statusCode)} ERR`}
+          </span>
+          <span class="dot-sep">&middot;</span>
+          <span>{formatNumber(
+            currentRequest.response.ttft,
+            "ms"
+          )}</span>
+        {/if}
+        {#if avgTtft != null}
+          <span class="dot-sep">&middot;</span>
+          <span>avg: {formatNumber(avgTtft, "ms")}</span>
+        {/if}
+      </div>
+      <div class="card-right">
+        {#if currentRequest}
+          <div class="provider-badge">
+            {currentRequest.provider ?? "—"}:{currentRequest.model ??
+              "—"}
+          </div>
+        {/if}
+        <div class="elapsed">{elapsed}</div>
+      </div>
+    </div>
+
+    {#if currentRequest}
       <div class="stage-dots">
         {#each STAGES as stage, i}
           {#if stage.key === "failed"}
-            {@const reached = session.stage === "failed"}
+            {@const reached = currentRequest.stage === "failed"}
             <span class="dot-wrapper">
               <span
                 class="dot {reached ? 'dot-error' : 'dot-empty'}"
@@ -84,10 +158,12 @@ const elapsed = $derived(formatNumber(elapsedMs, "ms"));
               <span class="dot-label">{stage.label}</span>
             </span>
           {:else if stage.key === "complete"}
-            {@const reached = session.stage === "complete"}
+            {@const reached = currentRequest.stage === "complete"}
             <span class="dot-wrapper">
               <span
-                class="dot {reached ? 'dot-complete' : 'dot-empty'}"
+                class="dot {reached
+                  ? 'dot-complete'
+                  : 'dot-empty'}"
               ></span>
               <span class="dot-label">{stage.label}</span>
             </span>
@@ -105,97 +181,143 @@ const elapsed = $derived(formatNumber(elapsedMs, "ms"));
           {#if i < STAGES.length - 1}
             <span
               class="dot-line {i < stageIndex &&
-              session.stage !== "failed"
+              currentRequest.stage !== "failed"
                 ? 'line-filled'
                 : ''}"
             ></span>
           {/if}
         {/each}
       </div>
-      <div class="card-right">
-        <div class="provider-badge">
-          {session.provider ?? "—"}:{session.model ?? "—"}
-        </div>
-        <div class="elapsed">{elapsed}</div>
-      </div>
-    </div>
 
-    {#if session.prompt}
-      <div class="prompt-line">{session.prompt}</div>
+      {#if currentRequest.prompt}
+        <div class="prompt-line">{currentRequest.prompt}</div>
+      {/if}
+
+      {#if currentRequest.candidates &&
+        currentRequest.candidates.length > 0}
+        <div class="selection-block">
+          <div class="selection-header">
+            Strategy: {currentRequest.strategy ?? "—"} | Pool: {String(
+              currentRequest.poolSize ?? 0
+            )}
+          </div>
+          {#each currentRequest.candidates as c}
+            <div
+              class="candidate-row {c.key === currentRequest.selected
+                ? 'candidate-selected'
+                : ''}"
+            >
+              <span class="cand-prov">{c.provider}</span>
+              <span class="cand-model">{c.model}</span>
+              {#if c.status === "eligible"}
+                <span style="color:{sc(c.score)}"
+                  >{c.score.toFixed(1)}%</span
+                >
+              {:else}
+                <span class="badge ineligible">{c.status}</span>
+              {/if}
+              {#if c.affinity}<span class="badge">affinity</span>{/if}
+            </div>
+          {/each}
+        </div>
+      {/if}
+
+      {#if currentRequest.failovers.length > 0}
+        <div class="failovers">
+          {#each currentRequest.failovers as f}
+            <span class="badge failover"
+              >{f.provider}:{f.model} &rarr; {f.errorType}</span
+            >
+          {/each}
+        </div>
+      {/if}
+
+      {#if currentRequest.outputChars != null ||
+        currentRequest.thinkingChars != null}
+        <div class="token-stats">
+          <span>{String(currentRequest.outputChars ??
+            0)} output chars</span>
+          <span class="dot-sep">&middot;</span>
+          <span>{String(currentRequest.thinkingChars ??
+            0)} thinking chars</span>
+          {#if currentRequest.tokensPerSecond != null}
+            <span class="dot-sep">&middot;</span>
+            <span>{currentRequest.tokensPerSecond} tps</span>
+          {/if}
+        </div>
+      {/if}
+
+      {#if currentRequest.response}
+        <div class="response-summary">
+          <span
+            style="color:{currentRequest.response.success
+              ? 'var(--success)'
+              : 'var(--error)'}"
+          >
+            {currentRequest.response.success
+              ? String(currentRequest.response.statusCode)
+              : `${String(currentRequest.response.statusCode)} ERR`}
+          </span>
+          <span
+            >{formatNumber(
+              currentRequest.response.ttft,
+              "ms"
+            )} TTFT</span
+          >
+          <span
+            >{formatNumber(
+              currentRequest.response.totalLatency,
+              "ms"
+            )} total</span
+          >
+          <span>
+            {currentRequest.response.outputTokens != null
+              ? String(currentRequest.response.outputTokens)
+              : "—"}
+            tok
+          </span>
+          <span>{currentRequest.response.finishReason ?? "—"}</span>
+          {#if currentRequest.response.toolCallFailed}
+            <span class="badge tool-err">TOOL-ERR</span>
+          {/if}
+        </div>
+      {/if}
     {/if}
 
-    {#if session.candidates && session.candidates.length > 0}
-      <div class="selection-block">
-        <div class="selection-header">
-          Strategy: {session.strategy ?? "—"} | Pool: {String(
-            session.poolSize ?? 0
-          )}
-        </div>
-        {#each session.candidates as c}
-          <div
-            class="candidate-row {c.key === session.selected
-              ? 'candidate-selected'
-              : ''}"
-          >
-            <span class="cand-prov">{c.provider}</span>
-            <span class="cand-model">{c.model}</span>
-            {#if c.status === "eligible"}
-              <span style="color:{sc(c.score)}">{c.score.toFixed(1)}%</span>
-            {:else}
-              <span class="badge ineligible">{c.status}</span>
-            {/if}
-            {#if c.affinity}<span class="badge">affinity</span>{/if}
+    {#if completedRequests.length > 0}
+      <button class="history-toggle" onclick={() =>
+        (showHistory = !showHistory)}>
+        <span class="history-arrow">{showHistory
+            ? "\u25BE"
+            : "\u25B8"}</span>
+        History ({completedRequests.length} completed)
+      </button>
+      {#if showHistory}
+        {#each completedRequests as req}
+          <div class="history-row">
+            <span class="history-time">{formatTime(
+              req.timestamp
+            )}</span>
+            <span
+              style="color:{req.response?.success
+                ? 'var(--success)'
+                : req.response
+                  ? 'var(--error)'
+                  : 'var(--muted)'}"
+            >
+              {req.response?.success
+                ? String(req.response.statusCode)
+                : req.response
+                  ? `${String(req.response.statusCode)} ERR`
+                  : "..."}
+            </span>
+            <span>{req.response
+                ? formatNumber(req.response.ttft, "ms")
+                : "..."}</span>
+            <span class="history-prov">{req.provider}:{req.model}</span>
           </div>
         {/each}
-      </div>
-    {/if}
-
-    {#if session.failovers.length > 0}
-      <div class="failovers">
-        {#each session.failovers as f}
-          <span class="badge failover"
-            >{f.provider}:{f.model} &rarr; {f.errorType}</span
-          >
-        {/each}
-      </div>
-    {/if}
-
-    {#if session.outputChars != null || session.thinkingChars != null}
-      <div class="token-stats">
-        <span>{String(session.outputChars ?? 0)} output chars</span>
-        <span class="dot-sep">&middot;</span>
-        <span>{String(session.thinkingChars ?? 0)} thinking chars</span>
-        {#if session.tokensPerSecond != null}
-          <span class="dot-sep">&middot;</span>
-          <span>{session.tokensPerSecond} tps</span>
-        {/if}
-      </div>
-    {/if}
-
-    {#if session.response}
-      <div class="response-summary">
-        <span
-          style="color:{session.response.success
-            ? 'var(--success)'
-            : 'var(--error)'}"
-        >
-          {session.response.success
-            ? String(session.response.statusCode)
-            : `${String(session.response.statusCode)} ERR`}
-        </span>
-        <span>{formatNumber(session.response.ttft, "ms")} TTFT</span>
-        <span>{formatNumber(session.response.totalLatency, "ms")} total</span>
-        <span>
-          {session.response.outputTokens != null
-            ? String(session.response.outputTokens)
-            : "—"}
-          tok
-        </span>
-        <span>{session.response.finishReason ?? "—"}</span>
-        {#if session.response.toolCallFailed}
-          <span class="badge tool-err">TOOL-ERR</span>
-        {/if}
-      </div>
+      {/if}
     {/if}
   </div>
 {/if}
@@ -227,6 +349,10 @@ const elapsed = $derived(formatNumber(elapsedMs, "ms"));
     color: var(--accent);
     min-width: 180px;
   }
+  .collapsed-count {
+    color: var(--muted);
+    min-width: 40px;
+  }
   .collapsed-pending {
     color: var(--warning);
   }
@@ -247,6 +373,37 @@ const elapsed = $derived(formatNumber(elapsedMs, "ms"));
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
+  }
+
+  .session-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.625rem;
+    color: var(--muted);
+  }
+  .summary-count {
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  .card-right {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-shrink: 0;
+  }
+  .provider-badge {
+    color: var(--accent);
+    font-family: monospace;
+    font-size: 0.625rem;
+  }
+  .elapsed {
+    color: var(--muted);
+    font-family: monospace;
+    font-size: 0.625rem;
+    min-width: 70px;
+    text-align: right;
   }
 
   .stage-dots {
@@ -295,25 +452,6 @@ const elapsed = $derived(formatNumber(elapsedMs, "ms"));
     background: var(--success);
   }
 
-  .card-right {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    flex-shrink: 0;
-  }
-  .provider-badge {
-    color: var(--accent);
-    font-family: monospace;
-    font-size: 0.625rem;
-  }
-  .elapsed {
-    color: var(--muted);
-    font-family: monospace;
-    font-size: 0.625rem;
-    min-width: 70px;
-    text-align: right;
-  }
-
   .prompt-line {
     color: var(--text);
     font-size: 0.6875rem;
@@ -342,7 +480,7 @@ const elapsed = $derived(formatNumber(elapsedMs, "ms"));
     gap: 0.5rem;
     padding: 0.125rem 0;
   }
-  .candidate-row.candidate-selected {
+  .candidate-selected {
     color: var(--success);
   }
   .cand-prov {
@@ -401,5 +539,41 @@ const elapsed = $derived(formatNumber(elapsedMs, "ms"));
     gap: 0.75rem;
     font-size: 0.6875rem;
     color: var(--muted);
+  }
+
+  .history-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.125rem 0.25rem;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: monospace;
+    font-size: 0.5625rem;
+    cursor: pointer;
+    text-align: left;
+  }
+  .history-toggle:hover {
+    background: rgba(var(--border-rgb), 0.08);
+  }
+  .history-arrow {
+    font-size: 0.5625rem;
+  }
+  .history-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: monospace;
+    font-size: 0.5625rem;
+    color: var(--muted);
+    padding: 0.125rem 0.25rem;
+  }
+  .history-time {
+    min-width: 70px;
+  }
+  .history-prov {
+    color: var(--accent);
+    font-size: 0.5rem;
   }
 </style>
