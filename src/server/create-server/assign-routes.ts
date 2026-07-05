@@ -7,9 +7,17 @@ import type { Provider } from "../../providers";
 import { getModelId } from "../../providers";
 import { routingMemory } from "../../proxy";
 import { type FlowEvent, onFlowEvent } from "../../proxy/flow-events";
+import {
+  getSessionSnapshot,
+  onSessionPatch,
+} from "../../proxy/session-aggregator";
 import { addLogListener, getRecentLogs, logger } from "../../shared/logger";
 import { getServerConfig } from "../../shared/server-config";
-import { conversationStore, loadCache, telemetryRecorder } from "../../telemetry";
+import {
+  conversationStore,
+  loadCache,
+  telemetryRecorder,
+} from "../../telemetry";
 import type { FastifyServer } from "../create-server";
 import { clearOverride, getOverride, setOverride } from "../override";
 
@@ -37,7 +45,9 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
 
       return providerModels.map((entry) => {
         const model = getModelId(entry);
-        const matchingState = states.find((s) => s.provider === p.name && s.model === model) ?? null;
+        const matchingState =
+          states.find((s) => s.provider === p.name && s.model === model) ??
+          null;
         const compKey = `${p.name}:${model}`;
 
         return {
@@ -87,7 +97,9 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
     }));
 
     const bestEntry =
-      providers.filter((p) => p.keyConfigured).sort((a, b) => b.stabilityScore - a.stabilityScore)[0] ?? null;
+      providers
+        .filter((p) => p.keyConfigured)
+        .sort((a, b) => b.stabilityScore - a.stabilityScore)[0] ?? null;
 
     const bestProvider = bestEntry.name;
     const bestModel = bestEntry.model;
@@ -115,7 +127,8 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
         bestModel,
         bestScore,
         routingStrategy: process.env.HIVE_ROUTING_STRATEGY || "balanced",
-        contextWindowWeight: Number(process.env.HIVE_CONTEXT_WINDOW_WEIGHT) || 0,
+        contextWindowWeight:
+          Number(process.env.HIVE_CONTEXT_WINDOW_WEIGHT) || 0,
       },
     };
   };
@@ -169,6 +182,18 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
     }
   });
 
+  onSessionPatch((patch) => {
+    if (activeSockets.size === 0) return;
+    const payload = JSON.stringify({ type: "session_state", data: patch });
+    for (const socket of activeSockets) {
+      try {
+        socket.send(payload);
+      } catch {
+        // ignore
+      }
+    }
+  });
+
   server.get("/ws", { websocket: true }, (socket) => {
     activeSockets.add(socket);
 
@@ -188,6 +213,10 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
         for (const event of flowEventBuffer) {
           socket.send(JSON.stringify({ type: "flow", data: event }));
         }
+
+        // Send session snapshot
+        const sessions = getSessionSnapshot();
+        socket.send(JSON.stringify({ type: "session_init", data: sessions }));
       } catch (err) {
         logger.error("failed to send initial ws payload", err);
       }
@@ -199,14 +228,23 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
 
     socket.on("message", (msg) => {
       try {
-        const text = typeof msg === "string" ? msg : Buffer.isBuffer(msg) ? msg.toString() : JSON.stringify(msg);
+        const text =
+          typeof msg === "string"
+            ? msg
+            : Buffer.isBuffer(msg)
+              ? msg.toString()
+              : JSON.stringify(msg);
         // JSON.parse returns unknown; downstream validates with typeof checks
         const parsed = JSON.parse(text) as Record<string, unknown> | null;
         if (parsed?.type === "override") {
           const provider = parsed.provider;
           const model = parsed.model;
           const enabled = parsed.enabled !== false;
-          if (typeof provider === "string" && typeof model === "string" && enabled) {
+          if (
+            typeof provider === "string" &&
+            typeof model === "string" &&
+            enabled
+          ) {
             setOverride(provider, model);
             logger.debug(`override set: ${provider} / ${model}`);
           } else {
@@ -216,7 +254,9 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
           void broadcastTelemetry();
         }
       } catch {
-        logger.debug(`received WS message: ${typeof msg === "string" ? msg : JSON.stringify(msg)}`);
+        logger.debug(
+          `received WS message: ${typeof msg === "string" ? msg : JSON.stringify(msg)}`
+        );
       }
     });
   });
@@ -243,7 +283,9 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
   server.get("/api-spec", async (_request, reply) => {
     console.log(`Serving API spec from: ${specHtmlPath}`);
     if (!existsSync(specHtmlPath)) {
-      return reply.status(404).send({ error: `API spec not found ${specHtmlPath}` });
+      return reply
+        .status(404)
+        .send({ error: `API spec not found ${specHtmlPath}` });
     }
     const html = readFileSync(specHtmlPath, "utf-8");
     reply.type("text/html");
@@ -252,7 +294,9 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
 
   server.get("/api-spec.yaml", async (_request, reply) => {
     if (!existsSync(specYamlPath)) {
-      return reply.status(404).send({ error: `API spec YAML not found ${specYamlPath}` });
+      return reply
+        .status(404)
+        .send({ error: `API spec YAML not found ${specYamlPath}` });
     }
     const yaml = readFileSync(specYamlPath, "utf-8");
     reply.type("application/x-yaml");
@@ -268,14 +312,19 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
     const requestId = crypto.randomUUID();
     logger.info(`request ${requestId} — handling chat completion`);
     // Fastify body is typed as unknown; API contract guarantees JSON object
-    const result = await deps.handleChatCompletion(request.body as Record<string, unknown>, request.headers);
+    const result = await deps.handleChatCompletion(
+      request.body as Record<string, unknown>,
+      request.headers
+    );
 
     if (!result.success) {
       logger.error(
         `request ${requestId} — chat completion failed`,
         `${result.error ?? ""} (${String(result.statusCode ?? "")})`
       );
-      return reply.status(result.statusCode ?? 500).send({ error: result.error });
+      return reply
+        .status(result.statusCode ?? 500)
+        .send({ error: result.error });
     }
 
     logger.info(
