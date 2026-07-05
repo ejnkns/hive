@@ -17,7 +17,7 @@ const completed = $derived(
 );
 
 let archiveOpen = $state(false);
-let expandedIds = $state(new Set<string>(active.map((s) => s.sessionId)));
+let expandedIds = $state(new Set<string>());
 
 function toggleExpanded(sessionId: string) {
   const next = new Set(expandedIds);
