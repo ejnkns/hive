@@ -4,23 +4,26 @@ import SessionCard from "./SessionCard.svelte";
 
 let { sessions = [] as SessionState[] } = $props();
 
-const active = $derived(
-  sessions.filter((s) =>
-    s.requests.some((r) => {
-      const last = r.path[r.path.length - 1];
-      return last !== "complete" && last !== "failed";
-    })
-  )
-);
-const completed = $derived(
-  sessions.filter(
-    (s) =>
-      !s.requests.some((r) => {
-        const last = r.path[r.path.length - 1];
-        return last !== "complete" && last !== "failed";
-      })
-  )
-);
+function hasActiveRequest(s: SessionState): boolean {
+  return s.requests.some((r) => {
+    const last = r.path[r.path.length - 1];
+    return last !== "complete" && last !== "failed";
+  });
+}
+
+const active = $derived(sessions.filter((s) => hasActiveRequest(s)));
+const completed = $derived(sessions.filter((s) => !hasActiveRequest(s)));
+
+const visible = $derived.by(() => {
+  if (active.length > 0) return active;
+  if (completed.length === 0) return [];
+  return [completed[0]];
+});
+
+const archived = $derived.by(() => {
+  if (active.length > 0) return completed;
+  return completed.slice(1);
+});
 
 let archiveOpen = $state(false);
 let fullExpandedId = $state<string | null>(null);
@@ -34,11 +37,11 @@ function toggleArchive() {
 }
 </script>
 
-{#if active.length === 0 && completed.length === 0}
+{#if visible.length === 0 && archived.length === 0}
   <div class="no-data">Awaiting requests...</div>
 {:else}
-  {#if active.length > 0}
-    {#each active as session (session.sessionId)}
+  {#if visible.length > 0}
+    {#each visible as session (session.sessionId)}
       <SessionCard
         {session}
         fullExpanded={fullExpandedId === session.sessionId}
@@ -47,13 +50,13 @@ function toggleArchive() {
     {/each}
   {/if}
 
-  {#if completed.length > 0}
+  {#if archived.length > 0}
     <button class="archive-toggle" onclick={toggleArchive}>
       <span class="archive-arrow">{archiveOpen ? "\u25BE" : "\u25B8"}</span>
-      Previous Sessions ({completed.length})
+      Previous Sessions ({archived.length})
     </button>
     {#if archiveOpen}
-      {#each completed as session (session.sessionId)}
+      {#each archived as session (session.sessionId)}
         <SessionCard
           {session}
           fullExpanded={fullExpandedId === session.sessionId}
