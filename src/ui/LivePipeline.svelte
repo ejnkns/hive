@@ -4,7 +4,7 @@ import type { FlowEvent, ProviderData } from "./types";
 let { events = [] as FlowEvent[], providers = [] as ProviderData[] } = $props();
 
 const PADDING_TOP = 32;
-const ROW_HEIGHT = 36;
+const ROW_HEIGHT = 32;
 const INGRESS_X = 50;
 const PROVIDER_X = 740;
 const SVG_WIDTH = 800;
@@ -76,24 +76,99 @@ const sessions = $derived.by(() => {
     .sort((a, b) => b.timestamp - a.timestamp);
 });
 
-const svgHeight = $derived(
-  Math.max(PADDING_TOP + providers.length * ROW_HEIGHT + 16, 120)
-);
-
-const ingressY = $derived(PADDING_TOP + (providers.length * ROW_HEIGHT) / 2);
-
-function getProviderIndex(provider: string, model: string): number {
-  return providers.findIndex((p) => p.name === provider && p.model === model);
-}
-
-function getProviderY(index: number): number {
-  return PADDING_TOP + index * ROW_HEIGHT + ROW_HEIGHT / 2;
-}
+type PipelineRow =
+  | { kind: "provider"; displayName: string; provider: string }
+  | {
+      kind: "model";
+      provider: string;
+      displayName: string;
+      model: string;
+      cooldownSec: number;
+      keyConfigured: boolean;
+    };
 
 function getCooldownSec(name: string, model: string): number {
   const p = providers.find((x) => x.name === name && x.model === model);
   if (!p || p.trippedUntil == null) return 0;
   return Math.max(0, Math.round((p.trippedUntil - Date.now()) / 1000));
+}
+
+const rows = $derived.by(() => {
+  const seen = new Set<string>();
+  const providerMap = new Map<
+    string,
+    {
+      displayName: string;
+      models: {
+        provider: string;
+        model: string;
+        cooldownSec: number;
+        keyConfigured: boolean;
+      }[];
+    }
+  >();
+
+  for (const session of sessions) {
+    if (!session.provider || !session.model) continue;
+    const key = `${session.provider}:${session.model}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const p = providers.find(
+      (x) => x.name === session.provider && x.model === session.model
+    );
+
+    if (!providerMap.has(session.provider)) {
+      providerMap.set(session.provider, {
+        displayName: p?.displayName ?? session.provider,
+        models: [],
+      });
+    }
+
+    providerMap.get(session.provider)!.models.push({
+      provider: session.provider,
+      model: session.model,
+      cooldownSec: getCooldownSec(session.provider, session.model),
+      keyConfigured: p?.keyConfigured ?? false,
+    });
+  }
+
+  const result: PipelineRow[] = [];
+  for (const [provider, group] of providerMap) {
+    result.push({
+      kind: "provider",
+      displayName: group.displayName,
+      provider,
+    });
+    for (const model of group.models) {
+      result.push({
+        kind: "model",
+        provider: model.provider,
+        displayName: group.displayName,
+        model: model.model,
+        cooldownSec: model.cooldownSec,
+        keyConfigured: model.keyConfigured,
+      });
+    }
+  }
+
+  return result;
+});
+
+const svgHeight = $derived(
+  Math.max(PADDING_TOP + rows.length * ROW_HEIGHT + 16, 120)
+);
+
+const ingressY = $derived(PADDING_TOP + (rows.length * ROW_HEIGHT) / 2);
+
+function getRowY(index: number): number {
+  return PADDING_TOP + index * ROW_HEIGHT + ROW_HEIGHT / 2;
+}
+
+function getTargetRowIndex(provider: string, model: string): number {
+  return rows.findIndex(
+    (r) => r.kind === "model" && r.provider === provider && r.model === model
+  );
 }
 
 function getPathClass(session: PipelineSession): string {
@@ -105,25 +180,34 @@ function getPathClass(session: PipelineSession): string {
 </script>
 
 <svg viewBox="0 0 {SVG_WIDTH} {svgHeight}" class="pipeline">
-  {#each providers as p, i}
-    {@const y = getProviderY(i)}
-    {@const cd = getCooldownSec(p.name, p.model)}
-    <g class="provider-node" transform="translate({PROVIDER_X}, {y})">
-      <circle
-        r="4"
-        class={cd > 0 ? "cooldown" : p.keyConfigured ? "active" : "inactive"}
-      />
-      <text x="12" y="4" class="provider-label">{p.displayName}:{p.model}</text>
-      {#if cd > 0}
-        <text x="12" y="16" class="cooldown-label">{String(cd)}s</text>
-      {/if}
-    </g>
+  {#each rows as row, i}
+    {@const y = getRowY(i)}
+    {#if row.kind === "provider"}
+      <text
+        x={PROVIDER_X + 4}
+        y={y + 4}
+        class="provider-header"
+      >
+        {row.displayName}
+      </text>
+    {:else}
+      <g class="model-node" transform="translate({PROVIDER_X}, {y})">
+        <circle
+          r="3"
+          class={row.cooldownSec > 0 ? "cooldown" : row.keyConfigured ? "active" : "inactive"}
+        />
+        <text x="12" y="4" class="model-label">{row.model}</text>
+        {#if row.cooldownSec > 0}
+          <text x="12" y="16" class="cooldown-label">{String(row.cooldownSec)}s</text>
+        {/if}
+      </g>
+    {/if}
   {/each}
 
   <circle cx={INGRESS_X} cy={ingressY} r="7" class="ingress" />
   <text x={INGRESS_X + 14} y={ingressY + 4} class="ingress-label">hive</text>
 
-  {#if sessions.length === 0}
+  {#if rows.length === 0}
     <text
       x={SVG_WIDTH / 2}
       y={svgHeight / 2}
@@ -135,15 +219,17 @@ function getPathClass(session: PipelineSession): string {
   {/if}
 
   {#each sessions as session}
-    {@const pidx = getProviderIndex(
+    {@const ridx = getTargetRowIndex(
       session.provider ?? "",
       session.model ?? "",
     )}
-    {#if pidx >= 0}
-      {@const targetY = getProviderY(pidx)}
+    {#if ridx >= 0}
+      {@const targetY = getRowY(ridx)}
       {@const isDone =
         session.phase === "complete" || session.phase === "failed"}
-      {@const opacity = isDone ? 0.2 : Math.max(0.5, 1 - (Date.now() - session.timestamp) / 15000 * 0.5)}
+      {@const opacity = isDone
+        ? 0.2
+        : Math.max(0.5, 1 - (Date.now() - session.timestamp) / 15000 * 0.5)}
 
       <path
         d="M {INGRESS_X},{ingressY} C {INGRESS_X + 140},{ingressY} {PROVIDER_X - 140},{targetY} {PROVIDER_X},{targetY}"
@@ -185,19 +271,29 @@ function getPathClass(session: PipelineSession): string {
     font-family: monospace;
   }
 
-  .provider-node circle.active {
+  .provider-header {
+    fill: var(--muted);
+    font-size: 0.5rem;
+    font-family: monospace;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    dominant-baseline: middle;
+  }
+
+  .model-node circle.active {
     fill: var(--success);
   }
 
-  .provider-node circle.inactive {
+  .model-node circle.inactive {
     fill: var(--border);
   }
 
-  .provider-node circle.cooldown {
+  .model-node circle.cooldown {
     fill: var(--error);
   }
 
-  .provider-label {
+  .model-label {
     fill: var(--muted);
     font-size: 0.5rem;
     font-family: monospace;
