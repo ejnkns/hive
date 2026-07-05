@@ -10,16 +10,19 @@ import type {
   MetricData,
   OverrideState,
   ProviderData,
+  SessionPatch,
+  SessionState,
   SubScores,
 } from "./types";
 import "../app.css";
 import Header from "./Header.svelte";
 import Stats from "./Stats.svelte";
 import ProviderPanel from "./ProviderPanel.svelte";
-import Flow from "./Flow.svelte";
+import Sessions from "./Sessions.svelte";
 import LivePipeline from "./LivePipeline.svelte";
 import Logs from "./Logs.svelte";
 import DetailOverlay from "./DetailOverlay.svelte";
+import { createSessionStore } from "./use-sessions.svelte";
 
 type ProviderPayload = {
   name: string;
@@ -62,7 +65,9 @@ type TelemetryData = {
 type WsMessage =
   | { type: "init" | "update"; data: TelemetryData }
   | { type: "log"; data: LogEntry }
-  | { type: "flow"; data: FlowEvent };
+  | { type: "flow"; data: FlowEvent }
+  | { type: "session_state"; data: SessionPatch }
+  | { type: "session_init"; data: SessionState[] };
 
 let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -82,6 +87,8 @@ let telemetry: TelemetryData | null = $state(null);
 
 let detailMetric: MetricData | null = $state(null);
 let detailAllMetrics: MetricData[] = $state([]);
+
+const { sessions, applyPatch, initSessions } = createSessionStore();
 
 let headerData = $derived.by(() => {
   const t = telemetry;
@@ -228,6 +235,14 @@ function handleMessage(msg: WsMessage) {
     if (logEntries.length > 500) logEntries.shift();
     return;
   }
+  if (msg.type === "session_state") {
+    applyPatch(msg.data);
+    return;
+  }
+  if (msg.type === "session_init") {
+    initSessions(msg.data);
+    return;
+  }
   telemetry = msg.data;
   override = {
     active: msg.data.overrideActive,
@@ -283,11 +298,9 @@ onDestroy(() => {
     <div>
       <div class="section-head" style="margin-top:1.5rem">Pipeline</div>
       <LivePipeline events={flowEvents} providers={providersData} />
-      <div class="section-head" style="margin-top:1.5rem">Live Requests</div>
-      <Flow events={flowEvents} />
+      <div class="section-head" style="margin-top:1.5rem">Live Sessions</div>
+      <Sessions {sessions} />
       <ProviderPanel data={providersData} {metrics} {conversations} overrideKey={overrideKey} onRowClick={handleMetricClick} lastProvider={headerData?.lastProvider ?? null} lastModel={headerData?.lastModel ?? null} />
-      <div class="section-head" style="margin-top:1.5rem">Live Requests</div>
-      <Flow events={flowEvents} />
     </div>
     <Logs entries={logEntries} />
   </div>
