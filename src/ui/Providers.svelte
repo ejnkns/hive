@@ -78,7 +78,9 @@ function switchTab(name: string, tab: "activity" | "conversations") {
   <div class="no-data">No providers registered</div>
 {:else}
   {#each groups as group}
-    {@const f = group.entries[0]}
+    {@const f = (overrideKey
+      ? group.entries.find((e) => `${e.name}:${e.model}` === overrideKey)
+      : null) ?? [...group.entries].sort((a, b) => b.stabilityScore - a.stabilityScore)[0]}
     {@const isExpanded = expandedConsoles[group.name] ?? false}
     {@const isModelsExpanded = expandedModels[group.name] ?? false}
     {@const activeTab = activeTabs[group.name] || "activity"}

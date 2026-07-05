@@ -15,7 +15,7 @@ import type {
 import "../app.css";
 import Header from "./Header.svelte";
 import Stats from "./Stats.svelte";
-import Providers from "./Providers.svelte";
+import ProviderPanel from "./ProviderPanel.svelte";
 import Flow from "./Flow.svelte";
 import LivePipeline from "./LivePipeline.svelte";
 import Logs from "./Logs.svelte";
@@ -281,10 +281,11 @@ onDestroy(() => {
   <div class="content">
     <Stats data={statsData} />
     <div>
-      <div class="section-head">Providers</div>
-      <Providers data={providersData} {metrics} {conversations} overrideKey={overrideKey} onRowClick={handleMetricClick} />
       <div class="section-head" style="margin-top:1.5rem">Pipeline</div>
       <LivePipeline events={flowEvents} providers={providersData} />
+      <div class="section-head" style="margin-top:1.5rem">Live Requests</div>
+      <Flow events={flowEvents} />
+      <ProviderPanel data={providersData} {metrics} {conversations} overrideKey={overrideKey} onRowClick={handleMetricClick} lastProvider={headerData?.lastProvider ?? null} lastModel={headerData?.lastModel ?? null} />
       <div class="section-head" style="margin-top:1.5rem">Live Requests</div>
       <Flow events={flowEvents} />
     </div>
