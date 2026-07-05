@@ -135,7 +135,7 @@ export type SessionState = {
 
 export type RequestState = {
   requestId: string;
-  stage: SessionStage;
+  path: SessionStage[];
   timestamp: number;
   prompt?: string;
   provider?: string;
@@ -168,7 +168,7 @@ export type SessionPatch = {
   lastActivity?: number;
   requestId?: string;
   requestInitial?: { timestamp: number; prompt?: string };
-  stage?: SessionStage;
+  path?: SessionStage[];
   provider?: string;
   model?: string;
   candidates?: CandidateInfo[];

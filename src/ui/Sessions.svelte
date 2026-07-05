@@ -6,13 +6,19 @@ let { sessions = [] as SessionState[] } = $props();
 
 const active = $derived(
   sessions.filter((s) =>
-    s.requests.some((r) => r.stage !== "complete" && r.stage !== "failed")
+    s.requests.some((r) => {
+      const last = r.path[r.path.length - 1];
+      return last !== "complete" && last !== "failed";
+    })
   )
 );
 const completed = $derived(
   sessions.filter(
     (s) =>
-      !s.requests.some((r) => r.stage !== "complete" && r.stage !== "failed")
+      !s.requests.some((r) => {
+        const last = r.path[r.path.length - 1];
+        return last !== "complete" && last !== "failed";
+      })
   )
 );
 

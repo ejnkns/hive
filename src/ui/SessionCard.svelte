@@ -26,7 +26,10 @@ const STAGES: { key: string; label: string }[] = [
 const requestCount = $derived(session.requests.length);
 const latest = $derived(session.requests.at(-1) ?? null);
 const completedRequests = $derived(
-  session.requests.filter((r) => r.stage === "complete" || r.stage === "failed")
+  session.requests.filter((r) => {
+    const last = r.path[r.path.length - 1];
+    return last === "complete" || last === "failed";
+  })
 );
 const avgTtft = $derived.by(() => {
   const finished = completedRequests.filter((r) => r.response != null);
@@ -39,8 +42,11 @@ const avgTtft = $derived.by(() => {
 const lastResponse = $derived(latest?.response ?? null);
 const allRequestsNewestFirst = $derived([...session.requests].reverse());
 
-const stageIndexOf = (req: RequestState) =>
-  STAGES.findIndex((s) => s.key === req.stage);
+const lastPathStageIdx = (req: RequestState) => {
+  const last = req.path[req.path.length - 1];
+  if (!last) return -1;
+  return STAGES.findIndex((s) => s.key === last);
+};
 </script>
 
 {#if collapsed}
@@ -112,7 +118,8 @@ const stageIndexOf = (req: RequestState) =>
 
     {#each allRequestsNewestFirst as req, i}
       {@const isLatest = i === 0}
-      {@const idx = stageIndexOf(req)}
+      {@const idx = lastPathStageIdx(req)}
+      {@const lastStage = req.path[req.path.length - 1]}
       <div class="request-subcard" class:request-latest={isLatest}>
         <div class="req-header">
           <span class="req-label">{isLatest
@@ -139,7 +146,7 @@ const stageIndexOf = (req: RequestState) =>
         <div class="stage-dots">
           {#each STAGES as stage, si}
             {#if stage.key === "failed"}
-              {@const reached = req.stage === "failed"}
+              {@const reached = lastStage === "failed"}
               <span class="dot-wrapper">
                 <span
                   class="dot {reached ? 'dot-error' : 'dot-empty'}"
@@ -147,7 +154,7 @@ const stageIndexOf = (req: RequestState) =>
                 <span class="dot-label">{stage.label}</span>
               </span>
             {:else if stage.key === "complete"}
-              {@const reached = req.stage === "complete"}
+              {@const reached = lastStage === "complete"}
               <span class="dot-wrapper">
                 <span
                   class="dot {reached
@@ -170,7 +177,7 @@ const stageIndexOf = (req: RequestState) =>
             {#if si < STAGES.length - 1}
               <span
                 class="dot-line {si < idx &&
-                req.stage !== "failed"
+                lastStage !== "failed"
                   ? 'line-filled'
                   : ''}"
               ></span>

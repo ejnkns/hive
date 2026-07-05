@@ -7,11 +7,17 @@ export function createSessionStore() {
   function rebuild() {
     const all = Array.from(map.values());
     const active = all.filter((s) =>
-      s.requests.some((r) => r.stage !== "complete" && r.stage !== "failed")
+      s.requests.some((r) => {
+        const last = r.path[r.path.length - 1];
+        return last !== "complete" && last !== "failed";
+      })
     );
     const completed = all.filter(
       (s) =>
-        !s.requests.some((r) => r.stage !== "complete" && r.stage !== "failed")
+        !s.requests.some((r) => {
+          const last = r.path[r.path.length - 1];
+          return last !== "complete" && last !== "failed";
+        })
     );
     active.sort((a, b) => b.lastActivity - a.lastActivity);
     completed.sort((a, b) => b.lastActivity - a.lastActivity);
@@ -46,7 +52,7 @@ export function createSessionStore() {
       if (!patch.requestInitial) return null;
       request = {
         requestId: patch.requestId,
-        stage: "received",
+        path: [],
         timestamp: patch.requestInitial.timestamp,
         prompt: patch.requestInitial.prompt,
         failovers: [],
@@ -66,8 +72,8 @@ export function createSessionStore() {
       return;
     }
 
-    if (patch.stage) {
-      request.stage = patch.stage;
+    if (patch.path) {
+      request.path = patch.path;
     }
     if (patch.provider !== undefined) {
       request.provider = patch.provider;

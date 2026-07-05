@@ -52,7 +52,7 @@ function getOrCreateRequest(
   if (!request) {
     request = {
       requestId,
-      stage: "received",
+      path: [],
       timestamp,
       prompt,
       failovers: [],
@@ -66,10 +66,11 @@ function maybeAdvanceStage(
   request: RequestState,
   newStage: SessionStage
 ): boolean {
-  const current = STAGE_ORDER[request.stage] ?? -1;
+  const lastStage = request.path.at(-1);
+  const current = lastStage ? (STAGE_ORDER[lastStage] ?? -1) : -1;
   const incoming = STAGE_ORDER[newStage] ?? -1;
   if (incoming > current) {
-    request.stage = newStage;
+    request.path.push(newStage);
     return true;
   }
   return false;
@@ -80,9 +81,10 @@ function evictIfNeeded() {
     let oldestEvictable: string | null = null;
     let oldestActivity = Infinity;
     for (const [id, s] of sessionMap) {
-      const hasActive = s.requests.some(
-        (r) => r.stage !== "complete" && r.stage !== "failed"
-      );
+      const hasActive = s.requests.some((r) => {
+        const last = r.path.at(-1);
+        return last !== "complete" && last !== "failed";
+      });
       if (!hasActive && s.lastActivity < oldestActivity) {
         oldestActivity = s.lastActivity;
         oldestEvictable = id;
@@ -150,6 +152,7 @@ onFlowEvent((event: FlowEvent) => {
       event.timestamp,
       event.promptPreview
     );
+    request.path.push("received");
 
     const patch: SessionPatch = {
       sessionId,
@@ -159,7 +162,7 @@ onFlowEvent((event: FlowEvent) => {
         timestamp: event.timestamp,
         prompt: event.promptPreview,
       },
-      stage: request.stage,
+      path: [...request.path],
     };
     emitPatch(patch);
 
@@ -183,7 +186,7 @@ onFlowEvent((event: FlowEvent) => {
 
   const stage = STAGE_MAP[event.type] as SessionStage | undefined;
   if (stage && maybeAdvanceStage(request, stage)) {
-    patch.stage = stage;
+    patch.path = [...request.path];
   }
 
   if (event.type === "selection_round") {
@@ -245,7 +248,7 @@ onFlowEvent((event: FlowEvent) => {
     request.model = event.model;
     const finalStage: SessionStage = event.success ? "complete" : "failed";
     if (maybeAdvanceStage(request, finalStage)) {
-      patch.stage = finalStage;
+      patch.path = [...request.path];
     }
     patch.provider = event.provider;
     patch.model = event.model;
