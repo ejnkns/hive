@@ -125,12 +125,15 @@ const rows = $derived.by(() => {
       });
     }
 
-    providerMap.get(session.provider)!.models.push({
-      provider: session.provider,
-      model: session.model,
-      cooldownSec: getCooldownSec(session.provider, session.model),
-      keyConfigured: p?.keyConfigured ?? false,
-    });
+    const group = providerMap.get(session.provider);
+    if (group) {
+      group.models.push({
+        provider: session.provider,
+        model: session.model,
+        cooldownSec: getCooldownSec(session.provider, session.model),
+        keyConfigured: p?.keyConfigured ?? false,
+      });
+    }
   }
 
   const result: PipelineRow[] = [];
