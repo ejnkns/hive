@@ -19,6 +19,7 @@ export function onSessionPatch(listener: SessionPatchListener): () => void {
 }
 
 const sessionMap = new Map<string, SessionState>();
+const requestToSession = new Map<string, string>();
 const MAX_SESSIONS = 100;
 
 const STAGE_MAP: Record<string, SessionStage> = {
@@ -88,6 +89,12 @@ function evictIfNeeded() {
       }
     }
     if (oldestEvictable) {
+      const session = sessionMap.get(oldestEvictable);
+      if (session) {
+        for (const req of session.requests) {
+          requestToSession.delete(req.requestId);
+        }
+      }
       sessionMap.delete(oldestEvictable);
     } else {
       break;
@@ -111,7 +118,10 @@ export function getSessionSnapshot(): SessionState[] {
 }
 
 onFlowEvent((event: FlowEvent) => {
-  const sessionId = event.type === "request_received" ? event.sessionId : "";
+  const sessionId =
+    event.type === "request_received"
+      ? event.sessionId
+      : (requestToSession.get(event.requestId) ?? "");
   let session = sessionMap.get(sessionId);
 
   if (event.type === "request_received") {
@@ -131,6 +141,8 @@ onFlowEvent((event: FlowEvent) => {
     } else {
       session.lastActivity = event.timestamp;
     }
+
+    requestToSession.set(event.requestId, sessionId);
 
     const request = getOrCreateRequest(
       session,
