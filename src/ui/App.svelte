@@ -296,12 +296,12 @@ onDestroy(() => {
   <div class="content">
     <Stats data={statsData} />
     <div>
-      <div class="section-head" style="margin-top:1.5rem">Pipeline</div>
-      <LivePipeline events={flowEvents} providers={providersData} />
       <div class="section-head" style="margin-top:1.5rem">Live Sessions</div>
       <Sessions sessions={sessionStore.sessions} />
       <ProviderPanel data={providersData} {metrics} {conversations} overrideKey={overrideKey} onRowClick={handleMetricClick} lastProvider={headerData?.lastProvider ?? null} lastModel={headerData?.lastModel ?? null} />
     </div>
+    <div class="section-head" style="margin-top:1.5rem">Pipeline</div>
+    <LivePipeline events={flowEvents} providers={providersData} />
     <Logs entries={logEntries} />
   </div>
   <DetailOverlay {detailMetric} {detailAllMetrics} />
