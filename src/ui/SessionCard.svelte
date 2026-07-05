@@ -25,7 +25,6 @@ const STAGE_LABELS: Record<SessionStage, string> = {
 
 const latest = $derived(session.requests.at(-1) ?? null);
 const allRequestsNewestFirst = $derived([...session.requests].reverse());
-const prevRequests = $derived(allRequestsNewestFirst.slice(1));
 
 let expandedRequestIds = $state(new Set<string>());
 
@@ -173,21 +172,24 @@ function displayPrompt(prompt: string): string {
   {/if}
 
   {#each allRequestsNewestFirst as req, i}
-    {@const isLatest = i === 0}
-    {@const isFullyVisible = fullExpanded || isLatest}
-    {@const isSubExpanded = expandedRequestIds.has(req.requestId)}
-    {@const lastStage = req.path[req.path.length - 1]}
-    {@const completed = lastStage !== undefined && isTerminal(lastStage)}
-    {@const label = isLatest
-      ? "latest"
-      : completed
-        ? `#${i + 1}`
-        : `#${i + 1} (active)`}
+    {#if fullExpanded || i > 0}
+      {@const isFirstVisible = fullExpanded ? i === 0 : i === 1}
+      {@const isFullyVisible = fullExpanded || isFirstVisible}
+      {@const isSubExpanded = expandedRequestIds.has(req.requestId)}
+      {@const lastStage = req.path[req.path.length - 1]}
+      {@const completed = lastStage !== undefined && isTerminal(lastStage)}
+      {@const label = fullExpanded && i === 0
+        ? "latest"
+        : completed
+          ? `#${i + 1}`
+          : `#${i + 1} (active)`}
 
     {#if isFullyVisible || isSubExpanded}
       <div
-        class="request-subcard {isLatest ? '' : 'request-prev'}"
-        class:request-latest={isLatest}
+        class="request-subcard {fullExpanded && i === 0
+          ? ''
+          : 'request-prev'}"
+        class:request-latest={fullExpanded && i === 0}
       >
         <div class="req-header">
           <span class="req-label">{label}</span>
@@ -370,6 +372,7 @@ function displayPrompt(prompt: string): string {
           >&#x25B8;</button
         >
       </div>
+    {/if}
     {/if}
   {/each}
 </div>
