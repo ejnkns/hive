@@ -116,6 +116,62 @@ export type CandidateInfo = {
   cooldownSec?: number;
 };
 
+export type SessionStage =
+  | "received"
+  | "selection"
+  | "dispatched"
+  | "thinking"
+  | "streaming"
+  | "tool_use"
+  | "complete"
+  | "failed";
+
+export type SessionState = {
+  requestId: string;
+  stage: SessionStage;
+  timestamp: number;
+  prompt?: string;
+  provider?: string;
+  model?: string;
+  candidates?: CandidateInfo[];
+  selected?: string;
+  strategy?: string;
+  poolSize?: number;
+  outputChars?: number;
+  thinkingChars?: number;
+  tokensPerSecond?: number;
+  failovers: { provider: string; model: string; errorType: string }[];
+  response?: {
+    provider: string;
+    model: string;
+    statusCode: number;
+    success: boolean;
+    ttft: number;
+    totalLatency: number;
+    outputTokens: number | null;
+    finishReason: string | null;
+    toolCallFailed: boolean;
+    errorType: string | null;
+  };
+};
+
+export type SessionPatch = {
+  requestId: string;
+  initial?: { timestamp: number; prompt?: string };
+  stage?: SessionStage;
+  provider?: string;
+  model?: string;
+  candidates?: CandidateInfo[];
+  selected?: string;
+  strategy?: string;
+  poolSize?: number;
+  outputChars?: number;
+  thinkingChars?: number;
+  tokensPerSecond?: number;
+  failover?: { provider: string; model: string; errorType: string };
+  response?: SessionState["response"];
+};
+
 export type FlowEvent =
   | {
       type: "request_received";
