@@ -175,7 +175,7 @@ function displayPrompt(prompt: string): string {
   {/if}
 
   {#each allRequestsNewestFirst as req, i}
-    {#if fullExpanded || i > 0}
+    {#if i > 0}
       {@const isFirstVisible = fullExpanded ? i === 0 : i === 1}
       {@const isFullyVisible = fullExpanded || isFirstVisible}
       {@const isSubExpanded = expandedRequestIds.has(req.requestId)}
@@ -588,7 +588,7 @@ function displayPrompt(prompt: string): string {
     gap: 0.25rem;
   }
   .request-prev {
-    margin-left: 1rem;
+    margin-left: -0.5rem;
     border-left: 2px solid var(--border);
     padding-left: 0.5rem;
   }
