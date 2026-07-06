@@ -166,6 +166,9 @@ function displayPrompt(prompt: string): string {
           {#if latest.response.toolCallFailed}
             <span class="badge tool-err">TOOL-ERR</span>
           {/if}
+          {#if latest.toolLoopDetected}
+            <span class="badge tool-loop">LOOP</span>
+          {/if}
         </div>
       {/if}
     </div>
@@ -323,6 +326,9 @@ function displayPrompt(prompt: string): string {
             <span>{req.response.finishReason ?? "—"}</span>
             {#if req.response.toolCallFailed}
               <span class="badge tool-err">TOOL-ERR</span>
+            {/if}
+            {#if req.toolLoopDetected}
+              <span class="badge tool-loop">LOOP</span>
             {/if}
           </div>
         {/if}
@@ -547,6 +553,11 @@ function displayPrompt(prompt: string): string {
   .badge.tool-err {
     color: var(--error);
     background: rgba(var(--error-rgb), 0.1);
+  }
+  .badge.tool-loop {
+    color: #e2a93b;
+    background: rgba(226, 169, 59, 0.1);
+    border: 1px solid rgba(226, 169, 59, 0.2);
   }
 
   .token-stats {

@@ -108,6 +108,9 @@ export function createSessionStore() {
     if (patch.failover) {
       request.failovers = [...(request.failovers || []), patch.failover];
     }
+    if (patch.toolLoopDetected !== undefined) {
+      request.toolLoopDetected = patch.toolLoopDetected;
+    }
 
     rebuild();
   }

@@ -153,6 +153,9 @@ onFlowEvent((event: FlowEvent) => {
       event.promptPreview
     );
     request.path.push("received");
+    if (event.toolLoopDetected) {
+      request.toolLoopDetected = true;
+    }
 
     const patch: SessionPatch = {
       sessionId,
@@ -163,6 +166,7 @@ onFlowEvent((event: FlowEvent) => {
         prompt: event.promptPreview,
       },
       path: [...request.path],
+      toolLoopDetected: event.toolLoopDetected,
     };
     emitPatch(patch);
 

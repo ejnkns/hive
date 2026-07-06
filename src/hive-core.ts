@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { IncomingHttpHeaders } from "node:http";
 import type { PassThrough } from "node:stream";
 import { detectEditLoop } from "./hive-core/detect-edit-loop";
+import { detectToolLoop } from "./hive-core/detect-tool-loop";
 import { extractRequiredFeatures } from "./hive-core/extract-required-features";
 import { generateId } from "./hive-core/generateId";
 import { sanitizePayloadForProvider } from "./hive-core/sanitize-payload-for-provider";
@@ -137,15 +138,31 @@ export class HiveCore {
       : [];
 
     const sessionId = resolveSessionId(incomingHeaders, typedMessages);
-    const editLoop = detectEditLoop(typedMessages);
-    if (editLoop) {
+
+    let toolLoopDetected = false;
+    const toolLoop = detectToolLoop(typedMessages);
+    if (toolLoop) {
+      toolLoopDetected = true;
       (parsed as Record<string, unknown>).messages = [
         ...typedMessages,
         {
           role: "system",
-          content: `The edit tool failed repeatedly on "${editLoop.filePath}". Use the read tool to refresh the file content before attempting more edits.`,
+          content: `You have called "${toolLoop.toolName}" with identical arguments repeatedly. You appear to be stuck in a loop. Try a different approach or tool.`,
         },
       ];
+    }
+
+    if (!toolLoopDetected) {
+      const editLoop = detectEditLoop(typedMessages);
+      if (editLoop) {
+        (parsed as Record<string, unknown>).messages = [
+          ...typedMessages,
+          {
+            role: "system",
+            content: `The edit tool failed repeatedly on "${editLoop.filePath}". Use the read tool to refresh the file content before attempting more edits.`,
+          },
+        ];
+      }
     }
     const payloadStr = JSON.stringify(parsed);
 
@@ -192,6 +209,7 @@ export class HiveCore {
       sessionId,
       timestamp: Date.now(),
       promptPreview,
+      toolLoopDetected,
     });
 
     const requiredFeatures = extractRequiredFeatures(parsed);

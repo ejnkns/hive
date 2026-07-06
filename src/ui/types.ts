@@ -148,6 +148,7 @@ export type RequestState = {
   thinkingChars?: number;
   tokensPerSecond?: number;
   failovers: { provider: string; model: string; errorType: string }[];
+  toolLoopDetected?: boolean;
   response?: {
     provider: string;
     model: string;
@@ -169,6 +170,7 @@ export type SessionPatch = {
   requestId?: string;
   requestInitial?: { timestamp: number; prompt?: string };
   path?: SessionStage[];
+  toolLoopDetected?: boolean;
   provider?: string;
   model?: string;
   candidates?: CandidateInfo[];
@@ -189,6 +191,7 @@ export type FlowEvent =
       sessionId: string;
       timestamp: number;
       promptPreview: string;
+      toolLoopDetected?: boolean;
     }
   | {
       type: "selection_round";
