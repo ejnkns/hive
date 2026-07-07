@@ -30,7 +30,7 @@ const logo =
   "   ,-.      .' '.        .`\n   \\_/      .   .       .\n:>(|||} .    ` .       .\n   / \\   '. . '  ' . '\n   `-'  ";
 
 const configuredProviders = $derived(
-  data.availableProviders.filter((p) => p.keyConfigured)
+  data.availableProviders.filter((p) => p.keyConfigured && !p.disabled)
 );
 const selectedProvider = $derived(
   data.override.active

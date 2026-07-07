@@ -19,6 +19,11 @@ import {
   telemetryRecorder,
 } from "../../telemetry";
 import type { FastifyServer } from "../create-server";
+import {
+  disableProvider,
+  enableProvider,
+  isProviderDisabled,
+} from "../disabled-providers";
 import { clearOverride, getOverride, setOverride } from "../override";
 
 export type RouteDeps = {
@@ -74,6 +79,7 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
           contentFilterRate: matchingState?.contentFilterRate ?? 0,
           trippedUntil: routingStates.trippedBreakers[compKey] || null,
           disabledFeatures: routingStates.disabledFeatures[compKey],
+          disabled: isProviderDisabled(p.name),
         };
       });
     });
@@ -94,6 +100,7 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
       displayName: p.displayName,
       models: p.models.map((entry) => getModelId(entry)),
       keyConfigured: !!process.env[p.apiKeyEnvVar],
+      disabled: isProviderDisabled(p.name),
     }));
 
     const bestEntry =
@@ -252,6 +259,27 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
             logger.debug("override cleared");
           }
           void broadcastTelemetry();
+        }
+        if (parsed?.type === "toggle_provider") {
+          const provider = parsed.provider;
+          const disabled = parsed.disabled;
+          if (typeof provider === "string" && typeof disabled === "boolean") {
+            if (disabled) {
+              disableProvider(provider);
+              const override = getOverride();
+              if (override?.provider === provider) {
+                clearOverride();
+                logger.debug(
+                  `override cleared (provider disabled): ${provider}`
+                );
+              }
+              logger.debug(`provider disabled: ${provider}`);
+            } else {
+              enableProvider(provider);
+              logger.debug(`provider enabled: ${provider}`);
+            }
+            void broadcastTelemetry();
+          }
         }
       } catch {
         logger.debug(

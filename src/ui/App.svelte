@@ -40,6 +40,7 @@ type ProviderPayload = {
   contentFilterRate: number;
   trippedUntil: number | null;
   disabledFeatures: string[];
+  disabled: boolean;
 };
 
 type TelemetryData = {
@@ -168,6 +169,7 @@ let providersData = $derived.by(() => {
     contentFilterRate: x.contentFilterRate,
     trippedUntil: x.trippedUntil,
     disabledFeatures: x.disabledFeatures,
+    disabled: x.disabled,
   }));
 });
 
@@ -282,6 +284,12 @@ function handleOverrideClear() {
   }
 }
 
+function handleToggleProvider(provider: string, disabled: boolean) {
+  if (ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: "toggle_provider", provider, disabled }));
+  }
+}
+
 onMount(() => {
   connect();
 });
@@ -298,7 +306,7 @@ onDestroy(() => {
     <div>
       <div class="section-head" style="margin-top:1.5rem">Live Sessions</div>
       <Sessions sessions={sessionStore.sessions} />
-      <ProviderPanel data={providersData} {metrics} {conversations} overrideKey={overrideKey} onRowClick={handleMetricClick} lastProvider={headerData?.lastProvider ?? null} lastModel={headerData?.lastModel ?? null} />
+      <ProviderPanel data={providersData} {metrics} {conversations} overrideKey={overrideKey} onRowClick={handleMetricClick} onToggleProvider={handleToggleProvider} lastProvider={headerData?.lastProvider ?? null} lastModel={headerData?.lastModel ?? null} />
     </div>
     <div class="section-head" style="margin-top:1.5rem">Pipeline</div>
     <LivePipeline events={flowEvents} providers={providersData} />

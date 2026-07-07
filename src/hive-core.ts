@@ -21,7 +21,7 @@ import {
   routingMemory,
 } from "./proxy";
 import { emitFlowEvent } from "./proxy/flow-events";
-import { getOverride, loadProviders } from "./server";
+import { getOverride, isProviderDisabled, loadProviders } from "./server";
 import { logger } from "./shared/logger";
 import {
   applySlidingWindow,
@@ -116,7 +116,7 @@ export class HiveCore {
 
     const qualified = this.providers.filter((p) => {
       const key = process.env[p.apiKeyEnvVar];
-      return key && key.length > 0;
+      return key && key.length > 0 && !isProviderDisabled(p.name);
     });
 
     if (qualified.length === 0) {
@@ -391,7 +391,7 @@ export class HiveCore {
     return cache.scores.map((s) => ({
       provider: s.provider,
       model: s.model,
-      enabled: true,
+      enabled: !isProviderDisabled(s.provider),
       stabilityScore: s.score,
       subscores: s.subscores,
       p95Latency: s.derived.p95Ttft,

@@ -10,12 +10,14 @@ let {
   conversations = [] as ConversationData[],
   overrideKey = null as string | null,
   onRowClick: onRowClickCallback,
+  onToggleProvider,
 } = $props<{
   data?: ProviderData[];
   metrics?: MetricData[];
   conversations?: ConversationData[];
   overrideKey?: string | null;
   onRowClick?: (metric: MetricData, allMetrics: MetricData[]) => void;
+  onToggleProvider?: (provider: string, disabled: boolean) => void;
 }>();
 
 let expandedConsoles = $state<Record<string, boolean>>({});
@@ -33,12 +35,14 @@ const groups = $derived.by(() => {
     .map(([name, entries]) => {
       const maxScore = Math.max(...entries.map((e) => e.stabilityScore));
       const keyConfigured = entries.some((e) => e.keyConfigured);
+      const disabled = entries[0]?.disabled ?? false;
       return {
         name,
         displayName: entries[0].displayName || name,
         entries,
         maxScore,
         keyConfigured,
+        disabled,
       };
     })
     .sort((a, b) => {
@@ -84,11 +88,21 @@ function switchTab(name: string, tab: "activity" | "conversations") {
     {@const isExpanded = expandedConsoles[group.name] ?? false}
     {@const isModelsExpanded = expandedModels[group.name] ?? false}
     {@const activeTab = activeTabs[group.name] || "activity"}
-    <div class="worker" style="opacity:{group.keyConfigured ? '1' : '0.4'}">
+    <div class="worker" style="opacity:{group.keyConfigured && !group.disabled ? '1' : '0.4'}">
       <div class="worker-summary">
         <div class="worker-identity">
           <span class="worker-name">{group.displayName}</span>
           <span class="key-badge {group.keyConfigured ? 'active' : 'no-key'}">{group.keyConfigured ? "active" : "no key"}</span>
+          {#if group.disabled}
+            <span class="key-badge disabled">disabled</span>
+          {/if}
+          {#if group.keyConfigured}
+            <button
+              class="toggle-btn"
+              onclick={() => onToggleProvider?.(group.name, !group.disabled)}
+              >{group.disabled ? "enable" : "disable"}</button
+            >
+          {/if}
         </div>
         <div class="sbar">
           <span class="score" style="color:{sc(group.maxScore)}">{group.maxScore.toFixed(2)}%</span>
@@ -185,6 +199,18 @@ function switchTab(name: string, tab: "activity" | "conversations") {
   .key-badge { font-size: 0.5625rem; padding: 0.0625rem 0.375rem; font-weight: 700; border: 1px solid currentColor; }
   .key-badge.active { color: var(--success); border-color: var(--success); background: rgba(var(--success-rgb), 0.08); }
   .key-badge.no-key { color: var(--muted); border-color: var(--border); background: transparent; }
+  .key-badge.disabled { color: #e2a93b; border-color: #e2a93b; background: rgba(226, 169, 59, 0.08); }
+  .toggle-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: monospace;
+    font-size: 0.5625rem;
+    cursor: pointer;
+    padding: 0.0625rem 0.375rem;
+    text-transform: uppercase;
+  }
+  .toggle-btn:hover { border-color: var(--accent); color: var(--accent); }
   .sbar { display: flex; align-items: center; gap: 0.5rem; min-width: 180px; }
   .score { font-size: 0.75rem; font-weight: 700; min-width: 2.5rem; }
   .bar-text { font-family: monospace; font-size: 0.75rem; letter-spacing: 0.05em; line-height: 1; }

@@ -11,6 +11,7 @@ let {
   lastProvider = null as string | null,
   lastModel = null as string | null,
   onRowClick: onRowClickCallback,
+  onToggleProvider,
 } = $props<{
   data?: ProviderData[];
   metrics?: MetricData[];
@@ -19,6 +20,7 @@ let {
   lastProvider?: string | null;
   lastModel?: string | null;
   onRowClick?: (metric: MetricData, allMetrics: MetricData[]) => void;
+  onToggleProvider?: (provider: string, disabled: boolean) => void;
 }>();
 
 let expanded = $state(false);
@@ -107,7 +109,7 @@ const isPinned = $derived(
   </div>
 
   {#if expanded}
-    <Providers {data} {metrics} {conversations} {overrideKey} onRowClick={onRowClickCallback} />
+    <Providers {data} {metrics} {conversations} {overrideKey} onRowClick={onRowClickCallback} {onToggleProvider} />
   {:else}
     {#if groups.length === 0}
       <div class="no-data">No providers registered</div>

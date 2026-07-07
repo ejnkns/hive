@@ -24,6 +24,7 @@ export type ProviderData = {
   contentFilterRate: number;
   trippedUntil: number | null;
   disabledFeatures: string[] | null;
+  disabled: boolean;
 };
 
 export type MetricData = {
@@ -73,6 +74,7 @@ export type AvailableProvider = {
   displayName: string;
   models: string[];
   keyConfigured: boolean;
+  disabled: boolean;
 };
 
 export type OverrideState = {
