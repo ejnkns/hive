@@ -3,7 +3,7 @@ import type { Provider } from "../registry";
 export const ollama = {
   name: "ollama",
   displayName: "Ollama",
-  baseUrl: "http://127.0.0.1:11434",
+  baseUrl: process.env.OLLAMA_HOST || "http://127.0.0.1:11434",
   apiKeyEnvVar: "OLLAMA_API_KEY",
   models: [
     "llama3.1",

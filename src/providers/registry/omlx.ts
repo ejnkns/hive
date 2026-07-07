@@ -3,7 +3,7 @@ import type { Provider } from "../registry";
 export const omlx = {
   name: "omlx",
   displayName: "oMLX",
-  baseUrl: "http://127.0.0.1:8000/v1",
+  baseUrl: process.env.OMLX_HOST || "http://127.0.0.1:8000/v1",
   apiKeyEnvVar: "OMLX_API_KEY",
   models: ["gpt-oss-20b-MXFP4-Q8"],
   defaultModel: "gpt-oss-20b-MXFP4-Q8",
