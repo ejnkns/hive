@@ -1,10 +1,13 @@
 import { createHash } from "node:crypto";
 import type { IncomingHttpHeaders } from "node:http";
 import type { PassThrough } from "node:stream";
+import type { ChatCompletionResult } from "./hive-core/chat-completion-result";
 import { detectEditLoop } from "./hive-core/detect-edit-loop";
 import { detectToolLoop } from "./hive-core/detect-tool-loop";
 import { extractRequiredFeatures } from "./hive-core/extract-required-features";
 import { generateId } from "./hive-core/generateId";
+import type { Message } from "./hive-core/message";
+import type { ProviderState } from "./hive-core/provider-state";
 import { sanitizePayloadForProvider } from "./hive-core/sanitize-payload-for-provider";
 import {
   buildChatEndpoint,
@@ -29,7 +32,6 @@ import {
   loadCache,
   type Node,
   type RequestMetric,
-  type SubScores,
   startHeartbeat,
   telemetryRecorder,
 } from "./telemetry";
@@ -462,37 +464,7 @@ export class HiveCore {
   }
 }
 
-export type ProviderState = {
-  provider: string;
-  model: string;
-  enabled: boolean;
-  stabilityScore: number;
-  subscores: SubScores;
-  p95Latency: number;
-  recentSuccessRate: number;
-  requestCount: number;
-  meanTokensPerSecond: number | null;
-  truncationRate: number;
-  refusalRate: number;
-  contentFilterRate: number;
-};
-
-export type ChatCompletionResult = {
-  success: boolean;
-  stream?: PassThrough;
-  provider?: string;
-  model?: string;
-  statusCode?: number;
-  error?: string;
-};
-
-export type Message = {
-  role: string;
-  content: string;
-  reasoning_content?: string;
-  tool_calls?: unknown[];
-  tool_call_id?: string;
-};
+export type { ChatCompletionResult, Message, ProviderState };
 
 const SESSION_HEADERS = [
   "x-session-id",

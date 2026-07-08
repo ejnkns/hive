@@ -1,4 +1,4 @@
-import type { Message } from "../hive-core";
+import type { Message } from "./message";
 
 type ToolCall = {
   type?: string;
