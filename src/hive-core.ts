@@ -1,14 +1,16 @@
 import type { IncomingHttpHeaders } from "node:http";
 import type { PassThrough } from "node:stream";
+import { buildPromptPreview } from "./hive-core/build-prompt-preview";
 import type { ChatCompletionResult } from "./hive-core/chat-completion-result";
 import { detectEditLoop } from "./hive-core/detect-edit-loop";
 import { detectToolLoop } from "./hive-core/detect-tool-loop";
+import { dispatchRequest } from "./hive-core/dispatch-request";
 import { extractRequiredFeatures } from "./hive-core/extract-required-features";
 import { generateId } from "./hive-core/generateId";
+import { getMetricsForNode } from "./hive-core/get-metrics-for-node";
 import type { Message } from "./hive-core/message";
 import type { ProviderState } from "./hive-core/provider-state";
 import { resolveSessionId } from "./hive-core/resolve-session-id";
-import { sanitizePayloadForProvider } from "./hive-core/sanitize-payload-for-provider";
 import {
   buildChatEndpoint,
   discoverAndCacheModels,
@@ -19,7 +21,7 @@ import {
 import {
   executeProxyRequest,
   mutateRequest,
-  ProxyResponse,
+  type ProxyResponse,
   routeRequest,
   routingMemory,
 } from "./proxy";
@@ -27,11 +29,9 @@ import { emitFlowEvent } from "./proxy/flow-events";
 import { getOverride, isProviderDisabled, loadProviders } from "./server";
 import { logger } from "./shared/logger";
 import {
-  applySlidingWindow,
   conversationStore,
   loadCache,
   type Node,
-  type RequestMetric,
   startHeartbeat,
   telemetryRecorder,
 } from "./telemetry";
@@ -152,9 +152,7 @@ export class HiveCore {
           content: `You have called "${toolLoop.toolName}" with identical arguments repeatedly. You appear to be stuck in a loop. Try a different approach or tool.`,
         },
       ];
-    }
-
-    if (!toolLoopDetected) {
+    } else {
       const editLoop = detectEditLoop(typedMessages);
       if (editLoop) {
         (parsed as Record<string, unknown>).messages = [
@@ -170,41 +168,7 @@ export class HiveCore {
 
     const lastMsg = typedMessages.at(-1);
 
-    function buildPromptPreview(): string {
-      if (!lastMsg) return "";
-
-      if (lastMsg.tool_calls && lastMsg.tool_calls.length > 0) {
-        const tc = lastMsg.tool_calls[0] as Record<string, unknown>;
-        const func = tc.function as Record<string, unknown> | undefined;
-        if (func?.name) {
-          let preview = `tool: ${String(func.name)}`;
-          try {
-            const argsStr =
-              typeof func.arguments === "string" ? func.arguments : "";
-            if (argsStr) {
-              const args = JSON.parse(argsStr) as Record<string, unknown>;
-              const firstKey = Object.keys(args)[0];
-              if (firstKey) {
-                preview += ` ${firstKey}=${JSON.stringify(args[firstKey])}`;
-              }
-            }
-          } catch {
-            // ignore malformed args
-          }
-          return preview.slice(0, 120);
-        }
-      }
-
-      if (lastMsg.role === "tool") {
-        const text = typeof lastMsg.content === "string" ? lastMsg.content : "";
-        return `tool result (${text.length} chars)`;
-      }
-
-      const text = typeof lastMsg.content === "string" ? lastMsg.content : "";
-      return text.slice(0, 120);
-    }
-
-    const promptPreview = buildPromptPreview();
+    const promptPreview = buildPromptPreview(lastMsg);
     emitFlowEvent({
       type: "request_received",
       requestId,
@@ -250,53 +214,14 @@ export class HiveCore {
       )
     );
 
-    const getMetricsForNode = (compoundKey: string): RequestMetric[] => {
-      const all = cache.metrics.filter(
-        (m) => `${m.provider}:${m.model}` === compoundKey
-      );
-      return applySlidingWindow(all);
-    };
+    const boundGetMetricsForNode = (compoundKey: string) =>
+      getMetricsForNode(compoundKey, cache);
 
-    const dispatchRequest = async (
+    const boundDispatchRequest = async (
       node: Node,
       payload: string
-    ): Promise<ProxyResponse> => {
-      const provider = qualified.find((p) => p.name === node.providerName);
-      if (!provider) {
-        logger.debug(
-          `dispatch: provider config not found for ${node.providerName}`
-        );
-        return ProxyResponse.error(500, "config-error");
-      }
-
-      // payload is JSON-stringified earlier; shape matches body contract
-      const sanitized = sanitizePayloadForProvider(
-        node.providerName,
-        JSON.parse(payload) as Record<string, unknown>
-      );
-
-      const mutated = mutateRequest({
-        originalHeaders: headers,
-        originalBody: JSON.stringify(sanitized),
-        targetProvider: provider,
-        targetModel: node.modelName,
-      });
-
-      const result = await routeRequest({
-        upstreamUrl: buildChatEndpoint(provider.baseUrl),
-        mutated,
-        timeoutMs: 10000,
-        providerName: node.providerName,
-        modelName: node.modelName,
-        requestId,
-      });
-
-      logger.debug(
-        `dispatch → ${node.providerName}:${node.modelName} — status ${String(result.proxyResponse.status)}, ttft ${String(result.ttft)}ms`
-      );
-
-      return result.proxyResponse;
-    };
+    ): Promise<ProxyResponse> =>
+      dispatchRequest(node, payload, qualified, headers, requestId);
 
     // Try manual override first — single-node attempt, fall back to auto-routing if it fails
     const override = getOverride();
@@ -311,7 +236,7 @@ export class HiveCore {
         `request ${requestId} — trying override node ${overrideNode.providerName}:${overrideNode.modelName}`
       );
       try {
-        response = await dispatchRequest(overrideNode, payloadStr);
+        response = await boundDispatchRequest(overrideNode, payloadStr);
         if (response.isOk()) {
           this.lastProvider = overrideNode.providerName;
           this.lastModel = overrideNode.modelName;
@@ -343,8 +268,8 @@ export class HiveCore {
         nodes,
         originalPayload: payloadStr,
         requiredFeatures,
-        getMetricsForNode,
-        dispatchRequest,
+        getMetricsForNode: boundGetMetricsForNode,
+        dispatchRequest: boundDispatchRequest,
         sessionId,
       });
     } catch (err: unknown) {

@@ -1,5 +1,3 @@
-import type { Message } from "./message";
-
 const SESSION_HEADERS = [
   "x-session-id",
   "x-session-affinity",
