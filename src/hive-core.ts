@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import type { IncomingHttpHeaders } from "node:http";
 import type { PassThrough } from "node:stream";
 import type { ChatCompletionResult } from "./hive-core/chat-completion-result";
@@ -8,6 +7,7 @@ import { extractRequiredFeatures } from "./hive-core/extract-required-features";
 import { generateId } from "./hive-core/generateId";
 import type { Message } from "./hive-core/message";
 import type { ProviderState } from "./hive-core/provider-state";
+import { resolveSessionId } from "./hive-core/resolve-session-id";
 import { sanitizePayloadForProvider } from "./hive-core/sanitize-payload-for-provider";
 import {
   buildChatEndpoint,
@@ -465,46 +465,5 @@ export class HiveCore {
 }
 
 export type { ChatCompletionResult, Message, ProviderState };
-
-const SESSION_HEADERS = [
-  "x-session-id",
-  "x-session-affinity",
-  "x-parent-session-id",
-] as const;
-
-function extractSessionHeader(
-  headers: Record<string, string | string[] | undefined>
-): string | null {
-  for (const name of SESSION_HEADERS) {
-    const value = headers[name];
-    if (typeof value === "string" && value.length > 0) return value;
-    if (
-      Array.isArray(value) &&
-      value.length > 0 &&
-      typeof value[0] === "string"
-    )
-      return value[0];
-  }
-  return null;
-}
-
-function computeSessionFingerprint(messages: Message[]): string | null {
-  const systemMsg = messages.find((m) => m.role === "system");
-  const firstUserMsg = messages.find((m) => m.role === "user");
-  if (!systemMsg || !firstUserMsg) return null;
-  const content = `${systemMsg.content}\n${firstUserMsg.content}`;
-  return createHash("sha256").update(content).digest("hex").slice(0, 16);
-}
-
-function resolveSessionId(
-  headers: Record<string, string | string[] | undefined>,
-  messages: Message[]
-): string {
-  const headerId = extractSessionHeader(headers);
-  if (headerId) return headerId;
-  const fingerprint = computeSessionFingerprint(messages);
-  if (fingerprint) return fingerprint;
-  return generateId();
-}
 
 export const hiveCore = new HiveCore();
