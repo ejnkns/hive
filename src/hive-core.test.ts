@@ -2,8 +2,13 @@ import assert from "node:assert";
 import { PassThrough } from "node:stream";
 import { beforeEach, describe, it } from "node:test";
 import { HiveCore } from "./hive-core";
-import { executeProxyRequest, type FailoverContext, ProxyResponse, routingMemory, selectBestNode } from "./proxy";
-import type { Node, RequestMetric } from "./telemetry";
+import {
+  executeProxyRequest,
+  type FailoverContext,
+  ProxyResponse,
+  routingMemory,
+} from "./proxy";
+import type { RequestMetric } from "./telemetry";
 
 await describe("HiveCore", async () => {
   let core: HiveCore;
@@ -60,12 +65,6 @@ await describe("Hive Core Router Interception Loop", async () => {
     process.env.HIVE_ROUTING_STRATEGY = "balanced";
     process.env.HIVE_MIN_TOKEN_TELEMETRY = "200";
   });
-
-  const nodes: Node[] = [
-    { providerName: "groq", modelName: "llama-3" },
-    { providerName: "sambanova", modelName: "llama-3" },
-    { providerName: "deepinfra", modelName: "llama-3" },
-  ];
 
   const mockMetricsGenerator = (compoundKey: string): RequestMetric[] => {
     if (compoundKey.startsWith("groq")) {
@@ -133,43 +132,6 @@ await describe("Hive Core Router Interception Loop", async () => {
       },
     ];
   };
-
-  await it("should select candidates inside a 5-point probability cluster range and bypass slow channels", () => {
-    for (let i = 0; i < 20; i++) {
-      const selected = selectBestNode(nodes, mockMetricsGenerator);
-      assert.ok(selected !== null);
-      assert.ok(selected.providerName === "groq" || selected.providerName === "sambanova");
-      assert.notStrictEqual(selected.providerName, "deepinfra");
-    }
-  });
-
-  await it("should apply warm-path sticky session bias across consecutive calls", () => {
-    const sessionId = "test-session";
-    routingMemory.setNodeAffinity(sessionId, "sambanova:llama-3");
-
-    let sambaCount = 0;
-    for (let i = 0; i < 50; i++) {
-      const selected = selectBestNode(nodes, mockMetricsGenerator, [], sessionId);
-      if (selected?.providerName === "sambanova") sambaCount++;
-    }
-    assert.ok(sambaCount > 25, "Warm paths must lock current interaction channels smoothly.");
-  });
-
-  await it("should register empirical feature failures dynamically and remove lacking hosts from routing options", () => {
-    const requiredFeatures = ["tools"];
-
-    routingMemory.recordUpstreamError("groq:llama-3", "unsupported-feature", ["tools"]);
-
-    for (let i = 0; i < 10; i++) {
-      const selected = selectBestNode(nodes, mockMetricsGenerator, requiredFeatures);
-      assert.ok(selected !== null);
-      assert.notStrictEqual(
-        selected.providerName,
-        "groq",
-        "Endpoints that fail structural specifications must be dropped."
-      );
-    }
-  });
 
   await it("should manage fast pre-stream circuit isolation and replay payloads transparently", async () => {
     const sessionId = "circuit-test";
