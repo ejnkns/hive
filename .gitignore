@@ -8,6 +8,11 @@ contexts/
 !README.md
 repomix-output.xml
 vault
+docs/
+.fallow
+.opencode
+.codex
 
 architecture-review-*.html
 graphify-out/
+TODOs/

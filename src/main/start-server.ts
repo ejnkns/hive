@@ -15,7 +15,8 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     getProviders: () => hiveCore.getProviders(),
     getProviderStates: () => hiveCore.getProviderStates(),
     getLastUsed: () => hiveCore.getLastUsed(),
-    handleChatCompletion: (body, headers) => hiveCore.handleChatCompletion(body, headers),
+    handleChatCompletion: (body, headers) =>
+      hiveCore.handleChatCompletion(body, headers),
   });
   listen(server, config);
 
