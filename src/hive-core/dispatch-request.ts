@@ -1,5 +1,5 @@
 import type { IncomingHttpHeaders } from "node:http";
-import { buildChatEndpoint, getModelId, type Provider } from "../providers";
+import { buildChatEndpoint, type Provider } from "../providers";
 import { mutateRequest, ProxyResponse, routeRequest } from "../proxy";
 import { logger } from "../shared/logger";
 import type { Node } from "../telemetry";

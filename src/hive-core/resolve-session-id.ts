@@ -1,6 +1,6 @@
 import { computeSessionFingerprint } from "./compute-session-fingerprint";
 import { extractSessionHeader } from "./extract-session-header";
-import { generateId } from "./generateId";
+import { generateId } from "./generate-id";
 import type { Message } from "./message";
 
 export function resolveSessionId(
