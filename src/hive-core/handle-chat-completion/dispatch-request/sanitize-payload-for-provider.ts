@@ -1,4 +1,6 @@
-import type { Message } from "../hive-core";
+/** @internal — only imported by dispatch-request.ts */
+
+import type { Message } from "../../message";
 
 export function sanitizePayloadForProvider(
   providerName: string,

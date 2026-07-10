@@ -1,6 +1,6 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
-import type { Message } from "../hive-core";
+import type { Message } from "../../message";
 import { detectEditLoop } from "./detect-edit-loop";
 
 function editAssistant(filePath: string, oldString: string): Message {
@@ -12,7 +12,11 @@ function editAssistant(filePath: string, oldString: string): Message {
         type: "function",
         function: {
           name: "edit",
-          arguments: JSON.stringify({ filePath, oldString, newString: "replacement" }),
+          arguments: JSON.stringify({
+            filePath,
+            oldString,
+            newString: "replacement",
+          }),
         },
       },
     ],
@@ -50,7 +54,10 @@ function userMessage(text: string): Message {
 
 await describe("detectEditLoop", async () => {
   await it("returns null when no edit calls exist", () => {
-    const messages = [userMessage("hello"), { role: "assistant", content: "hi" }];
+    const messages = [
+      userMessage("hello"),
+      { role: "assistant", content: "hi" },
+    ];
     assert.strictEqual(detectEditLoop(messages), null);
   });
 
@@ -118,19 +125,29 @@ await describe("detectEditLoop", async () => {
           type: "function",
           function: {
             name: "edit",
-            arguments: JSON.stringify({ filePath: "/path/a.txt", oldString: "x" }),
+            arguments: JSON.stringify({
+              filePath: "/path/a.txt",
+              oldString: "x",
+            }),
           },
         },
         {
           type: "function",
           function: {
             name: "edit",
-            arguments: JSON.stringify({ filePath: "/path/b.txt", oldString: "y" }),
+            arguments: JSON.stringify({
+              filePath: "/path/b.txt",
+              oldString: "y",
+            }),
           },
         },
       ],
     };
-    const messages = [userMessage("edit"), multiToolAssistant, editFailure("call-1")];
+    const messages = [
+      userMessage("edit"),
+      multiToolAssistant,
+      editFailure("call-1"),
+    ];
     assert.strictEqual(detectEditLoop(messages), null);
   });
 
@@ -145,7 +162,13 @@ await describe("detectEditLoop", async () => {
         role: "assistant",
         content: "",
         tool_calls: [
-          { type: "function", function: { name: "read", arguments: JSON.stringify({ filePath: "/path/file.txt" }) } },
+          {
+            type: "function",
+            function: {
+              name: "read",
+              arguments: JSON.stringify({ filePath: "/path/file.txt" }),
+            },
+          },
         ],
       },
       readSuccess("/path/file.txt"),

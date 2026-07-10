@@ -1,4 +1,6 @@
-import type { Message } from "../hive-core";
+/** @internal — only imported by detect-and-inject-loop-messages.ts */
+
+import type { Message } from "../../message";
 
 type ToolCall = {
   type?: string;
@@ -41,9 +43,12 @@ export function detectToolLoop(messages: Message[]): ToolLoopResult | null {
     counts.set(key, count);
 
     if (count >= THRESHOLD) {
-      const func = toolCalls[0].function!;
+      if (!Array.isArray(toolCalls) || toolCalls.length !== 1) return null;
+      const toolCall = toolCalls[0] as ToolCall;
+      if (!toolCall.function?.name) return null;
+      const func = toolCall.function;
       return {
-        toolName: func.name!,
+        toolName: func.name ?? "",
         arguments: func.arguments ?? "{}",
       };
     }

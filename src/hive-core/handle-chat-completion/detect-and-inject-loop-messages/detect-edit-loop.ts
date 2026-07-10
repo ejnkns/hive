@@ -1,4 +1,6 @@
-import type { Message } from "../hive-core";
+/** @internal — only imported by detect-and-inject-loop-messages.ts */
+
+import type { Message } from "../../message";
 
 type ToolCall = {
   type?: string;
@@ -16,13 +18,21 @@ type EditLoopResult = {
 
 const THRESHOLD = 3;
 
-function parseEditArgs(toolCall: ToolCall): { filePath: string; oldString: string } | null {
+function parseEditArgs(
+  toolCall: ToolCall
+): { filePath: string; oldString: string } | null {
   if (toolCall.function?.name !== "edit") return null;
   if (!toolCall.function?.arguments) return null;
   try {
     // JSON.parse returns unknown; shape checked by property access
-    const args = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
-    if (typeof args.filePath === "string" && typeof args.oldString === "string") {
+    const args = JSON.parse(toolCall.function.arguments) as Record<
+      string,
+      unknown
+    >;
+    if (
+      typeof args.filePath === "string" &&
+      typeof args.oldString === "string"
+    ) {
       return { filePath: args.filePath, oldString: args.oldString };
     }
   } catch {
@@ -32,7 +42,10 @@ function parseEditArgs(toolCall: ToolCall): { filePath: string; oldString: strin
 }
 
 function isEditFailure(toolMsg: Message): boolean {
-  return typeof toolMsg.content === "string" && toolMsg.content.includes("Could not find oldString in the file");
+  return (
+    typeof toolMsg.content === "string" &&
+    toolMsg.content.includes("Could not find oldString in the file")
+  );
 }
 
 export function detectEditLoop(messages: Message[]): EditLoopResult | null {

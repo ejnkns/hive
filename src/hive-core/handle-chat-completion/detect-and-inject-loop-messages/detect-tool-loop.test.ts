@@ -1,6 +1,6 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
-import type { Message } from "../hive-core";
+import type { Message } from "../../message";
 import { detectToolLoop } from "./detect-tool-loop";
 
 function toolAssistant(

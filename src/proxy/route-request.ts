@@ -3,7 +3,11 @@ import https from "node:https";
 import { PassThrough } from "node:stream";
 import { URL } from "node:url";
 import { logger } from "../shared/logger";
-import type { FinishReason, MetricSource } from "../telemetry";
+import type {
+  FinishReason,
+  MetricSource,
+  StreamPhaseEvent,
+} from "../telemetry";
 import {
   classifyError,
   conversationStore,
@@ -11,7 +15,6 @@ import {
   detectRefusal,
   telemetryRecorder,
 } from "../telemetry";
-import type { StreamPhaseEvent } from "../telemetry/recorder/create-stream-counter";
 import { emitFlowEvent } from "./flow-events";
 import type { MutatedRequest } from "./mutate-request";
 import { ProxyResponse } from "./proxy-response";
