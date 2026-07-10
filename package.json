@@ -34,7 +34,7 @@
     "build:server": "tsdown --tsconfig ./tsconfig.node.json --copy static",
     "build": "npm run build:server && npm run build:ui",
     "start": "node --env-file=.env dist/main.mjs start",
-    "test": "node --import tsx --env-file=.env --test src/*.test.ts src/**/*.test.ts",
+    "test": "node --import tsx --env-file=.env.test --test 'src/**/*.test.ts'",
     "typecheck": "tsc --noEmit --p ./tsconfig.node.json",
     "lint": "biome lint .",
     "lint:fix": "biome lint --write .",
