@@ -7,6 +7,7 @@ import {
   type Provider,
   providers,
 } from "../providers";
+
 import {
   executeProxyRequest,
   mutateRequest,
@@ -21,20 +22,52 @@ import {
   conversationStore,
   loadCache,
   type Node,
+  type SubScores,
   startHeartbeat,
   telemetryRecorder,
 } from "../telemetry";
 import { buildPromptPreview } from "./build-prompt-preview";
-import type { ChatCompletionResult } from "./chat-completion-result";
 import { detectEditLoop } from "./detect-edit-loop";
 import { detectToolLoop } from "./detect-tool-loop";
 import { dispatchRequest } from "./dispatch-request";
 import { extractRequiredFeatures } from "./extract-required-features";
 import { generateId } from "./generate-id";
 import { getMetricsForNode } from "./get-metrics-for-node";
-import type { Message } from "./message";
-import type { ProviderState } from "./provider-state";
 import { resolveSessionId } from "./resolve-session-id";
+
+export namespace HiveCore {
+  export type ChatCompletionResult = {
+    success: boolean;
+    stream?: PassThrough;
+    provider?: string;
+    model?: string;
+    statusCode?: number;
+    error?: string;
+  };
+
+  export type Message = {
+    role: string;
+    content: string;
+    reasoning_content?: string;
+    tool_calls?: unknown[];
+    tool_call_id?: string;
+  };
+
+  export type ProviderState = {
+    provider: string;
+    model: string;
+    enabled: boolean;
+    stabilityScore: number;
+    subscores: SubScores;
+    p95Latency: number;
+    recentSuccessRate: number;
+    requestCount: number;
+    meanTokensPerSecond: number | null;
+    truncationRate: number;
+    refusalRate: number;
+    contentFilterRate: number;
+  };
+}
 
 export class HiveCore {
   private initialProviders: ReadonlyArray<Provider>;
@@ -107,7 +140,7 @@ export class HiveCore {
   async handleChatCompletion(
     body: string | Record<string, unknown>,
     incomingHeaders: Record<string, string | string[] | undefined> = {}
-  ): Promise<ChatCompletionResult> {
+  ): Promise<HiveCore.ChatCompletionResult> {
     const parsed:
       | Record<string, unknown>
       | { messages?: Array<Record<string, unknown>> } =
@@ -135,7 +168,7 @@ export class HiveCore {
     const requestId = generateId();
     const messages = (parsed as Record<string, unknown>).messages ?? [];
     const typedMessages = Array.isArray(messages)
-      ? (messages as Message[])
+      ? (messages as HiveCore.Message[])
       : [];
 
     const sessionId = resolveSessionId(incomingHeaders, typedMessages);
@@ -310,7 +343,7 @@ export class HiveCore {
     };
   }
 
-  async getProviderStates(): Promise<ProviderState[]> {
+  async getProviderStates(): Promise<HiveCore.ProviderState[]> {
     const cache = await loadCache();
     return cache.scores.map((s) => ({
       provider: s.provider,

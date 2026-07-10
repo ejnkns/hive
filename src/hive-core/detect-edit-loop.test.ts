@@ -1,9 +1,9 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
+import type { HiveCore } from "../hive-core";
 import { detectEditLoop } from "./detect-edit-loop";
-import type { Message } from "./message";
 
-function editAssistant(filePath: string, oldString: string): Message {
+function editAssistant(filePath: string, oldString: string): HiveCore.Message {
   return {
     role: "assistant",
     content: "",
@@ -23,7 +23,7 @@ function editAssistant(filePath: string, oldString: string): Message {
   };
 }
 
-function editFailure(toolCallId: string): Message {
+function editFailure(toolCallId: string): HiveCore.Message {
   return {
     role: "tool",
     tool_call_id: toolCallId,
@@ -32,7 +32,7 @@ function editFailure(toolCallId: string): Message {
   };
 }
 
-function editSuccess(toolCallId: string): Message {
+function editSuccess(toolCallId: string): HiveCore.Message {
   return {
     role: "tool",
     tool_call_id: toolCallId,
@@ -40,7 +40,7 @@ function editSuccess(toolCallId: string): Message {
   };
 }
 
-function readSuccess(_filePath: string): Message {
+function readSuccess(_filePath: string): HiveCore.Message {
   return {
     role: "tool",
     tool_call_id: "read-1",
@@ -48,7 +48,7 @@ function readSuccess(_filePath: string): Message {
   };
 }
 
-function userMessage(text: string): Message {
+function userMessage(text: string): HiveCore.Message {
   return { role: "user", content: text };
 }
 
@@ -117,7 +117,7 @@ await describe("detectEditLoop", async () => {
   });
 
   await it("returns null when assistant sends multiple tool calls", () => {
-    const multiToolAssistant: Message = {
+    const multiToolAssistant: HiveCore.Message = {
       role: "assistant",
       content: "",
       tool_calls: [

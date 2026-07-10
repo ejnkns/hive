@@ -1,4 +1,4 @@
-import type { Message } from "./message";
+import type { HiveCore } from "../hive-core";
 
 export function sanitizePayloadForProvider(
   providerName: string,
@@ -11,7 +11,7 @@ export function sanitizePayloadForProvider(
   if (providerName !== "opencode-zen") {
     cloned.messages = msgs.map((msg: unknown) => {
       // msgs elements are already validated as Array<Record> upstream
-      const m = msg as Message;
+      const m = msg as HiveCore.Message;
       if (m.role === "assistant" && "reasoning_content" in m) {
         if (m.reasoning_content && typeof m.content === "string") {
           m.content = `[Thought: ${m.reasoning_content}]\n\n${m.content}`;
