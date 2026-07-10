@@ -1,25 +1,22 @@
 import assert from "node:assert";
 import { after, describe, it } from "node:test";
 
+import { shutdown } from "../hive-core";
 import { startServer } from "./start-server";
 
-type HiveModule = {
-  server: { close(): void };
-  hiveCore: { shutdown(): void };
-};
-
 await describe("hive", async () => {
-  let mod: HiveModule | undefined;
+  let server: { close(): void } | undefined;
 
   await it("loads and starts without error", async () => {
-    mod = await startServer();
-    assert.ok(mod.server);
+    const result = await startServer();
+    server = result.server;
+    assert.ok(server);
   });
 
   after(() => {
-    if (mod) {
-      mod.server.close();
-      mod.hiveCore.shutdown();
+    if (server) {
+      server.close();
+      shutdown();
     }
   });
 });

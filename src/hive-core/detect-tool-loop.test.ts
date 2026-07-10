@@ -1,13 +1,13 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
-import type { HiveCore } from "../hive-core";
+import type { Message } from "./message";
 import { detectToolLoop } from "./detect-tool-loop";
 
 function toolAssistant(
   toolName: string,
   args: Record<string, unknown>,
   callId: string
-): HiveCore.Message {
+): Message {
   return {
     role: "assistant",
     content: "",
@@ -24,7 +24,7 @@ function toolAssistant(
   };
 }
 
-function toolResponse(callId: string, content: string): HiveCore.Message {
+function toolResponse(callId: string, content: string): Message {
   return {
     role: "tool",
     tool_call_id: callId,
@@ -32,7 +32,7 @@ function toolResponse(callId: string, content: string): HiveCore.Message {
   };
 }
 
-function userMessage(text: string): HiveCore.Message {
+function userMessage(text: string): Message {
   return { role: "user", content: text };
 }
 
@@ -121,7 +121,7 @@ await describe("detectToolLoop", async () => {
   });
 
   await it("returns null when assistant sends multiple tool calls", () => {
-    const multiToolAssistant: HiveCore.Message = {
+    const multiToolAssistant: Message = {
       role: "assistant",
       content: "",
       tool_calls: [
@@ -150,7 +150,7 @@ await describe("detectToolLoop", async () => {
   });
 
   await it("returns null when tool call has no function name", () => {
-    const badAssistant: HiveCore.Message = {
+    const badAssistant: Message = {
       role: "assistant",
       content: "",
       tool_calls: [

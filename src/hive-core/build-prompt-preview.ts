@@ -1,8 +1,6 @@
-import type { HiveCore } from "../hive-core";
+import type { Message } from "./message";
 
-export function buildPromptPreview(
-  lastMsg: HiveCore.Message | undefined
-): string {
+export function buildPromptPreview(lastMsg: Message | undefined): string {
   if (!lastMsg) return "";
 
   if (lastMsg.tool_calls && lastMsg.tool_calls.length > 0) {

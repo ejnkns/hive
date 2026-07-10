@@ -1,4 +1,4 @@
-import type { HiveCore } from "../hive-core";
+import type { Message } from "./message";
 
 type ToolCall = {
   type?: string;
@@ -39,16 +39,14 @@ function parseEditArgs(
   return null;
 }
 
-function isEditFailure(toolMsg: HiveCore.Message): boolean {
+function isEditFailure(toolMsg: Message): boolean {
   return (
     typeof toolMsg.content === "string" &&
     toolMsg.content.includes("Could not find oldString in the file")
   );
 }
 
-export function detectEditLoop(
-  messages: HiveCore.Message[]
-): EditLoopResult | null {
+export function detectEditLoop(messages: Message[]): EditLoopResult | null {
   const counts = new Map<string, number>();
 
   for (let i = messages.length - 1; i > 0; i -= 2) {

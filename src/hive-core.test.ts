@@ -1,7 +1,13 @@
 import assert from "node:assert";
 import { PassThrough } from "node:stream";
 import { beforeEach, describe, it } from "node:test";
-import { HiveCore } from "./hive-core";
+import {
+  getLastUsed,
+  getProviderStates,
+  getProviders,
+  handleChatCompletion,
+  setLastUsed,
+} from "./hive-core";
 import {
   executeProxyRequest,
   type FailoverContext,
@@ -10,23 +16,21 @@ import {
 } from "./proxy";
 import type { RequestMetric } from "./telemetry";
 
-await describe("HiveCore", async () => {
-  let core: HiveCore;
-
+await describe("HiveCore module", async () => {
   const saved: Record<string, string | undefined> = {};
 
   beforeEach(() => {
-    core = new HiveCore();
+    setLastUsed(null, null);
   });
 
-  await it("constructs and exposes providers", () => {
-    const providers = core.getProviders();
+  await it("getProviders returns array", () => {
+    const providers = getProviders();
     assert.ok(Array.isArray(providers));
     assert.ok(providers.length > 0);
   });
 
   await it("getProviderStates returns array of states", async () => {
-    const states = await core.getProviderStates();
+    const states = await getProviderStates();
     assert.ok(Array.isArray(states));
     for (const s of states) {
       assert.ok(typeof s.provider === "string");
@@ -36,7 +40,7 @@ await describe("HiveCore", async () => {
   });
 
   await it("returns error when no API keys are set", async () => {
-    const providers = core.getProviders();
+    const providers = getProviders();
     const envVars = providers.map((p) => p.apiKeyEnvVar);
     const unique = [...new Set(envVars)];
 
@@ -45,7 +49,7 @@ await describe("HiveCore", async () => {
       process.env[v] = "";
     }
 
-    const result = await core.handleChatCompletion({
+    const result = await handleChatCompletion({
       model: "test-model",
       messages: [{ role: "user", content: "hello" }],
     });
@@ -56,6 +60,12 @@ await describe("HiveCore", async () => {
     for (const v of unique) {
       if (saved[v] !== undefined) process.env[v] = saved[v];
     }
+  });
+
+  await it("getLastUsed returns initial state", () => {
+    const last = getLastUsed();
+    assert.strictEqual(last.provider, null);
+    assert.strictEqual(last.model, null);
   });
 });
 

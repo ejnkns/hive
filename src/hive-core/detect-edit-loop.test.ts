@@ -1,9 +1,9 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
-import type { HiveCore } from "../hive-core";
+import type { Message } from "./message";
 import { detectEditLoop } from "./detect-edit-loop";
 
-function editAssistant(filePath: string, oldString: string): HiveCore.Message {
+function editAssistant(filePath: string, oldString: string): Message {
   return {
     role: "assistant",
     content: "",
@@ -23,7 +23,7 @@ function editAssistant(filePath: string, oldString: string): HiveCore.Message {
   };
 }
 
-function editFailure(toolCallId: string): HiveCore.Message {
+function editFailure(toolCallId: string): Message {
   return {
     role: "tool",
     tool_call_id: toolCallId,
@@ -32,7 +32,7 @@ function editFailure(toolCallId: string): HiveCore.Message {
   };
 }
 
-function editSuccess(toolCallId: string): HiveCore.Message {
+function editSuccess(toolCallId: string): Message {
   return {
     role: "tool",
     tool_call_id: toolCallId,
@@ -40,7 +40,7 @@ function editSuccess(toolCallId: string): HiveCore.Message {
   };
 }
 
-function readSuccess(_filePath: string): HiveCore.Message {
+function readSuccess(_filePath: string): Message {
   return {
     role: "tool",
     tool_call_id: "read-1",
@@ -48,7 +48,7 @@ function readSuccess(_filePath: string): HiveCore.Message {
   };
 }
 
-function userMessage(text: string): HiveCore.Message {
+function userMessage(text: string): Message {
   return { role: "user", content: text };
 }
 
@@ -117,7 +117,7 @@ await describe("detectEditLoop", async () => {
   });
 
   await it("returns null when assistant sends multiple tool calls", () => {
-    const multiToolAssistant: HiveCore.Message = {
+    const multiToolAssistant: Message = {
       role: "assistant",
       content: "",
       tool_calls: [

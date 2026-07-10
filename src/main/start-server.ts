@@ -1,4 +1,11 @@
-import { HiveCore } from "../hive-core";
+import {
+  getLastUsed,
+  getProviderStates,
+  getProviders,
+  handleChatCompletion,
+  shutdown,
+  start,
+} from "../hive-core";
 import { createServer, listen } from "../server";
 import { printBanner } from "../shared/logger/ascii-banner";
 import { getServerConfig, type ServerConfig } from "../shared/server-config";
@@ -8,27 +15,26 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
 
   const config = getServerConfig(overrides);
 
-  const hiveCore = new HiveCore();
-  hiveCore.start();
+  start();
 
   const server = await createServer({
-    getProviders: () => hiveCore.getProviders(),
-    getProviderStates: () => hiveCore.getProviderStates(),
-    getLastUsed: () => hiveCore.getLastUsed(),
+    getProviders: () => getProviders(),
+    getProviderStates: () => getProviderStates(),
+    getLastUsed: () => getLastUsed(),
     handleChatCompletion: (body, headers) =>
-      hiveCore.handleChatCompletion(body, headers),
+      handleChatCompletion(body, headers),
   });
   listen(server, config);
 
   process.on("SIGINT", () => {
-    hiveCore.shutdown();
+    shutdown();
     server.close(() => process.exit(0));
   });
 
   process.on("SIGTERM", () => {
-    hiveCore.shutdown();
+    shutdown();
     server.close(() => process.exit(0));
   });
 
-  return { server, hiveCore };
+  return { server };
 }

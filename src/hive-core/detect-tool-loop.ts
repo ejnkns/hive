@@ -1,4 +1,4 @@
-import type { HiveCore } from "../hive-core";
+import type { Message } from "./message";
 
 type ToolCall = {
   type?: string;
@@ -22,9 +22,7 @@ function buildToolKey(toolCall: ToolCall): string | null {
   return `${toolCall.function.name}|${args}`;
 }
 
-export function detectToolLoop(
-  messages: HiveCore.Message[]
-): ToolLoopResult | null {
+export function detectToolLoop(messages: Message[]): ToolLoopResult | null {
   const counts = new Map<string, number>();
 
   for (let i = messages.length - 1; i > 0; i -= 2) {

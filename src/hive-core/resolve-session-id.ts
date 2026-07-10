@@ -1,11 +1,11 @@
-import type { HiveCore } from "../hive-core";
+import type { Message } from "./message";
 import { computeSessionFingerprint } from "./compute-session-fingerprint";
 import { extractSessionHeader } from "./extract-session-header";
 import { generateId } from "./generate-id";
 
 export function resolveSessionId(
   headers: Record<string, string | string[] | undefined>,
-  messages: HiveCore.Message[]
+  messages: Message[]
 ): string {
   const headerId = extractSessionHeader(headers);
   if (headerId) return headerId;

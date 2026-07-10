@@ -2,15 +2,16 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { WebSocket } from "ws";
-import type { HiveCore } from "../../hive-core";
+import type { ChatCompletionResult, ProviderState } from "../../hive-core";
 import type { Provider } from "../../providers";
 import { getModelId } from "../../providers";
-import { routingMemory } from "../../proxy";
-import { type FlowEvent, onFlowEvent } from "../../proxy/flow-events";
 import {
   getSessionSnapshot,
+  onFlowEvent,
   onSessionPatch,
-} from "../../proxy/session-aggregator";
+  routingMemory,
+  type FlowEvent,
+} from "../../proxy";
 import { addLogListener, getRecentLogs, logger } from "../../shared/logger";
 import { getServerConfig } from "../../shared/server-config";
 import {
@@ -28,12 +29,12 @@ import { clearOverride, getOverride, setOverride } from "../override";
 
 export type RouteDeps = {
   getProviders: () => ReadonlyArray<Provider>;
-  getProviderStates: () => Promise<HiveCore.ProviderState[]>;
+  getProviderStates: () => Promise<ProviderState[]>;
   getLastUsed: () => { provider: string | null; model: string | null };
   handleChatCompletion: (
     body: Record<string, unknown>,
     headers: Record<string, string | string[] | undefined>
-  ) => Promise<HiveCore.ChatCompletionResult>;
+  ) => Promise<ChatCompletionResult>;
 };
 
 export function assignRoutes(server: FastifyServer, deps: RouteDeps) {

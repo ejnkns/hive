@@ -1,9 +1,7 @@
 import { createHash } from "node:crypto";
-import type { HiveCore } from "../hive-core";
+import type { Message } from "./message";
 
-export function computeSessionFingerprint(
-  messages: HiveCore.Message[]
-): string | null {
+export function computeSessionFingerprint(messages: Message[]): string | null {
   const systemMsg = messages.find((m) => m.role === "system");
   const firstUserMsg = messages.find((m) => m.role === "user");
   if (!systemMsg || !firstUserMsg) return null;
