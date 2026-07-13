@@ -1,8 +1,8 @@
-/** @internal — only imported by handle-chat-completion.ts */
+/** @internal — only imported by orchestrate.ts */
 
 import type { Message } from "../../shared/message";
-import { detectEditLoop } from "./detect-and-inject-loop-messages/detect-edit-loop";
-import { detectToolLoop } from "./detect-and-inject-loop-messages/detect-tool-loop";
+import { detectEditLoop } from "./detect-loop/detect-edit-loop";
+import { detectToolLoop } from "./detect-loop/detect-tool-loop";
 
 export function detectAndInjectLoopMessages(
   parsed: Record<string, unknown>,

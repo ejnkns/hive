@@ -8,9 +8,7 @@ import type {
   ModelCaller,
   OrchestrationConfig,
   OrchestrationResult,
-  ToolCall,
   ToolExecutor,
-  ToolResult,
 } from "./types";
 
 const DEFAULT_MAX_ITERATIONS = 10;

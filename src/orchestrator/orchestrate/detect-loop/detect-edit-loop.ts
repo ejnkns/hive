@@ -1,4 +1,4 @@
-/** @internal — only imported by detect-and-inject-loop-messages.ts */
+/** @internal — only imported by detect-loop.ts */
 
 import type { Message } from "../../../shared/message";
 

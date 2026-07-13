@@ -21,7 +21,6 @@ import { generateId } from "../shared/generate-id";
 import { logger } from "../shared/logger";
 import type { Message } from "../shared/message";
 import { conversationStore, loadCache, type Node } from "../telemetry";
-import { detectAndInjectLoopMessages } from "./handle-chat-completion/detect-and-inject-loop-messages";
 import { setLastUsed } from "./last-used-state";
 import { getProviders } from "./providers-state";
 
@@ -31,7 +30,7 @@ export async function handleChatCompletion(
   body: string | Record<string, unknown>,
   incomingHeaders: Record<string, string | string[] | undefined> = {}
 ): Promise<ChatCompletionResult> {
-  let parsed:
+  const parsed:
     | Record<string, unknown>
     | { messages?: Array<Record<string, unknown>> } =
     typeof body === "string"
@@ -59,9 +58,6 @@ export async function handleChatCompletion(
 
   const sessionId = resolveSessionId(incomingHeaders, typedMessages);
 
-  const loopResult = detectAndInjectLoopMessages(parsed, typedMessages);
-  parsed = loopResult.parsed;
-  const toolLoopDetected = loopResult.toolLoopDetected;
   const payloadStr = JSON.stringify(parsed);
 
   const lastMsg = typedMessages.at(-1);
@@ -73,7 +69,6 @@ export async function handleChatCompletion(
     sessionId,
     timestamp: Date.now(),
     promptPreview,
-    toolLoopDetected,
   });
 
   const requiredFeatures = extractRequiredFeatures(parsed);
