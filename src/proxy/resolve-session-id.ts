@@ -1,7 +1,7 @@
 /** @internal — only imported by handle-chat-completion.ts */
 
-import { generateId } from "../generate-id";
-import type { Message } from "../message";
+import { generateId } from "../shared/generate-id";
+import type { Message } from "../shared/message";
 import { computeSessionFingerprint } from "./resolve-session-id/compute-session-fingerprint";
 import { extractSessionHeader } from "./resolve-session-id/extract-session-header";
 

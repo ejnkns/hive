@@ -1,7 +1,7 @@
 /** @internal — only imported by resolve-session-id.ts */
 
 import { createHash } from "node:crypto";
-import type { Message } from "../../message";
+import type { Message } from "../../shared/message";
 
 export function computeSessionFingerprint(messages: Message[]): string | null {
   const systemMsg = messages.find((m) => m.role === "system");

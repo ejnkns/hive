@@ -1,6 +1,6 @@
 /** @internal — only imported by handle-chat-completion.ts */
 
-import type { Message } from "../message";
+import type { Message } from "../shared/message";
 
 export function buildPromptPreview(lastMsg: Message | undefined): string {
   if (!lastMsg) return "";

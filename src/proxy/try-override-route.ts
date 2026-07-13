@@ -1,19 +1,19 @@
 /** @internal — only imported by handle-chat-completion.ts */
 
 import type { PassThrough } from "node:stream";
-import type { ProxyResponse } from "../../proxy";
-import { logger } from "../../shared/logger";
-import type { Node } from "../../telemetry";
-import type { ChatCompletionResult } from "../handle-chat-completion";
-import { setLastUsed } from "../last-used-state";
+import { logger } from "../shared/logger";
+import type { Node } from "../telemetry";
+import type { ProxyResponse } from "./proxy-response";
+import type { ChatCompletionResult } from "./types";
 
 export async function tryOverrideRoute(params: {
   overrideNode: { providerName: string; modelName: string } | null;
   dispatch: (node: Node, payload: string) => Promise<ProxyResponse>;
   payloadStr: string;
   requestId: string;
+  onSuccess?: (provider: string, model: string) => void;
 }): Promise<ChatCompletionResult | null> {
-  const { overrideNode, dispatch, payloadStr, requestId } = params;
+  const { overrideNode, dispatch, payloadStr, requestId, onSuccess } = params;
   if (!overrideNode) return null;
 
   logger.debug(
@@ -23,7 +23,7 @@ export async function tryOverrideRoute(params: {
   try {
     const response = await dispatch(overrideNode, payloadStr);
     if (response.isOk()) {
-      setLastUsed(overrideNode.providerName, overrideNode.modelName);
+      onSuccess?.(overrideNode.providerName, overrideNode.modelName);
       logger.debug(
         `request ${requestId} — override success via ${overrideNode.providerName}:${overrideNode.modelName}`
       );

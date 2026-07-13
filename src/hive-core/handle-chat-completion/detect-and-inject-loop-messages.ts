@@ -1,6 +1,6 @@
 /** @internal — only imported by handle-chat-completion.ts */
 
-import type { Message } from "../message";
+import type { Message } from "../../shared/message";
 import { detectEditLoop } from "./detect-and-inject-loop-messages/detect-edit-loop";
 import { detectToolLoop } from "./detect-and-inject-loop-messages/detect-tool-loop";
 

@@ -7,31 +7,25 @@ import {
   type ProxyResponse,
   routingMemory,
 } from "../proxy";
+import { buildPromptPreview } from "../proxy/build-prompt-preview";
+import { dispatchRequest } from "../proxy/dispatch-request";
+import { buildNodes } from "../proxy/execute-proxy-request/build-nodes";
+import { extractRequiredFeatures } from "../proxy/execute-proxy-request/extract-required-features";
+import { getMetricsForNode } from "../proxy/execute-proxy-request/get-metrics-for-node";
+import { filterHeaders } from "../proxy/filter-headers";
+import { resolveSessionId } from "../proxy/resolve-session-id";
+import { tryOverrideRoute } from "../proxy/try-override-route";
+import type { ChatCompletionResult } from "../proxy/types";
 import { getOverride, isProviderDisabled } from "../server";
+import { generateId } from "../shared/generate-id";
 import { logger } from "../shared/logger";
+import type { Message } from "../shared/message";
 import { conversationStore, loadCache, type Node } from "../telemetry";
-import { generateId } from "./generate-id";
-import { buildNodes } from "./handle-chat-completion/build-nodes";
-import { buildPromptPreview } from "./handle-chat-completion/build-prompt-preview";
 import { detectAndInjectLoopMessages } from "./handle-chat-completion/detect-and-inject-loop-messages";
-import { dispatchRequest } from "./handle-chat-completion/dispatch-request";
-import { extractRequiredFeatures } from "./handle-chat-completion/extract-required-features";
-import { filterHeaders } from "./handle-chat-completion/filter-headers";
-import { getMetricsForNode } from "./handle-chat-completion/get-metrics-for-node";
-import { resolveSessionId } from "./handle-chat-completion/resolve-session-id";
-import { tryOverrideRoute } from "./handle-chat-completion/try-override-route";
 import { setLastUsed } from "./last-used-state";
-import type { Message } from "./message";
 import { getProviders } from "./providers-state";
 
-export type ChatCompletionResult = {
-  success: boolean;
-  stream?: PassThrough;
-  provider?: string;
-  model?: string;
-  statusCode?: number;
-  error?: string;
-};
+export type { ChatCompletionResult };
 
 export async function handleChatCompletion(
   body: string | Record<string, unknown>,
@@ -119,6 +113,7 @@ export async function handleChatCompletion(
     dispatch: boundDispatchRequest,
     payloadStr,
     requestId,
+    onSuccess: (provider, model) => setLastUsed(provider, model),
   });
   if (overrideResult) return overrideResult;
   let response: ProxyResponse | null;

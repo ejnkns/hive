@@ -1,6 +1,6 @@
 /** @internal — only imported by detect-and-inject-loop-messages.ts */
 
-import type { Message } from "../../message";
+import type { Message } from "../../../shared/message";
 
 type ToolCall = {
   type?: string;

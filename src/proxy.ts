@@ -5,8 +5,8 @@ export {
 } from "./proxy/execute-proxy-request";
 export {
   emitFlowEvent,
-  onFlowEvent,
   type FlowEvent,
+  onFlowEvent,
 } from "./proxy/flow-events";
 export { mutateRequest } from "./proxy/mutate-request";
 export { ProxyResponse } from "./proxy/proxy-response";
@@ -16,3 +16,4 @@ export {
   getSessionSnapshot,
   onSessionPatch,
 } from "./proxy/session-aggregator";
+export type { ChatCompletionResult } from "./proxy/types";
