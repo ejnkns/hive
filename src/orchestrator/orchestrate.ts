@@ -1,5 +1,6 @@
 /** @internal — only imported by orchestrator.ts */
 
+import { emitFlowEvent } from "../proxy/flow-events";
 import { logger } from "../shared/logger";
 import type { Message } from "../shared/message";
 import { parseCompletionResponse } from "./orchestrate/parse-completion-response";
@@ -26,6 +27,14 @@ export async function orchestrate(
   const onEvent = config.onEvent;
 
   for (let iteration = 0; iteration < maxIterations; iteration++) {
+    const iterationRequestId = `${sessionId ?? "orch"}-iter-${String(iteration)}`;
+    emitFlowEvent({
+      type: "request_received",
+      requestId: iterationRequestId,
+      sessionId: sessionId ?? "orchestrator",
+      timestamp: Date.now(),
+      promptPreview: messages.at(-1)?.content?.slice(0, 80) ?? "",
+    });
     onEvent?.({ type: "iteration_start", iteration });
 
     const payload: Record<string, unknown> = {
@@ -43,6 +52,20 @@ export async function orchestrate(
       logger.debug(
         `orchestrate iteration ${String(iteration)} — model call failed (status ${String(response.status)})`
       );
+      emitFlowEvent({
+        type: "response_complete",
+        requestId: iterationRequestId,
+        provider: response.provider ?? "",
+        model: response.model ?? "",
+        statusCode: response.status,
+        success: false,
+        ttft: 0,
+        totalLatency: 0,
+        outputTokens: null,
+        finishReason: null,
+        toolCallFailed: false,
+        errorType: "orchestrate-error",
+      });
       onEvent?.({ type: "error", error: response.body });
       return {
         messages,
@@ -74,11 +97,26 @@ export async function orchestrate(
       toolCallCount: parsed.toolCalls.length,
     });
 
-    if (
+    const isSuccess =
       parsed.toolCalls.length === 0 ||
       (parsed.finishReason !== null &&
-        TERMINAL_FINISH_REASONS.has(parsed.finishReason))
-    ) {
+        TERMINAL_FINISH_REASONS.has(parsed.finishReason));
+    emitFlowEvent({
+      type: "response_complete",
+      requestId: iterationRequestId,
+      provider: response.provider ?? "",
+      model: response.model ?? "",
+      statusCode: response.status,
+      success: response.ok && isSuccess,
+      ttft: 0,
+      totalLatency: 0,
+      outputTokens: null,
+      finishReason: parsed.finishReason,
+      toolCallFailed: false,
+      errorType: null,
+    });
+
+    if (isSuccess) {
       const finishReason =
         (parsed.finishReason as "stop" | "length" | "content-filter") ?? "stop";
       onEvent?.({ type: "complete", finishReason, iterations: iteration + 1 });
