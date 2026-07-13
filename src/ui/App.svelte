@@ -19,6 +19,7 @@ import Header from "./Header.svelte";
 import Stats from "./Stats.svelte";
 import ProviderPanel from "./ProviderPanel.svelte";
 import Sessions from "./Sessions.svelte";
+import Orchestrator from "./Orchestrator.svelte";
 import LivePipeline from "./LivePipeline.svelte";
 import Logs from "./Logs.svelte";
 import DetailOverlay from "./DetailOverlay.svelte";
@@ -308,6 +309,7 @@ onDestroy(() => {
       <Sessions sessions={sessionStore.sessions} />
       <ProviderPanel data={providersData} {metrics} {conversations} overrideKey={overrideKey} onRowClick={handleMetricClick} onToggleProvider={handleToggleProvider} lastProvider={headerData?.lastProvider ?? null} lastModel={headerData?.lastModel ?? null} />
     </div>
+    <Orchestrator />
     <div class="section-head" style="margin-top:1.5rem">Pipeline</div>
     <LivePipeline events={flowEvents} providers={providersData} />
     <Logs entries={logEntries} />
