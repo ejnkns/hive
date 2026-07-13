@@ -1,4 +1,5 @@
 import type { Message } from "../shared/message";
+import type { ToolExecutionContext, ToolRegistry } from "../tools/tool";
 
 export type CompletionRequest = {
   payload: Record<string, unknown>;
@@ -17,34 +18,10 @@ export type ModelCaller = {
   complete: (request: CompletionRequest) => Promise<CompletionResponse>;
 };
 
-export type ToolDefinition = {
-  type: "function";
-  function: {
-    name: string;
-    description?: string;
-    parameters?: Record<string, unknown>;
-  };
-};
-
-export type ToolCall = {
-  id: string;
-  name: string;
-  arguments: string;
-};
-
-export type ToolResult = {
-  toolCallId: string;
-  content: string;
-  isError: boolean;
-};
-
-export type ToolExecutor = {
-  execute: (toolCall: ToolCall) => Promise<ToolResult>;
-};
-
 export type OrchestrationConfig = {
   messages: Message[];
-  tools?: ToolDefinition[];
+  toolRegistry: ToolRegistry;
+  toolContext: ToolExecutionContext;
   maxIterations?: number;
   sessionId?: string;
 };

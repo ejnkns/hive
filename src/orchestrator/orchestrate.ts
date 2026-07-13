@@ -8,7 +8,6 @@ import type {
   ModelCaller,
   OrchestrationConfig,
   OrchestrationResult,
-  ToolExecutor,
 } from "./types";
 
 const DEFAULT_MAX_ITERATIONS = 10;
@@ -17,19 +16,21 @@ const TERMINAL_FINISH_REASONS = new Set(["stop", "length", "content-filter"]);
 
 export async function orchestrate(
   config: OrchestrationConfig,
-  modelCaller: ModelCaller,
-  toolExecutor: ToolExecutor
+  modelCaller: ModelCaller
 ): Promise<OrchestrationResult> {
   const maxIterations = config.maxIterations ?? DEFAULT_MAX_ITERATIONS;
   const messages: Message[] = [...config.messages];
   const sessionId = config.sessionId;
+  const toolRegistry = config.toolRegistry;
+  const toolContext = config.toolContext;
 
   for (let iteration = 0; iteration < maxIterations; iteration++) {
     const payload: Record<string, unknown> = {
       messages,
     };
-    if (config.tools && config.tools.length > 0) {
-      payload.tools = config.tools;
+    const toolDefinitions = toolRegistry.getDefinitions();
+    if (toolDefinitions.length > 0) {
+      payload.tools = toolDefinitions;
     }
 
     const request: CompletionRequest = { payload, sessionId };
@@ -78,7 +79,7 @@ export async function orchestrate(
     }
 
     for (const toolCall of parsed.toolCalls) {
-      const result = await toolExecutor.execute(toolCall);
+      const result = await toolRegistry.execute(toolCall, toolContext);
       const toolMessage: Message = {
         role: "tool",
         content: result.content,

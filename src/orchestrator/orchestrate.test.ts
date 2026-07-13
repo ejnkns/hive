@@ -1,14 +1,18 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
+import type {
+  ToolCall,
+  ToolDefinition,
+  ToolExecutionContext,
+  ToolRegistry,
+  ToolResult,
+} from "../tools/tool";
 import { orchestrate } from "./orchestrate";
 import type {
   CompletionRequest,
   CompletionResponse,
   ModelCaller,
   OrchestrationConfig,
-  ToolCall,
-  ToolExecutor,
-  ToolResult,
 } from "./types";
 
 function createMockModelCaller(responses: CompletionResponse[]): ModelCaller {
@@ -24,11 +28,16 @@ function createMockModelCaller(responses: CompletionResponse[]): ModelCaller {
   };
 }
 
-function createMockToolExecutor(
-  results: Map<string, ToolResult>
-): ToolExecutor {
+function createMockToolRegistry(
+  results: Map<string, ToolResult>,
+  definitions: ToolDefinition[] = []
+): ToolRegistry {
   return {
-    execute: async (toolCall: ToolCall): Promise<ToolResult> => {
+    getDefinitions: () => definitions,
+    execute: async (
+      toolCall: ToolCall,
+      _context: ToolExecutionContext
+    ): Promise<ToolResult> => {
       const result = results.get(toolCall.id);
       if (!result) {
         return {
@@ -87,18 +96,25 @@ function stopResponse(content: string): CompletionResponse {
   });
 }
 
+const TEST_CONTEXT: ToolExecutionContext = {
+  sessionId: "test-session",
+  workspacePath: "/tmp/test-workspace",
+};
+
 await describe("orchestrate", async () => {
   await it("returns immediately when model responds with stop and no tool calls", async () => {
     const modelCaller = createMockModelCaller([
       stopResponse("Hello! How can I help?"),
     ]);
-    const toolExecutor = createMockToolExecutor(new Map());
+    const toolRegistry = createMockToolRegistry(new Map());
 
     const config: OrchestrationConfig = {
       messages: [{ role: "user", content: "Hi" }],
+      toolRegistry,
+      toolContext: TEST_CONTEXT,
     };
 
-    const result = await orchestrate(config, modelCaller, toolExecutor);
+    const result = await orchestrate(config, modelCaller);
 
     assert.strictEqual(result.finishReason, "stop");
     assert.strictEqual(result.finalContent, "Hello! How can I help?");
@@ -114,7 +130,7 @@ await describe("orchestrate", async () => {
       ),
       stopResponse("The file contains hello world."),
     ]);
-    const toolExecutor = createMockToolExecutor(
+    const toolRegistry = createMockToolRegistry(
       new Map([
         [
           "call-1",
@@ -125,9 +141,11 @@ await describe("orchestrate", async () => {
 
     const config: OrchestrationConfig = {
       messages: [{ role: "user", content: "Read /foo" }],
+      toolRegistry,
+      toolContext: TEST_CONTEXT,
     };
 
-    const result = await orchestrate(config, modelCaller, toolExecutor);
+    const result = await orchestrate(config, modelCaller);
 
     assert.strictEqual(result.finishReason, "stop");
     assert.strictEqual(result.finalContent, "The file contains hello world.");
@@ -147,7 +165,7 @@ await describe("orchestrate", async () => {
       ]),
       stopResponse("Both files read."),
     ]);
-    const toolExecutor = createMockToolExecutor(
+    const toolRegistry = createMockToolRegistry(
       new Map([
         [
           "call-1",
@@ -161,9 +179,12 @@ await describe("orchestrate", async () => {
     );
 
     const result = await orchestrate(
-      { messages: [{ role: "user", content: "Read both" }] },
-      modelCaller,
-      toolExecutor
+      {
+        messages: [{ role: "user", content: "Read both" }],
+        toolRegistry,
+        toolContext: TEST_CONTEXT,
+      },
+      modelCaller
     );
 
     assert.strictEqual(result.iterations, 2);
@@ -179,7 +200,7 @@ await describe("orchestrate", async () => {
       { id: "call-1", name: "loop", args: "{}" },
     ]);
     const modelCaller = createMockModelCaller(Array(20).fill(infiniteToolCall));
-    const toolExecutor = createMockToolExecutor(
+    const toolRegistry = createMockToolRegistry(
       new Map([
         [
           "call-1",
@@ -189,9 +210,13 @@ await describe("orchestrate", async () => {
     );
 
     const result = await orchestrate(
-      { messages: [{ role: "user", content: "loop" }], maxIterations: 3 },
-      modelCaller,
-      toolExecutor
+      {
+        messages: [{ role: "user", content: "loop" }],
+        toolRegistry,
+        toolContext: TEST_CONTEXT,
+        maxIterations: 3,
+      },
+      modelCaller
     );
 
     assert.strictEqual(result.finishReason, "max-iterations");
@@ -208,12 +233,15 @@ await describe("orchestrate", async () => {
         model: null,
       },
     ]);
-    const toolExecutor = createMockToolExecutor(new Map());
+    const toolRegistry = createMockToolRegistry(new Map());
 
     const result = await orchestrate(
-      { messages: [{ role: "user", content: "Hi" }] },
-      modelCaller,
-      toolExecutor
+      {
+        messages: [{ role: "user", content: "Hi" }],
+        toolRegistry,
+        toolContext: TEST_CONTEXT,
+      },
+      modelCaller
     );
 
     assert.strictEqual(result.finishReason, "error");
@@ -223,10 +251,17 @@ await describe("orchestrate", async () => {
 
   await it("does not mutate the input messages array", async () => {
     const modelCaller = createMockModelCaller([stopResponse("done")]);
-    const toolExecutor = createMockToolExecutor(new Map());
+    const toolRegistry = createMockToolRegistry(new Map());
     const inputMessages = [{ role: "user", content: "Hi" }];
 
-    await orchestrate({ messages: inputMessages }, modelCaller, toolExecutor);
+    await orchestrate(
+      {
+        messages: inputMessages,
+        toolRegistry,
+        toolContext: TEST_CONTEXT,
+      },
+      modelCaller
+    );
 
     assert.strictEqual(inputMessages.length, 1);
   });

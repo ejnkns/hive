@@ -1,6 +1,6 @@
 /** @internal — only imported by orchestrate.ts */
 
-import type { ToolCall } from "../types";
+import type { ToolCall } from "../../tools/tool";
 
 type ParsedCompletion = {
   content: string;
