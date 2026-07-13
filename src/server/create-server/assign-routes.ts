@@ -341,15 +341,23 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
   server.post("/v1/chat/completions", async (request, reply) => {
     const requestId = crypto.randomUUID();
     logger.info(`request ${requestId} — handling chat completion`);
-    logger.debug(
-      `request ${requestId} — raw signal aborted=${String(request.raw.signal.aborted)}`
-    );
+
+    const controller = new AbortController();
+    const onAborted = () => {
+      logger.debug(`request ${requestId} — client aborted connection`);
+      controller.abort();
+    };
+    request.raw.once("aborted", onAborted);
+
     // Fastify body is typed as unknown; API contract guarantees JSON object
     const result = await deps.handleChatCompletion(
       request.body as Record<string, unknown>,
       request.headers,
-      request.raw.signal
+      controller.signal
     );
+
+    // clean up listener after the request is done (no-op if already fired)
+    request.raw.removeListener("aborted", onAborted);
 
     logger.debug(
       `request ${requestId} — handleChatCompletion result: success=${String(result.success)}, statusCode=${String(result.statusCode ?? "??")}, provider=${result.provider ?? "??"}, error=${result.error ?? "none"}`
