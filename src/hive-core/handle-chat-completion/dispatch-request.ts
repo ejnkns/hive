@@ -4,7 +4,7 @@ import type { IncomingHttpHeaders } from "node:http";
 import { buildChatEndpoint, type Provider } from "../../providers";
 import { mutateRequest, ProxyResponse, routeRequest } from "../../proxy";
 import { logger } from "../../shared/logger";
-import type { Node } from "../../telemetry";
+import { createTelemetrySink, type Node } from "../../telemetry";
 import { sanitizePayloadForProvider } from "./dispatch-request/sanitize-payload-for-provider";
 
 export async function dispatchRequest(
@@ -41,6 +41,7 @@ export async function dispatchRequest(
     providerName: node.providerName,
     modelName: node.modelName,
     requestId,
+    telemetrySink: createTelemetrySink(),
   });
 
   logger.debug(

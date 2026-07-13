@@ -8,6 +8,7 @@ import {
 import { mutateRequest, routeRequest } from "../proxy";
 import { logger } from "../shared/logger";
 import {
+  createTelemetrySink,
   loadCache,
   startHeartbeat as startTelemetryHeartbeat,
   telemetryRecorder,
@@ -105,6 +106,7 @@ function startHeartbeat(): void {
           modelName: provider.defaultModel,
           requestId: generateId(),
           source: "heartbeat",
+          telemetrySink: createTelemetrySink(),
         });
       } catch (err: unknown) {
         logger.debug(

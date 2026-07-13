@@ -1,6 +1,23 @@
 import type { FinishReason } from "./request-metric";
 
-type ContentPart = { type: "text" | "image_url"; text?: string; image_url?: { url: string } };
+type ContentPart = {
+  type: "text" | "image_url";
+  text?: string;
+  image_url?: { url: string };
+};
+
+export type ConversationData = {
+  provider: string;
+  model: string;
+  ttft: number | null;
+  totalLatency: number | null;
+  statusCode: number;
+  success: boolean;
+  responseText: string;
+  outputTokens: number | null;
+  finishReason: FinishReason;
+  refused: boolean;
+};
 
 type Conversation = {
   requestId: string;
@@ -29,28 +46,17 @@ class ConversationStore {
   > = new Map();
   private readonly maxEntries = 20;
 
-  startConversation(requestId: string, prompt: { role: string; content: string | ContentPart[] }[]): void {
+  startConversation(
+    requestId: string,
+    prompt: { role: string; content: string | ContentPart[] }[]
+  ): void {
     this.pending.set(requestId, {
       prompt,
       timestamp: Date.now(),
     });
   }
 
-  completeConversation(
-    requestId: string,
-    data: {
-      provider: string;
-      model: string;
-      ttft: number | null;
-      totalLatency: number | null;
-      statusCode: number;
-      success: boolean;
-      responseText: string;
-      outputTokens: number | null;
-      finishReason: FinishReason;
-      refused: boolean;
-    }
-  ): void {
+  completeConversation(requestId: string, data: ConversationData): void {
     const pending = this.pending.get(requestId);
     if (!pending) return;
 
