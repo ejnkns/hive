@@ -6,6 +6,7 @@ export function classifyError(
 ): ErrorType {
   if (statusCode === 0) {
     if (errorHint === "TIMEOUT") return "timeout";
+    if (errorHint === "ABORTED") return "aborted";
     if (errorHint === "NETWORK_ERROR") return "network-error";
     return "network-error";
   }

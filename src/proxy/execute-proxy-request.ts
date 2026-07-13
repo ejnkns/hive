@@ -12,6 +12,7 @@ export type FailoverContext = {
   getMetricsForNode: (compoundKey: string) => RequestMetric[];
   dispatchRequest: (node: Node, payload: string) => Promise<ProxyResponse>;
   sessionId?: string;
+  signal?: AbortSignal;
 };
 
 export async function executeProxyRequest(
@@ -22,6 +23,8 @@ export async function executeProxyRequest(
   const tried = new Set<string>();
 
   while (attempts < maxAttempts) {
+    if (ctx.signal?.aborted) break;
+
     const availableNodes = ctx.nodes.filter(
       (n) => !tried.has(`${n.providerName}:${n.modelName}`)
     );

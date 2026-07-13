@@ -35,7 +35,8 @@ export type ChatCompletionResult = {
 
 export async function handleChatCompletion(
   body: string | Record<string, unknown>,
-  incomingHeaders: Record<string, string | string[] | undefined> = {}
+  incomingHeaders: Record<string, string | string[] | undefined> = {},
+  signal?: AbortSignal
 ): Promise<ChatCompletionResult> {
   let parsed:
     | Record<string, unknown>
@@ -106,7 +107,7 @@ export async function handleChatCompletion(
     node: Node,
     payload: string
   ): Promise<ProxyResponse> =>
-    dispatchRequest(node, payload, qualified, headers, requestId);
+    dispatchRequest(node, payload, qualified, headers, requestId, signal);
 
   const override = getOverride();
   const overrideNode =
@@ -131,6 +132,7 @@ export async function handleChatCompletion(
       getMetricsForNode: boundGetMetricsForNode,
       dispatchRequest: boundDispatchRequest,
       sessionId,
+      signal,
     });
   } catch (err: unknown) {
     logger.error(`request ${requestId} — all providers failed`, err);

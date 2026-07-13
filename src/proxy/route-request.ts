@@ -27,6 +27,7 @@ type RouteRequestOptions = {
   modelName: string;
   requestId: string;
   source?: MetricSource;
+  signal?: AbortSignal;
 };
 
 type RouteResult = {
@@ -44,10 +45,35 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
     modelName,
     requestId,
     source: metricSource,
+    signal,
   } = opts;
   return new Promise((resolve) => {
     const url = new URL(upstreamUrl);
     const start = Date.now();
+
+    let onAbort: (() => void) | undefined;
+    let resolved = false;
+    const finalize = () => {
+      if (onAbort && signal) {
+        signal.removeEventListener("abort", onAbort);
+      }
+    };
+
+    const resolveOnce = (result: RouteResult) => {
+      if (resolved) return;
+      resolved = true;
+      finalize();
+      resolve(result);
+    };
+
+    if (signal?.aborted) {
+      resolveOnce({
+        proxyResponse: ProxyResponse.error(0, "ABORTED"),
+        ttft: 0,
+        requestId,
+      });
+      return;
+    }
 
     const bodyBuffer = Buffer.from(mutated.body);
 
@@ -152,7 +178,7 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
         });
         res.on("end", () => {
           record(timeoutMs, false, statusCode, errorBody);
-          resolve({
+          resolveOnce({
             proxyResponse: ProxyResponse.error(statusCode, errorBody),
             ttft: timeoutMs,
             requestId,
@@ -223,7 +249,7 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
           `upstream ${providerName}:${modelName} — first byte in ${String(ttft)}ms`
         );
 
-        resolve({
+        resolveOnce({
           proxyResponse: ProxyResponse.ok(statusCode, passThrough),
           ttft,
           requestId,
@@ -247,7 +273,7 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
         );
 
         if (!initialByteReceived) {
-          resolve({
+          resolveOnce({
             proxyResponse: ProxyResponse.error(500, ""),
             ttft: Date.now() - start,
             requestId,
@@ -293,7 +319,7 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
         );
 
         if (!initialByteReceived) {
-          resolve({
+          resolveOnce({
             proxyResponse: ProxyResponse.ok(statusCode, passThrough),
             ttft: effectiveTtft,
             requestId,
@@ -308,7 +334,7 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
       );
       req.destroy();
       record(timeoutMs, false, 0, undefined, "TIMEOUT");
-      resolve({
+      resolveOnce({
         proxyResponse: ProxyResponse.error(0, "TIMEOUT"),
         ttft: timeoutMs,
         requestId,
@@ -317,18 +343,45 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
 
     req.on("error", (err: Error) => {
       const elapsed = Date.now() - start;
+      const isAborted = signal?.aborted ?? false;
       logger.debug(
-        `upstream ${providerName}:${modelName} — network error: ${err.message}`
+        `upstream ${providerName}:${modelName} — ${isAborted ? "aborted" : "network error"}: ${err.message}`
       );
-      record(elapsed, false, 0, undefined, "NETWORK_ERROR");
-      resolve({
-        proxyResponse: ProxyResponse.error(0, "NETWORK_ERROR"),
+      record(
+        elapsed,
+        false,
+        0,
+        undefined,
+        isAborted ? "ABORTED" : "NETWORK_ERROR"
+      );
+      resolveOnce({
+        proxyResponse: ProxyResponse.error(
+          0,
+          isAborted ? "ABORTED" : "NETWORK_ERROR"
+        ),
         ttft: elapsed,
         requestId,
       });
     });
 
-    req.write(bodyBuffer);
-    req.end();
+    if (signal) {
+      onAbort = () => {
+        req.destroy();
+      };
+      signal.addEventListener("abort", onAbort, { once: true });
+    }
+
+    try {
+      req.write(bodyBuffer);
+      req.end();
+    } catch {
+      if (signal?.aborted) {
+        resolveOnce({
+          proxyResponse: ProxyResponse.error(0, "ABORTED"),
+          ttft: 0,
+          requestId,
+        });
+      }
+    }
   });
 }

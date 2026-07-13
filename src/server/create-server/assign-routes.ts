@@ -6,11 +6,11 @@ import type { ChatCompletionResult, ProviderState } from "../../hive-core";
 import type { Provider } from "../../providers";
 import { getModelId } from "../../providers";
 import {
+  type FlowEvent,
   getSessionSnapshot,
   onFlowEvent,
   onSessionPatch,
   routingMemory,
-  type FlowEvent,
 } from "../../proxy";
 import { addLogListener, getRecentLogs, logger } from "../../shared/logger";
 import { getServerConfig } from "../../shared/server-config";
@@ -33,7 +33,8 @@ export type RouteDeps = {
   getLastUsed: () => { provider: string | null; model: string | null };
   handleChatCompletion: (
     body: Record<string, unknown>,
-    headers: Record<string, string | string[] | undefined>
+    headers: Record<string, string | string[] | undefined>,
+    signal?: AbortSignal
   ) => Promise<ChatCompletionResult>;
 };
 
@@ -343,7 +344,8 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
     // Fastify body is typed as unknown; API contract guarantees JSON object
     const result = await deps.handleChatCompletion(
       request.body as Record<string, unknown>,
-      request.headers
+      request.headers,
+      request.raw.signal
     );
 
     if (!result.success) {

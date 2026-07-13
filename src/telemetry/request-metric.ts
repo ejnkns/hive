@@ -7,6 +7,7 @@ export type ErrorType =
   | "timeout"
   | "network-error"
   | "invalid-request"
+  | "aborted"
   | null;
 
 export type MetricSource = "user" | "heartbeat";

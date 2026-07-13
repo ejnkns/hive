@@ -21,8 +21,8 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     getProviders: () => getProviders(),
     getProviderStates: () => getProviderStates(),
     getLastUsed: () => getLastUsed(),
-    handleChatCompletion: (body, headers) =>
-      handleChatCompletion(body, headers),
+    handleChatCompletion: (body, headers, signal) =>
+      handleChatCompletion(body, headers, signal),
   });
   listen(server, config);
 
