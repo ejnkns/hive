@@ -343,11 +343,12 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
     logger.info(`request ${requestId} — handling chat completion`);
 
     const controller = new AbortController();
-    const onAborted = () => {
-      logger.debug(`request ${requestId} — client aborted connection`);
+    const socket = request.raw.socket;
+    const onClose = () => {
+      logger.debug(`request ${requestId} — client closed connection`);
       controller.abort();
     };
-    request.raw.once("aborted", onAborted);
+    socket?.once("close", onClose);
 
     // Fastify body is typed as unknown; API contract guarantees JSON object
     const result = await deps.handleChatCompletion(
@@ -357,7 +358,7 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
     );
 
     // clean up listener after the request is done (no-op if already fired)
-    request.raw.removeListener("aborted", onAborted);
+    socket?.removeListener("close", onClose);
 
     logger.debug(
       `request ${requestId} — handleChatCompletion result: success=${String(result.success)}, statusCode=${String(result.statusCode ?? "??")}, provider=${result.provider ?? "??"}, error=${result.error ?? "none"}`
