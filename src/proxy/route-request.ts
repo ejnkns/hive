@@ -67,6 +67,9 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
     };
 
     if (signal?.aborted) {
+      logger.debug(
+        `upstream ${providerName}:${modelName} — signal already aborted before dispatch`
+      );
       resolveOnce({
         proxyResponse: ProxyResponse.error(0, "ABORTED"),
         ttft: 0,
@@ -345,7 +348,7 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
       const elapsed = Date.now() - start;
       const isAborted = signal?.aborted ?? false;
       logger.debug(
-        `upstream ${providerName}:${modelName} — ${isAborted ? "aborted" : "network error"}: ${err.message}`
+        `upstream ${providerName}:${modelName} — ${isAborted ? "ABORTED by client" : "NETWORK ERROR"}: ${err.message} (signalAborted=${String(isAborted)})`
       );
       record(
         elapsed,
@@ -366,6 +369,9 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
 
     if (signal) {
       onAbort = () => {
+        logger.debug(
+          `upstream ${providerName}:${modelName} — client aborted, destroying upstream connection`
+        );
         req.destroy();
       };
       signal.addEventListener("abort", onAbort, { once: true });

@@ -61,6 +61,12 @@ export async function handleChatCompletion(
 
   const cache = await loadCache();
   const requestId = generateId();
+
+  if (signal) {
+    logger.debug(
+      `request ${requestId} — cancellation signal present (aborted=${String(signal.aborted)})`
+    );
+  }
   const messages = (parsed as Record<string, unknown>).messages ?? [];
   const typedMessages = Array.isArray(messages) ? (messages as Message[]) : [];
 
