@@ -111,6 +111,8 @@ export async function executeProxyRequest(
   }
 
   throw new Error(
-    "Hive Router Error: All qualifying upstream endpoints failed execution."
+    ctx.signal?.aborted
+      ? "Hive Router Error: Request cancelled during failover."
+      : "Hive Router Error: All qualifying upstream endpoints failed execution."
   );
 }

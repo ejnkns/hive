@@ -238,7 +238,7 @@ await describe("Hive Core Router — abort signal", async () => {
 
     await assert.rejects(
       () => executeProxyRequest(ctx),
-      /All qualifying upstream endpoints failed/
+      /cancelled during failover/
     );
 
     assert.strictEqual(

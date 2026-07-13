@@ -38,6 +38,15 @@ export async function handleChatCompletion(
   incomingHeaders: Record<string, string | string[] | undefined> = {},
   signal?: AbortSignal
 ): Promise<ChatCompletionResult> {
+  if (signal?.aborted) {
+    logger.debug("request aborted before processing began");
+    return {
+      success: false,
+      statusCode: 499,
+      error: "Client disconnected before request was processed",
+    };
+  }
+
   let parsed:
     | Record<string, unknown>
     | { messages?: Array<Record<string, unknown>> } =
@@ -62,10 +71,13 @@ export async function handleChatCompletion(
   const cache = await loadCache();
   const requestId = generateId();
 
-  if (signal) {
-    logger.debug(
-      `request ${requestId} — cancellation signal present (aborted=${String(signal.aborted)})`
-    );
+  if (signal?.aborted) {
+    logger.debug(`request ${requestId} — client disconnected during loadCache`);
+    return {
+      success: false,
+      statusCode: 499,
+      error: "Client disconnected during request initialization",
+    };
   }
   const messages = (parsed as Record<string, unknown>).messages ?? [];
   const typedMessages = Array.isArray(messages) ? (messages as Message[]) : [];
@@ -141,11 +153,17 @@ export async function handleChatCompletion(
       signal,
     });
   } catch (err: unknown) {
-    logger.error(`request ${requestId} — all providers failed`, err);
+    const cancelled = err instanceof Error && err.message.includes("cancelled");
+    logger.error(
+      `request ${requestId} — ${cancelled ? "request cancelled during failover" : "all providers failed"}`,
+      err
+    );
     return {
       success: false,
-      statusCode: 503,
-      error: "All providers failed",
+      statusCode: cancelled ? 499 : 503,
+      error: cancelled
+        ? "Request cancelled during failover"
+        : "All providers failed",
     };
   }
 
