@@ -185,6 +185,30 @@ await describe("Hive Core Router Interception Loop", async () => {
 });
 
 await describe("Hive Core Router — abort signal", async () => {
+  const mockMetrics = (compoundKey: string): RequestMetric[] => {
+    const [provider, model] = compoundKey.split(":");
+    return [
+      {
+        requestId: "id",
+        provider,
+        model,
+        timestamp: Date.now(),
+        ttft: 100,
+        totalLatency: 500,
+        inputTokens: 300,
+        outputTokens: 40,
+        thinkingTime: null,
+        finishReason: "stop",
+        refused: false,
+        statusCode: 200,
+        errorType: null,
+        success: true,
+        source: "user",
+        toolCallFailed: false,
+      },
+    ];
+  };
+
   beforeEach(() => {
     routingMemory.reset();
     process.env.HIVE_ROUTING_STRATEGY = "balanced";
@@ -204,7 +228,7 @@ await describe("Hive Core Router — abort signal", async () => {
       ],
       originalPayload: JSON.stringify({ prompt: "test" }),
       requiredFeatures: [],
-      getMetricsForNode: () => [],
+      getMetricsForNode: mockMetrics,
       signal: controller.signal,
       dispatchRequest: async () => {
         dispatchCalled = true;
@@ -237,7 +261,7 @@ await describe("Hive Core Router — abort signal", async () => {
       ],
       originalPayload: JSON.stringify({ prompt: "test" }),
       requiredFeatures: [],
-      getMetricsForNode: () => [],
+      getMetricsForNode: mockMetrics,
       signal: controller.signal,
       dispatchRequest: async (node) => {
         if (node.providerName === "groq") {
