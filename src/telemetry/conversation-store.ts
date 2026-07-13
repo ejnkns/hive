@@ -1,6 +1,10 @@
 import type { FinishReason } from "./request-metric";
 
-type ContentPart = { type: "text" | "image_url"; text?: string; image_url?: { url: string } };
+type ContentPart = {
+  type: "text" | "image_url";
+  text?: string;
+  image_url?: { url: string };
+};
 
 type Conversation = {
   requestId: string;
@@ -18,25 +22,28 @@ type Conversation = {
   refused: boolean;
 };
 
-class ConversationStore {
-  private buffer: Conversation[] = [];
-  private pending: Map<
+function createConversationStore() {
+  const buffer: Conversation[] = [];
+  const pending: Map<
     string,
     {
       prompt: { role: string; content: string | ContentPart[] }[];
       timestamp: number;
     }
   > = new Map();
-  private readonly maxEntries = 20;
+  const maxEntries = 20;
 
-  startConversation(requestId: string, prompt: { role: string; content: string | ContentPart[] }[]): void {
-    this.pending.set(requestId, {
+  function startConversation(
+    requestId: string,
+    prompt: { role: string; content: string | ContentPart[] }[]
+  ): void {
+    pending.set(requestId, {
       prompt,
       timestamp: Date.now(),
     });
   }
 
-  completeConversation(
+  function completeConversation(
     requestId: string,
     data: {
       provider: string;
@@ -51,26 +58,28 @@ class ConversationStore {
       refused: boolean;
     }
   ): void {
-    const pending = this.pending.get(requestId);
-    if (!pending) return;
+    const entry = pending.get(requestId);
+    if (!entry) return;
 
-    this.buffer.unshift({
+    buffer.unshift({
       requestId,
       ...data,
-      prompt: pending.prompt,
-      timestamp: pending.timestamp,
+      prompt: entry.prompt,
+      timestamp: entry.timestamp,
     });
 
-    if (this.buffer.length > this.maxEntries) {
-      this.buffer.pop();
+    if (buffer.length > maxEntries) {
+      buffer.pop();
     }
 
-    this.pending.delete(requestId);
+    pending.delete(requestId);
   }
 
-  getConversations(): Conversation[] {
-    return this.buffer;
+  function getConversations(): Conversation[] {
+    return buffer;
   }
+
+  return { startConversation, completeConversation, getConversations };
 }
 
-export const conversationStore = new ConversationStore();
+export const conversationStore = createConversationStore();

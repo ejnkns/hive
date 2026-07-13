@@ -1,6 +1,6 @@
-import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert";
-import { routingMemory, RoutingMemory } from "./routing-memory";
+import { beforeEach, describe, it } from "node:test";
+import { createRoutingMemory, routingMemory } from "./routing-memory";
 
 await describe("RoutingMemory", async () => {
   beforeEach(() => {
@@ -23,7 +23,7 @@ await describe("RoutingMemory", async () => {
     });
 
     await it("returns true after circuit breaker cooldown expires", () => {
-      const slow = new RoutingMemory();
+      const slow = createRoutingMemory();
       slow.recordNetworkFailure("p:m");
       assert.strictEqual(slow.isNodeEligible("p:m", []), false);
     });

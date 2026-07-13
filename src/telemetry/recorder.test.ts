@@ -1,13 +1,13 @@
 import assert from "node:assert";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { loadCache, saveCache } from "./cache";
-import { TelemetryRecorder } from "./recorder";
+import { createTelemetryRecorder } from "./recorder";
 
 await describe("TelemetryRecorder", async () => {
-  let recorder: TelemetryRecorder;
+  let recorder: ReturnType<typeof createTelemetryRecorder>;
 
   beforeEach(async () => {
-    recorder = new TelemetryRecorder();
+    recorder = createTelemetryRecorder();
     await saveCache({ metrics: [], scores: [] });
   });
 
