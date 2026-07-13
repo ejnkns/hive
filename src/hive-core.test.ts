@@ -183,3 +183,89 @@ await describe("Hive Core Router Interception Loop", async () => {
     );
   });
 });
+
+await describe("Hive Core Router — abort signal", async () => {
+  beforeEach(() => {
+    routingMemory.reset();
+    process.env.HIVE_ROUTING_STRATEGY = "balanced";
+    process.env.HIVE_MIN_TOKEN_TELEMETRY = "200";
+  });
+
+  await it("skips failover when signal is already aborted", async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    let dispatchCalled = false;
+
+    const ctx: FailoverContext = {
+      nodes: [
+        { providerName: "groq", modelName: "llama-3" },
+        { providerName: "sambanova", modelName: "llama-3" },
+      ],
+      originalPayload: JSON.stringify({ prompt: "test" }),
+      requiredFeatures: [],
+      getMetricsForNode: () => [],
+      signal: controller.signal,
+      dispatchRequest: async () => {
+        dispatchCalled = true;
+        return ProxyResponse.ok(200, new PassThrough());
+      },
+    };
+
+    await assert.rejects(
+      () => executeProxyRequest(ctx),
+      /All qualifying upstream endpoints failed/
+    );
+
+    assert.strictEqual(
+      dispatchCalled,
+      false,
+      "no dispatch should be attempted when signal is aborted"
+    );
+  });
+
+  await it("aborts failover mid-loop: second node not dispatched after signal fires", async () => {
+    const controller = new AbortController();
+
+    let firstCalled = false;
+    let secondCalled = false;
+
+    const ctx: FailoverContext = {
+      nodes: [
+        { providerName: "groq", modelName: "llama-3" },
+        { providerName: "sambanova", modelName: "llama-3" },
+      ],
+      originalPayload: JSON.stringify({ prompt: "test" }),
+      requiredFeatures: [],
+      getMetricsForNode: () => [],
+      signal: controller.signal,
+      dispatchRequest: async (node) => {
+        if (node.providerName === "groq") {
+          firstCalled = true;
+          controller.abort();
+          return ProxyResponse.error(429, "rate limit exceeded");
+        }
+        secondCalled = true;
+        return ProxyResponse.ok(200, new PassThrough());
+      },
+    };
+
+    let threw = false;
+    try {
+      await executeProxyRequest(ctx);
+    } catch {
+      threw = true;
+    }
+
+    assert.ok(firstCalled, "first node should be dispatched");
+    assert.strictEqual(
+      secondCalled,
+      false,
+      "second node should be skipped after abort"
+    );
+    assert.ok(
+      threw,
+      "executeProxyRequest should throw when signal aborts during failover"
+    );
+  });
+});
