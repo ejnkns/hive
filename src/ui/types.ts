@@ -53,6 +53,19 @@ export type ContentPart = {
   image_url?: { url: string };
 };
 
+export type ToolCall = {
+  id: string;
+  type: string;
+  function: { name: string; arguments: string };
+};
+
+export type ConversationMessage = {
+  role: string;
+  content: string | ContentPart[];
+  tool_call_id?: string;
+  tool_calls?: ToolCall[];
+};
+
 export type ConversationData = {
   requestId: string;
   provider: string;
@@ -62,7 +75,7 @@ export type ConversationData = {
   totalLatency: number | null;
   statusCode: number;
   success: boolean;
-  prompt: { role: string; content: string | ContentPart[] }[];
+  prompt: ConversationMessage[];
   responseText: string;
   outputTokens: number | null;
   finishReason: FinishReason;
@@ -151,6 +164,8 @@ export type RequestState = {
   tokensPerSecond?: number;
   failovers: { provider: string; model: string; errorType: string }[];
   toolLoopDetected?: boolean;
+  conversationPrompt?: ConversationMessage[];
+  responseText?: string;
   response?: {
     provider: string;
     model: string;
@@ -183,6 +198,8 @@ export type SessionPatch = {
   thinkingChars?: number;
   tokensPerSecond?: number;
   failover?: { provider: string; model: string; errorType: string };
+  conversationPrompt?: ConversationMessage[];
+  responseText?: string;
   response?: RequestState["response"];
 };
 

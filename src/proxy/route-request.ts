@@ -262,19 +262,6 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
         const isSuccess = isHeartbeat
           ? statusCode < 400
           : !stats.isAbruptDisconnect;
-        record(
-          effectiveTtft,
-          isSuccess,
-          statusCode,
-          undefined,
-          undefined,
-          undefined,
-          stats
-        );
-
-        logger.debug(
-          `upstream ${providerName}:${modelName} — stream complete (${String(stats.outputChars)} chars, abrupt=${String(stats.isAbruptDisconnect)})`
-        );
 
         if (!streamErrored && !stats.isAbruptDisconnect) {
           conversationStore.completeConversation(requestId, {
@@ -290,6 +277,20 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
             refused: detectRefusal(stats.responseText),
           });
         }
+
+        logger.debug(
+          `upstream ${providerName}:${modelName} — stream complete (${String(stats.outputChars)} chars, abrupt=${String(stats.isAbruptDisconnect)})`
+        );
+
+        record(
+          effectiveTtft,
+          isSuccess,
+          statusCode,
+          undefined,
+          undefined,
+          undefined,
+          stats
+        );
 
         if (!initialByteReceived) {
           resolve({

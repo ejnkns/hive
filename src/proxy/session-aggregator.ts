@@ -1,3 +1,4 @@
+import { conversationStore } from "../telemetry/conversation-store";
 import {
   type FlowEvent,
   onFlowEvent,
@@ -116,7 +117,24 @@ function emitPatch(patch: SessionPatch) {
 }
 
 export function getSessionSnapshot(): SessionState[] {
-  return Array.from(sessionMap.values());
+  const conversations = conversationStore.getConversations();
+  const convByRequestId = new Map<string, (typeof conversations)[number]>();
+  for (const c of conversations) {
+    convByRequestId.set(c.requestId, c);
+  }
+
+  return Array.from(sessionMap.values()).map((session) => ({
+    ...session,
+    requests: session.requests.map((req) => {
+      const conv = convByRequestId.get(req.requestId);
+      if (!conv) return req;
+      return {
+        ...req,
+        conversationPrompt: conv.prompt,
+        responseText: conv.responseText,
+      };
+    }),
+  }));
 }
 
 onFlowEvent((event: FlowEvent) => {
@@ -257,6 +275,15 @@ onFlowEvent((event: FlowEvent) => {
     patch.provider = event.provider;
     patch.model = event.model;
     patch.response = request.response;
+
+    const conversations = conversationStore.getConversations();
+    const conv = conversations.find((c) => c.requestId === event.requestId);
+    if (conv) {
+      request.conversationPrompt = conv.prompt;
+      request.responseText = conv.responseText;
+      patch.conversationPrompt = conv.prompt;
+      patch.responseText = conv.responseText;
+    }
   }
 
   if (event.type === "failover_attempt") {

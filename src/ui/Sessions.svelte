@@ -26,11 +26,6 @@ const archived = $derived.by(() => {
 });
 
 let archiveOpen = $state(false);
-let fullExpandedId = $state<string | null>(null);
-
-function toggleFullExpand(sessionId: string) {
-  fullExpandedId = fullExpandedId === sessionId ? null : sessionId;
-}
 
 function toggleArchive() {
   archiveOpen = !archiveOpen;
@@ -42,11 +37,7 @@ function toggleArchive() {
 {:else}
   {#if visible.length > 0}
     {#each visible as session (session.sessionId)}
-      <SessionCard
-        {session}
-        fullExpanded={fullExpandedId === session.sessionId}
-        onToggleFull={() => toggleFullExpand(session.sessionId)}
-      />
+      <SessionCard {session} />
     {/each}
   {/if}
 
@@ -57,11 +48,7 @@ function toggleArchive() {
     </button>
     {#if archiveOpen}
       {#each archived as session (session.sessionId)}
-        <SessionCard
-          {session}
-          fullExpanded={fullExpandedId === session.sessionId}
-          onToggleFull={() => toggleFullExpand(session.sessionId)}
-        />
+        <SessionCard {session} />
       {/each}
     {/if}
   {/if}

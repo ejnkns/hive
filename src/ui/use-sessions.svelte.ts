@@ -105,6 +105,12 @@ export function createSessionStore() {
     if (patch.response) {
       request.response = patch.response;
     }
+    if (patch.conversationPrompt) {
+      request.conversationPrompt = patch.conversationPrompt;
+    }
+    if (patch.responseText !== undefined) {
+      request.responseText = patch.responseText;
+    }
     if (patch.failover) {
       request.failovers = [...(request.failovers || []), patch.failover];
     }

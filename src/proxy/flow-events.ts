@@ -1,3 +1,22 @@
+export type ContentPart = {
+  type: "text" | "image_url";
+  text?: string;
+  image_url?: { url: string };
+};
+
+export type ToolCall = {
+  id: string;
+  type: string;
+  function: { name: string; arguments: string };
+};
+
+export type ConversationMessage = {
+  role: string;
+  content: string | ContentPart[];
+  tool_call_id?: string;
+  tool_calls?: ToolCall[];
+};
+
 export type CandidateInfo = {
   key: string;
   provider: string;
@@ -131,6 +150,8 @@ export type RequestState = {
   tokensPerSecond?: number;
   failovers: { provider: string; model: string; errorType: string }[];
   toolLoopDetected?: boolean;
+  conversationPrompt?: ConversationMessage[];
+  responseText?: string;
   response?: {
     provider: string;
     model: string;
@@ -163,6 +184,8 @@ export type SessionPatch = {
   thinkingChars?: number;
   tokensPerSecond?: number;
   failover?: { provider: string; model: string; errorType: string };
+  conversationPrompt?: ConversationMessage[];
+  responseText?: string;
   response?: RequestState["response"];
 };
 
