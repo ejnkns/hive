@@ -8,11 +8,12 @@ import type { Message } from "../shared/message";
 import { loadCache } from "../telemetry";
 import { createLocalToolRegistry } from "../tools/local-tool-registry";
 import { orchestrate } from "./orchestrate";
-import type { OrchestrationResult } from "./types";
+import type { OrchestrationEvent, OrchestrationResult } from "./types";
 
 export type HandleOrchestrate = (
   body: Record<string, unknown>,
-  headers: Record<string, string | string[] | undefined>
+  headers: Record<string, string | string[] | undefined>,
+  onEvent?: (event: OrchestrationEvent) => void
 ) => Promise<OrchestrationResult>;
 
 type OrchestratorHandlerConfig = {
@@ -23,7 +24,7 @@ type OrchestratorHandlerConfig = {
 export function createOrchestratorHandler(
   config: OrchestratorHandlerConfig
 ): HandleOrchestrate {
-  return async (body, headers) => {
+  return async (body, headers, onEvent) => {
     const messages = (body.messages as Message[]) ?? [];
     const sessionId =
       (headers["x-session-id"] as string) ??
@@ -73,6 +74,7 @@ export function createOrchestratorHandler(
         toolContext: { sessionId, workspacePath: config.workspacePath },
         maxIterations,
         sessionId,
+        onEvent,
       },
       modelCaller
     );

@@ -24,7 +24,26 @@ export type OrchestrationConfig = {
   toolContext: ToolExecutionContext;
   maxIterations?: number;
   sessionId?: string;
+  onEvent?: (event: OrchestrationEvent) => void;
 };
+
+export type OrchestrationEvent =
+  | { type: "iteration_start"; iteration: number }
+  | {
+      type: "model_complete";
+      iteration: number;
+      finishReason: string | null;
+      toolCallCount: number;
+    }
+  | {
+      type: "tool_executed";
+      iteration: number;
+      toolName: string;
+      isError: boolean;
+      contentPreview: string;
+    }
+  | { type: "complete"; finishReason: string; iterations: number }
+  | { type: "error"; error: string };
 
 export type OrchestrationResult = {
   messages: Message[];

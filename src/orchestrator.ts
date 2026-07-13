@@ -8,5 +8,6 @@ export type {
   CompletionResponse,
   ModelCaller,
   OrchestrationConfig,
+  OrchestrationEvent,
   OrchestrationResult,
 } from "./orchestrator/types";
