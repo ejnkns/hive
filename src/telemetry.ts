@@ -8,6 +8,7 @@ export type {
   SubScores,
 } from "./telemetry/calculate-node-score";
 export { calculateNodeScore } from "./telemetry/calculate-node-score";
+export type { ConversationData } from "./telemetry/conversation-store";
 export { conversationStore } from "./telemetry/conversation-store";
 export { telemetryRecorder } from "./telemetry/recorder";
 export { classifyError } from "./telemetry/recorder/classify-error";
@@ -23,3 +24,5 @@ export type {
   RequestMetric,
 } from "./telemetry/request-metric";
 export { startHeartbeat } from "./telemetry/start-heartbeat";
+export type { TelemetrySink } from "./telemetry/telemetry-sink";
+export { createTelemetrySink } from "./telemetry/telemetry-sink";

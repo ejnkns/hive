@@ -3,14 +3,15 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { WebSocket } from "ws";
 import type { ChatCompletionResult, ProviderState } from "../../hive-core";
+import type { HandleOrchestrate } from "../../orchestrator/create-handler";
 import type { Provider } from "../../providers";
 import { getModelId } from "../../providers";
 import {
+  type FlowEvent,
   getSessionSnapshot,
   onFlowEvent,
   onSessionPatch,
   routingMemory,
-  type FlowEvent,
 } from "../../proxy";
 import { addLogListener, getRecentLogs, logger } from "../../shared/logger";
 import { getServerConfig } from "../../shared/server-config";
@@ -35,6 +36,7 @@ export type RouteDeps = {
     body: Record<string, unknown>,
     headers: Record<string, string | string[] | undefined>
   ) => Promise<ChatCompletionResult>;
+  handleOrchestrate: HandleOrchestrate;
 };
 
 export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
@@ -361,6 +363,33 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
     );
     reply.header("Content-Type", "text/event-stream");
     return reply.send(result.stream);
+  });
+
+  server.post("/api/orchestrate", async (request, reply) => {
+    const requestId = crypto.randomUUID();
+    logger.info(`request ${requestId} — handling orchestrate`);
+    const result = await deps.handleOrchestrate(
+      request.body as Record<string, unknown>,
+      request.headers
+    );
+
+    if (result.finishReason === "error") {
+      logger.error(
+        `request ${requestId} — orchestrate failed`,
+        result.error ?? ""
+      );
+      return reply.status(500).send({ error: result.error });
+    }
+
+    logger.info(
+      `request ${requestId} — orchestrate done (${result.finishReason}, ${String(result.iterations)} iterations)`
+    );
+    return reply.send({
+      messages: result.messages,
+      finish_reason: result.finishReason,
+      final_content: result.finalContent,
+      iterations: result.iterations,
+    });
   });
 
   server.get("/api/providers", async (_request, reply) => {

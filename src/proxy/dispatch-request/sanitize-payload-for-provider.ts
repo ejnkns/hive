@@ -1,6 +1,6 @@
 /** @internal — only imported by dispatch-request.ts */
 
-import type { Message } from "../../message";
+import type { Message } from "../../shared/message";
 
 export function sanitizePayloadForProvider(
   providerName: string,

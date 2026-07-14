@@ -1,11 +1,13 @@
 /** @internal — only imported by handle-chat-completion.ts */
 
 import type { IncomingHttpHeaders } from "node:http";
-import { buildChatEndpoint, type Provider } from "../../providers";
-import { mutateRequest, ProxyResponse, routeRequest } from "../../proxy";
-import { logger } from "../../shared/logger";
-import type { Node } from "../../telemetry";
+import { buildChatEndpoint, type Provider } from "../providers";
+import { logger } from "../shared/logger";
+import { createTelemetrySink, type Node } from "../telemetry";
 import { sanitizePayloadForProvider } from "./dispatch-request/sanitize-payload-for-provider";
+import { mutateRequest } from "./mutate-request";
+import { ProxyResponse } from "./proxy-response";
+import { routeRequest } from "./route-request";
 
 export async function dispatchRequest(
   node: Node,
@@ -41,6 +43,7 @@ export async function dispatchRequest(
     providerName: node.providerName,
     modelName: node.modelName,
     requestId,
+    telemetrySink: createTelemetrySink(),
   });
 
   logger.debug(

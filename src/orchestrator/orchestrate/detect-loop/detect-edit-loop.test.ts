@@ -1,6 +1,6 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
-import type { Message } from "../../message";
+import type { Message } from "../../../shared/message";
 import { detectEditLoop } from "./detect-edit-loop";
 
 function editAssistant(filePath: string, oldString: string): Message {

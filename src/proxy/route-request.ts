@@ -7,13 +7,12 @@ import type {
   FinishReason,
   MetricSource,
   StreamPhaseEvent,
+  TelemetrySink,
 } from "../telemetry";
 import {
   classifyError,
-  conversationStore,
   createStreamCounter,
   detectRefusal,
-  telemetryRecorder,
 } from "../telemetry";
 import { emitFlowEvent } from "./flow-events";
 import type { MutatedRequest } from "./mutate-request";
@@ -27,6 +26,7 @@ type RouteRequestOptions = {
   modelName: string;
   requestId: string;
   source?: MetricSource;
+  telemetrySink: TelemetrySink;
 };
 
 type RouteResult = {
@@ -44,6 +44,7 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
     modelName,
     requestId,
     source: metricSource,
+    telemetrySink,
   } = opts;
   return new Promise((resolve) => {
     const url = new URL(upstreamUrl);
@@ -97,7 +98,7 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
         (stats ? Math.round(stats.outputChars / 4) : null);
       const inputTokens = stats?.inputTokens ?? null;
 
-      telemetryRecorder.recordMetric({
+      telemetrySink.recordMetric({
         requestId,
         provider: providerName,
         model: modelName,
@@ -264,7 +265,7 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
           : !stats.isAbruptDisconnect;
 
         if (!streamErrored && !stats.isAbruptDisconnect) {
-          conversationStore.completeConversation(requestId, {
+          telemetrySink.completeConversation(requestId, {
             provider: providerName,
             model: modelName,
             ttft: effectiveTtft,

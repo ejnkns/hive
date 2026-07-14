@@ -6,13 +6,14 @@ import {
   providers as staticProviders,
 } from "../providers";
 import { mutateRequest, routeRequest } from "../proxy";
+import { generateId } from "../shared/generate-id";
 import { logger } from "../shared/logger";
 import {
+  createTelemetrySink,
   loadCache,
   startHeartbeat as startTelemetryHeartbeat,
   telemetryRecorder,
 } from "../telemetry";
-import { generateId } from "./generate-id";
 import { setLastUsed } from "./last-used-state";
 import { getProviders } from "./providers-state";
 
@@ -105,6 +106,7 @@ function startHeartbeat(): void {
           modelName: provider.defaultModel,
           requestId: generateId(),
           source: "heartbeat",
+          telemetrySink: createTelemetrySink(),
         });
       } catch (err: unknown) {
         logger.debug(
