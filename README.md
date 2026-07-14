@@ -21,6 +21,8 @@ _sting and they die,_
 _replaced with the alive._
 -->
 
+> **Work in progress.** This project is under active development.
+
 Automatically route OpenAI-compatible agent traffic to free model providers.
 
 A lightweight proxy daemon with agent routing and automatic failover, hiding the volatility of free model providers by continuously monitoring quality and swapping providers and models automatically.
@@ -39,6 +41,10 @@ A lightweight proxy daemon with agent routing and automatic failover, hiding the
 - Scoring uses a 100-entry, 24h window per node with exponential TTFT decay and severity-weighted error penalties (auth 2.5x, server 1.0x, rate-limit 0.5x)
 - Providers recover score gradually as successful requests accumulate (30min half-life decay)
 - Truncated streams (missing `[DONE]` / `finish_reason`) are counted as failures, not successes
+
+### Orchestrator
+
+An agentic tool-calling loop that runs server-side, routing each iteration through the same provider selection pipeline. Built-in tools include file read/write and command execution, with automatic failover across providers. Results stream live to a collapsible UI panel.
 
 ### Browser Dashboard
 
