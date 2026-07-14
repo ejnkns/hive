@@ -284,6 +284,56 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
             void broadcastTelemetry();
           }
         }
+        if (parsed?.type === "orchestrate_start") {
+          const messages = parsed.messages;
+          const sessionId =
+            typeof parsed.sessionId === "string"
+              ? parsed.sessionId
+              : `orch-${crypto.randomUUID().slice(0, 8)}`;
+          if (!Array.isArray(messages)) return;
+          const send = (data: Record<string, unknown>) => {
+            if (socket.readyState === 1) {
+              socket.send(JSON.stringify(data));
+            }
+          };
+          void deps
+            .handleOrchestrate(
+              { messages, max_iterations: parsed.max_iterations },
+              { "x-session-id": sessionId },
+              (event) => {
+                send({
+                  type: "orchestrator_event",
+                  data: { sessionId, ...event },
+                });
+              }
+            )
+            .then((result) => {
+              send({
+                type: "orchestrator_complete",
+                data: {
+                  sessionId,
+                  messages: result.messages,
+                  finish_reason: result.finishReason,
+                  final_content: result.finalContent,
+                  iterations: result.iterations,
+                  error: result.error,
+                },
+              });
+            })
+            .catch((err) => {
+              send({
+                type: "orchestrator_complete",
+                data: {
+                  sessionId,
+                  messages: [],
+                  finish_reason: "error",
+                  final_content: "",
+                  iterations: 0,
+                  error: err instanceof Error ? err.message : String(err),
+                },
+              });
+            });
+        }
       } catch {
         logger.debug(
           `received WS message: ${typeof msg === "string" ? msg : JSON.stringify(msg)}`

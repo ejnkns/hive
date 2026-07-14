@@ -9,7 +9,6 @@ export {
   onFlowEvent,
 } from "./proxy/flow-events";
 export { mutateRequest } from "./proxy/mutate-request";
-export { createProxyModelCaller } from "./proxy/proxy-model-caller";
 export { ProxyResponse } from "./proxy/proxy-response";
 export { routeRequest } from "./proxy/route-request";
 export { routingMemory } from "./proxy/routing-memory";

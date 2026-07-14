@@ -88,6 +88,10 @@ export async function handleChatCompletion(
 
   const headers = filterHeaders(incomingHeaders);
 
+  logger.debug(
+    `request ${requestId} — upstream payload (first 500): ${payloadStr.slice(0, 500)}`
+  );
+
   const boundGetMetricsForNode = (compoundKey: string) =>
     getMetricsForNode(compoundKey, cache);
 

@@ -1,18 +1,17 @@
 /** @internal — wiring for the /api/orchestrate endpoint */
 
 import type { Provider } from "../providers";
-import { getMetricsForNode } from "../proxy/execute-proxy-request/get-metrics-for-node";
-import { createProxyModelCaller } from "../proxy/proxy-model-caller";
 import { logger } from "../shared/logger";
 import type { Message } from "../shared/message";
-import { loadCache } from "../telemetry";
 import { createLocalToolRegistry } from "../tools/local-tool-registry";
+import { createHandleChatCompletionCaller } from "./handle-chat-completion-caller";
 import { orchestrate } from "./orchestrate";
-import type { OrchestrationResult } from "./types";
+import type { OrchestrationEvent, OrchestrationResult } from "./types";
 
 export type HandleOrchestrate = (
   body: Record<string, unknown>,
-  headers: Record<string, string | string[] | undefined>
+  headers: Record<string, string | string[] | undefined>,
+  onEvent?: (event: OrchestrationEvent) => void
 ) => Promise<OrchestrationResult>;
 
 type OrchestratorHandlerConfig = {
@@ -23,37 +22,14 @@ type OrchestratorHandlerConfig = {
 export function createOrchestratorHandler(
   config: OrchestratorHandlerConfig
 ): HandleOrchestrate {
-  return async (body, headers) => {
+  return async (body, headers, onEvent) => {
     const messages = (body.messages as Message[]) ?? [];
     const sessionId =
       (headers["x-session-id"] as string) ??
       (headers["x-session-affinity"] as string) ??
       "orchestrator-default";
 
-    const qualified = config.getProviders().filter((p) => {
-      const key = process.env[p.apiKeyEnvVar];
-      return key && key.length > 0;
-    });
-
-    if (qualified.length === 0) {
-      logger.debug("orchestrate — no configured providers available");
-      return {
-        messages,
-        finishReason: "error",
-        finalContent: "",
-        iterations: 0,
-        error: "No configured providers available",
-      };
-    }
-
-    const cache = await loadCache();
-    const boundGetMetricsForNode = (compoundKey: string) =>
-      getMetricsForNode(compoundKey, cache);
-
-    const modelCaller = createProxyModelCaller({
-      qualifiedProviders: qualified,
-      getMetricsForNode: boundGetMetricsForNode,
-    });
+    const modelCaller = createHandleChatCompletionCaller();
 
     const toolRegistry = createLocalToolRegistry({
       workspacePath: config.workspacePath,
@@ -62,9 +38,7 @@ export function createOrchestratorHandler(
     const maxIterations =
       typeof body.max_iterations === "number" ? body.max_iterations : undefined;
 
-    logger.debug(
-      `orchestrate — ${String(qualified.length)} providers, session ${sessionId}`
-    );
+    logger.debug(`orchestrate — session ${sessionId}`);
 
     return orchestrate(
       {
@@ -73,6 +47,7 @@ export function createOrchestratorHandler(
         toolContext: { sessionId, workspacePath: config.workspacePath },
         maxIterations,
         sessionId,
+        onEvent,
       },
       modelCaller
     );

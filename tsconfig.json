@@ -2,6 +2,7 @@
   "extends": "@tsconfig/svelte/tsconfig.json",
   "compilerOptions": {
     "types": ["node"],
+    "lib": ["ESNext"],
     "noUncheckedSideEffectImports": false,
     "forceConsistentCasingInFileNames": true,
     "isolatedModules": true,

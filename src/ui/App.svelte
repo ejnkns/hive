@@ -19,11 +19,13 @@ import Header from "./Header.svelte";
 import Stats from "./Stats.svelte";
 import ProviderPanel from "./ProviderPanel.svelte";
 import Sessions from "./Sessions.svelte";
-import Orchestrator from "./Orchestrator.svelte";
+import OrchestratorPanel from "./OrchestratorPanel.svelte";
+import BottomDrawer from "./BottomDrawer.svelte";
 import LivePipeline from "./LivePipeline.svelte";
 import Logs from "./Logs.svelte";
 import DetailOverlay from "./DetailOverlay.svelte";
 import { createSessionStore } from "./use-sessions.svelte";
+import { createOrchestratorStore } from "./use-orchestrator.svelte";
 
 type ProviderPayload = {
   name: string;
@@ -69,7 +71,37 @@ type WsMessage =
   | { type: "log"; data: LogEntry }
   | { type: "flow"; data: FlowEvent }
   | { type: "session_state"; data: SessionPatch }
-  | { type: "session_init"; data: SessionState[] };
+  | { type: "session_init"; data: SessionState[] }
+  | {
+      type: "orchestrator_event";
+      data: {
+        sessionId: string;
+        type: string;
+        iteration?: number;
+        finishReason?: string | null;
+        toolCallCount?: number;
+        toolName?: string;
+        isError?: boolean;
+        contentPreview?: string;
+        error?: string;
+      };
+    }
+  | {
+      type: "orchestrator_complete";
+      data: {
+        sessionId: string;
+        messages: {
+          role: string;
+          content: string;
+          toolCalls?: unknown[];
+          toolCallId?: string;
+        }[];
+        finish_reason: string;
+        final_content: string;
+        iterations: number;
+        error?: string;
+      };
+    };
 
 let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -91,6 +123,8 @@ let detailMetric: MetricData | null = $state(null);
 let detailAllMetrics: MetricData[] = $state([]);
 
 const sessionStore = createSessionStore();
+const orchestratorStore = createOrchestratorStore();
+let drawerOpen = $state(false);
 
 let headerData = $derived.by(() => {
   const t = telemetry;
@@ -246,6 +280,16 @@ function handleMessage(msg: WsMessage) {
     sessionStore.initSessions(msg.data);
     return;
   }
+  if (msg.type === "orchestrator_event") {
+    orchestratorStore.applyEvent(
+      msg.data as Parameters<typeof orchestratorStore.applyEvent>[0]
+    );
+    return;
+  }
+  if (msg.type === "orchestrator_complete") {
+    orchestratorStore.applyComplete(msg.data);
+    return;
+  }
   telemetry = msg.data;
   override = {
     active: msg.data.overrideActive,
@@ -291,6 +335,19 @@ function handleToggleProvider(provider: string, disabled: boolean) {
   }
 }
 
+function handleOrchestrateStart(prompt: string) {
+  const sessionId = orchestratorStore.start(prompt);
+  if (ws?.readyState === WebSocket.OPEN) {
+    ws.send(
+      JSON.stringify({
+        type: "orchestrate_start",
+        sessionId,
+        messages: [{ role: "user", content: prompt }],
+      })
+    );
+  }
+}
+
 onMount(() => {
   connect();
 });
@@ -309,11 +366,13 @@ onDestroy(() => {
       <Sessions sessions={sessionStore.sessions} />
       <ProviderPanel data={providersData} {metrics} {conversations} overrideKey={overrideKey} onRowClick={handleMetricClick} onToggleProvider={handleToggleProvider} lastProvider={headerData?.lastProvider ?? null} lastModel={headerData?.lastModel ?? null} />
     </div>
-    <Orchestrator />
     <div class="section-head" style="margin-top:1.5rem">Pipeline</div>
     <LivePipeline events={flowEvents} providers={providersData} />
     <Logs entries={logEntries} />
   </div>
+  <BottomDrawer bind:open={drawerOpen} title="Orchestrator">
+    <OrchestratorPanel session={orchestratorStore.session} onStart={handleOrchestrateStart} />
+  </BottomDrawer>
   <DetailOverlay {detailMetric} {detailAllMetrics} />
 </div>
 

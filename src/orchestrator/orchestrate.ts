@@ -2,7 +2,7 @@
 
 import { logger } from "../shared/logger";
 import type { Message } from "../shared/message";
-import { parseCompletionResponse } from "./orchestrate/parse-completion-response";
+import { consumeSSEStream } from "./orchestrate/consume-sse-stream";
 import type {
   CompletionRequest,
   ModelCaller,
@@ -23,10 +23,14 @@ export async function orchestrate(
   const sessionId = config.sessionId;
   const toolRegistry = config.toolRegistry;
   const toolContext = config.toolContext;
+  const onEvent = config.onEvent;
 
   for (let iteration = 0; iteration < maxIterations; iteration++) {
+    onEvent?.({ type: "iteration_start", iteration });
+
     const payload: Record<string, unknown> = {
       messages,
+      stream: true,
     };
     const toolDefinitions = toolRegistry.getDefinitions();
     if (toolDefinitions.length > 0) {
@@ -40,16 +44,41 @@ export async function orchestrate(
       logger.debug(
         `orchestrate iteration ${String(iteration)} — model call failed (status ${String(response.status)})`
       );
+      onEvent?.({
+        type: "error",
+        error: response.error ?? "Model call failed",
+      });
       return {
         messages,
         finishReason: "error",
         finalContent: "",
         iterations: iteration + 1,
-        error: response.body,
+        error: response.error ?? "Model call failed",
       };
     }
 
-    const parsed = parseCompletionResponse(response.body);
+    logger.debug(
+      `orchestrate iteration ${String(iteration)} — response ok, status=${String(response.status)}, provider=${response.provider ?? "none"}, model=${response.model ?? "none"}, stream readable=${String(typeof response.stream?.read === "function")}`
+    );
+
+    onEvent?.({ type: "streaming_started", iteration });
+
+    let accumulatedContent = "";
+    const parsed = await consumeSSEStream(response.stream, (chunk) => {
+      if (chunk.content) {
+        accumulatedContent += chunk.content;
+        onEvent?.({
+          type: "content_delta",
+          iteration,
+          content: accumulatedContent,
+        });
+      }
+    });
+
+    logger.debug(
+      `orchestrate iteration ${String(iteration)} — stream parsed: contentLength=${String(parsed.content.length)}, toolCalls=${String(parsed.toolCalls.length)}, finishReason=${parsed.finishReason ?? "null"}`
+    );
+
     const assistantMessage: Message = {
       role: "assistant",
       content: parsed.content,
@@ -63,16 +92,25 @@ export async function orchestrate(
     }
     messages.push(assistantMessage);
 
-    if (
+    onEvent?.({
+      type: "model_complete",
+      iteration,
+      finishReason: parsed.finishReason,
+      toolCallCount: parsed.toolCalls.length,
+    });
+
+    const isSuccess =
       parsed.toolCalls.length === 0 ||
       (parsed.finishReason !== null &&
-        TERMINAL_FINISH_REASONS.has(parsed.finishReason))
-    ) {
+        TERMINAL_FINISH_REASONS.has(parsed.finishReason));
+
+    if (isSuccess) {
+      const finishReason =
+        (parsed.finishReason as "stop" | "length" | "content-filter") ?? "stop";
+      onEvent?.({ type: "complete", finishReason, iterations: iteration + 1 });
       return {
         messages,
-        finishReason:
-          (parsed.finishReason as "stop" | "length" | "content-filter") ??
-          "stop",
+        finishReason,
         finalContent: parsed.content,
         iterations: iteration + 1,
       };
@@ -89,9 +127,21 @@ export async function orchestrate(
       logger.debug(
         `orchestrate iteration ${String(iteration)} — executed tool ${toolCall.name} (error=${String(result.isError)})`
       );
+      onEvent?.({
+        type: "tool_executed",
+        iteration,
+        toolName: toolCall.name,
+        isError: result.isError,
+        contentPreview: result.content.slice(0, 200),
+      });
     }
   }
 
+  onEvent?.({
+    type: "complete",
+    finishReason: "max-iterations",
+    iterations: maxIterations,
+  });
   return {
     messages,
     finishReason: "max-iterations",
