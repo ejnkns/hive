@@ -1,9 +1,8 @@
 /** @internal — only imported by orchestrator.ts */
 
-import { emitFlowEvent } from "../proxy/flow-events";
 import { logger } from "../shared/logger";
 import type { Message } from "../shared/message";
-import { parseCompletionResponse } from "./orchestrate/parse-completion-response";
+import { consumeSSEStream } from "./orchestrate/consume-sse-stream";
 import type {
   CompletionRequest,
   ModelCaller,
@@ -27,18 +26,11 @@ export async function orchestrate(
   const onEvent = config.onEvent;
 
   for (let iteration = 0; iteration < maxIterations; iteration++) {
-    const iterationRequestId = `${sessionId ?? "orch"}-iter-${String(iteration)}`;
-    emitFlowEvent({
-      type: "request_received",
-      requestId: iterationRequestId,
-      sessionId: sessionId ?? "orchestrator",
-      timestamp: Date.now(),
-      promptPreview: messages[messages.length - 1]?.content?.slice(0, 80) ?? "",
-    });
     onEvent?.({ type: "iteration_start", iteration });
 
     const payload: Record<string, unknown> = {
       messages,
+      stream: true,
     };
     const toolDefinitions = toolRegistry.getDefinitions();
     if (toolDefinitions.length > 0) {
@@ -52,31 +44,41 @@ export async function orchestrate(
       logger.debug(
         `orchestrate iteration ${String(iteration)} — model call failed (status ${String(response.status)})`
       );
-      emitFlowEvent({
-        type: "response_complete",
-        requestId: iterationRequestId,
-        provider: response.provider ?? "",
-        model: response.model ?? "",
-        statusCode: response.status,
-        success: false,
-        ttft: 0,
-        totalLatency: 0,
-        outputTokens: null,
-        finishReason: null,
-        toolCallFailed: false,
-        errorType: "orchestrate-error",
+      onEvent?.({
+        type: "error",
+        error: response.error ?? "Model call failed",
       });
-      onEvent?.({ type: "error", error: response.body });
       return {
         messages,
         finishReason: "error",
         finalContent: "",
         iterations: iteration + 1,
-        error: response.body,
+        error: response.error ?? "Model call failed",
       };
     }
 
-    const parsed = parseCompletionResponse(response.body);
+    logger.debug(
+      `orchestrate iteration ${String(iteration)} — response ok, status=${String(response.status)}, provider=${response.provider ?? "none"}, model=${response.model ?? "none"}, stream readable=${String(typeof response.stream?.read === "function")}`
+    );
+
+    onEvent?.({ type: "streaming_started", iteration });
+
+    let accumulatedContent = "";
+    const parsed = await consumeSSEStream(response.stream, (chunk) => {
+      if (chunk.content) {
+        accumulatedContent += chunk.content;
+        onEvent?.({
+          type: "content_delta",
+          iteration,
+          content: accumulatedContent,
+        });
+      }
+    });
+
+    logger.debug(
+      `orchestrate iteration ${String(iteration)} — stream parsed: contentLength=${String(parsed.content.length)}, toolCalls=${String(parsed.toolCalls.length)}, finishReason=${parsed.finishReason ?? "null"}`
+    );
+
     const assistantMessage: Message = {
       role: "assistant",
       content: parsed.content,
@@ -101,20 +103,6 @@ export async function orchestrate(
       parsed.toolCalls.length === 0 ||
       (parsed.finishReason !== null &&
         TERMINAL_FINISH_REASONS.has(parsed.finishReason));
-    emitFlowEvent({
-      type: "response_complete",
-      requestId: iterationRequestId,
-      provider: response.provider ?? "",
-      model: response.model ?? "",
-      statusCode: response.status,
-      success: response.ok && isSuccess,
-      ttft: 0,
-      totalLatency: 0,
-      outputTokens: null,
-      finishReason: parsed.finishReason,
-      toolCallFailed: false,
-      errorType: null,
-    });
 
     if (isSuccess) {
       const finishReason =

@@ -229,6 +229,10 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
           ttft,
           requestId,
         });
+
+        logger.debug(
+          `upstream ${providerName}:${modelName} — resolve() called, passThrough writable=${String(passThrough.writable)}, readable=${String(passThrough.readable)}`
+        );
       });
 
       res.on("error", (err: Error) => {
@@ -263,6 +267,10 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
         const isSuccess = isHeartbeat
           ? statusCode < 400
           : !stats.isAbruptDisconnect;
+
+        logger.debug(
+          `upstream ${providerName}:${modelName} — res.on(end): initialByteReceived=${String(initialByteReceived)}, outputChars=${String(stats.outputChars)}, abrupt=${String(stats.isAbruptDisconnect)}, resolveAlreadyCalled=${String(initialByteReceived)}`
+        );
 
         if (!streamErrored && !stats.isAbruptDisconnect) {
           telemetrySink.completeConversation(requestId, {

@@ -1,4 +1,5 @@
 import assert from "node:assert";
+import { Readable } from "node:stream";
 import { describe, it } from "node:test";
 import type {
   ToolCall,
@@ -51,11 +52,16 @@ function createMockToolRegistry(
   };
 }
 
+function sseStream(body: Record<string, unknown>): Readable {
+  const data = JSON.stringify(body);
+  return Readable.from(Buffer.from(`data: ${data}\n\ndata: [DONE]\n\n`));
+}
+
 function completionResponse(body: Record<string, unknown>): CompletionResponse {
   return {
     status: 200,
     ok: true,
-    body: JSON.stringify(body),
+    stream: sseStream(body),
     provider: "test-provider",
     model: "test-model",
   };
@@ -69,10 +75,11 @@ function toolCallResponse(
     choices: [
       {
         index: 0,
-        message: {
+        delta: {
           role: "assistant",
           content,
-          tool_calls: calls.map((c) => ({
+          tool_calls: calls.map((c, i) => ({
+            index: i,
             id: c.id,
             type: "function",
             function: { name: c.name, arguments: c.args },
@@ -89,7 +96,7 @@ function stopResponse(content: string): CompletionResponse {
     choices: [
       {
         index: 0,
-        message: { role: "assistant", content },
+        delta: { role: "assistant", content },
         finish_reason: "stop",
       },
     ],
@@ -196,10 +203,11 @@ await describe("orchestrate", async () => {
   });
 
   await it("returns max-iterations when loop does not terminate", async () => {
-    const infiniteToolCall = toolCallResponse([
-      { id: "call-1", name: "loop", args: "{}" },
-    ]);
-    const modelCaller = createMockModelCaller(Array(20).fill(infiniteToolCall));
+    const modelCaller = createMockModelCaller(
+      Array.from({ length: 20 }, () =>
+        toolCallResponse([{ id: "call-1", name: "loop", args: "{}" }])
+      )
+    );
     const toolRegistry = createMockToolRegistry(
       new Map([
         [
@@ -228,9 +236,14 @@ await describe("orchestrate", async () => {
       {
         status: 503,
         ok: false,
-        body: "All providers failed",
+        stream: new Readable({
+          read() {
+            this.push(null);
+          },
+        }),
         provider: null,
         model: null,
+        error: "All providers failed",
       },
     ]);
     const toolRegistry = createMockToolRegistry(new Map());
