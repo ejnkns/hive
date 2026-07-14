@@ -3,6 +3,7 @@ import type {
   OrchestratorSession,
   OrchestratorMessage,
 } from "./use-orchestrator.svelte";
+import TruncatableText from "./TruncatableText.svelte";
 
 type Props = {
   session: OrchestratorSession | null;
@@ -34,11 +35,6 @@ function roleLabel(role: string): string {
   if (role === "assistant") return "assistant";
   if (role === "tool") return "tool result";
   return role;
-}
-
-function truncate(content: string, max: number): string {
-  if (content.length <= max) return content;
-  return `${content.slice(0, max)}...`;
 }
 
 $effect(() => {
@@ -111,7 +107,13 @@ $effect(() => {
               <span class="msg-tool-id">{msg.toolCallId.slice(0, 12)}</span>
             {/if}
           </div>
-          <div class="msg-content">{msg.content}</div>
+          <div class="msg-content">
+            {#if msg.streaming}
+              {msg.content}<span class="cursor">|</span>
+            {:else}
+              <TruncatableText text={msg.content} />
+            {/if}
+          </div>
           {#if msg.toolCalls && msg.toolCalls.length > 0}
             <div class="tool-calls">
               {#each msg.toolCalls as tc, ti}
@@ -131,7 +133,7 @@ $effect(() => {
       {/each}
 
       {#if session.status === "running" && session.messages.length === 0}
-        <div class="waiting">waiting for model response...</div>
+        <div class="waiting">waiting for response...</div>
       {/if}
     </div>
   {/if}
@@ -282,5 +284,12 @@ $effect(() => {
   @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.4; }
+  }
+  .cursor {
+    animation: blink 1s step-end infinite;
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
   }
 </style>

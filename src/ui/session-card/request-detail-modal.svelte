@@ -289,7 +289,6 @@ const hasConversation = $derived(
                   {#if hasContent || (!hasToolCalls && !hasContent)}
                     <TruncatableText
                       text={normalizeContent(msg.content)}
-                      maxLength={200}
                     />
                   {/if}
                 </div>
@@ -301,7 +300,6 @@ const hasConversation = $derived(
                 <div class="conv-content">
                   <TruncatableText
                     text={request.responseText}
-                    maxLength={400}
                   />
                 </div>
               </div>

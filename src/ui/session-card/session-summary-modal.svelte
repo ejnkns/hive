@@ -83,7 +83,6 @@ function handleTimelineClick(req: RequestState) {
                 {#if hasContent || (!hasToolCalls && !hasContent)}
                   <TruncatableText
                     text={normalizeContent(msg.content)}
-                    maxLength={200}
                   />
                 {/if}
               </div>
@@ -95,7 +94,6 @@ function handleTimelineClick(req: RequestState) {
               <div class="conv-content">
                 <TruncatableText
                   text={latest.responseText}
-                  maxLength={400}
                 />
               </div>
             </div>
@@ -105,7 +103,7 @@ function handleTimelineClick(req: RequestState) {
     {:else if latest?.prompt}
       <div class="section">
         <div class="section-title">latest prompt</div>
-        <TruncatableText text={latest.prompt} maxLength={200} />
+        <TruncatableText text={latest.prompt} />
       </div>
     {/if}
 

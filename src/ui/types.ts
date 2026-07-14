@@ -47,13 +47,13 @@ export type MetricData = {
   source: MetricSource;
 };
 
-export type ContentPart = {
+type ContentPart = {
   type: "text" | "image_url";
   text?: string;
   image_url?: { url: string };
 };
 
-export type ToolCall = {
+type ToolCall = {
   id: string;
   type: string;
   function: { name: string; arguments: string };

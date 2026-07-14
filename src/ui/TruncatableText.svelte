@@ -2,22 +2,30 @@
 let {
   text = "",
   maxLength = 300,
+  maxLines = 3,
 }: {
   text: string;
   maxLength?: number;
+  maxLines?: number;
 } = $props();
 
 let expanded = $state(false);
 
-const truncated = $derived(!expanded && text.length > maxLength);
+const charLimitFromLines = $derived(
+  maxLines != null
+    ? text.split("\n").slice(0, maxLines).join("\n").length
+    : Infinity
+);
+const effectiveLimit = $derived(Math.min(maxLength, charLimitFromLines));
+const truncated = $derived(!expanded && text.length > effectiveLimit);
 const displayText = $derived(
-  truncated ? `${text.slice(0, maxLength)}\u2026` : text
+  truncated ? `${text.slice(0, effectiveLimit)}\u2026` : text
 );
 </script>
 
 <div class="truncatable">
   <pre class="text">{displayText}</pre>
-  {#if text.length > maxLength}
+  {#if text.length > effectiveLimit}
     <button class="toggle-btn" onclick={() => (expanded = !expanded)}>
       {expanded ? "show less" : "show more"}
     </button>

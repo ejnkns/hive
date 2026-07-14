@@ -3,6 +3,7 @@ import type { OrchestrationEvent } from "../orchestrator";
 export type OrchestratorMessage = {
   role: string;
   content: string;
+  streaming?: boolean;
   toolCalls?: {
     id: string;
     type: string;
@@ -48,10 +49,24 @@ export function createOrchestratorStore() {
 
     if (event.type === "iteration_start") {
       session.iteration = event.iteration;
+    } else if (event.type === "streaming_started") {
+      session.messages.push({
+        role: "assistant",
+        content: "",
+        streaming: true,
+      });
+    } else if (event.type === "content_delta") {
+      const lastMsg = session.messages.at(-1);
+      if (lastMsg && lastMsg.role === "assistant" && lastMsg.streaming) {
+        lastMsg.content = event.content;
+      }
     } else if (event.type === "model_complete") {
-      // message already pushed via complete message
+      const lastMsg = session.messages.at(-1);
+      if (lastMsg && lastMsg.role === "assistant" && lastMsg.streaming) {
+        lastMsg.streaming = false;
+      }
     } else if (event.type === "tool_executed") {
-      // tool result already pushed via complete message
+      // tool result will come via applyComplete
     } else if (event.type === "complete") {
       session.status = "complete";
       session.finishReason = event.finishReason;
