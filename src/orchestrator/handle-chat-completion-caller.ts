@@ -1,7 +1,7 @@
 /** @internal — wraps handleChatCompletion as a ModelCaller for the orchestrator */
 
-import { Readable } from "node:stream";
-import { handleChatCompletion } from "../hive-core/handle-chat-completion";
+import { type PassThrough, Readable } from "node:stream";
+import { handleChatCompletion } from "../proxy";
 import { logger } from "../shared/logger";
 import type { ModelCaller } from "./types";
 
@@ -45,10 +45,12 @@ export function createHandleChatCompletionCaller(): ModelCaller {
         };
       }
 
+      // success is true, so stream is defined per ChatCompletionResult contract
+      const stream = result.stream as PassThrough;
       return {
         status: result.statusCode ?? 200,
         ok: true,
-        stream: result.stream!,
+        stream,
         provider: result.provider ?? null,
         model: result.model ?? null,
       };

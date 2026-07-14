@@ -2,12 +2,4 @@
 
 export type { HandleOrchestrate } from "./orchestrator/create-handler";
 export { createOrchestratorHandler } from "./orchestrator/create-handler";
-export { orchestrate } from "./orchestrator/orchestrate";
-export type {
-  CompletionRequest,
-  CompletionResponse,
-  ModelCaller,
-  OrchestrationConfig,
-  OrchestrationEvent,
-  OrchestrationResult,
-} from "./orchestrator/types";
+export type { OrchestrationEvent } from "./orchestrator/types";

@@ -1,7 +1,5 @@
-/** @internal — only imported by handle-chat-completion.ts */
-
-import type { loadCache, RequestMetric } from "../../telemetry";
-import { applySlidingWindow } from "../../telemetry";
+import type { loadCache, RequestMetric } from "../../../telemetry";
+import { applySlidingWindow } from "../../../telemetry";
 
 export function getMetricsForNode(
   compoundKey: string,

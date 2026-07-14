@@ -1,8 +1,5 @@
-/** @public */
-
-import { isProviderDisabled } from "../server";
-import type { SubScores } from "../telemetry";
-import { loadCache } from "../telemetry";
+import { loadCache, type SubScores } from "../telemetry";
+import { getCoreState } from "./core-context";
 
 export type ProviderState = {
   provider: string;
@@ -20,11 +17,12 @@ export type ProviderState = {
 };
 
 export async function getProviderStates(): Promise<ProviderState[]> {
+  const state = getCoreState();
   const cache = await loadCache();
   return cache.scores.map((s) => ({
     provider: s.provider,
     model: s.model,
-    enabled: !isProviderDisabled(s.provider),
+    enabled: !state.isProviderDisabled(s.provider),
     stabilityScore: s.score,
     subscores: s.subscores,
     p95Latency: s.derived.p95Ttft,

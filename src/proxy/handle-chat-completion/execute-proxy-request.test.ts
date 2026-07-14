@@ -1,75 +1,15 @@
 import assert from "node:assert";
 import { PassThrough } from "node:stream";
 import { beforeEach, describe, it } from "node:test";
-import {
-  getLastUsed,
-  getProviderStates,
-  getProviders,
-  handleChatCompletion,
-  setLastUsed,
-} from "./hive-core";
+import type { RequestMetric } from "../../telemetry";
+import { ProxyResponse } from "../proxy-response";
+import { routingMemory } from "../routing-memory";
 import {
   executeProxyRequest,
   type FailoverContext,
-  ProxyResponse,
-  routingMemory,
-} from "./proxy";
-import type { RequestMetric } from "./telemetry";
+} from "./execute-proxy-request";
 
-await describe("HiveCore module", async () => {
-  const saved: Record<string, string | undefined> = {};
-
-  beforeEach(() => {
-    setLastUsed(null, null);
-  });
-
-  await it("getProviders returns array", () => {
-    const providers = getProviders();
-    assert.ok(Array.isArray(providers));
-    assert.ok(providers.length > 0);
-  });
-
-  await it("getProviderStates returns array of states", async () => {
-    const states = await getProviderStates();
-    assert.ok(Array.isArray(states));
-    for (const s of states) {
-      assert.ok(typeof s.provider === "string");
-      assert.ok(typeof s.enabled === "boolean");
-      assert.ok(typeof s.stabilityScore === "number");
-    }
-  });
-
-  await it("returns error when no API keys are set", async () => {
-    const providers = getProviders();
-    const envVars = providers.map((p) => p.apiKeyEnvVar);
-    const unique = [...new Set(envVars)];
-
-    for (const v of unique) {
-      saved[v] = process.env[v];
-      process.env[v] = "";
-    }
-
-    const result = await handleChatCompletion({
-      model: "test-model",
-      messages: [{ role: "user", content: "hello" }],
-    });
-    assert.strictEqual(result.success, false);
-    assert.strictEqual(result.statusCode, 503);
-    assert.ok(result.error?.includes("No configured providers") ?? false);
-
-    for (const v of unique) {
-      if (saved[v] !== undefined) process.env[v] = saved[v];
-    }
-  });
-
-  await it("getLastUsed returns initial state", () => {
-    const last = getLastUsed();
-    assert.strictEqual(last.provider, null);
-    assert.strictEqual(last.model, null);
-  });
-});
-
-await describe("Hive Core Router Interception Loop", async () => {
+await describe("Proxy Router Interception Loop", async () => {
   beforeEach(() => {
     routingMemory.reset();
     process.env.HIVE_ROUTING_STRATEGY = "balanced";

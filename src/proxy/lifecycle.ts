@@ -1,11 +1,8 @@
-/** @public */
-
 import {
   buildChatEndpoint,
   discoverAndCacheModels,
   providers as staticProviders,
 } from "../providers";
-import { mutateRequest, routeRequest } from "../proxy";
 import { generateId } from "../shared/generate-id";
 import { logger } from "../shared/logger";
 import {
@@ -15,7 +12,9 @@ import {
   telemetryRecorder,
 } from "../telemetry";
 import { setLastUsed } from "./last-used-state";
+import { mutateRequest } from "./mutate-request";
 import { getProviders } from "./providers-state";
+import { routeRequest } from "./route-request";
 
 let heartbeatTimer: NodeJS.Timeout | null = null;
 let discoveryTimer: NodeJS.Timeout | null = null;

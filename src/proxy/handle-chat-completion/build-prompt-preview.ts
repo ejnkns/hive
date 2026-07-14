@@ -1,6 +1,4 @@
-/** @internal — only imported by handle-chat-completion.ts */
-
-import type { Message } from "../shared/message";
+import type { Message } from "../../shared/message";
 
 export function buildPromptPreview(lastMsg: Message | undefined): string {
   if (!lastMsg) return "";
@@ -20,9 +18,7 @@ export function buildPromptPreview(lastMsg: Message | undefined): string {
             preview += ` ${firstKey}=${JSON.stringify(args[firstKey])}`;
           }
         }
-      } catch {
-        // ignore malformed args
-      }
+      } catch {}
       return preview.slice(0, 120);
     }
   }

@@ -1,28 +1,24 @@
-/** @public — handle-chat-completion module API. Import from here, not from handle-chat-completion/ directly. */
-
 import type { PassThrough } from "node:stream";
-import {
-  emitFlowEvent,
-  executeProxyRequest,
-  type ProxyResponse,
-  routingMemory,
-} from "../proxy";
-import { buildPromptPreview } from "../proxy/build-prompt-preview";
-import { dispatchRequest } from "../proxy/dispatch-request";
-import { buildNodes } from "../proxy/execute-proxy-request/build-nodes";
-import { extractRequiredFeatures } from "../proxy/execute-proxy-request/extract-required-features";
-import { getMetricsForNode } from "../proxy/execute-proxy-request/get-metrics-for-node";
-import { filterHeaders } from "../proxy/filter-headers";
-import { resolveSessionId } from "../proxy/resolve-session-id";
-import { tryOverrideRoute } from "../proxy/try-override-route";
-import type { ChatCompletionResult } from "../proxy/types";
-import { getOverride, isProviderDisabled } from "../server";
 import { generateId } from "../shared/generate-id";
 import { logger } from "../shared/logger";
 import type { Message } from "../shared/message";
 import { conversationStore, loadCache, type Node } from "../telemetry";
+import { getCoreState } from "./core-context";
+import { emitFlowEvent } from "./flow-events";
+import { buildPromptPreview } from "./handle-chat-completion/build-prompt-preview";
+import { dispatchRequest } from "./handle-chat-completion/dispatch-request";
+import { executeProxyRequest } from "./handle-chat-completion/execute-proxy-request";
+import { buildNodes } from "./handle-chat-completion/execute-proxy-request/build-nodes";
+import { extractRequiredFeatures } from "./handle-chat-completion/execute-proxy-request/extract-required-features";
+import { getMetricsForNode } from "./handle-chat-completion/execute-proxy-request/get-metrics-for-node";
+import { filterHeaders } from "./handle-chat-completion/filter-headers";
+import { resolveSessionId } from "./handle-chat-completion/resolve-session-id";
+import { tryOverrideRoute } from "./handle-chat-completion/try-override-route";
 import { setLastUsed } from "./last-used-state";
 import { getProviders } from "./providers-state";
+import type { ProxyResponse } from "./proxy-response";
+import { routingMemory } from "./routing-memory";
+import type { ChatCompletionResult } from "./types";
 
 export type { ChatCompletionResult };
 
@@ -30,6 +26,7 @@ export async function handleChatCompletion(
   body: string | Record<string, unknown>,
   incomingHeaders: Record<string, string | string[] | undefined> = {}
 ): Promise<ChatCompletionResult> {
+  const state = getCoreState();
   const parsed:
     | Record<string, unknown>
     | { messages?: Array<Record<string, unknown>> } =
@@ -39,7 +36,7 @@ export async function handleChatCompletion(
 
   const qualified = getProviders().filter((p) => {
     const key = process.env[p.apiKeyEnvVar];
-    return key && key.length > 0 && !isProviderDisabled(p.name);
+    return key && key.length > 0 && !state.isProviderDisabled(p.name);
   });
 
   if (qualified.length === 0) {
@@ -101,7 +98,7 @@ export async function handleChatCompletion(
   ): Promise<ProxyResponse> =>
     dispatchRequest(node, payload, qualified, headers, requestId);
 
-  const override = getOverride();
+  const override = state.getOverride();
   const overrideNode =
     override && qualified.some((p) => p.name === override.provider)
       ? { providerName: override.provider, modelName: override.model }

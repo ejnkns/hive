@@ -1,5 +1,3 @@
-/** @internal — only imported by handle-chat-completion.ts */
-
 export function extractRequiredFeatures(
   parsed: Record<string, unknown>
 ): string[] {

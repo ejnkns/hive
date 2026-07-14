@@ -1,5 +1,3 @@
-/** @public */
-
 let lastProvider: string | null = null;
 let lastModel: string | null = null;
 

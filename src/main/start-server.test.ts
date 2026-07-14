@@ -1,7 +1,7 @@
 import assert from "node:assert";
 import { after, describe, it } from "node:test";
 
-import { shutdown } from "../hive-core";
+import { shutdown } from "../proxy";
 import { startServer } from "./start-server";
 
 await describe("hive", async () => {

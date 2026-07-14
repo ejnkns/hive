@@ -1,5 +1,3 @@
-/** @internal — only imported by resolve-session-id.ts */
-
 const SESSION_HEADERS = [
   "x-session-id",
   "x-session-affinity",

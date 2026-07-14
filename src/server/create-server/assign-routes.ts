@@ -2,10 +2,10 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { WebSocket } from "ws";
-import type { ChatCompletionResult, ProviderState } from "../../hive-core";
 import type { HandleOrchestrate } from "../../orchestrator/create-handler";
 import type { Provider } from "../../providers";
 import { getModelId } from "../../providers";
+import type { ChatCompletionResult, ProviderState } from "../../proxy";
 import {
   type FlowEvent,
   getSessionSnapshot,

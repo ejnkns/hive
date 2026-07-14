@@ -1,12 +1,12 @@
-import { logger } from "../../shared/logger";
-import type { RequestMetric } from "../../telemetry";
+import { logger } from "../../../shared/logger";
+import type { RequestMetric } from "../../../telemetry";
 import {
   calculateNodeScore,
   type Node,
   type RoutingStrategy,
-} from "../../telemetry";
-import { type CandidateInfo, emitFlowEvent } from "../flow-events";
-import { routingMemory } from "../routing-memory";
+} from "../../../telemetry";
+import { type CandidateInfo, emitFlowEvent } from "../../flow-events";
+import { routingMemory } from "../../routing-memory";
 
 export function selectBestNode(
   nodes: Node[],
@@ -153,7 +153,6 @@ type HiveRoutingConfig = {
 
 function getHiveConfig(): HiveRoutingConfig {
   return {
-    // env value expected to be one of "balanced", "latency", "quality"
     strategy: (process.env.HIVE_ROUTING_STRATEGY ||
       "balanced") as RoutingStrategy,
     minTokenThreshold: parseInt(

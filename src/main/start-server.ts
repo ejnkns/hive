@@ -1,13 +1,20 @@
+import { createOrchestratorHandler } from "../orchestrator";
 import {
   getLastUsed,
   getProviderStates,
   getProviders,
   handleChatCompletion,
+  initCore,
   shutdown,
   start,
-} from "../hive-core";
-import { createOrchestratorHandler } from "../orchestrator";
-import { createServer, listen } from "../server";
+} from "../proxy";
+import {
+  createServer,
+  getOverride,
+  isProviderDisabled,
+  listen,
+  loadProviders,
+} from "../server";
 import { printBanner } from "../shared/logger/ascii-banner";
 import { getServerConfig, type ServerConfig } from "../shared/server-config";
 
@@ -15,6 +22,12 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
   printBanner();
 
   const config = getServerConfig(overrides);
+
+  initCore({
+    getOverride,
+    isProviderDisabled,
+    getProviders: loadProviders,
+  });
 
   start();
 
