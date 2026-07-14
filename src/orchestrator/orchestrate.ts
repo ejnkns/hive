@@ -33,7 +33,7 @@ export async function orchestrate(
       requestId: iterationRequestId,
       sessionId: sessionId ?? "orchestrator",
       timestamp: Date.now(),
-      promptPreview: messages.at(-1)?.content?.slice(0, 80) ?? "",
+      promptPreview: messages[messages.length - 1]?.content?.slice(0, 80) ?? "",
     });
     onEvent?.({ type: "iteration_start", iteration });
 

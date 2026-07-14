@@ -20,6 +20,7 @@ import Stats from "./Stats.svelte";
 import ProviderPanel from "./ProviderPanel.svelte";
 import Sessions from "./Sessions.svelte";
 import OrchestratorPanel from "./OrchestratorPanel.svelte";
+import BottomDrawer from "./BottomDrawer.svelte";
 import LivePipeline from "./LivePipeline.svelte";
 import Logs from "./Logs.svelte";
 import DetailOverlay from "./DetailOverlay.svelte";
@@ -123,6 +124,7 @@ let detailAllMetrics: MetricData[] = $state([]);
 
 const sessionStore = createSessionStore();
 const orchestratorStore = createOrchestratorStore();
+let drawerOpen = $state(false);
 
 let headerData = $derived.by(() => {
   const t = telemetry;
@@ -364,11 +366,13 @@ onDestroy(() => {
       <Sessions sessions={sessionStore.sessions} />
       <ProviderPanel data={providersData} {metrics} {conversations} overrideKey={overrideKey} onRowClick={handleMetricClick} onToggleProvider={handleToggleProvider} lastProvider={headerData?.lastProvider ?? null} lastModel={headerData?.lastModel ?? null} />
     </div>
-    <OrchestratorPanel session={orchestratorStore.session} onStart={handleOrchestrateStart} />
     <div class="section-head" style="margin-top:1.5rem">Pipeline</div>
     <LivePipeline events={flowEvents} providers={providersData} />
     <Logs entries={logEntries} />
   </div>
+  <BottomDrawer bind:open={drawerOpen} title="Orchestrator">
+    <OrchestratorPanel session={orchestratorStore.session} onStart={handleOrchestrateStart} />
+  </BottomDrawer>
   <DetailOverlay {detailMetric} {detailAllMetrics} />
 </div>
 
