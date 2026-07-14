@@ -1,7 +1,7 @@
 <script lang="ts">
 import { onDestroy, onMount } from "svelte";
-import { type LogEntry, logger } from "../shared/logger";
-import { getServerConfig } from "../shared/server-config";
+import { type LogEntry, logger } from "hive-shared/logger";
+import { getServerConfig } from "hive-shared/server-config";
 import type {
   AvailableProvider,
   ConversationData,

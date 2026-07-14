@@ -1,4 +1,4 @@
-import type { ErrorType, FinishReason, MetricSource } from "../telemetry";
+import type { ErrorType, FinishReason, MetricSource } from "hive-telemetry";
 
 export type SubScores = {
   latency: number;

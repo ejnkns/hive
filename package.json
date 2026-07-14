@@ -27,10 +27,10 @@
     "hive": "dist/main.mjs"
   },
   "scripts": {
-    "dev:ui": "vite",
+    "dev:ui": "pnpm --filter hive-ui dev",
     "dev:server": "tsdown --tsconfig ./tsconfig.node.json --watch --on-success \"node --env-file=.env dist/main.mjs start\"",
-    "dev": "npm run dev:server & npm run dev:ui",
-    "build:ui": "vite build",
+    "dev": "pnpm run dev:server & pnpm run dev:ui",
+    "build:ui": "pnpm --filter hive-ui build",
     "build:server": "tsdown --tsconfig ./tsconfig.node.json --copy static",
     "build": "npm run build:server && npm run build:ui",
     "start": "node --env-file=.env dist/main.mjs start",
