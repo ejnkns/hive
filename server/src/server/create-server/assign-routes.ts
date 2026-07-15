@@ -10,7 +10,7 @@ import {
   disableProvider,
   enableProvider,
   isProviderDisabled,
-} from "../disabled-providers";
+} from "../disabled-providers-state";
 import type { HandleOrchestrate } from "../orchestrator/create-handler";
 import { clearOverride, getOverride, setOverride } from "../override";
 import type { Provider } from "../providers";
