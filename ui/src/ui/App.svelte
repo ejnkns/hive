@@ -26,6 +26,7 @@ import Logs from "./Logs.svelte";
 import DetailOverlay from "./DetailOverlay.svelte";
 import { createSessionStore } from "./use-sessions.svelte";
 import { createOrchestratorStore } from "./use-orchestrator.svelte";
+import CanvasHost from "./canvas/CanvasHost.svelte";
 
 type ProviderPayload = {
   name: string;
@@ -125,6 +126,15 @@ let detailAllMetrics: MetricData[] = $state([]);
 const sessionStore = createSessionStore();
 const orchestratorStore = createOrchestratorStore();
 let drawerOpen = $state(false);
+
+let currentHash = $state(window.location.hash);
+onMount(() => {
+  const onHashChange = () => {
+    currentHash = window.location.hash;
+  };
+  window.addEventListener("hashchange", onHashChange);
+  return () => window.removeEventListener("hashchange", onHashChange);
+});
 
 let headerData = $derived.by(() => {
   const t = telemetry;
@@ -361,21 +371,26 @@ onDestroy(() => {
 
 <div class="app">
   <Header data={headerData ?? undefined} onOverrideSet={handleOverrideSet} onOverrideClear={handleOverrideClear} />
-  <div class="content">
-    <Stats data={statsData} />
-    <div>
-      <div class="section-head" style="margin-top:1.5rem">Live Sessions</div>
-      <Sessions sessions={sessionStore.sessions} />
-      <ProviderPanel data={providersData} {metrics} {conversations} overrideKey={overrideKey} onRowClick={handleMetricClick} onToggleProvider={handleToggleProvider} lastProvider={headerData?.lastProvider ?? null} lastModel={headerData?.lastModel ?? null} />
+  
+  {#if currentHash === '#/canvas'}
+    <CanvasHost />
+  {:else}
+    <div class="content">
+      <Stats data={statsData} />
+      <div>
+        <div class="section-head" style="margin-top:1.5rem">Live Sessions</div>
+        <Sessions sessions={sessionStore.sessions} />
+        <ProviderPanel data={providersData} {metrics} {conversations} overrideKey={overrideKey} onRowClick={handleMetricClick} onToggleProvider={handleToggleProvider} lastProvider={headerData?.lastProvider ?? null} lastModel={headerData?.lastModel ?? null} />
+      </div>
+      <div class="section-head" style="margin-top:1.5rem">Pipeline</div>
+      <LivePipeline events={flowEvents} providers={providersData} />
+      <Logs entries={logEntries} />
     </div>
-    <div class="section-head" style="margin-top:1.5rem">Pipeline</div>
-    <LivePipeline events={flowEvents} providers={providersData} />
-    <Logs entries={logEntries} />
-  </div>
-  <BottomDrawer bind:open={drawerOpen} title="Orchestrator">
-    <OrchestratorPanel session={orchestratorStore.session} onStart={handleOrchestrateStart} />
-  </BottomDrawer>
-  <DetailOverlay {detailMetric} {detailAllMetrics} />
+    <BottomDrawer bind:open={drawerOpen} title="Orchestrator">
+      <OrchestratorPanel session={orchestratorStore.session} onStart={handleOrchestrateStart} />
+    </BottomDrawer>
+    <DetailOverlay {detailMetric} {detailAllMetrics} />
+  {/if}
 </div>
 
 <style>
