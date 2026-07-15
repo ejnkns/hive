@@ -1,4 +1,5 @@
 <script lang="ts">
+import { onMount } from "svelte";
 import { SYSTEM_PROMPT_INITIAL, SYSTEM_PROMPT_PATCH } from "./canvas-prompts";
 import { setupCanvasRuntime } from "./canvas-runtime";
 
@@ -6,9 +7,28 @@ let iframeEl: HTMLIFrameElement;
 let promptInput = $state("");
 let isStreaming = $state(false);
 let chatHistory: Array<{ role: string; content: string }> = $state([]);
+let currentHtml: string | null = $state(null);
 
-// The \/ in <\/script> prevents the Svelte parser from closing the component's <script> tag
+const SESSION_KEY = "canvas-session-id";
+function getSessionId(): string {
+  let id = localStorage.getItem(SESSION_KEY);
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem(SESSION_KEY, id);
+  }
+  return id;
+}
+const sessionId = getSessionId();
+
 const IFRAME_RUNTIME = `\x3Cscript>(${setupCanvasRuntime.toString()})(window);\x3C/script>`;
+
+async function saveState(html: string | null) {
+  await fetch(`/api/canvas-state/${sessionId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ html, chatHistory }),
+  });
+}
 
 async function handleDOMSummaryResponse(
   summary: Array<Record<string, string | null>>
@@ -27,9 +47,32 @@ $effect(() => {
     if (event.data?.type === "DOM_SUMMARY_RESPONSE") {
       handleDOMSummaryResponse(event.data.payload);
     }
+    if (event.data?.type === "HTML_SERIALIZED") {
+      currentHtml = event.data.payload;
+      saveState(event.data.payload);
+    }
   };
   window.addEventListener("message", handleMessage);
   return () => window.removeEventListener("message", handleMessage);
+});
+
+onMount(async () => {
+  const res = await fetch(`/api/canvas-state/${sessionId}`);
+  if (res.ok) {
+    const state = await res.json();
+    if (state.html) {
+      currentHtml = state.html;
+    }
+    if (state.chatHistory?.length) {
+      chatHistory = state.chatHistory;
+    }
+  }
+});
+
+$effect(() => {
+  if (currentHtml && iframeEl) {
+    iframeEl.srcdoc = IFRAME_RUNTIME + currentHtml;
+  }
 });
 
 async function submitPrompt() {
@@ -39,7 +82,9 @@ async function submitPrompt() {
   promptInput = "";
   chatHistory.push({ role: "user", content: userMessage });
 
-  const isInitial = chatHistory.length === 1;
+  saveState(currentHtml);
+
+  const isInitial = !currentHtml;
 
   if (isInitial) {
     const url = "/v1/chat/completions";
@@ -163,7 +208,9 @@ async function performStreamingRequest(
         console.log(
           "[HOST] Setting iframe.srcdoc with IFRAME_RUNTIME + htmlContent"
         );
+        currentHtml = htmlContent;
         iframeEl.srcdoc = IFRAME_RUNTIME + htmlContent;
+        saveState(htmlContent);
       } else {
         console.log("[HOST] No htmlContent extracted or iframe missing");
       }
@@ -179,6 +226,7 @@ async function performStreamingRequest(
           { type: "APPLY_PATCH", payload: jsContent },
           "*"
         );
+        iframeEl.contentWindow.postMessage({ type: "SERIALIZE_HTML" }, "*");
       } else {
         console.log("[HOST] No jsContent extracted or iframe missing");
       }

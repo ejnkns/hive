@@ -32,6 +32,16 @@ export function setupCanvasRuntime(win: Window): void {
         }
         break;
       }
+      case "SERIALIZE_HTML": {
+        win.parent.postMessage(
+          {
+            type: "HTML_SERIALIZED",
+            payload: win.document.documentElement.outerHTML,
+          },
+          "*"
+        );
+        break;
+      }
       case "REQUEST_DOM_SUMMARY": {
         const elements: Array<{
           tag: string;
