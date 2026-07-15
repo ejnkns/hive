@@ -2,7 +2,7 @@
 
 import { type PassThrough, Readable } from "node:stream";
 import { logger } from "shared/logger";
-import { handleChatCompletion } from "../proxy/proxy";
+import { handleChatCompletion } from "../proxy";
 import type { ModelCaller } from "./types";
 
 export function createHandleChatCompletionCaller(): ModelCaller {

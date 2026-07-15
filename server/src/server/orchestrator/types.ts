@@ -5,7 +5,7 @@ import type {
   ToolCall,
   ToolExecutionContext,
   ToolRegistry,
-} from "./tools/tool";
+} from "./create-local-tool-registry";
 
 export type CompletionRequest = {
   payload: Record<string, unknown>;

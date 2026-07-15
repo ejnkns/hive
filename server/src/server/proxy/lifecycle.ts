@@ -10,7 +10,7 @@ import {
   buildChatEndpoint,
   discoverAndCacheModels,
   providers as staticProviders,
-} from "../providers/providers";
+} from "../providers";
 import { setLastUsed } from "./last-used-state";
 import { mutateRequest } from "./mutate-request";
 import { getProviders } from "./providers-state";

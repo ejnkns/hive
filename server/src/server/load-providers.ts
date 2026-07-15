@@ -2,7 +2,7 @@ import {
   providers as allProviders,
   loadModelCacheSync,
   type Provider,
-} from "./providers/providers";
+} from "./providers";
 
 export function loadProviders(): ReadonlyArray<Provider> {
   const cache = loadModelCacheSync();

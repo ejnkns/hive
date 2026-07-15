@@ -2,10 +2,10 @@
 
 import { logger } from "shared/logger";
 import type { Message } from "shared/message";
-import type { Provider } from "../providers/providers";
+import type { Provider } from "../providers";
+import { createLocalToolRegistry } from "./create-local-tool-registry";
 import { createHandleChatCompletionCaller } from "./handle-chat-completion-caller";
 import { orchestrate } from "./orchestrate";
-import { createLocalToolRegistry } from "./tools/local-tool-registry";
 import type { OrchestrationEvent, OrchestrationResult } from "./types";
 
 export type HandleOrchestrate = (

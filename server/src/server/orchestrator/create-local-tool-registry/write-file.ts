@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { Tool } from "../tool";
+import type { Tool } from "../create-local-tool-registry";
 
 type WriteFileArgs = {
   path: string;

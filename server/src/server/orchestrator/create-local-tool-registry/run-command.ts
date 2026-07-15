@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import type { Tool } from "../tool";
+import type { Tool } from "../create-local-tool-registry";
 
 type RunCommandArgs = {
   command: string;

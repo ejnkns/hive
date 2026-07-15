@@ -13,16 +13,16 @@ import {
 } from "../disabled-providers";
 import type { HandleOrchestrate } from "../orchestrator/create-handler";
 import { clearOverride, getOverride, setOverride } from "../override";
-import type { Provider } from "../providers/providers";
-import { getModelId } from "../providers/providers";
-import type { ChatCompletionResult, ProviderState } from "../proxy/proxy";
+import type { Provider } from "../providers";
+import { getModelId } from "../providers";
+import type { ChatCompletionResult, ProviderState } from "../proxy";
 import {
   type FlowEvent,
   getSessionSnapshot,
   onFlowEvent,
   onSessionPatch,
   routingMemory,
-} from "../proxy/proxy";
+} from "../proxy";
 
 export type RouteDeps = {
   getProviders: () => ReadonlyArray<Provider>;

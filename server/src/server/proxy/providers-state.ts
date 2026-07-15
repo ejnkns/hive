@@ -1,4 +1,4 @@
-import type { Provider } from "../providers/providers";
+import type { Provider } from "../providers";
 import { getCoreState } from "./core-context";
 
 let providers: ReadonlyArray<Provider> | null = null;

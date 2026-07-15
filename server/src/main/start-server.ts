@@ -7,7 +7,7 @@ import {
   listen,
   loadProviders,
 } from "../server";
-import { createOrchestratorHandler } from "../server/orchestrator/orchestrator";
+import { createOrchestratorHandler } from "../server/orchestrator";
 import {
   getLastUsed,
   getProviderStates,
@@ -16,7 +16,7 @@ import {
   initCore,
   shutdown,
   start,
-} from "../server/proxy/proxy";
+} from "../server/proxy";
 
 export async function startServer(overrides?: Partial<ServerConfig>) {
   printBanner();

@@ -1,14 +1,14 @@
 import assert from "node:assert";
 import { Readable } from "node:stream";
 import { describe, it } from "node:test";
-import { orchestrate } from "./orchestrate";
 import type {
   ToolCall,
   ToolDefinition,
   ToolExecutionContext,
   ToolRegistry,
   ToolResult,
-} from "./tools/tool";
+} from "./create-local-tool-registry";
+import { orchestrate } from "./orchestrate";
 import type {
   CompletionRequest,
   CompletionResponse,

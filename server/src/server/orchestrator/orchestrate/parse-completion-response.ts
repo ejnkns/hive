@@ -1,6 +1,6 @@
 /** @internal — only imported by orchestrate.ts */
 
-import type { ToolCall } from "../tools/tool";
+import type { ToolCall } from "../create-local-tool-registry";
 
 type ParsedCompletion = {
   content: string;

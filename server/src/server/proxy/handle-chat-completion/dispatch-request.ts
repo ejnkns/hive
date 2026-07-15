@@ -1,7 +1,7 @@
 import type { IncomingHttpHeaders } from "node:http";
 import { logger } from "shared/logger";
 import { createTelemetrySink, type Node } from "telemetry";
-import { buildChatEndpoint, type Provider } from "../../providers/providers";
+import { buildChatEndpoint, type Provider } from "../../providers";
 import { mutateRequest } from "../mutate-request";
 import { ProxyResponse } from "../proxy-response";
 import { routeRequest } from "../route-request";

@@ -3,8 +3,8 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
-import { createLocalToolRegistry } from "./local-tool-registry";
-import type { ToolExecutionContext } from "./tool";
+import type { ToolExecutionContext } from "./create-local-tool-registry";
+import { createLocalToolRegistry } from "./create-local-tool-registry";
 
 function tmpDir(): string {
   return path.join(
