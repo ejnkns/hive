@@ -1,0 +1,36 @@
+{
+  "name": "server",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "bin": {
+    "hive": "dist/main.mjs"
+  },
+  "exports": {
+    ".": "./src/server.ts",
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@fastify/websocket": "^11.2.0",
+    "cac": "^6.7.14",
+    "dotenv": "^16.5.0",
+    "fastify": "^5.9.0",
+    "httpxy": "^0.5.3",
+    "shared": "workspace:*",
+    "telemetry": "workspace:*",
+    "lru-cache": "^11.5.1"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsdown --watch --on-success \"node --import tsx --env-file=../.env dist/main.mjs start\"",
+    "test": "node --import tsx --test 'src/**/*.test.ts'"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "@types/ws": "^8.18.1",
+    "tsdown": "^0.22.3",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}
