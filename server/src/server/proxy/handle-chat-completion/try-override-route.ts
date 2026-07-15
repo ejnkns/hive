@@ -1,8 +1,8 @@
 import type { PassThrough } from "node:stream";
 import { logger } from "shared/logger";
 import type { Node } from "telemetry";
+import type { ChatCompletionResult } from "../handle-chat-completion";
 import type { ProxyResponse } from "../proxy-response";
-import type { ChatCompletionResult } from "../types";
 
 export async function tryOverrideRoute(params: {
   overrideNode: { providerName: string; modelName: string } | null;

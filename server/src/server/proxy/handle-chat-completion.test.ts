@@ -1,9 +1,9 @@
 import assert from "node:assert";
 import { beforeEach, describe, it } from "node:test";
-import type { ServerState } from "./core-context";
-import { initCore } from "./core-context";
 import { handleChatCompletion } from "./handle-chat-completion";
 import { getLastUsed, setLastUsed } from "./last-used-state";
+import type { ServerState } from "./server-state";
+import { initServerState } from "./server-state";
 
 function createEmptyServerState(): ServerState {
   return {
@@ -16,7 +16,7 @@ function createEmptyServerState(): ServerState {
 await describe("handleChatCompletion", async () => {
   beforeEach(() => {
     setLastUsed(null, null);
-    initCore(createEmptyServerState());
+    initServerState(createEmptyServerState());
   });
 
   await it("returns error when no providers available", async () => {

@@ -1,8 +1,8 @@
 import assert from "node:assert";
 import { beforeEach, describe, it } from "node:test";
-import type { ServerState } from "./core-context";
-import { initCore } from "./core-context";
 import { getProviderStates } from "./get-provider-states";
+import type { ServerState } from "./server-state";
+import { initServerState } from "./server-state";
 
 function createEmptyServerState(): ServerState {
   return {
@@ -14,7 +14,7 @@ function createEmptyServerState(): ServerState {
 
 await describe("getProviderStates", async () => {
   beforeEach(() => {
-    initCore(createEmptyServerState());
+    initServerState(createEmptyServerState());
   });
 
   await it("returns array of states", async () => {

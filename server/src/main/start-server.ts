@@ -13,7 +13,7 @@ import {
   getProviderStates,
   getProviders,
   handleChatCompletion,
-  initCore,
+  initServerState,
   shutdown,
   start,
 } from "../server/proxy";
@@ -23,7 +23,7 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
 
   const config = getServerConfig(overrides);
 
-  initCore({
+  initServerState({
     getOverride,
     isProviderDisabled,
     getProviders: loadProviders,

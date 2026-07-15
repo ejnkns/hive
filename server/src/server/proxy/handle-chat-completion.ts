@@ -3,7 +3,6 @@ import { generateId } from "shared/generate-id";
 import { logger } from "shared/logger";
 import type { Message } from "shared/message";
 import { conversationStore, loadCache, type Node } from "telemetry";
-import { getCoreState } from "./core-context";
 import { emitFlowEvent } from "./flow-events";
 import { buildPromptPreview } from "./handle-chat-completion/build-prompt-preview";
 import { dispatchRequest } from "./handle-chat-completion/dispatch-request";
@@ -18,15 +17,22 @@ import { setLastUsed } from "./last-used-state";
 import { getProviders } from "./providers-state";
 import type { ProxyResponse } from "./proxy-response";
 import { routingMemory } from "./routing-memory";
-import type { ChatCompletionResult } from "./types";
+import { getServerState } from "./server-state";
 
-export type { ChatCompletionResult };
+export type ChatCompletionResult = {
+  success: boolean;
+  stream?: PassThrough;
+  provider?: string;
+  model?: string;
+  statusCode?: number;
+  error?: string;
+};
 
 export async function handleChatCompletion(
   body: string | Record<string, unknown>,
   incomingHeaders: Record<string, string | string[] | undefined> = {}
 ): Promise<ChatCompletionResult> {
-  const state = getCoreState();
+  const state = getServerState();
   const parsed:
     | Record<string, unknown>
     | { messages?: Array<Record<string, unknown>> } =

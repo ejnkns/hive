@@ -8,13 +8,15 @@ export type ServerState = {
 
 let currentState: ServerState | null = null;
 
-export function initCore(state: ServerState): void {
+export function initServerState(state: ServerState): void {
   currentState = state;
 }
 
-export function getCoreState(): ServerState {
+export function getServerState(): ServerState {
   if (!currentState) {
-    throw new Error("Core not initialized — call initCore() first");
+    throw new Error(
+      "ServerState not initialized — call initServerState() first"
+    );
   }
   return currentState;
 }

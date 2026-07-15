@@ -1,11 +1,11 @@
 import type { Provider } from "../providers";
-import { getCoreState } from "./core-context";
+import { getServerState } from "./server-state";
 
 let providers: ReadonlyArray<Provider> | null = null;
 
 function ensureProviders(): ReadonlyArray<Provider> {
   if (!providers) {
-    const loaded = getCoreState().getProviders();
+    const loaded = getServerState().getProviders();
     providers = loaded.map((p) => ({
       name: p.name,
       displayName: p.displayName,

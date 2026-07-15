@@ -1,5 +1,5 @@
 import { loadCache, type SubScores } from "telemetry";
-import { getCoreState } from "./core-context";
+import { getServerState } from "./server-state";
 
 export type ProviderState = {
   provider: string;
@@ -17,7 +17,7 @@ export type ProviderState = {
 };
 
 export async function getProviderStates(): Promise<ProviderState[]> {
-  const state = getCoreState();
+  const state = getServerState();
   const cache = await loadCache();
   return cache.scores.map((s) => ({
     provider: s.provider,
