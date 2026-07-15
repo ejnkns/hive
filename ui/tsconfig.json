@@ -1,0 +1,9 @@
+{
+  "extends": "@tsconfig/svelte/tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "lib": ["ESNext"],
+    "noEmit": true
+  },
+  "include": ["src/**/*.svelte", "src/**/*.ts"]
+}

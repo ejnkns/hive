@@ -1,73 +1,19 @@
 {
   "name": "hive",
-  "version": "0.1.0",
-  "description": "Lightweight local proxy daemon routing OpenAI-compatible agent traffic to free model providers",
-  "files": [
-    "dist",
-    "README.md"
-  ],
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/ejnkns/hive.git"
-  },
-  "homepage": "https://github.com/ejnkns/hive.git",
-  "keywords": [
-    "proxy",
-    "llm",
-    "openai-compatible",
-    "routing",
-    "failover"
-  ],
-  "engines": {
-    "node": ">=22.18.0"
-  },
-  "type": "module",
-  "bin": {
-    "hive": "dist/main.mjs"
-  },
+  "private": true,
   "scripts": {
-    "dev:ui": "vite",
-    "dev:server": "tsdown --tsconfig ./tsconfig.node.json --watch --on-success \"node --env-file=.env dist/main.mjs start\"",
-    "dev": "npm run dev:server & npm run dev:ui",
-    "build:ui": "vite build",
-    "build:server": "tsdown --tsconfig ./tsconfig.node.json --copy static",
-    "build": "npm run build:server && npm run build:ui",
-    "start": "node --env-file=.env dist/main.mjs start",
-    "test": "node --import tsx --env-file=.env.test --test 'src/**/*.test.ts'",
-    "typecheck": "tsc --noEmit --p ./tsconfig.node.json",
+    "dev:ui": "pnpm --filter ui dev",
+    "dev:server": "pnpm --filter server dev",
+    "dev": "pnpm run dev:server & pnpm run dev:ui",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
     "lint": "biome lint .",
-    "lint:fix": "biome lint --write .",
     "format": "biome format --write .",
-    "format:check": "biome format .",
-    "prepublishOnly": "npm run build",
     "prepare": "lefthook install"
-  },
-  "dependencies": {
-    "@fastify/websocket": "^11.2.0",
-    "@sveltejs/vite-plugin-svelte": "^7.1.2",
-    "cac": "^6.7.14",
-    "dotenv": "^16.5.0",
-    "fastify": "^5.9.0",
-    "httpxy": "^0.5.3",
-    "lru-cache": "^11.5.1",
-    "svelte": "^5.56.4"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.1",
-    "@tsconfig/svelte": "^5.0.8",
-    "@types/node": "^26.1.0",
-    "@types/ws": "^8.18.1",
-    "lefthook": "^2.1.9",
-    "svelte-check": "^4.7.1",
-    "tsdown": "^0.22.3",
-    "tsx": "^4.19.4",
-    "typescript": "^5.8.3",
-    "vite": "^8.1.0"
-  },
-  "allowScripts": {
-    "esbuild@0.28.1": true,
-    "fsevents@2.3.3": true,
-    "lefthook@2.1.9": true
+    "lefthook": "^2.1.9"
   }
 }

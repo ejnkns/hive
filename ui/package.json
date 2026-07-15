@@ -1,0 +1,25 @@
+{
+  "name": "ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "echo ok"
+  },
+  "dependencies": {
+    "shared": "workspace:*",
+    "telemetry": "workspace:*",
+    "svelte": "^5.56.4"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "@tsconfig/svelte": "^5.0.8",
+    "@types/node": "^26.1.0",
+    "svelte-check": "^4.7.1",
+    "typescript": "^5.8.3",
+    "vite": "^8.1.0"
+  }
+}
