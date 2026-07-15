@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { LogEntry } from "hive-shared/logger";
+import type { LogEntry } from "shared/logger";
 
 let { entries = $bindable([] as LogEntry[]) } = $props();
 

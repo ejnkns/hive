@@ -51,7 +51,7 @@ function handleTimelineClick(req: RequestState) {
       {/if}
     </div>
 
-    {#if hasConversation}
+    {#if hasConversation && latest}
       <div class="section">
         <div class="section-title">latest request conversation</div>
         <div class="conv-messages">
@@ -73,7 +73,7 @@ function handleTimelineClick(req: RequestState) {
               <div class="conv-content">
                 {#if hasToolCalls}
                   <div class="tool-call-list">
-                    {#each groupToolCalls(msg.tool_calls) as tc}
+                    {#each groupToolCalls(msg.tool_calls ?? []) as tc}
                       <span class="tool-call-badge"
                         >{formatToolCallLabel(tc)}</span
                       >

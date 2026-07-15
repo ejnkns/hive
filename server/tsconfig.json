@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "strict": true,
+    "skipLibCheck": true,
+    "declaration": true,
+    "sourceMap": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "hive-proxy": ["src/proxy/proxy"],
+      "hive-proxy/*": ["src/proxy/*"],
+      "hive-providers": ["src/providers/providers"],
+      "hive-providers/*": ["src/providers/*"],
+      "hive-orchestrator": ["src/orchestrator/orchestrator"],
+      "hive-orchestrator/*": ["src/orchestrator/*"],
+      "hive-tools": ["src/orchestrator/tools/tools"],
+      "hive-tools/*": ["src/orchestrator/tools/*"],
+      "server": ["src/server"],
+      "server/*": ["src/server/*"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

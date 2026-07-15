@@ -26,7 +26,7 @@ let activeTabs = $state<Record<string, "activity" | "conversations">>({});
 
 const groups = $derived.by(() => {
   const grouped = new Map<string, ProviderData[]>();
-  data.forEach((x) => {
+  data.forEach((x: ProviderData) => {
     const existing = grouped.get(x.name);
     if (existing) existing.push(x);
     else grouped.set(x.name, [x]);
@@ -56,7 +56,7 @@ const groups = $derived.by(() => {
 let tick = $state(0);
 $effect(() => {
   const hasTripped = data.some(
-    (e) => e.trippedUntil && e.trippedUntil > Date.now()
+    (e: ProviderData) => e.trippedUntil && e.trippedUntil > Date.now()
   );
   if (!hasTripped) return;
   const interval = setInterval(() => {
@@ -177,9 +177,9 @@ function switchTab(name: string, tab: "activity" | "conversations") {
               </div>
               <div class="tab-content">
                 {#if activeTab === "activity"}
-                  <ActivityLog data={metrics.filter((m) => m.provider === group.name)} onRowClick={onRowClickCallback} />
+                  <ActivityLog data={metrics.filter((m: MetricData) => m.provider === group.name)} onRowClick={onRowClickCallback} />
                 {:else}
-                  <Conversations data={conversations.filter((c) => c.provider === group.name)} />
+                  <Conversations data={conversations.filter((c: ConversationData) => c.provider === group.name)} />
                 {/if}
               </div>
             </div>

@@ -1,4 +1,4 @@
-import type { OrchestrationEvent } from "hive-orchestrator";
+import type { OrchestrationEvent } from "shared/orchestration-event";
 
 export type OrchestratorMessage = {
   role: string;

@@ -1,7 +1,7 @@
 <script lang="ts">
 import { onDestroy, onMount } from "svelte";
-import { type LogEntry, logger } from "hive-shared/logger";
-import { getServerConfig } from "hive-shared/server-config";
+import { type LogEntry, logger } from "shared/logger";
+import { getServerConfig } from "shared/server-config";
 import type {
   AvailableProvider,
   ConversationData,
@@ -287,7 +287,9 @@ function handleMessage(msg: WsMessage) {
     return;
   }
   if (msg.type === "orchestrator_complete") {
-    orchestratorStore.applyComplete(msg.data);
+    orchestratorStore.applyComplete(
+      msg.data as Parameters<typeof orchestratorStore.applyComplete>[0]
+    );
     return;
   }
   telemetry = msg.data;

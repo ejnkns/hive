@@ -1,6 +1,5 @@
 packages:
+  - "shared"
+  - "telemetry"
+  - "server"
   - "ui"
-allowBuilds:
-  esbuild: false
-  lefthook: false
-onlyBuiltDependencies: '["esbuild","lefthook"]'

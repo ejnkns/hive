@@ -3,16 +3,7 @@
   "compilerOptions": {
     "types": ["node"],
     "lib": ["ESNext"],
-    "strict": true,
-    "noEmit": true,
-    "baseUrl": ".",
-    "paths": {
-      "hive-shared/*": ["../src/shared/*"],
-      "hive-telemetry": ["../src/telemetry.ts"],
-      "hive-telemetry/*": ["../src/telemetry/*"],
-      "hive-orchestrator": ["../src/orchestrator.ts"],
-      "hive-orchestrator/*": ["../src/orchestrator/*"]
-    }
+    "noEmit": true
   },
   "include": ["src/**/*.svelte", "src/**/*.ts"]
 }
