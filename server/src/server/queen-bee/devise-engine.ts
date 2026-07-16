@@ -3,6 +3,7 @@
 import type { Message } from "shared/message";
 import { createDeviseModelCaller } from "./devise-engine/create-devise-model-caller";
 import { DEVISE_SYSTEM_PROMPT } from "./devise-engine/devise-system-prompt";
+import { executeDeviseTool } from "./devise-engine/devise-tools";
 
 export type DeviseSession = {
   projectId: string;
@@ -11,8 +12,16 @@ export type DeviseSession = {
 };
 
 export type DeviseEngine = {
-  start(projectId: string, prompt: string): Promise<DeviseStartResult>;
-  respond(projectId: string, answer: string): Promise<DeviseRespondResult>;
+  start(
+    projectId: string,
+    prompt: string,
+    workspacePath: string
+  ): Promise<DeviseStartResult>;
+  respond(
+    projectId: string,
+    answer: string,
+    workspacePath: string
+  ): Promise<DeviseRespondResult>;
 };
 
 export type DeviseStartResult = {
@@ -28,15 +37,19 @@ export function createDeviseEngine(): DeviseEngine {
   const modelCaller = createDeviseModelCaller();
 
   return {
-    async start(projectId, prompt) {
+    async start(projectId, prompt, workspacePath) {
       const messages: Message[] = [
         { role: "system", content: DEVISE_SYSTEM_PROMPT },
         { role: "user", content: prompt },
       ];
 
-      const result = await modelCaller.call(messages);
+      const result = await callWithToolLoop(
+        modelCaller,
+        messages,
+        workspacePath
+      );
 
-      messages.push({ role: "assistant", content: result.content });
+      messages.push({ role: "assistant", content: result });
 
       sessions.set(projectId, {
         projectId,
@@ -44,10 +57,10 @@ export function createDeviseEngine(): DeviseEngine {
         status: "active",
       });
 
-      return { question: result.content };
+      return { question: result };
     },
 
-    async respond(projectId, answer) {
+    async respond(projectId, answer, workspacePath) {
       const session = sessions.get(projectId);
       if (!session || session.status === "complete") {
         throw new Error("No active devise session for this project");
@@ -55,27 +68,79 @@ export function createDeviseEngine(): DeviseEngine {
 
       session.messages.push({ role: "user", content: answer });
 
-      const result = await modelCaller.call(session.messages);
+      const result = await callWithToolLoop(
+        modelCaller,
+        session.messages,
+        workspacePath
+      );
 
-      session.messages.push({ role: "assistant", content: result.content });
+      const isComplete = detectCompletion(result);
 
-      const isComplete = detectCompletion(result.content);
+      session.messages.push({
+        role: "assistant",
+        content: isComplete ? extractSpec(result) : result,
+      });
 
       if (isComplete) {
         session.status = "complete";
         sessions.delete(projectId);
-        return { type: "complete", spec: result.content };
+        return { type: "complete", spec: extractSpec(result) };
       }
 
-      return { type: "question", question: result.content };
+      return { type: "question", question: result };
     },
   };
 }
 
+async function callWithToolLoop(
+  modelCaller: ReturnType<typeof createDeviseModelCaller>,
+  messages: Message[],
+  workspacePath: string,
+  maxToolRounds = 10
+): Promise<string> {
+  for (let round = 0; round < maxToolRounds; round++) {
+    const response = await modelCaller.call(messages, workspacePath, true);
+
+    if (response.toolCalls.length === 0) {
+      return response.content;
+    }
+
+    for (const toolCall of response.toolCalls) {
+      const result = executeDeviseTool(toolCall, workspacePath);
+      messages.push({
+        role: "assistant",
+        content: "",
+        tool_calls: [
+          {
+            id: toolCall.id,
+            type: "function",
+            function: {
+              name: toolCall.name,
+              arguments: toolCall.arguments,
+            },
+          },
+        ],
+      });
+
+      const toolMessage: Message = {
+        role: "tool",
+        content: result.content,
+        tool_call_id: toolCall.id,
+      };
+      messages.push(toolMessage);
+    }
+  }
+
+  return "";
+}
+
 function detectCompletion(content: string): boolean {
-  return (
-    content.includes("# Requirements") ||
-    content.includes("# Overview") ||
-    content.includes("## Overview")
+  return content.includes("<requirements-complete>");
+}
+
+export function extractSpec(content: string): string {
+  const match = content.match(
+    /<requirements-complete>([\s\S]*?)<\/requirements-complete>/
   );
+  return match ? match[1].trim() : content;
 }

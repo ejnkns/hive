@@ -5,42 +5,62 @@ import type { PassThrough, Readable } from "node:stream";
 import type { Message } from "shared/message";
 
 import { handleChatCompletion } from "../../proxy";
+import { DEVISE_TOOLS, type ToolCall } from "./devise-tools";
 
 export type DeviseModelCaller = {
-  call(messages: Message[]): Promise<{ content: string; finishReason: string }>;
+  call(
+    messages: Message[],
+    workspacePath: string,
+    includeTools: boolean
+  ): Promise<DeviseModelResponse>;
+};
+
+export type DeviseModelResponse = {
+  content: string;
+  toolCalls: ToolCall[];
+  finishReason: string;
 };
 
 export function createDeviseModelCaller(): DeviseModelCaller {
   return {
-    async call(messages) {
-      const result = await handleChatCompletion({ messages, stream: true }, {});
+    async call(messages, workspacePath, includeTools) {
+      const payload: Record<string, unknown> = {
+        messages,
+        stream: true,
+      };
+
+      if (includeTools) {
+        payload.tools = DEVISE_TOOLS;
+      }
+
+      const result = await handleChatCompletion(payload, {});
 
       if (!result.success || !result.stream) {
         throw new Error(result.error ?? "Model call failed");
       }
 
-      const parsed = await consumeStream(result.stream);
-      return {
-        content: parsed.content,
-        finishReason: parsed.finishReason ?? "stop",
-      };
+      return consumeStream(result.stream, workspacePath);
     },
   };
 }
 
-type ParsedStream = {
-  content: string;
-  finishReason: string | null;
-};
-
 async function consumeStream(
-  stream: Readable | PassThrough
-): Promise<ParsedStream> {
+  stream: Readable | PassThrough,
+  _workspacePath: string
+): Promise<DeviseModelResponse> {
   let content = "";
   let finishReason: string | null = null;
   let buffer = "";
 
-  return new Promise<ParsedStream>((resolve, reject) => {
+  type ToolAccumulator = {
+    id: string;
+    type: string;
+    name: string;
+    arguments: string;
+  };
+  const toolCalls = new Map<number, ToolAccumulator>();
+
+  return new Promise<DeviseModelResponse>((resolve, reject) => {
     stream.on("data", (chunk: Buffer) => {
       buffer += chunk.toString();
 
@@ -59,17 +79,57 @@ async function consumeStream(
             | Array<Record<string, unknown>>
             | undefined;
 
-          if (choices?.[0]) {
-            const choice = choices[0];
-            const delta = choice.delta as Record<string, unknown> | undefined;
-            if (delta?.content && typeof delta.content === "string") {
-              content += delta.content;
-            }
-            if (
-              choice.finish_reason &&
-              typeof choice.finish_reason === "string"
-            ) {
-              finishReason = choice.finish_reason;
+          if (!choices?.[0]) continue;
+
+          const choice = choices[0];
+          const delta = choice.delta as Record<string, unknown> | undefined;
+
+          if (delta?.content && typeof delta.content === "string") {
+            content += delta.content;
+          }
+
+          if (
+            choice.finish_reason &&
+            typeof choice.finish_reason === "string"
+          ) {
+            finishReason = choice.finish_reason;
+          }
+
+          if (delta?.tool_calls && Array.isArray(delta.tool_calls)) {
+            for (const tc of delta.tool_calls) {
+              const toolCall = tc as Record<string, unknown>;
+              const index =
+                typeof toolCall.index === "number" ? toolCall.index : undefined;
+              if (index === undefined) continue;
+
+              const existing = toolCalls.get(index);
+              if (existing) {
+                if (toolCall.id && typeof toolCall.id === "string")
+                  existing.id = toolCall.id;
+                if (toolCall.type && typeof toolCall.type === "string")
+                  existing.type = toolCall.type;
+                const fn = toolCall.function as
+                  | Record<string, unknown>
+                  | undefined;
+                if (fn?.name && typeof fn.name === "string")
+                  existing.name = fn.name;
+                if (fn?.arguments && typeof fn.arguments === "string")
+                  existing.arguments += fn.arguments;
+              } else {
+                const fn = (toolCall.function ?? {}) as Record<string, unknown>;
+                toolCalls.set(index, {
+                  id: (typeof toolCall.id === "string"
+                    ? toolCall.id
+                    : "") as string,
+                  type: (typeof toolCall.type === "string"
+                    ? toolCall.type
+                    : "function") as string,
+                  name: (typeof fn.name === "string" ? fn.name : "") as string,
+                  arguments: (typeof fn.arguments === "string"
+                    ? fn.arguments
+                    : "") as string,
+                });
+              }
             }
           }
         } catch {
@@ -79,7 +139,20 @@ async function consumeStream(
     });
 
     stream.on("end", () => {
-      resolve({ content, finishReason });
+      const parsedToolCalls = Array.from(toolCalls.values()).map(
+        (tc) =>
+          ({
+            id: tc.id,
+            name: tc.name,
+            arguments: tc.arguments,
+          }) as ToolCall
+      );
+
+      resolve({
+        content,
+        toolCalls: parsedToolCalls,
+        finishReason: finishReason ?? "stop",
+      });
     });
 
     stream.on("error", (err) => {

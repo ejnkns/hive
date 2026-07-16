@@ -28,7 +28,11 @@ export function registerDeviseRoutes(
       }
 
       try {
-        const result = await deps.engine.start(projectId, body.prompt);
+        const result = await deps.engine.start(
+          projectId,
+          body.prompt,
+          project.repoPath
+        );
         return reply.send({ question: result.question, projectId });
       } catch (err) {
         return reply.status(500).send({
@@ -48,8 +52,19 @@ export function registerDeviseRoutes(
         return reply.status(400).send({ error: "answer is required" });
       }
 
+      const project = deps.projectStore
+        .getAll()
+        .find((p) => p.id === projectId);
+      if (!project) {
+        return reply.status(404).send({ error: "Project not found" });
+      }
+
       try {
-        const result = await deps.engine.respond(projectId, body.answer);
+        const result = await deps.engine.respond(
+          projectId,
+          body.answer,
+          project.repoPath
+        );
 
         if (result.type === "complete") {
           const project = deps.projectStore
