@@ -17,7 +17,12 @@ import {
   shutdown,
   start,
 } from "../server/proxy";
-import { createProjectStore, registerProjectRoutes } from "../server/queen-bee";
+import {
+  createDeviseEngine,
+  createProjectStore,
+  registerDeviseRoutes,
+  registerProjectRoutes,
+} from "../server/queen-bee";
 
 export async function startServer(overrides?: Partial<ServerConfig>) {
   printBanner();
@@ -38,6 +43,8 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     // Phase 1: no-op on change; Phase 3+ will broadcast via WebSocket
   });
 
+  const deviseEngine = createDeviseEngine();
+
   const server = await createServer({
     getProviders: () => getProviders(),
     getProviderStates: () => getProviderStates(),
@@ -51,6 +58,7 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
   });
 
   registerProjectRoutes(server, projectStore);
+  registerDeviseRoutes(server, { engine: deviseEngine, projectStore });
 
   listen(server, config);
 

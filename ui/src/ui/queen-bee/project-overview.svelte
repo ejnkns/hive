@@ -79,9 +79,9 @@ loadProjects();
             <div class="project-path">{project.repoPath}</div>
           </div>
           <div class="project-actions">
-            <button class="btn btn-outline" onclick={() => {}}>
+            <a class="btn btn-outline" href={`#/project/${project.id}`}>
               Open
-            </button>
+            </a>
             <button
               class="btn btn-danger"
               onclick={() => unlinkProject(project.id)}

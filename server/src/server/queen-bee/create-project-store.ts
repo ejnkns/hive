@@ -85,7 +85,7 @@ export function createProjectStore(
     },
 
     create(repoPath: string, name?: string): Project {
-      const project = createProject(repoPath, name);
+      const project = createProject(repoPath, name, registry);
       registry.projects[project.id] = { path: project.repoPath };
       save();
       return project;

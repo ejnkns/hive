@@ -28,6 +28,7 @@ import { createSessionStore } from "./use-sessions.svelte";
 import { createOrchestratorStore } from "./use-orchestrator.svelte";
 import CanvasHost from "./canvas/CanvasHost.svelte";
 import ProjectOverview from "./queen-bee/project-overview.svelte";
+import ProjectPage from "./queen-bee/project-page.svelte";
 
 type ProviderPayload = {
   name: string;
@@ -393,6 +394,8 @@ onDestroy(() => {
       <OrchestratorPanel session={orchestratorStore.session} onStart={handleOrchestrateStart} />
     </BottomDrawer>
     <DetailOverlay {detailMetric} {detailAllMetrics} />
+  {:else if currentHash.startsWith('#/project/')}
+    <ProjectPage projectId={currentHash.slice('#/project/'.length)} />
   {:else}
     <ProjectOverview />
   {/if}

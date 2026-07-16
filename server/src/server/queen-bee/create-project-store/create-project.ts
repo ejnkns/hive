@@ -2,15 +2,19 @@
 
 import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { generateId } from "shared/generate-id";
-import type { Project } from "../create-project-store";
+import type { Project, ProjectRegistry } from "../create-project-store";
 
-export function createProject(repoPath: string, name?: string): Project {
+export function createProject(
+  repoPath: string,
+  name?: string,
+  registry?: ProjectRegistry
+): Project {
   const resolved = resolveRepoPath(repoPath);
   validateGitRepo(resolved);
 
-  const id = generateId();
   const projectName = name ?? repoPath.split("/").pop() ?? repoPath;
+  const slug = slugify(projectName);
+  const id = makeUnique(slug, registry);
   const createdAt = new Date().toISOString();
 
   const hiveDir = join(resolved, ".hive");
@@ -40,6 +44,25 @@ export function createProject(repoPath: string, name?: string): Project {
     systemPrompt: "",
     codingGuidelines: "",
   };
+}
+
+function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 50);
+}
+
+function makeUnique(slug: string, registry?: ProjectRegistry): string {
+  if (!registry) return slug;
+  if (!(slug in registry.projects)) return slug;
+
+  let n = 2;
+  while (`${slug}-${n}` in registry.projects) {
+    n++;
+  }
+  return `${slug}-${n}`;
 }
 
 function resolveRepoPath(input: string): string {
