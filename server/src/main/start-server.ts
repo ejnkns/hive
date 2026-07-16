@@ -18,8 +18,11 @@ import {
   start,
 } from "../server/proxy";
 import {
+  createBoardStore,
   createDeviseEngine,
+  createPlanner,
   createProjectStore,
+  registerBoardRoutes,
   registerDeviseRoutes,
   registerProjectRoutes,
 } from "../server/queen-bee";
@@ -44,6 +47,8 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
   });
 
   const deviseEngine = createDeviseEngine();
+  const boardStore = createBoardStore(() => {});
+  const planner = createPlanner(boardStore);
 
   const server = await createServer({
     getProviders: () => getProviders(),
@@ -59,6 +64,7 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
 
   registerProjectRoutes(server, projectStore);
   registerDeviseRoutes(server, { engine: deviseEngine, projectStore });
+  registerBoardRoutes(server, { boardStore, planner, projectStore });
 
   listen(server, config);
 

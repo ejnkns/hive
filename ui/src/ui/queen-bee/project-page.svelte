@@ -1,6 +1,7 @@
 <script lang="ts">
 import { onMount } from "svelte";
 import DeviseChat from "./devise-chat.svelte";
+import KanbanBoard from "./kanban-board.svelte";
 
 let { projectId }: Props = $props();
 
@@ -9,6 +10,7 @@ type Props = {
 };
 
 let hasRequirements = $state<boolean | null>(null);
+let hasBoard = $state<boolean | null>(null);
 let loading = $state(true);
 
 onMount(() => {
@@ -22,6 +24,19 @@ async function checkStatus() {
     if (!res.ok) throw new Error("Failed to load project");
     const data = (await res.json()) as { hasRequirements: boolean };
     hasRequirements = data.hasRequirements;
+
+    if (data.hasRequirements) {
+      try {
+        const boardRes = await fetch(`/api/queen-bee/${projectId}/board`);
+        if (boardRes.ok) {
+          const boardData = (await boardRes.json()) as { cards: unknown[] };
+          hasBoard =
+            Array.isArray(boardData.cards) && boardData.cards.length > 0;
+        }
+      } catch {
+        hasBoard = false;
+      }
+    }
   } catch {
     hasRequirements = null;
   } finally {
@@ -38,14 +53,18 @@ async function checkStatus() {
 
   {#if loading}
     <div class="loading">Loading...</div>
+  {:else if hasBoard}
+    <KanbanBoard {projectId} />
   {:else if hasRequirements === true}
     <div class="placeholder">
       <div class="placeholder-icon">+</div>
       <h2>Requirements Complete</h2>
-      <p>The kanban board is coming in Phase 3.</p>
+      <p>Open the board and click "Plan Cards" to generate tasks.</p>
     </div>
-  {:else}
+  {:else if hasRequirements === false}
     <DeviseChat {projectId} />
+  {:else}
+    <div class="loading">Could not load project.</div>
   {/if}
 </div>
 

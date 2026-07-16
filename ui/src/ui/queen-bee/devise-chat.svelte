@@ -20,7 +20,7 @@ let error = $state<string | null>(null);
 async function startDevise(prompt: string) {
   loading = true;
   error = null;
-  messages = [];
+  messages = [{ role: "user", content: prompt }];
   complete = false;
   spec = "";
 
