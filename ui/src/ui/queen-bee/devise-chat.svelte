@@ -1,8 +1,10 @@
 <script lang="ts">
-let { projectId }: Props = $props();
+let { projectId, onComplete, initialPrompt }: Props = $props();
 
 type Props = {
   projectId: string;
+  onComplete?: () => void;
+  initialPrompt?: string;
 };
 
 type Message = {
@@ -16,6 +18,12 @@ let loading = $state(false);
 let complete = $state(false);
 let spec = $state("");
 let error = $state<string | null>(null);
+
+$effect(() => {
+  if (initialPrompt) {
+    startDevise(initialPrompt);
+  }
+});
 
 async function startDevise(prompt: string) {
   loading = true;
@@ -37,7 +45,7 @@ async function startDevise(prompt: string) {
     }
 
     const data = (await res.json()) as { question: string };
-    messages = [{ role: "model", content: data.question }];
+    messages.push({ role: "model", content: data.question });
   } catch (err) {
     error = err instanceof Error ? err.message : "Unknown error";
   } finally {
@@ -73,6 +81,7 @@ async function respond(answer: string) {
       complete = true;
       spec = data.spec;
       messages.push({ role: "model", content: data.spec });
+      onComplete?.();
     } else {
       messages.push({ role: "model", content: data.question });
     }

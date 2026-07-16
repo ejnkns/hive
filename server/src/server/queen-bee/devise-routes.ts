@@ -1,6 +1,6 @@
 /** @private — only imported by queen-bee.ts */
 
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
 import type { ProjectStore } from "./create-project-store";
@@ -115,6 +115,33 @@ export function registerDeviseRoutes(
       const hasRequirements = existsSync(requirementsPath);
 
       return reply.send({ projectId, hasRequirements });
+    }
+  );
+
+  server.get(
+    "/api/queen-bee/:projectId/requirements",
+    async (request, reply) => {
+      const { projectId } = request.params as { projectId: string };
+
+      const project = deps.projectStore
+        .getAll()
+        .find((p) => p.id === projectId);
+      if (!project) {
+        return reply.status(404).send({ error: "Project not found" });
+      }
+
+      const requirementsPath = join(
+        project.repoPath,
+        ".hive",
+        "requirements.md"
+      );
+
+      try {
+        const content = readFileSync(requirementsPath, "utf-8");
+        return reply.send({ content });
+      } catch {
+        return reply.status(404).send({ error: "Requirements not found" });
+      }
     }
   );
 }

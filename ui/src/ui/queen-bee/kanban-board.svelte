@@ -3,10 +3,11 @@ import type { Card, Column } from "shared/board-types";
 import KanbanCard from "./kanban-card.svelte";
 import CardDetail from "./card-detail.svelte";
 
-let { projectId }: Props = $props();
+let { projectId, onAmend }: Props = $props();
 
 type Props = {
   projectId: string;
+  onAmend: () => void;
 };
 
 type Board = {
@@ -36,6 +37,10 @@ let board: Board | null = $state(null);
 let loading = $state(true);
 let error = $state<string | null>(null);
 let selectedCard: Card | null = $state(null);
+let showRequirements = $state(false);
+let requirementsText = $state("");
+let reqLoading = $state(false);
+let planning = $state(false);
 
 async function loadBoard() {
   loading = true;
@@ -48,6 +53,34 @@ async function loadBoard() {
     error = err instanceof Error ? err.message : "Unknown error";
   } finally {
     loading = false;
+  }
+}
+
+async function loadRequirements() {
+  if (requirementsText) {
+    showRequirements = !showRequirements;
+    return;
+  }
+  showRequirements = true;
+  reqLoading = true;
+  try {
+    const res = await fetch(`/api/queen-bee/${projectId}/requirements`);
+    if (res.ok) {
+      const data = (await res.json()) as { content: string };
+      requirementsText = data.content;
+    }
+  } catch {
+    // ignore
+  } finally {
+    reqLoading = false;
+  }
+}
+
+function toggleRequirements() {
+  if (showRequirements) {
+    showRequirements = false;
+  } else {
+    loadRequirements();
   }
 }
 
@@ -64,15 +97,17 @@ async function moveCard(cardId: string, column: Column) {
   }
 }
 
-async function handlePlan() {
+async function handleReplan() {
+  planning = true;
   try {
-    const res = await fetch(`/api/queen-bee/${projectId}/plan`, {
+    await fetch(`/api/queen-bee/${projectId}/plan`, {
       method: "POST",
     });
-    if (!res.ok) throw new Error("Planning failed");
     await loadBoard();
-  } catch (err) {
-    error = err instanceof Error ? err.message : "Unknown error";
+  } catch {
+    // ignore
+  } finally {
+    planning = false;
   }
 }
 
@@ -87,10 +122,27 @@ loadBoard();
   <div class="board-header">
     <h2>Board</h2>
     <div class="board-actions">
-      <button class="btn btn-outline" onclick={loadBoard}>Refresh</button>
-      <button class="btn btn-primary" onclick={handlePlan}>Plan Cards</button>
+      <button class="btn btn-outline" onclick={toggleRequirements}>
+        {showRequirements ? "Hide" : "View"} Requirements
+      </button>
+      <button class="btn btn-outline" onclick={onAmend}>
+        Amend
+      </button>
+      <button class="btn btn-outline" onclick={handleReplan} disabled={planning}>
+        {planning ? "Replanning..." : "Replan"}
+      </button>
     </div>
   </div>
+
+  {#if showRequirements}
+    <div class="requirements-bar">
+      {#if reqLoading}
+        <div class="req-loading">Loading...</div>
+      {:else}
+        <pre class="req-content">{requirementsText}</pre>
+      {/if}
+    </div>
+  {/if}
 
   {#if error}
     <div class="error">{error}</div>
@@ -121,7 +173,7 @@ loadBoard();
     </div>
   {:else}
     <div class="empty">
-      <p>No board yet. Plan cards from the requirements document to get started.</p>
+      <p>No board yet.</p>
     </div>
   {/if}
 
@@ -148,7 +200,7 @@ loadBoard();
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
   }
 
   .board-header h2 {
@@ -160,28 +212,53 @@ loadBoard();
 
   .board-actions {
     display: flex;
-    gap: 0.5rem;
+    gap: 0.375rem;
+  }
+
+  .requirements-bar {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 0.75rem;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  .req-loading {
+    padding: 0.75rem;
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+
+  .req-content {
+    padding: 0.75rem;
+    margin: 0;
+    font-size: 0.6875rem;
+    font-family: var(--font-mono, monospace);
+    color: var(--text);
+    white-space: pre-wrap;
+    line-height: 1.5;
   }
 
   .btn {
-    padding: 0.375rem 0.75rem;
+    padding: 0.375rem 0.625rem;
     border: 1px solid var(--border);
-    border-radius: 6px;
-    font-size: 0.75rem;
+    border-radius: 5px;
+    font-size: 0.6875rem;
     font-weight: 500;
     cursor: pointer;
     background: var(--surface);
     color: var(--text);
+    white-space: nowrap;
   }
 
-  .btn:hover {
+  .btn:hover:not(:disabled) {
     background: var(--border);
   }
 
-  .btn-primary {
-    background: var(--accent);
-    color: #1b1601;
-    border-color: var(--accent);
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
 
   .btn-outline {
