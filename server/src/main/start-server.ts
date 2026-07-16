@@ -17,6 +17,7 @@ import {
   shutdown,
   start,
 } from "../server/proxy";
+import { createProjectStore, registerProjectRoutes } from "../server/queen-bee";
 
 export async function startServer(overrides?: Partial<ServerConfig>) {
   printBanner();
@@ -33,6 +34,10 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
 
   const workspacePath = process.env.HIVE_WORKSPACE_PATH ?? process.cwd();
 
+  const projectStore = createProjectStore(() => {
+    // Phase 1: no-op on change; Phase 3+ will broadcast via WebSocket
+  });
+
   const server = await createServer({
     getProviders: () => getProviders(),
     getProviderStates: () => getProviderStates(),
@@ -44,6 +49,9 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
       workspacePath,
     }),
   });
+
+  registerProjectRoutes(server, projectStore);
+
   listen(server, config);
 
   process.on("SIGINT", () => {

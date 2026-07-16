@@ -27,6 +27,7 @@ import DetailOverlay from "./DetailOverlay.svelte";
 import { createSessionStore } from "./use-sessions.svelte";
 import { createOrchestratorStore } from "./use-orchestrator.svelte";
 import CanvasHost from "./canvas/CanvasHost.svelte";
+import ProjectOverview from "./queen-bee/project-overview.svelte";
 
 type ProviderPayload = {
   name: string;
@@ -376,7 +377,7 @@ onDestroy(() => {
   
   {#if currentHash === '#/canvas'}
     <CanvasHost />
-  {:else}
+  {:else if currentHash === '#/dashboard'}
     <div class="content">
       <Stats data={statsData} />
       <div>
@@ -392,6 +393,8 @@ onDestroy(() => {
       <OrchestratorPanel session={orchestratorStore.session} onStart={handleOrchestrateStart} />
     </BottomDrawer>
     <DetailOverlay {detailMetric} {detailAllMetrics} />
+  {:else}
+    <ProjectOverview />
   {/if}
 </div>
 
