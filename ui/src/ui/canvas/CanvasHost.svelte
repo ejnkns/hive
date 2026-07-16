@@ -3,10 +3,16 @@ import { onMount } from "svelte";
 import { SYSTEM_PROMPT_INITIAL, SYSTEM_PROMPT_PATCH } from "./canvas-prompts";
 import { setupCanvasRuntime } from "./canvas-runtime";
 
+type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+  responseText?: string;
+};
+
 let iframeEl: HTMLIFrameElement | undefined = $state();
 let promptInput = $state("");
 let isStreaming = $state(false);
-let chatHistory: Array<{ role: string; content: string }> = $state([]);
+let chatHistory: ChatMessage[] = $state([]);
 let currentHtml: string | null = $state(null);
 let stateLoaded = $state(false);
 
@@ -108,7 +114,7 @@ async function submitPrompt() {
 
 function extractContent(
   response: string,
-  tag: "canvas-build" | "canvas-patch"
+  tag: "canvas-build" | "canvas-patch" | "canvas-response"
 ): string | null {
   const startTag = `<${tag}>`;
   const endTag = `</${tag}>`;
@@ -176,6 +182,8 @@ async function performStreamingRequest(
       }
     }
 
+    const responseText = extractContent(fullResponse, "canvas-response");
+
     if (isInitial) {
       const htmlContent = extractContent(fullResponse, "canvas-build");
       if (htmlContent) {
@@ -183,17 +191,27 @@ async function performStreamingRequest(
         saveState(htmlContent);
       }
     } else {
-      const jsContent = extractContent(fullResponse, "canvas-patch");
-      if (jsContent && iframeEl?.contentWindow) {
-        iframeEl.contentWindow.postMessage(
-          { type: "APPLY_PATCH", payload: jsContent },
-          "*"
-        );
-        iframeEl.contentWindow.postMessage({ type: "SERIALIZE_HTML" }, "*");
+      const htmlContent = extractContent(fullResponse, "canvas-build");
+      if (htmlContent) {
+        currentHtml = htmlContent;
+        saveState(htmlContent);
+      } else {
+        const jsContent = extractContent(fullResponse, "canvas-patch");
+        if (jsContent && iframeEl?.contentWindow) {
+          iframeEl.contentWindow.postMessage(
+            { type: "APPLY_PATCH", payload: jsContent },
+            "*"
+          );
+          iframeEl.contentWindow.postMessage({ type: "SERIALIZE_HTML" }, "*");
+        }
       }
     }
 
-    chatHistory.push({ role: "assistant", content: fullResponse });
+    chatHistory.push({
+      role: "assistant",
+      content: fullResponse,
+      responseText: responseText ?? undefined,
+    });
   } catch (err) {
     console.error("[HOST] Error:", err);
   } finally {
@@ -218,6 +236,8 @@ async function performStreamingRequest(
       {#each chatHistory as msg}
         {#if msg.role === 'user'}
           <div class="msg user-msg">{msg.content}</div>
+        {:else if msg.responseText}
+          <div class="msg assistant-msg">{msg.responseText}</div>
         {/if}
       {/each}
     </div>
@@ -291,6 +311,11 @@ async function performStreamingRequest(
   .user-msg {
     font-weight: 500;
     color: var(--accent);
+  }
+
+  .assistant-msg {
+    font-weight: 400;
+    color: var(--text);
   }
 
   .input-area {
