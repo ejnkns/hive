@@ -5,6 +5,7 @@ import { addLogListener, getRecentLogs, logger } from "shared/logger";
 import { getServerConfig } from "shared/server-config";
 import { conversationStore, loadCache, telemetryRecorder } from "telemetry";
 import type { WebSocket } from "ws";
+import { getCanvasState, setCanvasState } from "../canvas/canvas-state";
 import type { FastifyServer } from "../create-server";
 import {
   disableProvider,
@@ -461,6 +462,28 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
     reply.send({
       conversations: conversationStore.getConversations(),
     });
+  });
+
+  server.get("/api/canvas-state/:sessionId", async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string };
+    const state = getCanvasState(sessionId);
+    if (!state) {
+      return reply.status(404).send({ error: "not found" });
+    }
+    return reply.send(state);
+  });
+
+  server.post("/api/canvas-state/:sessionId", async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string };
+    const body = request.body as {
+      html?: string;
+      chatHistory?: Array<{ role: string; content: string }>;
+    };
+    setCanvasState(sessionId, {
+      html: body.html ?? null,
+      chatHistory: body.chatHistory ?? [],
+    });
+    return reply.send({ ok: true });
   });
 
   return server;

@@ -25,9 +25,9 @@ export default defineConfig({
         changeOrigin: true,
         ws: true,
       },
-      "/api": "http://localhost:8153",
-      "/v1": "http://localhost:8153",
-      "/health": "http://localhost:8153",
+      "/api": "http://127.0.0.1:8153",
+      "/v1": "http://127.0.0.1:8153",
+      "/health": "http://127.0.0.1:8153",
     },
   },
 });

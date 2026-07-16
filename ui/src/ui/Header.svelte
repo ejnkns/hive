@@ -112,8 +112,11 @@ function toggleTheme() {
 
 <div class="header-inner">
   <div class="logo-area">
-    <span class="logo-text">[ <b>h i v e</b> ]</span>
+    <a href="#/" class="logo-text">[ <b>h i v e</b> ]</a>
     <pre class="logo-ascii">{logo}</pre>
+    <div style="margin-top:0.5rem">
+      <a href="#/canvas" class="nav-link">Ephemeral Canvas &rarr;</a>
+    </div>
   </div>
   <div class="header-meta">
     <div class="status-row">
@@ -185,7 +188,16 @@ function toggleTheme() {
     color: var(--logo-text);
     white-space: nowrap;
     width: 248px;
-    text-align: right;
+    text-decoration: none;
+  }
+  .nav-link {
+    font-size: 0.75rem;
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: bold;
+  }
+  .nav-link:hover {
+    text-decoration: underline;
   }
   .header-meta {
     text-align: right;
