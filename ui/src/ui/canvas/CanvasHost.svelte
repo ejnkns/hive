@@ -3,11 +3,12 @@ import { onMount } from "svelte";
 import { SYSTEM_PROMPT_INITIAL, SYSTEM_PROMPT_PATCH } from "./canvas-prompts";
 import { setupCanvasRuntime } from "./canvas-runtime";
 
-let iframeEl: HTMLIFrameElement;
+let iframeEl: HTMLIFrameElement | undefined = $state();
 let promptInput = $state("");
 let isStreaming = $state(false);
 let chatHistory: Array<{ role: string; content: string }> = $state([]);
 let currentHtml: string | null = $state(null);
+let stateLoaded = $state(false);
 
 const SESSION_KEY = "canvas-session-id";
 function getSessionId(): string {
@@ -48,7 +49,6 @@ $effect(() => {
       handleDOMSummaryResponse(event.data.payload);
     }
     if (event.data?.type === "HTML_SERIALIZED") {
-      currentHtml = event.data.payload;
       saveState(event.data.payload);
     }
   };
@@ -67,13 +67,19 @@ onMount(async () => {
       chatHistory = state.chatHistory;
     }
   }
+  stateLoaded = true;
 });
 
-$effect(() => {
-  if (currentHtml && iframeEl) {
-    iframeEl.srcdoc = IFRAME_RUNTIME + currentHtml;
-  }
-});
+const DOCTYPE_PREFIX = "<!DOCTYPE html>";
+
+function stripDoctype(html: string): string {
+  return html.replace(/^<!DOCTYPE\s+html[^>]*>/i, "").trimStart();
+}
+
+function buildSrcdoc(html: string | null): string {
+  if (!html) return IFRAME_RUNTIME;
+  return DOCTYPE_PREFIX + IFRAME_RUNTIME + stripDoctype(html);
+}
 
 async function submitPrompt() {
   if (!promptInput.trim() || isStreaming) return;
@@ -120,17 +126,11 @@ async function performStreamingRequest(
   messages: Array<{ role: string; content: string }>,
   isInitial: boolean
 ) {
-  console.log("[HOST] performStreamingRequest", {
-    url,
-    isInitial,
-    msgCount: messages.length,
-  });
   isStreaming = true;
   let fullResponse = "";
   let lineBuffer = "";
 
   try {
-    console.log("[HOST] Sending fetch to", url);
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -141,25 +141,17 @@ async function performStreamingRequest(
       }),
     });
 
-    console.log("[HOST] fetch response", {
-      status: res.status,
-      ok: res.ok,
-      hasBody: !!res.body,
-    });
-
     if (!res.ok || !res.body) throw new Error("Failed to connect to backend");
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
 
     if (isInitial) {
-      console.log("[HOST] Sending BUILD_START to iframe");
-      iframeEl.contentWindow?.postMessage({ type: "BUILD_START" }, "*");
+      iframeEl?.contentWindow?.postMessage({ type: "BUILD_START" }, "*");
     }
 
     while (true) {
       const { done, value } = await reader.read();
-      console.log("[HOST] read()", { done, bytes: value?.byteLength ?? 0 });
       if (done) break;
 
       const chunk = decoder.decode(value, { stream: true });
@@ -167,9 +159,7 @@ async function performStreamingRequest(
       const lines = lineBuffer.split("\n");
       lineBuffer = lines.pop() ?? "";
 
-      console.log("[HOST] chunk decoded into", lines.length, "lines");
-
-      for (const [lineIdx, line] of lines.entries()) {
+      for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed.startsWith("data: ") || trimmed === "data: [DONE]")
           continue;
@@ -179,56 +169,27 @@ async function performStreamingRequest(
           const delta = parsed.choices?.[0]?.delta?.content || "";
           if (delta) {
             fullResponse += delta;
-            console.log("[HOST] delta accumulated", {
-              lineIdx,
-              deltaLen: delta.length,
-              deltaPreview: delta.substring(0, 40),
-              fullLen: fullResponse.length,
-            });
           }
-        } catch (e) {
-          console.log("[HOST] parse error on line", {
-            lineIdx,
-            linePreview: line.substring(0, 80),
-            error: (e as Error).message,
-          });
+        } catch {
+          // skip malformed SSE lines
         }
       }
     }
 
-    console.log("[HOST] Stream complete. fullResponse:", fullResponse);
-
     if (isInitial) {
       const htmlContent = extractContent(fullResponse, "canvas-build");
-      console.log(
-        "[HOST] Extracted htmlContent:",
-        htmlContent ? htmlContent.length + " chars" : "null"
-      );
-      if (htmlContent && iframeEl) {
-        console.log(
-          "[HOST] Setting iframe.srcdoc with IFRAME_RUNTIME + htmlContent"
-        );
+      if (htmlContent) {
         currentHtml = htmlContent;
-        iframeEl.srcdoc = IFRAME_RUNTIME + htmlContent;
         saveState(htmlContent);
-      } else {
-        console.log("[HOST] No htmlContent extracted or iframe missing");
       }
     } else {
       const jsContent = extractContent(fullResponse, "canvas-patch");
-      console.log(
-        "[HOST] Extracted jsContent:",
-        jsContent ? jsContent.length + " chars" : "null"
-      );
       if (jsContent && iframeEl?.contentWindow) {
-        console.log("[HOST] Sending APPLY_PATCH to iframe");
         iframeEl.contentWindow.postMessage(
           { type: "APPLY_PATCH", payload: jsContent },
           "*"
         );
         iframeEl.contentWindow.postMessage({ type: "SERIALIZE_HTML" }, "*");
-      } else {
-        console.log("[HOST] No jsContent extracted or iframe missing");
       }
     }
 
@@ -242,13 +203,15 @@ async function performStreamingRequest(
 </script>
 
 <div class="canvas-container">
-  <iframe
-    bind:this={iframeEl}
-    sandbox="allow-scripts" 
-    srcdoc={IFRAME_RUNTIME}
-    class="canvas-iframe"
-    title="Ephemeral Canvas"
-  ></iframe>
+  {#if stateLoaded}
+    <iframe
+      bind:this={iframeEl}
+      sandbox="allow-scripts"
+      srcdoc={buildSrcdoc(currentHtml)}
+      class="canvas-iframe"
+      title="Ephemeral Canvas"
+    ></iframe>
+  {/if}
 
   <div class="floating-panel">
     <div class="chat-history">
