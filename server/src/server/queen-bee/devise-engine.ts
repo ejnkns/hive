@@ -1,7 +1,10 @@
 /** @public */
 
 import type { Message } from "shared/message";
-import { createDeviseModelCaller } from "./devise-engine/create-devise-model-caller";
+import {
+  createDeviseModelCaller,
+  type DeviseModelCaller,
+} from "./devise-engine/create-devise-model-caller";
 import { DEVISE_SYSTEM_PROMPT } from "./devise-engine/devise-system-prompt";
 import { executeDeviseTool } from "./devise-engine/devise-tools";
 
@@ -32,9 +35,11 @@ export type DeviseRespondResult =
   | { type: "question"; question: string }
   | { type: "complete"; spec: string };
 
-export function createDeviseEngine(): DeviseEngine {
+export function createDeviseEngine(
+  modelCaller?: DeviseModelCaller
+): DeviseEngine {
+  const caller = modelCaller ?? createDeviseModelCaller();
   const sessions = new Map<string, DeviseSession>();
-  const modelCaller = createDeviseModelCaller();
 
   return {
     async start(projectId, prompt, workspacePath) {
@@ -43,11 +48,7 @@ export function createDeviseEngine(): DeviseEngine {
         { role: "user", content: prompt },
       ];
 
-      const result = await callWithToolLoop(
-        modelCaller,
-        messages,
-        workspacePath
-      );
+      const result = await callWithToolLoop(caller, messages, workspacePath);
 
       messages.push({ role: "assistant", content: result });
 
@@ -69,7 +70,7 @@ export function createDeviseEngine(): DeviseEngine {
       session.messages.push({ role: "user", content: answer });
 
       const result = await callWithToolLoop(
-        modelCaller,
+        caller,
         session.messages,
         workspacePath
       );
@@ -93,13 +94,13 @@ export function createDeviseEngine(): DeviseEngine {
 }
 
 async function callWithToolLoop(
-  modelCaller: ReturnType<typeof createDeviseModelCaller>,
+  caller: DeviseModelCaller,
   messages: Message[],
   workspacePath: string,
   maxToolRounds = 10
 ): Promise<string> {
   for (let round = 0; round < maxToolRounds; round++) {
-    const response = await modelCaller.call(messages, workspacePath, true);
+    const response = await caller.call(messages, workspacePath, true);
 
     if (response.toolCalls.length === 0) {
       return response.content;

@@ -1,5 +1,6 @@
 /** @private — only imported by create-devise-model-caller.ts */
 
+import { execSync } from "node:child_process";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
@@ -194,17 +195,13 @@ function searchCode(toolCall: ToolCall, workspacePath: string): ToolResult {
   }
 
   try {
-    const { execSync } =
-      require("node:child_process") as typeof import("node:child_process");
-    const result = execSync(
-      `rg -n --no-heading -e "${args.pattern.replace(/"/g, '\\"')}" .`,
-      {
-        cwd: workspacePath,
-        encoding: "utf-8",
-        maxBuffer: 1024 * 1024,
-        timeout: 10_000,
-      }
-    );
+    const escaped = args.pattern.replace(/"/g, '\\"');
+    const result = execSync(`rg -n --no-heading -e "${escaped}" .`, {
+      cwd: workspacePath,
+      encoding: "utf-8",
+      maxBuffer: 1024 * 1024,
+      timeout: 10_000,
+    });
 
     const lines = result.split("\n").filter(Boolean);
     const truncated = lines.slice(0, 100).join("\n");
