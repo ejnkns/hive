@@ -34,8 +34,7 @@ function emptyResponse(content: string): DeviseModelResponse {
 
 function completionResponse(): DeviseModelResponse {
   return {
-    content:
-      "<requirements-complete>\n# Requirements\n\n## Overview\nTest app\n</requirements-complete>",
+    content: "# Requirements\n\n## Overview\nTest app\n\nREQUIREMENTS_COMPLETE",
     toolCalls: [],
     finishReason: "stop",
   };
@@ -66,26 +65,27 @@ describe("DEVISE_SYSTEM_PROMPT", () => {
     assert.ok(DEVISE_SYSTEM_PROMPT.includes("RECOMMENDED ANSWER"));
     assert.ok(DEVISE_SYSTEM_PROMPT.includes("BREADTH-FIRST"));
     assert.ok(DEVISE_SYSTEM_PROMPT.includes("Codebase exploration"));
-    assert.ok(DEVISE_SYSTEM_PROMPT.includes("<requirements-complete>"));
+    assert.ok(DEVISE_SYSTEM_PROMPT.includes("REQUIREMENTS_COMPLETE"));
+    assert.ok(
+      DEVISE_SYSTEM_PROMPT.includes("requirements analyst, not an implementer")
+    );
   });
 });
 
 describe("extractSpec", () => {
-  it("extracts content between tags", () => {
-    const content =
-      "before\n<requirements-complete>\n# Spec\n\n## Hello\n</requirements-complete>\nafter";
+  it("strips REQUIREMENTS_COMPLETE signal and trims", () => {
+    const content = "before\nREQUIREMENTS_COMPLETE\n# Spec\n\n## Hello";
     const result = extractSpec(content);
-    assert.strictEqual(result, "# Spec\n\n## Hello");
+    assert.strictEqual(result, "before\n\n# Spec\n\n## Hello");
   });
 
-  it("returns trimmed content", () => {
-    const content =
-      "<requirements-complete>\n  \n# Spec\n\n  \n</requirements-complete>";
+  it("strips multiple occurrences of the signal", () => {
+    const content = "REQUIREMENTS_COMPLETE\n\n# Spec\n\nREQUIREMENTS_COMPLETE";
     assert.strictEqual(extractSpec(content), "# Spec");
   });
 
-  it("returns full content when no tags present", () => {
-    assert.strictEqual(extractSpec("# Just text"), "# Just text");
+  it("returns trimmed content when no signal present", () => {
+    assert.strictEqual(extractSpec("  # Just text  "), "# Just text");
   });
 });
 
@@ -129,7 +129,7 @@ describe("DeviseEngine", () => {
     if (result.type === "complete") {
       assert.ok(result.spec.includes("# Requirements"));
       assert.ok(result.spec.includes("Test app"));
-      assert.ok(!result.spec.includes("<requirements-complete>"));
+      assert.ok(!result.spec.includes("REQUIREMENTS_COMPLETE"));
     }
   });
 

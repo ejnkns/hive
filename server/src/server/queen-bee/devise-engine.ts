@@ -25,6 +25,7 @@ export type DeviseEngine = {
     answer: string,
     workspacePath: string
   ): Promise<DeviseRespondResult>;
+  getSession(projectId: string): DeviseSession | undefined;
 };
 
 export type DeviseStartResult = {
@@ -84,11 +85,14 @@ export function createDeviseEngine(
 
       if (isComplete) {
         session.status = "complete";
-        sessions.delete(projectId);
         return { type: "complete", spec: extractSpec(result) };
       }
 
       return { type: "question", question: result };
+    },
+
+    getSession(projectId) {
+      return sessions.get(projectId);
     },
   };
 }
@@ -136,12 +140,9 @@ async function callWithToolLoop(
 }
 
 function detectCompletion(content: string): boolean {
-  return content.includes("<requirements-complete>");
+  return content.includes("REQUIREMENTS_COMPLETE");
 }
 
 export function extractSpec(content: string): string {
-  const match = content.match(
-    /<requirements-complete>([\s\S]*?)<\/requirements-complete>/
-  );
-  return match ? match[1].trim() : content;
+  return content.replace(/REQUIREMENTS_COMPLETE/g, "").trim();
 }

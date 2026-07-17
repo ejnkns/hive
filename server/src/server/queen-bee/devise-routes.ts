@@ -1,6 +1,6 @@
 /** @private — only imported by queen-bee.ts */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
 import type { ProjectStore } from "./create-project-store";
@@ -67,22 +67,6 @@ export function registerDeviseRoutes(
         );
 
         if (result.type === "complete") {
-          const project = deps.projectStore
-            .getAll()
-            .find((p) => p.id === projectId);
-
-          if (project) {
-            const hiveDir = join(project.repoPath, ".hive");
-            if (!existsSync(hiveDir)) {
-              mkdirSync(hiveDir, { recursive: true });
-            }
-            writeFileSync(
-              join(hiveDir, "requirements.md"),
-              result.spec,
-              "utf-8"
-            );
-          }
-
           return reply.send({ complete: true, spec: result.spec, projectId });
         }
 
@@ -142,6 +126,31 @@ export function registerDeviseRoutes(
       } catch {
         return reply.status(404).send({ error: "Requirements not found" });
       }
+    }
+  );
+
+  server.get(
+    "/api/queen-bee/:projectId/devise/session",
+    async (request, reply) => {
+      const { projectId } = request.params as { projectId: string };
+      const session = deps.engine.getSession(projectId);
+
+      if (!session) {
+        return reply.send({ active: false });
+      }
+
+      const clientMessages = session.messages
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .map((m) => ({
+          role: m.role,
+          content: m.content,
+        }));
+
+      return reply.send({
+        active: true,
+        status: session.status,
+        messages: clientMessages,
+      });
     }
   );
 }

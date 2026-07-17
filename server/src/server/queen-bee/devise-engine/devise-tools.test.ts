@@ -1,5 +1,5 @@
 import assert from "node:assert";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -23,12 +23,13 @@ function createTempWorkspace(): string {
 
 describe("DEVISE_TOOLS", () => {
   it("registers three tools", () => {
-    assert.strictEqual(DEVISE_TOOLS.length, 3);
+    assert.strictEqual(DEVISE_TOOLS.length, 4);
     const names = DEVISE_TOOLS.map((t) => t.function.name);
     assert.deepStrictEqual(names.sort(), [
       "list_directory",
       "read_file",
       "search_code",
+      "update_requirements",
     ]);
   });
 
@@ -177,6 +178,97 @@ describe("executeDeviseTool", () => {
 
       assert.strictEqual(result.isError, true);
       assert.ok(result.content.includes("Unknown tool"));
+    });
+  });
+
+  describe("update_requirements", () => {
+    it("writes content to .hive/requirements.md", () => {
+      const workspace = createTempWorkspace();
+      const content = "# Requirements\n\n## Overview\nTest spec";
+
+      const result = executeDeviseTool(
+        {
+          id: "tc1",
+          name: "update_requirements",
+          arguments: JSON.stringify({ content }),
+        },
+        workspace
+      );
+
+      assert.strictEqual(result.isError, false);
+      assert.strictEqual(result.content, "Requirements document updated");
+
+      const written = readFileSync(
+        join(workspace, ".hive", "requirements.md"),
+        "utf-8"
+      );
+      assert.strictEqual(written, content);
+    });
+
+    it("creates .hive directory if it does not exist", () => {
+      const workspace = mkdtempSync(join(tmpdir(), "hive-tool-test-"));
+      writeFileSync(join(workspace, "package.json"), "{}");
+
+      const content = "# Requirements\n\n## Overview\nProject spec";
+
+      const result = executeDeviseTool(
+        {
+          id: "tc1",
+          name: "update_requirements",
+          arguments: JSON.stringify({ content }),
+        },
+        workspace
+      );
+
+      assert.strictEqual(result.isError, false);
+
+      const written = readFileSync(
+        join(workspace, ".hive", "requirements.md"),
+        "utf-8"
+      );
+      assert.strictEqual(written, content);
+    });
+
+    it("overwrites existing file content", () => {
+      const workspace = createTempWorkspace();
+      const initial = "# Requirements\n\n## Overview\nOld content";
+      const updated =
+        "# Requirements\n\n## Overview\nNew content\n\n## Functional requirements\n- FR-1: Something";
+
+      executeDeviseTool(
+        {
+          id: "tc1",
+          name: "update_requirements",
+          arguments: JSON.stringify({ content: initial }),
+        },
+        workspace
+      );
+
+      const result = executeDeviseTool(
+        {
+          id: "tc2",
+          name: "update_requirements",
+          arguments: JSON.stringify({ content: updated }),
+        },
+        workspace
+      );
+
+      assert.strictEqual(result.isError, false);
+
+      const written = readFileSync(
+        join(workspace, ".hive", "requirements.md"),
+        "utf-8"
+      );
+      assert.strictEqual(written, updated);
+    });
+
+    it("rejects missing content argument", () => {
+      const result = executeDeviseTool(
+        { id: "tc1", name: "update_requirements", arguments: "{}" },
+        "/tmp"
+      );
+
+      assert.strictEqual(result.isError, true);
     });
   });
 });

@@ -5,7 +5,11 @@ import type { PassThrough, Readable } from "node:stream";
 import type { Message } from "shared/message";
 
 import { handleChatCompletion } from "../../proxy";
-import { DEVISE_TOOLS, type ToolCall } from "./devise-tools";
+import {
+  DEVISE_TOOLS,
+  type ToolCall,
+  type ToolDefinition,
+} from "./devise-tools";
 
 export type DeviseModelCaller = {
   call(
@@ -21,7 +25,11 @@ export type DeviseModelResponse = {
   finishReason: string;
 };
 
-export function createDeviseModelCaller(): DeviseModelCaller {
+export function createDeviseModelCaller(
+  tools?: ToolDefinition[]
+): DeviseModelCaller {
+  const activeTools = tools ?? DEVISE_TOOLS;
+
   return {
     async call(messages, workspacePath, includeTools) {
       const payload: Record<string, unknown> = {
@@ -30,7 +38,7 @@ export function createDeviseModelCaller(): DeviseModelCaller {
       };
 
       if (includeTools) {
-        payload.tools = DEVISE_TOOLS;
+        payload.tools = activeTools;
       }
 
       const result = await handleChatCompletion(payload, {});

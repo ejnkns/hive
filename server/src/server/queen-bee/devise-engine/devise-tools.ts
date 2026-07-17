@@ -1,7 +1,13 @@
 /** @private — only imported by create-devise-model-caller.ts */
 
 import { execSync } from "node:child_process";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import {
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { join, relative, resolve } from "node:path";
 
 export type ToolDefinition = {
@@ -30,6 +36,25 @@ export type ToolResult = {
 };
 
 export const DEVISE_TOOLS: ToolDefinition[] = [
+  {
+    type: "function",
+    function: {
+      name: "update_requirements",
+      description:
+        "Write the current requirements document to .hive/requirements.md. This is the ONLY file you can write — it stores the requirements spec, not source code. Call this whenever you add, remove, or refine requirements. Pass the FULL document content — this replaces the file entirely.",
+      parameters: {
+        type: "object",
+        properties: {
+          content: {
+            type: "string",
+            description:
+              "The full requirements document in markdown format, including all sections (Overview, Functional requirements, Acceptance criteria, Out of scope, For later).",
+          },
+        },
+        required: ["content"],
+      },
+    },
+  },
   {
     type: "function",
     function: {
@@ -92,6 +117,8 @@ export function executeDeviseTool(
 ): ToolResult {
   try {
     switch (toolCall.name) {
+      case "update_requirements":
+        return updateRequirements(toolCall, workspacePath);
       case "list_directory":
         return listDirectory(toolCall, workspacePath);
       case "read_file":
@@ -112,6 +139,30 @@ export function executeDeviseTool(
       isError: true,
     };
   }
+}
+
+function updateRequirements(
+  toolCall: ToolCall,
+  workspacePath: string
+): ToolResult {
+  const args = JSON.parse(toolCall.arguments) as { content?: string };
+  if (!args.content) {
+    return {
+      toolCallId: toolCall.id,
+      content: "content is required",
+      isError: true,
+    };
+  }
+
+  const hiveDir = join(workspacePath, ".hive");
+  mkdirSync(hiveDir, { recursive: true });
+  writeFileSync(join(hiveDir, "requirements.md"), args.content, "utf-8");
+
+  return {
+    toolCallId: toolCall.id,
+    content: "Requirements document updated",
+    isError: false,
+  };
 }
 
 function listDirectory(toolCall: ToolCall, workspacePath: string): ToolResult {
