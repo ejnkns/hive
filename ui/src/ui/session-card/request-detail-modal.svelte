@@ -177,6 +177,18 @@ const hasConversation = $derived(
         </div>
       {/if}
 
+      {#if request.overrideError}
+        <div class="detail-section">
+          <div class="section-title">pinned node error</div>
+          <div class="override-detail">
+            <span class="od-prov">{request.overrideError.provider}:{request.overrideError.model}</span>
+            <span class="od-status">status {request.overrideError.statusCode}</span>
+            <span class="od-type">{request.overrideError.errorType}</span>
+            <div class="od-body">{request.overrideError.errorBody}</div>
+          </div>
+        </div>
+      {/if}
+
       {#if request.response}
         <div class="detail-section">
           <div class="section-title">response</div>
@@ -510,6 +522,43 @@ const hasConversation = $derived(
     display: flex;
     gap: 0.25rem;
     flex-wrap: wrap;
+  }
+
+  .override-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .od-prov {
+    font-family: monospace;
+    font-size: 0.625rem;
+    color: var(--accent);
+  }
+
+  .od-status {
+    font-size: 0.5625rem;
+    color: var(--error);
+    font-weight: 700;
+  }
+
+  .od-type {
+    font-size: 0.5rem;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .od-body {
+    font-size: 0.5625rem;
+    color: var(--muted);
+    font-family: monospace;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 100px;
+    overflow-y: auto;
+    padding: 0.25rem;
+    background: rgba(var(--border-rgb), 0.08);
+    border: 1px solid var(--border);
   }
 
   .token-stats {

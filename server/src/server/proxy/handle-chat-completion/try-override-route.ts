@@ -57,9 +57,22 @@ export async function tryOverrideRoute(params: {
       attempt: 1,
     });
 
+    const errorBody = await response.getBodyAsString();
     logger.debug(
-      `request ${requestId} — override node failed (status ${String(response.status)}), falling back to auto-routing`
+      `request ${requestId} — override node ${overrideNode.providerName}:${overrideNode.modelName} returned ${String(response.status)}, falling back to auto-routing`
     );
+    logger.debug(
+      `request ${requestId} — override error body: ${errorBody.slice(0, 1000)}`
+    );
+    emitFlowEvent({
+      type: "override_failed",
+      requestId,
+      provider: overrideNode.providerName,
+      model: overrideNode.modelName,
+      statusCode: response.status,
+      errorType: normalized.type,
+      errorBody,
+    });
   } catch (err: unknown) {
     const compoundKey = `${overrideNode.providerName}:${overrideNode.modelName}`;
     routingMemory.recordNetworkFailure(compoundKey);

@@ -118,6 +118,12 @@ function handleSelectRequest(requestId: string) {
       {/if}
 
       <div class="summary-prompt">{latest.prompt ?? ""}</div>
+
+      {#if latest.overrideError}
+        <div class="override-error" title={latest.overrideError.errorBody}>
+          pinned {latest.overrideError.provider}:{latest.overrideError.model} returned {latest.overrideError.statusCode}
+        </div>
+      {/if}
     {/if}
   </button>
 
@@ -251,6 +257,19 @@ function handleSelectRequest(requestId: string) {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .override-error {
+    color: #e2a93b;
+    font-family: monospace;
+    font-size: 0.5625rem;
+    padding: 0.125rem 0.375rem;
+    background: rgba(226, 169, 59, 0.08);
+    border: 1px solid rgba(226, 169, 59, 0.15);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: help;
   }
 
   .path-dots {

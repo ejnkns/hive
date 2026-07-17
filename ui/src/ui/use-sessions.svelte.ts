@@ -117,6 +117,9 @@ export function createSessionStore() {
     if (patch.toolLoopDetected !== undefined) {
       request.toolLoopDetected = patch.toolLoopDetected;
     }
+    if (patch.overrideError) {
+      request.overrideError = patch.overrideError;
+    }
 
     rebuild();
   }

@@ -369,5 +369,20 @@ onFlowEvent((event: FlowEvent) => {
     patch.model = event.model;
   }
 
+  if (event.type === "override_failed") {
+    request.overrideError = {
+      provider: event.provider,
+      model: event.model,
+      statusCode: event.statusCode,
+      errorType: event.errorType,
+      errorBody: event.errorBody,
+    };
+    request.provider = event.provider;
+    request.model = event.model;
+    patch.overrideError = request.overrideError;
+    patch.provider = event.provider;
+    patch.model = event.model;
+  }
+
   emitPatch(patch);
 });
