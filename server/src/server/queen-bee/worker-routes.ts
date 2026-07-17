@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
 import type { BoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
+import { workerEventBus } from "./worker-event-bus";
 import type { WorkerEvent, WorkerSupervisor } from "./worker-supervisor";
 
 export function registerWorkerRoutes(
@@ -69,6 +70,48 @@ export function registerWorkerRoutes(
         codingGuidelines,
         (event) => deps.onWorkerEvent(projectId, event)
       );
+    }
+  );
+
+  server.get("/api/queen-bee/ws", { websocket: true }, (socket) => {
+    const handler = (event: WorkerEvent, projectId: string) => {
+      try {
+        socket.send(
+          JSON.stringify({
+            type: "worker_event",
+            data: { projectId, ...event },
+          })
+        );
+      } catch {
+        // socket closed
+      }
+    };
+
+    workerEventBus.on("event", handler);
+
+    socket.on("close", () => {
+      workerEventBus.off("event", handler);
+    });
+  });
+
+  server.post(
+    "/api/queen-bee/:projectId/cards/:cardId/cancel",
+    async (request, reply) => {
+      const { projectId, cardId } = request.params as {
+        projectId: string;
+        cardId: string;
+      };
+
+      const project = deps.projectStore
+        .getAll()
+        .find((p) => p.id === projectId);
+      if (!project) {
+        return reply.status(404).send({ error: "Project not found" });
+      }
+
+      deps.workerSupervisor.cancel(cardId);
+
+      return reply.send({ cancelled: true, cardId });
     }
   );
 }

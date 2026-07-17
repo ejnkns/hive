@@ -28,6 +28,7 @@ import {
   registerProjectRoutes,
   registerWorkerRoutes,
 } from "../server/queen-bee";
+import { emitWorkerEvent } from "../server/queen-bee/worker-event-bus";
 
 export async function startServer(overrides?: Partial<ServerConfig>) {
   printBanner();
@@ -72,7 +73,9 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     workerSupervisor,
     boardStore,
     projectStore,
-    onWorkerEvent: () => {},
+    onWorkerEvent: (projectId, event) => {
+      emitWorkerEvent(event, projectId);
+    },
   });
 
   listen(server, config);
