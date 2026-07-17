@@ -1,5 +1,6 @@
 import type { SubScores } from "telemetry";
 import { cerebras } from "./registry/cerebras";
+import { deepseek } from "./registry/deepseek";
 import { githubModels } from "./registry/github-models";
 import { googleAi } from "./registry/google-ai";
 import { groq } from "./registry/groq";
@@ -36,6 +37,7 @@ export type ProviderState = {
 };
 
 export const allProviders: Provider[] = [
+  deepseek,
   groq,
   sambanova,
   nvidiaNim,
