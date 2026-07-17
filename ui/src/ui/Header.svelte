@@ -166,8 +166,6 @@ function toggleTheme() {
 
 <style>
   .header-inner {
-    position: sticky;
-    top: 0;
     background: var(--bg);
     display: flex;
     justify-content: space-between;

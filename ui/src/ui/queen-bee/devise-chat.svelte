@@ -1,10 +1,18 @@
 <script lang="ts">
-let { projectId, onComplete, initialPrompt }: Props = $props();
+let {
+  projectId,
+  onComplete,
+  onApprove,
+  initialMessages,
+  initialStatus,
+}: Props = $props();
 
 type Props = {
   projectId: string;
   onComplete?: () => void;
-  initialPrompt?: string;
+  onApprove?: () => void;
+  initialMessages?: { role: string; content: string }[];
+  initialStatus?: string;
 };
 
 type Message = {
@@ -20,8 +28,15 @@ let spec = $state("");
 let error = $state<string | null>(null);
 
 $effect(() => {
-  if (initialPrompt) {
-    startDevise(initialPrompt);
+  if (initialMessages && initialMessages.length > 0) {
+    messages = initialMessages.map((m) => ({
+      role: m.role as "model" | "user",
+      content: m.content,
+    }));
+    complete = initialStatus === "complete";
+    if (complete && initialMessages.length > 0) {
+      spec = initialMessages[initialMessages.length - 1].content;
+    }
   }
 });
 
@@ -127,6 +142,12 @@ function submit() {
         <div class="content">
           {#if msg.role === "model" && complete && msg.content === spec}
             <pre class="spec">{msg.content}</pre>
+            {#if onApprove}
+              <div class="approve-inside">
+                <button class="btn btn-approve" onclick={onApprove}>Approve Plan</button>
+                <span class="approve-hint">or continue the conversation to refine</span>
+              </div>
+            {/if}
           {:else}
             {msg.content}
           {/if}
@@ -142,26 +163,24 @@ function submit() {
     {/if}
   </div>
 
-  {#if !complete}
-    <div class="input-area">
-      <input
-        type="text"
-        bind:value={input}
-        placeholder={
-          messages.length === 0
-            ? "Describe your project..."
-            : "Your answer..."
-        }
-        disabled={loading}
-        onkeydown={(e) => {
-          if (e.key === "Enter") submit();
-        }}
-      />
-      <button class="btn btn-primary" onclick={submit} disabled={loading || !input.trim()}>
-        {loading ? "..." : "Send"}
-      </button>
-    </div>
-  {/if}
+  <div class="input-area">
+    <input
+      type="text"
+      bind:value={input}
+      placeholder={
+        messages.length === 0
+          ? "Describe your project..."
+          : "Your answer..."
+      }
+      disabled={loading}
+      onkeydown={(e) => {
+        if (e.key === "Enter") submit();
+      }}
+    />
+    <button class="btn btn-primary" onclick={submit} disabled={loading || !input.trim()}>
+      {loading ? "..." : "Send"}
+    </button>
+  </div>
 </div>
 
 <style>
@@ -300,5 +319,30 @@ function submit() {
     background: var(--accent);
     color: #1b1601;
     border-color: var(--accent);
+  }
+
+  .approve-inside {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .btn-approve {
+    padding: 0.5rem 1.25rem;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    background: var(--accent);
+    color: #1b1601;
+  }
+
+  .approve-hint {
+    font-size: 0.75rem;
+    color: var(--muted);
   }
 </style>

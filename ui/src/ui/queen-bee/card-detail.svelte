@@ -1,12 +1,13 @@
 <script lang="ts">
 import type { Card, Column } from "shared/board-types";
 
-let { card, onClose, onMove }: Props = $props();
+let { card, onClose, onMove, onRun }: Props = $props();
 
 type Props = {
   card: Card;
   onClose: () => void;
   onMove: (column: Column) => void;
+  onRun?: () => void;
 };
 
 const COLUMN_LABELS: Record<Column, string> = {
@@ -73,9 +74,37 @@ const COLUMN_LABELS: Record<Column, string> = {
           </div>
         </div>
       {/if}
+
+      {#if card.workerLog}
+        <div class="section">
+          <div class="section-label">Last Run</div>
+          <div class="log-summary">
+            {card.workerLog.iterations} iteration{card.workerLog.iterations !== 1 ? "s" : ""},
+            {card.workerLog.toolCalls.length} tool call{card.workerLog.toolCalls.length !== 1 ? "s" : ""}
+            {#if card.workerLog.error}
+              <span class="log-error">— Failed: {card.workerLog.error}</span>
+            {/if}
+          </div>
+          {#if card.workerLog.toolCalls.length > 0}
+            <div class="log-tools">
+              {#each card.workerLog.toolCalls as tc}
+                <span class="log-tool">{tc.name}</span>
+              {/each}
+            </div>
+          {/if}
+          {#if card.workerLog.content}
+            <pre class="log-content">{card.workerLog.content.slice(-2000)}</pre>
+          {/if}
+        </div>
+      {/if}
     </div>
 
     <div class="panel-actions">
+      {#if (card.column === "ready" || card.column === "in_progress") && onRun}
+        <button class="btn btn-run" onclick={onRun}>
+          {card.column === "in_progress" ? "Retry Worker" : "Run Worker"}
+        </button>
+      {/if}
       {#each ["idea", "ready", "in_progress", "reviewing", "done", "unfulfillable"] as col}
         {#if col !== card.column}
           <button class="btn btn-sm" onclick={() => onMove(col as Column)}>
@@ -219,4 +248,49 @@ const COLUMN_LABELS: Record<Column, string> = {
   .btn:hover {
     background: var(--border);
   }
+
+  .btn-run {
+    background: var(--accent);
+    color: #1b1601;
+    border-color: var(--accent);
+    font-weight: 600;
+    padding: 0.5rem 1.25rem;
+  }
+
+  .log-summary {
+    font-size: 0.75rem;
+    color: var(--text);
+  }
+
+  .log-error {
+    color: #dc3c3c;
+  }
+
+  .log-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-top: 0.375rem;
+  }
+
+  .log-tool {
+    font-size: 0.625rem;
+    background: var(--bg);
+    color: var(--accent);
+    padding: 0.125rem 0.375rem;
+    border-radius: 3px;
+    font-family: var(--font-mono, monospace);
+  }
+
+  .log-content {
+    font-size: 0.6875rem;
+    font-family: var(--font-mono, monospace);
+    color: var(--muted);
+    white-space: pre-wrap;
+    margin: 0.5rem 0 0 0;
+    max-height: 200px;
+    overflow-y: auto;
+    line-height: 1.45;
+  }
+
 </style>

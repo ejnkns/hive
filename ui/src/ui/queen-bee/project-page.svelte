@@ -2,6 +2,7 @@
 import { onMount } from "svelte";
 import DeviseChat from "./devise-chat.svelte";
 import KanbanBoard from "./kanban-board.svelte";
+import { projectHeader } from "./project-header-state.svelte";
 
 let { projectId }: Props = $props();
 
@@ -9,16 +10,37 @@ type Props = {
   projectId: string;
 };
 
-let hasRequirements = $state<boolean | null>(null);
 let hasBoard = $state<boolean | null>(null);
 let loading = $state(true);
-let amending = $state(false);
-let requirementsContent = $state("");
-let overviewText = $state("");
+let planning = $state(false);
+let errorMessage = $state<string | null>(null);
+let initialMessages = $state<{ role: string; content: string }[] | undefined>(
+  undefined
+);
+let initialStatus = $state<string | undefined>(undefined);
 
 onMount(() => {
+  projectHeader.projectId = projectId;
   checkStatus();
 });
+
+async function restoreSession() {
+  try {
+    const res = await fetch(`/api/queen-bee/${projectId}/devise/session`);
+    if (!res.ok) return;
+    const data = (await res.json()) as {
+      active?: boolean;
+      status?: string;
+      messages?: { role: string; content: string }[];
+    };
+    if (data.active && data.messages && data.messages.length > 0) {
+      initialMessages = data.messages;
+      initialStatus = data.status;
+    }
+  } catch {
+    // session restore is best-effort
+  }
+}
 
 async function checkStatus() {
   loading = true;
@@ -26,10 +48,10 @@ async function checkStatus() {
     const res = await fetch(`/api/queen-bee/${projectId}/devise/status`);
     if (!res.ok) throw new Error("Failed to load project");
     const data = (await res.json()) as { hasRequirements: boolean };
-    hasRequirements = data.hasRequirements;
 
     if (data.hasRequirements) {
-      fetchRequirements();
+      await fetchRequirements();
+      await restoreSession();
       try {
         const boardRes = await fetch(`/api/queen-bee/${projectId}/board`);
         if (boardRes.ok) {
@@ -42,7 +64,7 @@ async function checkStatus() {
       }
     }
   } catch {
-    hasRequirements = null;
+    hasBoard = null;
   } finally {
     loading = false;
   }
@@ -53,68 +75,62 @@ async function fetchRequirements() {
     const res = await fetch(`/api/queen-bee/${projectId}/requirements`);
     if (res.ok) {
       const data = (await res.json()) as { content: string };
-      requirementsContent = data.content;
-      overviewText = extractOverview(data.content);
+      projectHeader.requirementsContent = data.content;
     }
   } catch {
     // ignore
   }
 }
 
-function extractOverview(content: string): string {
-  const match = content.match(/## Overview\s*\n([\s\S]*?)(?=\n## |$)/);
-  return match ? match[1].trim() : content.slice(0, 300);
+async function handleApprove() {
+  planning = true;
+  errorMessage = null;
+  try {
+    const res = await fetch(`/api/queen-bee/${projectId}/plan`, {
+      method: "POST",
+    });
+    if (!res.ok) {
+      const data = (await res.json()) as { error?: string };
+      throw new Error(data.error ?? "Planning failed");
+    }
+    await checkStatus();
+  } catch (err) {
+    errorMessage =
+      err instanceof Error ? err.message : "Unknown error planning";
+  } finally {
+    planning = false;
+  }
 }
 </script>
 
 <div class="project-page">
-  <div class="header">
-    <a href="#/" class="back-link">&larr; Projects</a>
-    <span class="project-id">{projectId}</span>
+  <div class="main-content">
+    {#if loading}
+      <div class="loading">Loading...</div>
+    {:else if planning}
+      <div class="planning">
+        <div class="planning-text">Generating cards...</div>
+        <div class="planning-hint">Exploring codebase and planning features from requirements</div>
+      </div>
+    {:else if errorMessage}
+      <div class="error">{errorMessage}</div>
+      <div class="error-actions">
+        <button class="btn btn-primary" onclick={handleApprove}>Retry</button>
+      </div>
+    {:else if hasBoard}
+      <KanbanBoard {projectId} />
+    {:else}
+      <DeviseChat
+        {projectId}
+        initialMessages={initialMessages}
+        initialStatus={initialStatus}
+        onApprove={handleApprove}
+        onComplete={() => {
+          fetchRequirements();
+        }}
+      />
+    {/if}
   </div>
-
-  {#if loading}
-    <div class="loading">Loading...</div>
-  {:else if amending}
-    <DeviseChat
-      {projectId}
-      onComplete={() => {
-        amending = false;
-        checkStatus();
-      }}
-    />
-  {:else if hasBoard}
-    <KanbanBoard {projectId} onAmend={() => (amending = true)} />
-  {:else if hasRequirements === true}
-    <div class="requirements-card">
-      <div class="card-header">
-        <h2>Requirements</h2>
-      </div>
-      <div class="overview-preview">
-        {overviewText}
-      </div>
-      <div class="card-footer">
-        <div class="footer-text">Review the requirements, then generate cards to start implementing.</div>
-        <div class="footer-actions">
-          <button
-            class="btn btn-primary"
-            onclick={async () => {
-              await fetch(`/api/queen-bee/${projectId}/plan`, {
-                method: "POST",
-              });
-              checkStatus();
-            }}
-          >
-            Generate Cards
-          </button>
-        </div>
-      </div>
-    </div>
-  {:else if hasRequirements === false}
-    <DeviseChat {projectId} onComplete={() => checkStatus()} />
-  {:else}
-    <div class="loading">Could not load project.</div>
-  {/if}
 </div>
 
 <style>
@@ -124,29 +140,6 @@ function extractOverview(content: string): string {
     padding: 1.5rem 1.25rem;
   }
 
-  .header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 1.5rem;
-  }
-
-  .back-link {
-    font-size: 0.8125rem;
-    color: var(--muted);
-    text-decoration: none;
-  }
-
-  .back-link:hover {
-    color: var(--text);
-  }
-
-  .project-id {
-    font-size: 0.75rem;
-    color: var(--muted);
-    font-family: var(--font-mono, monospace);
-  }
-
   .loading {
     text-align: center;
     padding: 3rem 1rem;
@@ -154,71 +147,57 @@ function extractOverview(content: string): string {
     font-size: 0.875rem;
   }
 
-  .requirements-card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    overflow: hidden;
+  .planning {
+    text-align: center;
+    padding: 3rem 1rem;
   }
 
-  .card-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .card-header h2 {
+  .planning-text {
     font-size: 0.9375rem;
-    font-weight: 600;
     color: var(--text);
-    margin: 0;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
   }
 
-  .overview-preview {
-    padding: 1rem;
-    font-size: 0.8125rem;
-    color: var(--text);
-    line-height: 1.55;
-    max-height: 120px;
-    overflow: hidden;
-    white-space: pre-wrap;
-    mask-image: linear-gradient(to bottom, black 50%, transparent);
-  }
-
-  .card-footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.75rem 1rem;
-    border-top: 1px solid var(--border);
-  }
-
-  .footer-text {
-    font-size: 0.6875rem;
+  .planning-hint {
+    font-size: 0.75rem;
     color: var(--muted);
   }
 
-  .footer-actions {
-    display: flex;
-    gap: 0.5rem;
-    flex-shrink: 0;
+  .error {
+    background: rgba(220, 60, 60, 0.1);
+    border: 1px solid rgba(220, 60, 60, 0.3);
+    color: #dc3c3c;
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    font-size: 0.8125rem;
+    margin-bottom: 1rem;
+  }
+
+  .error-actions {
+    text-align: center;
+    margin-bottom: 1.5rem;
   }
 
   .btn {
-    padding: 0.375rem 0.75rem;
+    padding: 0.375rem 0.625rem;
     border: 1px solid var(--border);
     border-radius: 5px;
-    font-size: 0.75rem;
+    font-size: 0.6875rem;
     font-weight: 500;
     cursor: pointer;
     background: var(--surface);
     color: var(--text);
+    white-space: nowrap;
   }
 
-  .btn:hover {
+  .btn:hover:not(:disabled) {
     background: var(--border);
+  }
+
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
 
   .btn-primary {

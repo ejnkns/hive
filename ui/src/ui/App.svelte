@@ -29,6 +29,10 @@ import { createOrchestratorStore } from "./use-orchestrator.svelte";
 import CanvasHost from "./canvas/CanvasHost.svelte";
 import ProjectOverview from "./queen-bee/project-overview.svelte";
 import ProjectPage from "./queen-bee/project-page.svelte";
+import {
+  projectHeader,
+  togglePanel,
+} from "./queen-bee/project-header-state.svelte";
 
 type ProviderPayload = {
   name: string;
@@ -374,7 +378,34 @@ onDestroy(() => {
 </script>
 
 <div class="app">
-  <Header data={headerData ?? undefined} onOverrideSet={handleOverrideSet} onOverrideClear={handleOverrideClear} />
+  <div class="top-bar">
+    <Header data={headerData ?? undefined} onOverrideSet={handleOverrideSet} onOverrideClear={handleOverrideClear} />
+    {#if currentHash.startsWith('#/project/') && projectHeader.projectId}
+      <div class="project-header">
+        <div class="project-header-row">
+          <a href="#/" class="back-link">&larr; Projects</a>
+          <div class="header-right">
+            {#if projectHeader.requirementsContent}
+              <button class="btn btn-outline" onclick={togglePanel}>
+                {projectHeader.panelOpen ? "Hide" : "View"} Requirements
+              </button>
+            {/if}
+            <span class="project-id">{projectHeader.projectId}</span>
+          </div>
+        </div>
+        {#if projectHeader.requirementsContent && projectHeader.panelOpen}
+          <div class="requirements-panel">
+            <div class="panel-header">
+              <h2>Requirements</h2>
+            </div>
+            <div class="panel-body">
+              <pre class="req-content">{projectHeader.requirementsContent}</pre>
+            </div>
+          </div>
+        {/if}
+      </div>
+    {/if}
+  </div>
   
   {#if currentHash === '#/canvas'}
     <CanvasHost />
@@ -403,6 +434,92 @@ onDestroy(() => {
 
 <style>
   .app { display: block; }
+  .top-bar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+  .project-header {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0.75rem 1.25rem 0.75rem;
+  }
+  .project-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+  }
+  .back-link {
+    font-size: 0.8125rem;
+    color: var(--muted);
+    text-decoration: none;
+  }
+  .back-link:hover {
+    color: var(--text);
+  }
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .project-id {
+    font-size: 0.75rem;
+    color: var(--muted);
+    font-family: var(--font-mono, monospace);
+  }
+  .btn {
+    padding: 0.375rem 0.625rem;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    cursor: pointer;
+    background: var(--surface);
+    color: var(--text);
+    white-space: nowrap;
+  }
+  .btn:hover:not(:disabled) {
+    background: var(--border);
+  }
+  .btn-outline {
+    background: transparent;
+  }
+  .requirements-panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-top: 0.5rem;
+    overflow: hidden;
+  }
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .panel-header h2 {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0;
+  }
+  .panel-body {
+    max-height: 300px;
+    overflow-y: auto;
+  }
+  .req-content {
+    padding: 0.75rem 1rem;
+    margin: 0;
+    font-size: 0.6875rem;
+    font-family: var(--font-mono, monospace);
+    color: var(--text);
+    white-space: pre-wrap;
+    line-height: 1.5;
+  }
   .content {
     display: flex;
     flex-direction: column;
