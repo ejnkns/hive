@@ -9,6 +9,7 @@ import { mistral } from "./registry/mistral";
 import { novita } from "./registry/novita";
 import { nvidiaNim } from "./registry/nvidia-nim";
 import { ollama } from "./registry/ollama";
+import { ollamaCloud } from "./registry/ollama-cloud";
 import { omlx } from "./registry/omlx";
 import { opencodeZen } from "./registry/opencode-zen";
 import { openrouter } from "./registry/openrouter";
@@ -57,6 +58,7 @@ export const allProviders: Provider[] = [
   novita,
   omlx,
   ollama,
+  ollamaCloud,
   ovhcloud,
   routeway,
   lmStudio,

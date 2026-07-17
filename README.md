@@ -102,6 +102,7 @@ Configuration is loaded synchronously from `.env` or from exported system variab
 | `CEREBRAS_API_KEY`     | Cerebras         | `https://api.cerebras.ai`                                 |
 | `DEEPSEEK_API_KEY`     | DeepSeek         | `https://api.deepseek.com`                                |
 | `MISTRAL_API_KEY`      | Mistral          | `https://api.mistral.ai`                                  |
+| `OLLAMA_CLOUD_API_KEY` | Ollama Cloud     | `https://ollama.com`                                      |
 | `OPENROUTER_API_KEY`   | OpenRouter       | `https://openrouter.ai/api/v1`                            |
 | `OVH_AI_ENDPOINTS_ACCESS_TOKEN` | OVHcloud AI | `https://oai.endpoints.kepler.ai.cloud.ovh.net`       |
 | `OPENCODE_ZEN_API_KEY` | OpenCode Zen     | `https://opencode.ai/zen`                                 |
