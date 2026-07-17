@@ -12,6 +12,7 @@ import { omlx } from "./registry/omlx";
 import { opencodeZen } from "./registry/opencode-zen";
 import { openrouter } from "./registry/openrouter";
 import { ovhcloud } from "./registry/ovhcloud";
+import { routeway } from "./registry/routeway";
 import { sambanova } from "./registry/sambanova";
 import { scaleway } from "./registry/scaleway";
 
@@ -55,6 +56,7 @@ export const allProviders: Provider[] = [
   omlx,
   ollama,
   ovhcloud,
+  routeway,
   lmStudio,
 ].map((p) => ({
   ...p,

@@ -92,6 +92,7 @@ Configuration is loaded synchronously from `.env` or from exported system variab
 | Variable               | Target Provider  | Base URL Endpoint                                         |
 | ---------------------- | ---------------- | --------------------------------------------------------- |
 | `GROQ_API_KEY`         | Groq             | `https://api.groq.com/openai`                             |
+| `ROUTEWAY_API_KEY`     | Routeway         | `https://api.routeway.ai`                                 |
 | `SAMBA_NOVA_API_KEY`   | SambaNova        | `https://api.sambanova.ai`                                |
 | `SCALEWAY_API_KEY`     | Scaleway         | `https://api.scaleway.ai`                                 |
 | `GOOGLE_API_KEY`       | Google AI Studio | `https://generativelanguage.googleapis.com/v1beta/openai` |
