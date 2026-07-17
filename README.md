@@ -101,6 +101,7 @@ Configuration is loaded synchronously from `.env` or from exported system variab
 | `DEEPSEEK_API_KEY`     | DeepSeek         | `https://api.deepseek.com`                                |
 | `MISTRAL_API_KEY`      | Mistral          | `https://api.mistral.ai`                                  |
 | `OPENROUTER_API_KEY`   | OpenRouter       | `https://openrouter.ai/api/v1`                            |
+| `OVH_AI_ENDPOINTS_ACCESS_TOKEN` | OVHcloud AI | `https://oai.endpoints.kepler.ai.cloud.ovh.net`       |
 | `OPENCODE_ZEN_API_KEY` | OpenCode Zen     | `https://opencode.ai/zen`                                 |
 | `OLLAMA_API_KEY`\*     | Ollama           | `http://127.0.0.1:11434/v1` or `OLLAMA_HOST` in `.env`    |
 | `OMLX_API_KEY`\*       | oMLX             | `http://127.0.0.1:8000/v1` or `OMLX_HOST` in `.env`       |
