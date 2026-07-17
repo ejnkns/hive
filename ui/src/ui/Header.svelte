@@ -175,7 +175,11 @@ function toggleTheme() {
     padding: 1rem 1.25rem;
     z-index: 1;
   }
-  .logo-area { display: flex; flex-direction: column; }
+  .logo-area { 
+    display: flex; 
+    flex-direction: column;
+    width: 248px;
+  }
   .logo-ascii {
     font-family: monospace;
     font-size: 0.625rem;
@@ -186,8 +190,8 @@ function toggleTheme() {
   }
   .logo-text {
     color: var(--logo-text);
+    align-self: flex-end;
     white-space: nowrap;
-    width: 248px;
     text-decoration: none;
   }
   .nav-link {
