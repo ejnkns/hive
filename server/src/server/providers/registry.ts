@@ -6,6 +6,7 @@ import { googleAi } from "./registry/google-ai";
 import { groq } from "./registry/groq";
 import { lmStudio } from "./registry/lm-studio";
 import { mistral } from "./registry/mistral";
+import { novita } from "./registry/novita";
 import { nvidiaNim } from "./registry/nvidia-nim";
 import { ollama } from "./registry/ollama";
 import { omlx } from "./registry/omlx";
@@ -53,6 +54,7 @@ export const allProviders: Provider[] = [
   githubModels,
   cerebras,
   mistral,
+  novita,
   omlx,
   ollama,
   ovhcloud,

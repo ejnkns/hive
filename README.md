@@ -96,6 +96,7 @@ Configuration is loaded synchronously from `.env` or from exported system variab
 | `SAMBA_NOVA_API_KEY`   | SambaNova        | `https://api.sambanova.ai`                                |
 | `SCALEWAY_API_KEY`     | Scaleway         | `https://api.scaleway.ai`                                 |
 | `GOOGLE_API_KEY`       | Google AI Studio | `https://generativelanguage.googleapis.com/v1beta/openai` |
+| `NOVITA_API_KEY`       | Novita AI        | `https://api.novita.ai/openai`                            |
 | `NVIDIA_NIM_API_KEY`   | NVIDIA NIM       | `https://integrate.api.nvidia.com`                        |
 | `GITHUB_TOKEN`         | GitHub Models    | `https://models.github.ai/inference`                      |
 | `CEREBRAS_API_KEY`     | Cerebras         | `https://api.cerebras.ai`                                 |
