@@ -41,6 +41,11 @@ export type Card = {
     error?: string;
     content: string;
   };
+  reviewerLog?: {
+    verdict: "pass" | "fail";
+    feedback: string;
+    reviewedAt: string;
+  };
 };
 
 export type Board = {

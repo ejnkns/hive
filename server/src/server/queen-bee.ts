@@ -11,6 +11,8 @@ export { registerDeviseRoutes } from "./queen-bee/devise-routes";
 export type { Planner } from "./queen-bee/planner";
 export { createPlanner } from "./queen-bee/planner";
 export { registerProjectRoutes } from "./queen-bee/project-routes";
+export type { Reviewer, ReviewerVerdict } from "./queen-bee/reviewer";
+export { createReviewer } from "./queen-bee/reviewer";
 export { registerWorkerRoutes } from "./queen-bee/worker-routes";
 export type {
   WorkerEvent,

@@ -97,6 +97,20 @@ const COLUMN_LABELS: Record<Column, string> = {
           {/if}
         </div>
       {/if}
+
+      {#if card.reviewerLog}
+        <div class="section">
+          <div class="section-label">Review</div>
+          <div
+            class="review-verdict"
+            class:verdict-pass={card.reviewerLog.verdict === "pass"}
+            class:verdict-fail={card.reviewerLog.verdict === "fail"}
+          >
+            {card.reviewerLog.verdict === "pass" ? "Passed" : "Failed"}
+          </div>
+          <div class="review-feedback">{card.reviewerLog.feedback}</div>
+        </div>
+      {/if}
     </div>
 
     <div class="panel-actions">
@@ -291,6 +305,27 @@ const COLUMN_LABELS: Record<Column, string> = {
     max-height: 200px;
     overflow-y: auto;
     line-height: 1.45;
+  }
+
+  .review-verdict {
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+  }
+
+  .verdict-pass {
+    color: #7cb342;
+  }
+
+  .verdict-fail {
+    color: #dc3c3c;
+  }
+
+  .review-feedback {
+    font-size: 0.75rem;
+    color: var(--text);
+    line-height: 1.45;
+    white-space: pre-wrap;
   }
 
 </style>

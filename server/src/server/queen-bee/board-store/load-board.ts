@@ -33,6 +33,11 @@ export function loadBoard(projectId: string, repoPath: string): Board {
           error?: string;
           content: string;
         };
+        reviewerLog?: {
+          verdict: "pass" | "fail";
+          feedback: string;
+          reviewedAt: string;
+        };
       }[];
     };
 
@@ -57,6 +62,7 @@ export function loadBoard(projectId: string, repoPath: string): Board {
               : "idea") as Card["column"],
             createdAt: typeof c.createdAt === "string" ? c.createdAt : "",
             workerLog: c.workerLog,
+            reviewerLog: c.reviewerLog,
           });
         }
       }

@@ -22,6 +22,7 @@ import {
   createDeviseEngine,
   createPlanner,
   createProjectStore,
+  createReviewer,
   createWorkerSupervisor,
   registerBoardRoutes,
   registerDeviseRoutes,
@@ -58,7 +59,8 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     emitBoardEvent(projectId);
   });
   const planner = createPlanner(boardStore);
-  const workerSupervisor = createWorkerSupervisor(boardStore);
+  const reviewer = createReviewer();
+  const workerSupervisor = createWorkerSupervisor(boardStore, reviewer);
 
   const server = await createServer({
     getProviders: () => getProviders(),

@@ -380,40 +380,50 @@ Blockers resolved. Worker can now implement code with write/execute tools. WebSo
 
 7. ~~**Cancel/stop endpoint**~~ — `POST /api/queen-bee/:projectId/cards/:cardId/cancel` added to `worker-routes.ts`. `cancel()` method added to `WorkerSupervisor`. Uses `AbortController` per running worker. On cancel, the controller is aborted and removed from the map.
 
-#### Polish
+#### Polish [DEFERRED]
 
-8. **`git_diff` and `git_status` as model-callable tools** — `git-operations.ts` already has `getDiff()` and `getCurrentBranch()`. Expose `git_status` and `git_diff` as model-callable tools so the worker can check its own progress and produce better commit messages.
+8. **`git_diff` and `git_status` as model-callable tools** — `git-operations.ts` already has `getDiff()` and `getCurrentBranch()`. Add `git_status` and `git_diff` tool definitions to `WORKER_TOOLS` in `worker-tools.ts` with implementations that wrap the existing git operations. The worker can then call them directly to check its progress and produce better commit messages. Implementation: add tool definitions with `git status` (calls `git diff --stat`) and `git diff` (calls `getDiff`), wire in `executeWorkerTool` switch.
 
-9. **Inline run button on KanbanCard** — Currently the "Run" button is only in CardDetail modal. Add a compact run button directly on the card in the column view for `ready`/`in_progress` cards.
+9. **Inline run button on KanbanCard** — Currently accessible only via CardDetail modal. Add a compact "▶" button to `kanban-card.svelte` for `ready`/`in_progress` cards, calling the same `POST .../run` endpoint. Requires: new `onRun` prop on KanbanCard, wired from kanban-board's `handleRunCard`.
 
-10. **Worktree cleanup** — After card reaches `done`, clean up the worktree at `.worktrees/<cardId>/`. Preserve on error/unfulfillable for inspection.
+10. **Worktree cleanup** — `git-operations.ts` has `removeWorktree()` already. Currently called only at the start of a new run (cleans up previous worktree). Add cleanup when card reaches `done`: call `removeWorktree(repoPath, card.id)` in the reviewer's pass path. Preserve worktrees on `unfulfillable`/error for inspection.
 
-#### Decommission (final step of Phase 4)
+#### Decommission (final step of Phase 4) [DEFERRED]
 
-11. **Branch summary and PR creation** — After worker completes, call model to generate a branch summary. If remote exists, push branch and open PR via `gh pr create`.
+11. **Branch summary and PR creation** — After worker commit, call model (reuse `createDeviseModelCaller`) with a short prompt: "Summarize what was implemented on branch `qb/<cardId>` in 2-3 sentences." Store summary on card. If git remote exists: `git push origin qb/<cardId>` + `gh pr create --title "<card.title>" --body "<summary>"`. Store PR URL on card.
 
-12. **Remove old orchestrator** — Delete `POST /api/orchestrate` endpoint, `server/src/server/orchestrator/` directory, orchestrator WebSocket event handling, and UI references.
+12. **Remove old orchestrator** — Files to delete: `server/src/server/orchestrator/` (17 files). Remove `POST /api/orchestrate` from `assign-routes.ts` (line ~415). Remove orchestrator WebSocket event handling in `assign-routes.ts`. Remove `BottomDrawer`/`OrchestratorPanel` from `App.svelte`. Remove orchestrator store (`use-orchestrator.svelte`). Remove orchestrator-related CSS classes.
 
 ---
 
-## Phase 5 — reviewer agent
+## Phase 5 — reviewer agent [COMPLETE]
 
-### What the user gets
+### Status
 
-When a worker finishes, a reviewer agent automatically audits the changes. Pass moves the card to **done**. Fail returns it to **in progress** with actionable feedback. The user is notified on fail and must manually restart.
+Core reviewer agent implemented. Runs automatically after worker completion. Missing: feedback injection into worker retry context, WebSocket notification for review verdicts, worktree cleanup on pass.
+
+### What was delivered
+
+- `reviewer.ts` — factory, calls model with git diff + card criteria, parses `VERDICT: pass|fail` + `FEEDBACK:` from response
+- `reviewer/reviewer-system-prompt.ts` — instructions for code-and-diff inspection only, structured output format
+- `ReviewerLog` type added to `shared/board-types.ts`, `board-store.ts` Card, `save-board.ts`, `load-board.ts`, `save-card.ts`
+- Worker supervisor invokes reviewer after successful commit: computes `git diff HEAD~1`, calls reviewer, stores `reviewerLog` on card
+- On pass: card → done. On fail: card → in_progress with feedback stored.
+- UI: `card-detail.svelte` shows reviewer verdict (pass/fail) and feedback. `kanban-card.svelte` shows colored pass/fail badge.
 
 ### Implementation steps
 
-1. Implement reviewer agent: model call that inspects the local git diff, branch summary, and card criteria.
-2. Reviewer produces structured verdict (pass / fail + feedback).
-3. On pass: card moves to **done**, worktree is cleaned up after user merges.
-4. On fail: card moves back to **in progress**, feedback recorded, user notified via WebSocket.
-5. UI shows reviewer verdict in card detail view.
-6. Worker context builder incorporates reviewer feedback on retry.
+1. ~~**Reviewer agent**~~ — `reviewer.ts`: model call with `REVIEWER_SYSTEM_PROMPT` + git diff (truncated to 8000 chars) + card criteria. Parses `VERDICT:` and `FEEDBACK:` from response.
 
-### Deliverable
+2. ~~**Structured verdict**~~ — Produces `ReviewerVerdict { verdict, feedback }`. Pass/fail determined by `VERDICT:` prefix, feedback from `FEEDBACK:` section.
 
-Worker finishes, reviewer runs automatically, verdict visible in UI. Failed cards return to in-progress with feedback.
+3. ~~**Pass → done**~~ — `runReviewer()` moves card to `done` on pass. (Worktree cleanup deferred to Phase 4 polish #10.)
+
+4. ~~**Fail → in_progress with feedback**~~ — Card moves back to `in_progress`, `reviewerLog` stored with verdict and feedback.
+
+5. ~~**UI reviewer verdict**~~ — Card detail shows "Passed"/"Failed" with colored text and feedback. KanbanCard shows small pass/fail badge.
+
+6. **Worker context incorporates reviewer feedback on retry** — [DEFERRED] The `build-worker-context.ts` should include previous reviewer feedback when the worker is retried on a failed card. Currently not implemented.
 
 ---
 

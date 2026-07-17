@@ -17,6 +17,7 @@ export function saveCard(repoPath: string, card: Card): void {
     column: card.column,
     createdAt: card.createdAt,
     workerLog: card.workerLog,
+    reviewerLog: card.reviewerLog,
   };
 
   writeFileSync(cardPath, JSON.stringify(data, null, 2), "utf-8");

@@ -19,6 +19,7 @@ export function saveBoard(repoPath: string, board: Board): void {
       column: c.column,
       createdAt: c.createdAt,
       workerLog: c.workerLog,
+      reviewerLog: c.reviewerLog,
     })),
   };
 

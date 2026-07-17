@@ -5,11 +5,13 @@ import { join } from "node:path";
 import type { Message } from "shared/message";
 import type { BoardStore, Card } from "./board-store";
 import { createDeviseModelCaller } from "./devise-engine/create-devise-model-caller";
+import type { Reviewer } from "./reviewer";
 import { buildWorkerContext } from "./worker-supervisor/build-worker-context";
 import {
   commitChanges,
   createBranch,
   createWorktree,
+  getDiff,
   getWorktreePath,
   removeWorktree,
 } from "./worker-supervisor/git-operations";
@@ -43,7 +45,8 @@ export type WorkerSupervisor = {
 };
 
 export function createWorkerSupervisor(
-  boardStore: BoardStore
+  boardStore: BoardStore,
+  reviewer: Reviewer
 ): WorkerSupervisor {
   const modelCaller = createDeviseModelCaller(WORKER_TOOLS);
   const abortControllers = new Map<string, AbortController>();
@@ -162,6 +165,16 @@ export function createWorkerSupervisor(
           content: commitResult.message,
         });
         boardStore.moveCard(projectId, repoPath, card.id, "reviewing");
+
+        await runReviewer(
+          card,
+          repoPath,
+          worktreePath,
+          projectId,
+          boardStore,
+          reviewer,
+          onEvent
+        );
       } else {
         onEvent({
           type: "worker_error",
@@ -286,5 +299,53 @@ function writeWorkerLog(
     }
   } catch {
     // ignore log write failures
+  }
+}
+
+async function runReviewer(
+  card: Card,
+  repoPath: string,
+  worktreePath: string,
+  projectId: string,
+  boardStore: BoardStore,
+  reviewer: Reviewer,
+  onEvent: (event: WorkerEvent) => void
+): Promise<void> {
+  try {
+    const diff = getDiff(worktreePath, "HEAD~1");
+    const verdict = await reviewer.review(card, diff, worktreePath);
+
+    const board = boardStore.getBoard(projectId, repoPath);
+    const existing = board.cards.find((c) => c.id === card.id);
+    if (!existing) return;
+
+    existing.reviewerLog = {
+      verdict: verdict.verdict,
+      feedback: verdict.feedback,
+      reviewedAt: new Date().toISOString(),
+    };
+
+    if (verdict.verdict === "pass") {
+      boardStore.moveCard(projectId, repoPath, card.id, "done");
+      onEvent({
+        type: "worker_content",
+        cardId: card.id,
+        content: `Review passed: ${verdict.feedback}`,
+      });
+    } else {
+      boardStore.moveCard(projectId, repoPath, card.id, "in_progress");
+      boardStore.saveCards(projectId, repoPath, board.cards);
+      onEvent({
+        type: "worker_error",
+        cardId: card.id,
+        error: `Review failed: ${verdict.feedback}`,
+      });
+    }
+  } catch (err) {
+    onEvent({
+      type: "worker_error",
+      cardId: card.id,
+      error: `Reviewer error: ${err instanceof Error ? err.message : "Unknown"}`,
+    });
   }
 }

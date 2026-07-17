@@ -17,6 +17,12 @@ export type WorkerLog = {
   content: string;
 };
 
+export type ReviewerLog = {
+  verdict: "pass" | "fail";
+  feedback: string;
+  reviewedAt: string;
+};
+
 export type Card = {
   id: string;
   title: string;
@@ -27,4 +33,5 @@ export type Card = {
   column: Column;
   createdAt: string;
   workerLog?: WorkerLog;
+  reviewerLog?: ReviewerLog;
 };

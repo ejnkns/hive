@@ -32,6 +32,15 @@ let showMove = $state(false);
   {#if card.dependencies.length > 0}
     <div class="card-deps">{card.dependencies.length} dep{card.dependencies.length > 1 ? "s" : ""}</div>
   {/if}
+  {#if card.reviewerLog}
+    <div
+      class="card-review"
+      class:review-pass={card.reviewerLog.verdict === "pass"}
+      class:review-fail={card.reviewerLog.verdict === "fail"}
+    >
+      {card.reviewerLog.verdict === "pass" ? "pass" : "fail"}
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -66,5 +75,20 @@ let showMove = $state(false);
     font-size: 0.625rem;
     color: var(--accent);
     margin-top: 0.375rem;
+  }
+
+  .card-review {
+    font-size: 0.5625rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    margin-top: 0.375rem;
+  }
+
+  .review-pass {
+    color: #7cb342;
+  }
+
+  .review-fail {
+    color: #dc3c3c;
   }
 </style>
