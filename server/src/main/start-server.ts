@@ -28,7 +28,11 @@ import {
   registerProjectRoutes,
   registerWorkerRoutes,
 } from "../server/queen-bee";
-import { emitWorkerEvent } from "../server/queen-bee/worker-event-bus";
+import {
+  emitBoardEvent,
+  emitProjectEvent,
+  emitWorkerEvent,
+} from "../server/queen-bee/worker-event-bus";
 
 export async function startServer(overrides?: Partial<ServerConfig>) {
   printBanner();
@@ -46,11 +50,13 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
   const workspacePath = process.env.HIVE_WORKSPACE_PATH ?? process.cwd();
 
   const projectStore = createProjectStore(() => {
-    // Phase 1: no-op on change; Phase 3+ will broadcast via WebSocket
+    emitProjectEvent("");
   });
 
   const deviseEngine = createDeviseEngine();
-  const boardStore = createBoardStore(() => {});
+  const boardStore = createBoardStore((projectId) => {
+    emitBoardEvent(projectId);
+  });
   const planner = createPlanner(boardStore);
   const workerSupervisor = createWorkerSupervisor(boardStore);
 

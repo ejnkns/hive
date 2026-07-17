@@ -8,3 +8,19 @@ export const workerEventBus = new EventEmitter<{
 export function emitWorkerEvent(event: WorkerEvent, projectId: string): void {
   workerEventBus.emit("event", event, projectId);
 }
+
+export const projectEventBus = new EventEmitter<{
+  change: [string];
+}>();
+
+export function emitProjectEvent(projectId: string): void {
+  projectEventBus.emit("change", projectId);
+}
+
+export const boardEventBus = new EventEmitter<{
+  change: [string];
+}>();
+
+export function emitBoardEvent(projectId: string): void {
+  boardEventBus.emit("change", projectId);
+}

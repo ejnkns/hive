@@ -64,7 +64,9 @@ export type BoardStore = {
   saveCards(projectId: string, repoPath: string, cards: Card[]): void;
 };
 
-export function createBoardStore(onBoardChanged: () => void): BoardStore {
+export function createBoardStore(
+  onBoardChanged: (projectId: string) => void
+): BoardStore {
   return {
     getBoard(projectId: string, repoPath: string): Board {
       return loadBoard(projectId, repoPath);
@@ -86,7 +88,7 @@ export function createBoardStore(onBoardChanged: () => void): BoardStore {
       ensureHiveDir(repoPath);
       saveBoard(repoPath, board);
       saveCard(repoPath, newCard);
-      onBoardChanged();
+      onBoardChanged(projectId);
 
       return newCard;
     },
@@ -104,7 +106,7 @@ export function createBoardStore(onBoardChanged: () => void): BoardStore {
       card.column = column;
       saveBoard(repoPath, board);
       saveCard(repoPath, card);
-      onBoardChanged();
+      onBoardChanged(projectId);
 
       return card;
     },
@@ -116,7 +118,7 @@ export function createBoardStore(onBoardChanged: () => void): BoardStore {
       for (const card of cards) {
         saveCard(repoPath, card);
       }
-      onBoardChanged();
+      onBoardChanged(projectId);
     },
   };
 }

@@ -5,7 +5,11 @@ import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
 import type { BoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
-import { workerEventBus } from "./worker-event-bus";
+import {
+  boardEventBus,
+  projectEventBus,
+  workerEventBus,
+} from "./worker-event-bus";
 import type { WorkerEvent, WorkerSupervisor } from "./worker-supervisor";
 
 export function registerWorkerRoutes(
@@ -74,7 +78,7 @@ export function registerWorkerRoutes(
   );
 
   server.get("/api/queen-bee/ws", { websocket: true }, (socket) => {
-    const handler = (event: WorkerEvent, projectId: string) => {
+    const workerHandler = (event: WorkerEvent, projectId: string) => {
       try {
         socket.send(
           JSON.stringify({
@@ -87,10 +91,32 @@ export function registerWorkerRoutes(
       }
     };
 
-    workerEventBus.on("event", handler);
+    const boardHandler = (projectId: string) => {
+      try {
+        socket.send(
+          JSON.stringify({ type: "board_updated", data: { projectId } })
+        );
+      } catch {
+        // socket closed
+      }
+    };
+
+    const projectHandler = () => {
+      try {
+        socket.send(JSON.stringify({ type: "projects_changed" }));
+      } catch {
+        // socket closed
+      }
+    };
+
+    workerEventBus.on("event", workerHandler);
+    boardEventBus.on("change", boardHandler);
+    projectEventBus.on("change", projectHandler);
 
     socket.on("close", () => {
-      workerEventBus.off("event", handler);
+      workerEventBus.off("event", workerHandler);
+      boardEventBus.off("change", boardHandler);
+      projectEventBus.off("change", projectHandler);
     });
   });
 
