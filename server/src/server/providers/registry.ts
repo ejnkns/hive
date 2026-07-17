@@ -21,7 +21,8 @@ export function getModelId(entry: ModelEntry): string {
 export type Provider = {
   name: string;
   displayName: string;
-  baseUrl: string;
+  chatEndpoint: string;
+  modelsEndpoint: string;
   apiKeyEnvVar: string;
   models: ModelEntry[];
   defaultModel: string;
@@ -51,19 +52,7 @@ export const allProviders: Provider[] = [
   lmStudio,
 ].map((p) => ({
   ...p,
-  baseUrl: p.baseUrl.replace(/\/+$/, ""),
+  chatEndpoint: p.chatEndpoint.replace(/\/+$/, ""),
+  modelsEndpoint: p.modelsEndpoint.replace(/\/+$/, ""),
 }));
 
-export function buildChatEndpoint(baseUrl: string): string {
-  if (/\/v\d/.test(baseUrl)) {
-    return `${baseUrl}/chat/completions`;
-  }
-  return `${baseUrl}/v1/chat/completions`;
-}
-
-export function buildModelsEndpoint(baseUrl: string): string {
-  if (/\/v\d/.test(baseUrl)) {
-    return `${baseUrl}/models`;
-  }
-  return `${baseUrl}/v1/models`;
-}

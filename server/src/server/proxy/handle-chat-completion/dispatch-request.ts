@@ -1,7 +1,7 @@
 import type { IncomingHttpHeaders } from "node:http";
 import { logger } from "shared/logger";
 import { createTelemetrySink, type Node } from "telemetry";
-import { buildChatEndpoint, type Provider } from "../../providers";
+import type { Provider } from "../../providers";
 import { mutateRequest } from "../mutate-request";
 import { ProxyResponse } from "../proxy-response";
 import { routeRequest } from "../route-request";
@@ -35,7 +35,7 @@ export async function dispatchRequest(
   });
 
   const result = await routeRequest({
-    upstreamUrl: buildChatEndpoint(provider.baseUrl),
+    upstreamUrl: provider.chatEndpoint,
     mutated,
     timeoutMs: 10000,
     providerName: node.providerName,

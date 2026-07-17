@@ -3,7 +3,8 @@ import type { Provider } from "../registry";
 export const opencodeZen = {
   name: "opencode-zen",
   displayName: "Zen",
-  baseUrl: "https://opencode.ai/zen",
+  chatEndpoint: "https://opencode.ai/zen/v1/chat/completions",
+  modelsEndpoint: "https://opencode.ai/zen/v1/models",
   apiKeyEnvVar: "OPENCODE_ZEN_API_KEY",
   models: [
     "gpt-5.5",
