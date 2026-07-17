@@ -9,7 +9,8 @@ function ensureProviders(): ReadonlyArray<Provider> {
     providers = loaded.map((p) => ({
       name: p.name,
       displayName: p.displayName,
-      baseUrl: p.baseUrl,
+      chatEndpoint: p.chatEndpoint,
+      modelsEndpoint: p.modelsEndpoint,
       apiKeyEnvVar: p.apiKeyEnvVar,
       models: [...p.models],
       defaultModel: p.defaultModel,

@@ -11,7 +11,8 @@ export function loadProviders(): ReadonlyArray<Provider> {
     return {
       name: p.name,
       displayName: p.displayName,
-      baseUrl: p.baseUrl,
+      chatEndpoint: p.chatEndpoint,
+      modelsEndpoint: p.modelsEndpoint,
       apiKeyEnvVar: p.apiKeyEnvVar,
       models: cached ? [...cached.models] : [...p.models],
       defaultModel: cached ? cached.defaultModel : p.defaultModel,

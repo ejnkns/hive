@@ -97,6 +97,7 @@ Configuration is loaded synchronously from `.env` or from exported system variab
 | `NVIDIA_NIM_API_KEY`   | NVIDIA NIM       | `https://integrate.api.nvidia.com`                        |
 | `GITHUB_TOKEN`         | GitHub Models    | `https://models.github.ai/inference`                      |
 | `CEREBRAS_API_KEY`     | Cerebras         | `https://api.cerebras.ai`                                 |
+| `DEEPSEEK_API_KEY`     | DeepSeek         | `https://api.deepseek.com`                                |
 | `MISTRAL_API_KEY`      | Mistral          | `https://api.mistral.ai`                                  |
 | `OPENCODE_ZEN_API_KEY` | OpenCode Zen     | `https://opencode.ai/zen`                                 |
 | `OLLAMA_API_KEY`\*     | Ollama           | `http://127.0.0.1:11434/v1` or `OLLAMA_HOST` in `.env`    |

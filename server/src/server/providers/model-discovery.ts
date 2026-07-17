@@ -2,7 +2,7 @@ import { logger } from "shared/logger";
 import { loadModelCache } from "./model-discovery/load-model-cache";
 import { saveModelCache } from "./model-discovery/save-model-cache";
 import { selectDefaultModel } from "./model-discovery/select-default-model";
-import { buildModelsEndpoint, getModelId, type Provider } from "./registry";
+import { getModelId, type Provider } from "./registry";
 
 type ModelListResponse = {
   data: Array<{ id: string }>;
@@ -10,7 +10,7 @@ type ModelListResponse = {
 
 type CachedProvider = {
   name: string;
-  baseUrl: string;
+  modelsEndpoint: string;
   apiKeyEnvVar: string;
   models: string[];
   defaultModel: string;
@@ -25,7 +25,7 @@ export type ModelCache = {
 };
 
 async function fetchProviderModels(
-  baseUrl: string,
+  modelsEndpoint: string,
   apiKeyEnvVar: string
 ): Promise<string[]> {
   const apiKey = process.env[apiKeyEnvVar];
@@ -34,10 +34,8 @@ async function fetchProviderModels(
   }
 
   logger.debug(
-    `API key '${apiKeyEnvVar}' found in environment for baseUrl: ${baseUrl}`
+    `API key '${apiKeyEnvVar}' found in environment for endpoint: ${modelsEndpoint}`
   );
-
-  const modelsEndpoint = buildModelsEndpoint(baseUrl);
 
   const controller = new AbortController();
   const id = setTimeout(() => {
@@ -72,7 +70,7 @@ async function fetchProviderModels(
         .map((m) => m.id)
         .filter((id): id is string => typeof id === "string");
       logger.debug(
-        `Successfully fetched ${String(models.length)} models from baseUrl: ${baseUrl}`
+        `Successfully fetched ${String(models.length)} models from endpoint: ${modelsEndpoint}`
       );
       return models;
     }
@@ -81,7 +79,7 @@ async function fetchProviderModels(
   } catch (error: unknown) {
     clearTimeout(id);
     logger.debug(
-      `Failed to fetch models from baseUrl ${baseUrl}: ${error instanceof Error ? error.message : String(error)}`
+      `Failed to fetch models from ${modelsEndpoint}: ${error instanceof Error ? error.message : String(error)}`
     );
     throw error;
   }
@@ -118,7 +116,7 @@ export async function discoverAndCacheModels(
     if (key && key.length > 0) {
       try {
         const fetchedModels = await fetchProviderModels(
-          provider.baseUrl,
+          provider.modelsEndpoint,
           provider.apiKeyEnvVar
         );
         const bestDefault = selectDefaultModel(
@@ -129,7 +127,7 @@ export async function discoverAndCacheModels(
 
         updatedProviders.push({
           name: provider.name,
-          baseUrl: provider.baseUrl,
+          modelsEndpoint: provider.modelsEndpoint,
           apiKeyEnvVar: provider.apiKeyEnvVar,
           models:
             fetchedModels.length > 0
@@ -143,7 +141,7 @@ export async function discoverAndCacheModels(
       } catch (err: unknown) {
         updatedProviders.push({
           name: provider.name,
-          baseUrl: provider.baseUrl,
+          modelsEndpoint: provider.modelsEndpoint,
           apiKeyEnvVar: provider.apiKeyEnvVar,
           models: cached?.models || provider.models.map(getModelId),
           defaultModel: cached?.defaultModel || provider.defaultModel,
@@ -158,7 +156,7 @@ export async function discoverAndCacheModels(
       );
       updatedProviders.push({
         name: provider.name,
-        baseUrl: provider.baseUrl,
+        modelsEndpoint: provider.modelsEndpoint,
         apiKeyEnvVar: provider.apiKeyEnvVar,
         models: cached?.models || provider.models.map(getModelId),
         defaultModel: cached?.defaultModel || provider.defaultModel,

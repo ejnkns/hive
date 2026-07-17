@@ -3,7 +3,8 @@ import type { Provider } from "../registry";
 export const mistral = {
   name: "mistral",
   displayName: "Mistral",
-  baseUrl: "https://api.mistral.ai",
+  chatEndpoint: "https://api.mistral.ai/v1/chat/completions",
+  modelsEndpoint: "https://api.mistral.ai/v1/models",
   apiKeyEnvVar: "MISTRAL_API_KEY",
   models: [
     { id: "mistral-large-latest", contextLength: 128_000 },

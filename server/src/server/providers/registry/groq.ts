@@ -3,7 +3,8 @@ import type { Provider } from "../registry";
 export const groq = {
   name: "groq",
   displayName: "Groq",
-  baseUrl: "https://api.groq.com/openai",
+  chatEndpoint: "https://api.groq.com/openai/v1/chat/completions",
+  modelsEndpoint: "https://api.groq.com/openai/v1/models",
   apiKeyEnvVar: "GROQ_API_KEY",
   models: [
     { id: "deepseek-r1-distill-llama-70b", contextLength: 128_000 },

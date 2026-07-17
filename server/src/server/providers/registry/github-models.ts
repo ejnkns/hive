@@ -3,7 +3,8 @@ import type { Provider } from "../registry";
 export const githubModels = {
   name: "github-models",
   displayName: "GitHub Models",
-  baseUrl: "https://models.github.ai/inference",
+  chatEndpoint: "https://models.github.ai/inference/v1/chat/completions",
+  modelsEndpoint: "https://models.github.ai/inference/v1/models",
   apiKeyEnvVar: "GITHUB_TOKEN",
   models: [
     { id: "gpt-4o", contextLength: 128_000 },

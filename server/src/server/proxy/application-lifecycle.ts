@@ -7,7 +7,6 @@ import {
   telemetryRecorder,
 } from "telemetry";
 import {
-  buildChatEndpoint,
   discoverAndCacheModels,
   providers as staticProviders,
 } from "../providers";
@@ -98,7 +97,7 @@ function startHeartbeat(): void {
           targetModel: provider.defaultModel,
         });
         await routeRequest({
-          upstreamUrl: buildChatEndpoint(provider.baseUrl),
+          upstreamUrl: provider.chatEndpoint,
           mutated,
           timeoutMs: 5000,
           providerName: provider.name,

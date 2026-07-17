@@ -58,7 +58,7 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
         return {
           name: p.name,
           displayName: p.displayName,
-          baseUrl: p.baseUrl,
+          chatEndpoint: p.chatEndpoint,
           model,
           models: p.models.map(getModelId),
           keyConfigured,

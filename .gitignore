@@ -6,6 +6,7 @@ dist/
 contexts/
 *.md
 !README.md
+!CONTRIBUTING.md
 repomix-output.xml
 vault
 docs/

@@ -3,7 +3,8 @@ import type { Provider } from "../registry";
 export const sambanova = {
   name: "sambanova",
   displayName: "SambaNova",
-  baseUrl: "https://api.sambanova.ai",
+  chatEndpoint: "https://api.sambanova.ai/v1/chat/completions",
+  modelsEndpoint: "https://api.sambanova.ai/v1/models",
   apiKeyEnvVar: "SAMBA_NOVA_API_KEY",
   models: [
     { id: "DeepSeek-R1", contextLength: 128_000 },

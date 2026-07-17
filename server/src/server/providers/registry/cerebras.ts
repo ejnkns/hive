@@ -3,7 +3,8 @@ import type { Provider } from "../registry";
 export const cerebras = {
   name: "cerebras",
   displayName: "Cerebras",
-  baseUrl: "https://api.cerebras.ai",
+  chatEndpoint: "https://api.cerebras.ai/v1/chat/completions",
+  modelsEndpoint: "https://api.cerebras.ai/v1/models",
   apiKeyEnvVar: "CEREBRAS_API_KEY",
   models: [
     { id: "llama-3.3-70b", contextLength: 8_192 },
