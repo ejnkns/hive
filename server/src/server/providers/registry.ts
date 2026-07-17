@@ -6,11 +6,17 @@ import { googleAi } from "./registry/google-ai";
 import { groq } from "./registry/groq";
 import { lmStudio } from "./registry/lm-studio";
 import { mistral } from "./registry/mistral";
+import { novita } from "./registry/novita";
 import { nvidiaNim } from "./registry/nvidia-nim";
 import { ollama } from "./registry/ollama";
+import { ollamaCloud } from "./registry/ollama-cloud";
 import { omlx } from "./registry/omlx";
 import { opencodeZen } from "./registry/opencode-zen";
+import { openrouter } from "./registry/openrouter";
+import { ovhcloud } from "./registry/ovhcloud";
+import { routeway } from "./registry/routeway";
 import { sambanova } from "./registry/sambanova";
+import { scaleway } from "./registry/scaleway";
 
 export type ModelEntry = string | { id: string; contextLength?: number };
 
@@ -41,14 +47,20 @@ export const allProviders: Provider[] = [
   deepseek,
   groq,
   sambanova,
+  scaleway,
   nvidiaNim,
   opencodeZen,
+  openrouter,
   googleAi,
   githubModels,
   cerebras,
   mistral,
+  novita,
   omlx,
   ollama,
+  ollamaCloud,
+  ovhcloud,
+  routeway,
   lmStudio,
 ].map((p) => ({
   ...p,
