@@ -91,10 +91,27 @@ async function callWithToolLoop(
 function parseCards(content: string): Card[] {
   const match = content.match(/```json\s*([\s\S]*?)```/);
   if (!match) {
-    throw new Error("Planner did not produce valid JSON output");
+    const tail = content.slice(-1000);
+    throw new Error(
+      `Planner did not produce valid JSON output. Response (last 1000 chars):\n${tail}`
+    );
   }
 
-  const raw = JSON.parse(match[1]) as {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(match[1]);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Planner produced invalid JSON: ${message}\n\nOutput:\n${match[1].slice(0, 1000)}`
+    );
+  }
+
+  if (!Array.isArray(raw)) {
+    throw new Error(`Planner output is not an array. Got: ${typeof raw}`);
+  }
+
+  const items = raw as {
     title?: string;
     description?: string;
     acceptanceCriteria?: string[];
@@ -102,11 +119,7 @@ function parseCards(content: string): Card[] {
     dependencies?: string[];
   }[];
 
-  if (!Array.isArray(raw)) {
-    throw new Error("Planner output is not an array");
-  }
-
-  const cards = raw.map((item, index) => ({
+  const cards = items.map((item, index) => ({
     id: `card-${String(index)}`,
     title: item.title ?? `Untitled card ${String(index)}`,
     description: item.description ?? "",
