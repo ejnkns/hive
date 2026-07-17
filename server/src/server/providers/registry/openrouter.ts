@@ -1,0 +1,36 @@
+import type { Provider } from "../registry";
+
+export const openrouter = {
+  name: "openrouter",
+  displayName: "OpenRouter",
+  chatEndpoint: "https://openrouter.ai/api/v1/chat/completions",
+  modelsEndpoint: "https://openrouter.ai/api/v1/models",
+  apiKeyEnvVar: "OPENROUTER_API_KEY",
+  models: [
+    { id: "nvidia/nemotron-3-ultra-550b-a55b:free", contextLength: 1_000_000 },
+    { id: "poolside/laguna-m.1:free", contextLength: 262_000 },
+    { id: "poolside/laguna-xs.2:free", contextLength: 262_000 },
+    { id: "poolside/laguna-xs-2.1:free", contextLength: 262_000 },
+    { id: "openai/gpt-oss-120b:free", contextLength: 131_000 },
+    { id: "cohere/north-mini-code:free", contextLength: 256_000 },
+    { id: "tencent/hy3:free", contextLength: 262_000 },
+    { id: "qwen/qwen3-coder:free", contextLength: 1_000_000 },
+    { id: "nvidia/nemotron-3-super-120b-a12b:free", contextLength: 1_000_000 },
+    { id: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", contextLength: 256_000 },
+    { id: "openai/gpt-oss-20b:free", contextLength: 131_000 },
+    { id: "nvidia/nemotron-3-nano-30b-a3b:free", contextLength: 256_000 },
+    { id: "google/gemma-4-31b-it:free", contextLength: 262_000 },
+    { id: "meta-llama/llama-3.3-70b-instruct:free", contextLength: 131_000 },
+    { id: "qwen/qwen3-next-80b-a3b-instruct:free", contextLength: 262_000 },
+  ],
+  defaultModel: "nvidia/nemotron-3-ultra-550b-a55b:free",
+  modelPreferences: [
+    "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "poolside/laguna-m.1:free",
+    "openai/gpt-oss-120b:free",
+    "cohere/north-mini-code:free",
+    "qwen/qwen3-coder:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "google/gemma-4-31b-it:free",
+  ],
+} satisfies Provider;

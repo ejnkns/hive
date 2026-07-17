@@ -10,6 +10,7 @@ import { nvidiaNim } from "./registry/nvidia-nim";
 import { ollama } from "./registry/ollama";
 import { omlx } from "./registry/omlx";
 import { opencodeZen } from "./registry/opencode-zen";
+import { openrouter } from "./registry/openrouter";
 import { sambanova } from "./registry/sambanova";
 
 export type ModelEntry = string | { id: string; contextLength?: number };
@@ -43,6 +44,7 @@ export const allProviders: Provider[] = [
   sambanova,
   nvidiaNim,
   opencodeZen,
+  openrouter,
   googleAi,
   githubModels,
   cerebras,
