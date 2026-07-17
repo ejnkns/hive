@@ -12,6 +12,7 @@ import { omlx } from "./registry/omlx";
 import { opencodeZen } from "./registry/opencode-zen";
 import { openrouter } from "./registry/openrouter";
 import { sambanova } from "./registry/sambanova";
+import { scaleway } from "./registry/scaleway";
 
 export type ModelEntry = string | { id: string; contextLength?: number };
 
@@ -42,6 +43,7 @@ export const allProviders: Provider[] = [
   deepseek,
   groq,
   sambanova,
+  scaleway,
   nvidiaNim,
   opencodeZen,
   openrouter,
