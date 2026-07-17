@@ -25,6 +25,14 @@ export function loadBoard(projectId: string, repoPath: string): Board {
         dependencies: string[];
         column: string;
         createdAt: string;
+        workerLog?: {
+          startedAt: string;
+          finishedAt: string;
+          iterations: number;
+          toolCalls: { name: string; args: string }[];
+          error?: string;
+          content: string;
+        };
       }[];
     };
 
@@ -48,6 +56,7 @@ export function loadBoard(projectId: string, repoPath: string): Board {
               ? c.column
               : "idea") as Card["column"],
             createdAt: typeof c.createdAt === "string" ? c.createdAt : "",
+            workerLog: c.workerLog,
           });
         }
       }

@@ -8,6 +8,15 @@ export type Column =
   | "done"
   | "unfulfillable";
 
+export type WorkerLog = {
+  startedAt: string;
+  finishedAt: string;
+  iterations: number;
+  toolCalls: { name: string; args: string }[];
+  error?: string;
+  content: string;
+};
+
 export type Card = {
   id: string;
   title: string;
@@ -17,4 +26,5 @@ export type Card = {
   dependencies: string[];
   column: Column;
   createdAt: string;
+  workerLog?: WorkerLog;
 };

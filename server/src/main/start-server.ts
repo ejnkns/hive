@@ -22,9 +22,11 @@ import {
   createDeviseEngine,
   createPlanner,
   createProjectStore,
+  createWorkerSupervisor,
   registerBoardRoutes,
   registerDeviseRoutes,
   registerProjectRoutes,
+  registerWorkerRoutes,
 } from "../server/queen-bee";
 
 export async function startServer(overrides?: Partial<ServerConfig>) {
@@ -49,6 +51,7 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
   const deviseEngine = createDeviseEngine();
   const boardStore = createBoardStore(() => {});
   const planner = createPlanner(boardStore);
+  const workerSupervisor = createWorkerSupervisor(boardStore);
 
   const server = await createServer({
     getProviders: () => getProviders(),
@@ -65,6 +68,12 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
   registerProjectRoutes(server, projectStore);
   registerDeviseRoutes(server, { engine: deviseEngine, projectStore });
   registerBoardRoutes(server, { boardStore, planner, projectStore });
+  registerWorkerRoutes(server, {
+    workerSupervisor,
+    boardStore,
+    projectStore,
+    onWorkerEvent: () => {},
+  });
 
   listen(server, config);
 

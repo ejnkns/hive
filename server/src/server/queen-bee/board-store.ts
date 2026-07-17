@@ -33,6 +33,14 @@ export type Card = {
   dependencies: string[];
   column: Column;
   createdAt: string;
+  workerLog?: {
+    startedAt: string;
+    finishedAt: string;
+    iterations: number;
+    toolCalls: { name: string; args: string }[];
+    error?: string;
+    content: string;
+  };
 };
 
 export type Board = {
