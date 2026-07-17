@@ -98,7 +98,12 @@ export function registerBoardRoutes(
     }
 
     try {
-      const cards = await deps.planner.plan(projectId, project.repoPath);
+      const body = (request.body ?? {}) as { guidance?: string };
+      const cards = await deps.planner.plan(
+        projectId,
+        project.repoPath,
+        body.guidance
+      );
       return reply.send({ cards });
     } catch (err) {
       return reply.status(500).send({

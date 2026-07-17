@@ -12,7 +12,13 @@ export function saveBoard(repoPath: string, board: Board): void {
     cards: board.cards.map((c) => ({
       id: c.id,
       title: c.title,
+      description: c.description,
+      acceptanceCriteria: c.acceptanceCriteria,
+      relevantFiles: c.relevantFiles,
+      dependencies: c.dependencies,
       column: c.column,
+      createdAt: c.createdAt,
+      workerLog: c.workerLog,
     })),
   };
 
