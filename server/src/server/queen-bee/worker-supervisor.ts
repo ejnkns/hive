@@ -1,6 +1,6 @@
 /** @public */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { Message } from "shared/message";
 import type { BoardStore, Card } from "./board-store";
@@ -82,7 +82,7 @@ export function createWorkerSupervisor(
     systemPrompt: string,
     codingGuidelines: string,
     onEvent: (event: WorkerEvent) => void,
-    controller: AbortController
+    _controller: AbortController
   ) {
     const projectId = boardStore.getBoard("", repoPath).projectId;
     const startedAt = new Date().toISOString();
