@@ -19,6 +19,7 @@ export type Project = {
   systemPrompt: string;
   codingGuidelines: string;
   targetBranch: string;
+  maxConcurrentWorkers: number;
 };
 
 export type ProjectRegistry = {
@@ -47,6 +48,7 @@ export function createProjectStore(
     codingGuidelines: string;
     createdAt: string;
     targetBranch: string;
+    maxConcurrentWorkers: number;
   } {
     try {
       const raw = readFileSync(
@@ -70,6 +72,9 @@ export function createProjectStore(
           typeof parsed.targetBranch === "string" && parsed.targetBranch
             ? parsed.targetBranch
             : inferTargetBranch(repoPath),
+        maxConcurrentWorkers: parseMaxConcurrentWorkers(
+          parsed.maxConcurrentWorkers
+        ),
       };
     } catch {
       return {
@@ -78,6 +83,7 @@ export function createProjectStore(
         codingGuidelines: "",
         createdAt: "",
         targetBranch: inferTargetBranch(repoPath),
+        maxConcurrentWorkers: DEFAULT_MAX_CONCURRENT_WORKERS,
       };
     }
   }
@@ -94,6 +100,7 @@ export function createProjectStore(
           systemPrompt: meta.systemPrompt,
           codingGuidelines: meta.codingGuidelines,
           targetBranch: meta.targetBranch,
+          maxConcurrentWorkers: meta.maxConcurrentWorkers,
         };
       });
     },
@@ -110,4 +117,12 @@ export function createProjectStore(
       save();
     },
   };
+}
+
+const DEFAULT_MAX_CONCURRENT_WORKERS = 3;
+
+function parseMaxConcurrentWorkers(value: unknown): number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0
+    ? value
+    : DEFAULT_MAX_CONCURRENT_WORKERS;
 }

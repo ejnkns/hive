@@ -75,6 +75,21 @@ export type CardActivityEvent = {
   occurredAt: string;
 };
 
+export type WorkerAdmissionBlocker = {
+  kind: "capacity" | "dependency" | "file_overlap";
+  message: string;
+  cardIds: string[];
+  files?: string[];
+};
+
+export type WorkerAdmission = {
+  allowed: boolean;
+  canOverride: boolean;
+  activeWorkers: number;
+  maxConcurrentWorkers: number;
+  blockers: WorkerAdmissionBlocker[];
+};
+
 export type CardSpecification = Pick<
   Card,
   | "title"

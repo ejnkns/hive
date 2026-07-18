@@ -207,12 +207,12 @@ describe("WorkerSupervisor", () => {
 
     const run = supervisor.run("project-1", card, repoPath, "", "", () => {});
     await modelCallStarted;
-    assert.equal(supervisor.isRunning(card.id), true);
-    assert.equal(supervisor.cancel(card.id), true);
-    assert.equal(supervisor.isRunning(card.id), true);
+    assert.equal(supervisor.isRunning("project-1", card.id), true);
+    assert.equal(supervisor.cancel("project-1", card.id), true);
+    assert.equal(supervisor.isRunning("project-1", card.id), true);
     await run;
 
-    assert.equal(supervisor.isRunning(card.id), false);
+    assert.equal(supervisor.isRunning("project-1", card.id), false);
     assert.equal(
       boardStore.getBoard("project-1", repoPath).cards[0]?.column,
       "ready"

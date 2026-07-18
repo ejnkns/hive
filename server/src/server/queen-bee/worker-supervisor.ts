@@ -55,8 +55,9 @@ export type WorkerSupervisor = {
     codingGuidelines: string,
     onEvent: (event: WorkerEvent) => void
   ): Promise<void>;
-  isRunning(cardId: string): boolean;
-  cancel(cardId: string): boolean;
+  isRunning(projectId: string, cardId: string): boolean;
+  runningCardIds(projectId: string): string[];
+  cancel(projectId: string, cardId: string): boolean;
 };
 
 export function createWorkerSupervisor(
@@ -66,7 +67,10 @@ export function createWorkerSupervisor(
   runtimeStore: QueenBeeRuntimeStore,
   modelCaller: DeviseModelCaller = createDeviseModelCaller(WORKER_TOOLS)
 ): WorkerSupervisor {
-  const abortControllers = new Map<string, AbortController>();
+  const abortControllers = new Map<
+    string,
+    { projectId: string; cardId: string; controller: AbortController }
+  >();
 
   return {
     async run(
@@ -77,13 +81,18 @@ export function createWorkerSupervisor(
       codingGuidelines,
       onEvent
     ) {
-      if (abortControllers.has(card.id)) {
+      const attemptKey = runningAttemptKey(projectId, card.id);
+      if (abortControllers.has(attemptKey)) {
         throw new Error(
           `Worker Agent is already running for card '${card.id}'`
         );
       }
       const controller = new AbortController();
-      abortControllers.set(card.id, controller);
+      abortControllers.set(attemptKey, {
+        projectId,
+        cardId: card.id,
+        controller,
+      });
 
       try {
         await runWithController(
@@ -96,18 +105,26 @@ export function createWorkerSupervisor(
           controller
         );
       } finally {
-        abortControllers.delete(card.id);
+        abortControllers.delete(attemptKey);
       }
     },
 
-    isRunning(cardId: string) {
-      return abortControllers.has(cardId);
+    isRunning(projectId: string, cardId: string) {
+      return abortControllers.has(runningAttemptKey(projectId, cardId));
     },
 
-    cancel(cardId: string) {
-      const controller = abortControllers.get(cardId);
-      if (controller) {
-        controller.abort();
+    runningCardIds(projectId: string) {
+      return [...abortControllers.values()]
+        .filter((attempt) => attempt.projectId === projectId)
+        .map((attempt) => attempt.cardId);
+    },
+
+    cancel(projectId: string, cardId: string) {
+      const attempt = abortControllers.get(
+        runningAttemptKey(projectId, cardId)
+      );
+      if (attempt) {
+        attempt.controller.abort();
         return true;
       }
       return false;
@@ -284,6 +301,10 @@ export function createWorkerSupervisor(
       });
     }
   }
+}
+
+function runningAttemptKey(projectId: string, cardId: string): string {
+  return `${projectId}\u0000${cardId}`;
 }
 
 type WorkerLoopResult =

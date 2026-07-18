@@ -34,6 +34,7 @@ describe("coordinator routes", () => {
       systemPrompt: "",
       codingGuidelines: "",
       targetBranch: "main",
+      maxConcurrentWorkers: 3,
     };
     const projectStore: ProjectStore = {
       getAll: () => [project],

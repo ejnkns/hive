@@ -5,6 +5,7 @@ import type {
   Column,
   CoordinatorAction,
   PlanningProposal,
+  WorkerAdmission,
 } from "shared/board-types";
 import KanbanCard from "./kanban-card.svelte";
 import CardDetail from "./card-detail.svelte";
@@ -51,6 +52,10 @@ let revisionText = $state("");
 let revisionError = $state<string | null>(null);
 let activeWorkWarning = $state<string | null>(null);
 let refinementQuestion = $state<string | null>(null);
+let pendingAdmission = $state<{
+  cardId: string;
+  admission: WorkerAdmission;
+} | null>(null);
 
 async function loadBoard() {
   loading = true;
@@ -113,15 +118,36 @@ async function submitRevision(confirmActive = false) {
   }
 }
 
-async function handleRunCard(cardId: string) {
+async function handleRunCard(cardId: string, confirmRisks = false) {
   running = cardId;
+  error = null;
   try {
-    await fetch(`/api/queen-bee/${projectId}/cards/${cardId}/run`, {
-      method: "POST",
-    });
+    const response = await fetch(
+      `/api/queen-bee/${projectId}/cards/${cardId}/run`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmRisks }),
+      }
+    );
+    const result = (await response.json()) as {
+      admission?: WorkerAdmission;
+      error?: string;
+    };
+    if (!response.ok) {
+      if (result.admission?.canOverride) {
+        pendingAdmission = { cardId, admission: result.admission };
+        return;
+      }
+      throw new Error(result.error ?? "Could not start Worker Agent");
+    }
+    pendingAdmission = null;
     await loadBoard();
-  } catch {
-    // ignore
+  } catch (runError) {
+    error =
+      runError instanceof Error
+        ? runError.message
+        : "Could not start Worker Agent";
   } finally {
     running = null;
   }
@@ -308,6 +334,35 @@ onMount(() => {
     <div class="error">{error}</div>
   {/if}
 
+  {#if pendingAdmission}
+    <div class="worker-risk">
+      <div>
+        <strong>Confirm parallel work risks</strong>
+        <ul>
+          {#each pendingAdmission.admission.blockers as blocker}
+            <li>
+              {blocker.message}{blocker.files?.length
+                ? `: ${blocker.files.join(", ")}`
+                : ""}
+            </li>
+          {/each}
+        </ul>
+      </div>
+      <div class="worker-risk-actions">
+        <button
+          class="btn btn-danger"
+          onclick={() => handleRunCard(pendingAdmission!.cardId, true)}
+          disabled={running === pendingAdmission.cardId}
+        >
+          {running === pendingAdmission.cardId ? "Starting..." : "Run anyway"}
+        </button>
+        <button class="btn" onclick={() => (pendingAdmission = null)}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  {/if}
+
   {#if loading}
     <div class="loading">Loading board...</div>
   {:else if board}
@@ -379,6 +434,32 @@ onMount(() => {
 
   .board-actions {
     display: flex;
+    gap: 0.375rem;
+  }
+
+  .worker-risk {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+    padding: 0.75rem;
+    border: 1px solid #8a6d1d;
+    border-radius: 6px;
+    background: rgba(138, 109, 29, 0.12);
+    color: var(--text);
+    font-size: 0.75rem;
+  }
+
+  .worker-risk ul {
+    margin: 0.375rem 0 0;
+    padding-left: 1.25rem;
+    color: var(--muted);
+  }
+
+  .worker-risk-actions {
+    display: flex;
+    flex-shrink: 0;
     gap: 0.375rem;
   }
 

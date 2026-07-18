@@ -8,6 +8,7 @@ export type ProjectListItem = {
   systemPrompt: string;
   codingGuidelines: string;
   targetBranch: string;
+  maxConcurrentWorkers: number;
 };
 
 export type ProjectIntegrationStatus = {

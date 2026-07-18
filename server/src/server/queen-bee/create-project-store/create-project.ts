@@ -19,6 +19,7 @@ export function createProject(
   const id = makeUnique(slug, registry);
   const createdAt = new Date().toISOString();
   const targetBranch = inferTargetBranch(resolved);
+  const maxConcurrentWorkers = 3;
 
   const hiveDir = join(resolved, ".hive");
   if (!existsSync(hiveDir)) {
@@ -32,6 +33,7 @@ export function createProject(
     systemPrompt: "",
     codingGuidelines: "",
     targetBranch,
+    maxConcurrentWorkers,
   };
 
   writeFileSync(
@@ -54,6 +56,7 @@ export function createProject(
     systemPrompt: "",
     codingGuidelines: "",
     targetBranch,
+    maxConcurrentWorkers,
   };
 }
 

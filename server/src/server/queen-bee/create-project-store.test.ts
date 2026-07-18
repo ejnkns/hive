@@ -37,11 +37,13 @@ describe("createProject", () => {
     assert.strictEqual(project.systemPrompt, "");
     assert.strictEqual(project.codingGuidelines, "");
     assert.strictEqual(project.targetBranch, "main");
+    assert.strictEqual(project.maxConcurrentWorkers, 3);
 
     const raw = readFileSync(join(repoPath, ".hive", "project.json"), "utf-8");
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     assert.strictEqual(parsed.name, "my-project");
     assert.strictEqual(parsed.targetBranch, "main");
+    assert.strictEqual(parsed.maxConcurrentWorkers, 3);
   });
 
   it("generates slug-based ID from project name", () => {

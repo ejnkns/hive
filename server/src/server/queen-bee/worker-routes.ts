@@ -6,6 +6,7 @@ import type { FastifyInstance } from "fastify";
 import type { BoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
 import type { DeviseDraftUpdate } from "./devise-engine";
+import { evaluateWorkerAdmission } from "./worker-admission";
 import {
   boardEventBus,
   deviseEventBus,
@@ -49,10 +50,27 @@ export function registerWorkerRoutes(
           error: "Card must be in the 'ready' column to run",
         });
       }
-      if (deps.workerSupervisor.isRunning(cardId)) {
+      if (deps.workerSupervisor.isRunning(projectId, cardId)) {
         return reply
           .status(409)
           .send({ error: "Worker Agent is already running" });
+      }
+
+      const body = (request.body ?? {}) as { confirmRisks?: boolean };
+      const admission = evaluateWorkerAdmission({
+        card,
+        cards: board.cards,
+        runningCardIds: deps.workerSupervisor.runningCardIds(projectId),
+        maxConcurrentWorkers: project.maxConcurrentWorkers,
+        confirmRisks: body.confirmRisks === true,
+      });
+      if (!admission.allowed) {
+        return reply.status(409).send({
+          error: admission.canOverride
+            ? "Worker start requires explicit risk confirmation"
+            : "Project worker capacity has been reached",
+          admission,
+        });
       }
 
       const projectJsonPath = join(project.repoPath, ".hive", "project.json");
@@ -72,7 +90,7 @@ export function registerWorkerRoutes(
         // use empty defaults
       }
 
-      reply.send({ started: true, cardId });
+      reply.send({ started: true, cardId, admission });
 
       await deps.workerSupervisor.run(
         projectId,
@@ -150,7 +168,7 @@ export function registerWorkerRoutes(
         return reply.status(404).send({ error: "Project not found" });
       }
 
-      if (!deps.workerSupervisor.cancel(cardId)) {
+      if (!deps.workerSupervisor.cancel(projectId, cardId)) {
         return reply.status(409).send({ error: "Worker Agent is not running" });
       }
 
