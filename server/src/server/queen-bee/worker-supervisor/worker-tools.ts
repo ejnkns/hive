@@ -155,14 +155,15 @@ export const WORKER_TOOLS: ToolDefinition[] = [
 
 export async function executeWorkerTool(
   toolCall: ToolCall,
-  workspacePath: string
+  workspacePath: string,
+  signal?: AbortSignal
 ): Promise<ToolResult> {
   try {
     switch (toolCall.name) {
       case "write_file":
         return writeFile(toolCall, workspacePath);
       case "run_command":
-        return await runCommand(toolCall, workspacePath);
+        return await runCommand(toolCall, workspacePath, signal);
       case "commit_work":
         return commitWork(toolCall, workspacePath);
       case "git_status":

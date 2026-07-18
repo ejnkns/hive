@@ -15,7 +15,8 @@ export type DeviseModelCaller = {
   call(
     messages: Message[],
     workspacePath: string,
-    includeTools: boolean
+    includeTools: boolean,
+    signal?: AbortSignal
   ): Promise<DeviseModelResponse>;
 };
 
@@ -33,7 +34,7 @@ export function createDeviseModelCaller(
   const activeTools = tools ?? DEVISE_TOOLS;
 
   return {
-    async call(messages, workspacePath, includeTools) {
+    async call(messages, workspacePath, includeTools, signal) {
       const payload: Record<string, unknown> = {
         messages,
         stream: true,
@@ -49,14 +50,15 @@ export function createDeviseModelCaller(
         throw new Error(result.error ?? "Model call failed");
       }
 
-      return consumeStream(result.stream, workspacePath);
+      return consumeStream(result.stream, workspacePath, signal);
     },
   };
 }
 
 async function consumeStream(
   stream: Readable | PassThrough,
-  _workspacePath: string
+  _workspacePath: string,
+  signal?: AbortSignal
 ): Promise<DeviseModelResponse> {
   let content = "";
   let reasoningContent = "";
@@ -73,6 +75,16 @@ async function consumeStream(
   const toolCalls = new Map<number, ToolAccumulator>();
 
   return new Promise<DeviseModelResponse>((resolve, reject) => {
+    function abort(): void {
+      stream.destroy(new Error("Model call cancelled"));
+      reject(signal?.reason ?? new Error("Model call cancelled"));
+    }
+    if (signal?.aborted) {
+      abort();
+      return;
+    }
+    signal?.addEventListener("abort", abort, { once: true });
+
     stream.on("data", (chunk: Buffer) => {
       buffer += chunk.toString();
 
@@ -162,6 +174,7 @@ async function consumeStream(
     });
 
     stream.on("end", () => {
+      signal?.removeEventListener("abort", abort);
       const parsedToolCalls = Array.from(toolCalls.values()).map(
         (tc) =>
           ({
@@ -181,6 +194,7 @@ async function consumeStream(
     });
 
     stream.on("error", (err) => {
+      signal?.removeEventListener("abort", abort);
       reject(err);
     });
   });

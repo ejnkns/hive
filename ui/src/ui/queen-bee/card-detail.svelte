@@ -378,9 +378,9 @@ const COLUMN_LABELS: Record<Column, string> = {
           Refine card
         </button>
       {/if}
-      {#if (card.column === "ready" || card.column === "in_progress") && onRun}
+      {#if card.column === "ready" && onRun}
         <button class="btn btn-run" onclick={onRun}>
-          {card.column === "in_progress" ? "Retry Worker" : "Run Worker"}
+          Run Worker
         </button>
       {/if}
       {#if card.column === "reviewing" && card.reviewerLog?.status === "complete" && onAccept && onRequestChanges}

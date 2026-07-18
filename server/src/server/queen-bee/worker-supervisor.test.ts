@@ -167,6 +167,58 @@ describe("WorkerSupervisor", () => {
     );
   });
 
+  it("cancels the active model call and returns the card to Ready", async () => {
+    const repoPath = createGitRepository();
+    const boardStore = createBoardStore(
+      () => {},
+      createQueenBeeRuntimeStore(join(repoPath, ".runtime"))
+    );
+    const card = boardStore.addCard("project-1", repoPath, {
+      title: "Cancel active work",
+      description: "Stop the active Worker Agent",
+      acceptanceCriteria: ["Cancellation stops the model call"],
+      relevantFiles: ["source.txt"],
+      dependencies: [],
+      column: "ready",
+    });
+    let enteredModelCall: (() => void) | undefined;
+    const modelCallStarted = new Promise<void>((resolve) => {
+      enteredModelCall = resolve;
+    });
+    const modelCaller: DeviseModelCaller = {
+      call(_messages, _workspacePath, _includeTools, signal) {
+        enteredModelCall?.();
+        return new Promise<DeviseModelResponse>((_resolve, reject) => {
+          signal?.addEventListener(
+            "abort",
+            () => reject(signal.reason ?? new Error("cancelled")),
+            { once: true }
+          );
+        });
+      },
+    };
+    const supervisor = createWorkerSupervisor(
+      boardStore,
+      failingReviewer(),
+      unusedCoordinator(),
+      createQueenBeeRuntimeStore(join(repoPath, ".runtime")),
+      modelCaller
+    );
+
+    const run = supervisor.run("project-1", card, repoPath, "", "", () => {});
+    await modelCallStarted;
+    assert.equal(supervisor.isRunning(card.id), true);
+    assert.equal(supervisor.cancel(card.id), true);
+    assert.equal(supervisor.isRunning(card.id), true);
+    await run;
+
+    assert.equal(supervisor.isRunning(card.id), false);
+    assert.equal(
+      boardStore.getBoard("project-1", repoPath).cards[0]?.column,
+      "ready"
+    );
+  });
+
   it("includes completed command output in the next model turn", async () => {
     const repoPath = createGitRepository();
     const boardStore = createBoardStore(

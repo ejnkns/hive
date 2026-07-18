@@ -31,7 +31,8 @@ const GIT_MUTATIONS = new Set([
 
 export function runCommand(
   toolCall: ToolCall,
-  workspacePath: string
+  workspacePath: string,
+  signal?: AbortSignal
 ): Promise<ToolResult> {
   const parsed: unknown = JSON.parse(toolCall.arguments);
   if (!isRecord(parsed) || typeof parsed.command !== "string") {
@@ -70,7 +71,12 @@ export function runCommand(
     execFile(
       command,
       args,
-      { cwd: workspacePath, timeout: 30_000, maxBuffer: 1024 * 1024 },
+      {
+        cwd: workspacePath,
+        timeout: 30_000,
+        maxBuffer: 1024 * 1024,
+        signal,
+      },
       (error, stdout, stderr) => {
         if (error) {
           resolveResult(errorResult(toolCall.id, error.message));

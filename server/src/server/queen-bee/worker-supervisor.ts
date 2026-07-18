@@ -55,7 +55,8 @@ export type WorkerSupervisor = {
     codingGuidelines: string,
     onEvent: (event: WorkerEvent) => void
   ): Promise<void>;
-  cancel(cardId: string): void;
+  isRunning(cardId: string): boolean;
+  cancel(cardId: string): boolean;
 };
 
 export function createWorkerSupervisor(
@@ -76,6 +77,11 @@ export function createWorkerSupervisor(
       codingGuidelines,
       onEvent
     ) {
+      if (abortControllers.has(card.id)) {
+        throw new Error(
+          `Worker Agent is already running for card '${card.id}'`
+        );
+      }
       const controller = new AbortController();
       abortControllers.set(card.id, controller);
 
@@ -94,12 +100,17 @@ export function createWorkerSupervisor(
       }
     },
 
+    isRunning(cardId: string) {
+      return abortControllers.has(cardId);
+    },
+
     cancel(cardId: string) {
       const controller = abortControllers.get(cardId);
       if (controller) {
         controller.abort();
-        abortControllers.delete(cardId);
+        return true;
       }
+      return false;
     },
   };
 
@@ -110,7 +121,7 @@ export function createWorkerSupervisor(
     systemPrompt: string,
     codingGuidelines: string,
     onEvent: (event: WorkerEvent) => void,
-    _controller: AbortController
+    controller: AbortController
   ) {
     const startedAt = new Date().toISOString();
     const log: NonNullable<Card["workerLog"]> = {
@@ -138,9 +149,9 @@ export function createWorkerSupervisor(
     }
 
     const worktreePath = wtResult.path;
-    const recordActivity = (event: NewCardActivityEvent) => {
+    function recordActivity(event: NewCardActivityEvent): void {
       runtimeStore.appendActivity(projectId, card.id, event);
-    };
+    }
     let workAttempts = beginAttempt(
       card,
       wtResult.branchName,
@@ -160,8 +171,9 @@ export function createWorkerSupervisor(
       column: "in_progress",
       workAttempts,
     });
-    const persistLog = () =>
+    function persistLog(): void {
       writeWorkerLog(boardStore, projectId, repoPath, card.id, log);
+    }
     persistLog();
 
     const baseCommit = wtResult.baseCommit;
@@ -200,7 +212,8 @@ export function createWorkerSupervisor(
         modelCaller,
         log,
         persistLog,
-        recordActivity
+        recordActivity,
+        controller.signal
       );
 
       if (result.type === "handover") {
@@ -287,16 +300,24 @@ async function runLoop(
   log: NonNullable<Card["workerLog"]>,
   persistLog: () => void,
   recordActivity: (event: NewCardActivityEvent) => void,
+  signal: AbortSignal,
   maxIterations = 20
 ): Promise<WorkerLoopResult> {
   const evidence = new Map<string, WorkerToolEvidence>();
   let rejectedCompletions = 0;
 
   for (let iteration = 0; iteration < maxIterations; iteration++) {
+    signal.throwIfAborted();
     log.iterations = iteration + 1;
     persistLog();
 
-    const response = await modelCaller.call(messages, worktreePath, true);
+    const response = await modelCaller.call(
+      messages,
+      worktreePath,
+      true,
+      signal
+    );
+    signal.throwIfAborted();
 
     if (response.content) {
       log.content += `${response.content}\n`;
@@ -368,7 +389,8 @@ async function runLoop(
       });
       persistLog();
 
-      const result = await executeWorkerTool(toolCall, worktreePath);
+      const result = await executeWorkerTool(toolCall, worktreePath, signal);
+      signal.throwIfAborted();
       evidence.set(toolCall.id, {
         name: toolCall.name,
         arguments: toolCall.arguments,

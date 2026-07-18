@@ -42,10 +42,15 @@ export function registerWorkerRoutes(
         return reply.status(404).send({ error: "Card not found" });
       }
 
-      if (card.column !== "ready" && card.column !== "in_progress") {
+      if (card.column !== "ready") {
         return reply.status(400).send({
-          error: "Card must be in 'ready' or 'in_progress' column to run",
+          error: "Card must be in the 'ready' column to run",
         });
+      }
+      if (deps.workerSupervisor.isRunning(cardId)) {
+        return reply
+          .status(409)
+          .send({ error: "Worker Agent is already running" });
       }
 
       const projectJsonPath = join(project.repoPath, ".hive", "project.json");
@@ -131,7 +136,9 @@ export function registerWorkerRoutes(
         return reply.status(404).send({ error: "Project not found" });
       }
 
-      deps.workerSupervisor.cancel(cardId);
+      if (!deps.workerSupervisor.cancel(cardId)) {
+        return reply.status(409).send({ error: "Worker Agent is not running" });
+      }
 
       return reply.send({ cancelled: true, cardId });
     }

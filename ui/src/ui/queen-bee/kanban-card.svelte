@@ -14,16 +14,16 @@ type Props = {
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="card" onclick={onSelect}>
   <div class="card-title">{card.title}</div>
-  {#if (card.column === "ready" || card.column === "in_progress") && onRun}
+  {#if card.column === "ready" && onRun}
     <button
       class="run"
-      aria-label={card.column === "ready" ? "Run worker" : "Retry worker"}
+      aria-label="Run worker"
       onclick={(event) => {
         event.stopPropagation();
         onRun?.();
       }}
     >
-      {card.column === "ready" ? "Run" : "Retry"}
+      Run
     </button>
   {/if}
   {#if card.description}
