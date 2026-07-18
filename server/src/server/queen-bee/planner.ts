@@ -1,6 +1,6 @@
 /** @public */
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type {
   CardSpecification,
   PlanningChange,
@@ -23,10 +23,6 @@ import {
   requirementsRevision,
   writeRequirements,
 } from "./requirements-store";
-
-const PLANNER_TOOLS = DEVISE_TOOLS.filter((tool) =>
-  ["list_directory", "read_file", "search_code"].includes(tool.function.name)
-);
 
 export type Planner = {
   propose(
@@ -77,6 +73,7 @@ export function createPlanner(
         baseRequirementsRevision: requirementsRevision(
           readRequirements(repoPath)
         ),
+        baseBoardRevision: boardRevision(currentCards),
         proposedRequirements,
         changes,
         createdAt: new Date().toISOString(),
@@ -130,6 +127,10 @@ export function createPlanner(
     },
   };
 }
+
+const PLANNER_TOOLS = DEVISE_TOOLS.filter((tool) =>
+  ["list_directory", "read_file", "search_code"].includes(tool.function.name)
+);
 
 async function callWithToolLoop(
   modelCaller: DeviseModelCaller,
@@ -320,6 +321,9 @@ function applyProposal(
   }
 
   const currentCards = boardStore.getBoard(proposal.projectId, repoPath).cards;
+  if (boardRevision(currentCards) !== proposal.baseBoardRevision) {
+    throw new Error("Board cards changed after planning started");
+  }
   const currentRequirements = readRequirements(repoPath);
   const byId = new Map(currentCards.map((card) => [card.id, card]));
   const result: Card[] = [];
@@ -354,6 +358,25 @@ function applyProposal(
   proposal.appliedAt = new Date().toISOString();
   runtimeStore.savePlanningProposal(proposal);
   return result.filter((card) => !card.archivedAt);
+}
+
+function boardRevision(cards: Card[]): string {
+  const specifications = cards
+    .map((card) => ({
+      id: card.id,
+      title: card.title,
+      description: card.description,
+      acceptanceCriteria: card.acceptanceCriteria,
+      relevantFiles: card.relevantFiles,
+      dependencies: card.dependencies,
+      requirementRefs: card.requirementRefs ?? [],
+      column: card.column,
+      archivedAt: card.archivedAt,
+    }))
+    .sort((left, right) => left.id.localeCompare(right.id));
+  return createHash("sha256")
+    .update(JSON.stringify(specifications))
+    .digest("hex");
 }
 
 function newCard(specification: CardSpecification): Card {

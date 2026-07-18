@@ -1,14 +1,20 @@
 <script lang="ts">
 import { onMount } from "svelte";
-import type { Card, Column, CoordinatorAction } from "shared/board-types";
+import type {
+  Card,
+  Column,
+  CoordinatorAction,
+  PlanningProposal,
+} from "shared/board-types";
 import KanbanCard from "./kanban-card.svelte";
 import CardDetail from "./card-detail.svelte";
 
-let { projectId, onReDeviseStarted }: Props = $props();
+let { projectId, onReDeviseStarted, onPlanningProposal }: Props = $props();
 
 type Props = {
   projectId: string;
   onReDeviseStarted?: () => void;
+  onPlanningProposal?: (proposal: PlanningProposal) => void;
 };
 
 type Board = {
@@ -180,10 +186,17 @@ async function handleRemediate(
       throw new Error(data.error ?? "Remediation failed");
     }
     const result = (await res.json()) as {
-      card: Card;
+      card?: Card;
+      proposal?: PlanningProposal;
       redevise?: boolean;
       question?: string;
     };
+    if (result.proposal) {
+      selectedCard = null;
+      onPlanningProposal?.(result.proposal);
+      return;
+    }
+    if (!result.card) throw new Error("Remediation returned no result");
     handleCardUpdated(result.card);
     if (result.redevise && result.question) {
       refinementQuestion = result.question;
@@ -333,6 +346,7 @@ onMount(() => {
         selectedCard = null;
       }}
       onCardUpdated={handleCardUpdated}
+      {onPlanningProposal}
       onRun={() => handleRunCard(selectedCard!.id)}
       onAccept={() => handleAcceptCard(selectedCard!.id)}
       onRequestChanges={(guidance) =>

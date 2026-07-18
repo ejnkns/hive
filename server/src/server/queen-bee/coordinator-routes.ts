@@ -5,11 +5,8 @@ import type { CoordinatorAction } from "shared/board-types";
 import type { BoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
 import type { DeviseEngine } from "./devise-engine";
-import {
-  readRequirements,
-  requirementsRevision,
-  writeRequirements,
-} from "./requirements-store";
+import type { Planner } from "./planner";
+import { readRequirements, requirementsRevision } from "./requirements-store";
 
 export function registerCoordinatorRoutes(
   server: FastifyInstance,
@@ -17,6 +14,7 @@ export function registerCoordinatorRoutes(
     boardStore: BoardStore;
     projectStore: ProjectStore;
     engine: DeviseEngine;
+    planner: Planner;
   }
 ): void {
   server.post(
@@ -109,19 +107,27 @@ export function registerCoordinatorRoutes(
         });
       }
 
-      writeRequirements(project.repoPath, suggestion.requirementsContent);
-      const updated = deps.boardStore.updateCard(
-        projectId,
-        project.repoPath,
-        cardId,
-        {
-          ...suggestion.cardPatch,
-          column: "ready",
-          handover: undefined,
-          coordinatorLog: undefined,
-        }
-      );
-      return reply.send({ card: updated });
+      try {
+        const proposal = await deps.planner.propose(
+          projectId,
+          project.repoPath,
+          suggestion.requirementsContent,
+          [
+            `The user selected the Coordinator's retry_with_patch remediation for card '${cardId}'.`,
+            "Use this approved card patch when reconciling that card:",
+            JSON.stringify(suggestion.cardPatch, null, 2),
+            "Reconcile every other card against the updated project requirements before applying anything.",
+          ].join("\n")
+        );
+        return reply.send({ proposal });
+      } catch (error) {
+        return reply.status(500).send({
+          error:
+            error instanceof Error
+              ? error.message
+              : "Could not reconcile the remediation",
+        });
+      }
     }
   );
 }

@@ -9,6 +9,7 @@ import { createBoardStore } from "./board-store";
 import { registerCoordinatorRoutes } from "./coordinator-routes";
 import type { ProjectStore } from "./create-project-store";
 import type { DeviseEngine } from "./devise-engine";
+import type { Planner } from "./planner";
 import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
 
 describe("coordinator routes", () => {
@@ -60,6 +61,13 @@ describe("coordinator routes", () => {
             action: "redevise",
             rationale: "Ask the user which behavior should win",
           },
+          {
+            id: "suggestion-2",
+            action: "retry_with_patch",
+            rationale: "Apply a requirements-aligned patch",
+            cardPatch: { description: "Patched description" },
+            requirementsContent: "# Patched requirements",
+          },
         ],
       },
     });
@@ -80,7 +88,34 @@ describe("coordinator routes", () => {
     };
     const server = Fastify();
     servers.push(server);
-    registerCoordinatorRoutes(server, { boardStore, projectStore, engine });
+    let plannerRequirements = "";
+    const planner: Planner = {
+      async propose(projectId, _repoPath, proposedRequirements) {
+        plannerRequirements = proposedRequirements;
+        return {
+          id: "proposal-1",
+          projectId,
+          status: "pending",
+          baseRequirementsRevision: "requirements-1",
+          baseBoardRevision: "board-1",
+          proposedRequirements,
+          changes: [],
+          createdAt: "2026-07-19T00:02:00.000Z",
+        };
+      },
+      decide: () => {
+        throw new Error("Not used");
+      },
+      acceptAll: () => [],
+      apply: () => [],
+      getProposal: () => null,
+    };
+    registerCoordinatorRoutes(server, {
+      boardStore,
+      projectStore,
+      engine,
+      planner,
+    });
 
     const response = await server.inject({
       method: "POST",
@@ -95,5 +130,19 @@ describe("coordinator routes", () => {
     assert.equal(startCardArgs?.[0], project.id);
     assert.equal(startCardArgs?.[1], card.id);
     assert.match(String(startCardArgs?.[2]), /which behavior should win/i);
+
+    const retryResponse = await server.inject({
+      method: "POST",
+      url: `/api/queen-bee/${project.id}/cards/${card.id}/remediate`,
+      payload: { action: "retry_with_patch", suggestionId: "suggestion-2" },
+    });
+
+    assert.equal(retryResponse.statusCode, 200);
+    assert.equal(retryResponse.json().proposal.id, "proposal-1");
+    assert.equal(plannerRequirements, "# Patched requirements");
+    assert.equal(
+      boardStore.getBoard(project.id, project.repoPath).cards[0]?.description,
+      "The worker found ambiguous scope"
+    );
   });
 });

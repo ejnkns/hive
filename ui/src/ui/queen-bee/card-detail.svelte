@@ -1,5 +1,10 @@
 <script lang="ts">
-import type { Card, CardActivityEvent, Column } from "shared/board-types";
+import type {
+  Card,
+  CardActivityEvent,
+  Column,
+  PlanningProposal,
+} from "shared/board-types";
 import CardRefinement from "./card-refinement.svelte";
 
 let {
@@ -8,6 +13,7 @@ let {
   initialRefinementQuestion,
   onClose,
   onCardUpdated,
+  onPlanningProposal,
   onRun,
   onAccept,
   onRequestChanges,
@@ -21,6 +27,7 @@ type Props = {
   initialRefinementQuestion?: string | null;
   onClose: () => void;
   onCardUpdated: (card: Card) => void;
+  onPlanningProposal?: (proposal: PlanningProposal) => void;
   onRun?: () => void;
   onAccept?: () => Promise<void>;
   onRequestChanges?: (guidance: string) => Promise<void>;
@@ -328,6 +335,7 @@ const COLUMN_LABELS: Record<Column, string> = {
           {projectId}
           {card}
           {onCardUpdated}
+          {onPlanningProposal}
           initialQuestion={initialRefinementQuestion}
           onCancel={() => (refining = false)}
         />

@@ -95,21 +95,13 @@ async function handleApprove() {
     const approval = await fetch(`/api/queen-bee/${projectId}/devise/approve`, {
       method: "POST",
     });
-    if (!approval.ok) {
-      const data = (await approval.json()) as { error?: string };
-      throw new Error(data.error ?? "Requirements approval failed");
-    }
-    const res = await fetch(`/api/queen-bee/${projectId}/plan`, {
-      method: "POST",
-    });
-    if (!res.ok) {
-      const data = (await res.json()) as { error?: string };
-      throw new Error(data.error ?? "Planning failed");
-    }
-    const result = (await res.json()) as {
+    const result = (await approval.json()) as {
       proposal?: PlanningProposal;
       error?: string;
     };
+    if (!approval.ok) {
+      throw new Error(result.error ?? "Requirements approval failed");
+    }
     if (!result.proposal) {
       throw new Error(result.error ?? "Planner returned no proposal");
     }
@@ -149,6 +141,9 @@ async function handleApprove() {
     {:else if hasBoard}
       <KanbanBoard
         {projectId}
+        onPlanningProposal={(proposal) => {
+          planningProposal = proposal;
+        }}
         onReDeviseStarted={() => {
           hasBoard = false;
           void restoreSession();

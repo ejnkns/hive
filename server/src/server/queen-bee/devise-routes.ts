@@ -6,11 +6,8 @@ import type { FastifyInstance } from "fastify";
 import type { BoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
 import type { DeviseEngine } from "./devise-engine";
-import {
-  readRequirements,
-  requirementsRevision,
-  writeRequirements,
-} from "./requirements-store";
+import type { Planner } from "./planner";
+import { readRequirements, requirementsRevision } from "./requirements-store";
 
 export function registerDeviseRoutes(
   server: FastifyInstance,
@@ -18,6 +15,7 @@ export function registerDeviseRoutes(
     engine: DeviseEngine;
     projectStore: ProjectStore;
     boardStore: BoardStore;
+    planner: Planner;
   }
 ): void {
   server.post(
@@ -277,11 +275,22 @@ export function registerDeviseRoutes(
       );
       if (!draft.ok) return reply.status(409).send({ error: draft.error });
 
-      writeRequirements(project.repoPath, draft.content);
-      return reply.send({
-        approved: true,
-        requirementsRevision: requirementsRevision(draft.content),
-      });
+      try {
+        const proposal = await deps.planner.propose(
+          projectId,
+          project.repoPath,
+          draft.content,
+          "The user explicitly approved this Devise Agent requirements draft. Reconcile every card before anything becomes canonical."
+        );
+        return reply.send({ approved: true, proposal });
+      } catch (error) {
+        return reply.status(500).send({
+          error:
+            error instanceof Error
+              ? error.message
+              : "Could not reconcile the approved draft",
+        });
+      }
     }
   );
 
@@ -306,22 +315,26 @@ export function registerDeviseRoutes(
         return reply.status(409).send({ error: "Card proposal is missing" });
       }
 
-      writeRequirements(project.repoPath, draft.content);
       try {
-        const card = deps.boardStore.updateCard(
+        const proposal = await deps.planner.propose(
           projectId,
           project.repoPath,
-          cardId,
-          {
-            ...patch,
-            column: "ready",
-            handover: undefined,
-            coordinatorLog: undefined,
-          }
+          draft.content,
+          [
+            `The user approved a refinement of card '${cardId}'.`,
+            "Use this exact approved card patch when reconciling that card:",
+            JSON.stringify(patch, null, 2),
+            "Reconcile every other card against the project-wide requirements draft. The selected card must remain provisional until the planning proposal is accepted.",
+          ].join("\n")
         );
-        return reply.send({ card, approved: true });
-      } catch {
-        return reply.status(404).send({ error: "Card not found" });
+        return reply.send({ proposal, approved: true });
+      } catch (error) {
+        return reply.status(500).send({
+          error:
+            error instanceof Error
+              ? error.message
+              : "Could not reconcile the card refinement",
+        });
       }
     }
   );

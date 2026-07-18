@@ -93,6 +93,7 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     engine: deviseEngine,
     projectStore,
     boardStore,
+    planner,
   });
   registerBoardRoutes(server, { boardStore, planner, projectStore });
   registerIntegrationRoutes(server, { projectStore, integrationManager });
@@ -100,6 +101,7 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     boardStore,
     projectStore,
     engine: deviseEngine,
+    planner,
   });
   registerWorkerRoutes(server, {
     workerSupervisor,

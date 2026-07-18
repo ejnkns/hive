@@ -1,14 +1,21 @@
 <script lang="ts">
-import type { Card } from "shared/board-types";
+import type { Card, PlanningProposal } from "shared/board-types";
 
-let { projectId, card, initialQuestion, onCardUpdated, onCancel }: Props =
-  $props();
+let {
+  projectId,
+  card,
+  initialQuestion,
+  onCardUpdated,
+  onPlanningProposal,
+  onCancel,
+}: Props = $props();
 
 type Props = {
   projectId: string;
   card: Card;
   initialQuestion?: string | null;
   onCardUpdated: (card: Card) => void;
+  onPlanningProposal?: (proposal: PlanningProposal) => void;
   onCancel: () => void;
 };
 
@@ -114,11 +121,14 @@ async function confirmReady() {
         method: "POST",
       }
     );
-    const result = (await response.json()) as { card?: Card; error?: string };
-    if (!response.ok || !result.card) {
-      throw new Error(result.error ?? "Could not move card to Ready");
+    const result = (await response.json()) as {
+      proposal?: PlanningProposal;
+      error?: string;
+    };
+    if (!response.ok || !result.proposal) {
+      throw new Error(result.error ?? "Could not reconcile card refinement");
     }
-    onCardUpdated(result.card);
+    onPlanningProposal?.(result.proposal);
     onCancel();
   } catch (err) {
     error = err instanceof Error ? err.message : "Could not confirm card";
@@ -143,8 +153,8 @@ async function confirmReady() {
     <div class="confirmation">
       <div class="confirmation-title">Card and requirements ready to approve</div>
       <div>
-        Confirm to apply the proposed card and requirements together, then move
-        the card to Ready.
+        Confirm to reconcile the proposed card and requirements against the
+        whole board. You will review every affected card before applying them.
       </div>
     </div>
   {/if}
@@ -181,7 +191,7 @@ async function confirmReady() {
       </button>
     {:else}
       <button class="btn btn-primary" onclick={confirmReady} disabled={busy}>
-        {busy ? "Confirming..." : "Confirm and move to Ready"}
+        {busy ? "Reconciling..." : "Confirm and review changes"}
       </button>
     {/if}
     <button class="btn" onclick={onCancel} disabled={busy}>

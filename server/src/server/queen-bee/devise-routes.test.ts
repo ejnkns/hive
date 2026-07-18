@@ -9,6 +9,7 @@ import { createBoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
 import type { DeviseEngine } from "./devise-engine";
 import { registerDeviseRoutes } from "./devise-routes";
+import type { Planner } from "./planner";
 import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
 import {
   readRequirements,
@@ -152,7 +153,7 @@ describe("devise routes", () => {
     );
   });
 
-  it("applies a completed requirements draft only after explicit approval", async () => {
+  it("turns an explicitly approved draft into a provisional planning proposal", async () => {
     const canonical = "# Requirements\n\n## Overview\nOriginal";
     const draft = "# Requirements\n\n## Overview\nApproved revision";
     const { server, project } = createRouteFixture({
@@ -177,7 +178,8 @@ describe("devise routes", () => {
     });
 
     assert.equal(response.statusCode, 200);
-    assert.equal(readRequirements(project.repoPath), draft);
+    assert.equal(response.json().proposal.proposedRequirements, draft);
+    assert.equal(readRequirements(project.repoPath), canonical);
   });
 
   it("rejects approval when canonical requirements changed after session start", async () => {
@@ -204,6 +206,56 @@ describe("devise routes", () => {
 
     assert.equal(response.statusCode, 409);
     assert.equal(readRequirements(project.repoPath), "# Changed elsewhere");
+  });
+
+  it("routes approved card refinements through whole-board planning", async () => {
+    const canonical = "# Requirements\n\nOriginal";
+    const draft = "# Requirements\n\nRefined";
+    let cardId = "";
+    const { server, boardStore, project } = createRouteFixture({
+      getCardSession() {
+        return {
+          sessionId: "session-card-1",
+          projectId: project.id,
+          cardId,
+          messages: [
+            {
+              role: "assistant",
+              content:
+                'CARD_UPDATE\n```json\n{"description":"Refined card","acceptanceCriteria":["Works"],"relevantFiles":["source.ts"]}\n```',
+            },
+          ],
+          status: "complete",
+          baseRequirementsRevision: requirementsRevision(canonical),
+          draftRequirements: draft,
+          startedAt: "2026-07-19T00:00:00.000Z",
+          updatedAt: "2026-07-19T00:01:00.000Z",
+        };
+      },
+    });
+    writeRequirements(project.repoPath, canonical);
+    const card = boardStore.addCard(project.id, project.repoPath, {
+      title: "Idea",
+      description: "Original card",
+      acceptanceCriteria: ["Original"],
+      relevantFiles: ["source.ts"],
+      dependencies: [],
+      column: "idea",
+    });
+    cardId = card.id;
+
+    const response = await server.inject({
+      method: "POST",
+      url: `/api/queen-bee/${project.id}/cards/${card.id}/devise/approve`,
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json().proposal.proposedRequirements, draft);
+    assert.equal(readRequirements(project.repoPath), canonical);
+    assert.equal(
+      boardStore.getBoard(project.id, project.repoPath).cards[0]?.description,
+      "Original card"
+    );
   });
 
   function createRouteFixture(overrides: Partial<DeviseEngine> = {}) {
@@ -241,9 +293,31 @@ describe("devise routes", () => {
       () => {},
       createQueenBeeRuntimeStore(join(repoPath, ".runtime"))
     );
+    const planner: Planner = {
+      async propose(projectId, _repoPath, proposedRequirements) {
+        return {
+          id: "proposal-1",
+          projectId,
+          status: "pending",
+          baseRequirementsRevision: requirementsRevision(
+            readRequirements(repoPath)
+          ),
+          baseBoardRevision: "board-1",
+          proposedRequirements,
+          changes: [],
+          createdAt: "2026-07-19T00:02:00.000Z",
+        };
+      },
+      decide: () => {
+        throw new Error("Not used");
+      },
+      acceptAll: () => [],
+      apply: () => [],
+      getProposal: () => null,
+    };
     const server = Fastify();
     servers.push(server);
-    registerDeviseRoutes(server, { engine, boardStore, projectStore });
+    registerDeviseRoutes(server, { engine, boardStore, projectStore, planner });
     return { server, boardStore, project };
   }
 });

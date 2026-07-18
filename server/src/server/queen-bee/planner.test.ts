@@ -159,6 +159,55 @@ describe("Planner Agent reconciliation", () => {
     );
   });
 
+  it("rejects a proposal when the board changed after planning started", async () => {
+    const repoPath = createWorkspace();
+    const runtimeStore = createQueenBeeRuntimeStore(join(repoPath, ".runtime"));
+    const boardStore = createBoardStore(() => {}, runtimeStore);
+    const idea = boardStore.addCard("project-1", repoPath, {
+      title: "Original card",
+      description: "Original",
+      acceptanceCriteria: ["Original behavior"],
+      relevantFiles: ["source.ts"],
+      dependencies: [],
+      column: "idea",
+    });
+    const planner = createPlanner(
+      boardStore,
+      runtimeStore,
+      integrationManager(),
+      responseCaller({
+        changes: [
+          {
+            action: "update",
+            cardId: idea.id,
+            rationale: "Change it",
+            proposedCard: cardSpec("Changed card"),
+          },
+        ],
+      })
+    );
+    const proposal = await planner.propose(
+      "project-1",
+      repoPath,
+      "# Changed requirements"
+    );
+    planner.decide("project-1", proposal.id, "change-0", "accepted");
+    boardStore.addCard("project-1", repoPath, {
+      title: "Concurrent idea",
+      description: "Added later",
+      acceptanceCriteria: ["Must be preserved"],
+      relevantFiles: ["source.ts"],
+      dependencies: [],
+      column: "idea",
+    });
+
+    assert.throws(
+      () => planner.apply("project-1", repoPath, proposal.id),
+      /Board cards changed after planning started/
+    );
+    assert.equal(readRequirements(repoPath), "# Original requirements");
+  });
+
   function createWorkspace(): string {
     const repoPath = mkdtempSync(join(tmpdir(), "hive-planner-"));
     directories.push(repoPath);

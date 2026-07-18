@@ -99,6 +99,7 @@ export type PlanningProposal = {
   projectId: string;
   status: "pending" | "applied";
   baseRequirementsRevision: string;
+  baseBoardRevision: string;
   proposedRequirements: string;
   changes: PlanningChange[];
   createdAt: string;
