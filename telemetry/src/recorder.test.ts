@@ -71,4 +71,65 @@ await describe("TelemetryRecorder", async () => {
     const cacheAfter = await loadCache();
     assert.strictEqual(cacheAfter.metrics.length, cacheBefore.metrics.length);
   });
+
+  await it("debounce: multiple rapid metrics flush together in a single batch", async () => {
+    for (let i = 0; i < 5; i++) {
+      recorder.recordMetric({
+        requestId: `test-${String(i)}`,
+        provider: "test",
+        model: "test-model",
+        timestamp: Date.now(),
+        ttft: 100,
+        totalLatency: 500,
+        inputTokens: 10,
+        outputTokens: 50,
+        thinkingTime: null,
+        finishReason: null,
+        refused: false,
+        statusCode: 200,
+        errorType: null,
+        success: true,
+        source: "user",
+        toolCallFailed: false,
+      });
+    }
+
+    assert.strictEqual(recorder.getPendingCount(), 5);
+    await recorder.flush();
+
+    const cache = await loadCache();
+    assert.strictEqual(cache.metrics.length, 5);
+    assert.strictEqual(recorder.getPendingCount(), 0);
+  });
+
+  await it("stop cancels pending debounce timer without flushing", {
+    timeout: 3000,
+  }, async () => {
+    recorder.recordMetric({
+      requestId: "test-id",
+      provider: "test",
+      model: "test-model",
+      timestamp: Date.now(),
+      ttft: 100,
+      totalLatency: 500,
+      inputTokens: 10,
+      outputTokens: 50,
+      thinkingTime: null,
+      finishReason: null,
+      refused: false,
+      statusCode: 200,
+      errorType: null,
+      success: true,
+      source: "user",
+      toolCallFailed: false,
+    });
+
+    assert.strictEqual(recorder.getPendingCount(), 1);
+    recorder.stop();
+
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
+    const cache = await loadCache();
+    assert.strictEqual(cache.metrics.length, 0);
+  });
 });
