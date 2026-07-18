@@ -6,6 +6,7 @@ import type { FastifyInstance } from "fastify";
 import type { BoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
 import type { DeviseEngine } from "./devise-engine";
+import { readRequirements, requirementsRevision } from "./requirements-store";
 
 export function registerDeviseRoutes(
   server: FastifyInstance,
@@ -132,7 +133,14 @@ export function registerDeviseRoutes(
           project.repoPath
         );
         if (result.type === "complete") {
-          if (!cardSessionUpdatedRequirements(deps.engine, projectId, cardId)) {
+          if (
+            !cardSessionUpdatedRequirements(
+              deps.engine,
+              projectId,
+              cardId,
+              project.repoPath
+            )
+          ) {
             return reply.status(422).send({
               error:
                 "Card devise completed without updating the project requirements",
@@ -148,7 +156,11 @@ export function registerDeviseRoutes(
             projectId,
             project.repoPath,
             cardId,
-            patch
+            {
+              ...patch,
+              handover: undefined,
+              coordinatorLog: undefined,
+            }
           );
           return reply.send({
             complete: true,
@@ -316,17 +328,14 @@ export function registerDeviseRoutes(
 function cardSessionUpdatedRequirements(
   engine: DeviseEngine,
   projectId: string,
-  cardId: string
+  cardId: string,
+  repoPath: string
 ): boolean {
   const session = engine.getCardSession(projectId, cardId);
   return Boolean(
-    session?.messages.some((message) =>
-      message.tool_calls?.some((toolCall) => {
-        if (!toolCall || typeof toolCall !== "object") return false;
-        const fn = (toolCall as { function?: { name?: unknown } }).function;
-        return fn?.name === "update_requirements";
-      })
-    )
+    session?.requirementsRevision &&
+      session.requirementsRevision ===
+        requirementsRevision(readRequirements(repoPath))
   );
 }
 

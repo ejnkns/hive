@@ -7,12 +7,14 @@ import {
 } from "./devise-engine/create-devise-model-caller";
 import { DEVISE_SYSTEM_PROMPT } from "./devise-engine/devise-system-prompt";
 import { executeDeviseTool } from "./devise-engine/devise-tools";
+import { requirementsRevision } from "./requirements-store";
 
 export type DeviseSession = {
   projectId: string;
   cardId?: string;
   messages: Message[];
   status: "active" | "complete";
+  requirementsRevision?: string;
 };
 
 export type DeviseEngine = {
@@ -106,16 +108,17 @@ export function createDeviseEngine(
 
     const result = await callWithToolLoop(caller, messages, workspacePath);
 
-    messages.push({ role: "assistant", content: result });
+    messages.push({ role: "assistant", content: result.content });
 
     sessions.set(sessionKey, {
       projectId,
       cardId,
       messages,
       status: "active",
+      requirementsRevision: result.requirementsRevision,
     });
 
-    return { question: result };
+    return { question: result.content };
   }
 
   async function respondSession(
@@ -136,19 +139,22 @@ export function createDeviseEngine(
       workspacePath
     );
 
-    const isComplete = detectCompletion(result);
+    if (result.requirementsRevision) {
+      session.requirementsRevision = result.requirementsRevision;
+    }
+    const isComplete = detectCompletion(result.content);
 
     session.messages.push({
       role: "assistant",
-      content: isComplete ? extractSpec(result) : result,
+      content: isComplete ? extractSpec(result.content) : result.content,
     });
 
     if (isComplete) {
       session.status = "complete";
-      return { type: "complete", spec: extractSpec(result) };
+      return { type: "complete", spec: extractSpec(result.content) };
     }
 
-    return { type: "question", question: result };
+    return { type: "question", question: result.content };
   }
 }
 
@@ -161,16 +167,26 @@ async function callWithToolLoop(
   messages: Message[],
   workspacePath: string,
   maxToolRounds = 10
-): Promise<string> {
+): Promise<{ content: string; requirementsRevision?: string }> {
+  let updatedRequirementsRevision: string | undefined;
   for (let round = 0; round < maxToolRounds; round++) {
     const response = await caller.call(messages, workspacePath, true);
 
     if (response.toolCalls.length === 0) {
-      return response.content;
+      return {
+        content: response.content,
+        requirementsRevision: updatedRequirementsRevision,
+      };
     }
 
     for (const toolCall of response.toolCalls) {
       const result = executeDeviseTool(toolCall, workspacePath);
+      if (toolCall.name === "update_requirements" && !result.isError) {
+        const args = JSON.parse(toolCall.arguments) as { content?: unknown };
+        if (typeof args.content === "string") {
+          updatedRequirementsRevision = requirementsRevision(args.content);
+        }
+      }
 
       const assistantMsg: Message = {
         role: "assistant",
@@ -206,7 +222,10 @@ async function callWithToolLoop(
     }
   }
 
-  return "";
+  return {
+    content: "",
+    requirementsRevision: updatedRequirementsRevision,
+  };
 }
 
 function detectCompletion(content: string): boolean {

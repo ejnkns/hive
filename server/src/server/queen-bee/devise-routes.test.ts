@@ -9,6 +9,7 @@ import { createBoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
 import type { DeviseEngine } from "./devise-engine";
 import { registerDeviseRoutes } from "./devise-routes";
+import { requirementsRevision, writeRequirements } from "./requirements-store";
 
 describe("devise routes", () => {
   const directories: string[] = [];
@@ -57,6 +58,8 @@ describe("devise routes", () => {
   });
 
   it("keeps a refined card in Idea until the user confirms promotion", async () => {
+    const requirements = "# Requirements\n\n- Refined behavior";
+    const syncedRevision = requirementsRevision(requirements);
     const { server, boardStore, project } = createRouteFixture({
       async respondCard() {
         return {
@@ -75,9 +78,10 @@ describe("devise routes", () => {
         };
       },
       getCardSession() {
-        return requirementsUpdatedSession();
+        return requirementsUpdatedSession(syncedRevision);
       },
     });
+    writeRequirements(project.repoPath, requirements);
     const card = boardStore.addCard(project.id, project.repoPath, {
       title: "New idea",
       description: "",
@@ -85,6 +89,13 @@ describe("devise routes", () => {
       relevantFiles: [],
       dependencies: [],
       column: "idea",
+      handover: {
+        problem: "Old requirements conflict",
+        attempted: [],
+        blockedBy: [],
+        occurredAt: "",
+      },
+      coordinatorLog: { status: "complete", suggestions: [] },
     });
 
     const response = await server.inject({
@@ -97,6 +108,8 @@ describe("devise routes", () => {
     assert.equal(response.json().complete, true);
     assert.equal(response.json().card.description, "Refined description");
     assert.equal(response.json().card.column, "idea");
+    assert.equal(response.json().card.handover, undefined);
+    assert.equal(response.json().card.coordinatorLog, undefined);
     assert.equal(
       boardStore
         .getBoard(project.id, project.repoPath)
@@ -174,11 +187,12 @@ describe("devise routes", () => {
     return { server, boardStore, project };
   }
 
-  function requirementsUpdatedSession() {
+  function requirementsUpdatedSession(revision: string) {
     return {
       projectId: "project-1",
       cardId: "card-1",
       status: "complete" as const,
+      requirementsRevision: revision,
       messages: [
         {
           role: "assistant",
