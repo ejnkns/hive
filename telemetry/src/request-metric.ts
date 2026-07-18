@@ -9,7 +9,7 @@ export type ErrorType =
   | "invalid-request"
   | null;
 
-export type MetricSource = "user" | "heartbeat";
+export type MetricSource = "user";
 
 export type RequestMetric = {
   requestId: string;

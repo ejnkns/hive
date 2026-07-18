@@ -276,7 +276,7 @@ components:
           type: boolean
         source:
           type: string
-          enum: [user, heartbeat]
+          enum: [user]
 
     Conversation:
       type: object

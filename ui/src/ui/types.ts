@@ -1,4 +1,4 @@
-import type { ErrorType, FinishReason, MetricSource } from "telemetry";
+import type { ErrorType, FinishReason } from "telemetry";
 
 export type SubScores = {
   latency: number;
@@ -44,7 +44,7 @@ export type MetricData = {
   errorType: ErrorType;
   errorBody?: string;
   success: boolean;
-  source: MetricSource;
+  source: string;
 };
 
 type ContentPart = {
@@ -164,6 +164,13 @@ export type RequestState = {
   tokensPerSecond?: number;
   failovers: { provider: string; model: string; errorType: string }[];
   toolLoopDetected?: boolean;
+  overrideError?: {
+    provider: string;
+    model: string;
+    statusCode: number;
+    errorType: string;
+    errorBody: string;
+  };
   conversationPrompt?: ConversationMessage[];
   responseText?: string;
   response?: {
@@ -198,6 +205,7 @@ export type SessionPatch = {
   thinkingChars?: number;
   tokensPerSecond?: number;
   failover?: { provider: string; model: string; errorType: string };
+  overrideError?: RequestState["overrideError"];
   conversationPrompt?: ConversationMessage[];
   responseText?: string;
   response?: RequestState["response"];
@@ -283,4 +291,13 @@ export type FlowEvent =
       provider: string;
       model: string;
       cooldownDurationSec: number;
+    }
+  | {
+      type: "override_failed";
+      requestId: string;
+      provider: string;
+      model: string;
+      statusCode: number;
+      errorType: string;
+      errorBody: string;
     };

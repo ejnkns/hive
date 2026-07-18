@@ -39,9 +39,7 @@ export function computeDerivedMetrics(
 ): DerivedMetrics {
   const n = metrics.length;
 
-  const perfMetrics = metrics.filter(
-    (m) => m.success && m.source !== "heartbeat"
-  );
+  const perfMetrics = metrics.filter((m) => m.success);
   const successMetrics =
     perfMetrics.length > 0 ? perfMetrics : metrics.filter((m) => m.success);
   const hasSuccessMetrics = successMetrics.length > 0;
@@ -101,9 +99,7 @@ export function computeDerivedMetrics(
   const dynamicThreshold = successMean * 3;
   const spikes = successMetrics.filter((m) => m.ttft > dynamicThreshold).length;
 
-  const userMetricCount = metrics.filter(
-    (m) => m.source !== "heartbeat"
-  ).length;
+  const userMetricCount = metrics.length;
 
   return {
     requestCount: userMetricCount,

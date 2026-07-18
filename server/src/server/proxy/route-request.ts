@@ -3,12 +3,7 @@ import https from "node:https";
 import { PassThrough } from "node:stream";
 import { URL } from "node:url";
 import { logger } from "shared/logger";
-import type {
-  FinishReason,
-  MetricSource,
-  StreamPhaseEvent,
-  TelemetrySink,
-} from "telemetry";
+import type { FinishReason, StreamPhaseEvent, TelemetrySink } from "telemetry";
 import { classifyError, createStreamCounter, detectRefusal } from "telemetry";
 import { emitFlowEvent } from "./flow-events";
 import type { MutatedRequest } from "./mutate-request";
@@ -21,7 +16,6 @@ type RouteRequestOptions = {
   providerName: string;
   modelName: string;
   requestId: string;
-  source?: MetricSource;
   telemetrySink: TelemetrySink;
 };
 
@@ -39,7 +33,6 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
     providerName,
     modelName,
     requestId,
-    source: metricSource,
     telemetrySink,
   } = opts;
   return new Promise((resolve) => {
@@ -115,7 +108,7 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
         errorBody,
         errorType: classifyError(statusCode, errorType),
         success,
-        source: metricSource ?? "user",
+        source: "user",
         toolCallFailed: stats?.toolCallFailed ?? false,
       });
 
@@ -148,6 +141,9 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
           errorBody += chunk.toString();
         });
         res.on("end", () => {
+          logger.debug(
+            `upstream ${providerName}:${modelName} — error body (${String(errorBody.length)} bytes): ${errorBody.slice(0, 1000)}`
+          );
           record(timeoutMs, false, statusCode, errorBody);
           resolve({
             proxyResponse: ProxyResponse.error(statusCode, errorBody),
@@ -259,10 +255,7 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
       res.on("end", () => {
         const stats = counter.getStats();
         const effectiveTtft = initialByteReceived ? ttft : Date.now() - start;
-        const isHeartbeat = metricSource === "heartbeat";
-        const isSuccess = isHeartbeat
-          ? statusCode < 400
-          : !stats.isAbruptDisconnect;
+        const isSuccess = !stats.isAbruptDisconnect;
 
         logger.debug(
           `upstream ${providerName}:${modelName} — res.on(end): initialByteReceived=${String(initialByteReceived)}, outputChars=${String(stats.outputChars)}, abrupt=${String(stats.isAbruptDisconnect)}, resolveAlreadyCalled=${String(initialByteReceived)}`
