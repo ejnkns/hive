@@ -12,11 +12,10 @@ let error = $state<string | null>(null);
 async function loadStatus() {
   try {
     const response = await fetch(`/api/queen-bee/${projectId}/integration`);
-    const result = (await response.json()) as ProjectIntegrationStatus & {
-      error?: string;
-    };
-    if (!response.ok)
-      throw new Error(result.error ?? "Integration status failed");
+    const result = await readIntegrationResponse(
+      response,
+      "Integration status failed"
+    );
     status = result;
     error = null;
   } catch (cause) {
@@ -35,10 +34,10 @@ async function integrate() {
       `/api/queen-bee/${projectId}/integration/integrate`,
       { method: "POST" }
     );
-    const result = (await response.json()) as ProjectIntegrationStatus & {
-      error?: string;
-    };
-    if (!response.ok) throw new Error(result.error ?? "Integration failed");
+    const result = await readIntegrationResponse(
+      response,
+      "Integration failed"
+    );
     status = result;
   } catch (cause) {
     error = cause instanceof Error ? cause.message : "Integration failed";
@@ -55,27 +54,70 @@ onMount(() => {
   );
   socket.onmessage = (event) => {
     try {
-      const message = JSON.parse(String(event.data)) as {
-        type?: string;
-        data?: { projectId?: string };
-      };
-      if (
-        message.type === "board_updated" &&
-        message.data?.projectId === projectId
-      ) {
+      const message: unknown = JSON.parse(String(event.data));
+      if (isProjectBoardUpdate(message, projectId)) {
         void loadStatus();
       }
     } catch {
       // Ignore malformed events.
     }
   };
-  const refresh = () => void loadStatus();
-  window.addEventListener("focus", refresh);
+  function refreshOnFocus() {
+    void loadStatus();
+  }
+  window.addEventListener("focus", refreshOnFocus);
   return () => {
     socket.close();
-    window.removeEventListener("focus", refresh);
+    window.removeEventListener("focus", refreshOnFocus);
   };
 });
+
+async function readIntegrationResponse(
+  response: Response,
+  fallbackError: string
+): Promise<ProjectIntegrationStatus> {
+  const result: unknown = await response.json();
+  if (!response.ok) {
+    throw new Error(readError(result) ?? fallbackError);
+  }
+  if (!isIntegrationStatus(result)) {
+    throw new Error("Hive returned an invalid integration status");
+  }
+  return result;
+}
+
+function isIntegrationStatus(
+  value: unknown
+): value is ProjectIntegrationStatus {
+  if (!isRecord(value)) return false;
+  return (
+    value.branchName === "hive-main" &&
+    typeof value.revision === "string" &&
+    typeof value.targetBranch === "string" &&
+    typeof value.targetRevision === "string" &&
+    (value.state === "integrated" ||
+      value.state === "ready" ||
+      value.state === "diverged") &&
+    typeof value.ahead === "number" &&
+    typeof value.behind === "number" &&
+    typeof value.canIntegrate === "boolean"
+  );
+}
+
+function isProjectBoardUpdate(value: unknown, project: string): boolean {
+  if (!isRecord(value) || value.type !== "board_updated") return false;
+  return isRecord(value.data) && value.data.projectId === project;
+}
+
+function readError(value: unknown): string | null {
+  return isRecord(value) && typeof value.error === "string"
+    ? value.error
+    : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
 </script>
 
 <div class="integration" aria-live="polite">

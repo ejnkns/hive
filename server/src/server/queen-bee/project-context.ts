@@ -19,17 +19,6 @@ export type ProjectContext = {
   manifests: Record<string, string>;
 };
 
-const MANIFEST_NAMES = new Set([
-  "package.json",
-  "pnpm-workspace.yaml",
-  "tsconfig.json",
-  "Cargo.toml",
-  "go.mod",
-  "pyproject.toml",
-  "requirements.txt",
-  "Gemfile",
-]);
-
 export function loadProjectContext(
   projectId: string,
   repoPath: string,
@@ -69,6 +58,17 @@ export function loadProjectContext(
   writeContext(path, context);
   return context;
 }
+
+const MANIFEST_NAMES = new Set([
+  "package.json",
+  "pnpm-workspace.yaml",
+  "tsconfig.json",
+  "Cargo.toml",
+  "go.mod",
+  "pyproject.toml",
+  "requirements.txt",
+  "Gemfile",
+]);
 
 function contextRevision(repoPath: string): string {
   return hasBranch(repoPath, "hive-main")

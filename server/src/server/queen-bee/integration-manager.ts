@@ -6,8 +6,6 @@ import { cpSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { removeWorktree } from "./worker-supervisor/git-operations";
 
-const INTEGRATION_BRANCH = "hive-main";
-
 export type IntegrationRevision = {
   branchName: typeof INTEGRATION_BRANCH;
   revision: string;
@@ -66,6 +64,8 @@ export function createIntegrationManager(): IntegrationManager {
     },
   };
 }
+
+const INTEGRATION_BRANCH = "hive-main";
 
 function integrationStatus(
   repoPath: string,
