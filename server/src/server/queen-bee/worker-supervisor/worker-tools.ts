@@ -1,6 +1,6 @@
 /** @private — only imported by worker-supervisor.ts */
 
-import { execFile, execSync } from "node:child_process";
+import { execSync } from "node:child_process";
 import {
   mkdirSync,
   readdirSync,
@@ -16,9 +16,13 @@ import type {
 } from "../devise-engine/devise-tools";
 import { DEVISE_TOOLS } from "../devise-engine/devise-tools";
 import { getDiff, getStatus } from "./git-operations";
+import { commitWork } from "./worker-tools/commit-work";
+import { runCommand } from "./worker-tools/run-command";
 
 export const WORKER_TOOLS: ToolDefinition[] = [
-  ...DEVISE_TOOLS,
+  ...DEVISE_TOOLS.filter(
+    (tool) => tool.function.name !== "update_requirements"
+  ),
   {
     type: "function",
     function: {
@@ -46,13 +50,14 @@ export const WORKER_TOOLS: ToolDefinition[] = [
     function: {
       name: "run_command",
       description:
-        "Execute a shell command in the workspace directory. Returns stdout and stderr. Commands timeout after 30 seconds. Pass arguments as a single string in 'args'.",
+        "Execute one program in the worktree without a shell. Pass only the executable name in 'command' and every argument as a separate item in 'args'. Compound shell expressions, pipes, redirection, and direct Git mutations are not supported.",
       parameters: {
         type: "object",
         properties: {
           command: {
             type: "string",
-            description: "The command to execute",
+            description:
+              "Executable name only, for example 'pnpm', 'git', or 'python3'. Do not include arguments or shell operators.",
           },
           args: {
             type: "array",
@@ -80,6 +85,72 @@ export const WORKER_TOOLS: ToolDefinition[] = [
       parameters: { type: "object", properties: {}, required: [] },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "git_log",
+      description: "Show commits on the current worker branch.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "commit_work",
+      description:
+        "Create a meaningful implementation commit. Declare exactly which relative worktree paths belong in the commit. Repository Git hooks run normally.",
+      parameters: {
+        type: "object",
+        properties: {
+          message: {
+            type: "string",
+            description:
+              "Commit subject following the repository's documented conventions.",
+          },
+          paths: {
+            type: "array",
+            description: "Relative files or directories to stage and commit.",
+            items: { type: "string" },
+          },
+        },
+        required: ["message", "paths"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "submit_work",
+      description:
+        "Submit committed work to the deterministic Completion Gate. This must be the only tool call in the response.",
+      parameters: {
+        type: "object",
+        properties: {
+          outcome: {
+            type: "string",
+            description: "Either 'implemented' or 'already_satisfied'.",
+          },
+          verificationCallIds: {
+            type: "array",
+            description:
+              "Successful run_command tool call IDs that verified the current commit.",
+            items: { type: "string" },
+          },
+          verificationNotRunReason: {
+            type: "string",
+            description:
+              "Required instead of verificationCallIds when no applicable automated checks exist.",
+          },
+          noChangeRationale: {
+            type: "string",
+            description:
+              "Required only for already_satisfied; explain why no implementation commit is needed.",
+          },
+        },
+        required: ["outcome"],
+      },
+    },
+  },
 ];
 
 export async function executeWorkerTool(
@@ -92,6 +163,8 @@ export async function executeWorkerTool(
         return writeFile(toolCall, workspacePath);
       case "run_command":
         return await runCommand(toolCall, workspacePath);
+      case "commit_work":
+        return commitWork(toolCall, workspacePath);
       case "git_status":
         return {
           toolCallId: toolCall.id,
@@ -102,6 +175,16 @@ export async function executeWorkerTool(
         return {
           toolCallId: toolCall.id,
           content: getDiff(workspacePath, "HEAD"),
+          isError: false,
+        };
+      case "git_log":
+        return {
+          toolCallId: toolCall.id,
+          content: execSync("git log --oneline --decorate -20", {
+            cwd: workspacePath,
+            encoding: "utf-8",
+            timeout: 5_000,
+          }).trim(),
           isError: false,
         };
       default:
@@ -155,61 +238,11 @@ function writeFile(toolCall: ToolCall, workspacePath: string): ToolResult {
   };
 }
 
-function runCommand(
-  toolCall: ToolCall,
-  workspacePath: string
-): Promise<ToolResult> {
-  const args = JSON.parse(toolCall.arguments) as {
-    command?: string;
-    args?: string[];
-  };
-  if (!args.command) {
-    return Promise.resolve({
-      toolCallId: toolCall.id,
-      content: "command is required",
-      isError: true,
-    });
-  }
-
-  const command = args.command;
-  const cmdArgs = Array.isArray(args.args) ? args.args : [];
-
-  return new Promise<ToolResult>((resolveResult) => {
-    execFile(
-      command,
-      cmdArgs,
-      { cwd: workspacePath, timeout: 30_000, maxBuffer: 1024 * 1024 },
-      (error, stdout, stderr) => {
-        if (error) {
-          resolveResult({
-            toolCallId: toolCall.id,
-            content: error.message,
-            isError: true,
-          });
-          return;
-        }
-
-        const parts: string[] = [];
-        if (stdout) parts.push(`stdout:\n${stdout}`);
-        if (stderr) parts.push(`stderr:\n${stderr}`);
-
-        resolveResult({
-          toolCallId: toolCall.id,
-          content: parts.join("\n") || "(no output)",
-          isError: false,
-        });
-      }
-    );
-  });
-}
-
 function executeDeviseToolFallback(
   toolCall: ToolCall,
   workspacePath: string
 ): ToolResult {
   switch (toolCall.name) {
-    case "update_requirements":
-      return updateRequirementsFallback(toolCall, workspacePath);
     case "list_directory":
       return listDirectoryFallback(toolCall, workspacePath);
     case "read_file":
@@ -223,30 +256,6 @@ function executeDeviseToolFallback(
         isError: true,
       };
   }
-}
-
-function updateRequirementsFallback(
-  toolCall: ToolCall,
-  workspacePath: string
-): ToolResult {
-  const args = JSON.parse(toolCall.arguments) as { content?: string };
-  if (!args.content) {
-    return {
-      toolCallId: toolCall.id,
-      content: "content is required",
-      isError: true,
-    };
-  }
-
-  const hiveDir = join(workspacePath, ".hive");
-  mkdirSync(hiveDir, { recursive: true });
-  writeFileSync(join(hiveDir, "requirements.md"), args.content, "utf-8");
-
-  return {
-    toolCallId: toolCall.id,
-    content: "Requirements document updated",
-    isError: false,
-  };
 }
 
 function listDirectoryFallback(
