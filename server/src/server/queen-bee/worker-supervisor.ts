@@ -15,12 +15,9 @@ import type { Reviewer } from "./reviewer";
 import { buildWorkerContext } from "./worker-supervisor/build-worker-context";
 import {
   commitChanges,
-  createBranch,
   createPullRequest,
-  createWorktree,
   getDiff,
-  getHeadCommit,
-  getWorktreePath,
+  prepareWorktree,
   removeWorktree,
 } from "./worker-supervisor/git-operations";
 import { parseWorkerHandover } from "./worker-supervisor/parse-worker-handover";
@@ -110,11 +107,7 @@ export function createWorkerSupervisor(
       content: "",
     };
 
-    const worktreePath = getWorktreePath(repoPath, card.id);
-
-    removeWorktree(repoPath, card.id);
-
-    const wtResult = createWorktree(repoPath, card.id);
+    const wtResult = prepareWorktree(repoPath, card.id);
     if (!wtResult.ok) {
       log.error = wtResult.message;
       log.finishedAt = new Date().toISOString();
@@ -128,25 +121,13 @@ export function createWorkerSupervisor(
       return;
     }
 
+    const worktreePath = wtResult.path;
     const branchName = `qb/${card.id}`;
-    const brResult = createBranch(worktreePath, branchName);
-    if (!brResult.ok) {
-      log.error = brResult.message;
-      log.finishedAt = new Date().toISOString();
-      writeWorkerLog(boardStore, projectId, repoPath, card.id, log);
-      boardStore.moveCard(projectId, repoPath, card.id, "ready");
-      onEvent({
-        type: "worker_error",
-        cardId: card.id,
-        error: brResult.message,
-      });
-      return;
-    }
 
     onEvent({ type: "worker_started", cardId: card.id });
     boardStore.moveCard(projectId, repoPath, card.id, "in_progress");
 
-    const baseCommit = getHeadCommit(worktreePath);
+    const baseCommit = wtResult.baseCommit;
     const messages = buildWorkerContext(card, systemPrompt, codingGuidelines);
 
     const validation = validateCard(card, worktreePath);

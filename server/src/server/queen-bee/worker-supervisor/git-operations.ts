@@ -9,73 +9,119 @@ export type GitResult = {
   message: string;
 };
 
-export function createWorktree(repoPath: string, cardId: string): GitResult {
-  const worktreeDir = join(repoPath, ".worktrees", cardId);
+export type PreparedWorktree =
+  | { ok: true; message: string; path: string; baseCommit: string }
+  | { ok: false; message: string };
 
-  if (existsSync(worktreeDir)) {
-    return { ok: true, message: "Worktree already exists" };
-  }
+export function prepareWorktree(
+  repoPath: string,
+  cardId: string
+): PreparedWorktree {
+  const worktreeDir = join(repoPath, ".worktrees", cardId);
+  const branchName = `qb/${cardId}`;
 
   try {
     const worktreesDir = join(repoPath, ".worktrees");
     mkdirSync(worktreesDir, { recursive: true });
+    const branchExists = hasBranch(repoPath, branchName);
 
-    execSync(`git worktree add --detach "${worktreeDir}"`, {
-      cwd: repoPath,
-      encoding: "utf-8",
-      timeout: 30_000,
-    });
-    return { ok: true, message: `Worktree created at ${worktreeDir}` };
-  } catch (err) {
-    return {
-      ok: false,
-      message: err instanceof Error ? err.message : "Failed to create worktree",
-    };
-  }
-}
-
-export function createBranch(
-  worktreePath: string,
-  branchName: string
-): GitResult {
-  try {
-    if (branchExistsInWorktree(worktreePath, branchName)) {
-      execSync(`git checkout "${branchName}"`, {
-        cwd: worktreePath,
-        encoding: "utf-8",
-        timeout: 10_000,
-      });
-      return { ok: true, message: `Checked out existing branch ${branchName}` };
+    if (existsSync(worktreeDir)) {
+      const currentBranch = getCurrentBranch(worktreeDir);
+      if (currentBranch !== branchName) {
+        return {
+          ok: false,
+          message: `Existing worktree is on '${currentBranch}', expected '${branchName}'`,
+        };
+      }
+      const baseCommit = getMergeBase(repoPath, branchName);
+      if (!baseCommit) {
+        return unrelatedHistory(branchName);
+      }
+      return {
+        ok: true,
+        message: `Reusing worktree at ${worktreeDir}`,
+        path: worktreeDir,
+        baseCommit,
+      };
     }
 
-    execSync(`git checkout -b "${branchName}"`, {
-      cwd: worktreePath,
-      encoding: "utf-8",
-      timeout: 10_000,
-    });
-    return { ok: true, message: `Branch ${branchName} created` };
+    if (branchExists) {
+      const baseCommit = getMergeBase(repoPath, branchName);
+      if (!baseCommit) {
+        return unrelatedHistory(branchName);
+      }
+      execFileSync("git", ["worktree", "add", worktreeDir, branchName], {
+        cwd: repoPath,
+        encoding: "utf-8",
+        timeout: 30_000,
+      });
+      return {
+        ok: true,
+        message: `Restored worktree at ${worktreeDir}`,
+        path: worktreeDir,
+        baseCommit,
+      };
+    }
+
+    const baseCommit = getHeadCommit(repoPath);
+    execFileSync(
+      "git",
+      ["worktree", "add", "-b", branchName, worktreeDir, "HEAD"],
+      {
+        cwd: repoPath,
+        encoding: "utf-8",
+        timeout: 30_000,
+      }
+    );
+    return {
+      ok: true,
+      message: `Worktree created at ${worktreeDir}`,
+      path: worktreeDir,
+      baseCommit,
+    };
   } catch (err) {
     return {
       ok: false,
-      message: err instanceof Error ? err.message : "Failed to create branch",
+      message:
+        err instanceof Error ? err.message : "Failed to prepare worktree",
     };
   }
 }
 
-function branchExistsInWorktree(
-  worktreePath: string,
-  branchName: string
-): boolean {
+function hasBranch(repoPath: string, branchName: string): boolean {
   try {
-    execSync(`git show-ref --verify --quiet "refs/heads/${branchName}"`, {
-      cwd: worktreePath,
-      encoding: "utf-8",
-      timeout: 5_000,
-    });
+    execFileSync(
+      "git",
+      ["show-ref", "--verify", "--quiet", `refs/heads/${branchName}`],
+      {
+        cwd: repoPath,
+        encoding: "utf-8",
+        timeout: 5_000,
+      }
+    );
     return true;
   } catch {
     return false;
   }
+}
+
+function getMergeBase(repoPath: string, branchName: string): string | null {
+  try {
+    return execFileSync("git", ["merge-base", "HEAD", branchName], {
+      cwd: repoPath,
+      encoding: "utf-8",
+      timeout: 5_000,
+    }).trim();
+  } catch {
+    return null;
+  }
+}
+
+function unrelatedHistory(branchName: string): PreparedWorktree {
+  return {
+    ok: false,
+    message: `Existing branch '${branchName}' has no shared history with the project HEAD`,
+  };
 }
 
 export function commitChanges(
@@ -121,7 +167,7 @@ export function getDiff(worktreePath: string, baseBranch: string): string {
   }
 }
 
-export function getHeadCommit(worktreePath: string): string {
+function getHeadCommit(worktreePath: string): string {
   try {
     return execSync("git rev-parse HEAD", {
       cwd: worktreePath,
@@ -191,10 +237,6 @@ export function createPullRequest(
       message: err instanceof Error ? err.message : "PR creation failed",
     };
   }
-}
-
-export function getWorktreePath(repoPath: string, cardId: string): string {
-  return join(repoPath, ".worktrees", cardId);
 }
 
 export function removeWorktree(repoPath: string, cardId: string): GitResult {

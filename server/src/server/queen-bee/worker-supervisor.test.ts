@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
@@ -86,6 +93,86 @@ describe("WorkerSupervisor", () => {
     assert.match(receivedToolContent ?? "", /command complete/);
   });
 
+  it("reuses interrupted work from the card's existing worktree", async () => {
+    const repoPath = createGitRepository();
+    const boardStore = createBoardStore(() => {});
+    const card = boardStore.addCard("project-1", repoPath, {
+      title: "Resume interrupted work",
+      description: "Keep the worker's existing changes",
+      acceptanceCriteria: ["The interrupted change is preserved"],
+      relevantFiles: ["source.txt"],
+      dependencies: [],
+      column: "in_progress",
+    });
+    const worktreePath = createCardWorktree(repoPath, card.id);
+    writeFileSync(join(worktreePath, "source.txt"), "interrupted change\n");
+    let observedSource = "";
+    let callCount = 0;
+    const modelCaller: DeviseModelCaller = {
+      async call(_messages, workspacePath) {
+        callCount += 1;
+        if (callCount === 1) {
+          observedSource = readFileSync(
+            join(workspacePath, "source.txt"),
+            "utf-8"
+          );
+          return terminalResponse("Implementation complete");
+        }
+        return terminalResponse("Preserved interrupted work");
+      },
+    };
+    const supervisor = createWorkerSupervisor(
+      boardStore,
+      failingReviewer(),
+      unusedCoordinator(),
+      modelCaller
+    );
+
+    await supervisor.run(card, repoPath, "", "", () => {});
+
+    assert.equal(observedSource, "interrupted change\n");
+  });
+
+  it("blocks an unrelated existing card branch without modifying it", async () => {
+    const repoPath = createGitRepository();
+    const boardStore = createBoardStore(() => {});
+    const card = boardStore.addCard("project-1", repoPath, {
+      title: "Reject unrelated history",
+      description: "Do not overwrite an unrelated branch",
+      acceptanceCriteria: ["The existing worktree remains untouched"],
+      relevantFiles: ["source.txt"],
+      dependencies: [],
+      column: "in_progress",
+    });
+    const worktreePath = createUnrelatedCardWorktree(repoPath, card.id);
+    const sentinelPath = join(worktreePath, "sentinel.txt");
+    writeFileSync(sentinelPath, "do not remove\n", "utf-8");
+    const originalHead = git(repoPath, ["rev-parse", `qb/${card.id}`]);
+    let modelCallCount = 0;
+    const modelCaller: DeviseModelCaller = {
+      async call() {
+        modelCallCount += 1;
+        return terminalResponse("This should not run");
+      },
+    };
+    const supervisor = createWorkerSupervisor(
+      boardStore,
+      failingReviewer(),
+      unusedCoordinator(),
+      modelCaller
+    );
+
+    await supervisor.run(card, repoPath, "", "", () => {});
+
+    assert.equal(modelCallCount, 0);
+    assert.equal(git(repoPath, ["rev-parse", `qb/${card.id}`]), originalHead);
+    assert.equal(readFileSync(sentinelPath, "utf-8"), "do not remove\n");
+    assert.equal(
+      boardStore.getBoard("project-1", repoPath).cards[0]?.column,
+      "ready"
+    );
+  });
+
   function createGitRepository(): string {
     const repoPath = mkdtempSync(join(tmpdir(), "hive-worker-supervisor-"));
     repositories.push(repoPath);
@@ -102,6 +189,60 @@ describe("WorkerSupervisor", () => {
       cwd: repoPath,
     });
     return repoPath;
+  }
+
+  function createCardWorktree(repoPath: string, cardId: string): string {
+    const worktreePath = join(repoPath, ".worktrees", cardId);
+    mkdirSync(join(repoPath, ".worktrees"), { recursive: true });
+    git(repoPath, [
+      "worktree",
+      "add",
+      "--quiet",
+      "-b",
+      `qb/${cardId}`,
+      worktreePath,
+    ]);
+    return worktreePath;
+  }
+
+  function createUnrelatedCardWorktree(
+    repoPath: string,
+    cardId: string
+  ): string {
+    const worktreePath = join(repoPath, ".worktrees", cardId);
+    mkdirSync(join(repoPath, ".worktrees"), { recursive: true });
+    git(repoPath, ["worktree", "add", "--quiet", "--detach", worktreePath]);
+    git(worktreePath, ["checkout", "--quiet", "--orphan", `qb/${cardId}`]);
+    if (existsSync(join(worktreePath, "source.txt"))) {
+      git(worktreePath, ["rm", "--quiet", "--force", "source.txt"]);
+    }
+    writeFileSync(join(worktreePath, "source.txt"), "unrelated history\n");
+    git(worktreePath, ["add", "source.txt"]);
+    git(worktreePath, ["commit", "--quiet", "-m", "unrelated root"]);
+    return worktreePath;
+  }
+
+  function git(repoPath: string, args: string[]): string {
+    return execFileSync("git", args, {
+      cwd: repoPath,
+      encoding: "utf-8",
+    }).trim();
+  }
+
+  function failingReviewer(): Reviewer {
+    return {
+      async review() {
+        return { verdict: "fail", feedback: "Keep the worktree" };
+      },
+    };
+  }
+
+  function unusedCoordinator(): Coordinator {
+    return {
+      async analyze() {
+        return { summary: "Not used", suggestions: [] };
+      },
+    };
   }
 
   function terminalResponse(content: string): DeviseModelResponse {
