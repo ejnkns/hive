@@ -130,6 +130,7 @@ describe("board routes", () => {
       createdAt: "",
       systemPrompt: "",
       codingGuidelines: "",
+      targetBranch: "main",
     };
     const projectStore: ProjectStore = {
       getAll: () => [project],

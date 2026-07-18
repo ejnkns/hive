@@ -181,6 +181,26 @@ describe("Planner Agent reconciliation", () => {
   function integrationManager(commitFails = false): IntegrationManager {
     return {
       ensure: () => ({ branchName: "hive-main", revision: "integration-1" }),
+      status: () => ({
+        branchName: "hive-main",
+        revision: "integration-1",
+        targetBranch: "main",
+        targetRevision: "target-1",
+        state: "ready",
+        ahead: 1,
+        behind: 0,
+        canIntegrate: true,
+      }),
+      integrate: () => ({
+        branchName: "hive-main",
+        revision: "integration-1",
+        targetBranch: "main",
+        targetRevision: "integration-1",
+        state: "integrated",
+        ahead: 0,
+        behind: 0,
+        canIntegrate: false,
+      }),
       assertCurrent: () => {},
       accept: () => ({ branchName: "hive-main", revision: "integration-2" }),
       discardWorktree: () => {},

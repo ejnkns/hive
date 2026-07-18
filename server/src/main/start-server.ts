@@ -30,6 +30,7 @@ import {
   registerBoardRoutes,
   registerCoordinatorRoutes,
   registerDeviseRoutes,
+  registerIntegrationRoutes,
   registerProjectRoutes,
   registerWorkDecisionRoutes,
   registerWorkerRoutes,
@@ -94,6 +95,7 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     boardStore,
   });
   registerBoardRoutes(server, { boardStore, planner, projectStore });
+  registerIntegrationRoutes(server, { projectStore, integrationManager });
   registerCoordinatorRoutes(server, {
     boardStore,
     projectStore,

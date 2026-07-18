@@ -1,6 +1,6 @@
 /** @private — only imported by create-project-store.ts */
 
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Project, ProjectRegistry } from "../create-project-store";
@@ -18,6 +18,7 @@ export function createProject(
   const slug = slugify(projectName);
   const id = makeUnique(slug, registry);
   const createdAt = new Date().toISOString();
+  const targetBranch = inferTargetBranch(resolved);
 
   const hiveDir = join(resolved, ".hive");
   if (!existsSync(hiveDir)) {
@@ -30,6 +31,7 @@ export function createProject(
     createdAt,
     systemPrompt: "",
     codingGuidelines: "",
+    targetBranch,
   };
 
   writeFileSync(
@@ -51,7 +53,49 @@ export function createProject(
     createdAt,
     systemPrompt: "",
     codingGuidelines: "",
+    targetBranch,
   };
+}
+
+export function inferTargetBranch(repoPath: string): string {
+  const current = gitOptional(repoPath, ["branch", "--show-current"]);
+  if (current && current !== "hive-main") return current;
+
+  const branches = gitOptional(repoPath, [
+    "for-each-ref",
+    "--sort=-committerdate",
+    "--format=%(refname:short)",
+    "refs/heads",
+  ])
+    .split("\n")
+    .filter(
+      (branch) =>
+        branch &&
+        branch !== "hive-main" &&
+        !branch.startsWith("hive/") &&
+        !branch.startsWith("qb/")
+    );
+  const preferred =
+    branches.find((branch) => branch === "main") ??
+    branches.find((branch) => branch === "master") ??
+    branches[0];
+  if (!preferred) {
+    throw new Error("Project requires a target branch for Hive integration");
+  }
+  return preferred;
+}
+
+function gitOptional(repoPath: string, args: string[]): string {
+  try {
+    return execFileSync("git", args, {
+      cwd: repoPath,
+      encoding: "utf-8",
+      timeout: 5_000,
+      stdio: "pipe",
+    }).trim();
+  } catch {
+    return "";
+  }
 }
 
 function slugify(name: string): string {

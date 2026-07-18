@@ -190,6 +190,68 @@ describe("IntegrationManager", () => {
     );
   });
 
+  it("reports accepted Hive work waiting to be integrated into the target branch", () => {
+    const repoPath = createRepository();
+    const manager = createIntegrationManager();
+    manager.ensure(repoPath);
+    git(repoPath, ["switch", "hive-main"]);
+    writeFileSync(join(repoPath, "accepted.txt"), "accepted\n");
+    git(repoPath, ["add", "accepted.txt"]);
+    git(repoPath, ["commit", "-m", "feature: accept work"]);
+    git(repoPath, ["switch", "main"]);
+
+    const status = manager.status(repoPath, "main");
+
+    assert.equal(status.state, "ready");
+    assert.equal(status.ahead, 1);
+    assert.equal(status.behind, 0);
+    assert.equal(status.canIntegrate, true);
+  });
+
+  it("fast-forwards an explicitly selected target branch without switching branches", () => {
+    const repoPath = createRepository();
+    const manager = createIntegrationManager();
+    manager.ensure(repoPath);
+    git(repoPath, ["switch", "hive-main"]);
+    writeFileSync(join(repoPath, "accepted.txt"), "accepted\n");
+    git(repoPath, ["add", "accepted.txt"]);
+    git(repoPath, ["commit", "-m", "feature: accept work"]);
+    git(repoPath, ["switch", "main"]);
+    git(repoPath, ["switch", "-c", "user-work"]);
+
+    const status = manager.integrate(repoPath, "main");
+
+    assert.equal(status.state, "integrated");
+    assert.equal(git(repoPath, ["branch", "--show-current"]), "user-work");
+    assert.equal(git(repoPath, ["show", "main:accepted.txt"]), "accepted");
+  });
+
+  it("detects manual integration and refuses divergent branches", () => {
+    const repoPath = createRepository();
+    const manager = createIntegrationManager();
+    manager.ensure(repoPath);
+    git(repoPath, ["switch", "hive-main"]);
+    writeFileSync(join(repoPath, "accepted.txt"), "accepted\n");
+    git(repoPath, ["add", "accepted.txt"]);
+    git(repoPath, ["commit", "-m", "feature: accept work"]);
+    git(repoPath, ["switch", "main"]);
+    git(repoPath, ["merge", "--ff-only", "hive-main"]);
+
+    assert.equal(manager.status(repoPath, "main").state, "integrated");
+
+    writeFileSync(join(repoPath, "target.txt"), "target\n");
+    git(repoPath, ["add", "target.txt"]);
+    git(repoPath, ["commit", "-m", "feature: target-only work"]);
+    git(repoPath, ["switch", "hive-main"]);
+    writeFileSync(join(repoPath, "hive.txt"), "hive\n");
+    git(repoPath, ["add", "hive.txt"]);
+    git(repoPath, ["commit", "-m", "feature: hive-only work"]);
+    git(repoPath, ["switch", "main"]);
+
+    assert.equal(manager.status(repoPath, "main").state, "diverged");
+    assert.throws(() => manager.integrate(repoPath, "main"), /diverged/);
+  });
+
   function createRepository(): string {
     const repoPath = mkdtempSync(join(tmpdir(), "hive-integration-"));
     repositories.push(repoPath);

@@ -3,7 +3,10 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ProjectListItem } from "shared/project-types";
-import { createProject } from "./create-project-store/create-project";
+import {
+  createProject,
+  inferTargetBranch,
+} from "./create-project-store/create-project";
 import { loadProjectRegistry } from "./create-project-store/load-project-registry";
 import { unlinkProject } from "./create-project-store/unlink-project";
 import { writeProjectRegistry } from "./create-project-store/write-project-registry";
@@ -15,6 +18,7 @@ export type Project = {
   createdAt: string;
   systemPrompt: string;
   codingGuidelines: string;
+  targetBranch: string;
 };
 
 export type ProjectRegistry = {
@@ -41,6 +45,8 @@ export function createProjectStore(
     name: string;
     systemPrompt: string;
     codingGuidelines: string;
+    createdAt: string;
+    targetBranch: string;
   } {
     try {
       const raw = readFileSync(
@@ -59,12 +65,19 @@ export function createProjectStore(
           typeof parsed.codingGuidelines === "string"
             ? parsed.codingGuidelines
             : "",
+        createdAt: typeof parsed.createdAt === "string" ? parsed.createdAt : "",
+        targetBranch:
+          typeof parsed.targetBranch === "string" && parsed.targetBranch
+            ? parsed.targetBranch
+            : inferTargetBranch(repoPath),
       };
     } catch {
       return {
         name: repoPath.split("/").pop() ?? repoPath,
         systemPrompt: "",
         codingGuidelines: "",
+        createdAt: "",
+        targetBranch: inferTargetBranch(repoPath),
       };
     }
   }
@@ -77,9 +90,10 @@ export function createProjectStore(
           id,
           name: meta.name,
           repoPath: entry.path,
-          createdAt: "",
+          createdAt: meta.createdAt,
           systemPrompt: meta.systemPrompt,
           codingGuidelines: meta.codingGuidelines,
+          targetBranch: meta.targetBranch,
         };
       });
     },

@@ -13,6 +13,7 @@ export { createDeviseEngine } from "./queen-bee/devise-engine";
 export { registerDeviseRoutes } from "./queen-bee/devise-routes";
 export type { IntegrationManager } from "./queen-bee/integration-manager";
 export { createIntegrationManager } from "./queen-bee/integration-manager";
+export { registerIntegrationRoutes } from "./queen-bee/integration-routes";
 export type { Planner } from "./queen-bee/planner";
 export { createPlanner } from "./queen-bee/planner";
 export { registerProjectRoutes } from "./queen-bee/project-routes";

@@ -1,5 +1,6 @@
 import assert from "node:assert";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -9,10 +10,20 @@ import { unlinkProject } from "./create-project-store/unlink-project";
 
 function createTempGitRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), "hive-test-"));
-  mkdirSync(join(dir, ".git"));
-  mkdirSync(join(dir, "src"), { recursive: true });
   writeFileSync(join(dir, "package.json"), "{}");
+  git(dir, ["init", "-b", "main"]);
+  git(dir, ["config", "user.name", "Hive Test"]);
+  git(dir, ["config", "user.email", "hive@example.test"]);
+  git(dir, ["add", "package.json"]);
+  git(dir, ["commit", "-m", "source: initialize project"]);
   return dir;
+}
+
+function git(repoPath: string, args: string[]): string {
+  return execFileSync("git", args, {
+    cwd: repoPath,
+    encoding: "utf-8",
+  }).trim();
 }
 
 describe("createProject", () => {
@@ -25,10 +36,12 @@ describe("createProject", () => {
     assert.strictEqual(project.id, "my-project");
     assert.strictEqual(project.systemPrompt, "");
     assert.strictEqual(project.codingGuidelines, "");
+    assert.strictEqual(project.targetBranch, "main");
 
     const raw = readFileSync(join(repoPath, ".hive", "project.json"), "utf-8");
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     assert.strictEqual(parsed.name, "my-project");
+    assert.strictEqual(parsed.targetBranch, "main");
   });
 
   it("generates slug-based ID from project name", () => {

@@ -13,6 +13,15 @@ export type IntegrationRevision = {
   revision: string;
 };
 
+export type IntegrationStatus = IntegrationRevision & {
+  targetBranch: string;
+  targetRevision: string;
+  state: "integrated" | "ready" | "diverged";
+  ahead: number;
+  behind: number;
+  canIntegrate: boolean;
+};
+
 export type AcceptWorkInput = {
   repoPath: string;
   cardId: string;
@@ -24,6 +33,8 @@ export type AcceptWorkInput = {
 
 export type IntegrationManager = {
   ensure(repoPath: string): IntegrationRevision;
+  status(repoPath: string, targetBranch: string): IntegrationStatus;
+  integrate(repoPath: string, targetBranch: string): IntegrationStatus;
   assertCurrent(input: AcceptWorkInput): void;
   accept(input: AcceptWorkInput): IntegrationRevision;
   discardWorktree(repoPath: string, worktreePath: string): void;
@@ -36,6 +47,8 @@ export type IntegrationManager = {
 export function createIntegrationManager(): IntegrationManager {
   return {
     ensure: ensureIntegrationBranch,
+    status: integrationStatus,
+    integrate: integrateTargetBranch,
     assertCurrent: assertReviewedWorkCurrent,
     accept: acceptWork,
     commitPlanningSnapshot,
@@ -52,6 +65,111 @@ export function createIntegrationManager(): IntegrationManager {
       if (!result.ok) throw new Error(result.message);
     },
   };
+}
+
+function integrationStatus(
+  repoPath: string,
+  targetBranch: string
+): IntegrationStatus {
+  const integration = ensureIntegrationBranch(repoPath);
+  assertTargetBranch(repoPath, targetBranch);
+  const targetRevision = git(repoPath, ["rev-parse", targetBranch]);
+  const ahead = Number(
+    git(repoPath, [
+      "rev-list",
+      "--count",
+      `${targetBranch}..${INTEGRATION_BRANCH}`,
+    ])
+  );
+  const behind = Number(
+    git(repoPath, [
+      "rev-list",
+      "--count",
+      `${INTEGRATION_BRANCH}..${targetBranch}`,
+    ])
+  );
+  const integrationIsInTarget = gitSucceeds(repoPath, [
+    "merge-base",
+    "--is-ancestor",
+    INTEGRATION_BRANCH,
+    targetBranch,
+  ]);
+  const targetIsInIntegration = gitSucceeds(repoPath, [
+    "merge-base",
+    "--is-ancestor",
+    targetBranch,
+    INTEGRATION_BRANCH,
+  ]);
+  const state = integrationIsInTarget
+    ? "integrated"
+    : targetIsInIntegration
+      ? "ready"
+      : "diverged";
+  return {
+    ...integration,
+    targetBranch,
+    targetRevision,
+    state,
+    ahead,
+    behind,
+    canIntegrate: state === "ready" && ahead > 0,
+  };
+}
+
+function integrateTargetBranch(
+  repoPath: string,
+  targetBranch: string
+): IntegrationStatus {
+  const before = integrationStatus(repoPath, targetBranch);
+  if (before.state === "integrated") return before;
+  if (before.state === "diverged") {
+    throw new Error(
+      `${targetBranch} and ${INTEGRATION_BRANCH} have diverged; reconcile them explicitly before integrating`
+    );
+  }
+
+  const checkedOutPath = branchWorktreePath(repoPath, targetBranch);
+  if (checkedOutPath) {
+    if (git(checkedOutPath, ["status", "--porcelain"])) {
+      throw new Error(
+        `${targetBranch} is checked out with uncommitted changes`
+      );
+    }
+    git(checkedOutPath, ["merge", "--ff-only", INTEGRATION_BRANCH]);
+  } else {
+    git(repoPath, [
+      "update-ref",
+      `refs/heads/${targetBranch}`,
+      before.revision,
+      before.targetRevision,
+    ]);
+  }
+  return integrationStatus(repoPath, targetBranch);
+}
+
+function assertTargetBranch(repoPath: string, targetBranch: string): void {
+  if (!targetBranch || targetBranch === INTEGRATION_BRANCH) {
+    throw new Error("A target branch other than hive-main is required");
+  }
+  if (!hasBranch(repoPath, targetBranch)) {
+    throw new Error(`Target branch '${targetBranch}' does not exist`);
+  }
+}
+
+function branchWorktreePath(
+  repoPath: string,
+  branchName: string
+): string | null {
+  const records = git(repoPath, ["worktree", "list", "--porcelain"])
+    .split("\n\n")
+    .map((record) => record.split("\n"));
+  const branchRef = `branch refs/heads/${branchName}`;
+  for (const record of records) {
+    if (!record.includes(branchRef)) continue;
+    const worktree = record.find((line) => line.startsWith("worktree "));
+    if (worktree) return worktree.slice("worktree ".length);
+  }
+  return null;
 }
 
 function commitPlanningSnapshot(

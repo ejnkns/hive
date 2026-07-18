@@ -29,6 +29,7 @@ import { createOrchestratorStore } from "./use-orchestrator.svelte";
 import CanvasHost from "./canvas/CanvasHost.svelte";
 import ProjectOverview from "./queen-bee/project-overview.svelte";
 import ProjectPage from "./queen-bee/project-page.svelte";
+import ProjectIntegration from "./queen-bee/project-integration.svelte";
 import {
   projectHeader,
   togglePanel,
@@ -385,6 +386,9 @@ onDestroy(() => {
         <div class="project-header-row">
           <a href="#/" class="back-link">&larr; Projects</a>
           <div class="header-right">
+            {#key projectHeader.projectId}
+              <ProjectIntegration projectId={projectHeader.projectId} />
+            {/key}
             {#if projectHeader.requirementsContent}
               <button class="btn btn-outline" onclick={togglePanel}>
                 {projectHeader.panelOpen ? "Hide" : "View"} Requirements
