@@ -3,7 +3,10 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import { loadCache, saveCache } from "./cache";
 import { TelemetryRecorder } from "./recorder";
 
-await describe("TelemetryRecorder", async () => {
+// TODO: Re-enable once TelemetryRecorder accepts an isolated cache adapter/path.
+// These tests currently read and overwrite the live ~/.hive/telemetry-cache.json,
+// so they race a running Hive server and can destroy real telemetry data.
+await describe.skip("TelemetryRecorder", async () => {
   let recorder: TelemetryRecorder;
 
   beforeEach(async () => {
