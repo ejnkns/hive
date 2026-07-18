@@ -2,7 +2,16 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { ReviewerLog } from "shared/board-types";
 import type { Board, Card } from "../board-store";
+
+type LegacyReviewerLog = {
+  verdict: "pass" | "fail";
+  feedback: string;
+  reviewedAt: string;
+};
+
+type PersistedReviewerLog = ReviewerLog | LegacyReviewerLog;
 
 export function loadBoard(projectId: string, repoPath: string): Board {
   const hiveDir = join(repoPath, ".hive");
@@ -33,11 +42,7 @@ export function loadBoard(projectId: string, repoPath: string): Board {
           error?: string;
           content: string;
         };
-        reviewerLog?: {
-          verdict: "pass" | "fail";
-          feedback: string;
-          reviewedAt: string;
-        };
+        reviewerLog?: PersistedReviewerLog;
         handover?: Card["handover"];
         coordinatorLog?: Card["coordinatorLog"];
         requirementRefs?: string[];
@@ -69,7 +74,7 @@ export function loadBoard(projectId: string, repoPath: string): Board {
               : "idea") as Card["column"],
             createdAt: typeof c.createdAt === "string" ? c.createdAt : "",
             workerLog: c.workerLog,
-            reviewerLog: c.reviewerLog,
+            reviewerLog: migrateReviewerLog(c.reviewerLog),
             handover: c.handover,
             coordinatorLog: c.coordinatorLog,
             requirementRefs: Array.isArray(c.requirementRefs)
@@ -88,4 +93,31 @@ export function loadBoard(projectId: string, repoPath: string): Board {
   } catch {
     return { projectId, cards: [] };
   }
+}
+
+function migrateReviewerLog(
+  reviewerLog: PersistedReviewerLog | undefined
+): ReviewerLog | undefined {
+  if (!reviewerLog) return undefined;
+  if ("status" in reviewerLog) return reviewerLog;
+  const approved = reviewerLog.verdict === "pass";
+  return {
+    status: "complete",
+    verdict: approved ? "approved" : "changes_requested",
+    findings: approved
+      ? []
+      : [
+          {
+            severity: "blocking",
+            requirement: "Legacy reviewer feedback",
+            evidence: reviewerLog.feedback,
+            recommendation: reviewerLog.feedback,
+          },
+        ],
+    verificationAssessment: {
+      status: approved ? "sufficient" : "insufficient",
+      notes: reviewerLog.feedback,
+    },
+    reviewedAt: reviewerLog.reviewedAt,
+  };
 }

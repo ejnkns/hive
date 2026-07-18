@@ -75,7 +75,7 @@ describe("WorkerSupervisor", () => {
     const reviewer: Reviewer = {
       async review() {
         reviewerCalls += 1;
-        return { verdict: "fail", feedback: "Keep branch for inspection" };
+        return changesRequestedVerdict("Keep branch for inspection");
       },
     };
     const supervisor = createWorkerSupervisor(
@@ -201,7 +201,7 @@ describe("WorkerSupervisor", () => {
     };
     const reviewer: Reviewer = {
       async review() {
-        return { verdict: "pass", feedback: "Command contract verified" };
+        return approvedVerdict("Command contract verified");
       },
     };
     const coordinator: Coordinator = {
@@ -219,6 +219,14 @@ describe("WorkerSupervisor", () => {
     await supervisor.run("project-1", card, repoPath, "", "", () => {});
 
     assert.match(receivedToolContent ?? "", /command complete/);
+    const reviewed = boardStore.getBoard("project-1", repoPath).cards[0];
+    assert.equal(reviewed?.column, "reviewing");
+    assert.equal(reviewed?.reviewerLog?.verdict, "approved");
+    assert.equal(
+      existsSync(join(repoPath, ".worktrees", card.id)),
+      true,
+      "approved work remains isolated until the user accepts it"
+    );
   });
 
   it("reuses interrupted work from the card's existing worktree", async () => {
@@ -517,7 +525,33 @@ describe("WorkerSupervisor", () => {
   function failingReviewer(): Reviewer {
     return {
       async review() {
-        return { verdict: "fail", feedback: "Keep the worktree" };
+        return changesRequestedVerdict("Keep the worktree");
+      },
+    };
+  }
+
+  function approvedVerdict(notes: string) {
+    return {
+      verdict: "approved" as const,
+      findings: [],
+      verificationAssessment: { status: "sufficient" as const, notes },
+    };
+  }
+
+  function changesRequestedVerdict(recommendation: string) {
+    return {
+      verdict: "changes_requested" as const,
+      findings: [
+        {
+          severity: "blocking" as const,
+          requirement: "Acceptance criteria",
+          evidence: "The implementation needs another attempt.",
+          recommendation,
+        },
+      ],
+      verificationAssessment: {
+        status: "insufficient" as const,
+        notes: recommendation,
       },
     };
   }

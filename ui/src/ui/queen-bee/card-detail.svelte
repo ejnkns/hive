@@ -131,12 +131,34 @@ const COLUMN_LABELS: Record<Column, string> = {
           <div class="section-label">Review</div>
           <div
             class="review-verdict"
-            class:verdict-pass={card.reviewerLog.verdict === "pass"}
-            class:verdict-fail={card.reviewerLog.verdict === "fail"}
+            class:verdict-approved={card.reviewerLog.verdict === "approved"}
+            class:verdict-changes={card.reviewerLog.verdict === "changes_requested"}
+            class:verdict-error={card.reviewerLog.status === "error"}
           >
-            {card.reviewerLog.verdict === "pass" ? "Passed" : "Failed"}
+            {card.reviewerLog.status === "error"
+              ? "Review error"
+              : card.reviewerLog.verdict === "approved"
+                ? "Approved"
+                : "Changes requested"}
           </div>
-          <div class="review-feedback">{card.reviewerLog.feedback}</div>
+          {#if card.reviewerLog.error}
+            <div class="review-feedback">{card.reviewerLog.error}</div>
+          {/if}
+          {#each card.reviewerLog.findings ?? [] as finding}
+            <div class="review-finding">
+              <div class="review-finding-header">
+                {finding.severity}: {finding.requirement}
+              </div>
+              <div>{finding.evidence}</div>
+              <div class="review-recommendation">{finding.recommendation}</div>
+            </div>
+          {/each}
+          {#if card.reviewerLog.verificationAssessment}
+            <div class="review-assessment">
+              Verification {card.reviewerLog.verificationAssessment.status}:
+              {card.reviewerLog.verificationAssessment.notes}
+            </div>
+          {/if}
         </div>
       {/if}
 
@@ -402,11 +424,12 @@ const COLUMN_LABELS: Record<Column, string> = {
     margin-bottom: 0.25rem;
   }
 
-  .verdict-pass {
+  .verdict-approved {
     color: #7cb342;
   }
 
-  .verdict-fail {
+  .verdict-changes,
+  .verdict-error {
     color: #dc3c3c;
   }
 
@@ -415,6 +438,27 @@ const COLUMN_LABELS: Record<Column, string> = {
     color: var(--text);
     line-height: 1.45;
     white-space: pre-wrap;
+  }
+
+  .review-finding {
+    border-left: 2px solid var(--border);
+    color: var(--text);
+    font-size: 0.75rem;
+    line-height: 1.45;
+    margin-top: 0.5rem;
+    padding-left: 0.5rem;
+  }
+
+  .review-finding-header {
+    font-weight: 600;
+    text-transform: capitalize;
+  }
+
+  .review-recommendation,
+  .review-assessment {
+    color: var(--muted);
+    font-size: 0.6875rem;
+    margin-top: 0.25rem;
   }
 
   .handover-problem {

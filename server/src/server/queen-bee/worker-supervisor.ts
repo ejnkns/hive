@@ -13,17 +13,14 @@ import {
 } from "./devise-engine/create-devise-model-caller";
 import { readRequirements, requirementsRevision } from "./requirements-store";
 import type { Reviewer } from "./reviewer";
+import { buildReviewPackage } from "./worker-supervisor/build-review-package";
 import { buildWorkerContext } from "./worker-supervisor/build-worker-context";
 import {
   evaluateCompletion,
   type WorkerCompletion,
   type WorkerToolEvidence,
 } from "./worker-supervisor/completion-gate";
-import {
-  getDiff,
-  prepareWorktree,
-  removeWorktree,
-} from "./worker-supervisor/git-operations";
+import { prepareWorktree } from "./worker-supervisor/git-operations";
 import { parseWorkerHandover } from "./worker-supervisor/parse-worker-handover";
 import {
   executeWorkerTool,
@@ -206,7 +203,8 @@ export function createWorkerSupervisor(
         boardStore,
         reviewer,
         onEvent,
-        baseCommit
+        baseCommit,
+        result.completion
       );
     } catch (err) {
       log.error = err instanceof Error ? err.message : "Worker failed";
@@ -313,6 +311,8 @@ async function runLoop(
       const result = await executeWorkerTool(toolCall, worktreePath);
       evidence.set(toolCall.id, {
         name: toolCall.name,
+        arguments: toolCall.arguments,
+        output: result.content,
         isError: result.isError,
         headCommit: currentHead(worktreePath),
       });
@@ -439,45 +439,54 @@ async function runReviewer(
   boardStore: BoardStore,
   reviewer: Reviewer,
   onEvent: (event: WorkerEvent) => void,
-  baseCommit: string
+  baseCommit: string,
+  completion: WorkerCompletion
 ): Promise<void> {
   try {
-    const diff = getDiff(worktreePath, baseCommit);
-    const verdict = await reviewer.review(card, diff, worktreePath);
+    const reviewPackage = buildReviewPackage(
+      card,
+      repoPath,
+      worktreePath,
+      baseCommit,
+      completion
+    );
+    const verdict = await reviewer.review(reviewPackage, worktreePath);
 
     const reviewerLog = {
+      status: "complete" as const,
       verdict: verdict.verdict,
-      feedback: verdict.feedback,
+      findings: verdict.findings,
+      verificationAssessment: verdict.verificationAssessment,
+      reviewPackageId: reviewPackage.id,
       reviewedAt: new Date().toISOString(),
     };
 
-    if (verdict.verdict === "pass") {
-      boardStore.updateCard(projectId, repoPath, card.id, {
-        reviewerLog,
-        column: "done",
-      });
-      removeWorktree(repoPath, worktreePath);
-      onEvent({
-        type: "worker_content",
-        cardId: card.id,
-        content: `Review passed: ${verdict.feedback}`,
-      });
-    } else {
-      boardStore.updateCard(projectId, repoPath, card.id, {
-        reviewerLog,
-        column: "in_progress",
-      });
-      onEvent({
-        type: "worker_error",
-        cardId: card.id,
-        error: `Review failed: ${verdict.feedback}`,
-      });
-    }
+    boardStore.updateCard(projectId, repoPath, card.id, {
+      reviewerLog,
+      column: "reviewing",
+    });
+    onEvent({
+      type: "worker_content",
+      cardId: card.id,
+      content:
+        verdict.verdict === "approved"
+          ? "Reviewer Agent approved the immutable Review Package. Awaiting user acceptance."
+          : `Reviewer Agent requested changes with ${String(verdict.findings.length)} finding(s). Awaiting user decision.`,
+    });
   } catch (err) {
+    const error = err instanceof Error ? err.message : "Unknown reviewer error";
+    boardStore.updateCard(projectId, repoPath, card.id, {
+      reviewerLog: {
+        status: "error",
+        error,
+        reviewedAt: new Date().toISOString(),
+      },
+      column: "reviewing",
+    });
     onEvent({
       type: "worker_error",
       cardId: card.id,
-      error: `Reviewer error: ${err instanceof Error ? err.message : "Unknown"}`,
+      error: `Reviewer Agent failed: ${error}`,
     });
   }
 }

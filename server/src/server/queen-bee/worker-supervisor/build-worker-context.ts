@@ -63,12 +63,18 @@ function buildTaskPrompt(card: Card): string {
     parts.push("");
   }
 
-  if (card.reviewerLog && card.reviewerLog.verdict === "fail") {
+  if (
+    card.reviewerLog?.status === "complete" &&
+    card.reviewerLog.verdict === "changes_requested"
+  ) {
     parts.push("### Previous Review Feedback");
     parts.push(
-      "The previous attempt at this task failed review. Address this feedback:"
+      "The previous attempt received review findings. Address each finding:"
     );
-    parts.push(card.reviewerLog.feedback);
+    for (const finding of card.reviewerLog.findings ?? []) {
+      parts.push(`- ${finding.requirement}: ${finding.recommendation}`);
+      parts.push(`  Evidence: ${finding.evidence}`);
+    }
     parts.push("");
   }
 

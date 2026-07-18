@@ -18,8 +18,20 @@ export type WorkerLog = {
 };
 
 export type ReviewerLog = {
-  verdict: "pass" | "fail";
-  feedback: string;
+  status: "complete" | "error";
+  verdict?: "approved" | "changes_requested";
+  findings?: Array<{
+    severity: "blocking" | "warning";
+    requirement: string;
+    evidence: string;
+    recommendation: string;
+  }>;
+  verificationAssessment?: {
+    status: "sufficient" | "insufficient";
+    notes: string;
+  };
+  reviewPackageId?: string;
+  error?: string;
   reviewedAt: string;
 };
 

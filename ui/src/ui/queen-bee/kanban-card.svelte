@@ -35,10 +35,15 @@ type Props = {
   {#if card.reviewerLog}
     <div
       class="card-review"
-      class:review-pass={card.reviewerLog.verdict === "pass"}
-      class:review-fail={card.reviewerLog.verdict === "fail"}
+      class:review-approved={card.reviewerLog.verdict === "approved"}
+      class:review-changes={card.reviewerLog.verdict === "changes_requested"}
+      class:review-error={card.reviewerLog.status === "error"}
     >
-      {card.reviewerLog.verdict === "pass" ? "pass" : "fail"}
+      {card.reviewerLog.status === "error"
+        ? "review error"
+        : card.reviewerLog.verdict === "approved"
+          ? "approved"
+          : "changes"}
     </div>
   {/if}
 </div>
@@ -99,11 +104,12 @@ type Props = {
     margin-top: 0.375rem;
   }
 
-  .review-pass {
+  .review-approved {
     color: #7cb342;
   }
 
-  .review-fail {
+  .review-changes,
+  .review-error {
     color: #dc3c3c;
   }
 </style>

@@ -17,13 +17,19 @@ export type ToolDefinition = {
     description: string;
     parameters: {
       type: "object";
-      properties: Record<
-        string,
-        { type: string; description: string; items?: { type: string } }
-      >;
+      properties: Record<string, ToolParameterSchema>;
       required: string[];
     };
   };
+};
+
+export type ToolParameterSchema = {
+  type: string;
+  description?: string;
+  enum?: string[];
+  items?: ToolParameterSchema;
+  properties?: Record<string, ToolParameterSchema>;
+  required?: string[];
 };
 
 export type ToolCall = {

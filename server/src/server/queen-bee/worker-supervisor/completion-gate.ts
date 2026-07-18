@@ -8,10 +8,18 @@ export type WorkerCompletion = {
   verificationCallIds: string[];
   verificationNotRunReason?: string;
   noChangeRationale?: string;
+  verificationEvidence: Array<{
+    callId: string;
+    command: string;
+    output: string;
+    headCommit: string;
+  }>;
 };
 
 export type WorkerToolEvidence = {
   name: string;
+  arguments: string;
+  output: string;
   isError: boolean;
   headCommit: string;
 };
@@ -80,10 +88,27 @@ export function evaluateCompletion(
     );
   }
 
-  return { ok: true, completion };
+  return {
+    ok: true,
+    completion: {
+      ...completion,
+      verificationEvidence: completion.verificationCallIds.map((callId) => {
+        const result = evidence.get(callId);
+        if (!result) throw new Error(`Missing verified evidence: ${callId}`);
+        return {
+          callId,
+          command: result.arguments,
+          output: result.output,
+          headCommit: result.headCommit,
+        };
+      }),
+    },
+  };
 }
 
-function parseCompletion(toolCall: ToolCall): WorkerCompletion | null {
+function parseCompletion(
+  toolCall: ToolCall
+): Omit<WorkerCompletion, "verificationEvidence"> | null {
   const parsed: unknown = JSON.parse(toolCall.arguments);
   if (!isRecord(parsed)) return null;
   if (
@@ -107,7 +132,7 @@ function parseCompletion(toolCall: ToolCall): WorkerCompletion | null {
 }
 
 function validateVerification(
-  completion: WorkerCompletion,
+  completion: Omit<WorkerCompletion, "verificationEvidence">,
   evidence: ReadonlyMap<string, WorkerToolEvidence>,
   headCommit: string
 ): string | null {
