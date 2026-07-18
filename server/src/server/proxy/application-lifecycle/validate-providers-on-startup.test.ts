@@ -1,6 +1,6 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
-import { initServerState } from "./server-state";
+import { initServerState } from "../server-state";
 import { validateProvidersOnStartup } from "./validate-providers-on-startup";
 
 function createProvider(name: string, model: string, apiKeyEnvVar: string) {

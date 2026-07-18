@@ -4,9 +4,9 @@ import {
   discoverAndCacheModels,
   providers as staticProviders,
 } from "../providers";
+import { validateProvidersOnStartup } from "./application-lifecycle/validate-providers-on-startup";
 import { setLastUsed } from "./last-used-state";
 import { getProviders } from "./providers-state";
-import { validateProvidersOnStartup } from "./validate-providers-on-startup";
 
 let discoveryTimer: NodeJS.Timeout | null = null;
 

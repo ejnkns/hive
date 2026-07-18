@@ -1,9 +1,9 @@
 import { generateId } from "shared/generate-id";
 import { logger } from "shared/logger";
 import { createTelemetrySink } from "telemetry";
-import { mutateRequest } from "./mutate-request";
-import { getProviders } from "./providers-state";
-import { routeRequest } from "./route-request";
+import { mutateRequest } from "../mutate-request";
+import { getProviders } from "../providers-state";
+import { routeRequest } from "../route-request";
 
 export function validateProvidersOnStartup(): void {
   for (const provider of getProviders()) {
