@@ -5,12 +5,12 @@ import { calculateNodeScore } from "./calculate-node-score";
 import { computeDerivedMetrics } from "./derived-metrics";
 import type { RequestMetric } from "./request-metric";
 
-const FLUSH_INTERVAL_MS = 12_000;
+const FLUSH_DEBOUNCE_MS = 1_000;
 
 /** @package */
 export class TelemetryRecorder {
   private buffer: RequestMetric[] = [];
-  private flushTimer: ReturnType<typeof setInterval> | null = null;
+  private flushTimer: ReturnType<typeof setTimeout> | null = null;
   private listeners = new Set<() => void>();
 
   onChange(listener: () => void) {
@@ -30,8 +30,19 @@ export class TelemetryRecorder {
     }
   }
 
+  private scheduleFlush(): void {
+    if (this.flushTimer !== null) {
+      clearTimeout(this.flushTimer);
+    }
+    this.flushTimer = setTimeout(() => {
+      this.flushTimer = null;
+      void this.flush();
+    }, FLUSH_DEBOUNCE_MS);
+  }
+
   recordMetric(metric: RequestMetric): void {
     this.buffer.push(metric);
+    this.scheduleFlush();
     this.notify();
   }
 
@@ -41,10 +52,13 @@ export class TelemetryRecorder {
       return;
     }
     logger.debug("recorder: started");
-    this.flushTimer = setInterval(() => void this.flush(), FLUSH_INTERVAL_MS);
   }
 
   async flush(): Promise<void> {
+    if (this.flushTimer !== null) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
     if (this.buffer.length === 0) {
       logger.debug("recorder: flush — buffer empty");
       return;
@@ -92,9 +106,9 @@ export class TelemetryRecorder {
   }
 
   stop(): void {
-    if (this.flushTimer) {
-      logger.debug("recorder: stopping");
-      clearInterval(this.flushTimer);
+    logger.debug("recorder: stopping");
+    if (this.flushTimer !== null) {
+      clearTimeout(this.flushTimer);
       this.flushTimer = null;
     }
   }
