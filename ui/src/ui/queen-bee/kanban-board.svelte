@@ -1,6 +1,6 @@
 <script lang="ts">
 import { onMount } from "svelte";
-import type { Card, Column } from "shared/board-types";
+import type { Card, Column, CoordinatorAction } from "shared/board-types";
 import KanbanCard from "./kanban-card.svelte";
 import CardDetail from "./card-detail.svelte";
 
@@ -152,7 +152,7 @@ async function handleRunCard(cardId: string) {
 
 async function handleRemediate(
   cardId: string,
-  action: "retry_with_patch" | "redevise" | "archive",
+  action: CoordinatorAction,
   suggestionId?: string
 ) {
   try {

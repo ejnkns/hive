@@ -93,6 +93,7 @@ export function registerDeviseRoutes(
             `Card title: ${card.title}`,
             `Current card description: ${card.description}`,
             `User context: ${body.prompt}`,
+            "When complete, output CARD_UPDATE followed by a json code fence containing description, acceptanceCriteria, relevantFiles, and requirementRefs for this card, then REQUIREMENTS_COMPLETE. Also call update_requirements with the full aligned project requirements document.",
           ].join("\n"),
           project.repoPath
         );
@@ -131,11 +132,24 @@ export function registerDeviseRoutes(
           project.repoPath
         );
         if (result.type === "complete") {
+          const patch = parseCardPatch(result.spec);
+          if (!patch) {
+            return reply.status(422).send({
+              error: "Card devise completed without a structured card update",
+            });
+          }
+          const card = deps.boardStore.updateCard(
+            projectId,
+            project.repoPath,
+            cardId,
+            patch
+          );
           return reply.send({
             complete: true,
             spec: result.spec,
             projectId,
             cardId,
+            card,
           });
         }
         return reply.send({ question: result.question, projectId, cardId });
@@ -291,4 +305,41 @@ export function registerDeviseRoutes(
       });
     }
   );
+}
+
+function parseCardPatch(content: string): {
+  description?: string;
+  acceptanceCriteria?: string[];
+  relevantFiles?: string[];
+  requirementRefs?: string[];
+} | null {
+  const match = content.match(/CARD_UPDATE\s*```json\s*([\s\S]*?)```/i);
+  if (!match) return null;
+  try {
+    const value = JSON.parse(match[1]) as Record<string, unknown>;
+    const patch = {
+      description:
+        typeof value.description === "string" ? value.description : undefined,
+      acceptanceCriteria: Array.isArray(value.acceptanceCriteria)
+        ? value.acceptanceCriteria.filter(
+            (item): item is string => typeof item === "string"
+          )
+        : undefined,
+      relevantFiles: Array.isArray(value.relevantFiles)
+        ? value.relevantFiles.filter(
+            (item): item is string => typeof item === "string"
+          )
+        : undefined,
+      requirementRefs: Array.isArray(value.requirementRefs)
+        ? value.requirementRefs.filter(
+            (item): item is string => typeof item === "string"
+          )
+        : undefined,
+    };
+    return Object.values(patch).some((value) => value !== undefined)
+      ? patch
+      : null;
+  } catch {
+    return null;
+  }
 }

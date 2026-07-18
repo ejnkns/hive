@@ -189,7 +189,7 @@ export function createWorkerSupervisor(
         return;
       }
 
-      const commitResult = commitChanges(worktreePath, `feat: ${card.title}`);
+      const commitResult = commitChanges(worktreePath, `worker: ${card.title}`);
 
       log.finishedAt = new Date().toISOString();
       writeWorkerLog(boardStore, projectId, repoPath, card.id, log);

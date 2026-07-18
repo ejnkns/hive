@@ -38,6 +38,15 @@ export function registerCoordinatorRoutes(
       if (!body.action)
         return reply.status(400).send({ error: "action is required" });
 
+      const suggestion = card.coordinatorLog?.suggestions?.find(
+        (item) => item.id === body.suggestionId && item.action === body.action
+      );
+      if (!suggestion) {
+        return reply
+          .status(400)
+          .send({ error: "Matching coordinator suggestion is required" });
+      }
+
       if (body.action === "archive") {
         return reply.send({
           card: deps.boardStore.archiveCard(
@@ -46,15 +55,6 @@ export function registerCoordinatorRoutes(
             cardId
           ),
         });
-      }
-
-      const suggestion = card.coordinatorLog?.suggestions?.find(
-        (item) => item.id === body.suggestionId && item.action === body.action
-      );
-      if (!suggestion) {
-        return reply
-          .status(400)
-          .send({ error: "Matching coordinator suggestion is required" });
       }
 
       if (body.action === "redevise") {

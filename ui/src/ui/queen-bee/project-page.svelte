@@ -18,6 +18,7 @@ let initialMessages = $state<{ role: string; content: string }[] | undefined>(
   undefined
 );
 let initialStatus = $state<string | undefined>(undefined);
+let autoPlanAfterReDevise = $state(false);
 
 onMount(() => {
   projectHeader.projectId = projectId;
@@ -121,6 +122,7 @@ async function handleApprove() {
       <KanbanBoard
         {projectId}
         onReDeviseStarted={() => {
+          autoPlanAfterReDevise = true;
           hasBoard = false;
           void restoreSession();
         }}
@@ -133,6 +135,10 @@ async function handleApprove() {
         onApprove={handleApprove}
         onComplete={() => {
           fetchRequirements();
+          if (autoPlanAfterReDevise) {
+            autoPlanAfterReDevise = false;
+            void handleApprove();
+          }
         }}
       />
     {/if}
