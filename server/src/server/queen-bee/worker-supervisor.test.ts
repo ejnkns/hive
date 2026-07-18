@@ -133,13 +133,16 @@ describe("WorkerSupervisor", () => {
     assert.equal(observedSource, "interrupted change\n");
   });
 
-  it("blocks an unrelated existing card branch without modifying it", async () => {
+  it("recovers from unrelated history without modifying the old worktree", async () => {
     const repoPath = createGitRepository();
     const boardStore = createBoardStore(() => {});
     const card = boardStore.addCard("project-1", repoPath, {
-      title: "Reject unrelated history",
-      description: "Do not overwrite an unrelated branch",
-      acceptanceCriteria: ["The existing worktree remains untouched"],
+      title: "Recover from unrelated history",
+      description: "Start safely from the current project revision",
+      acceptanceCriteria: [
+        "The existing worktree remains untouched",
+        "The worker runs in a fresh compatible worktree",
+      ],
       relevantFiles: ["source.txt"],
       dependencies: [],
       column: "in_progress",
@@ -149,10 +152,12 @@ describe("WorkerSupervisor", () => {
     writeFileSync(sentinelPath, "do not remove\n", "utf-8");
     const originalHead = git(repoPath, ["rev-parse", `qb/${card.id}`]);
     let modelCallCount = 0;
+    let observedWorkspace = "";
     const modelCaller: DeviseModelCaller = {
-      async call() {
+      async call(_messages, workspacePath) {
         modelCallCount += 1;
-        return terminalResponse("This should not run");
+        observedWorkspace ||= workspacePath;
+        return terminalResponse("Recovered safely");
       },
     };
     const supervisor = createWorkerSupervisor(
@@ -164,16 +169,23 @@ describe("WorkerSupervisor", () => {
 
     await supervisor.run("project-1", card, repoPath, "", "", () => {});
 
-    assert.equal(modelCallCount, 0);
+    assert.ok(modelCallCount > 0);
+    assert.notEqual(observedWorkspace, worktreePath);
     assert.equal(git(repoPath, ["rev-parse", `qb/${card.id}`]), originalHead);
     assert.equal(readFileSync(sentinelPath, "utf-8"), "do not remove\n");
+    const recoveryBranch = git(observedWorkspace, [
+      "rev-parse",
+      "--abbrev-ref",
+      "HEAD",
+    ]);
+    assert.match(recoveryBranch, new RegExp(`^qb/${card.id}-recovery-`));
     assert.equal(
-      boardStore.getBoard("project-1", repoPath).cards[0]?.column,
-      "ready"
+      git(repoPath, ["merge-base", "HEAD", recoveryBranch]),
+      git(repoPath, ["rev-parse", "HEAD"])
     );
   });
 
-  it("blocks a card branch created from a stale project revision", async () => {
+  it("recovers from a stale card branch without modifying it", async () => {
     const repoPath = createGitRepository();
     const boardStore = createBoardStore(() => {});
     const card = boardStore.addCard("project-1", repoPath, {
@@ -192,26 +204,38 @@ describe("WorkerSupervisor", () => {
     git(repoPath, ["commit", "--quiet", "-m", "advance project"]);
     const originalBranchHead = git(repoPath, ["rev-parse", `qb/${card.id}`]);
     let modelCallCount = 0;
+    let observedWorkspace = "";
     const supervisor = createWorkerSupervisor(
       boardStore,
       failingReviewer(),
       unusedCoordinator(),
       {
-        async call() {
+        async call(_messages, workspacePath) {
           modelCallCount += 1;
-          return terminalResponse("This should not run");
+          observedWorkspace ||= workspacePath;
+          return terminalResponse("Recovered safely");
         },
       }
     );
 
     await supervisor.run("project-1", card, repoPath, "", "", () => {});
 
-    assert.equal(modelCallCount, 0);
+    assert.ok(modelCallCount > 0);
+    assert.notEqual(observedWorkspace, worktreePath);
     assert.equal(
       git(repoPath, ["rev-parse", `qb/${card.id}`]),
       originalBranchHead
     );
     assert.equal(readFileSync(sentinelPath, "utf-8"), "preserve stale work\n");
+    const recoveryBranch = git(observedWorkspace, [
+      "rev-parse",
+      "--abbrev-ref",
+      "HEAD",
+    ]);
+    assert.equal(
+      git(repoPath, ["merge-base", "HEAD", recoveryBranch]),
+      git(repoPath, ["rev-parse", "HEAD"])
+    );
   });
 
   it("persists project-scoped progress before the worker finishes", async () => {

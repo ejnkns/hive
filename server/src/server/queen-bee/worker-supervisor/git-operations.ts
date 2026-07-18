@@ -2,7 +2,7 @@
 
 import { execFileSync, execSync } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative, resolve } from "node:path";
 
 export type GitResult = {
   ok: boolean;
@@ -10,7 +10,13 @@ export type GitResult = {
 };
 
 export type PreparedWorktree =
-  | { ok: true; message: string; path: string; baseCommit: string }
+  | {
+      ok: true;
+      message: string;
+      path: string;
+      baseCommit: string;
+      branchName: string;
+    }
   | { ok: false; message: string };
 
 export function prepareWorktree(
@@ -28,33 +34,31 @@ export function prepareWorktree(
     if (existsSync(worktreeDir)) {
       const currentBranch = getCurrentBranch(worktreeDir);
       if (currentBranch !== branchName) {
-        return {
-          ok: false,
-          message: `Existing worktree is on '${currentBranch}', expected '${branchName}'`,
-        };
+        return prepareRecoveryWorktree(repoPath, cardId, worktreesDir);
       }
       const baseCommit = getMergeBase(repoPath, branchName);
       if (!baseCommit) {
-        return unrelatedHistory(branchName);
+        return prepareRecoveryWorktree(repoPath, cardId, worktreesDir);
       }
       if (baseCommit !== getHeadCommit(repoPath)) {
-        return staleHistory(branchName);
+        return prepareRecoveryWorktree(repoPath, cardId, worktreesDir);
       }
       return {
         ok: true,
         message: `Reusing worktree at ${worktreeDir}`,
         path: worktreeDir,
         baseCommit,
+        branchName,
       };
     }
 
     if (branchExists) {
       const baseCommit = getMergeBase(repoPath, branchName);
       if (!baseCommit) {
-        return unrelatedHistory(branchName);
+        return prepareRecoveryWorktree(repoPath, cardId, worktreesDir);
       }
       if (baseCommit !== getHeadCommit(repoPath)) {
-        return staleHistory(branchName);
+        return prepareRecoveryWorktree(repoPath, cardId, worktreesDir);
       }
       execFileSync("git", ["worktree", "add", worktreeDir, branchName], {
         cwd: repoPath,
@@ -66,6 +70,7 @@ export function prepareWorktree(
         message: `Restored worktree at ${worktreeDir}`,
         path: worktreeDir,
         baseCommit,
+        branchName,
       };
     }
 
@@ -84,6 +89,7 @@ export function prepareWorktree(
       message: `Worktree created at ${worktreeDir}`,
       path: worktreeDir,
       baseCommit,
+      branchName,
     };
   } catch (err) {
     return {
@@ -123,17 +129,77 @@ function getMergeBase(repoPath: string, branchName: string): string | null {
   }
 }
 
-function unrelatedHistory(branchName: string): PreparedWorktree {
-  return {
-    ok: false,
-    message: `Existing branch '${branchName}' has no shared history with the project HEAD`,
-  };
-}
+function prepareRecoveryWorktree(
+  repoPath: string,
+  cardId: string,
+  worktreesDir: string
+): PreparedWorktree {
+  const baseCommit = getHeadCommit(repoPath);
+  const recoveryBase = `${cardId}-recovery-${baseCommit.slice(0, 8)}`;
 
-function staleHistory(branchName: string): PreparedWorktree {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const suffix = attempt === 0 ? "" : `-${String(attempt + 1)}`;
+    const recoveryId = `${recoveryBase}${suffix}`;
+    const branchName = `qb/${recoveryId}`;
+    const worktreeDir = join(worktreesDir, recoveryId);
+
+    if (existsSync(worktreeDir)) {
+      if (
+        getCurrentBranch(worktreeDir) === branchName &&
+        getMergeBase(repoPath, branchName) === baseCommit
+      ) {
+        return {
+          ok: true,
+          message: `Reusing recovery worktree at ${worktreeDir}`,
+          path: worktreeDir,
+          baseCommit,
+          branchName,
+        };
+      }
+      continue;
+    }
+
+    if (hasBranch(repoPath, branchName)) {
+      if (getMergeBase(repoPath, branchName) !== baseCommit) continue;
+      try {
+        execFileSync("git", ["worktree", "add", worktreeDir, branchName], {
+          cwd: repoPath,
+          encoding: "utf-8",
+          timeout: 30_000,
+        });
+        return {
+          ok: true,
+          message: `Restored recovery worktree at ${worktreeDir}`,
+          path: worktreeDir,
+          baseCommit,
+          branchName,
+        };
+      } catch {
+        continue;
+      }
+    }
+
+    execFileSync(
+      "git",
+      ["worktree", "add", "-b", branchName, worktreeDir, "HEAD"],
+      {
+        cwd: repoPath,
+        encoding: "utf-8",
+        timeout: 30_000,
+      }
+    );
+    return {
+      ok: true,
+      message: `Created recovery worktree at ${worktreeDir}`,
+      path: worktreeDir,
+      baseCommit,
+      branchName,
+    };
+  }
+
   return {
     ok: false,
-    message: `Existing branch '${branchName}' was created from a stale project revision`,
+    message: `Could not allocate a recovery worktree for card '${cardId}'`,
   };
 }
 
@@ -252,15 +318,27 @@ export function createPullRequest(
   }
 }
 
-export function removeWorktree(repoPath: string, cardId: string): GitResult {
-  const worktreeDir = join(repoPath, ".worktrees", cardId);
+export function removeWorktree(
+  repoPath: string,
+  worktreePath: string
+): GitResult {
+  const worktreesDir = resolve(repoPath, ".worktrees");
+  const resolvedWorktree = resolve(worktreePath);
+  const relativePath = relative(worktreesDir, resolvedWorktree);
+  if (
+    !relativePath ||
+    relativePath.startsWith("..") ||
+    relativePath.includes("/../")
+  ) {
+    return { ok: false, message: "Refusing to remove an unsafe worktree path" };
+  }
 
-  if (!existsSync(worktreeDir)) {
+  if (!existsSync(resolvedWorktree)) {
     return { ok: true, message: "Worktree does not exist" };
   }
 
   try {
-    execSync(`git worktree remove "${worktreeDir}" --force`, {
+    execFileSync("git", ["worktree", "remove", resolvedWorktree, "--force"], {
       cwd: repoPath,
       encoding: "utf-8",
       timeout: 10_000,

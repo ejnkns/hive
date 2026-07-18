@@ -131,7 +131,7 @@ export function createWorkerSupervisor(
     }
 
     const worktreePath = wtResult.path;
-    const branchName = `qb/${card.id}`;
+    const branchName = wtResult.branchName;
 
     onEvent({ type: "worker_started", cardId: card.id });
     boardStore.moveCard(projectId, repoPath, card.id, "in_progress");
@@ -426,7 +426,7 @@ async function runReviewer(
         reviewerLog,
         column: "done",
       });
-      removeWorktree(repoPath, card.id);
+      removeWorktree(repoPath, worktreePath);
       onEvent({
         type: "worker_content",
         cardId: card.id,
