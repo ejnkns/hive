@@ -31,7 +31,7 @@ export function buildReviewPackage(
     revisions: {
       baseCommit,
       headCommit,
-      integrationCommit: git(repoPath, ["rev-parse", "HEAD"]),
+      integrationCommit: git(repoPath, ["rev-parse", "hive-main"]),
       cardRevision: digest({
         title: card.title,
         description: card.description,

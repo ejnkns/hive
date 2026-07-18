@@ -21,10 +21,8 @@ export function saveCard(repoPath: string, card: Card): void {
     handover: card.handover,
     coordinatorLog: card.coordinatorLog,
     requirementRefs: card.requirementRefs,
+    workAttempts: card.workAttempts,
     archivedAt: card.archivedAt,
-    branchSummary: card.branchSummary,
-    prUrl: card.prUrl,
-    prError: card.prError,
   };
 
   writeFileSync(cardPath, JSON.stringify(data, null, 2), "utf-8");

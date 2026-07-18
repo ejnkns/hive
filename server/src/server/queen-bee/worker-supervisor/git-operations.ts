@@ -12,36 +12,6 @@ export type GitResult = {
   message: string;
 };
 
-export function commitChanges(
-  worktreePath: string,
-  message: string
-): GitResult {
-  try {
-    execSync(`git add -A`, {
-      cwd: worktreePath,
-      encoding: "utf-8",
-      timeout: 10_000,
-    });
-
-    try {
-      execSync(`git commit -m "${message.replace(/"/g, '\\"')}"`, {
-        cwd: worktreePath,
-        encoding: "utf-8",
-        timeout: 10_000,
-      });
-    } catch {
-      return { ok: true, message: "No changes to commit" };
-    }
-
-    return { ok: true, message: "Changes committed" };
-  } catch (err) {
-    return {
-      ok: false,
-      message: err instanceof Error ? err.message : "Failed to commit",
-    };
-  }
-}
-
 export function getDiff(worktreePath: string, baseBranch: string): string {
   try {
     return execSync(`git diff "${baseBranch}"...HEAD`, {
@@ -66,39 +36,6 @@ export function getStatus(worktreePath: string): string {
     );
   } catch {
     return "Unable to read git status";
-  }
-}
-
-export function createPullRequest(
-  worktreePath: string,
-  branchName: string,
-  title: string,
-  body: string
-): { ok: boolean; url?: string; message?: string } {
-  try {
-    const remote = execFileSync("git", ["remote", "get-url", "origin"], {
-      cwd: worktreePath,
-      encoding: "utf-8",
-      timeout: 5_000,
-    }).trim();
-    if (!remote) return { ok: false, message: "No origin remote configured" };
-
-    execFileSync("git", ["push", "origin", branchName], {
-      cwd: worktreePath,
-      encoding: "utf-8",
-      timeout: 60_000,
-    });
-    const url = execFileSync(
-      "gh",
-      ["pr", "create", "--head", branchName, "--title", title, "--body", body],
-      { cwd: worktreePath, encoding: "utf-8", timeout: 60_000 }
-    ).trim();
-    return { ok: true, url };
-  } catch (err) {
-    return {
-      ok: false,
-      message: err instanceof Error ? err.message : "PR creation failed",
-    };
   }
 }
 

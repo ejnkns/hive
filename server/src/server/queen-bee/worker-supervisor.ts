@@ -3,7 +3,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import type { WorkerHandover } from "shared/board-types";
+import type { WorkAttempt, WorkerHandover } from "shared/board-types";
 import type { Message } from "shared/message";
 import type { BoardStore, Card } from "./board-store";
 import type { Coordinator } from "./coordinator";
@@ -117,7 +117,8 @@ export function createWorkerSupervisor(
       content: "",
     };
 
-    const wtResult = prepareWorktree(repoPath, card.id);
+    const attemptNumber = nextAttemptNumber(card);
+    const wtResult = prepareWorktree(repoPath, card.id, attemptNumber);
     if (!wtResult.ok) {
       log.error = wtResult.message;
       log.finishedAt = new Date().toISOString();
@@ -132,8 +133,19 @@ export function createWorkerSupervisor(
     }
 
     const worktreePath = wtResult.path;
+    let workAttempts = beginAttempt(
+      card,
+      wtResult.branchName,
+      worktreePath,
+      wtResult.baseCommit,
+      attemptNumber,
+      startedAt
+    );
     onEvent({ type: "worker_started", cardId: card.id });
-    boardStore.moveCard(projectId, repoPath, card.id, "in_progress");
+    boardStore.updateCard(projectId, repoPath, card.id, {
+      column: "in_progress",
+      workAttempts,
+    });
     const persistLog = () =>
       writeWorkerLog(boardStore, projectId, repoPath, card.id, log);
     persistLog();
@@ -143,9 +155,15 @@ export function createWorkerSupervisor(
 
     const validation = validateCard(card, worktreePath);
     if (validation !== null) {
+      workAttempts = updateCurrentAttempt(workAttempts, {
+        status: "worker_error",
+      });
       log.error = validation.problem;
       log.finishedAt = new Date().toISOString();
-      writeWorkerLog(boardStore, projectId, repoPath, card.id, log);
+      boardStore.updateCard(projectId, repoPath, card.id, {
+        workerLog: log,
+        workAttempts,
+      });
       await handleHandover(
         boardStore,
         coordinator,
@@ -204,13 +222,20 @@ export function createWorkerSupervisor(
         reviewer,
         onEvent,
         baseCommit,
-        result.completion
+        result.completion,
+        workAttempts
       );
     } catch (err) {
+      workAttempts = updateCurrentAttempt(workAttempts, {
+        status: "worker_error",
+      });
       log.error = err instanceof Error ? err.message : "Worker failed";
       log.finishedAt = new Date().toISOString();
-      writeWorkerLog(boardStore, projectId, repoPath, card.id, log);
-      boardStore.moveCard(projectId, repoPath, card.id, "ready");
+      boardStore.updateCard(projectId, repoPath, card.id, {
+        workerLog: log,
+        workAttempts,
+        column: "ready",
+      });
       onEvent({
         type: "worker_error",
         cardId: card.id,
@@ -440,7 +465,8 @@ async function runReviewer(
   reviewer: Reviewer,
   onEvent: (event: WorkerEvent) => void,
   baseCommit: string,
-  completion: WorkerCompletion
+  completion: WorkerCompletion,
+  workAttempts: WorkAttempt[]
 ): Promise<void> {
   try {
     const reviewPackage = buildReviewPackage(
@@ -460,9 +486,16 @@ async function runReviewer(
       reviewPackageId: reviewPackage.id,
       reviewedAt: new Date().toISOString(),
     };
+    const reviewedAttempts = updateCurrentAttempt(workAttempts, {
+      status: "reviewed",
+      reviewedHead: reviewPackage.revisions.headCommit,
+      reviewedIntegrationRevision: reviewPackage.revisions.integrationCommit,
+      reviewPackageId: reviewPackage.id,
+    });
 
     boardStore.updateCard(projectId, repoPath, card.id, {
       reviewerLog,
+      workAttempts: reviewedAttempts,
       column: "reviewing",
     });
     onEvent({
@@ -481,6 +514,9 @@ async function runReviewer(
         error,
         reviewedAt: new Date().toISOString(),
       },
+      workAttempts: updateCurrentAttempt(workAttempts, {
+        status: "review_error",
+      }),
       column: "reviewing",
     });
     onEvent({
@@ -489,6 +525,53 @@ async function runReviewer(
       error: `Reviewer Agent failed: ${error}`,
     });
   }
+}
+
+function nextAttemptNumber(card: Card): number {
+  const currentAttempt = card.workAttempts?.at(-1);
+  if (card.column === "in_progress" && currentAttempt?.status === "working") {
+    return currentAttempt.attempt;
+  }
+  return (currentAttempt?.attempt ?? 0) + 1;
+}
+
+function beginAttempt(
+  card: Card,
+  branchName: string,
+  worktreePath: string,
+  baseCommit: string,
+  attempt: number,
+  startedAt: string
+): WorkAttempt[] {
+  const previous = card.workAttempts ?? [];
+  const current = previous.at(-1);
+  if (
+    current?.attempt === attempt &&
+    current.branchName === branchName &&
+    current.status === "working"
+  ) {
+    return previous;
+  }
+  return [
+    ...previous,
+    {
+      attempt,
+      branchName,
+      worktreePath,
+      baseCommit,
+      status: "working",
+      startedAt,
+    },
+  ];
+}
+
+function updateCurrentAttempt(
+  workAttempts: WorkAttempt[],
+  patch: Partial<WorkAttempt>
+): WorkAttempt[] {
+  return workAttempts.map((attempt, index) =>
+    index === workAttempts.length - 1 ? { ...attempt, ...patch } : attempt
+  );
 }
 
 async function handleHandover(

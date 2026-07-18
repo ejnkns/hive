@@ -23,10 +23,8 @@ export function saveBoard(repoPath: string, board: Board): void {
       handover: c.handover,
       coordinatorLog: c.coordinatorLog,
       requirementRefs: c.requirementRefs,
+      workAttempts: c.workAttempts,
       archivedAt: c.archivedAt,
-      branchSummary: c.branchSummary,
-      prUrl: c.prUrl,
-      prError: c.prError,
     })),
   };
 

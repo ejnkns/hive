@@ -116,6 +116,34 @@ async function handleRunCard(cardId: string) {
   }
 }
 
+async function handleAcceptCard(cardId: string) {
+  const response = await fetch(
+    `/api/queen-bee/${projectId}/cards/${cardId}/accept`,
+    { method: "POST" }
+  );
+  const result = (await response.json()) as { card?: Card; error?: string };
+  if (!response.ok || !result.card) {
+    throw new Error(result.error ?? "Could not accept reviewed work");
+  }
+  handleCardUpdated(result.card);
+}
+
+async function handleRequestChanges(cardId: string, guidance: string) {
+  const response = await fetch(
+    `/api/queen-bee/${projectId}/cards/${cardId}/request-changes`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ guidance }),
+    }
+  );
+  const result = (await response.json()) as { card?: Card; error?: string };
+  if (!response.ok || !result.card) {
+    throw new Error(result.error ?? "Could not request changes");
+  }
+  handleCardUpdated(result.card);
+}
+
 async function handleRemediate(
   cardId: string,
   action: CoordinatorAction,
@@ -292,6 +320,9 @@ onMount(() => {
       }}
       onCardUpdated={handleCardUpdated}
       onRun={() => handleRunCard(selectedCard!.id)}
+      onAccept={() => handleAcceptCard(selectedCard!.id)}
+      onRequestChanges={(guidance) =>
+        handleRequestChanges(selectedCard!.id, guidance)}
       onRemediate={(action, suggestionId) =>
         handleRemediate(selectedCard!.id, action, suggestionId)}
     />

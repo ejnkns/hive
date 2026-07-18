@@ -35,6 +35,29 @@ export type ReviewerLog = {
   reviewedAt: string;
 };
 
+export type WorkAttempt = {
+  attempt: number;
+  branchName: string;
+  worktreePath: string;
+  baseCommit: string;
+  status:
+    | "working"
+    | "worker_error"
+    | "reviewed"
+    | "review_error"
+    | "changes_requested"
+    | "accepted";
+  startedAt: string;
+  reviewedHead?: string;
+  reviewedIntegrationRevision?: string;
+  reviewPackageId?: string;
+  decision?: {
+    type: "accept" | "request_changes";
+    guidance?: string;
+    decidedAt: string;
+  };
+};
+
 export type WorkerHandover = {
   problem: string;
   attempted: string[];
@@ -80,8 +103,6 @@ export type Card = {
   handover?: WorkerHandover;
   coordinatorLog?: CoordinatorLog;
   requirementRefs?: string[];
+  workAttempts?: WorkAttempt[];
   archivedAt?: string;
-  branchSummary?: string;
-  prUrl?: string;
-  prError?: string;
 };

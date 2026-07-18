@@ -9,6 +9,8 @@ let {
   onClose,
   onCardUpdated,
   onRun,
+  onAccept,
+  onRequestChanges,
   onRemediate,
 }: Props = $props();
 
@@ -19,6 +21,8 @@ type Props = {
   onClose: () => void;
   onCardUpdated: (card: Card) => void;
   onRun?: () => void;
+  onAccept?: () => Promise<void>;
+  onRequestChanges?: (guidance: string) => Promise<void>;
   onRemediate?: (
     action: "retry_with_patch" | "redevise" | "archive",
     suggestionId?: string
@@ -27,6 +31,41 @@ type Props = {
 
 let refining = $state(false);
 let consumedInitialQuestion = $state("");
+let requestingChanges = $state(false);
+let decisionGuidance = $state("");
+let decisionError = $state<string | null>(null);
+let deciding = $state(false);
+
+async function acceptWork() {
+  if (!onAccept) return;
+  deciding = true;
+  decisionError = null;
+  try {
+    await onAccept();
+  } catch (error) {
+    decisionError =
+      error instanceof Error ? error.message : "Could not accept work";
+  } finally {
+    deciding = false;
+  }
+}
+
+async function requestChanges() {
+  const guidance = decisionGuidance.trim();
+  if (!onRequestChanges || !guidance) return;
+  deciding = true;
+  decisionError = null;
+  try {
+    await onRequestChanges(guidance);
+    requestingChanges = false;
+    decisionGuidance = "";
+  } catch (error) {
+    decisionError =
+      error instanceof Error ? error.message : "Could not request changes";
+  } finally {
+    deciding = false;
+  }
+}
 
 $effect(() => {
   if (
@@ -224,6 +263,36 @@ const COLUMN_LABELS: Record<Column, string> = {
           onCancel={() => (refining = false)}
         />
       {/if}
+
+      {#if requestingChanges}
+        <div class="section decision-input">
+          <div class="section-label">Guidance for the next attempt</div>
+          <textarea
+            bind:value={decisionGuidance}
+            rows="3"
+            placeholder="What should the Worker Agent change?"
+            disabled={deciding}
+          ></textarea>
+          <div class="decision-input-actions">
+            <button
+              class="btn btn-run"
+              onclick={requestChanges}
+              disabled={deciding || !decisionGuidance.trim()}
+            >
+              Request changes
+            </button>
+            <button
+              class="btn"
+              onclick={() => (requestingChanges = false)}
+              disabled={deciding}
+            >Cancel</button>
+          </div>
+        </div>
+      {/if}
+
+      {#if decisionError}
+        <div class="log-error">{decisionError}</div>
+      {/if}
     </div>
 
     <div class="panel-actions">
@@ -236,6 +305,18 @@ const COLUMN_LABELS: Record<Column, string> = {
         <button class="btn btn-run" onclick={onRun}>
           {card.column === "in_progress" ? "Retry Worker" : "Run Worker"}
         </button>
+      {/if}
+      {#if card.column === "reviewing" && card.reviewerLog?.status === "complete" && onAccept && onRequestChanges}
+        <button class="btn btn-run" onclick={acceptWork} disabled={deciding}>
+          {deciding ? "Applying decision..." : "Accept into hive-main"}
+        </button>
+        {#if !requestingChanges}
+          <button
+            class="btn"
+            onclick={() => (requestingChanges = true)}
+            disabled={deciding}
+          >Request changes</button>
+        {/if}
       {/if}
     </div>
   </div>
@@ -459,6 +540,25 @@ const COLUMN_LABELS: Record<Column, string> = {
     color: var(--muted);
     font-size: 0.6875rem;
     margin-top: 0.25rem;
+  }
+
+  .decision-input textarea {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    box-sizing: border-box;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.75rem;
+    padding: 0.5rem;
+    resize: vertical;
+    width: 100%;
+  }
+
+  .decision-input-actions {
+    display: flex;
+    gap: 0.375rem;
+    margin-top: 0.5rem;
   }
 
   .handover-problem {

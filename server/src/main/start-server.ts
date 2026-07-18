@@ -21,6 +21,7 @@ import {
   createBoardStore,
   createCoordinator,
   createDeviseEngine,
+  createIntegrationManager,
   createPlanner,
   createProjectStore,
   createReviewer,
@@ -29,6 +30,7 @@ import {
   registerCoordinatorRoutes,
   registerDeviseRoutes,
   registerProjectRoutes,
+  registerWorkDecisionRoutes,
   registerWorkerRoutes,
 } from "../server/queen-bee";
 import {
@@ -63,6 +65,7 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
   const planner = createPlanner(boardStore);
   const reviewer = createReviewer();
   const coordinator = createCoordinator();
+  const integrationManager = createIntegrationManager();
   const workerSupervisor = createWorkerSupervisor(
     boardStore,
     reviewer,
@@ -100,6 +103,11 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     onWorkerEvent: (projectId, event) => {
       emitWorkerEvent(event, projectId);
     },
+  });
+  registerWorkDecisionRoutes(server, {
+    boardStore,
+    projectStore,
+    integrationManager,
   });
 
   listen(server, config);

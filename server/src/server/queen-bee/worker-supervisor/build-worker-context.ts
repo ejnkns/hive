@@ -78,6 +78,16 @@ function buildTaskPrompt(card: Card): string {
     parts.push("");
   }
 
+  const requestedChanges = card.workAttempts?.at(-1)?.decision;
+  if (
+    requestedChanges?.type === "request_changes" &&
+    requestedChanges.guidance
+  ) {
+    parts.push("### User-requested changes");
+    parts.push(requestedChanges.guidance);
+    parts.push("");
+  }
+
   parts.push("### Instructions");
   parts.push(
     "Implement this task. Read the relevant files first, create meaningful commits with commit_work, verify the final commit, and finish with submit_work."

@@ -2,7 +2,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ReviewerLog } from "shared/board-types";
+import type { ReviewerLog, WorkAttempt } from "shared/board-types";
 import type { Board, Card } from "../board-store";
 
 type LegacyReviewerLog = {
@@ -46,10 +46,8 @@ export function loadBoard(projectId: string, repoPath: string): Board {
         handover?: Card["handover"];
         coordinatorLog?: Card["coordinatorLog"];
         requirementRefs?: string[];
+        workAttempts?: WorkAttempt[];
         archivedAt?: string;
-        branchSummary?: string;
-        prUrl?: string;
-        prError?: string;
       }[];
     };
 
@@ -80,10 +78,10 @@ export function loadBoard(projectId: string, repoPath: string): Board {
             requirementRefs: Array.isArray(c.requirementRefs)
               ? c.requirementRefs
               : undefined,
+            workAttempts: Array.isArray(c.workAttempts)
+              ? c.workAttempts
+              : undefined,
             archivedAt: c.archivedAt,
-            branchSummary: c.branchSummary,
-            prUrl: c.prUrl,
-            prError: c.prError,
           });
         }
       }

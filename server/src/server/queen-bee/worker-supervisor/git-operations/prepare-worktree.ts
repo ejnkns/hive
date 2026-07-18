@@ -3,6 +3,7 @@
 import { execFileSync, execSync } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { ensureIntegrationBranch } from "../../integration-manager";
 
 export type PreparedWorktree =
   | {
@@ -16,31 +17,59 @@ export type PreparedWorktree =
 
 export function prepareWorktree(
   repoPath: string,
-  cardId: string
+  cardId: string,
+  attempt = 1
 ): PreparedWorktree {
   const worktreesDir = join(repoPath, ".worktrees");
-  const worktreeDir = join(worktreesDir, cardId);
-  const branchName = `qb/${cardId}`;
+  const worktreeDir = join(
+    worktreesDir,
+    attempt === 1 ? cardId : `${cardId}-attempt-${String(attempt)}`
+  );
+  const branchName = `hive/${cardId}/attempt-${String(attempt)}`;
+  const integration = ensureIntegrationBranch(repoPath);
 
   try {
     mkdirSync(worktreesDir, { recursive: true });
     if (existsSync(worktreeDir)) {
-      const baseCommit = compatibleBaseCommit(repoPath, branchName);
-      if (getCurrentBranch(worktreeDir) !== branchName || !baseCommit) {
-        return prepareRecoveryWorktree(repoPath, cardId, worktreesDir);
+      const currentBranch = getCurrentBranch(worktreeDir);
+      const legacyBranch = `qb/${cardId}`;
+      const reusableBranch =
+        currentBranch === branchName ||
+        (attempt === 1 && currentBranch === legacyBranch);
+      const baseCommit = reusableBranch
+        ? compatibleBaseCommit(repoPath, currentBranch, integration.revision)
+        : null;
+      if (!baseCommit) {
+        return prepareRecoveryWorktree(
+          repoPath,
+          cardId,
+          worktreesDir,
+          attempt,
+          integration.revision
+        );
       }
       return prepared(
         `Reusing worktree at ${worktreeDir}`,
         worktreeDir,
         baseCommit,
-        branchName
+        currentBranch
       );
     }
 
     if (hasBranch(repoPath, branchName)) {
-      const baseCommit = compatibleBaseCommit(repoPath, branchName);
+      const baseCommit = compatibleBaseCommit(
+        repoPath,
+        branchName,
+        integration.revision
+      );
       if (!baseCommit) {
-        return prepareRecoveryWorktree(repoPath, cardId, worktreesDir);
+        return prepareRecoveryWorktree(
+          repoPath,
+          cardId,
+          worktreesDir,
+          attempt,
+          integration.revision
+        );
       }
       execFileSync("git", ["worktree", "add", worktreeDir, branchName], {
         cwd: repoPath,
@@ -55,10 +84,38 @@ export function prepareWorktree(
       );
     }
 
-    const baseCommit = getHeadCommit(repoPath);
+    const legacyBranch = `qb/${cardId}`;
+    if (attempt === 1 && hasBranch(repoPath, legacyBranch)) {
+      const baseCommit = compatibleBaseCommit(
+        repoPath,
+        legacyBranch,
+        integration.revision
+      );
+      if (baseCommit) {
+        execFileSync("git", ["worktree", "add", worktreeDir, legacyBranch], {
+          cwd: repoPath,
+          encoding: "utf-8",
+          timeout: 30_000,
+        });
+        return prepared(
+          `Restored legacy worktree at ${worktreeDir}`,
+          worktreeDir,
+          baseCommit,
+          legacyBranch
+        );
+      }
+    }
+
     execFileSync(
       "git",
-      ["worktree", "add", "-b", branchName, worktreeDir, "HEAD"],
+      [
+        "worktree",
+        "add",
+        "-b",
+        branchName,
+        worktreeDir,
+        integration.branchName,
+      ],
       {
         cwd: repoPath,
         encoding: "utf-8",
@@ -68,7 +125,7 @@ export function prepareWorktree(
     return prepared(
       `Worktree created at ${worktreeDir}`,
       worktreeDir,
-      baseCommit,
+      integration.revision,
       branchName
     );
   } catch (err) {
@@ -83,26 +140,24 @@ export function prepareWorktree(
 function prepareRecoveryWorktree(
   repoPath: string,
   cardId: string,
-  worktreesDir: string
+  worktreesDir: string,
+  attempt: number,
+  integrationRevision: string
 ): PreparedWorktree {
-  const baseCommit = getHeadCommit(repoPath);
-  const recoveryBase = `${cardId}-recovery-${baseCommit.slice(0, 8)}`;
+  const recoveryBase = `${cardId}-attempt-${String(attempt)}-recovery-${integrationRevision.slice(0, 8)}`;
 
-  for (let attempt = 0; attempt < 100; attempt++) {
-    const suffix = attempt === 0 ? "" : `-${String(attempt + 1)}`;
+  for (let allocation = 0; allocation < 100; allocation++) {
+    const suffix = allocation === 0 ? "" : `-${String(allocation + 1)}`;
     const recoveryId = `${recoveryBase}${suffix}`;
-    const branchName = `qb/${recoveryId}`;
+    const branchName = `hive/${cardId}/attempt-${String(attempt)}-recovery${suffix}`;
     const worktreeDir = join(worktreesDir, recoveryId);
 
     if (existsSync(worktreeDir)) {
-      if (
-        getCurrentBranch(worktreeDir) === branchName &&
-        getMergeBase(repoPath, branchName) === baseCommit
-      ) {
+      if (getCurrentBranch(worktreeDir) === branchName) {
         return prepared(
           `Reusing recovery worktree at ${worktreeDir}`,
           worktreeDir,
-          baseCommit,
+          integrationRevision,
           branchName
         );
       }
@@ -110,7 +165,6 @@ function prepareRecoveryWorktree(
     }
 
     if (hasBranch(repoPath, branchName)) {
-      if (getMergeBase(repoPath, branchName) !== baseCommit) continue;
       try {
         execFileSync("git", ["worktree", "add", worktreeDir, branchName], {
           cwd: repoPath,
@@ -120,7 +174,7 @@ function prepareRecoveryWorktree(
         return prepared(
           `Restored recovery worktree at ${worktreeDir}`,
           worktreeDir,
-          baseCommit,
+          integrationRevision,
           branchName
         );
       } catch {
@@ -130,7 +184,7 @@ function prepareRecoveryWorktree(
 
     execFileSync(
       "git",
-      ["worktree", "add", "-b", branchName, worktreeDir, "HEAD"],
+      ["worktree", "add", "-b", branchName, worktreeDir, "hive-main"],
       {
         cwd: repoPath,
         encoding: "utf-8",
@@ -140,7 +194,7 @@ function prepareRecoveryWorktree(
     return prepared(
       `Created recovery worktree at ${worktreeDir}`,
       worktreeDir,
-      baseCommit,
+      integrationRevision,
       branchName
     );
   }
@@ -153,10 +207,11 @@ function prepareRecoveryWorktree(
 
 function compatibleBaseCommit(
   repoPath: string,
-  branchName: string
+  branchName: string,
+  integrationRevision: string
 ): string | null {
-  const baseCommit = getMergeBase(repoPath, branchName);
-  return baseCommit === getHeadCommit(repoPath) ? baseCommit : null;
+  const baseCommit = getMergeBase(repoPath, "hive-main", branchName);
+  return baseCommit === integrationRevision ? baseCommit : null;
 }
 
 function prepared(
@@ -185,27 +240,19 @@ function hasBranch(repoPath: string, branchName: string): boolean {
   }
 }
 
-function getMergeBase(repoPath: string, branchName: string): string | null {
+function getMergeBase(
+  repoPath: string,
+  leftBranch: string,
+  rightBranch: string
+): string | null {
   try {
-    return execFileSync("git", ["merge-base", "HEAD", branchName], {
+    return execFileSync("git", ["merge-base", leftBranch, rightBranch], {
       cwd: repoPath,
       encoding: "utf-8",
       timeout: 5_000,
     }).trim();
   } catch {
     return null;
-  }
-}
-
-function getHeadCommit(repoPath: string): string {
-  try {
-    return execSync("git rev-parse HEAD", {
-      cwd: repoPath,
-      encoding: "utf-8",
-      timeout: 5_000,
-    }).trim();
-  } catch {
-    return "HEAD~1";
   }
 }
 

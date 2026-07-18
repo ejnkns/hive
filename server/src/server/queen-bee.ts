@@ -11,11 +11,14 @@ export { createProjectStore } from "./queen-bee/create-project-store";
 export type { DeviseEngine } from "./queen-bee/devise-engine";
 export { createDeviseEngine } from "./queen-bee/devise-engine";
 export { registerDeviseRoutes } from "./queen-bee/devise-routes";
+export type { IntegrationManager } from "./queen-bee/integration-manager";
+export { createIntegrationManager } from "./queen-bee/integration-manager";
 export type { Planner } from "./queen-bee/planner";
 export { createPlanner } from "./queen-bee/planner";
 export { registerProjectRoutes } from "./queen-bee/project-routes";
 export type { Reviewer, ReviewerVerdict } from "./queen-bee/reviewer";
 export { createReviewer } from "./queen-bee/reviewer";
+export { registerWorkDecisionRoutes } from "./queen-bee/work-decision-routes";
 export { registerWorkerRoutes } from "./queen-bee/worker-routes";
 export type {
   WorkerEvent,

@@ -87,16 +87,17 @@ describe("WorkerSupervisor", () => {
 
     await supervisor.run("project-1", card, repoPath, "", "", () => {});
 
-    const branch = git(repoPath, ["branch", "--list", `qb/${card.id}`]);
+    const branchName = `hive/${card.id}/attempt-1`;
+    const branch = git(repoPath, ["branch", "--list", branchName]);
     assert.notEqual(branch, "");
     assert.match(completionCorrection, /submit_work/);
     assert.equal(reviewerCalls, 1);
     assert.equal(
-      git(repoPath, ["log", "-1", "--format=%s", `qb/${card.id}`]),
+      git(repoPath, ["log", "-1", "--format=%s", branchName]),
       "worker: implement explicit completion"
     );
     assert.equal(
-      git(repoPath, ["rev-list", "--count", `HEAD..qb/${card.id}`]),
+      git(repoPath, ["rev-list", "--count", `hive-main..${branchName}`]),
       "1"
     );
   });
@@ -141,7 +142,11 @@ describe("WorkerSupervisor", () => {
     assert.equal(saved?.column, "unfulfillable");
     assert.match(saved?.handover?.problem ?? "", /Completion Gate/);
     assert.equal(
-      git(repoPath, ["rev-list", "--count", `HEAD..qb/${card.id}`]),
+      git(repoPath, [
+        "rev-list",
+        "--count",
+        `hive-main..hive/${card.id}/attempt-1`,
+      ]),
       "0"
     );
     assert.equal(
@@ -324,7 +329,10 @@ describe("WorkerSupervisor", () => {
       "--abbrev-ref",
       "HEAD",
     ]);
-    assert.match(recoveryBranch, new RegExp(`^qb/${card.id}-recovery-`));
+    assert.match(
+      recoveryBranch,
+      new RegExp(`^hive/${card.id}/attempt-1-recovery`)
+    );
     assert.equal(
       git(repoPath, ["merge-base", "HEAD", recoveryBranch]),
       git(repoPath, ["rev-parse", "HEAD"])
