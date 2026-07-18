@@ -6,7 +6,10 @@ import type { WorkerHandover } from "shared/board-types";
 import type { Message } from "shared/message";
 import type { BoardStore, Card } from "./board-store";
 import type { Coordinator } from "./coordinator";
-import { createDeviseModelCaller } from "./devise-engine/create-devise-model-caller";
+import {
+  createDeviseModelCaller,
+  type DeviseModelCaller,
+} from "./devise-engine/create-devise-model-caller";
 import { readRequirements, requirementsRevision } from "./requirements-store";
 import type { Reviewer } from "./reviewer";
 import { buildWorkerContext } from "./worker-supervisor/build-worker-context";
@@ -55,9 +58,9 @@ export type WorkerSupervisor = {
 export function createWorkerSupervisor(
   boardStore: BoardStore,
   reviewer: Reviewer,
-  coordinator: Coordinator
+  coordinator: Coordinator,
+  modelCaller: DeviseModelCaller = createDeviseModelCaller(WORKER_TOOLS)
 ): WorkerSupervisor {
-  const modelCaller = createDeviseModelCaller(WORKER_TOOLS);
   const abortControllers = new Map<string, AbortController>();
 
   return {
@@ -310,7 +313,7 @@ async function runLoop(
         args: toolCall.arguments.slice(0, 200),
       });
 
-      const result = executeWorkerTool(toolCall, worktreePath);
+      const result = await executeWorkerTool(toolCall, worktreePath);
 
       const assistantMsg: Message = {
         role: "assistant",

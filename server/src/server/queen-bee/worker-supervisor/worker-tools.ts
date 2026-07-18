@@ -55,8 +55,9 @@ export const WORKER_TOOLS: ToolDefinition[] = [
             description: "The command to execute",
           },
           args: {
-            type: "string",
-            description: "Space-separated arguments to pass to the command",
+            type: "array",
+            description: "Arguments to pass to the command",
+            items: { type: "string" },
           },
         },
         required: ["command"],
@@ -81,16 +82,16 @@ export const WORKER_TOOLS: ToolDefinition[] = [
   },
 ];
 
-export function executeWorkerTool(
+export async function executeWorkerTool(
   toolCall: ToolCall,
   workspacePath: string
-): ToolResult {
+): Promise<ToolResult> {
   try {
     switch (toolCall.name) {
       case "write_file":
         return writeFile(toolCall, workspacePath);
       case "run_command":
-        return runCommand(toolCall, workspacePath);
+        return await runCommand(toolCall, workspacePath);
       case "git_status":
         return {
           toolCallId: toolCall.id,
@@ -154,17 +155,20 @@ function writeFile(toolCall: ToolCall, workspacePath: string): ToolResult {
   };
 }
 
-function runCommand(toolCall: ToolCall, workspacePath: string): ToolResult {
+function runCommand(
+  toolCall: ToolCall,
+  workspacePath: string
+): Promise<ToolResult> {
   const args = JSON.parse(toolCall.arguments) as {
     command?: string;
     args?: string[];
   };
   if (!args.command) {
-    return {
+    return Promise.resolve({
       toolCallId: toolCall.id,
       content: "command is required",
       isError: true,
-    };
+    });
   }
 
   const command = args.command;
@@ -196,7 +200,7 @@ function runCommand(toolCall: ToolCall, workspacePath: string): ToolResult {
         });
       }
     );
-  }) as unknown as ToolResult;
+  });
 }
 
 function executeDeviseToolFallback(
