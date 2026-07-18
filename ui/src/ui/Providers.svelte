@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { ConversationData, MetricData, ProviderData } from "./types";
-import { formatNumber, healthColor, healthLabel, sc } from "./utils";
+import { formatNumber, healthColor, sc } from "./utils";
 import ActivityLog from "./ActivityLog.svelte";
 import Conversations from "./Conversations.svelte";
 
@@ -90,6 +90,7 @@ function switchTab(name: string, tab: "activity" | "conversations") {
     {@const activeTab = activeTabs[group.name] || "activity"}
     <div class="worker" style="opacity:{group.keyConfigured && !group.disabled ? '1' : '0.4'}">
       <div class="worker-summary">
+        <span class="rank-badge" style="background:{healthColor(group.maxScore, f.requestCount)};color:var(--bg)">#{index + 1}</span>
         <div class="worker-identity">
           <span class="worker-name">{group.displayName}</span>
           <span class="key-badge {group.keyConfigured ? 'active' : 'no-key'}">{group.keyConfigured ? "active" : "no key"}</span>
@@ -103,10 +104,6 @@ function switchTab(name: string, tab: "activity" | "conversations") {
               >{group.disabled ? "enable" : "disable"}</button
             >
           {/if}
-        </div>
-        <div class="sbar">
-          <span class="rank-badge" style="background:{healthColor(group.maxScore, f.requestCount)};color:var(--bg)">#{index + 1}</span>
-          <span class="health-label" style="color:{healthColor(group.maxScore, f.requestCount)}">{healthLabel(group.maxScore, f.requestCount)}</span>
         </div>
         <div class="wmet">
           <div class="wmet-item"><span class="l">Latency</span><span class="v">{formatNumber(f.p95Latency, "ms")}</span></div>
@@ -193,7 +190,7 @@ function switchTab(name: string, tab: "activity" | "conversations") {
 <style>
   .no-data { padding: 1.5rem; text-align: center; color: var(--muted); font-size: 0.8125rem; }
   .worker { background: var(--card); border: 1px solid var(--border); padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
-  .worker-summary { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+  .worker-summary { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
   .worker-identity { display: flex; align-items: center; gap: 0.5rem; min-width: 150px; }
   .worker-name { font-size: 1.125rem; font-weight: 700; }
   .key-badge { font-size: 0.5625rem; padding: 0.0625rem 0.375rem; font-weight: 700; border: 1px solid currentColor; }
@@ -211,17 +208,12 @@ function switchTab(name: string, tab: "activity" | "conversations") {
     text-transform: uppercase;
   }
   .toggle-btn:hover { border-color: var(--accent); color: var(--accent); }
-  .sbar { display: flex; align-items: center; gap: 0.5rem; min-width: 180px; }
   .rank-badge {
     font-size: 0.625rem;
     font-weight: 700;
     padding: 0.125rem 0.375rem;
     text-transform: uppercase;
-  }
-  .health-label {
-    font-size: 0.625rem;
-    font-weight: 700;
-    text-transform: uppercase;
+    flex-shrink: 0;
   }
   .wmet { display: flex; gap: 1.5rem; }
   .wmet-item { display: flex; flex-direction: column; gap: 0.125rem; min-width: 60px; }

@@ -1,9 +1,14 @@
 import { generateId } from "shared/generate-id";
 import { logger } from "shared/logger";
-import { createTelemetrySink } from "telemetry";
+import type { TelemetrySink } from "telemetry";
 import { mutateRequest } from "../mutate-request";
 import { getProviders } from "../providers-state";
 import { routeRequest } from "../route-request";
+
+const NOOP_TELEMETRY_SINK: TelemetrySink = {
+  recordMetric: () => {},
+  completeConversation: () => {},
+};
 
 export function validateProvidersOnStartup(): void {
   for (const provider of getProviders()) {
@@ -30,7 +35,7 @@ export function validateProvidersOnStartup(): void {
       providerName: provider.name,
       modelName: provider.defaultModel,
       requestId: generateId(),
-      telemetrySink: createTelemetrySink(),
+      telemetrySink: NOOP_TELEMETRY_SINK,
     }).catch((err: unknown) => {
       logger.debug(
         `startup validation: ${provider.name} failed: ${err instanceof Error ? err.message : String(err)}`
