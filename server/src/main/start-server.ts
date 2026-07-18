@@ -24,6 +24,7 @@ import {
   createIntegrationManager,
   createPlanner,
   createProjectStore,
+  createQueenBeeRuntimeStore,
   createReviewer,
   createWorkerSupervisor,
   registerBoardRoutes,
@@ -59,9 +60,10 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
   });
 
   const deviseEngine = createDeviseEngine();
+  const runtimeStore = createQueenBeeRuntimeStore();
   const boardStore = createBoardStore((projectId) => {
     emitBoardEvent(projectId);
-  });
+  }, runtimeStore);
   const planner = createPlanner(boardStore);
   const reviewer = createReviewer();
   const coordinator = createCoordinator();
@@ -69,7 +71,8 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
   const workerSupervisor = createWorkerSupervisor(
     boardStore,
     reviewer,
-    coordinator
+    coordinator,
+    runtimeStore
   );
 
   const server = await createServer({
@@ -108,6 +111,8 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     boardStore,
     projectStore,
     integrationManager,
+    runtimeStore,
+    reviewer,
   });
 
   listen(server, config);

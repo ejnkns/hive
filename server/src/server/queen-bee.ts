@@ -16,6 +16,11 @@ export { createIntegrationManager } from "./queen-bee/integration-manager";
 export type { Planner } from "./queen-bee/planner";
 export { createPlanner } from "./queen-bee/planner";
 export { registerProjectRoutes } from "./queen-bee/project-routes";
+export type {
+  CardActivityEvent,
+  QueenBeeRuntimeStore,
+} from "./queen-bee/queen-bee-runtime-store";
+export { createQueenBeeRuntimeStore } from "./queen-bee/queen-bee-runtime-store";
 export type { Reviewer, ReviewerVerdict } from "./queen-bee/reviewer";
 export { createReviewer } from "./queen-bee/reviewer";
 export { registerWorkDecisionRoutes } from "./queen-bee/work-decision-routes";

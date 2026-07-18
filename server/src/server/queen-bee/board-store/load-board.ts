@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ReviewerLog, WorkAttempt } from "shared/board-types";
 import type { Board, Card } from "../board-store";
+import type { QueenBeeRuntimeStore } from "../queen-bee-runtime-store";
 
 type LegacyReviewerLog = {
   verdict: "pass" | "fail";
@@ -13,7 +14,11 @@ type LegacyReviewerLog = {
 
 type PersistedReviewerLog = ReviewerLog | LegacyReviewerLog;
 
-export function loadBoard(projectId: string, repoPath: string): Board {
+export function loadBoard(
+  projectId: string,
+  repoPath: string,
+  runtimeStore: QueenBeeRuntimeStore
+): Board {
   const hiveDir = join(repoPath, ".hive");
   const boardPath = join(hiveDir, "board.json");
   const _cardsDir = join(hiveDir, "cards");
@@ -56,6 +61,7 @@ export function loadBoard(projectId: string, repoPath: string): Board {
     if (parsed.cards && Array.isArray(parsed.cards)) {
       for (const c of parsed.cards) {
         if (c.id && typeof c.id === "string" && typeof c.title === "string") {
+          const runtime = runtimeStore.getCardState(projectId, c.id);
           cards.push({
             id: c.id,
             title: c.title,
@@ -67,21 +73,24 @@ export function loadBoard(projectId: string, repoPath: string): Board {
               ? c.relevantFiles
               : [],
             dependencies: Array.isArray(c.dependencies) ? c.dependencies : [],
-            column: (typeof c.column === "string"
-              ? c.column
-              : "idea") as Card["column"],
+            column:
+              runtime?.column ??
+              ((typeof c.column === "string"
+                ? c.column
+                : "idea") as Card["column"]),
             createdAt: typeof c.createdAt === "string" ? c.createdAt : "",
-            workerLog: c.workerLog,
-            reviewerLog: migrateReviewerLog(c.reviewerLog),
-            handover: c.handover,
-            coordinatorLog: c.coordinatorLog,
+            workerLog: runtime?.workerLog ?? c.workerLog,
+            reviewerLog:
+              runtime?.reviewerLog ?? migrateReviewerLog(c.reviewerLog),
+            handover: runtime?.handover ?? c.handover,
+            coordinatorLog: runtime?.coordinatorLog ?? c.coordinatorLog,
             requirementRefs: Array.isArray(c.requirementRefs)
               ? c.requirementRefs
               : undefined,
-            workAttempts: Array.isArray(c.workAttempts)
-              ? c.workAttempts
-              : undefined,
-            archivedAt: c.archivedAt,
+            workAttempts:
+              runtime?.workAttempts ??
+              (Array.isArray(c.workAttempts) ? c.workAttempts : undefined),
+            archivedAt: runtime?.archivedAt ?? c.archivedAt,
           });
         }
       }

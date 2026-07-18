@@ -58,6 +58,23 @@ export type WorkAttempt = {
   };
 };
 
+export type ActivityActor =
+  | "supervisor"
+  | "worker"
+  | "reviewer"
+  | "devise"
+  | "planner"
+  | "user";
+
+export type CardActivityEvent = {
+  id: string;
+  actor: ActivityActor;
+  type: "status" | "tool" | "progress" | "decision" | "error";
+  summary: string;
+  detail?: string;
+  occurredAt: string;
+};
+
 export type WorkerHandover = {
   problem: string;
   attempted: string[];

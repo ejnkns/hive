@@ -8,6 +8,8 @@ import type { ProjectListItem } from "shared/project-types";
 import { createBoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
 import type { IntegrationManager } from "./integration-manager";
+import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
+import type { Reviewer, ReviewPackage } from "./reviewer";
 import { registerWorkDecisionRoutes } from "./work-decision-routes";
 
 describe("work decision routes", () => {
@@ -71,6 +73,46 @@ describe("work decision routes", () => {
       "Handle the empty-state case."
     );
     assert.deepEqual(fixture.discardedWorktrees, ["/tmp/card-1"]);
+    assert.equal(
+      fixture.runtimeStore.getActivity(fixture.project.id, card.id)[0]?.actor,
+      "user"
+    );
+  });
+
+  it("retries only the immutable Review Package after a Reviewer Agent error", async () => {
+    const fixture = createFixture();
+    const card = fixture.reviewedCard();
+    fixture.runtimeStore.saveReviewPackage(
+      fixture.project.id,
+      reviewPackage(card.id)
+    );
+    fixture.boardStore.updateCard(
+      fixture.project.id,
+      fixture.project.repoPath,
+      card.id,
+      {
+        reviewerLog: {
+          status: "error",
+          error: "Invalid review submission",
+          reviewPackageId: "package-1",
+          reviewedAt: "2026-07-19T00:00:00.000Z",
+        },
+        workAttempts: card.workAttempts?.map((attempt) => ({
+          ...attempt,
+          status: "review_error" as const,
+        })),
+      }
+    );
+
+    const response = await fixture.server.inject({
+      method: "POST",
+      url: `/api/queen-bee/${fixture.project.id}/cards/${card.id}/restart-review`,
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json().card.column, "reviewing");
+    assert.equal(response.json().card.reviewerLog.verdict, "approved");
+    assert.equal(fixture.reviewCalls, 1);
   });
 
   function createFixture() {
@@ -91,11 +133,27 @@ describe("work decision routes", () => {
       },
       unlink: () => {},
     };
-    const boardStore = createBoardStore(() => {});
+    const runtimeStore = createQueenBeeRuntimeStore(join(repoPath, "runtime"));
+    const boardStore = createBoardStore(() => {}, runtimeStore);
     const acceptedBranches: string[] = [];
     const discardedWorktrees: string[] = [];
+    let reviewCalls = 0;
+    const reviewer: Reviewer = {
+      async review() {
+        reviewCalls += 1;
+        return {
+          verdict: "approved",
+          findings: [],
+          verificationAssessment: {
+            status: "sufficient",
+            notes: "Verified",
+          },
+        };
+      },
+    };
     const integrationManager: IntegrationManager = {
       ensure: () => ({ branchName: "hive-main", revision: "integration-1" }),
+      assertCurrent: () => {},
       accept: (input) => {
         acceptedBranches.push(input.branchName);
         return { branchName: "hive-main", revision: "integration-2" };
@@ -110,6 +168,8 @@ describe("work decision routes", () => {
       boardStore,
       projectStore,
       integrationManager,
+      runtimeStore,
+      reviewer,
     });
 
     return {
@@ -118,6 +178,10 @@ describe("work decision routes", () => {
       boardStore,
       acceptedBranches,
       discardedWorktrees,
+      runtimeStore,
+      get reviewCalls() {
+        return reviewCalls;
+      },
       reviewedCard() {
         return boardStore.addCard(project.id, project.repoPath, {
           title: "Reviewed card",
@@ -152,6 +216,31 @@ describe("work decision routes", () => {
           ],
         });
       },
+    };
+  }
+
+  function reviewPackage(cardId: string): ReviewPackage {
+    return {
+      id: "package-1",
+      card: {
+        id: cardId,
+        title: "Reviewed card",
+        description: "Ready for a user decision",
+        acceptanceCriteria: ["The user owns acceptance"],
+        requirementRefs: [],
+      },
+      requirements: { revision: "requirements-1", content: "Requirements" },
+      revisions: {
+        baseCommit: "base-1",
+        headCommit: "head-1",
+        integrationCommit: "integration-1",
+        cardRevision: "card-revision-1",
+      },
+      commits: [],
+      changedFiles: [],
+      diff: "",
+      diffStat: "",
+      verification: { commands: [] },
     };
   }
 });

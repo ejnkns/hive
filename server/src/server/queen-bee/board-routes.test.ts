@@ -9,6 +9,7 @@ import { registerBoardRoutes } from "./board-routes";
 import { type Column, createBoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
 import type { Planner } from "./planner";
+import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
 
 describe("board routes", () => {
   const directories: string[] = [];
@@ -137,7 +138,10 @@ describe("board routes", () => {
       },
       unlink: () => {},
     };
-    const boardStore = createBoardStore(() => {});
+    const boardStore = createBoardStore(
+      () => {},
+      createQueenBeeRuntimeStore(join(repoPath, ".runtime"))
+    );
     const planner: Planner = { plan: async () => [] };
     const server = Fastify();
     servers.push(server);

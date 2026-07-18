@@ -11,6 +11,10 @@ import {
   createDeviseModelCaller,
   type DeviseModelCaller,
 } from "./devise-engine/create-devise-model-caller";
+import type {
+  NewCardActivityEvent,
+  QueenBeeRuntimeStore,
+} from "./queen-bee-runtime-store";
 import { readRequirements, requirementsRevision } from "./requirements-store";
 import type { Reviewer } from "./reviewer";
 import { buildReviewPackage } from "./worker-supervisor/build-review-package";
@@ -58,6 +62,7 @@ export function createWorkerSupervisor(
   boardStore: BoardStore,
   reviewer: Reviewer,
   coordinator: Coordinator,
+  runtimeStore: QueenBeeRuntimeStore,
   modelCaller: DeviseModelCaller = createDeviseModelCaller(WORKER_TOOLS)
 ): WorkerSupervisor {
   const abortControllers = new Map<string, AbortController>();
@@ -133,6 +138,9 @@ export function createWorkerSupervisor(
     }
 
     const worktreePath = wtResult.path;
+    const recordActivity = (event: NewCardActivityEvent) => {
+      runtimeStore.appendActivity(projectId, card.id, event);
+    };
     let workAttempts = beginAttempt(
       card,
       wtResult.branchName,
@@ -142,6 +150,12 @@ export function createWorkerSupervisor(
       startedAt
     );
     onEvent({ type: "worker_started", cardId: card.id });
+    recordActivity({
+      actor: "supervisor",
+      type: "status",
+      summary: `Worker Supervisor prepared attempt ${String(attemptNumber)}`,
+      detail: `${wtResult.branchName} at ${worktreePath}`,
+    });
     boardStore.updateCard(projectId, repoPath, card.id, {
       column: "in_progress",
       workAttempts,
@@ -185,7 +199,8 @@ export function createWorkerSupervisor(
         onEvent,
         modelCaller,
         log,
-        persistLog
+        persistLog,
+        recordActivity
       );
 
       if (result.type === "handover") {
@@ -211,6 +226,12 @@ export function createWorkerSupervisor(
         cardId: card.id,
         content: completionDescription(result.completion),
       });
+      recordActivity({
+        actor: "supervisor",
+        type: "status",
+        summary: "Completion Gate accepted the Worker Agent submission",
+        detail: completionDescription(result.completion),
+      });
       boardStore.moveCard(projectId, repoPath, card.id, "reviewing");
 
       await runReviewer(
@@ -223,7 +244,8 @@ export function createWorkerSupervisor(
         onEvent,
         baseCommit,
         result.completion,
-        workAttempts
+        workAttempts,
+        runtimeStore
       );
     } catch (err) {
       workAttempts = updateCurrentAttempt(workAttempts, {
@@ -240,6 +262,12 @@ export function createWorkerSupervisor(
         type: "worker_error",
         cardId: card.id,
         error: log.error,
+      });
+      recordActivity({
+        actor: "supervisor",
+        type: "error",
+        summary: "Worker Agent attempt failed",
+        detail: log.error,
       });
     }
   }
@@ -258,6 +286,7 @@ async function runLoop(
   modelCaller: ReturnType<typeof createDeviseModelCaller>,
   log: NonNullable<Card["workerLog"]>,
   persistLog: () => void,
+  recordActivity: (event: NewCardActivityEvent) => void,
   maxIterations = 20
 ): Promise<WorkerLoopResult> {
   const evidence = new Map<string, WorkerToolEvidence>();
@@ -276,6 +305,12 @@ async function runLoop(
         type: "worker_content",
         cardId,
         content: response.content,
+      });
+      recordActivity({
+        actor: "worker",
+        type: "progress",
+        summary: summarizeProgress(response.content),
+        detail: response.content,
       });
     }
 
@@ -348,6 +383,12 @@ async function runLoop(
         cardId,
         toolName: toolCall.name,
       });
+      recordActivity({
+        actor: "worker",
+        type: result.isError ? "error" : "tool",
+        summary: `Worker Agent used ${toolCall.name}`,
+        detail: result.content,
+      });
     }
   }
 
@@ -410,6 +451,15 @@ function completionDescription(completion: WorkerCompletion): string {
     : "No-change claim submitted for review";
 }
 
+function summarizeProgress(content: string): string {
+  const firstLine = content
+    .split("\n")
+    .map((line) => line.trim())
+    .find(Boolean);
+  if (!firstLine) return "Worker Agent reported progress";
+  return firstLine.length > 160 ? `${firstLine.slice(0, 157)}...` : firstLine;
+}
+
 function validateCard(card: Card, worktreePath: string): WorkerHandover | null {
   if (!card.relevantFiles || card.relevantFiles.length === 0) {
     return {
@@ -466,16 +516,25 @@ async function runReviewer(
   onEvent: (event: WorkerEvent) => void,
   baseCommit: string,
   completion: WorkerCompletion,
-  workAttempts: WorkAttempt[]
+  workAttempts: WorkAttempt[],
+  runtimeStore: QueenBeeRuntimeStore
 ): Promise<void> {
+  let reviewPackage: ReturnType<typeof buildReviewPackage> | null = null;
   try {
-    const reviewPackage = buildReviewPackage(
+    reviewPackage = buildReviewPackage(
       card,
       repoPath,
       worktreePath,
       baseCommit,
       completion
     );
+    runtimeStore.saveReviewPackage(projectId, reviewPackage);
+    runtimeStore.appendActivity(projectId, card.id, {
+      actor: "reviewer",
+      type: "status",
+      summary: "Reviewer Agent started an immutable Review Package",
+      detail: reviewPackage.id,
+    });
     const verdict = await reviewer.review(reviewPackage, worktreePath);
 
     const reviewerLog = {
@@ -506,6 +565,15 @@ async function runReviewer(
           ? "Reviewer Agent approved the immutable Review Package. Awaiting user acceptance."
           : `Reviewer Agent requested changes with ${String(verdict.findings.length)} finding(s). Awaiting user decision.`,
     });
+    runtimeStore.appendActivity(projectId, card.id, {
+      actor: "reviewer",
+      type: "decision",
+      summary:
+        verdict.verdict === "approved"
+          ? "Reviewer Agent approved the Review Package"
+          : "Reviewer Agent requested changes",
+      detail: JSON.stringify(verdict),
+    });
   } catch (err) {
     const error = err instanceof Error ? err.message : "Unknown reviewer error";
     boardStore.updateCard(projectId, repoPath, card.id, {
@@ -516,6 +584,14 @@ async function runReviewer(
       },
       workAttempts: updateCurrentAttempt(workAttempts, {
         status: "review_error",
+        ...(reviewPackage
+          ? {
+              reviewedHead: reviewPackage.revisions.headCommit,
+              reviewedIntegrationRevision:
+                reviewPackage.revisions.integrationCommit,
+              reviewPackageId: reviewPackage.id,
+            }
+          : {}),
       }),
       column: "reviewing",
     });
@@ -523,6 +599,12 @@ async function runReviewer(
       type: "worker_error",
       cardId: card.id,
       error: `Reviewer Agent failed: ${error}`,
+    });
+    runtimeStore.appendActivity(projectId, card.id, {
+      actor: "reviewer",
+      type: "error",
+      summary: "Reviewer Agent failed to submit a valid review",
+      detail: error,
     });
   }
 }

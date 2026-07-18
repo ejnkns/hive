@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { Card, Column } from "shared/board-types";
+import type { Card, CardActivityEvent, Column } from "shared/board-types";
 import CardRefinement from "./card-refinement.svelte";
 
 let {
@@ -11,6 +11,7 @@ let {
   onRun,
   onAccept,
   onRequestChanges,
+  onRestartReview,
   onRemediate,
 }: Props = $props();
 
@@ -23,6 +24,7 @@ type Props = {
   onRun?: () => void;
   onAccept?: () => Promise<void>;
   onRequestChanges?: (guidance: string) => Promise<void>;
+  onRestartReview?: () => Promise<void>;
   onRemediate?: (
     action: "retry_with_patch" | "redevise" | "archive",
     suggestionId?: string
@@ -35,6 +37,34 @@ let requestingChanges = $state(false);
 let decisionGuidance = $state("");
 let decisionError = $state<string | null>(null);
 let deciding = $state(false);
+let activity = $state<CardActivityEvent[]>([]);
+let activityError = $state<string | null>(null);
+
+async function loadActivity() {
+  activityError = null;
+  try {
+    const response = await fetch(
+      `/api/queen-bee/${projectId}/cards/${card.id}/activity`
+    );
+    const result = (await response.json()) as {
+      activity?: CardActivityEvent[];
+      error?: string;
+    };
+    if (!response.ok)
+      throw new Error(result.error ?? "Could not load activity");
+    activity = result.activity ?? [];
+  } catch (error) {
+    activityError =
+      error instanceof Error ? error.message : "Could not load activity";
+  }
+}
+
+$effect(() => {
+  card.workerLog?.iterations;
+  card.reviewerLog?.reviewedAt;
+  card.workAttempts?.at(-1)?.status;
+  void loadActivity();
+});
 
 async function acceptWork() {
   if (!onAccept) return;
@@ -62,6 +92,20 @@ async function requestChanges() {
   } catch (error) {
     decisionError =
       error instanceof Error ? error.message : "Could not request changes";
+  } finally {
+    deciding = false;
+  }
+}
+
+async function restartReview() {
+  if (!onRestartReview) return;
+  deciding = true;
+  decisionError = null;
+  try {
+    await onRestartReview();
+  } catch (error) {
+    decisionError =
+      error instanceof Error ? error.message : "Could not restart review";
   } finally {
     deciding = false;
   }
@@ -201,6 +245,31 @@ const COLUMN_LABELS: Record<Column, string> = {
         </div>
       {/if}
 
+      {#if activity.length > 0 || activityError}
+        <div class="section">
+          <div class="section-label">Activity</div>
+          {#if activityError}
+            <div class="log-error">{activityError}</div>
+          {/if}
+          <div class="activity-list">
+            {#each activity as event}
+              <div class="activity-event" class:activity-error={event.type === "error"}>
+                <div class="activity-summary">
+                  <span class="activity-actor">{event.actor}</span>
+                  <span>{event.summary}</span>
+                </div>
+                {#if event.detail}
+                  <details>
+                    <summary>Diagnostics</summary>
+                    <pre>{event.detail}</pre>
+                  </details>
+                {/if}
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/if}
+
       {#if card.handover}
         <div class="section handover">
           <div class="section-label">Worker Handover</div>
@@ -309,6 +378,18 @@ const COLUMN_LABELS: Record<Column, string> = {
       {#if card.column === "reviewing" && card.reviewerLog?.status === "complete" && onAccept && onRequestChanges}
         <button class="btn btn-run" onclick={acceptWork} disabled={deciding}>
           {deciding ? "Applying decision..." : "Accept into hive-main"}
+        </button>
+        {#if !requestingChanges}
+          <button
+            class="btn"
+            onclick={() => (requestingChanges = true)}
+            disabled={deciding}
+          >Request changes</button>
+        {/if}
+      {/if}
+      {#if card.column === "reviewing" && card.reviewerLog?.status === "error" && onRestartReview && onRequestChanges}
+        <button class="btn btn-run" onclick={restartReview} disabled={deciding}>
+          {deciding ? "Restarting..." : "Retry review"}
         </button>
         {#if !requestingChanges}
           <button
@@ -559,6 +640,47 @@ const COLUMN_LABELS: Record<Column, string> = {
     display: flex;
     gap: 0.375rem;
     margin-top: 0.5rem;
+  }
+
+  .activity-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+
+  .activity-event {
+    border-left: 2px solid var(--border);
+    color: var(--text);
+    font-size: 0.6875rem;
+    padding-left: 0.5rem;
+  }
+
+  .activity-error {
+    border-left-color: #dc3c3c;
+  }
+
+  .activity-summary {
+    display: flex;
+    gap: 0.375rem;
+  }
+
+  .activity-actor {
+    color: var(--accent);
+    font-weight: 600;
+    text-transform: capitalize;
+  }
+
+  .activity-event details {
+    color: var(--muted);
+    margin-top: 0.25rem;
+  }
+
+  .activity-event pre {
+    font-family: var(--font-mono, monospace);
+    font-size: 0.625rem;
+    max-height: 160px;
+    overflow: auto;
+    white-space: pre-wrap;
   }
 
   .handover-problem {

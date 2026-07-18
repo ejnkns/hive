@@ -9,6 +9,7 @@ import { createBoardStore } from "./board-store";
 import { registerCoordinatorRoutes } from "./coordinator-routes";
 import type { ProjectStore } from "./create-project-store";
 import type { DeviseEngine } from "./devise-engine";
+import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
 
 describe("coordinator routes", () => {
   const directories: string[] = [];
@@ -39,7 +40,10 @@ describe("coordinator routes", () => {
       },
       unlink: () => {},
     };
-    const boardStore = createBoardStore(() => {});
+    const boardStore = createBoardStore(
+      () => {},
+      createQueenBeeRuntimeStore(join(repoPath, ".runtime"))
+    );
     const card = boardStore.addCard(project.id, project.repoPath, {
       title: "Resolve requirements conflict",
       description: "The worker found ambiguous scope",

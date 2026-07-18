@@ -9,6 +9,7 @@ import { createBoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
 import type { DeviseEngine } from "./devise-engine";
 import { registerDeviseRoutes } from "./devise-routes";
+import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
 import { requirementsRevision, writeRequirements } from "./requirements-store";
 
 describe("devise routes", () => {
@@ -180,7 +181,10 @@ describe("devise routes", () => {
       getCardSession: () => undefined,
       ...overrides,
     };
-    const boardStore = createBoardStore(() => {});
+    const boardStore = createBoardStore(
+      () => {},
+      createQueenBeeRuntimeStore(join(repoPath, ".runtime"))
+    );
     const server = Fastify();
     servers.push(server);
     registerDeviseRoutes(server, { engine, boardStore, projectStore });

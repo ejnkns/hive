@@ -52,7 +52,12 @@ async function loadBoard() {
   try {
     const res = await fetch(`/api/queen-bee/${projectId}/board`);
     if (!res.ok) throw new Error("Failed to load board");
-    board = (await res.json()) as Board;
+    const loadedBoard = (await res.json()) as Board;
+    board = loadedBoard;
+    if (selectedCard) {
+      selectedCard =
+        loadedBoard.cards.find((card) => card.id === selectedCard?.id) ?? null;
+    }
   } catch (err) {
     error = err instanceof Error ? err.message : "Unknown error";
   } finally {
@@ -140,6 +145,18 @@ async function handleRequestChanges(cardId: string, guidance: string) {
   const result = (await response.json()) as { card?: Card; error?: string };
   if (!response.ok || !result.card) {
     throw new Error(result.error ?? "Could not request changes");
+  }
+  handleCardUpdated(result.card);
+}
+
+async function handleRestartReview(cardId: string) {
+  const response = await fetch(
+    `/api/queen-bee/${projectId}/cards/${cardId}/restart-review`,
+    { method: "POST" }
+  );
+  const result = (await response.json()) as { card?: Card; error?: string };
+  if (!response.ok || !result.card) {
+    throw new Error(result.error ?? "Could not restart review");
   }
   handleCardUpdated(result.card);
 }
@@ -323,6 +340,7 @@ onMount(() => {
       onAccept={() => handleAcceptCard(selectedCard!.id)}
       onRequestChanges={(guidance) =>
         handleRequestChanges(selectedCard!.id, guidance)}
+      onRestartReview={() => handleRestartReview(selectedCard!.id)}
       onRemediate={(action, suggestionId) =>
         handleRemediate(selectedCard!.id, action, suggestionId)}
     />

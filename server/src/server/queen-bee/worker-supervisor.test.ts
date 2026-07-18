@@ -17,6 +17,7 @@ import type {
   DeviseModelCaller,
   DeviseModelResponse,
 } from "./devise-engine/create-devise-model-caller";
+import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
 import type { Reviewer } from "./reviewer";
 import { createWorkerSupervisor } from "./worker-supervisor";
 
@@ -31,7 +32,10 @@ describe("WorkerSupervisor", () => {
 
   it("requires explicit committed submission without supervisor-authored commits", async () => {
     const repoPath = createGitRepository();
-    const boardStore = createBoardStore(() => {});
+    const boardStore = createBoardStore(
+      () => {},
+      createQueenBeeRuntimeStore(join(repoPath, ".runtime"))
+    );
     const card = boardStore.addCard("project-1", repoPath, {
       title: "Require explicit completion",
       description: "Commit and submit through explicit tools",
@@ -82,6 +86,7 @@ describe("WorkerSupervisor", () => {
       boardStore,
       reviewer,
       unusedCoordinator(),
+      createQueenBeeRuntimeStore(join(repoPath, ".runtime")),
       modelCaller
     );
 
@@ -104,7 +109,10 @@ describe("WorkerSupervisor", () => {
 
   it("preserves dirty work after three rejected completion submissions", async () => {
     const repoPath = createGitRepository();
-    const boardStore = createBoardStore(() => {});
+    const boardStore = createBoardStore(
+      () => {},
+      createQueenBeeRuntimeStore(join(repoPath, ".runtime"))
+    );
     const card = boardStore.addCard("project-1", repoPath, {
       title: "Reject dirty completion",
       description: "Do not let the supervisor commit unfinished work",
@@ -133,6 +141,7 @@ describe("WorkerSupervisor", () => {
       boardStore,
       failingReviewer(),
       unusedCoordinator(),
+      createQueenBeeRuntimeStore(join(repoPath, ".runtime")),
       modelCaller
     );
 
@@ -160,7 +169,10 @@ describe("WorkerSupervisor", () => {
 
   it("includes completed command output in the next model turn", async () => {
     const repoPath = createGitRepository();
-    const boardStore = createBoardStore(() => {});
+    const boardStore = createBoardStore(
+      () => {},
+      createQueenBeeRuntimeStore(join(repoPath, ".runtime"))
+    );
     const card = boardStore.addCard("project-1", repoPath, {
       title: "Run a verification command",
       description: "Verify the worker command contract",
@@ -218,6 +230,7 @@ describe("WorkerSupervisor", () => {
       boardStore,
       reviewer,
       coordinator,
+      createQueenBeeRuntimeStore(join(repoPath, ".runtime")),
       modelCaller
     );
 
@@ -236,7 +249,10 @@ describe("WorkerSupervisor", () => {
 
   it("reuses interrupted work from the card's existing worktree", async () => {
     const repoPath = createGitRepository();
-    const boardStore = createBoardStore(() => {});
+    const boardStore = createBoardStore(
+      () => {},
+      createQueenBeeRuntimeStore(join(repoPath, ".runtime"))
+    );
     const card = boardStore.addCard("project-1", repoPath, {
       title: "Resume interrupted work",
       description: "Keep the worker's existing changes",
@@ -272,6 +288,7 @@ describe("WorkerSupervisor", () => {
       boardStore,
       failingReviewer(),
       unusedCoordinator(),
+      createQueenBeeRuntimeStore(join(repoPath, ".runtime")),
       modelCaller
     );
 
@@ -282,7 +299,10 @@ describe("WorkerSupervisor", () => {
 
   it("recovers from unrelated history without modifying the old worktree", async () => {
     const repoPath = createGitRepository();
-    const boardStore = createBoardStore(() => {});
+    const boardStore = createBoardStore(
+      () => {},
+      createQueenBeeRuntimeStore(join(repoPath, ".runtime"))
+    );
     const card = boardStore.addCard("project-1", repoPath, {
       title: "Recover from unrelated history",
       description: "Start safely from the current project revision",
@@ -315,6 +335,7 @@ describe("WorkerSupervisor", () => {
       boardStore,
       failingReviewer(),
       unusedCoordinator(),
+      createQueenBeeRuntimeStore(join(repoPath, ".runtime")),
       modelCaller
     );
 
@@ -341,7 +362,10 @@ describe("WorkerSupervisor", () => {
 
   it("recovers from a stale card branch without modifying it", async () => {
     const repoPath = createGitRepository();
-    const boardStore = createBoardStore(() => {});
+    const boardStore = createBoardStore(
+      () => {},
+      createQueenBeeRuntimeStore(join(repoPath, ".runtime"))
+    );
     const card = boardStore.addCard("project-1", repoPath, {
       title: "Reject stale history",
       description: "Do not resume from an outdated project revision",
@@ -363,6 +387,7 @@ describe("WorkerSupervisor", () => {
       boardStore,
       failingReviewer(),
       unusedCoordinator(),
+      createQueenBeeRuntimeStore(join(repoPath, ".runtime")),
       {
         async call(_messages, workspacePath) {
           modelCallCount += 1;
@@ -398,7 +423,8 @@ describe("WorkerSupervisor", () => {
 
   it("persists project-scoped progress before the worker finishes", async () => {
     const repoPath = createGitRepository();
-    const boardStore = createBoardStore(() => {});
+    const runtimeStore = createQueenBeeRuntimeStore(join(repoPath, ".runtime"));
+    const boardStore = createBoardStore(() => {}, runtimeStore);
     const card = boardStore.addCard("project-1", repoPath, {
       title: "Persist worker progress",
       description: "Keep enough state to diagnose an interruption",
@@ -443,29 +469,21 @@ describe("WorkerSupervisor", () => {
       boardStore,
       failingReviewer(),
       unusedCoordinator(),
+      runtimeStore,
       modelCaller
     );
     const run = supervisor.run("project-1", card, repoPath, "", "", () => {});
 
     await secondCallStarted;
     try {
-      const savedBoard = JSON.parse(
-        readFileSync(join(repoPath, ".hive", "board.json"), "utf-8")
-      ) as {
-        projectId: string;
-        cards: Array<{
-          workerLog?: {
-            iterations: number;
-            content: string;
-            toolCalls: Array<{ name: string }>;
-          };
-        }>;
-      };
-      assert.equal(savedBoard.projectId, "project-1");
-      assert.equal(savedBoard.cards[0]?.workerLog?.iterations, 2);
-      assert.match(savedBoard.cards[0]?.workerLog?.content ?? "", /Starting/);
+      const workerLog = runtimeStore.getCardState(
+        "project-1",
+        card.id
+      )?.workerLog;
+      assert.equal(workerLog?.iterations, 2);
+      assert.match(workerLog?.content ?? "", /Starting/);
       assert.deepEqual(
-        savedBoard.cards[0]?.workerLog?.toolCalls.map((call) => call.name),
+        workerLog?.toolCalls.map((call) => call.name),
         ["run_command"]
       );
     } finally {

@@ -16,15 +16,8 @@ export function saveBoard(repoPath: string, board: Board): void {
       acceptanceCriteria: c.acceptanceCriteria,
       relevantFiles: c.relevantFiles,
       dependencies: c.dependencies,
-      column: c.column,
       createdAt: c.createdAt,
-      workerLog: c.workerLog,
-      reviewerLog: c.reviewerLog,
-      handover: c.handover,
-      coordinatorLog: c.coordinatorLog,
       requirementRefs: c.requirementRefs,
-      workAttempts: c.workAttempts,
-      archivedAt: c.archivedAt,
     })),
   };
 

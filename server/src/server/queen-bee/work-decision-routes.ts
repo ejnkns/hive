@@ -5,6 +5,8 @@ import type { WorkAttempt } from "shared/board-types";
 import type { BoardStore, Card } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
 import type { IntegrationManager } from "./integration-manager";
+import type { QueenBeeRuntimeStore } from "./queen-bee-runtime-store";
+import type { Reviewer } from "./reviewer";
 
 export function registerWorkDecisionRoutes(
   server: FastifyInstance,
@@ -12,8 +14,21 @@ export function registerWorkDecisionRoutes(
     boardStore: BoardStore;
     projectStore: ProjectStore;
     integrationManager: IntegrationManager;
+    runtimeStore: QueenBeeRuntimeStore;
+    reviewer: Reviewer;
   }
 ): void {
+  server.get(
+    "/api/queen-bee/:projectId/cards/:cardId/activity",
+    async (request, reply) => {
+      const card = findCard(request.params, reply, deps);
+      if (!card) return;
+      return reply.send({
+        activity: deps.runtimeStore.getActivity(card.projectId, card.card.id),
+      });
+    }
+  );
+
   server.post(
     "/api/queen-bee/:projectId/cards/:cardId/accept",
     async (request, reply) => {
@@ -48,6 +63,12 @@ export function registerWorkDecisionRoutes(
             }),
           }
         );
+        deps.runtimeStore.appendActivity(projectId, card.id, {
+          actor: "user",
+          type: "decision",
+          summary: "User accepted reviewed work into hive-main",
+          detail: integration.revision,
+        });
         return reply.send({ card: updated, integration });
       } catch (error) {
         return reply.status(409).send({ error: errorMessage(error) });
@@ -96,9 +117,96 @@ export function registerWorkDecisionRoutes(
             }),
           }
         );
+        deps.runtimeStore.appendActivity(projectId, card.id, {
+          actor: "user",
+          type: "decision",
+          summary: "User requested another Worker Agent attempt",
+          detail: guidance,
+        });
         return reply.send({ card: updated });
       } catch (error) {
         return reply.status(409).send({ error: errorMessage(error) });
+      }
+    }
+  );
+
+  server.post(
+    "/api/queen-bee/:projectId/cards/:cardId/restart-review",
+    async (request, reply) => {
+      const context = findDecisionCard(request.params, reply, deps);
+      if (!context) return;
+      const { projectId, project, card, attempt } = context;
+      if (attempt.status !== "review_error" || !attempt.reviewPackageId) {
+        return reply.status(409).send({
+          error: "Card does not have a retryable Reviewer Agent error",
+        });
+      }
+      const reviewPackage = deps.runtimeStore.getReviewPackage(
+        projectId,
+        attempt.reviewPackageId
+      );
+      if (!reviewPackage) {
+        return reply.status(409).send({ error: "Review Package is missing" });
+      }
+
+      try {
+        deps.integrationManager.assertCurrent({
+          repoPath: project.repoPath,
+          cardId: card.id,
+          branchName: attempt.branchName,
+          worktreePath: attempt.worktreePath,
+          reviewedHead: reviewPackage.revisions.headCommit,
+          reviewedIntegrationRevision:
+            reviewPackage.revisions.integrationCommit,
+        });
+        const verdict = await deps.reviewer.review(
+          reviewPackage,
+          attempt.worktreePath
+        );
+        const reviewedAt = new Date().toISOString();
+        const updated = deps.boardStore.updateCard(
+          projectId,
+          project.repoPath,
+          card.id,
+          {
+            reviewerLog: {
+              status: "complete",
+              verdict: verdict.verdict,
+              findings: verdict.findings,
+              verificationAssessment: verdict.verificationAssessment,
+              reviewPackageId: reviewPackage.id,
+              reviewedAt,
+            },
+            workAttempts: updateAttempt(card, { status: "reviewed" }),
+          }
+        );
+        deps.runtimeStore.appendActivity(projectId, card.id, {
+          actor: "reviewer",
+          type: "decision",
+          summary:
+            verdict.verdict === "approved"
+              ? "Reviewer Agent approved the Review Package"
+              : "Reviewer Agent requested changes",
+          detail: JSON.stringify(verdict),
+        });
+        return reply.send({ card: updated });
+      } catch (error) {
+        const message = errorMessage(error);
+        deps.boardStore.updateCard(projectId, project.repoPath, card.id, {
+          reviewerLog: {
+            status: "error",
+            error: message,
+            reviewPackageId: reviewPackage.id,
+            reviewedAt: new Date().toISOString(),
+          },
+        });
+        deps.runtimeStore.appendActivity(projectId, card.id, {
+          actor: "reviewer",
+          type: "error",
+          summary: "Reviewer Agent retry failed",
+          detail: message,
+        });
+        return reply.status(502).send({ error: message });
       }
     }
   );
@@ -142,6 +250,29 @@ function findDecisionCard(
     projectStore: ProjectStore;
   }
 ): DecisionContext | null {
+  const context = findCard(params, reply, deps);
+  if (!context) return null;
+  const { projectId, project, card } = context;
+  if (card.column !== "reviewing") {
+    reply.status(409).send({ error: "Card is not awaiting a user decision" });
+    return null;
+  }
+  const attempt = card.workAttempts?.at(-1);
+  if (!attempt) {
+    reply.status(409).send({ error: "Card has no recorded work attempt" });
+    return null;
+  }
+  return { projectId, project, card, attempt };
+}
+
+function findCard(
+  params: unknown,
+  reply: FastifyReply,
+  deps: {
+    boardStore: BoardStore;
+    projectStore: ProjectStore;
+  }
+): Omit<DecisionContext, "attempt"> | null {
   const { projectId, cardId } = params as {
     projectId: string;
     cardId: string;
@@ -160,16 +291,7 @@ function findDecisionCard(
     reply.status(404).send({ error: "Card not found" });
     return null;
   }
-  if (card.column !== "reviewing") {
-    reply.status(409).send({ error: "Card is not awaiting a user decision" });
-    return null;
-  }
-  const attempt = card.workAttempts?.at(-1);
-  if (!attempt) {
-    reply.status(409).send({ error: "Card has no recorded work attempt" });
-    return null;
-  }
-  return { projectId, project, card, attempt };
+  return { projectId, project, card };
 }
 
 function updateAttempt(card: Card, patch: Partial<WorkAttempt>): WorkAttempt[] {

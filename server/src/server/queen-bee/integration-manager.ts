@@ -24,6 +24,7 @@ export type AcceptWorkInput = {
 
 export type IntegrationManager = {
   ensure(repoPath: string): IntegrationRevision;
+  assertCurrent(input: AcceptWorkInput): void;
   accept(input: AcceptWorkInput): IntegrationRevision;
   discardWorktree(repoPath: string, worktreePath: string): void;
 };
@@ -31,6 +32,7 @@ export type IntegrationManager = {
 export function createIntegrationManager(): IntegrationManager {
   return {
     ensure: ensureIntegrationBranch,
+    assertCurrent: assertReviewedWorkCurrent,
     accept: acceptWork,
     discardWorktree(repoPath, worktreePath) {
       if (
@@ -58,24 +60,7 @@ export function ensureIntegrationBranch(repoPath: string): IntegrationRevision {
 }
 
 function acceptWork(input: AcceptWorkInput): IntegrationRevision {
-  const integration = ensureIntegrationBranch(input.repoPath);
-  if (integration.revision !== input.reviewedIntegrationRevision) {
-    throw new Error(
-      "Hive integration branch changed since review; restart review before accepting"
-    );
-  }
-  const branchHead = git(input.repoPath, ["rev-parse", input.branchName]);
-  if (branchHead !== input.reviewedHead) {
-    throw new Error(
-      "Worker branch changed since review; restart review before accepting"
-    );
-  }
-  if (
-    existsSync(input.worktreePath) &&
-    git(input.worktreePath, ["status", "--porcelain"])
-  ) {
-    throw new Error("Worker worktree has uncommitted changes");
-  }
+  assertReviewedWorkCurrent(input);
 
   const integrationWorktree = acquireIntegrationWorktree(input.repoPath);
   try {
@@ -102,6 +87,27 @@ function acceptWork(input: AcceptWorkInput): IntegrationRevision {
   if (!cleanup.ok) throw new Error(cleanup.message);
   git(input.repoPath, ["branch", "-D", input.branchName]);
   return ensureIntegrationBranch(input.repoPath);
+}
+
+function assertReviewedWorkCurrent(input: AcceptWorkInput): void {
+  const integration = ensureIntegrationBranch(input.repoPath);
+  if (integration.revision !== input.reviewedIntegrationRevision) {
+    throw new Error(
+      "Hive integration branch changed since review; restart review before accepting"
+    );
+  }
+  const branchHead = git(input.repoPath, ["rev-parse", input.branchName]);
+  if (branchHead !== input.reviewedHead) {
+    throw new Error(
+      "Worker branch changed since review; restart review before accepting"
+    );
+  }
+  if (
+    existsSync(input.worktreePath) &&
+    git(input.worktreePath, ["status", "--porcelain"])
+  ) {
+    throw new Error("Worker worktree has uncommitted changes");
+  }
 }
 
 function acquireIntegrationWorktree(repoPath: string): {
