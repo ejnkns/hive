@@ -4,10 +4,11 @@ import type { Card, Column } from "shared/board-types";
 import KanbanCard from "./kanban-card.svelte";
 import CardDetail from "./card-detail.svelte";
 
-let { projectId }: Props = $props();
+let { projectId, onReDeviseStarted }: Props = $props();
 
 type Props = {
   projectId: string;
+  onReDeviseStarted?: () => void;
 };
 
 type Board = {
@@ -76,6 +77,41 @@ async function handleReplan() {
   replanError = null;
 }
 
+async function handleReDevise() {
+  const prompt = window.prompt(
+    "What new context should change the project requirements?"
+  );
+  if (!prompt) return;
+
+  const start = async (confirmActive: boolean) =>
+    fetch(`/api/queen-bee/${projectId}/devise/redevise/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, confirmActive }),
+    });
+
+  try {
+    let response = await start(false);
+    if (response.status === 409) {
+      const data = (await response.json()) as { error?: string };
+      if (
+        !window.confirm(
+          `${data.error ?? "Active work exists"}. Continue anyway?`
+        )
+      )
+        return;
+      response = await start(true);
+    }
+    if (!response.ok) {
+      const data = (await response.json()) as { error?: string };
+      throw new Error(data.error ?? "Could not start re-devise");
+    }
+    onReDeviseStarted?.();
+  } catch (err) {
+    error = err instanceof Error ? err.message : "Could not start re-devise";
+  }
+}
+
 async function handleSubmitReplan() {
   planning = true;
   replanError = null;
@@ -139,6 +175,55 @@ async function handleRemediate(
   }
 }
 
+async function handleCardDevise(card: Card) {
+  const prompt = window.prompt("What should this card add or clarify?");
+  if (!prompt) return;
+
+  try {
+    let response = await fetch(
+      `/api/queen-bee/${projectId}/cards/${card.id}/devise/start`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      }
+    );
+    let data = (await response.json()) as { question?: string; error?: string };
+    if (!response.ok || !data.question) {
+      throw new Error(data.error ?? "Could not start card devise");
+    }
+
+    while (data.question) {
+      const answer = window.prompt(data.question);
+      if (!answer) return;
+      response = await fetch(
+        `/api/queen-bee/${projectId}/cards/${card.id}/devise/respond`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ answer }),
+        }
+      );
+      const result = (await response.json()) as {
+        question?: string;
+        complete?: boolean;
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(result.error ?? "Could not continue card devise");
+      }
+      if (result.complete) {
+        await moveCard(card.id, "ready");
+        selectedCard = null;
+        return;
+      }
+      data = result;
+    }
+  } catch (err) {
+    error = err instanceof Error ? err.message : "Card devise failed";
+  }
+}
+
 function cardsInColumn(col: Column): Card[] {
   return board?.cards.filter((c) => c.column === col) ?? [];
 }
@@ -177,6 +262,9 @@ onMount(() => {
     <div class="board-actions">
       <button class="btn btn-outline" onclick={handleReplan} disabled={planning}>
         {planning ? "Replanning..." : "Replan"}
+      </button>
+      <button class="btn btn-outline" onclick={handleReDevise} disabled={planning}>
+        Re-devise
       </button>
     </div>
   </div>
@@ -247,6 +335,7 @@ onMount(() => {
       onRun={() => handleRunCard(selectedCard!.id)}
       onRemediate={(action, suggestionId) =>
         handleRemediate(selectedCard!.id, action, suggestionId)}
+      onCardDevise={() => handleCardDevise(selectedCard!)}
     />
   {/if}
 </div>

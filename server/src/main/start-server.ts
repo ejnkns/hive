@@ -82,7 +82,11 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
   });
 
   registerProjectRoutes(server, projectStore);
-  registerDeviseRoutes(server, { engine: deviseEngine, projectStore });
+  registerDeviseRoutes(server, {
+    engine: deviseEngine,
+    projectStore,
+    boardStore,
+  });
   registerBoardRoutes(server, { boardStore, planner, projectStore });
   registerCoordinatorRoutes(server, { boardStore, projectStore });
   registerWorkerRoutes(server, {

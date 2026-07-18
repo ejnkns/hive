@@ -118,7 +118,13 @@ async function handleApprove() {
         <button class="btn btn-primary" onclick={handleApprove}>Retry</button>
       </div>
     {:else if hasBoard}
-      <KanbanBoard {projectId} />
+      <KanbanBoard
+        {projectId}
+        onReDeviseStarted={() => {
+          hasBoard = false;
+          void restoreSession();
+        }}
+      />
     {:else}
       <DeviseChat
         {projectId}
