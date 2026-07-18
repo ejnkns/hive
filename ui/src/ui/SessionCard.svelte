@@ -44,9 +44,8 @@ function requestLabel(i: number): string {
   const completed = last !== undefined && isTerminal(last);
   const num = requestCount - i;
   const isFailover = req.requestId.includes("/F");
-  if (isFailover)
-    return completed ? `#${num} (failover)` : `#${num} (retrying)`;
-  return completed ? `#${num}` : `#${num} (active)`;
+  if (isFailover) return completed ? `#${num}F` : `#${num}R`;
+  return `#${num}`;
 }
 
 function displayPrompt(prompt: string): string {
@@ -372,7 +371,8 @@ function handleSelectRequest(requestId: string) {
   .row-label {
     color: var(--accent);
     font-weight: 700;
-    min-width: 32px;
+    width: 28px;
+    flex-shrink: 0;
   }
 
   .mini-dots {
