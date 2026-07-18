@@ -30,7 +30,7 @@ let error = $state<string | null>(null);
 $effect(() => {
   if (initialMessages && initialMessages.length > 0) {
     messages = initialMessages.map((m) => ({
-      role: m.role as "model" | "user",
+      role: m.role === "assistant" || m.role === "model" ? "model" : "user",
       content: m.content,
     }));
     complete = initialStatus === "complete";
