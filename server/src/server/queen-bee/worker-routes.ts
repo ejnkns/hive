@@ -5,8 +5,10 @@ import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
 import type { BoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
+import type { DeviseDraftUpdate } from "./devise-engine";
 import {
   boardEventBus,
+  deviseEventBus,
   projectEventBus,
   workerEventBus,
 } from "./worker-event-bus";
@@ -110,14 +112,26 @@ export function registerWorkerRoutes(
       }
     };
 
+    const deviseHandler = (update: DeviseDraftUpdate) => {
+      try {
+        socket.send(
+          JSON.stringify({ type: "devise_draft_updated", data: update })
+        );
+      } catch {
+        // socket closed
+      }
+    };
+
     workerEventBus.on("event", workerHandler);
     boardEventBus.on("change", boardHandler);
     projectEventBus.on("change", projectHandler);
+    deviseEventBus.on("draft", deviseHandler);
 
     socket.on("close", () => {
       workerEventBus.off("event", workerHandler);
       boardEventBus.off("change", boardHandler);
       projectEventBus.off("change", projectHandler);
+      deviseEventBus.off("draft", deviseHandler);
     });
   });
 

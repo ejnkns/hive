@@ -17,6 +17,13 @@ import { readRequirements, requirementsRevision } from "./requirements-store";
 
 export type DeviseSession = PersistedDeviseSession;
 
+export type DeviseDraftUpdate = {
+  projectId: string;
+  sessionId: string;
+  cardId?: string;
+  content: string;
+};
+
 export type DeviseEngine = {
   start(
     projectId: string,
@@ -55,7 +62,8 @@ export type DeviseRespondResult =
 
 export function createDeviseEngine(
   modelCaller?: DeviseModelCaller,
-  runtimeStore?: QueenBeeRuntimeStore
+  runtimeStore?: QueenBeeRuntimeStore,
+  onDraftUpdate: (update: DeviseDraftUpdate) => void = () => {}
 ): DeviseEngine {
   const caller = modelCaller ?? createDeviseModelCaller();
   const sessions = new Map<string, DeviseSession>();
@@ -123,13 +131,19 @@ export function createDeviseEngine(
       { role: "user", content: prompt },
     ];
 
-    const result = await callWithToolLoop(caller, messages, workspacePath);
+    const sessionId = randomUUID();
+    const result = await callWithToolLoop(
+      caller,
+      messages,
+      workspacePath,
+      (content) => onDraftUpdate({ projectId, sessionId, cardId, content })
+    );
 
     messages.push({ role: "assistant", content: result.content });
 
     const now = new Date().toISOString();
     const session: DeviseSession = {
-      sessionId: randomUUID(),
+      sessionId,
       projectId,
       cardId,
       messages,
@@ -167,7 +181,18 @@ export function createDeviseEngine(
     const result = await callWithToolLoop(
       caller,
       session.messages,
-      workspacePath
+      workspacePath,
+      (content) => {
+        session.draftRequirements = content;
+        session.updatedAt = new Date().toISOString();
+        runtimeStore?.saveDeviseSession(session);
+        onDraftUpdate({
+          projectId: session.projectId,
+          sessionId: session.sessionId,
+          cardId: session.cardId,
+          content,
+        });
+      }
     );
 
     if (result.draftRequirements) {
@@ -248,6 +273,7 @@ async function callWithToolLoop(
   caller: DeviseModelCaller,
   messages: Message[],
   workspacePath: string,
+  onDraftUpdate: (content: string) => void = () => {},
   maxToolRounds = 10
 ): Promise<{ content: string; draftRequirements?: string }> {
   let draftRequirements: string | undefined;
@@ -264,9 +290,10 @@ async function callWithToolLoop(
     for (const toolCall of response.toolCalls) {
       const result = executeDeviseTool(toolCall, workspacePath);
       if (toolCall.name === "update_requirements_draft" && !result.isError) {
-        const args = JSON.parse(toolCall.arguments) as { content?: unknown };
-        if (typeof args.content === "string") {
+        const args: unknown = JSON.parse(toolCall.arguments);
+        if (isRecord(args) && typeof args.content === "string") {
           draftRequirements = args.content;
+          onDraftUpdate(args.content);
         }
       }
 
@@ -308,6 +335,10 @@ async function callWithToolLoop(
     content: "",
     draftRequirements,
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function detectCompletion(content: string): boolean {

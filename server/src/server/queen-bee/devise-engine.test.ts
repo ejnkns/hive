@@ -215,6 +215,38 @@ describe("DeviseEngine", () => {
     );
   });
 
+  it("publishes each requirements draft before the model turn completes", async () => {
+    const workspace = createTempWorkspace();
+    let callCount = 0;
+    let finishModelTurn: (() => void) | undefined;
+    const modelTurnCanFinish = new Promise<void>((resolve) => {
+      finishModelTurn = resolve;
+    });
+    let receivedDraft: ((content: string) => void) | undefined;
+    const draftPublished = new Promise<string>((resolve) => {
+      receivedDraft = resolve;
+    });
+    const caller: DeviseModelCaller = {
+      async call() {
+        callCount += 1;
+        if (callCount === 1) return draftResponse();
+        await modelTurnCanFinish;
+        return emptyResponse("Next question");
+      },
+    };
+    const engine = createDeviseEngine(caller, undefined, (update) => {
+      receivedDraft?.(update.content);
+    });
+
+    const started = engine.start("test", "Build", workspace);
+    assert.equal(
+      await draftPublished,
+      "# Requirements\n\n## Overview\nTest app"
+    );
+    finishModelTurn?.();
+    await started;
+  });
+
   it("allows only one active Devise Agent session per project", async () => {
     const caller = createMockCaller([emptyResponse("Question")]);
     const engine = createDeviseEngine(caller);

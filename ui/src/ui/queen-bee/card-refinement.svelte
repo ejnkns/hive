@@ -1,4 +1,5 @@
 <script lang="ts">
+import { onMount } from "svelte";
 import type { Card, PlanningProposal } from "shared/board-types";
 
 let {
@@ -27,6 +28,7 @@ let question = $state("");
 let busy = $state(false);
 let error = $state<string | null>(null);
 let consumedInitialQuestion = $state("");
+let draftRequirements = $state("");
 
 $effect(() => {
   if (initialQuestion && initialQuestion !== consumedInitialQuestion) {
@@ -53,12 +55,14 @@ async function startRefinement() {
     );
     const result = (await response.json()) as {
       question?: string;
+      draftRequirements?: string;
       error?: string;
     };
     if (!response.ok || !result.question) {
       throw new Error(result.error ?? "Could not start card refinement");
     }
     question = result.question;
+    draftRequirements = result.draftRequirements ?? draftRequirements;
     input = "";
     stage = "question";
   } catch (err) {
@@ -94,6 +98,7 @@ async function respond() {
     if (!response.ok) {
       throw new Error(result.error ?? "Could not continue card refinement");
     }
+    draftRequirements = result.draftRequirements ?? draftRequirements;
     input = "";
     if (result.complete && result.cardProposal) {
       stage = "confirmation";
@@ -136,6 +141,45 @@ async function confirmReady() {
     busy = false;
   }
 }
+
+onMount(() => {
+  const protocol = window.location.protocol === "http:" ? "ws:" : "wss:";
+  const socket = new WebSocket(
+    `${protocol}//${window.location.host}/api/queen-bee/ws`
+  );
+  socket.onmessage = (event) => {
+    try {
+      const message: unknown = JSON.parse(String(event.data));
+      const content = cardDraftContent(message, projectId, card.id);
+      if (content !== null) draftRequirements = content;
+    } catch {
+      // Ignore malformed events.
+    }
+  };
+  return () => socket.close();
+});
+
+function cardDraftContent(
+  value: unknown,
+  project: string,
+  selectedCard: string
+): string | null {
+  if (!isRecord(value) || value.type !== "devise_draft_updated") return null;
+  const data = value.data;
+  if (
+    !isRecord(data) ||
+    data.projectId !== project ||
+    data.cardId !== selectedCard ||
+    typeof data.content !== "string"
+  ) {
+    return null;
+  }
+  return data.content;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
 </script>
 
 <div class="refinement">
@@ -161,6 +205,16 @@ async function confirmReady() {
 
   {#if error}
     <div class="error">{error}</div>
+  {/if}
+
+  {#if draftRequirements}
+    <div class="draft-panel">
+      <div class="role-label">Live project requirements draft</div>
+      <pre>{draftRequirements}</pre>
+      <div class="draft-note">
+        This remains provisional until whole-board reconciliation is approved.
+      </div>
+    </div>
   {/if}
 
   {#if stage !== "confirmation"}
@@ -218,6 +272,30 @@ async function confirmReady() {
     font-size: 0.75rem;
     line-height: 1.5;
     white-space: pre-wrap;
+  }
+
+  .draft-panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 0.625rem;
+  }
+
+  .draft-panel pre {
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.6875rem;
+    line-height: 1.45;
+    margin: 0;
+    max-height: 14rem;
+    overflow: auto;
+    white-space: pre-wrap;
+  }
+
+  .draft-note {
+    color: var(--muted);
+    font-size: 0.625rem;
+    margin-top: 0.375rem;
   }
 
   .question {

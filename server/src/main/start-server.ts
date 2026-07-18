@@ -37,6 +37,7 @@ import {
 } from "../server/queen-bee";
 import {
   emitBoardEvent,
+  emitDeviseDraft,
   emitProjectEvent,
   emitWorkerEvent,
 } from "../server/queen-bee/worker-event-bus";
@@ -61,7 +62,11 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
   });
 
   const runtimeStore = createQueenBeeRuntimeStore();
-  const deviseEngine = createDeviseEngine(undefined, runtimeStore);
+  const deviseEngine = createDeviseEngine(
+    undefined,
+    runtimeStore,
+    emitDeviseDraft
+  );
   const boardStore = createBoardStore((projectId) => {
     emitBoardEvent(projectId);
   }, runtimeStore);

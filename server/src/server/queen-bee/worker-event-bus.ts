@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import type { DeviseDraftUpdate } from "./devise-engine";
 import type { WorkerEvent } from "./worker-supervisor";
 
 export const workerEventBus = new EventEmitter<{
@@ -23,4 +24,12 @@ export const boardEventBus = new EventEmitter<{
 
 export function emitBoardEvent(projectId: string): void {
   boardEventBus.emit("change", projectId);
+}
+
+export const deviseEventBus = new EventEmitter<{
+  draft: [DeviseDraftUpdate];
+}>();
+
+export function emitDeviseDraft(update: DeviseDraftUpdate): void {
+  deviseEventBus.emit("draft", update);
 }
