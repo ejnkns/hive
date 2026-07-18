@@ -1,4 +1,6 @@
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
-export const HIVE_DIR = join(homedir(), ".hive");
+export const HIVE_DIR = process.env.HIVE_DATA_DIR
+  ? resolve(process.env.HIVE_DATA_DIR)
+  : join(homedir(), ".hive");

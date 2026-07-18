@@ -1,13 +1,18 @@
 {
   "name": "hive",
   "private": true,
+  "bin": {
+    "hive": "server/dist/main.mjs"
+  },
   "scripts": {
     "dev:ui": "pnpm --filter ui dev",
     "dev:server": "pnpm --filter server dev",
     "dev": "pnpm run dev:server & pnpm run dev:ui",
-    "build": "pnpm -r build",
+    "build": "pnpm --filter telemetry build && pnpm --filter ui build && pnpm --filter server build",
+    "start": "node server/dist/main.mjs start",
+    "test:build": "pnpm build && node scripts/built-server-smoke.mjs",
     "test:dev-proxy": "node scripts/dev-proxy-smoke.mjs",
-    "test": "pnpm run test:dev-proxy && pnpm -r test",
+    "test": "pnpm run test:dev-proxy && pnpm -r test && pnpm run test:build",
     "typecheck": "pnpm -r typecheck",
     "lint": "biome lint .",
     "format": "biome format --write .",

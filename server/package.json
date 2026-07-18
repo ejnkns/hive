@@ -21,7 +21,7 @@
     "lru-cache": "^11.5.1"
   },
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown && node scripts/package-assets.mjs",
     "typecheck": "tsc --noEmit",
     "dev": "tsdown --watch --on-success \"node --import tsx --env-file=../.env dist/main.mjs start --port 8154\"",
     "test": "node --import tsx --test 'src/**/*.test.ts'"

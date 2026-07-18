@@ -3,6 +3,9 @@ export default defineConfig({
   entry: ["src/main.ts"],
   format: "esm",
   platform: "node",
+  deps: {
+    alwaysBundle: [/^(shared|telemetry)(\/|$)/],
+  },
   dts: true,
   sourcemap: true,
   clean: true,

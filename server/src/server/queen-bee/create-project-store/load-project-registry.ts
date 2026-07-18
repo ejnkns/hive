@@ -1,11 +1,11 @@
 /** @private — only imported by create-project-store.ts */
 
 import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
+import { HIVE_DIR } from "shared/hive-dir";
 import type { ProjectRegistry } from "../create-project-store";
 
-const REGISTRY_PATH = join(homedir(), ".hive", "project-registry.json");
+const REGISTRY_PATH = join(HIVE_DIR, "project-registry.json");
 
 export function loadProjectRegistry(): ProjectRegistry {
   try {
