@@ -24,15 +24,3 @@ export const boardEventBus = new EventEmitter<{
 export function emitBoardEvent(projectId: string): void {
   boardEventBus.emit("change", projectId);
 }
-
-export const reviewerEventBus = new EventEmitter<{
-  verdict: [string, "pass" | "fail", string];
-}>();
-
-export function emitReviewerVerdict(
-  cardId: string,
-  verdict: "pass" | "fail",
-  feedback: string
-): void {
-  reviewerEventBus.emit("verdict", cardId, verdict, feedback);
-}

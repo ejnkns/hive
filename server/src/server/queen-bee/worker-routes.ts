@@ -8,7 +8,6 @@ import type { ProjectStore } from "./create-project-store";
 import {
   boardEventBus,
   projectEventBus,
-  reviewerEventBus,
   workerEventBus,
 } from "./worker-event-bus";
 import type { WorkerEvent, WorkerSupervisor } from "./worker-supervisor";
@@ -106,33 +105,14 @@ export function registerWorkerRoutes(
       }
     };
 
-    const reviewerHandler = (
-      cardId: string,
-      verdict: "pass" | "fail",
-      feedback: string
-    ) => {
-      try {
-        socket.send(
-          JSON.stringify({
-            type: "reviewer_verdict",
-            data: { cardId, verdict, feedback },
-          })
-        );
-      } catch {
-        // socket closed
-      }
-    };
-
     workerEventBus.on("event", workerHandler);
     boardEventBus.on("change", boardHandler);
     projectEventBus.on("change", projectHandler);
-    reviewerEventBus.on("verdict", reviewerHandler);
 
     socket.on("close", () => {
       workerEventBus.off("event", workerHandler);
       boardEventBus.off("change", boardHandler);
       projectEventBus.off("change", projectHandler);
-      reviewerEventBus.off("verdict", reviewerHandler);
     });
   });
 

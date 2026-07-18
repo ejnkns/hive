@@ -231,10 +231,7 @@ onMount(() => {
         type?: string;
         data?: { projectId?: string };
       };
-      if (
-        message.data?.projectId === projectId ||
-        message.type === "reviewer_verdict"
-      ) {
+      if (message.data?.projectId === projectId) {
         void loadBoard();
       }
     } catch {
