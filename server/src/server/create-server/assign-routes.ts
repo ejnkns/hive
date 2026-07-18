@@ -44,6 +44,9 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
     const routingStates = routingMemory.getStates();
 
     const states = await deps.getProviderStates();
+    logger.debug(
+      `buildProvidersPayload: config has ${configProviders.length} providers, ${states.length} score states`
+    );
     return configProviders.flatMap((p) => {
       const keyConfigured = !!process.env[p.apiKeyEnvVar];
       const providerModels = p.models.length > 0 ? p.models : [p.defaultModel];
@@ -53,6 +56,11 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
         const matchingState =
           states.find((s) => s.provider === p.name && s.model === model) ??
           null;
+        if (!matchingState) {
+          logger.debug(
+            `buildProvidersPayload: no score state for ${p.name}:${model}`
+          );
+        }
         const compKey = `${p.name}:${model}`;
 
         return {

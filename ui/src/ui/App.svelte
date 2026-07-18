@@ -143,13 +143,9 @@ let headerData = $derived.by(() => {
     .filter((p) => p.keyConfigured)
     .sort((a, b) => b.stabilityScore - a.stabilityScore);
   const bestEntry = sorted[0] ?? null;
-  const requestIds = new Set(t.metrics.map((r) => r.requestId));
-  const successfulRequestIds = new Set(
-    t.metrics.filter((r) => r.success).map((r) => r.requestId)
-  );
-  const total = requestIds.size;
-  const rate =
-    total > 0 ? Math.round((successfulRequestIds.size / total) * 100) : null;
+  const total = t.metrics.length;
+  const okCount = t.metrics.filter((r) => r.success).length;
+  const rate = total > 0 ? Math.round((okCount / total) * 100) : null;
   const names = new Set(
     t.providers.filter((x) => x.keyConfigured).map((x) => x.name)
   );
@@ -180,13 +176,11 @@ let headerData = $derived.by(() => {
 let statsData = $derived.by(() => {
   const t = telemetry;
   if (!t) return null;
-  const requestIds = new Set(t.metrics.map((r) => r.requestId));
-  const successfulRequestIds = new Set(
-    t.metrics.filter((r) => r.success).map((r) => r.requestId)
-  );
-  const total = requestIds.size;
+  const okCount = t.metrics.filter((r) => r.success).length;
   const rate =
-    total > 0 ? Math.round((successfulRequestIds.size / total) * 100) : null;
+    t.metrics.length > 0
+      ? Math.round((okCount / t.metrics.length) * 100)
+      : null;
   const flights = t.metrics.filter((r) => r.success).map((r) => r.ttft);
   const avg =
     flights.length > 0
@@ -196,7 +190,7 @@ let statsData = $derived.by(() => {
     t.providers.filter((x) => x.keyConfigured).map((x) => x.name)
   );
   return {
-    traffic: total,
+    traffic: t.metrics.length,
     successRate: rate,
     providers: names.size,
     avgLatency: avg,
