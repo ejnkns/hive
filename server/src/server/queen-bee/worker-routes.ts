@@ -8,6 +8,7 @@ import type { ProjectStore } from "./create-project-store";
 import {
   boardEventBus,
   projectEventBus,
+  reviewerEventBus,
   workerEventBus,
 } from "./worker-event-bus";
 import type { WorkerEvent, WorkerSupervisor } from "./worker-supervisor";
@@ -80,12 +81,31 @@ export function registerWorkerRoutes(
   server.get("/api/queen-bee/ws", { websocket: true }, (socket) => {
     const workerHandler = (event: WorkerEvent, projectId: string) => {
       try {
-        socket.send(
-          JSON.stringify({
-            type: "worker_event",
-            data: { projectId, ...event },
-          })
-        );
+        if (event.type === "worker_complete") {
+          socket.send(
+            JSON.stringify({
+              type: "worker_complete",
+              data: {
+                projectId,
+                cardId: event.cardId,
+                content: event.content ?? "",
+              },
+            })
+          );
+        } else {
+          socket.send(
+            JSON.stringify({
+              type: "worker_progress",
+              data: {
+                projectId,
+                cardId: event.cardId,
+                content: event.content ?? "",
+                toolName: event.toolName ?? null,
+                error: event.error ?? null,
+              },
+            })
+          );
+        }
       } catch {
         // socket closed
       }
@@ -109,14 +129,33 @@ export function registerWorkerRoutes(
       }
     };
 
+    const reviewerHandler = (
+      cardId: string,
+      verdict: "pass" | "fail",
+      feedback: string
+    ) => {
+      try {
+        socket.send(
+          JSON.stringify({
+            type: "reviewer_verdict",
+            data: { cardId, verdict, feedback },
+          })
+        );
+      } catch {
+        // socket closed
+      }
+    };
+
     workerEventBus.on("event", workerHandler);
     boardEventBus.on("change", boardHandler);
     projectEventBus.on("change", projectHandler);
+    reviewerEventBus.on("verdict", reviewerHandler);
 
     socket.on("close", () => {
       workerEventBus.off("event", workerHandler);
       boardEventBus.off("change", boardHandler);
       projectEventBus.off("change", projectHandler);
+      reviewerEventBus.off("verdict", reviewerHandler);
     });
   });
 

@@ -29,10 +29,14 @@ When the feature is fully implemented, respond with a brief summary of everythin
 
 ## If blocked
 
-If you encounter a problem you genuinely cannot resolve (missing dependency, incoherent requirements, conflicting code), explain:
-- What the problem is
-- What you tried
-- What is blocking you
+If you encounter a problem you genuinely cannot resolve (missing dependency, incoherent requirements, conflicting code, unrecoverable error), output your findings in this exact format and stop:
 
-Stop and let the user review.
+\`\`\`
+HANDOVER
+PROBLEM: <one sentence describing the root issue>
+ATTEMPTED: <what approaches you tried, one per line>
+BLOCKED_BY: <what prevents resolution, one per line>
+\`\`\`
+
+Do NOT output HANDOVER unless you have genuinely exhausted all reasonable approaches. If you can implement the task despite obstacles, do so.
 `;

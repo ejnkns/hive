@@ -77,13 +77,32 @@ export function registerBoardRoutes(
       const column = validateColumn(body.column);
 
       try {
-        const card = deps.boardStore.moveCard(
+        const board = deps.boardStore.getBoard(projectId, project.repoPath);
+        const existing = board.cards.find((c) => c.id === cardId);
+        if (!existing) {
+          return reply.status(404).send({ error: "Card not found" });
+        }
+
+        if (
+          existing.column === "idea" &&
+          column === "ready" &&
+          (!existing.description ||
+            !existing.acceptanceCriteria ||
+            existing.acceptanceCriteria.length === 0)
+        ) {
+          return reply.status(400).send({
+            error:
+              "Card must have a description and at least one acceptance criterion before moving to 'ready'",
+          });
+        }
+
+        const moved = deps.boardStore.moveCard(
           projectId,
           project.repoPath,
           cardId,
           column
         );
-        return reply.send({ card });
+        return reply.send({ card: moved });
       } catch {
         return reply.status(404).send({ error: "Card not found" });
       }

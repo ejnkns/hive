@@ -63,6 +63,15 @@ function buildTaskPrompt(card: Card): string {
     parts.push("");
   }
 
+  if (card.reviewerLog && card.reviewerLog.verdict === "fail") {
+    parts.push("### Previous Review Feedback");
+    parts.push(
+      "The previous attempt at this task failed review. Address this feedback:"
+    );
+    parts.push(card.reviewerLog.feedback);
+    parts.push("");
+  }
+
   parts.push("### Instructions");
   parts.push(
     "Implement this task. Read the relevant files first, commit frequently, and write a summary when done."

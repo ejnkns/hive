@@ -341,24 +341,26 @@ See a populated kanban board after a devise session. View card details. Move car
 
 ---
 
-## Phase 4 — worker agent loop [IN PROGRESS]
+## Phase 4 — worker agent loop [COMPLETE]
 
 ### Status assessment
 
-Blockers resolved. Worker can now implement code with write/execute tools. WebSocket events wired, validation pass added, cancel endpoint available.
+Core complete. Worker can implement code, events stream to UI, reviewer auto-invoked after completion. 5 polish items deferred.
 
 **Already working:**
 
 - Worker supervisor: `run()`, `runLoop()` with max 20 iterations via `createDeviseModelCaller(WORKER_TOOLS)`, cancel via `AbortController`
 - Worker tool set: `update_requirements`, `list_directory`, `read_file`, `search_code`, `write_file`, `run_command`
-- Worker system prompt: dedicated `worker-system-prompt.ts` with codebase exploration, git workflow, completion/error handover instructions
+- Worker system prompt: dedicated `worker-system-prompt.ts` with codebase exploration, git workflow, completion/error handover, `HANDOVER` schema for dead-ends
 - Git operations: `createWorktree`, `createBranch`, `commitChanges` (also `getDiff`, `getCurrentBranch`, `removeWorktree`)
-- Worker context builder (`build-worker-context.ts`): system prompt + card task prompt with title, description, criteria, files, dependencies
+- Worker context builder (`build-worker-context.ts`): system prompt + card task prompt + reviewer feedback on retry
 - Validation pass: reads all `relevantFiles` before run loop, moves card to `unfulfillable` if files missing
 - Worker route: `POST .../run` with card state validation, `POST .../cancel` for aborting running workers
-- WebSocket endpoint: `GET /api/queen-bee/ws` — broadcasts `worker_started`, `worker_content`, `worker_tool`, `worker_complete`, `worker_error` events
-- Card detail UI: "Run Worker" / "Retry Worker" button visible on `ready`/`in_progress` cards
-- Worker log storage: `WorkerLog` type in shared/board types, persisted to `board.json` via `writeWorkerLog`
+- Reviewer auto-invoked: `runReviewer()` in worker-supervisor after commit, stores verdict, emits via WebSocket
+- WebSocket endpoint: `GET /api/queen-bee/ws` — broadcasts `worker_progress`, `worker_complete`, `reviewer_verdict`, `board_updated`, `projects_changed`
+- Card detail UI: "Run Worker" / "Retry Worker" button, reviewer verdict and feedback display
+- Kanban card UI: colored pass/fail badge on reviewed cards
+- Worker log storage: `WorkerLog` + `ReviewerLog` types in shared/board types, persisted to `board.json`
 
 ### Prioritized implementation plan
 
@@ -400,7 +402,7 @@ Blockers resolved. Worker can now implement code with write/execute tools. WebSo
 
 ### Status
 
-Core reviewer agent implemented. Runs automatically after worker completion. Missing: feedback injection into worker retry context, WebSocket notification for review verdicts, worktree cleanup on pass.
+Complete. Reviewer runs automatically after worker completion, emits WebSocket verdict, feedback injected into retry context. Card movement rules enforced.
 
 ### What was delivered
 
@@ -408,8 +410,12 @@ Core reviewer agent implemented. Runs automatically after worker completion. Mis
 - `reviewer/reviewer-system-prompt.ts` — instructions for code-and-diff inspection only, structured output format
 - `ReviewerLog` type added to `shared/board-types.ts`, `board-store.ts` Card, `save-board.ts`, `load-board.ts`, `save-card.ts`
 - Worker supervisor invokes reviewer after successful commit: computes `git diff HEAD~1`, calls reviewer, stores `reviewerLog` on card
-- On pass: card → done. On fail: card → in_progress with feedback stored.
-- UI: `card-detail.svelte` shows reviewer verdict (pass/fail) and feedback. `kanban-card.svelte` shows colored pass/fail badge.
+- On pass: card → done, `reviewer_verdict` WebSocket event emitted. On fail: card → in_progress with feedback, `reviewer_verdict` event emitted.
+- Worker retry context: `build-worker-context.ts` injects "Previous Review Feedback" section when card has a failed `reviewerLog`
+- Card movement enforcement: idea→ready validated in `board-routes.ts` PATCH handler (requires description + ≥1 acceptance criterion)
+- Worker handover schema: system prompt enforces `HANDOVER / PROBLEM / ATTEMPTED / BLOCKED_BY` format when blocked
+- WebSocket event types aligned with ARCHITECTURE.md: `worker_progress`, `worker_complete`, `reviewer_verdict`, `board_updated`, `projects_changed`
+- UI: `card-detail.svelte` shows reviewer verdict (Passed/Failed) with feedback. `kanban-card.svelte` shows colored pass/fail badge.
 
 ### Implementation steps
 
@@ -423,7 +429,7 @@ Core reviewer agent implemented. Runs automatically after worker completion. Mis
 
 5. ~~**UI reviewer verdict**~~ — Card detail shows "Passed"/"Failed" with colored text and feedback. KanbanCard shows small pass/fail badge.
 
-6. **Worker context incorporates reviewer feedback on retry** — [DEFERRED] The `build-worker-context.ts` should include previous reviewer feedback when the worker is retried on a failed card. Currently not implemented.
+6. ~~**Worker context incorporates reviewer feedback on retry**~~ — `build-worker-context.ts` now includes "Previous Review Feedback" section when card has a `reviewerLog` with `verdict: "fail"`. The feedback is injected into the worker's task prompt so it knows what went wrong last time.
 
 ---
 
