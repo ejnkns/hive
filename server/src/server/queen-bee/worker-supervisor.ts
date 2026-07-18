@@ -1,5 +1,6 @@
 /** @public */
 
+import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { WorkerHandover } from "shared/board-types";
@@ -14,8 +15,11 @@ import { readRequirements, requirementsRevision } from "./requirements-store";
 import type { Reviewer } from "./reviewer";
 import { buildWorkerContext } from "./worker-supervisor/build-worker-context";
 import {
-  commitChanges,
-  createPullRequest,
+  evaluateCompletion,
+  type WorkerCompletion,
+  type WorkerToolEvidence,
+} from "./worker-supervisor/completion-gate";
+import {
   getDiff,
   prepareWorktree,
   removeWorktree,
@@ -131,8 +135,6 @@ export function createWorkerSupervisor(
     }
 
     const worktreePath = wtResult.path;
-    const branchName = wtResult.branchName;
-
     onEvent({ type: "worker_started", cardId: card.id });
     boardStore.moveCard(projectId, repoPath, card.id, "in_progress");
     const persistLog = () =>
@@ -160,9 +162,10 @@ export function createWorkerSupervisor(
     }
 
     try {
-      const handover = await runLoop(
+      const result = await runLoop(
         messages,
         worktreePath,
+        baseCommit,
         card.id,
         onEvent,
         modelCaller,
@@ -170,8 +173,8 @@ export function createWorkerSupervisor(
         persistLog
       );
 
-      if (handover) {
-        log.error = handover.problem;
+      if (result.type === "handover") {
+        log.error = result.handover.problem;
         log.finishedAt = new Date().toISOString();
         writeWorkerLog(boardStore, projectId, repoPath, card.id, log);
         await handleHandover(
@@ -180,60 +183,31 @@ export function createWorkerSupervisor(
           projectId,
           repoPath,
           card,
-          handover,
+          result.handover,
           onEvent
         );
         return;
       }
 
-      const commitResult = commitChanges(worktreePath, `worker: ${card.title}`);
-
       log.finishedAt = new Date().toISOString();
       writeWorkerLog(boardStore, projectId, repoPath, card.id, log);
+      onEvent({
+        type: "worker_complete",
+        cardId: card.id,
+        content: completionDescription(result.completion),
+      });
+      boardStore.moveCard(projectId, repoPath, card.id, "reviewing");
 
-      if (commitResult.ok) {
-        const branchSummary = await summarizeBranch(
-          modelCaller,
-          card,
-          worktreePath,
-          commitResult.message
-        );
-        const pr = createPullRequest(
-          worktreePath,
-          branchName,
-          card.title,
-          branchSummary
-        );
-        boardStore.updateCard(projectId, repoPath, card.id, {
-          branchSummary,
-          prUrl: pr.url,
-          prError: pr.ok ? undefined : pr.message,
-        });
-        onEvent({
-          type: "worker_complete",
-          cardId: card.id,
-          content: commitResult.message,
-        });
-        boardStore.moveCard(projectId, repoPath, card.id, "reviewing");
-
-        await runReviewer(
-          card,
-          repoPath,
-          worktreePath,
-          projectId,
-          boardStore,
-          reviewer,
-          onEvent,
-          baseCommit
-        );
-      } else {
-        onEvent({
-          type: "worker_error",
-          cardId: card.id,
-          error: commitResult.message,
-        });
-        boardStore.moveCard(projectId, repoPath, card.id, "ready");
-      }
+      await runReviewer(
+        card,
+        repoPath,
+        worktreePath,
+        projectId,
+        boardStore,
+        reviewer,
+        onEvent,
+        baseCommit
+      );
     } catch (err) {
       log.error = err instanceof Error ? err.message : "Worker failed";
       log.finishedAt = new Date().toISOString();
@@ -248,39 +222,24 @@ export function createWorkerSupervisor(
   }
 }
 
-async function summarizeBranch(
-  modelCaller: ReturnType<typeof createDeviseModelCaller>,
-  card: Card,
-  worktreePath: string,
-  fallback: string
-): Promise<string> {
-  try {
-    const response = await modelCaller.call(
-      [
-        {
-          role: "user",
-          content: `Summarize what was implemented for "${card.title}" in two or three concise sentences. Do not mention tools.`,
-        },
-      ],
-      worktreePath,
-      false
-    );
-    return response.content.trim() || fallback;
-  } catch {
-    return fallback;
-  }
-}
+type WorkerLoopResult =
+  | { type: "complete"; completion: WorkerCompletion }
+  | { type: "handover"; handover: WorkerHandover };
 
 async function runLoop(
   messages: Message[],
   worktreePath: string,
+  baseCommit: string,
   cardId: string,
   onEvent: (event: WorkerEvent) => void,
   modelCaller: ReturnType<typeof createDeviseModelCaller>,
   log: NonNullable<Card["workerLog"]>,
   persistLog: () => void,
   maxIterations = 20
-): Promise<WorkerHandover | null> {
+): Promise<WorkerLoopResult> {
+  const evidence = new Map<string, WorkerToolEvidence>();
+  let rejectedCompletions = 0;
+
   for (let iteration = 0; iteration < maxIterations; iteration++) {
     log.iterations = iteration + 1;
     persistLog();
@@ -299,9 +258,49 @@ async function runLoop(
 
     if (response.toolCalls.length === 0) {
       const parsed = parseWorkerHandover(response.content);
-      return parsed
-        ? { ...parsed, occurredAt: new Date().toISOString() }
-        : null;
+      if (parsed) {
+        return {
+          type: "handover",
+          handover: { ...parsed, occurredAt: new Date().toISOString() },
+        };
+      }
+      rejectedCompletions += 1;
+      const correction =
+        "Completion rejected: successful work must finish by calling submit_work as the only tool call. Commit coherent changes with commit_work first.";
+      if (rejectedCompletions >= 3) {
+        return completionGateHandover(correction);
+      }
+      messages.push({ role: "system", content: correction });
+      continue;
+    }
+
+    const submission = response.toolCalls.find(
+      (toolCall) => toolCall.name === "submit_work"
+    );
+    if (submission) {
+      const gate =
+        response.toolCalls.length === 1
+          ? evaluateCompletion(submission, worktreePath, baseCommit, evidence)
+          : {
+              ok: false as const,
+              correction:
+                "Completion rejected: submit_work must be the only tool call in the response.",
+            };
+      if (gate.ok) {
+        return { type: "complete", completion: gate.completion };
+      }
+      rejectedCompletions += 1;
+      if (rejectedCompletions >= 3) {
+        return completionGateHandover(gate.correction);
+      }
+      appendToolExchange(messages, response, submission, gate.correction);
+      onEvent({
+        type: "worker_tool",
+        cardId,
+        toolName: submission.name,
+        error: gate.correction,
+      });
+      continue;
     }
 
     for (const toolCall of response.toolCalls) {
@@ -312,37 +311,12 @@ async function runLoop(
       persistLog();
 
       const result = await executeWorkerTool(toolCall, worktreePath);
-
-      const assistantMsg: Message = {
-        role: "assistant",
-        content: response.content,
-        tool_calls: [
-          {
-            id: toolCall.id,
-            type: "function",
-            function: {
-              name: toolCall.name,
-              arguments: toolCall.arguments,
-            },
-          },
-        ],
-      };
-
-      if (response.reasoningContent) {
-        assistantMsg.reasoning_content = response.reasoningContent;
-      }
-
-      if (response.reasoning) {
-        assistantMsg.reasoning = response.reasoning;
-      }
-
-      messages.push(assistantMsg);
-
-      messages.push({
-        role: "tool",
-        content: result.content,
-        tool_call_id: toolCall.id,
+      evidence.set(toolCall.id, {
+        name: toolCall.name,
+        isError: result.isError,
+        headCommit: currentHead(worktreePath),
       });
+      appendToolExchange(messages, response, toolCall, result.content);
 
       onEvent({
         type: "worker_tool",
@@ -353,6 +327,62 @@ async function runLoop(
   }
 
   throw new Error("Reached maximum iterations");
+}
+
+function appendToolExchange(
+  messages: Message[],
+  response: Awaited<ReturnType<DeviseModelCaller["call"]>>,
+  toolCall: { id: string; name: string; arguments: string },
+  content: string
+): void {
+  const assistantMessage: Message = {
+    role: "assistant",
+    content: response.content,
+    tool_calls: [
+      {
+        id: toolCall.id,
+        type: "function",
+        function: { name: toolCall.name, arguments: toolCall.arguments },
+      },
+    ],
+  };
+  if (response.reasoningContent) {
+    assistantMessage.reasoning_content = response.reasoningContent;
+  }
+  if (response.reasoning) assistantMessage.reasoning = response.reasoning;
+  messages.push(assistantMessage, {
+    role: "tool",
+    content,
+    tool_call_id: toolCall.id,
+  });
+}
+
+function currentHead(worktreePath: string): string {
+  return execFileSync("git", ["rev-parse", "HEAD"], {
+    cwd: worktreePath,
+    encoding: "utf-8",
+    timeout: 5_000,
+  }).trim();
+}
+
+function completionGateHandover(correction: string): WorkerLoopResult {
+  return {
+    type: "handover",
+    handover: {
+      problem: "Completion Gate rejected the Worker Agent three times.",
+      attempted: [
+        "Reprompted the Worker Agent with deterministic corrections.",
+      ],
+      blockedBy: [correction],
+      occurredAt: new Date().toISOString(),
+    },
+  };
+}
+
+function completionDescription(completion: WorkerCompletion): string {
+  return completion.outcome === "implemented"
+    ? "Committed work submitted for review"
+    : "No-change claim submitted for review";
 }
 
 function validateCard(card: Card, worktreePath: string): WorkerHandover | null {

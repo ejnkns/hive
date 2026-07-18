@@ -74,7 +74,7 @@ function buildTaskPrompt(card: Card): string {
 
   parts.push("### Instructions");
   parts.push(
-    "Implement this task. Read the relevant files first, commit frequently, and write a summary when done."
+    "Implement this task. Read the relevant files first, create meaningful commits with commit_work, verify the final commit, and finish with submit_work."
   );
 
   return parts.join("\n");

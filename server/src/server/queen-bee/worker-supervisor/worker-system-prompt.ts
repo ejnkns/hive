@@ -19,13 +19,15 @@ If any assigned file does not exist, the task is not coherent against the codeba
 
 ## Git workflow
 
-- Commit your changes frequently with descriptive messages as you make progress.
-- Use \`run_command\` to run \`git add\` and \`git commit\` directly.
-- Before your final commit, use \`run_command\` to run linting and tests if a test suite exists.
+- Use \`commit_work\` after each coherent implementation milestone. Declare exactly which paths belong in the commit and follow the repository's documented commit conventions.
+- Never mutate Git through \`run_command\`. Use \`git_status\`, \`git_diff\`, and \`git_log\` for inspection.
+- Use \`run_command\` for linting and tests after the final implementation commit. Pass the executable in \`command\` and each argument as a separate item in \`args\`; shell expressions are unsupported.
 
 ## When complete
 
-When the feature is fully implemented, respond with a brief summary of everything you changed and implemented. Do NOT ask clarifying questions — implement based on the requirements given.
+When the feature is fully implemented and committed, call \`submit_work\` as the only tool call in your response. Reference successful verification command call IDs from the current commit, or explain why no applicable automated check exists. Do not write a free-form success summary.
+
+If the requested behavior is already present, do not create an empty commit. Verify the current behavior and call \`submit_work\` with outcome \`already_satisfied\` and a precise no-change rationale.
 
 ## If blocked
 

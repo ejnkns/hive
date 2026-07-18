@@ -29,6 +29,130 @@ describe("WorkerSupervisor", () => {
     }
   });
 
+  it("requires explicit committed submission without supervisor-authored commits", async () => {
+    const repoPath = createGitRepository();
+    const boardStore = createBoardStore(() => {});
+    const card = boardStore.addCard("project-1", repoPath, {
+      title: "Require explicit completion",
+      description: "Commit and submit through explicit tools",
+      acceptanceCriteria: ["The worker owns every implementation commit"],
+      relevantFiles: ["source.txt"],
+      dependencies: [],
+      column: "ready",
+    });
+    let callCount = 0;
+    let completionCorrection = "";
+    let reviewerCalls = 0;
+    const modelCaller: DeviseModelCaller = {
+      async call(messages) {
+        callCount += 1;
+        if (callCount === 1) {
+          return toolResponse("write-1", "write_file", {
+            path: "source.txt",
+            content: "implemented\n",
+          });
+        }
+        if (callCount === 2) return terminalResponse("The work is done");
+        if (callCount === 3) {
+          completionCorrection = messages.at(-1)?.content ?? "";
+          return toolResponse("commit-1", "commit_work", {
+            message: "worker: implement explicit completion",
+            paths: ["source.txt"],
+          });
+        }
+        if (callCount === 4) {
+          return toolResponse("verify-1", "run_command", {
+            command: process.execPath,
+            args: ["-e", 'process.stdout.write("verified")'],
+          });
+        }
+        return toolResponse("submit-1", "submit_work", {
+          outcome: "implemented",
+          verificationCallIds: ["verify-1"],
+        });
+      },
+    };
+    const reviewer: Reviewer = {
+      async review() {
+        reviewerCalls += 1;
+        return { verdict: "fail", feedback: "Keep branch for inspection" };
+      },
+    };
+    const supervisor = createWorkerSupervisor(
+      boardStore,
+      reviewer,
+      unusedCoordinator(),
+      modelCaller
+    );
+
+    await supervisor.run("project-1", card, repoPath, "", "", () => {});
+
+    const branch = git(repoPath, ["branch", "--list", `qb/${card.id}`]);
+    assert.notEqual(branch, "");
+    assert.match(completionCorrection, /submit_work/);
+    assert.equal(reviewerCalls, 1);
+    assert.equal(
+      git(repoPath, ["log", "-1", "--format=%s", `qb/${card.id}`]),
+      "worker: implement explicit completion"
+    );
+    assert.equal(
+      git(repoPath, ["rev-list", "--count", `HEAD..qb/${card.id}`]),
+      "1"
+    );
+  });
+
+  it("preserves dirty work after three rejected completion submissions", async () => {
+    const repoPath = createGitRepository();
+    const boardStore = createBoardStore(() => {});
+    const card = boardStore.addCard("project-1", repoPath, {
+      title: "Reject dirty completion",
+      description: "Do not let the supervisor commit unfinished work",
+      acceptanceCriteria: ["Dirty submissions become unfulfillable"],
+      relevantFiles: ["source.txt"],
+      dependencies: [],
+      column: "ready",
+    });
+    let callCount = 0;
+    const modelCaller: DeviseModelCaller = {
+      async call() {
+        callCount += 1;
+        if (callCount === 1) {
+          return toolResponse("write-1", "write_file", {
+            path: "source.txt",
+            content: "unfinished\n",
+          });
+        }
+        return toolResponse(`submit-${String(callCount)}`, "submit_work", {
+          outcome: "implemented",
+          verificationNotRunReason: "No test suite",
+        });
+      },
+    };
+    const supervisor = createWorkerSupervisor(
+      boardStore,
+      failingReviewer(),
+      unusedCoordinator(),
+      modelCaller
+    );
+
+    await supervisor.run("project-1", card, repoPath, "", "", () => {});
+
+    const saved = boardStore.getBoard("project-1", repoPath).cards[0];
+    assert.equal(saved?.column, "unfulfillable");
+    assert.match(saved?.handover?.problem ?? "", /Completion Gate/);
+    assert.equal(
+      git(repoPath, ["rev-list", "--count", `HEAD..qb/${card.id}`]),
+      "0"
+    );
+    assert.equal(
+      readFileSync(
+        join(repoPath, ".worktrees", card.id, "source.txt"),
+        "utf-8"
+      ),
+      "unfinished\n"
+    );
+  });
+
   it("includes completed command output in the next model turn", async () => {
     const repoPath = createGitRepository();
     const boardStore = createBoardStore(() => {});
@@ -66,9 +190,13 @@ describe("WorkerSupervisor", () => {
           receivedToolContent = messages.find(
             (message) => message.role === "tool"
           )?.content;
-          return terminalResponse("Implementation complete");
+          return toolResponse("submit-1", "submit_work", {
+            outcome: "already_satisfied",
+            verificationCallIds: ["command-1"],
+            noChangeRationale: "The command contract required no code change.",
+          });
         }
-        return terminalResponse("Verified the worker command contract");
+        throw new Error("Unexpected model call");
       },
     };
     const reviewer: Reviewer = {
@@ -116,9 +244,15 @@ describe("WorkerSupervisor", () => {
             join(workspacePath, "source.txt"),
             "utf-8"
           );
-          return terminalResponse("Implementation complete");
+          return toolResponse("commit-1", "commit_work", {
+            message: "worker: preserve interrupted change",
+            paths: ["source.txt"],
+          });
         }
-        return terminalResponse("Preserved interrupted work");
+        return toolResponse("submit-1", "submit_work", {
+          outcome: "implemented",
+          verificationNotRunReason: "No automated checks are configured.",
+        });
       },
     };
     const supervisor = createWorkerSupervisor(
@@ -157,7 +291,11 @@ describe("WorkerSupervisor", () => {
       async call(_messages, workspacePath) {
         modelCallCount += 1;
         observedWorkspace ||= workspacePath;
-        return terminalResponse("Recovered safely");
+        return toolResponse("submit-1", "submit_work", {
+          outcome: "already_satisfied",
+          verificationNotRunReason: "Recovery behavior is the test subject.",
+          noChangeRationale: "No implementation change is required.",
+        });
       },
     };
     const supervisor = createWorkerSupervisor(
@@ -213,7 +351,11 @@ describe("WorkerSupervisor", () => {
         async call(_messages, workspacePath) {
           modelCallCount += 1;
           observedWorkspace ||= workspacePath;
-          return terminalResponse("Recovered safely");
+          return toolResponse("submit-1", "submit_work", {
+            outcome: "already_satisfied",
+            verificationNotRunReason: "Recovery behavior is the test subject.",
+            noChangeRationale: "No implementation change is required.",
+          });
         },
       }
     );
@@ -390,5 +532,17 @@ describe("WorkerSupervisor", () => {
 
   function terminalResponse(content: string): DeviseModelResponse {
     return { content, toolCalls: [], finishReason: "stop" };
+  }
+
+  function toolResponse(
+    id: string,
+    name: string,
+    args: object
+  ): DeviseModelResponse {
+    return {
+      content: "",
+      toolCalls: [{ id, name, arguments: JSON.stringify(args) }],
+      finishReason: "tool_calls",
+    };
   }
 });
