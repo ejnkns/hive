@@ -13,13 +13,6 @@ export function healthColor(score: number, requestCount: number): string {
   return sc(score);
 }
 
-export function healthLabel(score: number, requestCount: number): string {
-  if (requestCount === 0) return "unknown";
-  if (score >= 70) return "healthy";
-  if (score >= 50) return "degraded";
-  return "unhealthy";
-}
-
 export function formatTime(ts: number): string {
   return new Date(ts).toLocaleTimeString([], {
     hour: "2-digit",
@@ -33,11 +26,6 @@ export function formatNumber(v: number | null, suf?: string): string {
   if (suf === "ms")
     return v >= 1000 ? `${(v / 1000).toFixed(1)}s` : `${String(v)}ms`;
   return v.toFixed(2) + (suf ? ` ${suf}` : "");
-}
-
-export function bar(pct: number): string {
-  const f = Math.max(0, Math.min(10, Math.round(pct / 10)));
-  return "\u2588".repeat(f) + "\u2591".repeat(10 - f);
 }
 
 export function esc(input: unknown): string {

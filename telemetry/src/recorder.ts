@@ -97,14 +97,7 @@ export class TelemetryRecorder {
 
     await saveCache({ metrics: retained, scores });
     this.buffer = [];
-    logger.debug(
-      `recorder: flush — ${String(count)} buffer metrics, ${String(scores.length)} scores`
-    );
-    for (const s of scores) {
-      logger.debug(
-        `recorder: score — ${s.provider}:${s.model} reqCount=${s.derived.requestCount} stability=${s.score.toFixed(1)}`
-      );
-    }
+    logger.debug(`recorder: flush — saved ${String(count)} metrics to cache`);
     this.notify();
   }
 

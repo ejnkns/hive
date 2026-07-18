@@ -98,6 +98,8 @@ function evictIfNeeded() {
       if (session) {
         for (const req of session.requests) {
           requestToSession.delete(req.requestId);
+          chainHeads.delete(req.requestId);
+          chainCounts.delete(req.requestId);
         }
       }
       sessionMap.delete(oldestEvictable);
