@@ -8,6 +8,7 @@ import {
 } from "./devise-engine/create-devise-model-caller";
 import { DEVISE_SYSTEM_PROMPT } from "./devise-engine/devise-system-prompt";
 import { executeDeviseTool } from "./devise-engine/devise-tools";
+import { loadProjectContext } from "./project-context";
 import type {
   PersistedDeviseSession,
   QueenBeeRuntimeStore,
@@ -118,6 +119,7 @@ export function createDeviseEngine(
     }
     const messages: Message[] = [
       { role: "system", content: DEVISE_SYSTEM_PROMPT },
+      ...projectContextMessages(projectId, workspacePath),
       { role: "user", content: prompt },
     ];
 
@@ -214,6 +216,27 @@ export function createDeviseEngine(
         sessions.set(key, session);
       }
     }
+  }
+}
+
+function projectContextMessages(
+  projectId: string,
+  workspacePath: string
+): Message[] {
+  try {
+    const context = loadProjectContext(projectId, workspacePath);
+    return [
+      {
+        role: "system",
+        content: `Shared Project Context at ${context.revision}:\n${JSON.stringify(
+          { files: context.files, manifests: context.manifests },
+          null,
+          2
+        )}`,
+      },
+    ];
+  } catch {
+    return [];
   }
 }
 

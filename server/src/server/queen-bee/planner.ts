@@ -16,6 +16,7 @@ import {
 import { DEVISE_TOOLS, executeDeviseTool } from "./devise-engine/devise-tools";
 import type { IntegrationManager } from "./integration-manager";
 import { PLAN_SYSTEM_PROMPT } from "./planner/plan-system-prompt";
+import { loadProjectContext } from "./project-context";
 import type { QueenBeeRuntimeStore } from "./queen-bee-runtime-store";
 import {
   readRequirements,
@@ -54,6 +55,7 @@ export function createPlanner(
   return {
     async propose(projectId, repoPath, proposedRequirements, guidance) {
       const currentCards = boardStore.getBoard(projectId, repoPath).cards;
+      const sharedContext = projectContext(projectId, repoPath);
       const messages: Message[] = [
         { role: "system", content: PLAN_SYSTEM_PROMPT },
         {
@@ -61,6 +63,7 @@ export function createPlanner(
           content: buildProposalPrompt(
             proposedRequirements,
             currentCards,
+            sharedContext,
             guidance
           ),
         },
@@ -169,6 +172,7 @@ async function callWithToolLoop(
 function buildProposalPrompt(
   proposedRequirements: string,
   currentCards: Card[],
+  sharedContext: unknown,
   guidance?: string
 ): string {
   return [
@@ -177,10 +181,20 @@ function buildProposalPrompt(
     proposedRequirements,
     "Current cards:",
     JSON.stringify(currentCards.map(cardContext), null, 2),
+    "Shared Project Context:",
+    JSON.stringify(sharedContext, null, 2),
     guidance ? `User guidance:\n${guidance}` : "",
   ]
     .filter(Boolean)
     .join("\n\n");
+}
+
+function projectContext(projectId: string, repoPath: string): unknown {
+  try {
+    return loadProjectContext(projectId, repoPath);
+  } catch {
+    return { unavailable: true };
+  }
 }
 
 function cardContext(card: Card) {
