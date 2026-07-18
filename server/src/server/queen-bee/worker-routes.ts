@@ -69,6 +69,7 @@ export function registerWorkerRoutes(
       reply.send({ started: true, cardId });
 
       await deps.workerSupervisor.run(
+        projectId,
         card,
         project.repoPath,
         systemPrompt,

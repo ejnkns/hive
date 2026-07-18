@@ -88,7 +88,7 @@ describe("WorkerSupervisor", () => {
       modelCaller
     );
 
-    await supervisor.run(card, repoPath, "", "", () => {});
+    await supervisor.run("project-1", card, repoPath, "", "", () => {});
 
     assert.match(receivedToolContent ?? "", /command complete/);
   });
@@ -128,7 +128,7 @@ describe("WorkerSupervisor", () => {
       modelCaller
     );
 
-    await supervisor.run(card, repoPath, "", "", () => {});
+    await supervisor.run("project-1", card, repoPath, "", "", () => {});
 
     assert.equal(observedSource, "interrupted change\n");
   });
@@ -162,7 +162,7 @@ describe("WorkerSupervisor", () => {
       modelCaller
     );
 
-    await supervisor.run(card, repoPath, "", "", () => {});
+    await supervisor.run("project-1", card, repoPath, "", "", () => {});
 
     assert.equal(modelCallCount, 0);
     assert.equal(git(repoPath, ["rev-parse", `qb/${card.id}`]), originalHead);
@@ -171,6 +171,84 @@ describe("WorkerSupervisor", () => {
       boardStore.getBoard("project-1", repoPath).cards[0]?.column,
       "ready"
     );
+  });
+
+  it("persists project-scoped progress before the worker finishes", async () => {
+    const repoPath = createGitRepository();
+    const boardStore = createBoardStore(() => {});
+    const card = boardStore.addCard("project-1", repoPath, {
+      title: "Persist worker progress",
+      description: "Keep enough state to diagnose an interruption",
+      acceptanceCriteria: ["Progress is saved during the run"],
+      relevantFiles: ["source.txt"],
+      dependencies: [],
+      column: "ready",
+    });
+    let notifySecondCall = () => {};
+    let interruptSecondCall = (_error: Error) => {};
+    const secondCallStarted = new Promise<void>((resolve) => {
+      notifySecondCall = resolve;
+    });
+    const interruptedCall = new Promise<never>((_resolve, reject) => {
+      interruptSecondCall = reject;
+    });
+    let callCount = 0;
+    const modelCaller: DeviseModelCaller = {
+      async call() {
+        callCount += 1;
+        if (callCount === 1) {
+          return {
+            content: "Starting verification",
+            toolCalls: [
+              {
+                id: "command-1",
+                name: "run_command",
+                arguments: JSON.stringify({
+                  command: process.execPath,
+                  args: ["-e", 'process.stdout.write("verified")'],
+                }),
+              },
+            ],
+            finishReason: "tool_calls",
+          };
+        }
+        notifySecondCall();
+        return await interruptedCall;
+      },
+    };
+    const supervisor = createWorkerSupervisor(
+      boardStore,
+      failingReviewer(),
+      unusedCoordinator(),
+      modelCaller
+    );
+    const run = supervisor.run("project-1", card, repoPath, "", "", () => {});
+
+    await secondCallStarted;
+    try {
+      const savedBoard = JSON.parse(
+        readFileSync(join(repoPath, ".hive", "board.json"), "utf-8")
+      ) as {
+        projectId: string;
+        cards: Array<{
+          workerLog?: {
+            iterations: number;
+            content: string;
+            toolCalls: Array<{ name: string }>;
+          };
+        }>;
+      };
+      assert.equal(savedBoard.projectId, "project-1");
+      assert.equal(savedBoard.cards[0]?.workerLog?.iterations, 2);
+      assert.match(savedBoard.cards[0]?.workerLog?.content ?? "", /Starting/);
+      assert.deepEqual(
+        savedBoard.cards[0]?.workerLog?.toolCalls.map((call) => call.name),
+        ["run_command"]
+      );
+    } finally {
+      interruptSecondCall(new Error("Simulated process interruption"));
+      await run;
+    }
   });
 
   function createGitRepository(): string {

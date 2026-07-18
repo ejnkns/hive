@@ -43,6 +43,7 @@ export type WorkerEvent = {
 
 export type WorkerSupervisor = {
   run(
+    projectId: string,
     card: Card,
     repoPath: string,
     systemPrompt: string,
@@ -61,12 +62,20 @@ export function createWorkerSupervisor(
   const abortControllers = new Map<string, AbortController>();
 
   return {
-    async run(card, repoPath, systemPrompt, codingGuidelines, onEvent) {
+    async run(
+      projectId,
+      card,
+      repoPath,
+      systemPrompt,
+      codingGuidelines,
+      onEvent
+    ) {
       const controller = new AbortController();
       abortControllers.set(card.id, controller);
 
       try {
         await runWithController(
+          projectId,
           card,
           repoPath,
           systemPrompt,
@@ -89,6 +98,7 @@ export function createWorkerSupervisor(
   };
 
   async function runWithController(
+    projectId: string,
     card: Card,
     repoPath: string,
     systemPrompt: string,
@@ -96,7 +106,6 @@ export function createWorkerSupervisor(
     onEvent: (event: WorkerEvent) => void,
     _controller: AbortController
   ) {
-    const projectId = boardStore.getBoard("", repoPath).projectId;
     const startedAt = new Date().toISOString();
     const log: NonNullable<Card["workerLog"]> = {
       startedAt,
@@ -126,6 +135,9 @@ export function createWorkerSupervisor(
 
     onEvent({ type: "worker_started", cardId: card.id });
     boardStore.moveCard(projectId, repoPath, card.id, "in_progress");
+    const persistLog = () =>
+      writeWorkerLog(boardStore, projectId, repoPath, card.id, log);
+    persistLog();
 
     const baseCommit = wtResult.baseCommit;
     const messages = buildWorkerContext(card, systemPrompt, codingGuidelines);
@@ -154,7 +166,8 @@ export function createWorkerSupervisor(
         card.id,
         onEvent,
         modelCaller,
-        log
+        log,
+        persistLog
       );
 
       if (handover) {
@@ -265,15 +278,18 @@ async function runLoop(
   onEvent: (event: WorkerEvent) => void,
   modelCaller: ReturnType<typeof createDeviseModelCaller>,
   log: NonNullable<Card["workerLog"]>,
+  persistLog: () => void,
   maxIterations = 20
 ): Promise<WorkerHandover | null> {
   for (let iteration = 0; iteration < maxIterations; iteration++) {
     log.iterations = iteration + 1;
+    persistLog();
 
     const response = await modelCaller.call(messages, worktreePath, true);
 
     if (response.content) {
       log.content += `${response.content}\n`;
+      persistLog();
       onEvent({
         type: "worker_content",
         cardId,
@@ -293,6 +309,7 @@ async function runLoop(
         name: toolCall.name,
         args: toolCall.arguments.slice(0, 200),
       });
+      persistLog();
 
       const result = await executeWorkerTool(toolCall, worktreePath);
 
