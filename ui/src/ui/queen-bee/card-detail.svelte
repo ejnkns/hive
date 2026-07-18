@@ -2,12 +2,20 @@
 import type { Card, Column } from "shared/board-types";
 import CardRefinement from "./card-refinement.svelte";
 
-let { projectId, card, onClose, onCardUpdated, onRun, onRemediate }: Props =
-  $props();
+let {
+  projectId,
+  card,
+  initialRefinementQuestion,
+  onClose,
+  onCardUpdated,
+  onRun,
+  onRemediate,
+}: Props = $props();
 
 type Props = {
   projectId: string;
   card: Card;
+  initialRefinementQuestion?: string | null;
   onClose: () => void;
   onCardUpdated: (card: Card) => void;
   onRun?: () => void;
@@ -18,6 +26,17 @@ type Props = {
 };
 
 let refining = $state(false);
+let consumedInitialQuestion = $state("");
+
+$effect(() => {
+  if (
+    initialRefinementQuestion &&
+    initialRefinementQuestion !== consumedInitialQuestion
+  ) {
+    consumedInitialQuestion = initialRefinementQuestion;
+    refining = true;
+  }
+});
 
 const COLUMN_LABELS: Record<Column, string> = {
   idea: "Idea",
@@ -179,6 +198,7 @@ const COLUMN_LABELS: Record<Column, string> = {
           {projectId}
           {card}
           {onCardUpdated}
+          initialQuestion={initialRefinementQuestion}
           onCancel={() => (refining = false)}
         />
       {/if}

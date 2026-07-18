@@ -74,6 +74,9 @@ describe("devise routes", () => {
           ].join("\n"),
         };
       },
+      getCardSession() {
+        return requirementsUpdatedSession();
+      },
     });
     const card = boardStore.addCard(project.id, project.repoPath, {
       title: "New idea",
@@ -99,6 +102,38 @@ describe("devise routes", () => {
         .getBoard(project.id, project.repoPath)
         .cards.find((candidate) => candidate.id === card.id)?.column,
       "idea"
+    );
+  });
+
+  it("rejects a card update when requirements were not updated", async () => {
+    const { server, boardStore, project } = createRouteFixture({
+      async respondCard() {
+        return {
+          type: "complete" as const,
+          spec: 'CARD_UPDATE\n```json\n{"description":"Card only"}\n```',
+        };
+      },
+    });
+    const card = boardStore.addCard(project.id, project.repoPath, {
+      title: "Keep requirements aligned",
+      description: "",
+      acceptanceCriteria: [],
+      relevantFiles: [],
+      dependencies: [],
+      column: "idea",
+    });
+
+    const response = await server.inject({
+      method: "POST",
+      url: `/api/queen-bee/${project.id}/cards/${card.id}/devise/respond`,
+      payload: { answer: "Done" },
+    });
+
+    assert.equal(response.statusCode, 422);
+    assert.match(response.json().error, /requirements/i);
+    assert.equal(
+      boardStore.getBoard(project.id, project.repoPath).cards[0]?.description,
+      ""
     );
   });
 
@@ -137,5 +172,24 @@ describe("devise routes", () => {
     servers.push(server);
     registerDeviseRoutes(server, { engine, boardStore, projectStore });
     return { server, boardStore, project };
+  }
+
+  function requirementsUpdatedSession() {
+    return {
+      projectId: "project-1",
+      cardId: "card-1",
+      status: "complete" as const,
+      messages: [
+        {
+          role: "assistant",
+          content: "",
+          tool_calls: [
+            {
+              function: { name: "update_requirements", arguments: "{}" },
+            },
+          ],
+        },
+      ],
+    };
   }
 });

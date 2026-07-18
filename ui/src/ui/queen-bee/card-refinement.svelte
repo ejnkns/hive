@@ -1,11 +1,13 @@
 <script lang="ts">
 import type { Card } from "shared/board-types";
 
-let { projectId, card, onCardUpdated, onCancel }: Props = $props();
+let { projectId, card, initialQuestion, onCardUpdated, onCancel }: Props =
+  $props();
 
 type Props = {
   projectId: string;
   card: Card;
+  initialQuestion?: string | null;
   onCardUpdated: (card: Card) => void;
   onCancel: () => void;
 };
@@ -17,6 +19,15 @@ let input = $state("");
 let question = $state("");
 let busy = $state(false);
 let error = $state<string | null>(null);
+let consumedInitialQuestion = $state("");
+
+$effect(() => {
+  if (initialQuestion && initialQuestion !== consumedInitialQuestion) {
+    consumedInitialQuestion = initialQuestion;
+    question = initialQuestion;
+    stage = "question";
+  }
+});
 
 async function startRefinement() {
   const prompt = input.trim();

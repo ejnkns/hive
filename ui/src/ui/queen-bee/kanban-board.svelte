@@ -44,6 +44,7 @@ let revisionShown = $state(false);
 let revisionText = $state("");
 let revisionError = $state<string | null>(null);
 let activeWorkWarning = $state<string | null>(null);
+let refinementQuestion = $state<string | null>(null);
 
 async function loadBoard() {
   loading = true;
@@ -133,6 +134,17 @@ async function handleRemediate(
       const data = (await res.json()) as { error?: string };
       throw new Error(data.error ?? "Remediation failed");
     }
+    const result = (await res.json()) as {
+      card: Card;
+      redevise?: boolean;
+      question?: string;
+    };
+    handleCardUpdated(result.card);
+    if (result.redevise && result.question) {
+      refinementQuestion = result.question;
+      return;
+    }
+    refinementQuestion = null;
     selectedCard = null;
     await loadBoard();
   } catch (err) {
@@ -150,6 +162,11 @@ function handleCardUpdated(updatedCard: Card) {
     };
   }
   selectedCard = updatedCard;
+}
+
+function selectCard(card: Card) {
+  refinementQuestion = null;
+  selectedCard = card;
 }
 
 function cardsInColumn(col: Column): Card[] {
@@ -250,7 +267,7 @@ onMount(() => {
             {#each cardsInColumn(col) as card (card.id)}
               <KanbanCard
                 {card}
-                onSelect={() => (selectedCard = card)}
+                onSelect={() => selectCard(card)}
                 onRun={() => handleRunCard(card.id)}
               />
             {/each}
@@ -268,7 +285,11 @@ onMount(() => {
     <CardDetail
       card={selectedCard}
       {projectId}
-      onClose={() => (selectedCard = null)}
+      initialRefinementQuestion={refinementQuestion}
+      onClose={() => {
+        refinementQuestion = null;
+        selectedCard = null;
+      }}
       onCardUpdated={handleCardUpdated}
       onRun={() => handleRunCard(selectedCard!.id)}
       onRemediate={(action, suggestionId) =>

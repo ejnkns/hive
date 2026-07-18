@@ -107,6 +107,18 @@ describe("board routes", () => {
     );
   });
 
+  it("requires every newly created card to start in Idea", async () => {
+    const { server, project } = createRouteFixture();
+
+    const response = await server.inject({
+      method: "POST",
+      url: `/api/queen-bee/${project.id}/cards`,
+      payload: { title: "Skip refinement", column: "in_progress" },
+    });
+
+    assert.equal(response.statusCode, 400);
+  });
+
   function createRouteFixture() {
     const repoPath = mkdtempSync(join(tmpdir(), "hive-board-routes-"));
     directories.push(repoPath);

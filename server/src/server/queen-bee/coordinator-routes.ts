@@ -4,6 +4,7 @@ import type { FastifyInstance } from "fastify";
 import type { CoordinatorAction } from "shared/board-types";
 import type { BoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
+import type { DeviseEngine } from "./devise-engine";
 import {
   readRequirements,
   requirementsRevision,
@@ -12,7 +13,11 @@ import {
 
 export function registerCoordinatorRoutes(
   server: FastifyInstance,
-  deps: { boardStore: BoardStore; projectStore: ProjectStore }
+  deps: {
+    boardStore: BoardStore;
+    projectStore: ProjectStore;
+    engine: DeviseEngine;
+  }
 ): void {
   server.post(
     "/api/queen-bee/:projectId/cards/:cardId/remediate",
@@ -58,6 +63,19 @@ export function registerCoordinatorRoutes(
       }
 
       if (body.action === "redevise") {
+        const result = await deps.engine.startCard(
+          projectId,
+          cardId,
+          [
+            "Resolve this card's unfulfillable handover by refining the card while keeping the project requirements document aligned.",
+            `Card title: ${card.title}`,
+            `Current card description: ${card.description}`,
+            `Coordinator rationale: ${suggestion.rationale}`,
+            "Ask the user for the decision needed to make this card fulfillable.",
+            "When complete, output CARD_UPDATE followed by a json code fence containing description, acceptanceCriteria, relevantFiles, and requirementRefs for this card, then REQUIREMENTS_COMPLETE. Also call update_requirements with the full aligned project requirements document.",
+          ].join("\n"),
+          project.repoPath
+        );
         const updated = deps.boardStore.updateCard(
           projectId,
           project.repoPath,
@@ -66,7 +84,11 @@ export function registerCoordinatorRoutes(
             column: "idea",
           }
         );
-        return reply.send({ card: updated, redevise: true });
+        return reply.send({
+          card: updated,
+          redevise: true,
+          question: result.question,
+        });
       }
 
       if (!suggestion.cardPatch || !suggestion.requirementsContent) {

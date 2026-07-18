@@ -132,6 +132,12 @@ export function registerDeviseRoutes(
           project.repoPath
         );
         if (result.type === "complete") {
+          if (!cardSessionUpdatedRequirements(deps.engine, projectId, cardId)) {
+            return reply.status(422).send({
+              error:
+                "Card devise completed without updating the project requirements",
+            });
+          }
           const patch = parseCardPatch(result.spec);
           if (!patch) {
             return reply.status(422).send({
@@ -304,6 +310,23 @@ export function registerDeviseRoutes(
         messages: clientMessages,
       });
     }
+  );
+}
+
+function cardSessionUpdatedRequirements(
+  engine: DeviseEngine,
+  projectId: string,
+  cardId: string
+): boolean {
+  const session = engine.getCardSession(projectId, cardId);
+  return Boolean(
+    session?.messages.some((message) =>
+      message.tool_calls?.some((toolCall) => {
+        if (!toolCall || typeof toolCall !== "object") return false;
+        const fn = (toolCall as { function?: { name?: unknown } }).function;
+        return fn?.name === "update_requirements";
+      })
+    )
   );
 }
 

@@ -173,6 +173,47 @@ describe("WorkerSupervisor", () => {
     );
   });
 
+  it("blocks a card branch created from a stale project revision", async () => {
+    const repoPath = createGitRepository();
+    const boardStore = createBoardStore(() => {});
+    const card = boardStore.addCard("project-1", repoPath, {
+      title: "Reject stale history",
+      description: "Do not resume from an outdated project revision",
+      acceptanceCriteria: ["The stale worktree remains untouched"],
+      relevantFiles: ["source.txt"],
+      dependencies: [],
+      column: "in_progress",
+    });
+    const worktreePath = createCardWorktree(repoPath, card.id);
+    const sentinelPath = join(worktreePath, "sentinel.txt");
+    writeFileSync(sentinelPath, "preserve stale work\n", "utf-8");
+    writeFileSync(join(repoPath, "main-only.txt"), "new project revision\n");
+    git(repoPath, ["add", "main-only.txt"]);
+    git(repoPath, ["commit", "--quiet", "-m", "advance project"]);
+    const originalBranchHead = git(repoPath, ["rev-parse", `qb/${card.id}`]);
+    let modelCallCount = 0;
+    const supervisor = createWorkerSupervisor(
+      boardStore,
+      failingReviewer(),
+      unusedCoordinator(),
+      {
+        async call() {
+          modelCallCount += 1;
+          return terminalResponse("This should not run");
+        },
+      }
+    );
+
+    await supervisor.run("project-1", card, repoPath, "", "", () => {});
+
+    assert.equal(modelCallCount, 0);
+    assert.equal(
+      git(repoPath, ["rev-parse", `qb/${card.id}`]),
+      originalBranchHead
+    );
+    assert.equal(readFileSync(sentinelPath, "utf-8"), "preserve stale work\n");
+  });
+
   it("persists project-scoped progress before the worker finishes", async () => {
     const repoPath = createGitRepository();
     const boardStore = createBoardStore(() => {});

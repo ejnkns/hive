@@ -82,31 +82,7 @@ export function registerWorkerRoutes(
   server.get("/api/queen-bee/ws", { websocket: true }, (socket) => {
     const workerHandler = (event: WorkerEvent, projectId: string) => {
       try {
-        if (event.type === "worker_complete") {
-          socket.send(
-            JSON.stringify({
-              type: "worker_complete",
-              data: {
-                projectId,
-                cardId: event.cardId,
-                content: event.content ?? "",
-              },
-            })
-          );
-        } else {
-          socket.send(
-            JSON.stringify({
-              type: "worker_progress",
-              data: {
-                projectId,
-                cardId: event.cardId,
-                content: event.content ?? "",
-                toolName: event.toolName ?? null,
-                error: event.error ?? null,
-              },
-            })
-          );
-        }
+        socket.send(JSON.stringify(toWorkerSocketMessage(event, projectId)));
       } catch {
         // socket closed
       }
@@ -180,4 +156,45 @@ export function registerWorkerRoutes(
       return reply.send({ cancelled: true, cardId });
     }
   );
+}
+
+export function toWorkerSocketMessage(
+  event: WorkerEvent,
+  projectId: string
+): {
+  type: string;
+  data: Record<string, unknown>;
+} {
+  if (event.type === "worker_complete") {
+    return {
+      type: "worker_complete",
+      data: {
+        projectId,
+        cardId: event.cardId,
+        content: event.content ?? "",
+      },
+    };
+  }
+  if (event.type === "unfulfillable_handover") {
+    return {
+      type: "unfulfillable_handover",
+      data: {
+        projectId,
+        cardId: event.cardId,
+        content: event.content ?? "",
+        suggestions: event.suggestions ?? [],
+        error: event.error ?? null,
+      },
+    };
+  }
+  return {
+    type: "worker_progress",
+    data: {
+      projectId,
+      cardId: event.cardId,
+      content: event.content ?? "",
+      toolName: event.toolName ?? null,
+      error: event.error ?? null,
+    },
+  };
 }

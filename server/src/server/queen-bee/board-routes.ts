@@ -40,9 +40,10 @@ export function registerBoardRoutes(
       return reply.status(400).send({ error: "title is required" });
     }
 
-    const column = body.column ? validateColumn(body.column) : "idea";
-    if (!column) {
-      return reply.status(400).send({ error: "column is invalid" });
+    if (body.column && body.column !== "idea") {
+      return reply.status(400).send({
+        error: "New cards must start in the idea column",
+      });
     }
 
     const card = deps.boardStore.addCard(projectId, project.repoPath, {
@@ -51,7 +52,7 @@ export function registerBoardRoutes(
       acceptanceCriteria: body.acceptanceCriteria ?? [],
       relevantFiles: body.relevantFiles ?? [],
       dependencies: body.dependencies ?? [],
-      column,
+      column: "idea",
     });
 
     return reply.status(201).send({ card });

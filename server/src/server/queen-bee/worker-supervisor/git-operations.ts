@@ -37,6 +37,9 @@ export function prepareWorktree(
       if (!baseCommit) {
         return unrelatedHistory(branchName);
       }
+      if (baseCommit !== getHeadCommit(repoPath)) {
+        return staleHistory(branchName);
+      }
       return {
         ok: true,
         message: `Reusing worktree at ${worktreeDir}`,
@@ -49,6 +52,9 @@ export function prepareWorktree(
       const baseCommit = getMergeBase(repoPath, branchName);
       if (!baseCommit) {
         return unrelatedHistory(branchName);
+      }
+      if (baseCommit !== getHeadCommit(repoPath)) {
+        return staleHistory(branchName);
       }
       execFileSync("git", ["worktree", "add", worktreeDir, branchName], {
         cwd: repoPath,
@@ -121,6 +127,13 @@ function unrelatedHistory(branchName: string): PreparedWorktree {
   return {
     ok: false,
     message: `Existing branch '${branchName}' has no shared history with the project HEAD`,
+  };
+}
+
+function staleHistory(branchName: string): PreparedWorktree {
+  return {
+    ok: false,
+    message: `Existing branch '${branchName}' was created from a stale project revision`,
   };
 }
 
