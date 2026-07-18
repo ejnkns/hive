@@ -21,6 +21,8 @@ export function onSessionPatch(listener: SessionPatchListener): () => void {
 
 const sessionMap = new Map<string, SessionState>();
 const requestToSession = new Map<string, string>();
+const chainHeads = new Map<string, string>();
+const chainCounts = new Map<string, number>();
 const MAX_SESSIONS = 100;
 
 const STAGE_MAP: Record<string, SessionStage> = {
@@ -96,6 +98,8 @@ function evictIfNeeded() {
       if (session) {
         for (const req of session.requests) {
           requestToSession.delete(req.requestId);
+          chainHeads.delete(req.requestId);
+          chainCounts.delete(req.requestId);
         }
       }
       sessionMap.delete(oldestEvictable);
@@ -114,6 +118,10 @@ function emitPatch(patch: SessionPatch) {
       // ignore listener errors
     }
   }
+}
+
+function effectiveRequestId(requestId: string): string {
+  return chainHeads.get(requestId) ?? requestId;
 }
 
 export function getSessionSnapshot(): SessionState[] {
@@ -195,15 +203,83 @@ onFlowEvent((event: FlowEvent) => {
   if (!session) return;
 
   session.lastActivity = Date.now();
+
+  if (event.type === "failover_attempt") {
+    const failoverRequest = getOrCreateRequest(
+      session,
+      event.requestId,
+      session.lastActivity
+    );
+    const failover = {
+      provider: event.failedProvider,
+      model: event.failedModel,
+      errorType: event.errorType,
+    };
+    failoverRequest.failovers.push(failover);
+
+    if (
+      failoverRequest.path.at(-1) !== "failed" &&
+      failoverRequest.path.at(-1) !== "complete"
+    ) {
+      failoverRequest.path.push("failed");
+    }
+
+    const failoverPatch: SessionPatch = {
+      sessionId,
+      lastActivity: session.lastActivity,
+      requestId: event.requestId,
+      path: [...failoverRequest.path],
+      failover,
+      provider: event.failedProvider,
+      model: event.failedModel,
+    };
+    emitPatch(failoverPatch);
+
+    let count = chainCounts.get(event.requestId) ?? 0;
+    count++;
+    chainCounts.set(event.requestId, count);
+
+    const nextId = `${event.requestId}/F${count}`;
+    chainHeads.set(event.requestId, nextId);
+    requestToSession.set(nextId, sessionId);
+
+    const parentRequest = session.requests.find(
+      (r) => r.requestId === event.requestId
+    );
+    const nextRequest: RequestState = {
+      requestId: nextId,
+      path: [],
+      timestamp: Date.now(),
+      failovers: [],
+      prompt: parentRequest?.prompt,
+    };
+    session.requests.push(nextRequest);
+
+    const nextPatch: SessionPatch = {
+      sessionId,
+      lastActivity: session.lastActivity,
+      requestId: nextId,
+      requestInitial: {
+        timestamp: Date.now(),
+        prompt: parentRequest?.prompt,
+      },
+      path: [],
+    };
+    emitPatch(nextPatch);
+
+    return;
+  }
+
+  const effectiveId = effectiveRequestId(event.requestId);
   const request = getOrCreateRequest(
     session,
-    event.requestId,
+    effectiveId,
     session.lastActivity
   );
   const patch: SessionPatch = {
     sessionId,
     lastActivity: session.lastActivity,
-    requestId: event.requestId,
+    requestId: effectiveId,
   };
 
   const stage = STAGE_MAP[event.type] as SessionStage | undefined;
@@ -284,16 +360,6 @@ onFlowEvent((event: FlowEvent) => {
       patch.conversationPrompt = conv.prompt;
       patch.responseText = conv.responseText;
     }
-  }
-
-  if (event.type === "failover_attempt") {
-    const failover = {
-      provider: event.failedProvider,
-      model: event.failedModel,
-      errorType: event.errorType,
-    };
-    request.failovers.push(failover);
-    patch.failover = failover;
   }
 
   if (event.type === "circuit_break") {

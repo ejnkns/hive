@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { ConversationData, MetricData, ProviderData } from "./types";
-import { bar, formatNumber, sc } from "./utils";
+import { formatNumber, healthColor } from "./utils";
 import Providers from "./Providers.svelte";
 
 let {
@@ -116,15 +116,12 @@ const isPinned = $derived(
     {:else if displayEntry && currentGroup}
       <div class="summary-card">
         <div class="summary-top">
+          <span class="rank-badge" style="background:{healthColor(currentGroup.maxScore, displayEntry.requestCount)};color:var(--bg)">#1</span>
           <div class="summary-identity">
             <span class="provider-name">{currentGroup.displayName}</span>
             <span class="key-badge {currentGroup.keyConfigured ? 'active' : 'no-key'}">
               {currentGroup.keyConfigured ? "active" : "no key"}
             </span>
-          </div>
-          <div class="summary-scores">
-            <span class="score" style="color:{sc(currentGroup.maxScore)}">{currentGroup.maxScore.toFixed(2)}%</span>
-            <span class="bar-text" style="color:{sc(currentGroup.maxScore)}">{bar(currentGroup.maxScore)}</span>
           </div>
         </div>
         <div class="summary-metrics">
@@ -159,7 +156,7 @@ const isPinned = $derived(
       {#if otherGroups.length > 0}
         <div class="other-providers">
           {#each configuredOthers as group, i}
-            <span class="other-chip">{group.displayName} {group.maxScore.toFixed(0)}%</span>
+            <span class="other-chip">#{i + 2} {group.displayName}</span>
             {#if i < configuredOthers.length - 1}
               <span class="sep">·</span>
             {/if}
@@ -226,9 +223,8 @@ const isPinned = $derived(
   .summary-top {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
     gap: 0.5rem;
+    flex-wrap: wrap;
   }
   .summary-identity {
     display: flex;
@@ -255,21 +251,12 @@ const isPinned = $derived(
     border-color: var(--border);
     background: transparent;
   }
-  .summary-scores {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-  .score {
-    font-size: 0.75rem;
-    font-weight: 700;
-    min-width: 2.5rem;
-  }
-  .bar-text {
-    font-family: monospace;
-    font-size: 0.75rem;
-    letter-spacing: 0.05em;
-    line-height: 1;
+  .rank-badge {
+      font-size: 0.625rem;
+      font-weight: 700;
+      padding: 0.125rem 0.375rem;
+    text-transform: uppercase;
+    flex-shrink: 0;
   }
   .summary-metrics {
     display: flex;

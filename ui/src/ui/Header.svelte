@@ -15,7 +15,7 @@ let {
     routingStrategy: "balanced",
     contextWindowWeight: 0,
     traffic: 0,
-    successRate: 100,
+    successRate: null as number | null,
     activeProviders: 0,
     avgLatency: null,
   } as HeaderData),
@@ -52,11 +52,13 @@ const selectedModel = $derived(
 );
 
 const successColor = $derived(
-  data.successRate < 75
-    ? "#d4451a"
-    : data.successRate < 90
-      ? "#e2a93b"
-      : "#7cb342"
+  data.successRate == null
+    ? "var(--muted)"
+    : data.successRate < 75
+      ? "#d4451a"
+      : data.successRate < 90
+        ? "#e2a93b"
+        : "#7cb342"
 );
 const strategyLabel = $derived(
   data.routingStrategy === "latency"
@@ -127,7 +129,7 @@ function toggleTheme() {
     </div>
     <div class="stats-bar">
       <span class="stat">TRAFFIC: <b>{data.traffic > 0 ? String(data.traffic) : "—"}</b></span>
-      <span class="stat">SUCCESS: <b style="color:{successColor}">{String(data.successRate)}%</b></span>
+      <span class="stat">SUCCESS: <b style="color:{successColor}">{data.successRate != null ? `${String(data.successRate)}%` : "—"}</b></span>
       <span class="stat">ACTIVE: <b>{String(data.activeProviders)}</b></span>
       <span class="stat">LATENCY: <b>{data.avgLatency != null ? `${data.avgLatency}ms` : "—"}</b></span>
     </div>

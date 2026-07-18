@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { ConversationData, MetricData, ProviderData } from "./types";
-import { bar, formatNumber, sc } from "./utils";
+import { formatNumber, healthColor, sc } from "./utils";
 import ActivityLog from "./ActivityLog.svelte";
 import Conversations from "./Conversations.svelte";
 
@@ -81,7 +81,7 @@ function switchTab(name: string, tab: "activity" | "conversations") {
 {#if groups.length === 0}
   <div class="no-data">No providers registered</div>
 {:else}
-  {#each groups as group}
+  {#each groups as group, index}
     {@const f = (overrideKey
       ? group.entries.find((e) => `${e.name}:${e.model}` === overrideKey)
       : null) ?? [...group.entries].sort((a, b) => b.stabilityScore - a.stabilityScore)[0]}
@@ -90,6 +90,7 @@ function switchTab(name: string, tab: "activity" | "conversations") {
     {@const activeTab = activeTabs[group.name] || "activity"}
     <div class="worker" style="opacity:{group.keyConfigured && !group.disabled ? '1' : '0.4'}">
       <div class="worker-summary">
+        <span class="rank-badge" style="background:{healthColor(group.maxScore, f.requestCount)};color:var(--bg)">#{index + 1}</span>
         <div class="worker-identity">
           <span class="worker-name">{group.displayName}</span>
           <span class="key-badge {group.keyConfigured ? 'active' : 'no-key'}">{group.keyConfigured ? "active" : "no key"}</span>
@@ -103,10 +104,6 @@ function switchTab(name: string, tab: "activity" | "conversations") {
               >{group.disabled ? "enable" : "disable"}</button
             >
           {/if}
-        </div>
-        <div class="sbar">
-          <span class="score" style="color:{sc(group.maxScore)}">{group.maxScore.toFixed(2)}%</span>
-          <span class="bar-text" style="color:{sc(group.maxScore)}">{bar(group.maxScore)}</span>
         </div>
         <div class="wmet">
           <div class="wmet-item"><span class="l">Latency</span><span class="v">{formatNumber(f.p95Latency, "ms")}</span></div>
@@ -138,7 +135,7 @@ function switchTab(name: string, tab: "activity" | "conversations") {
                     {/if}
                   </span>
                   <span class="mstats">
-                    <span style="color:{sc(e.stabilityScore)}">{e.stabilityScore.toFixed(2)}%</span>
+                    <span class="health-dot" style="color:{healthColor(e.stabilityScore, e.requestCount)}">&#9679;</span>
                     <span>{formatNumber(e.p95Latency, "ms")}</span>
                     <span>{formatNumber(e.meanTokensPerSecond)} t/s</span>
                     <span>{String(e.requestCount)}c</span>
@@ -193,7 +190,7 @@ function switchTab(name: string, tab: "activity" | "conversations") {
 <style>
   .no-data { padding: 1.5rem; text-align: center; color: var(--muted); font-size: 0.8125rem; }
   .worker { background: var(--card); border: 1px solid var(--border); padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
-  .worker-summary { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+  .worker-summary { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
   .worker-identity { display: flex; align-items: center; gap: 0.5rem; min-width: 150px; }
   .worker-name { font-size: 1.125rem; font-weight: 700; }
   .key-badge { font-size: 0.5625rem; padding: 0.0625rem 0.375rem; font-weight: 700; border: 1px solid currentColor; }
@@ -211,9 +208,13 @@ function switchTab(name: string, tab: "activity" | "conversations") {
     text-transform: uppercase;
   }
   .toggle-btn:hover { border-color: var(--accent); color: var(--accent); }
-  .sbar { display: flex; align-items: center; gap: 0.5rem; min-width: 180px; }
-  .score { font-size: 0.75rem; font-weight: 700; min-width: 2.5rem; }
-  .bar-text { font-family: monospace; font-size: 0.75rem; letter-spacing: 0.05em; line-height: 1; }
+  .rank-badge {
+    font-size: 0.625rem;
+    font-weight: 700;
+    padding: 0.125rem 0.375rem;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
   .wmet { display: flex; gap: 1.5rem; }
   .wmet-item { display: flex; flex-direction: column; gap: 0.125rem; min-width: 60px; }
   .wmet-item .l { font-size: 0.5625rem; color: var(--muted); text-transform: uppercase; }
@@ -232,7 +233,8 @@ function switchTab(name: string, tab: "activity" | "conversations") {
   .mrow.pinned { outline: 1px solid var(--accent); outline-offset: -1px; }
   .mrow-top { display: flex; justify-content: space-between; }
   .mname { color: var(--accent); font-family: monospace; font-size: 0.6875rem; font-weight: 500; display: inline-flex; align-items: center; gap: 0.25rem; }
-  .mstats { display: flex; gap: 0.75rem; color: var(--muted); font-size: 0.625rem; }
+  .mstats { display: flex; gap: 0.75rem; color: var(--muted); font-size: 0.625rem; align-items: center; }
+  .health-dot { font-size: 0.5rem; }
   .mstats span { white-space: nowrap; }
   .sub-bars { display: flex; gap: 0.25rem; }
   .sub-bar { display: flex; align-items: center; gap: 0.125rem; flex: 1; }
