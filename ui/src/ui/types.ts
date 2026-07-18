@@ -98,7 +98,7 @@ export type OverrideState = {
 
 export type StatsData = {
   traffic: number;
-  successRate: number;
+  successRate: number | null;
   providers: number;
   avgLatency: number | null;
 };
@@ -116,7 +116,7 @@ export type HeaderData = {
   routingStrategy: string;
   contextWindowWeight: number;
   traffic: number;
-  successRate: number;
+  successRate: number | null;
   activeProviders: number;
   avgLatency: number | null;
 };

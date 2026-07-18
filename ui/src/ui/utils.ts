@@ -8,6 +8,18 @@ export function sc(c: number): string {
       : "var(--error)";
 }
 
+export function healthColor(score: number, requestCount: number): string {
+  if (requestCount === 0) return "var(--muted)";
+  return sc(score);
+}
+
+export function healthLabel(score: number, requestCount: number): string {
+  if (requestCount === 0) return "unknown";
+  if (score >= 70) return "healthy";
+  if (score >= 50) return "degraded";
+  return "unhealthy";
+}
+
 export function formatTime(ts: number): string {
   return new Date(ts).toLocaleTimeString([], {
     hour: "2-digit",

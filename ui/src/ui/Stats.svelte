@@ -12,7 +12,7 @@ let { data }: { data: StatsData | null } = $props();
   </div>
   <div class="stat">
     <span class="stat-label">Success</span>
-    <span class="stat-value" style="color: {sc(data?.successRate ?? 100)}">{data?.successRate ?? 100}%</span>
+    <span class="stat-value" style="color: {data?.successRate != null ? sc(data.successRate) : 'var(--muted)'}">{data?.successRate != null ? `${data.successRate}%` : "—"}</span>
   </div>
   <div class="stat">
     <span class="stat-label">Providers</span>

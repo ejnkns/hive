@@ -145,7 +145,7 @@ let headerData = $derived.by(() => {
   const bestEntry = sorted[0] ?? null;
   const total = t.metrics.length;
   const okCount = t.metrics.filter((r) => r.success).length;
-  const rate = total > 0 ? Math.round((okCount / total) * 100) : 100;
+  const rate = total > 0 ? Math.round((okCount / total) * 100) : null;
   const names = new Set(
     t.providers.filter((x) => x.keyConfigured).map((x) => x.name)
   );
@@ -178,7 +178,9 @@ let statsData = $derived.by(() => {
   if (!t) return null;
   const okCount = t.metrics.filter((r) => r.success).length;
   const rate =
-    t.metrics.length > 0 ? Math.round((okCount / t.metrics.length) * 100) : 100;
+    t.metrics.length > 0
+      ? Math.round((okCount / t.metrics.length) * 100)
+      : null;
   const flights = t.metrics.filter((r) => r.success).map((r) => r.ttft);
   const avg =
     flights.length > 0
