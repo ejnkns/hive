@@ -142,7 +142,17 @@ describe("board routes", () => {
       () => {},
       createQueenBeeRuntimeStore(join(repoPath, ".runtime"))
     );
-    const planner: Planner = { plan: async () => [] };
+    const planner: Planner = {
+      propose: async () => {
+        throw new Error("Not used");
+      },
+      decide: () => {
+        throw new Error("Not used");
+      },
+      acceptAll: () => [],
+      apply: () => [],
+      getProposal: () => null,
+    };
     const server = Fastify();
     servers.push(server);
     registerBoardRoutes(server, { boardStore, planner, projectStore });

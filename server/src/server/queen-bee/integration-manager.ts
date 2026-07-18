@@ -2,7 +2,7 @@
 
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { removeWorktree } from "./worker-supervisor/git-operations";
 
@@ -27,6 +27,10 @@ export type IntegrationManager = {
   assertCurrent(input: AcceptWorkInput): void;
   accept(input: AcceptWorkInput): IntegrationRevision;
   discardWorktree(repoPath: string, worktreePath: string): void;
+  commitPlanningSnapshot(
+    repoPath: string,
+    proposalId: string
+  ): IntegrationRevision;
 };
 
 export function createIntegrationManager(): IntegrationManager {
@@ -34,6 +38,7 @@ export function createIntegrationManager(): IntegrationManager {
     ensure: ensureIntegrationBranch,
     assertCurrent: assertReviewedWorkCurrent,
     accept: acceptWork,
+    commitPlanningSnapshot,
     discardWorktree(repoPath, worktreePath) {
       if (
         existsSync(worktreePath) &&
@@ -47,6 +52,54 @@ export function createIntegrationManager(): IntegrationManager {
       if (!result.ok) throw new Error(result.message);
     },
   };
+}
+
+function commitPlanningSnapshot(
+  repoPath: string,
+  proposalId: string
+): IntegrationRevision {
+  ensureIntegrationBranch(repoPath);
+  const integrationWorktree = acquireIntegrationWorktree(repoPath);
+  try {
+    if (integrationWorktree.temporary) {
+      copyPlanningFile(repoPath, integrationWorktree.path, "requirements.md");
+      copyPlanningFile(repoPath, integrationWorktree.path, "board.json");
+      copyPlanningFile(repoPath, integrationWorktree.path, "project.json");
+      const sourceCards = join(repoPath, ".hive", "cards");
+      if (existsSync(sourceCards)) {
+        cpSync(sourceCards, join(integrationWorktree.path, ".hive", "cards"), {
+          recursive: true,
+        });
+      }
+    }
+    git(integrationWorktree.path, ["add", "-A", "--", ".hive"]);
+    if (
+      !gitSucceeds(integrationWorktree.path, ["diff", "--cached", "--quiet"])
+    ) {
+      git(integrationWorktree.path, [
+        "commit",
+        "-m",
+        `hive: apply planning proposal ${proposalId}`,
+      ]);
+    }
+    return ensureIntegrationBranch(repoPath);
+  } finally {
+    if (integrationWorktree.temporary) {
+      removeWorktree(repoPath, integrationWorktree.path);
+    }
+  }
+}
+
+function copyPlanningFile(
+  repoPath: string,
+  integrationWorktree: string,
+  filename: string
+): void {
+  const source = join(repoPath, ".hive", filename);
+  if (!existsSync(source)) return;
+  const destinationDirectory = join(integrationWorktree, ".hive");
+  mkdirSync(destinationDirectory, { recursive: true });
+  cpSync(source, join(destinationDirectory, filename));
 }
 
 export function ensureIntegrationBranch(repoPath: string): IntegrationRevision {
@@ -161,6 +214,15 @@ function git(repoPath: string, args: string[]): string {
     timeout: 30_000,
     maxBuffer: 10 * 1024 * 1024,
   }).trim();
+}
+
+function gitSucceeds(repoPath: string, args: string[]): boolean {
+  try {
+    git(repoPath, args);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function errorMessage(error: unknown): string {

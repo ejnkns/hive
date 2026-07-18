@@ -10,7 +10,11 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import type { Card, CardActivityEvent } from "shared/board-types";
+import type {
+  Card,
+  CardActivityEvent,
+  PlanningProposal,
+} from "shared/board-types";
 import { HIVE_DIR } from "shared/hive-dir";
 import type { Message } from "shared/message";
 import type { ReviewPackage } from "./reviewer";
@@ -59,6 +63,11 @@ export type QueenBeeRuntimeStore = {
   getCardState(projectId: string, cardId: string): CardRuntimeState | null;
   saveDeviseSession(session: PersistedDeviseSession): void;
   getDeviseSessions(projectId: string): PersistedDeviseSession[];
+  savePlanningProposal(proposal: PlanningProposal): void;
+  getPlanningProposal(
+    projectId: string,
+    proposalId: string
+  ): PlanningProposal | null;
 };
 
 export function createQueenBeeRuntimeStore(
@@ -142,6 +151,19 @@ export function createQueenBeeRuntimeStore(
         return [];
       }
     },
+
+    savePlanningProposal(proposal) {
+      writeJson(
+        planningProposalPath(rootDirectory, proposal.projectId, proposal.id),
+        proposal
+      );
+    },
+
+    getPlanningProposal(projectId, proposalId) {
+      return readJson<PlanningProposal>(
+        planningProposalPath(rootDirectory, projectId, proposalId)
+      );
+    },
   };
 }
 
@@ -205,6 +227,18 @@ function deviseSessionPath(
   return join(
     deviseSessionDirectory(rootDirectory, projectId),
     `${encodeURIComponent(sessionId)}.json`
+  );
+}
+
+function planningProposalPath(
+  rootDirectory: string,
+  projectId: string,
+  proposalId: string
+): string {
+  return join(
+    projectDirectory(rootDirectory, projectId),
+    "planning-proposals",
+    `${encodeURIComponent(proposalId)}.json`
   );
 }
 

@@ -75,6 +75,36 @@ export type CardActivityEvent = {
   occurredAt: string;
 };
 
+export type CardSpecification = Pick<
+  Card,
+  | "title"
+  | "description"
+  | "acceptanceCriteria"
+  | "relevantFiles"
+  | "dependencies"
+  | "requirementRefs"
+>;
+
+export type PlanningChange = {
+  id: string;
+  action: "keep" | "create" | "update" | "remove";
+  cardId?: string;
+  proposedCard?: CardSpecification;
+  rationale: string;
+  decision: "pending" | "accepted" | "rejected";
+};
+
+export type PlanningProposal = {
+  id: string;
+  projectId: string;
+  status: "pending" | "applied";
+  baseRequirementsRevision: string;
+  proposedRequirements: string;
+  changes: PlanningChange[];
+  createdAt: string;
+  appliedAt?: string;
+};
+
 export type WorkerHandover = {
   problem: string;
   attempted: string[];

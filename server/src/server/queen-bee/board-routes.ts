@@ -4,6 +4,7 @@ import type { FastifyInstance } from "fastify";
 import type { BoardStore, Column } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
 import type { Planner } from "./planner";
+import { readRequirements } from "./requirements-store";
 
 export function registerBoardRoutes(
   server: FastifyInstance,
@@ -130,18 +131,103 @@ export function registerBoardRoutes(
 
     try {
       const body = (request.body ?? {}) as { guidance?: string };
-      const cards = await deps.planner.plan(
+      const proposal = await deps.planner.propose(
         projectId,
         project.repoPath,
+        readRequirements(project.repoPath),
         body.guidance
       );
-      return reply.send({ cards });
+      return reply.send({ proposal });
     } catch (err) {
       return reply.status(500).send({
         error: err instanceof Error ? err.message : "Planning failed",
       });
     }
   });
+
+  server.post(
+    "/api/queen-bee/:projectId/planning/:proposalId/changes/:changeId",
+    async (request, reply) => {
+      const { projectId, proposalId, changeId } = request.params as {
+        projectId: string;
+        proposalId: string;
+        changeId: string;
+      };
+      const body = request.body as { decision?: string };
+      if (body.decision !== "accepted" && body.decision !== "rejected") {
+        return reply.status(400).send({ error: "decision is invalid" });
+      }
+      try {
+        const proposal = deps.planner.decide(
+          projectId,
+          proposalId,
+          changeId,
+          body.decision
+        );
+        return reply.send({ proposal });
+      } catch (error) {
+        return reply.status(409).send({
+          error: error instanceof Error ? error.message : "Decision failed",
+        });
+      }
+    }
+  );
+
+  server.post(
+    "/api/queen-bee/:projectId/planning/:proposalId/accept-all",
+    async (request, reply) => {
+      const { projectId, proposalId } = request.params as {
+        projectId: string;
+        proposalId: string;
+      };
+      const project = deps.projectStore
+        .getAll()
+        .find((item) => item.id === projectId);
+      if (!project) {
+        return reply.status(404).send({ error: "Project not found" });
+      }
+      try {
+        const cards = deps.planner.acceptAll(
+          projectId,
+          project.repoPath,
+          proposalId
+        );
+        return reply.send({ cards });
+      } catch (error) {
+        return reply.status(409).send({
+          error: error instanceof Error ? error.message : "Planning failed",
+        });
+      }
+    }
+  );
+
+  server.post(
+    "/api/queen-bee/:projectId/planning/:proposalId/apply",
+    async (request, reply) => {
+      const { projectId, proposalId } = request.params as {
+        projectId: string;
+        proposalId: string;
+      };
+      const project = deps.projectStore
+        .getAll()
+        .find((item) => item.id === projectId);
+      if (!project) {
+        return reply.status(404).send({ error: "Project not found" });
+      }
+      try {
+        const cards = deps.planner.apply(
+          projectId,
+          project.repoPath,
+          proposalId
+        );
+        return reply.send({ cards });
+      } catch (error) {
+        return reply.status(409).send({
+          error: error instanceof Error ? error.message : "Planning failed",
+        });
+      }
+    }
+  );
 }
 
 function validateColumn(column: string | undefined): Column | null {

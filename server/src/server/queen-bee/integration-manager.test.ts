@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
@@ -157,6 +163,31 @@ describe("IntegrationManager", () => {
 
     assert.equal(git(repoPath, ["branch", "--show-current"]), "hive-main");
     assert.equal(git(repoPath, ["show", "HEAD:feature.txt"]), "accepted");
+  });
+
+  it("commits approved planning files on hive-main without switching the user branch", () => {
+    const repoPath = createRepository();
+    const manager = createIntegrationManager();
+    manager.ensure(repoPath);
+    mkdirSync(join(repoPath, ".hive"), { recursive: true });
+    writeFileSync(join(repoPath, ".hive", "requirements.md"), "# Approved\n");
+    writeFileSync(
+      join(repoPath, ".hive", "board.json"),
+      JSON.stringify({ projectId: "project-1", cards: [] })
+    );
+
+    const result = manager.commitPlanningSnapshot(repoPath, "proposal-1");
+
+    assert.equal(git(repoPath, ["branch", "--show-current"]), "main");
+    assert.equal(
+      git(repoPath, ["show", "hive-main:.hive/requirements.md"]),
+      "# Approved"
+    );
+    assert.equal(result.revision, git(repoPath, ["rev-parse", "hive-main"]));
+    assert.equal(
+      git(repoPath, ["log", "-1", "--format=%s", "hive-main"]),
+      "hive: apply planning proposal proposal-1"
+    );
   });
 
   function createRepository(): string {

@@ -64,10 +64,10 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
   const boardStore = createBoardStore((projectId) => {
     emitBoardEvent(projectId);
   }, runtimeStore);
-  const planner = createPlanner(boardStore);
+  const integrationManager = createIntegrationManager();
+  const planner = createPlanner(boardStore, runtimeStore, integrationManager);
   const reviewer = createReviewer();
   const coordinator = createCoordinator();
-  const integrationManager = createIntegrationManager();
   const workerSupervisor = createWorkerSupervisor(
     boardStore,
     reviewer,

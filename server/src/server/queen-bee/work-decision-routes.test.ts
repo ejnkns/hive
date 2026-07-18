@@ -161,6 +161,10 @@ describe("work decision routes", () => {
       discardWorktree: (_path, worktreePath) => {
         discardedWorktrees.push(worktreePath);
       },
+      commitPlanningSnapshot: () => ({
+        branchName: "hive-main",
+        revision: "integration-2",
+      }),
     };
     const server = Fastify();
     servers.push(server);

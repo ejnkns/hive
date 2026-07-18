@@ -1,7 +1,9 @@
 <script lang="ts">
 import { onMount } from "svelte";
+import type { PlanningProposal } from "shared/board-types";
 import DeviseChat from "./devise-chat.svelte";
 import KanbanBoard from "./kanban-board.svelte";
+import PlanningProposalView from "./planning-proposal.svelte";
 import { projectHeader } from "./project-header-state.svelte";
 
 let { projectId }: Props = $props();
@@ -19,6 +21,7 @@ let initialMessages = $state<{ role: string; content: string }[] | undefined>(
 );
 let initialStatus = $state<string | undefined>(undefined);
 let initialDraftRequirements = $state<string | undefined>(undefined);
+let planningProposal = $state<PlanningProposal | null>(null);
 
 onMount(() => {
   projectHeader.projectId = projectId;
@@ -103,7 +106,14 @@ async function handleApprove() {
       const data = (await res.json()) as { error?: string };
       throw new Error(data.error ?? "Planning failed");
     }
-    await checkStatus();
+    const result = (await res.json()) as {
+      proposal?: PlanningProposal;
+      error?: string;
+    };
+    if (!result.proposal) {
+      throw new Error(result.error ?? "Planner returned no proposal");
+    }
+    planningProposal = result.proposal;
   } catch (err) {
     errorMessage =
       err instanceof Error ? err.message : "Unknown error planning";
@@ -127,6 +137,15 @@ async function handleApprove() {
       <div class="error-actions">
         <button class="btn btn-primary" onclick={handleApprove}>Retry</button>
       </div>
+    {:else if planningProposal}
+      <PlanningProposalView
+        {projectId}
+        proposal={planningProposal}
+        onApplied={() => {
+          planningProposal = null;
+          void checkStatus();
+        }}
+      />
     {:else if hasBoard}
       <KanbanBoard
         {projectId}
