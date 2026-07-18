@@ -1,12 +1,14 @@
 <script lang="ts">
 import type { PlanningProposal } from "shared/board-types";
+import { parsePlanningProposalResponse } from "./parse-planning-proposal-response";
 
-let { projectId, proposal, onApplied }: Props = $props();
+let { projectId, proposal, onApplied, onDiscard }: Props = $props();
 
 type Props = {
   projectId: string;
   proposal: PlanningProposal;
   onApplied: () => void;
+  onDiscard: () => void;
 };
 
 let updatedProposal = $state<PlanningProposal | null>(null);
@@ -26,10 +28,7 @@ async function decide(changeId: string, decision: "accepted" | "rejected") {
         body: JSON.stringify({ decision }),
       }
     );
-    const result = (await response.json()) as {
-      proposal?: PlanningProposal;
-      error?: string;
-    };
+    const result = parsePlanningProposalResponse(await response.json());
     if (!response.ok || !result.proposal) {
       throw new Error(result.error ?? "Could not save planning decision");
     }
@@ -61,8 +60,12 @@ async function finish(action: "accept-all" | "apply") {
   }
 }
 
-function allDecided() {
-  return current.changes.every((change) => change.decision !== "pending");
+function allAccepted() {
+  return current.changes.every((change) => change.decision === "accepted");
+}
+
+function hasRejected() {
+  return current.changes.some((change) => change.decision === "rejected");
 }
 </script>
 
@@ -116,12 +119,17 @@ function allDecided() {
   </div>
 
   <div class="proposal-footer">
-    <button
-      class="btn btn-primary"
-      onclick={() => finish("apply")}
-      disabled={busy || !allDecided()}
-    >Apply decisions</button>
-    {#if !allDecided()}<span>Decide every changed card before applying.</span>{/if}
+    {#if hasRejected()}
+      <button class="btn" onclick={onDiscard} disabled={busy}>Return to revise</button>
+      <span>Rejected card changes require a revised requirements proposal.</span>
+    {:else}
+      <button
+        class="btn btn-primary"
+        onclick={() => finish("apply")}
+        disabled={busy || !allAccepted()}
+      >Apply accepted changes</button>
+      {#if !allAccepted()}<span>Accept every changed card before applying.</span>{/if}
+    {/if}
   </div>
 </div>
 

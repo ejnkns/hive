@@ -4,6 +4,7 @@ import type { PlanningProposal } from "shared/board-types";
 import DeviseChat from "./devise-chat.svelte";
 import KanbanBoard from "./kanban-board.svelte";
 import PlanningProposalView from "./planning-proposal.svelte";
+import { parsePlanningProposalResponse } from "./parse-planning-proposal-response";
 import { projectHeader } from "./project-header-state.svelte";
 
 let { projectId }: Props = $props();
@@ -95,10 +96,7 @@ async function handleApprove() {
     const approval = await fetch(`/api/queen-bee/${projectId}/devise/approve`, {
       method: "POST",
     });
-    const result = (await approval.json()) as {
-      proposal?: PlanningProposal;
-      error?: string;
-    };
+    const result = parsePlanningProposalResponse(await approval.json());
     if (!approval.ok) {
       throw new Error(result.error ?? "Requirements approval failed");
     }
@@ -134,6 +132,10 @@ async function handleApprove() {
         {projectId}
         proposal={planningProposal}
         onApplied={() => {
+          planningProposal = null;
+          void checkStatus();
+        }}
+        onDiscard={() => {
           planningProposal = null;
           void checkStatus();
         }}

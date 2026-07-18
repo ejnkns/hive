@@ -16,4 +16,4 @@ Return only a JSON object in a json code fence:
   ]
 }
 
-Use retry_with_patch only when both a safe card patch and a complete revised requirements document can resolve the conflict. Use redevise when the user must make a requirements decision. Use archive when the task should not proceed. Provide at least one suggestion.`;
+Use retry_with_patch only when both a safe card patch and a complete revised requirements document can resolve the conflict. Use redevise when the user must make a requirements decision. Use archive when the task should not proceed; every archive suggestion must include a complete revised requirements document that removes the abandoned scope or explicitly moves it to For later. Provide at least one suggestion.`;

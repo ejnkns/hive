@@ -325,7 +325,8 @@ export function registerDeviseRoutes(
             "Use this exact approved card patch when reconciling that card:",
             JSON.stringify(patch, null, 2),
             "Reconcile every other card against the project-wide requirements draft. The selected card must remain provisional until the planning proposal is accepted.",
-          ].join("\n")
+          ].join("\n"),
+          { cardId, target: "ready" }
         );
         return reply.send({ proposal, approved: true });
       } catch (error) {

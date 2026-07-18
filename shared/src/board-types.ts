@@ -92,6 +92,7 @@ export type PlanningChange = {
   proposedCard?: CardSpecification;
   rationale: string;
   decision: "pending" | "accepted" | "rejected";
+  targetColumn?: "ready";
 };
 
 export type PlanningProposal = {

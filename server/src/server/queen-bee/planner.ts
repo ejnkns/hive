@@ -29,7 +29,8 @@ export type Planner = {
     projectId: string,
     repoPath: string,
     proposedRequirements: string,
-    guidance?: string
+    guidance?: string,
+    disposition?: PlanningDisposition
   ): Promise<PlanningProposal>;
   decide(
     projectId: string,
@@ -42,6 +43,11 @@ export type Planner = {
   getProposal(projectId: string, proposalId: string): PlanningProposal | null;
 };
 
+export type PlanningDisposition = {
+  cardId: string;
+  target: "ready" | "archived";
+};
+
 export function createPlanner(
   boardStore: BoardStore,
   runtimeStore: QueenBeeRuntimeStore,
@@ -49,7 +55,13 @@ export function createPlanner(
   modelCaller: DeviseModelCaller = createDeviseModelCaller(PLANNER_TOOLS)
 ): Planner {
   return {
-    async propose(projectId, repoPath, proposedRequirements, guidance) {
+    async propose(
+      projectId,
+      repoPath,
+      proposedRequirements,
+      guidance,
+      disposition
+    ) {
       const currentCards = boardStore.getBoard(projectId, repoPath).cards;
       const sharedContext = projectContext(projectId, repoPath);
       const messages: Message[] = [
@@ -66,6 +78,7 @@ export function createPlanner(
       ];
       const result = await callWithToolLoop(modelCaller, messages, repoPath);
       const changes = parseChanges(result, currentCards);
+      if (disposition) markCardDisposition(changes, disposition);
       const proposal: PlanningProposal = {
         id: randomUUID(),
         projectId,
@@ -313,6 +326,11 @@ function applyProposal(
   if (proposal.changes.some((change) => change.decision === "pending")) {
     throw new Error("Every proposed card change requires a decision");
   }
+  if (proposal.changes.some((change) => change.decision === "rejected")) {
+    throw new Error(
+      "Rejected card changes require a revised requirements and planning proposal"
+    );
+  }
   if (
     requirementsRevision(readRequirements(repoPath)) !==
     proposal.baseRequirementsRevision
@@ -336,10 +354,20 @@ function applyProposal(
     }
     const current = change.cardId ? byId.get(change.cardId) : undefined;
     if (!current) continue;
-    if (change.decision === "rejected" || change.action === "keep") {
+    if (change.action === "keep") {
       result.push(current);
     } else if (change.action === "update" && change.proposedCard) {
-      result.push({ ...current, ...change.proposedCard });
+      result.push({
+        ...current,
+        ...change.proposedCard,
+        ...(change.targetColumn === "ready"
+          ? {
+              column: change.targetColumn,
+              handover: undefined,
+              coordinatorLog: undefined,
+            }
+          : {}),
+      });
     } else if (change.action === "remove") {
       result.push({ ...current, archivedAt: new Date().toISOString() });
     }
@@ -358,6 +386,29 @@ function applyProposal(
   proposal.appliedAt = new Date().toISOString();
   runtimeStore.savePlanningProposal(proposal);
   return result.filter((card) => !card.archivedAt);
+}
+
+function markCardDisposition(
+  changes: PlanningChange[],
+  disposition: PlanningDisposition
+): void {
+  const change = changes.find(
+    (candidate) => candidate.cardId === disposition.cardId
+  );
+  if (disposition.target === "ready") {
+    if (change?.action !== "update" || !change.proposedCard) {
+      throw new Error(
+        `Planner Agent must update refined card '${disposition.cardId}' before it can move to Ready`
+      );
+    }
+    change.targetColumn = "ready";
+    return;
+  }
+  if (change?.action !== "remove") {
+    throw new Error(
+      `Planner Agent must remove archived card '${disposition.cardId}' from the active plan`
+    );
+  }
 }
 
 function boardRevision(cards: Card[]): string {

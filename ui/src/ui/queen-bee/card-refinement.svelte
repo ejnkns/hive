@@ -1,6 +1,7 @@
 <script lang="ts">
 import { onMount } from "svelte";
 import type { Card, PlanningProposal } from "shared/board-types";
+import { parsePlanningProposalResponse } from "./parse-planning-proposal-response";
 
 let {
   projectId,
@@ -126,10 +127,7 @@ async function confirmReady() {
         method: "POST",
       }
     );
-    const result = (await response.json()) as {
-      proposal?: PlanningProposal;
-      error?: string;
-    };
+    const result = parsePlanningProposalResponse(await response.json());
     if (!response.ok || !result.proposal) {
       throw new Error(result.error ?? "Could not reconcile card refinement");
     }

@@ -112,7 +112,7 @@ export function registerWorkerRoutes(
       }
     };
 
-    const deviseHandler = (update: DeviseDraftUpdate) => {
+    function deviseHandler(update: DeviseDraftUpdate): void {
       try {
         socket.send(
           JSON.stringify({ type: "devise_draft_updated", data: update })
@@ -120,7 +120,7 @@ export function registerWorkerRoutes(
       } catch {
         // socket closed
       }
-    };
+    }
 
     workerEventBus.on("event", workerHandler);
     boardEventBus.on("change", boardHandler);

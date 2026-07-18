@@ -68,6 +68,12 @@ describe("coordinator routes", () => {
             cardPatch: { description: "Patched description" },
             requirementsContent: "# Patched requirements",
           },
+          {
+            id: "suggestion-3",
+            action: "archive",
+            rationale: "The feature is no longer required",
+            requirementsContent: "# Requirements without abandoned scope",
+          },
         ],
       },
     });
@@ -89,9 +95,17 @@ describe("coordinator routes", () => {
     const server = Fastify();
     servers.push(server);
     let plannerRequirements = "";
+    let plannerDisposition: unknown;
     const planner: Planner = {
-      async propose(projectId, _repoPath, proposedRequirements) {
+      async propose(
+        projectId,
+        _repoPath,
+        proposedRequirements,
+        _guidance,
+        disposition
+      ) {
         plannerRequirements = proposedRequirements;
+        plannerDisposition = disposition;
         return {
           id: "proposal-1",
           projectId,
@@ -143,6 +157,23 @@ describe("coordinator routes", () => {
     assert.equal(
       boardStore.getBoard(project.id, project.repoPath).cards[0]?.description,
       "The worker found ambiguous scope"
+    );
+
+    const archiveResponse = await server.inject({
+      method: "POST",
+      url: `/api/queen-bee/${project.id}/cards/${card.id}/remediate`,
+      payload: { action: "archive", suggestionId: "suggestion-3" },
+    });
+
+    assert.equal(archiveResponse.statusCode, 200);
+    assert.equal(plannerRequirements, "# Requirements without abandoned scope");
+    assert.deepEqual(plannerDisposition, {
+      cardId: card.id,
+      target: "archived",
+    });
+    assert.equal(
+      boardStore.getBoard(project.id, project.repoPath).cards[0]?.archivedAt,
+      undefined
     );
   });
 });

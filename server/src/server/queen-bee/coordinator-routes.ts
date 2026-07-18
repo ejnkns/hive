@@ -50,14 +50,46 @@ export function registerCoordinatorRoutes(
           .send({ error: "Matching coordinator suggestion is required" });
       }
 
+      const currentRequirements = readRequirements(project.repoPath);
+      const expectedRevision = card.coordinatorLog?.requirementsRevision;
+      if (
+        expectedRevision &&
+        requirementsRevision(currentRequirements) !== expectedRevision
+      ) {
+        return reply.status(409).send({
+          error:
+            "Requirements changed after this analysis. Retry coordination.",
+        });
+      }
+
       if (body.action === "archive") {
-        return reply.send({
-          card: deps.boardStore.archiveCard(
+        if (!suggestion.requirementsContent) {
+          return reply.status(400).send({
+            error:
+              "Archive requires a complete requirements revision that removes or defers the abandoned scope",
+          });
+        }
+        try {
+          const proposal = await deps.planner.propose(
             projectId,
             project.repoPath,
-            cardId
-          ),
-        });
+            suggestion.requirementsContent,
+            [
+              `The user selected the Coordinator's archive remediation for card '${cardId}'.`,
+              `Rationale: ${suggestion.rationale}`,
+              "Remove this card from the active plan and reconcile every other card against the revised requirements.",
+            ].join("\n"),
+            { cardId, target: "archived" }
+          );
+          return reply.send({ proposal });
+        } catch (error) {
+          return reply.status(500).send({
+            error:
+              error instanceof Error
+                ? error.message
+                : "Could not reconcile the archive",
+          });
+        }
       }
 
       if (body.action === "redevise") {
@@ -95,18 +127,6 @@ export function registerCoordinatorRoutes(
         });
       }
 
-      const currentRequirements = readRequirements(project.repoPath);
-      const expectedRevision = card.coordinatorLog?.requirementsRevision;
-      if (
-        expectedRevision &&
-        requirementsRevision(currentRequirements) !== expectedRevision
-      ) {
-        return reply.status(409).send({
-          error:
-            "Requirements changed after this analysis. Retry coordination.",
-        });
-      }
-
       try {
         const proposal = await deps.planner.propose(
           projectId,
@@ -117,7 +137,8 @@ export function registerCoordinatorRoutes(
             "Use this approved card patch when reconciling that card:",
             JSON.stringify(suggestion.cardPatch, null, 2),
             "Reconcile every other card against the updated project requirements before applying anything.",
-          ].join("\n")
+          ].join("\n"),
+          { cardId, target: "ready" }
         );
         return reply.send({ proposal });
       } catch (error) {

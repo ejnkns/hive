@@ -71,12 +71,12 @@ describe("Planner Agent reconciliation", () => {
       "Old idea"
     );
     planner.decide("project-1", proposal.id, "change-0", "accepted");
-    planner.decide("project-1", proposal.id, "change-2", "rejected");
+    planner.decide("project-1", proposal.id, "change-2", "accepted");
     const cards = planner.apply("project-1", repoPath, proposal.id);
 
     assert.deepEqual(
       cards.map((card) => card.title),
-      ["Revised idea", "Accepted feature"]
+      ["Revised idea", "Accepted feature", "Optional card"]
     );
     assert.equal(readRequirements(repoPath), "# Proposed requirements");
   });
@@ -206,6 +206,134 @@ describe("Planner Agent reconciliation", () => {
       /Board cards changed after planning started/
     );
     assert.equal(readRequirements(repoPath), "# Original requirements");
+  });
+
+  it("moves an explicitly refined card to Ready only after proposal approval", async () => {
+    const repoPath = createWorkspace();
+    const runtimeStore = createQueenBeeRuntimeStore(join(repoPath, ".runtime"));
+    const boardStore = createBoardStore(() => {}, runtimeStore);
+    const idea = boardStore.addCard("project-1", repoPath, {
+      title: "Refined idea",
+      description: "Original",
+      acceptanceCriteria: ["Original behavior"],
+      relevantFiles: ["source.ts"],
+      dependencies: [],
+      column: "idea",
+    });
+    const planner = createPlanner(
+      boardStore,
+      runtimeStore,
+      integrationManager(),
+      responseCaller({
+        changes: [
+          {
+            action: "update",
+            cardId: idea.id,
+            rationale: "The user refined this idea",
+            proposedCard: cardSpec("Approved refinement"),
+          },
+        ],
+      })
+    );
+
+    const proposal = await planner.propose(
+      "project-1",
+      repoPath,
+      "# Refined requirements",
+      "Refine the selected idea",
+      { cardId: idea.id, target: "ready" }
+    );
+    assert.equal(
+      boardStore.getBoard("project-1", repoPath).cards[0]?.column,
+      "idea"
+    );
+    planner.decide("project-1", proposal.id, "change-0", "accepted");
+    const cards = planner.apply("project-1", repoPath, proposal.id);
+
+    assert.equal(cards[0]?.column, "ready");
+  });
+
+  it("refuses to apply requirements while a card change is rejected", async () => {
+    const repoPath = createWorkspace();
+    const runtimeStore = createQueenBeeRuntimeStore(join(repoPath, ".runtime"));
+    const boardStore = createBoardStore(() => {}, runtimeStore);
+    const idea = boardStore.addCard("project-1", repoPath, {
+      title: "Original card",
+      description: "Original",
+      acceptanceCriteria: ["Original behavior"],
+      relevantFiles: ["source.ts"],
+      dependencies: [],
+      column: "idea",
+    });
+    const planner = createPlanner(
+      boardStore,
+      runtimeStore,
+      integrationManager(),
+      responseCaller({
+        changes: [
+          {
+            action: "update",
+            cardId: idea.id,
+            rationale: "The requirement changed",
+            proposedCard: cardSpec("Changed card"),
+          },
+        ],
+      })
+    );
+    const proposal = await planner.propose(
+      "project-1",
+      repoPath,
+      "# Changed requirements"
+    );
+    planner.decide("project-1", proposal.id, "change-0", "rejected");
+
+    assert.throws(
+      () => planner.apply("project-1", repoPath, proposal.id),
+      /Rejected card changes require a revised/
+    );
+    assert.equal(readRequirements(repoPath), "# Original requirements");
+  });
+
+  it("archives remediated scope only through an accepted planning proposal", async () => {
+    const repoPath = createWorkspace();
+    const runtimeStore = createQueenBeeRuntimeStore(join(repoPath, ".runtime"));
+    const boardStore = createBoardStore(() => {}, runtimeStore);
+    const card = boardStore.addCard("project-1", repoPath, {
+      title: "Abandoned card",
+      description: "No longer required",
+      acceptanceCriteria: ["Old behavior"],
+      relevantFiles: ["source.ts"],
+      dependencies: [],
+      column: "unfulfillable",
+    });
+    const planner = createPlanner(
+      boardStore,
+      runtimeStore,
+      integrationManager(),
+      responseCaller({
+        changes: [
+          {
+            action: "remove",
+            cardId: card.id,
+            rationale: "Scope moved to For later",
+          },
+        ],
+      })
+    );
+
+    const proposal = await planner.propose(
+      "project-1",
+      repoPath,
+      "# Requirements\n\n## For later\nOld behavior",
+      "Archive the abandoned card",
+      { cardId: card.id, target: "archived" }
+    );
+    assert.equal(boardStore.getBoard("project-1", repoPath).cards.length, 1);
+    planner.decide("project-1", proposal.id, "change-0", "accepted");
+    const cards = planner.apply("project-1", repoPath, proposal.id);
+
+    assert.deepEqual(cards, []);
+    assert.deepEqual(boardStore.getBoard("project-1", repoPath).cards, []);
   });
 
   function createWorkspace(): string {
