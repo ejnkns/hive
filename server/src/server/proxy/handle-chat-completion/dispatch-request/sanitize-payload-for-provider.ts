@@ -1,5 +1,3 @@
-import type { Message } from "shared/message";
-
 /**
  * Sanitizes the chat completion payload before sending to a provider.
  *
