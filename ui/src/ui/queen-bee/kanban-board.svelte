@@ -306,9 +306,7 @@ onMount(() => {
             {#each cardsInColumn(col) as card (card.id)}
               <KanbanCard
                 {card}
-                currentColumn={col}
                 onSelect={() => (selectedCard = card)}
-                onMove={(target) => moveCard(card.id, target)}
                 onRun={() => handleRunCard(card.id)}
               />
             {/each}
@@ -326,12 +324,6 @@ onMount(() => {
     <CardDetail
       card={selectedCard}
       onClose={() => (selectedCard = null)}
-      onMove={(col) => {
-        if (selectedCard) {
-          moveCard(selectedCard.id, col);
-          selectedCard = null;
-        }
-      }}
       onRun={() => handleRunCard(selectedCard!.id)}
       onRemediate={(action, suggestionId) =>
         handleRemediate(selectedCard!.id, action, suggestionId)}

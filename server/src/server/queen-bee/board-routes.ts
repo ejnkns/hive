@@ -40,7 +40,10 @@ export function registerBoardRoutes(
       return reply.status(400).send({ error: "title is required" });
     }
 
-    const column = validateColumn(body.column);
+    const column = body.column ? validateColumn(body.column) : "idea";
+    if (!column) {
+      return reply.status(400).send({ error: "column is invalid" });
+    }
 
     const card = deps.boardStore.addCard(projectId, project.repoPath, {
       title: body.title,
@@ -75,6 +78,9 @@ export function registerBoardRoutes(
       }
 
       const column = validateColumn(body.column);
+      if (!column) {
+        return reply.status(400).send({ error: "column is invalid" });
+      }
 
       try {
         const board = deps.boardStore.getBoard(projectId, project.repoPath);
@@ -83,12 +89,17 @@ export function registerBoardRoutes(
           return reply.status(404).send({ error: "Card not found" });
         }
 
+        if (existing.column !== "idea" || column !== "ready") {
+          return reply.status(400).send({
+            error:
+              "Manual card movement only supports promoting an idea to ready",
+          });
+        }
+
         if (
-          existing.column === "idea" &&
-          column === "ready" &&
-          (!existing.description ||
-            !existing.acceptanceCriteria ||
-            existing.acceptanceCriteria.length === 0)
+          !existing.description ||
+          !existing.acceptanceCriteria ||
+          existing.acceptanceCriteria.length === 0
         ) {
           return reply.status(400).send({
             error:
@@ -132,7 +143,7 @@ export function registerBoardRoutes(
   });
 }
 
-function validateColumn(column: string | undefined): Column {
+function validateColumn(column: string | undefined): Column | null {
   if (
     column &&
     [
@@ -146,5 +157,5 @@ function validateColumn(column: string | undefined): Column {
   ) {
     return column as Column;
   }
-  return "idea";
+  return null;
 }

@@ -1,13 +1,11 @@
 <script lang="ts">
 import type { Card, Column } from "shared/board-types";
 
-let { card, onClose, onMove, onRun, onRemediate, onCardDevise }: Props =
-  $props();
+let { card, onClose, onRun, onRemediate, onCardDevise }: Props = $props();
 
 type Props = {
   card: Card;
   onClose: () => void;
-  onMove: (column: Column) => void;
   onRun?: () => void;
   onRemediate?: (
     action: "retry_with_patch" | "redevise" | "archive",
@@ -181,13 +179,6 @@ const COLUMN_LABELS: Record<Column, string> = {
           {card.column === "in_progress" ? "Retry Worker" : "Run Worker"}
         </button>
       {/if}
-      {#each ["idea", "ready", "in_progress", "reviewing", "done", "unfulfillable"] as col}
-        {#if col !== card.column}
-          <button class="btn btn-sm" onclick={() => onMove(col as Column)}>
-            Move to {COLUMN_LABELS[col as Column]}
-          </button>
-        {/if}
-      {/each}
     </div>
   </div>
 </div>

@@ -1,26 +1,13 @@
 <script lang="ts">
-import type { Card, Column } from "shared/board-types";
+import type { Card } from "shared/board-types";
 
-let { card, currentColumn, onSelect, onMove, onRun }: Props = $props();
+let { card, onSelect, onRun }: Props = $props();
 
 type Props = {
   card: Card;
-  currentColumn: Column;
   onSelect: () => void;
-  onMove: (column: Column) => void;
   onRun?: () => void;
 };
-
-const COLUMNS: Column[] = [
-  "idea",
-  "ready",
-  "in_progress",
-  "reviewing",
-  "done",
-  "unfulfillable",
-];
-
-let showMove = $state(false);
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -36,7 +23,7 @@ let showMove = $state(false);
         onRun?.();
       }}
     >
-      ▶
+      {card.column === "ready" ? "Run" : "Retry"}
     </button>
   {/if}
   {#if card.description}
