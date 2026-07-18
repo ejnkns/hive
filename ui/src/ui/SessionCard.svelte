@@ -43,6 +43,9 @@ function requestLabel(i: number): string {
   const last = req.path.at(-1);
   const completed = last !== undefined && isTerminal(last);
   const num = requestCount - i;
+  const isFailover = req.requestId.includes("/F");
+  if (isFailover)
+    return completed ? `#${num} (failover)` : `#${num} (retrying)`;
   return completed ? `#${num}` : `#${num} (active)`;
 }
 
