@@ -85,7 +85,7 @@ await describe("Hive Scoring Suite", async () => {
         errorType: "auth-error",
         timestamp: now - 1000,
       }),
-      mockMetric({ success: true, source: "heartbeat", timestamp: now - 2000 }),
+      mockMetric({ success: true, source: "user", timestamp: now - 2000 }),
     ];
 
     const result = calculateNodeScore(node, history, "balanced", 200);
@@ -433,7 +433,7 @@ await describe("Severity-Weighted Temporal Decay", async () => {
         errorType: "auth-error",
         timestamp: now - 1000,
       }),
-      mockMetric({ success: true, source: "heartbeat", timestamp: now - 2000 }),
+      mockMetric({ success: true, source: "user", timestamp: now - 2000 }),
     ];
 
     const score = calculateNodeScore(

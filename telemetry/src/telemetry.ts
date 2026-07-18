@@ -21,6 +21,5 @@ export type {
   MetricSource,
   RequestMetric,
 } from "./request-metric";
-export { startHeartbeat } from "./start-heartbeat";
 export type { TelemetrySink } from "./telemetry-sink";
 export { createTelemetrySink } from "./telemetry-sink";
