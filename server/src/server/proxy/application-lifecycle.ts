@@ -1,16 +1,20 @@
+import { generateId } from "shared/generate-id";
 import { logger } from "shared/logger";
-import { loadCache, telemetryRecorder } from "telemetry";
+import { createTelemetrySink, loadCache, telemetryRecorder } from "telemetry";
 import {
   discoverAndCacheModels,
   providers as staticProviders,
 } from "../providers";
 import { setLastUsed } from "./last-used-state";
+import { mutateRequest } from "./mutate-request";
 import { getProviders } from "./providers-state";
+import { routeRequest } from "./route-request";
 
 let discoveryTimer: NodeJS.Timeout | null = null;
 
 export function start(): void {
   telemetryRecorder.start();
+  validateProvidersOnStartup();
   void loadLastUsed();
   void triggerBackgroundDiscovery();
   discoveryTimer = setInterval(
@@ -60,5 +64,39 @@ async function triggerBackgroundDiscovery(): Promise<void> {
     logger.debug(
       `triggerBackgroundDiscovery: ${err instanceof Error ? err.message : String(err)}`
     );
+  }
+}
+
+function validateProvidersOnStartup(): void {
+  for (const provider of getProviders()) {
+    const key = process.env[provider.apiKeyEnvVar];
+    if (!key) continue;
+
+    const body = JSON.stringify({
+      model: provider.defaultModel,
+      messages: [{ role: "user", content: "ok" }],
+      max_tokens: 1,
+    });
+
+    const mutated = mutateRequest({
+      originalHeaders: {},
+      originalBody: body,
+      targetProvider: provider,
+      targetModel: provider.defaultModel,
+    });
+
+    void routeRequest({
+      upstreamUrl: provider.chatEndpoint,
+      mutated,
+      timeoutMs: 5000,
+      providerName: provider.name,
+      modelName: provider.defaultModel,
+      requestId: generateId(),
+      telemetrySink: createTelemetrySink(),
+    }).catch((err: unknown) => {
+      logger.debug(
+        `startup validation: ${provider.name} failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+    });
   }
 }
