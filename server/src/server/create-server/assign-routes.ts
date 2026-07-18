@@ -5,7 +5,6 @@ import { addLogListener, getRecentLogs, logger } from "shared/logger";
 import { getServerConfig } from "shared/server-config";
 import { conversationStore, loadCache, telemetryRecorder } from "telemetry";
 import type { WebSocket } from "ws";
-import { getCanvasState, setCanvasState } from "../canvas/canvas-state";
 import type { FastifyServer } from "../create-server";
 import {
   disableProvider,
@@ -24,6 +23,7 @@ import {
   onSessionPatch,
   routingMemory,
 } from "../proxy";
+import { getCanvasState, setCanvasState } from "./assign-routes/canvas-state";
 
 export type RouteDeps = {
   getProviders: () => ReadonlyArray<Provider>;

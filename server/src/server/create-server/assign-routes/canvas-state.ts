@@ -1,4 +1,4 @@
-export type CanvasState = {
+type CanvasState = {
   html: string | null;
   chatHistory: Array<{ role: string; content: string }>;
 };
