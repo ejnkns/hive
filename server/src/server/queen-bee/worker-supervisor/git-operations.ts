@@ -1,6 +1,6 @@
 /** @private — only imported by worker-supervisor.ts */
 
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 
@@ -121,6 +121,18 @@ export function getDiff(worktreePath: string, baseBranch: string): string {
   }
 }
 
+export function getHeadCommit(worktreePath: string): string {
+  try {
+    return execSync("git rev-parse HEAD", {
+      cwd: worktreePath,
+      encoding: "utf-8",
+      timeout: 5_000,
+    }).trim();
+  } catch {
+    return "HEAD~1";
+  }
+}
+
 export function getCurrentBranch(worktreePath: string): string {
   try {
     const branch = execSync("git rev-parse --abbrev-ref HEAD", {
@@ -131,6 +143,53 @@ export function getCurrentBranch(worktreePath: string): string {
     return branch.trim();
   } catch {
     return "unknown";
+  }
+}
+
+export function getStatus(worktreePath: string): string {
+  try {
+    return (
+      execSync("git status --short", {
+        cwd: worktreePath,
+        encoding: "utf-8",
+        timeout: 5_000,
+      }).trim() || "Working tree clean"
+    );
+  } catch {
+    return "Unable to read git status";
+  }
+}
+
+export function createPullRequest(
+  worktreePath: string,
+  branchName: string,
+  title: string,
+  body: string
+): { ok: boolean; url?: string; message?: string } {
+  try {
+    const remote = execFileSync("git", ["remote", "get-url", "origin"], {
+      cwd: worktreePath,
+      encoding: "utf-8",
+      timeout: 5_000,
+    }).trim();
+    if (!remote) return { ok: false, message: "No origin remote configured" };
+
+    execFileSync("git", ["push", "origin", branchName], {
+      cwd: worktreePath,
+      encoding: "utf-8",
+      timeout: 60_000,
+    });
+    const url = execFileSync(
+      "gh",
+      ["pr", "create", "--head", branchName, "--title", title, "--body", body],
+      { cwd: worktreePath, encoding: "utf-8", timeout: 60_000 }
+    ).trim();
+    return { ok: true, url };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "PR creation failed",
+    };
   }
 }
 

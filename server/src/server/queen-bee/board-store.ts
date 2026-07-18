@@ -2,18 +2,16 @@
 
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
+import type {
+  Card as SharedCard,
+  Column as SharedColumn,
+} from "shared/board-types";
 import { generateId } from "shared/generate-id";
 import { loadBoard } from "./board-store/load-board";
 import { saveBoard } from "./board-store/save-board";
 import { saveCard } from "./board-store/save-card";
 
-export type Column =
-  | "idea"
-  | "ready"
-  | "in_progress"
-  | "reviewing"
-  | "done"
-  | "unfulfillable";
+export type Column = SharedColumn;
 
 export const COLUMNS: Column[] = [
   "idea",
@@ -24,29 +22,7 @@ export const COLUMNS: Column[] = [
   "unfulfillable",
 ];
 
-export type Card = {
-  id: string;
-  title: string;
-  description: string;
-  acceptanceCriteria: string[];
-  relevantFiles: string[];
-  dependencies: string[];
-  column: Column;
-  createdAt: string;
-  workerLog?: {
-    startedAt: string;
-    finishedAt: string;
-    iterations: number;
-    toolCalls: { name: string; args: string }[];
-    error?: string;
-    content: string;
-  };
-  reviewerLog?: {
-    verdict: "pass" | "fail";
-    feedback: string;
-    reviewedAt: string;
-  };
-};
+export type Card = SharedCard;
 
 export type Board = {
   projectId: string;
@@ -66,6 +42,13 @@ export type BoardStore = {
     cardId: string,
     column: Column
   ): Card;
+  updateCard(
+    projectId: string,
+    repoPath: string,
+    cardId: string,
+    patch: Partial<Omit<Card, "id" | "createdAt">>
+  ): Card;
+  archiveCard(projectId: string, repoPath: string, cardId: string): Card;
   saveCards(projectId: string, repoPath: string, cards: Card[]): void;
 };
 
@@ -74,7 +57,7 @@ export function createBoardStore(
 ): BoardStore {
   return {
     getBoard(projectId: string, repoPath: string): Board {
-      return loadBoard(projectId, repoPath);
+      return visibleBoard(loadBoard(projectId, repoPath));
     },
 
     addCard(
@@ -116,9 +99,36 @@ export function createBoardStore(
       return card;
     },
 
+    updateCard(projectId, repoPath, cardId, patch) {
+      const board = loadBoard(projectId, repoPath);
+      const card = board.cards.find((candidate) => candidate.id === cardId);
+      if (!card) throw new Error(`Card not found: ${cardId}`);
+
+      Object.assign(card, patch, { id: card.id, createdAt: card.createdAt });
+      saveBoard(repoPath, board);
+      saveCard(repoPath, card);
+      onBoardChanged(projectId);
+      return card;
+    },
+
+    archiveCard(projectId, repoPath, cardId) {
+      const board = loadBoard(projectId, repoPath);
+      const card = board.cards.find((candidate) => candidate.id === cardId);
+      if (!card) throw new Error(`Card not found: ${cardId}`);
+
+      card.archivedAt = new Date().toISOString();
+      saveBoard(repoPath, board);
+      saveCard(repoPath, card);
+      onBoardChanged(projectId);
+      return card;
+    },
+
     saveCards(projectId: string, repoPath: string, cards: Card[]): void {
       ensureHiveDir(repoPath);
-      const board: Board = { projectId, cards };
+      const archivedCards = loadBoard(projectId, repoPath).cards.filter(
+        (card) => card.archivedAt
+      );
+      const board: Board = { projectId, cards: [...cards, ...archivedCards] };
       saveBoard(repoPath, board);
       for (const card of cards) {
         saveCard(repoPath, card);
@@ -126,6 +136,10 @@ export function createBoardStore(
       onBoardChanged(projectId);
     },
   };
+}
+
+function visibleBoard(board: Board): Board {
+  return { ...board, cards: board.cards.filter((card) => !card.archivedAt) };
 }
 
 function ensureHiveDir(repoPath: string): void {

@@ -2,19 +2,25 @@
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import type { WorkerHandover } from "shared/board-types";
 import type { Message } from "shared/message";
 import type { BoardStore, Card } from "./board-store";
+import type { Coordinator } from "./coordinator";
 import { createDeviseModelCaller } from "./devise-engine/create-devise-model-caller";
+import { readRequirements, requirementsRevision } from "./requirements-store";
 import type { Reviewer } from "./reviewer";
 import { buildWorkerContext } from "./worker-supervisor/build-worker-context";
 import {
   commitChanges,
   createBranch,
+  createPullRequest,
   createWorktree,
   getDiff,
+  getHeadCommit,
   getWorktreePath,
   removeWorktree,
 } from "./worker-supervisor/git-operations";
+import { parseWorkerHandover } from "./worker-supervisor/parse-worker-handover";
 import {
   executeWorkerTool,
   WORKER_TOOLS,
@@ -26,11 +32,13 @@ export type WorkerEvent = {
     | "worker_content"
     | "worker_tool"
     | "worker_complete"
-    | "worker_error";
+    | "worker_error"
+    | "unfulfillable_handover";
   cardId: string;
   content?: string;
   toolName?: string;
   error?: string;
+  suggestions?: string[];
 };
 
 export type WorkerSupervisor = {
@@ -46,7 +54,8 @@ export type WorkerSupervisor = {
 
 export function createWorkerSupervisor(
   boardStore: BoardStore,
-  reviewer: Reviewer
+  reviewer: Reviewer,
+  coordinator: Coordinator
 ): WorkerSupervisor {
   const modelCaller = createDeviseModelCaller(WORKER_TOOLS);
   const abortControllers = new Map<string, AbortController>();
@@ -106,7 +115,7 @@ export function createWorkerSupervisor(
     if (!wtResult.ok) {
       log.error = wtResult.message;
       log.finishedAt = new Date().toISOString();
-      writeWorkerLog(boardStore, repoPath, card, log);
+      writeWorkerLog(boardStore, projectId, repoPath, card.id, log);
       boardStore.moveCard(projectId, repoPath, card.id, "ready");
       onEvent({
         type: "worker_error",
@@ -121,7 +130,7 @@ export function createWorkerSupervisor(
     if (!brResult.ok) {
       log.error = brResult.message;
       log.finishedAt = new Date().toISOString();
-      writeWorkerLog(boardStore, repoPath, card, log);
+      writeWorkerLog(boardStore, projectId, repoPath, card.id, log);
       boardStore.moveCard(projectId, repoPath, card.id, "ready");
       onEvent({
         type: "worker_error",
@@ -134,31 +143,75 @@ export function createWorkerSupervisor(
     onEvent({ type: "worker_started", cardId: card.id });
     boardStore.moveCard(projectId, repoPath, card.id, "in_progress");
 
+    const baseCommit = getHeadCommit(worktreePath);
     const messages = buildWorkerContext(card, systemPrompt, codingGuidelines);
 
     const validation = validateCard(card, worktreePath);
     if (validation !== null) {
-      log.error = validation;
+      log.error = validation.problem;
       log.finishedAt = new Date().toISOString();
-      writeWorkerLog(boardStore, repoPath, card, log);
-      boardStore.moveCard(projectId, repoPath, card.id, "unfulfillable");
-      onEvent({
-        type: "worker_error",
-        cardId: card.id,
-        error: validation,
-      });
+      writeWorkerLog(boardStore, projectId, repoPath, card.id, log);
+      await handleHandover(
+        boardStore,
+        coordinator,
+        projectId,
+        repoPath,
+        card,
+        validation,
+        onEvent
+      );
       return;
     }
 
     try {
-      await runLoop(messages, worktreePath, card.id, onEvent, modelCaller, log);
+      const handover = await runLoop(
+        messages,
+        worktreePath,
+        card.id,
+        onEvent,
+        modelCaller,
+        log
+      );
+
+      if (handover) {
+        log.error = handover.problem;
+        log.finishedAt = new Date().toISOString();
+        writeWorkerLog(boardStore, projectId, repoPath, card.id, log);
+        await handleHandover(
+          boardStore,
+          coordinator,
+          projectId,
+          repoPath,
+          card,
+          handover,
+          onEvent
+        );
+        return;
+      }
 
       const commitResult = commitChanges(worktreePath, `feat: ${card.title}`);
 
       log.finishedAt = new Date().toISOString();
-      writeWorkerLog(boardStore, repoPath, card, log);
+      writeWorkerLog(boardStore, projectId, repoPath, card.id, log);
 
       if (commitResult.ok) {
+        const branchSummary = await summarizeBranch(
+          modelCaller,
+          card,
+          worktreePath,
+          commitResult.message
+        );
+        const pr = createPullRequest(
+          worktreePath,
+          branchName,
+          card.title,
+          branchSummary
+        );
+        boardStore.updateCard(projectId, repoPath, card.id, {
+          branchSummary,
+          prUrl: pr.url,
+          prError: pr.ok ? undefined : pr.message,
+        });
         onEvent({
           type: "worker_complete",
           cardId: card.id,
@@ -173,7 +226,8 @@ export function createWorkerSupervisor(
           projectId,
           boardStore,
           reviewer,
-          onEvent
+          onEvent,
+          baseCommit
         );
       } else {
         onEvent({
@@ -186,7 +240,7 @@ export function createWorkerSupervisor(
     } catch (err) {
       log.error = err instanceof Error ? err.message : "Worker failed";
       log.finishedAt = new Date().toISOString();
-      writeWorkerLog(boardStore, repoPath, card, log);
+      writeWorkerLog(boardStore, projectId, repoPath, card.id, log);
       boardStore.moveCard(projectId, repoPath, card.id, "ready");
       onEvent({
         type: "worker_error",
@@ -194,6 +248,29 @@ export function createWorkerSupervisor(
         error: log.error,
       });
     }
+  }
+}
+
+async function summarizeBranch(
+  modelCaller: ReturnType<typeof createDeviseModelCaller>,
+  card: Card,
+  worktreePath: string,
+  fallback: string
+): Promise<string> {
+  try {
+    const response = await modelCaller.call(
+      [
+        {
+          role: "user",
+          content: `Summarize what was implemented for "${card.title}" in two or three concise sentences. Do not mention tools.`,
+        },
+      ],
+      worktreePath,
+      false
+    );
+    return response.content.trim() || fallback;
+  } catch {
+    return fallback;
   }
 }
 
@@ -205,7 +282,7 @@ async function runLoop(
   modelCaller: ReturnType<typeof createDeviseModelCaller>,
   log: NonNullable<Card["workerLog"]>,
   maxIterations = 20
-): Promise<void> {
+): Promise<WorkerHandover | null> {
   for (let iteration = 0; iteration < maxIterations; iteration++) {
     log.iterations = iteration + 1;
 
@@ -221,7 +298,10 @@ async function runLoop(
     }
 
     if (response.toolCalls.length === 0) {
-      return;
+      const parsed = parseWorkerHandover(response.content);
+      return parsed
+        ? { ...parsed, occurredAt: new Date().toISOString() }
+        : null;
     }
 
     for (const toolCall of response.toolCalls) {
@@ -274,9 +354,16 @@ async function runLoop(
   throw new Error("Reached maximum iterations");
 }
 
-function validateCard(card: Card, worktreePath: string): string | null {
+function validateCard(card: Card, worktreePath: string): WorkerHandover | null {
   if (!card.relevantFiles || card.relevantFiles.length === 0) {
-    return `Card "${card.title}" has no relevant files.`;
+    return {
+      problem: `Card "${card.title}" has no relevant files.`,
+      attempted: [],
+      blockedBy: [
+        "The worker has no grounded starting point in the workspace.",
+      ],
+      occurredAt: new Date().toISOString(),
+    };
   }
 
   const missing: string[] = [];
@@ -288,7 +375,12 @@ function validateCard(card: Card, worktreePath: string): string | null {
   }
 
   if (missing.length > 0) {
-    return `Validation failed for card "${card.title}": files not found in workspace: ${missing.join(", ")}`;
+    return {
+      problem: `Validation failed for card "${card.title}": assigned files are missing.`,
+      attempted: ["Checked every assigned relevant file in the worktree."],
+      blockedBy: missing,
+      occurredAt: new Date().toISOString(),
+    };
   }
 
   return null;
@@ -296,17 +388,13 @@ function validateCard(card: Card, worktreePath: string): string | null {
 
 function writeWorkerLog(
   boardStore: BoardStore,
+  projectId: string,
   repoPath: string,
-  card: Card,
+  cardId: string,
   log: NonNullable<Card["workerLog"]>
 ): void {
   try {
-    const board = boardStore.getBoard(card.id, repoPath);
-    const existing = board.cards.find((c) => c.id === card.id);
-    if (existing) {
-      existing.workerLog = log;
-      boardStore.saveCards(card.id, repoPath, board.cards);
-    }
+    boardStore.updateCard(projectId, repoPath, cardId, { workerLog: log });
   } catch {
     // ignore log write failures
   }
@@ -319,32 +407,35 @@ async function runReviewer(
   projectId: string,
   boardStore: BoardStore,
   reviewer: Reviewer,
-  onEvent: (event: WorkerEvent) => void
+  onEvent: (event: WorkerEvent) => void,
+  baseCommit: string
 ): Promise<void> {
   try {
-    const diff = getDiff(worktreePath, "HEAD~1");
+    const diff = getDiff(worktreePath, baseCommit);
     const verdict = await reviewer.review(card, diff, worktreePath);
 
-    const board = boardStore.getBoard(projectId, repoPath);
-    const existing = board.cards.find((c) => c.id === card.id);
-    if (!existing) return;
-
-    existing.reviewerLog = {
+    const reviewerLog = {
       verdict: verdict.verdict,
       feedback: verdict.feedback,
       reviewedAt: new Date().toISOString(),
     };
 
     if (verdict.verdict === "pass") {
-      boardStore.moveCard(projectId, repoPath, card.id, "done");
+      boardStore.updateCard(projectId, repoPath, card.id, {
+        reviewerLog,
+        column: "done",
+      });
+      removeWorktree(repoPath, card.id);
       onEvent({
         type: "worker_content",
         cardId: card.id,
         content: `Review passed: ${verdict.feedback}`,
       });
     } else {
-      boardStore.moveCard(projectId, repoPath, card.id, "in_progress");
-      boardStore.saveCards(projectId, repoPath, board.cards);
+      boardStore.updateCard(projectId, repoPath, card.id, {
+        reviewerLog,
+        column: "in_progress",
+      });
       onEvent({
         type: "worker_error",
         cardId: card.id,
@@ -357,5 +448,52 @@ async function runReviewer(
       cardId: card.id,
       error: `Reviewer error: ${err instanceof Error ? err.message : "Unknown"}`,
     });
+  }
+}
+
+async function handleHandover(
+  boardStore: BoardStore,
+  coordinator: Coordinator,
+  projectId: string,
+  repoPath: string,
+  card: Card,
+  handover: WorkerHandover,
+  onEvent: (event: WorkerEvent) => void
+): Promise<void> {
+  const unfulfillable = boardStore.updateCard(projectId, repoPath, card.id, {
+    column: "unfulfillable",
+    handover,
+    coordinatorLog: { status: "pending" },
+  });
+
+  try {
+    const requirementsContent = readRequirements(repoPath);
+    const analysis = await coordinator.analyze(
+      unfulfillable,
+      requirementsContent
+    );
+    boardStore.updateCard(projectId, repoPath, card.id, {
+      coordinatorLog: {
+        status: "complete",
+        analyzedAt: new Date().toISOString(),
+        requirementsRevision: requirementsRevision(requirementsContent),
+        summary: analysis.summary,
+        suggestions: analysis.suggestions,
+      },
+    });
+    onEvent({
+      type: "unfulfillable_handover",
+      cardId: card.id,
+      content: analysis.summary,
+      suggestions: analysis.suggestions.map(
+        (suggestion) => suggestion.rationale
+      ),
+    });
+  } catch (err) {
+    const error = err instanceof Error ? err.message : "Coordinator failed";
+    boardStore.updateCard(projectId, repoPath, card.id, {
+      coordinatorLog: { status: "error", error },
+    });
+    onEvent({ type: "unfulfillable_handover", cardId: card.id, error });
   }
 }

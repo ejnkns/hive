@@ -23,6 +23,37 @@ export type ReviewerLog = {
   reviewedAt: string;
 };
 
+export type WorkerHandover = {
+  problem: string;
+  attempted: string[];
+  blockedBy: string[];
+  occurredAt: string;
+};
+
+export type CoordinatorAction = "retry_with_patch" | "redevise" | "archive";
+
+export type CoordinatorSuggestion = {
+  id: string;
+  action: CoordinatorAction;
+  rationale: string;
+  cardPatch?: {
+    description?: string;
+    acceptanceCriteria?: string[];
+    relevantFiles?: string[];
+    requirementRefs?: string[];
+  };
+  requirementsContent?: string;
+};
+
+export type CoordinatorLog = {
+  status: "pending" | "complete" | "error";
+  analyzedAt?: string;
+  requirementsRevision?: string;
+  summary?: string;
+  suggestions?: CoordinatorSuggestion[];
+  error?: string;
+};
+
 export type Card = {
   id: string;
   title: string;
@@ -34,4 +65,11 @@ export type Card = {
   createdAt: string;
   workerLog?: WorkerLog;
   reviewerLog?: ReviewerLog;
+  handover?: WorkerHandover;
+  coordinatorLog?: CoordinatorLog;
+  requirementRefs?: string[];
+  archivedAt?: string;
+  branchSummary?: string;
+  prUrl?: string;
+  prError?: string;
 };

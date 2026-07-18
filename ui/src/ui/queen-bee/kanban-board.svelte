@@ -1,4 +1,5 @@
 <script lang="ts">
+import { onMount } from "svelte";
 import type { Card, Column } from "shared/board-types";
 import KanbanCard from "./kanban-card.svelte";
 import CardDetail from "./card-detail.svelte";
@@ -113,11 +114,61 @@ async function handleRunCard(cardId: string) {
   }
 }
 
+async function handleRemediate(
+  cardId: string,
+  action: "retry_with_patch" | "redevise" | "archive",
+  suggestionId?: string
+) {
+  try {
+    const res = await fetch(
+      `/api/queen-bee/${projectId}/cards/${cardId}/remediate`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, suggestionId }),
+      }
+    );
+    if (!res.ok) {
+      const data = (await res.json()) as { error?: string };
+      throw new Error(data.error ?? "Remediation failed");
+    }
+    selectedCard = null;
+    await loadBoard();
+  } catch (err) {
+    error = err instanceof Error ? err.message : "Remediation failed";
+  }
+}
+
 function cardsInColumn(col: Column): Card[] {
   return board?.cards.filter((c) => c.column === col) ?? [];
 }
 
-loadBoard();
+onMount(() => {
+  void loadBoard();
+
+  const protocol = window.location.protocol === "http:" ? "ws:" : "wss:";
+  const socket = new WebSocket(
+    `${protocol}//${window.location.host}/api/queen-bee/ws`
+  );
+  socket.onmessage = (event) => {
+    try {
+      const message = JSON.parse(String(event.data)) as {
+        type?: string;
+        data?: { projectId?: string };
+      };
+      if (
+        message.data?.projectId === projectId ||
+        message.type === "reviewer_verdict"
+      ) {
+        void loadBoard();
+      }
+    } catch {
+      // Ignore malformed events.
+    }
+  };
+
+  return () => socket.close();
+});
 </script>
 
 <div class="kanban-board">
@@ -170,6 +221,7 @@ loadBoard();
                 currentColumn={col}
                 onSelect={() => (selectedCard = card)}
                 onMove={(target) => moveCard(card.id, target)}
+                onRun={() => handleRunCard(card.id)}
               />
             {/each}
           </div>
@@ -193,6 +245,8 @@ loadBoard();
         }
       }}
       onRun={() => handleRunCard(selectedCard!.id)}
+      onRemediate={(action, suggestionId) =>
+        handleRemediate(selectedCard!.id, action, suggestionId)}
     />
   {/if}
 </div>

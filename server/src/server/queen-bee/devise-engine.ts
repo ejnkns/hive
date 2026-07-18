@@ -10,6 +10,7 @@ import { executeDeviseTool } from "./devise-engine/devise-tools";
 
 export type DeviseSession = {
   projectId: string;
+  cardId?: string;
   messages: Message[];
   status: "active" | "complete";
 };
@@ -26,6 +27,19 @@ export type DeviseEngine = {
     workspacePath: string
   ): Promise<DeviseRespondResult>;
   getSession(projectId: string): DeviseSession | undefined;
+  startCard(
+    projectId: string,
+    cardId: string,
+    prompt: string,
+    workspacePath: string
+  ): Promise<DeviseStartResult>;
+  respondCard(
+    projectId: string,
+    cardId: string,
+    answer: string,
+    workspacePath: string
+  ): Promise<DeviseRespondResult>;
+  getCardSession(projectId: string, cardId: string): DeviseSession | undefined;
 };
 
 export type DeviseStartResult = {
@@ -44,57 +58,102 @@ export function createDeviseEngine(
 
   return {
     async start(projectId, prompt, workspacePath) {
-      const messages: Message[] = [
-        { role: "system", content: DEVISE_SYSTEM_PROMPT },
-        { role: "user", content: prompt },
-      ];
+      return startSession(projectId, projectId, prompt, workspacePath);
+    },
 
-      const result = await callWithToolLoop(caller, messages, workspacePath);
-
-      messages.push({ role: "assistant", content: result });
-
-      sessions.set(projectId, {
+    async startCard(projectId, cardId, prompt, workspacePath) {
+      return startSession(
+        cardSessionKey(projectId, cardId),
         projectId,
-        messages,
-        status: "active",
-      });
-
-      return { question: result };
+        prompt,
+        workspacePath,
+        cardId
+      );
     },
 
     async respond(projectId, answer, workspacePath) {
-      const session = sessions.get(projectId);
-      if (!session || session.status === "complete") {
-        throw new Error("No active devise session for this project");
-      }
+      return respondSession(projectId, answer, workspacePath);
+    },
 
-      session.messages.push({ role: "user", content: answer });
-
-      const result = await callWithToolLoop(
-        caller,
-        session.messages,
+    async respondCard(projectId, cardId, answer, workspacePath) {
+      return respondSession(
+        cardSessionKey(projectId, cardId),
+        answer,
         workspacePath
       );
-
-      const isComplete = detectCompletion(result);
-
-      session.messages.push({
-        role: "assistant",
-        content: isComplete ? extractSpec(result) : result,
-      });
-
-      if (isComplete) {
-        session.status = "complete";
-        return { type: "complete", spec: extractSpec(result) };
-      }
-
-      return { type: "question", question: result };
     },
 
     getSession(projectId) {
       return sessions.get(projectId);
     },
+
+    getCardSession(projectId, cardId) {
+      return sessions.get(cardSessionKey(projectId, cardId));
+    },
   };
+
+  async function startSession(
+    sessionKey: string,
+    projectId: string,
+    prompt: string,
+    workspacePath: string,
+    cardId?: string
+  ): Promise<DeviseStartResult> {
+    const messages: Message[] = [
+      { role: "system", content: DEVISE_SYSTEM_PROMPT },
+      { role: "user", content: prompt },
+    ];
+
+    const result = await callWithToolLoop(caller, messages, workspacePath);
+
+    messages.push({ role: "assistant", content: result });
+
+    sessions.set(sessionKey, {
+      projectId,
+      cardId,
+      messages,
+      status: "active",
+    });
+
+    return { question: result };
+  }
+
+  async function respondSession(
+    sessionKey: string,
+    answer: string,
+    workspacePath: string
+  ): Promise<DeviseRespondResult> {
+    const session = sessions.get(sessionKey);
+    if (!session || session.status === "complete") {
+      throw new Error("No active devise session for this project");
+    }
+
+    session.messages.push({ role: "user", content: answer });
+
+    const result = await callWithToolLoop(
+      caller,
+      session.messages,
+      workspacePath
+    );
+
+    const isComplete = detectCompletion(result);
+
+    session.messages.push({
+      role: "assistant",
+      content: isComplete ? extractSpec(result) : result,
+    });
+
+    if (isComplete) {
+      session.status = "complete";
+      return { type: "complete", spec: extractSpec(result) };
+    }
+
+    return { type: "question", question: result };
+  }
+}
+
+function cardSessionKey(projectId: string, cardId: string): string {
+  return `${projectId}:card:${cardId}`;
 }
 
 async function callWithToolLoop(

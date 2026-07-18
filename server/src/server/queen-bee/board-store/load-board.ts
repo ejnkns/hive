@@ -38,6 +38,13 @@ export function loadBoard(projectId: string, repoPath: string): Board {
           feedback: string;
           reviewedAt: string;
         };
+        handover?: Card["handover"];
+        coordinatorLog?: Card["coordinatorLog"];
+        requirementRefs?: string[];
+        archivedAt?: string;
+        branchSummary?: string;
+        prUrl?: string;
+        prError?: string;
       }[];
     };
 
@@ -63,6 +70,15 @@ export function loadBoard(projectId: string, repoPath: string): Board {
             createdAt: typeof c.createdAt === "string" ? c.createdAt : "",
             workerLog: c.workerLog,
             reviewerLog: c.reviewerLog,
+            handover: c.handover,
+            coordinatorLog: c.coordinatorLog,
+            requirementRefs: Array.isArray(c.requirementRefs)
+              ? c.requirementRefs
+              : undefined,
+            archivedAt: c.archivedAt,
+            branchSummary: c.branchSummary,
+            prUrl: c.prUrl,
+            prError: c.prError,
           });
         }
       }

@@ -3,6 +3,9 @@
 export { registerBoardRoutes } from "./queen-bee/board-routes";
 export type { Board, BoardStore, Card, Column } from "./queen-bee/board-store";
 export { createBoardStore } from "./queen-bee/board-store";
+export type { Coordinator, CoordinatorAnalysis } from "./queen-bee/coordinator";
+export { createCoordinator } from "./queen-bee/coordinator";
+export { registerCoordinatorRoutes } from "./queen-bee/coordinator-routes";
 export type { Project, ProjectStore } from "./queen-bee/create-project-store";
 export { createProjectStore } from "./queen-bee/create-project-store";
 export type { DeviseEngine } from "./queen-bee/devise-engine";

@@ -20,6 +20,13 @@ export function saveBoard(repoPath: string, board: Board): void {
       createdAt: c.createdAt,
       workerLog: c.workerLog,
       reviewerLog: c.reviewerLog,
+      handover: c.handover,
+      coordinatorLog: c.coordinatorLog,
+      requirementRefs: c.requirementRefs,
+      archivedAt: c.archivedAt,
+      branchSummary: c.branchSummary,
+      prUrl: c.prUrl,
+      prError: c.prError,
     })),
   };
 

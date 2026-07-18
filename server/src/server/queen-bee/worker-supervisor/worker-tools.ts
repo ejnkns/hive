@@ -15,6 +15,7 @@ import type {
   ToolResult,
 } from "../devise-engine/devise-tools";
 import { DEVISE_TOOLS } from "../devise-engine/devise-tools";
+import { getDiff, getStatus } from "./git-operations";
 
 export const WORKER_TOOLS: ToolDefinition[] = [
   ...DEVISE_TOOLS,
@@ -62,6 +63,22 @@ export const WORKER_TOOLS: ToolDefinition[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "git_status",
+      description: "Show the current git working-tree status.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "git_diff",
+      description: "Show the current uncommitted git diff.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
 ];
 
 export function executeWorkerTool(
@@ -74,6 +91,18 @@ export function executeWorkerTool(
         return writeFile(toolCall, workspacePath);
       case "run_command":
         return runCommand(toolCall, workspacePath);
+      case "git_status":
+        return {
+          toolCallId: toolCall.id,
+          content: getStatus(workspacePath),
+          isError: false,
+        };
+      case "git_diff":
+        return {
+          toolCallId: toolCall.id,
+          content: getDiff(workspacePath, "HEAD"),
+          isError: false,
+        };
       default:
         return executeDeviseToolFallback(toolCall, workspacePath);
     }
@@ -138,11 +167,12 @@ function runCommand(toolCall: ToolCall, workspacePath: string): ToolResult {
     };
   }
 
+  const command = args.command;
   const cmdArgs = Array.isArray(args.args) ? args.args : [];
 
   return new Promise<ToolResult>((resolveResult) => {
     execFile(
-      args.command!,
+      command,
       cmdArgs,
       { cwd: workspacePath, timeout: 30_000, maxBuffer: 1024 * 1024 },
       (error, stdout, stderr) => {

@@ -1,13 +1,17 @@
 <script lang="ts">
 import type { Card, Column } from "shared/board-types";
 
-let { card, onClose, onMove, onRun }: Props = $props();
+let { card, onClose, onMove, onRun, onRemediate }: Props = $props();
 
 type Props = {
   card: Card;
   onClose: () => void;
   onMove: (column: Column) => void;
   onRun?: () => void;
+  onRemediate?: (
+    action: "retry_with_patch" | "redevise" | "archive",
+    suggestionId?: string
+  ) => void;
 };
 
 const COLUMN_LABELS: Record<Column, string> = {
@@ -109,6 +113,59 @@ const COLUMN_LABELS: Record<Column, string> = {
             {card.reviewerLog.verdict === "pass" ? "Passed" : "Failed"}
           </div>
           <div class="review-feedback">{card.reviewerLog.feedback}</div>
+        </div>
+      {/if}
+
+      {#if card.handover}
+        <div class="section handover">
+          <div class="section-label">Worker Handover</div>
+          <div class="handover-problem">{card.handover.problem}</div>
+          {#if card.handover.attempted.length > 0}
+            <div class="handover-label">Attempted</div>
+            <ul class="criteria-list">
+              {#each card.handover.attempted as attempt}
+                <li>{attempt}</li>
+              {/each}
+            </ul>
+          {/if}
+          {#if card.handover.blockedBy.length > 0}
+            <div class="handover-label">Blocked by</div>
+            <ul class="criteria-list">
+              {#each card.handover.blockedBy as blocker}
+                <li>{blocker}</li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
+      {/if}
+
+      {#if card.coordinatorLog}
+        <div class="section">
+          <div class="section-label">Coordinator</div>
+          {#if card.coordinatorLog.status === "pending"}
+            <div class="section-value">Analyzing the handover…</div>
+          {:else if card.coordinatorLog.status === "error"}
+            <div class="log-error">{card.coordinatorLog.error ?? "Analysis failed"}</div>
+          {:else}
+            <div class="section-value">{card.coordinatorLog.summary}</div>
+            {#each card.coordinatorLog.suggestions ?? [] as suggestion}
+              <div class="suggestion">
+                <div>{suggestion.rationale}</div>
+                {#if onRemediate}
+                  <button
+                    class="btn btn-sm"
+                    onclick={() => onRemediate(suggestion.action, suggestion.id)}
+                  >
+                    {suggestion.action === "retry_with_patch"
+                      ? "Accept patch"
+                      : suggestion.action === "redevise"
+                        ? "Re-devise"
+                        : "Archive"}
+                  </button>
+                {/if}
+              </div>
+            {/each}
+          {/if}
         </div>
       {/if}
     </div>
@@ -326,6 +383,29 @@ const COLUMN_LABELS: Record<Column, string> = {
     color: var(--text);
     line-height: 1.45;
     white-space: pre-wrap;
+  }
+
+  .handover-problem {
+    font-size: 0.8125rem;
+    color: var(--text);
+  }
+
+  .handover-label {
+    color: var(--muted);
+    font-size: 0.6875rem;
+    margin-top: 0.5rem;
+  }
+
+  .suggestion {
+    align-items: center;
+    border-top: 1px solid var(--border);
+    color: var(--text);
+    display: flex;
+    font-size: 0.75rem;
+    gap: 0.5rem;
+    justify-content: space-between;
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
   }
 
 </style>

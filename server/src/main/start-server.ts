@@ -19,12 +19,14 @@ import {
 } from "../server/proxy";
 import {
   createBoardStore,
+  createCoordinator,
   createDeviseEngine,
   createPlanner,
   createProjectStore,
   createReviewer,
   createWorkerSupervisor,
   registerBoardRoutes,
+  registerCoordinatorRoutes,
   registerDeviseRoutes,
   registerProjectRoutes,
   registerWorkerRoutes,
@@ -60,7 +62,12 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
   });
   const planner = createPlanner(boardStore);
   const reviewer = createReviewer();
-  const workerSupervisor = createWorkerSupervisor(boardStore, reviewer);
+  const coordinator = createCoordinator();
+  const workerSupervisor = createWorkerSupervisor(
+    boardStore,
+    reviewer,
+    coordinator
+  );
 
   const server = await createServer({
     getProviders: () => getProviders(),
@@ -77,6 +84,7 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
   registerProjectRoutes(server, projectStore);
   registerDeviseRoutes(server, { engine: deviseEngine, projectStore });
   registerBoardRoutes(server, { boardStore, planner, projectStore });
+  registerCoordinatorRoutes(server, { boardStore, projectStore });
   registerWorkerRoutes(server, {
     workerSupervisor,
     boardStore,
