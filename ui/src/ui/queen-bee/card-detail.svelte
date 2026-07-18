@@ -1,18 +1,23 @@
 <script lang="ts">
 import type { Card, Column } from "shared/board-types";
+import CardRefinement from "./card-refinement.svelte";
 
-let { card, onClose, onRun, onRemediate, onCardDevise }: Props = $props();
+let { projectId, card, onClose, onCardUpdated, onRun, onRemediate }: Props =
+  $props();
 
 type Props = {
+  projectId: string;
   card: Card;
   onClose: () => void;
+  onCardUpdated: (card: Card) => void;
   onRun?: () => void;
   onRemediate?: (
     action: "retry_with_patch" | "redevise" | "archive",
     suggestionId?: string
   ) => void;
-  onCardDevise?: () => void;
 };
+
+let refining = $state(false);
 
 const COLUMN_LABELS: Record<Column, string> = {
   idea: "Idea",
@@ -159,7 +164,7 @@ const COLUMN_LABELS: Record<Column, string> = {
                     {suggestion.action === "retry_with_patch"
                       ? "Accept patch"
                       : suggestion.action === "redevise"
-                        ? "Re-devise"
+                        ? "Revise requirements"
                         : "Archive"}
                   </button>
                 {/if}
@@ -168,11 +173,22 @@ const COLUMN_LABELS: Record<Column, string> = {
           {/if}
         </div>
       {/if}
+
+      {#if refining}
+        <CardRefinement
+          {projectId}
+          {card}
+          {onCardUpdated}
+          onCancel={() => (refining = false)}
+        />
+      {/if}
     </div>
 
     <div class="panel-actions">
-      {#if card.column === "idea" && onCardDevise}
-        <button class="btn btn-run" onclick={onCardDevise}>Refine card</button>
+      {#if card.column === "idea" && !refining}
+        <button class="btn btn-run" onclick={() => (refining = true)}>
+          Refine card
+        </button>
       {/if}
       {#if (card.column === "ready" || card.column === "in_progress") && onRun}
         <button class="btn btn-run" onclick={onRun}>

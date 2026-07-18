@@ -38,11 +38,12 @@ let board: Board | null = $state(null);
 let loading = $state(true);
 let error = $state<string | null>(null);
 let selectedCard: Card | null = $state(null);
-let planning = $state(false);
+let revising = $state(false);
 let running = $state<string | null>(null);
-let guidanceShown = $state(false);
-let guidanceText = $state("");
-let replanError = $state<string | null>(null);
+let revisionShown = $state(false);
+let revisionText = $state("");
+let revisionError = $state<string | null>(null);
+let activeWorkWarning = $state<string | null>(null);
 
 async function loadBoard() {
   loading = true;
@@ -58,81 +59,45 @@ async function loadBoard() {
   }
 }
 
-async function moveCard(cardId: string, column: Column) {
-  try {
-    await fetch(`/api/queen-bee/${projectId}/cards/${cardId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ column }),
-    });
-    await loadBoard();
-  } catch {
-    // ignore
-  }
+function toggleRevision() {
+  revisionShown = !revisionShown;
+  revisionText = "";
+  revisionError = null;
+  activeWorkWarning = null;
 }
 
-async function handleReplan() {
-  guidanceShown = !guidanceShown;
-  guidanceText = "";
-  replanError = null;
-}
-
-async function handleReDevise() {
-  const prompt = window.prompt(
-    "What new context should change the project requirements?"
-  );
+async function submitRevision(confirmActive = false) {
+  const prompt = revisionText.trim();
   if (!prompt) return;
-
-  const start = async (confirmActive: boolean) =>
-    fetch(`/api/queen-bee/${projectId}/devise/redevise/start`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt, confirmActive }),
-    });
-
+  revising = true;
+  revisionError = null;
   try {
-    let response = await start(false);
+    const response = await fetch(
+      `/api/queen-bee/${projectId}/devise/redevise/start`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, confirmActive }),
+      }
+    );
     if (response.status === 409) {
       const data = (await response.json()) as { error?: string };
-      if (
-        !window.confirm(
-          `${data.error ?? "Active work exists"}. Continue anyway?`
-        )
-      )
-        return;
-      response = await start(true);
+      activeWorkWarning = data.error ?? "Active work exists";
+      return;
     }
     if (!response.ok) {
       const data = (await response.json()) as { error?: string };
-      throw new Error(data.error ?? "Could not start re-devise");
+      throw new Error(data.error ?? "Could not start revision");
     }
+    revisionShown = false;
+    revisionText = "";
+    activeWorkWarning = null;
     onReDeviseStarted?.();
   } catch (err) {
-    error = err instanceof Error ? err.message : "Could not start re-devise";
-  }
-}
-
-async function handleSubmitReplan() {
-  planning = true;
-  replanError = null;
-  try {
-    const res = await fetch(`/api/queen-bee/${projectId}/plan`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ guidance: guidanceText || undefined }),
-    });
-    if (!res.ok) {
-      const data = (await res.json()) as { error?: string };
-      throw new Error(data.error ?? "Replanning failed");
-    }
-    guidanceShown = false;
-    guidanceText = "";
-    await loadBoard();
-  } catch (err) {
-    replanError =
-      err instanceof Error ? err.message : "Unknown error replanning";
+    revisionError =
+      err instanceof Error ? err.message : "Could not start revision";
   } finally {
-    planning = false;
+    revising = false;
   }
 }
 
@@ -175,53 +140,16 @@ async function handleRemediate(
   }
 }
 
-async function handleCardDevise(card: Card) {
-  const prompt = window.prompt("What should this card add or clarify?");
-  if (!prompt) return;
-
-  try {
-    let response = await fetch(
-      `/api/queen-bee/${projectId}/cards/${card.id}/devise/start`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
-      }
-    );
-    let data = (await response.json()) as { question?: string; error?: string };
-    if (!response.ok || !data.question) {
-      throw new Error(data.error ?? "Could not start card devise");
-    }
-
-    while (data.question) {
-      const answer = window.prompt(data.question);
-      if (!answer) return;
-      response = await fetch(
-        `/api/queen-bee/${projectId}/cards/${card.id}/devise/respond`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ answer }),
-        }
-      );
-      const result = (await response.json()) as {
-        question?: string;
-        complete?: boolean;
-        error?: string;
-      };
-      if (!response.ok) {
-        throw new Error(result.error ?? "Could not continue card devise");
-      }
-      if (result.complete) {
-        await moveCard(card.id, "ready");
-        selectedCard = null;
-        return;
-      }
-      data = result;
-    }
-  } catch (err) {
-    error = err instanceof Error ? err.message : "Card devise failed";
+function handleCardUpdated(updatedCard: Card) {
+  if (board) {
+    board = {
+      ...board,
+      cards: board.cards.map((card) =>
+        card.id === updatedCard.id ? updatedCard : card
+      ),
+    };
   }
+  selectedCard = updatedCard;
 }
 
 function cardsInColumn(col: Column): Card[] {
@@ -260,32 +188,48 @@ onMount(() => {
   <div class="board-header">
     <h2>Board</h2>
     <div class="board-actions">
-      <button class="btn btn-outline" onclick={handleReplan} disabled={planning}>
-        {planning ? "Replanning..." : "Replan"}
-      </button>
-      <button class="btn btn-outline" onclick={handleReDevise} disabled={planning}>
-        Re-devise
+      <button class="btn btn-outline" onclick={toggleRevision} disabled={revising}>
+        {revising ? "Starting revision..." : "Revise"}
       </button>
     </div>
   </div>
 
-  {#if guidanceShown}
-    <div class="guidance-area">
+  {#if revisionShown}
+    <div class="revision-area">
       <textarea
-        class="guidance-input"
-        bind:value={guidanceText}
-        placeholder="What should the planner change? (optional)"
+        class="revision-input"
+        bind:value={revisionText}
+        placeholder="What context should change the project requirements and regenerated cards?"
         rows="2"
-        disabled={planning}
+        disabled={revising}
       ></textarea>
-      <button class="btn btn-primary" onclick={handleSubmitReplan} disabled={planning}>
-        {planning ? "Generating..." : "Generate"}
-      </button>
+      <div class="revision-actions">
+        <button
+          class="btn btn-primary"
+          onclick={() => submitRevision(false)}
+          disabled={revising || !revisionText.trim()}
+        >
+          {revising ? "Starting..." : "Revise requirements"}
+        </button>
+        <button class="btn" onclick={toggleRevision} disabled={revising}>Cancel</button>
+      </div>
+      {#if activeWorkWarning}
+        <div class="revision-warning">
+          <span>{activeWorkWarning}. Continuing may invalidate active work.</span>
+          <button
+            class="btn btn-danger"
+            onclick={() => submitRevision(true)}
+            disabled={revising}
+          >
+            Continue and regenerate
+          </button>
+        </div>
+      {/if}
     </div>
   {/if}
 
-  {#if replanError}
-    <div class="error">{replanError}</div>
+  {#if revisionError}
+    <div class="error">{revisionError}</div>
   {/if}
 
   {#if error}
@@ -323,11 +267,12 @@ onMount(() => {
   {#if selectedCard}
     <CardDetail
       card={selectedCard}
+      {projectId}
       onClose={() => (selectedCard = null)}
+      onCardUpdated={handleCardUpdated}
       onRun={() => handleRunCard(selectedCard!.id)}
       onRemediate={(action, suggestionId) =>
         handleRemediate(selectedCard!.id, action, suggestionId)}
-      onCardDevise={() => handleCardDevise(selectedCard!)}
     />
   {/if}
 </div>
@@ -391,13 +336,14 @@ onMount(() => {
     margin-bottom: 0.75rem;
   }
 
-  .guidance-area {
+  .revision-area {
     display: flex;
+    flex-direction: column;
     gap: 0.5rem;
     margin-bottom: 0.75rem;
   }
 
-  .guidance-input {
+  .revision-input {
     flex: 1;
     padding: 0.5rem 0.625rem;
     background: var(--bg);
@@ -409,13 +355,36 @@ onMount(() => {
     resize: vertical;
   }
 
-  .guidance-input:focus {
+  .revision-input:focus {
     outline: none;
     border-color: var(--accent);
   }
 
-  .guidance-input:disabled {
+  .revision-input:disabled {
     opacity: 0.5;
+  }
+
+  .revision-actions {
+    display: flex;
+    gap: 0.375rem;
+  }
+
+  .revision-warning {
+    align-items: center;
+    background: rgba(220, 120, 40, 0.1);
+    border: 1px solid rgba(220, 120, 40, 0.35);
+    border-radius: 6px;
+    color: var(--text);
+    display: flex;
+    font-size: 0.75rem;
+    gap: 0.75rem;
+    justify-content: space-between;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .btn-danger {
+    border-color: #dc783c;
+    color: #dc783c;
   }
 
   .btn-primary {
