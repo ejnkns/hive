@@ -18,7 +18,7 @@ let initialMessages = $state<{ role: string; content: string }[] | undefined>(
   undefined
 );
 let initialStatus = $state<string | undefined>(undefined);
-let autoPlanAfterReDevise = $state(false);
+let initialDraftRequirements = $state<string | undefined>(undefined);
 
 onMount(() => {
   projectHeader.projectId = projectId;
@@ -33,10 +33,12 @@ async function restoreSession() {
       active?: boolean;
       status?: string;
       messages?: { role: string; content: string }[];
+      draftRequirements?: string;
     };
     if (data.active && data.messages && data.messages.length > 0) {
       initialMessages = data.messages;
       initialStatus = data.status;
+      initialDraftRequirements = data.draftRequirements;
     }
   } catch {
     // session restore is best-effort
@@ -87,6 +89,13 @@ async function handleApprove() {
   planning = true;
   errorMessage = null;
   try {
+    const approval = await fetch(`/api/queen-bee/${projectId}/devise/approve`, {
+      method: "POST",
+    });
+    if (!approval.ok) {
+      const data = (await approval.json()) as { error?: string };
+      throw new Error(data.error ?? "Requirements approval failed");
+    }
     const res = await fetch(`/api/queen-bee/${projectId}/plan`, {
       method: "POST",
     });
@@ -122,7 +131,6 @@ async function handleApprove() {
       <KanbanBoard
         {projectId}
         onReDeviseStarted={() => {
-          autoPlanAfterReDevise = true;
           hasBoard = false;
           void restoreSession();
         }}
@@ -132,13 +140,10 @@ async function handleApprove() {
         {projectId}
         initialMessages={initialMessages}
         initialStatus={initialStatus}
+        {initialDraftRequirements}
         onApprove={handleApprove}
         onComplete={() => {
-          fetchRequirements();
-          if (autoPlanAfterReDevise) {
-            autoPlanAfterReDevise = false;
-            void handleApprove();
-          }
+          void fetchRequirements();
         }}
       />
     {/if}

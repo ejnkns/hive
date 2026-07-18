@@ -1,5 +1,6 @@
 /** @public */
 
+import { randomUUID } from "node:crypto";
 import type { Message } from "shared/message";
 import {
   createDeviseModelCaller,
@@ -7,15 +8,13 @@ import {
 } from "./devise-engine/create-devise-model-caller";
 import { DEVISE_SYSTEM_PROMPT } from "./devise-engine/devise-system-prompt";
 import { executeDeviseTool } from "./devise-engine/devise-tools";
-import { requirementsRevision } from "./requirements-store";
+import type {
+  PersistedDeviseSession,
+  QueenBeeRuntimeStore,
+} from "./queen-bee-runtime-store";
+import { readRequirements, requirementsRevision } from "./requirements-store";
 
-export type DeviseSession = {
-  projectId: string;
-  cardId?: string;
-  messages: Message[];
-  status: "active" | "complete";
-  requirementsRevision?: string;
-};
+export type DeviseSession = PersistedDeviseSession;
 
 export type DeviseEngine = {
   start(
@@ -46,14 +45,16 @@ export type DeviseEngine = {
 
 export type DeviseStartResult = {
   question: string;
+  draftRequirements?: string;
 };
 
 export type DeviseRespondResult =
-  | { type: "question"; question: string }
-  | { type: "complete"; spec: string };
+  | { type: "question"; question: string; draftRequirements?: string }
+  | { type: "complete"; spec: string; draftRequirements: string };
 
 export function createDeviseEngine(
-  modelCaller?: DeviseModelCaller
+  modelCaller?: DeviseModelCaller,
+  runtimeStore?: QueenBeeRuntimeStore
 ): DeviseEngine {
   const caller = modelCaller ?? createDeviseModelCaller();
   const sessions = new Map<string, DeviseSession>();
@@ -86,10 +87,14 @@ export function createDeviseEngine(
     },
 
     getSession(projectId) {
-      return sessions.get(projectId);
+      restoreProject(projectId);
+      return [...sessions.values()]
+        .filter((session) => session.projectId === projectId && !session.cardId)
+        .at(-1);
     },
 
     getCardSession(projectId, cardId) {
+      restoreProject(projectId);
       return sessions.get(cardSessionKey(projectId, cardId));
     },
   };
@@ -101,6 +106,16 @@ export function createDeviseEngine(
     workspacePath: string,
     cardId?: string
   ): Promise<DeviseStartResult> {
+    restoreProject(projectId);
+    const activeSession = [...sessions.values()].find(
+      (session) =>
+        session.projectId === projectId && session.status === "active"
+    );
+    if (activeSession) {
+      throw new Error(
+        "This project already has an active Devise Agent session"
+      );
+    }
     const messages: Message[] = [
       { role: "system", content: DEVISE_SYSTEM_PROMPT },
       { role: "user", content: prompt },
@@ -110,15 +125,27 @@ export function createDeviseEngine(
 
     messages.push({ role: "assistant", content: result.content });
 
-    sessions.set(sessionKey, {
+    const now = new Date().toISOString();
+    const session: DeviseSession = {
+      sessionId: randomUUID(),
       projectId,
       cardId,
       messages,
       status: "active",
-      requirementsRevision: result.requirementsRevision,
-    });
+      baseRequirementsRevision: requirementsRevision(
+        readRequirements(workspacePath)
+      ),
+      draftRequirements: result.draftRequirements,
+      startedAt: now,
+      updatedAt: now,
+    };
+    sessions.set(sessionKey, session);
+    runtimeStore?.saveDeviseSession(session);
 
-    return { question: result.content };
+    return {
+      question: result.content,
+      draftRequirements: result.draftRequirements,
+    };
   }
 
   async function respondSession(
@@ -126,6 +153,8 @@ export function createDeviseEngine(
     answer: string,
     workspacePath: string
   ): Promise<DeviseRespondResult> {
+    const projectId = sessionKey.split(":card:")[0] ?? sessionKey;
+    restoreProject(projectId);
     const session = sessions.get(sessionKey);
     if (!session || session.status === "complete") {
       throw new Error("No active devise session for this project");
@@ -139,8 +168,8 @@ export function createDeviseEngine(
       workspacePath
     );
 
-    if (result.requirementsRevision) {
-      session.requirementsRevision = result.requirementsRevision;
+    if (result.draftRequirements) {
+      session.draftRequirements = result.draftRequirements;
     }
     const isComplete = detectCompletion(result.content);
 
@@ -150,11 +179,41 @@ export function createDeviseEngine(
     });
 
     if (isComplete) {
+      if (!session.draftRequirements) {
+        throw new Error(
+          "Devise Agent completed without submitting a requirements draft"
+        );
+      }
       session.status = "complete";
-      return { type: "complete", spec: extractSpec(result.content) };
+      session.updatedAt = new Date().toISOString();
+      runtimeStore?.saveDeviseSession(session);
+      return {
+        type: "complete",
+        spec: extractSpec(result.content),
+        draftRequirements: session.draftRequirements,
+      };
     }
 
-    return { type: "question", question: result.content };
+    session.updatedAt = new Date().toISOString();
+    runtimeStore?.saveDeviseSession(session);
+    return {
+      type: "question",
+      question: result.content,
+      draftRequirements: session.draftRequirements,
+    };
+  }
+
+  function restoreProject(projectId: string): void {
+    if (!runtimeStore) return;
+    for (const session of runtimeStore.getDeviseSessions(projectId)) {
+      const key = session.cardId
+        ? cardSessionKey(projectId, session.cardId)
+        : projectId;
+      const existing = sessions.get(key);
+      if (!existing || existing.updatedAt < session.updatedAt) {
+        sessions.set(key, session);
+      }
+    }
   }
 }
 
@@ -167,24 +226,24 @@ async function callWithToolLoop(
   messages: Message[],
   workspacePath: string,
   maxToolRounds = 10
-): Promise<{ content: string; requirementsRevision?: string }> {
-  let updatedRequirementsRevision: string | undefined;
+): Promise<{ content: string; draftRequirements?: string }> {
+  let draftRequirements: string | undefined;
   for (let round = 0; round < maxToolRounds; round++) {
     const response = await caller.call(messages, workspacePath, true);
 
     if (response.toolCalls.length === 0) {
       return {
         content: response.content,
-        requirementsRevision: updatedRequirementsRevision,
+        draftRequirements,
       };
     }
 
     for (const toolCall of response.toolCalls) {
       const result = executeDeviseTool(toolCall, workspacePath);
-      if (toolCall.name === "update_requirements" && !result.isError) {
+      if (toolCall.name === "update_requirements_draft" && !result.isError) {
         const args = JSON.parse(toolCall.arguments) as { content?: unknown };
         if (typeof args.content === "string") {
-          updatedRequirementsRevision = requirementsRevision(args.content);
+          draftRequirements = args.content;
         }
       }
 
@@ -224,7 +283,7 @@ async function callWithToolLoop(
 
   return {
     content: "",
-    requirementsRevision: updatedRequirementsRevision,
+    draftRequirements,
   };
 }
 

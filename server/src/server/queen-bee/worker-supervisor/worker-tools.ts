@@ -21,7 +21,7 @@ import { runCommand } from "./worker-tools/run-command";
 
 export const WORKER_TOOLS: ToolDefinition[] = [
   ...DEVISE_TOOLS.filter(
-    (tool) => tool.function.name !== "update_requirements"
+    (tool) => tool.function.name !== "update_requirements_draft"
   ),
   {
     type: "function",

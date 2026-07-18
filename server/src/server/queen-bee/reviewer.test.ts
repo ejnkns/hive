@@ -64,7 +64,7 @@ describe("Reviewer Agent", () => {
     assert.equal(names.includes("write_file"), false);
     assert.equal(names.includes("run_command"), false);
     assert.equal(names.includes("commit_work"), false);
-    assert.equal(names.includes("update_requirements"), false);
+    assert.equal(names.includes("update_requirements_draft"), false);
   });
 
   function reviewPackage(): ReviewPackage {

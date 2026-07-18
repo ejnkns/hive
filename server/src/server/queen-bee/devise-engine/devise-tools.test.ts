@@ -29,7 +29,7 @@ describe("DEVISE_TOOLS", () => {
       "list_directory",
       "read_file",
       "search_code",
-      "update_requirements",
+      "update_requirements_draft",
     ]);
   });
 
@@ -181,90 +181,45 @@ describe("executeDeviseTool", () => {
     });
   });
 
-  describe("update_requirements", () => {
-    it("writes content to .hive/requirements.md", () => {
+  describe("update_requirements_draft", () => {
+    it("returns a live draft without mutating canonical requirements", () => {
       const workspace = createTempWorkspace();
-      const content = "# Requirements\n\n## Overview\nTest spec";
+      mkdirSync(join(workspace, ".hive"), { recursive: true });
+      writeFileSync(
+        join(workspace, ".hive", "requirements.md"),
+        "# Canonical requirements"
+      );
+      const content = "# Proposed requirements\n\n## Overview\nTest spec";
 
       const result = executeDeviseTool(
         {
           id: "tc1",
-          name: "update_requirements",
+          name: "update_requirements_draft",
           arguments: JSON.stringify({ content }),
         },
         workspace
       );
 
       assert.strictEqual(result.isError, false);
-      assert.strictEqual(result.content, "Requirements document updated");
+      assert.strictEqual(
+        result.content,
+        "Requirements draft updated for explicit user approval"
+      );
 
-      const written = readFileSync(
+      const canonical = readFileSync(
         join(workspace, ".hive", "requirements.md"),
         "utf-8"
       );
-      assert.strictEqual(written, content);
-    });
-
-    it("creates .hive directory if it does not exist", () => {
-      const workspace = mkdtempSync(join(tmpdir(), "hive-tool-test-"));
-      writeFileSync(join(workspace, "package.json"), "{}");
-
-      const content = "# Requirements\n\n## Overview\nProject spec";
-
-      const result = executeDeviseTool(
-        {
-          id: "tc1",
-          name: "update_requirements",
-          arguments: JSON.stringify({ content }),
-        },
-        workspace
-      );
-
-      assert.strictEqual(result.isError, false);
-
-      const written = readFileSync(
-        join(workspace, ".hive", "requirements.md"),
-        "utf-8"
-      );
-      assert.strictEqual(written, content);
-    });
-
-    it("overwrites existing file content", () => {
-      const workspace = createTempWorkspace();
-      const initial = "# Requirements\n\n## Overview\nOld content";
-      const updated =
-        "# Requirements\n\n## Overview\nNew content\n\n## Functional requirements\n- FR-1: Something";
-
-      executeDeviseTool(
-        {
-          id: "tc1",
-          name: "update_requirements",
-          arguments: JSON.stringify({ content: initial }),
-        },
-        workspace
-      );
-
-      const result = executeDeviseTool(
-        {
-          id: "tc2",
-          name: "update_requirements",
-          arguments: JSON.stringify({ content: updated }),
-        },
-        workspace
-      );
-
-      assert.strictEqual(result.isError, false);
-
-      const written = readFileSync(
-        join(workspace, ".hive", "requirements.md"),
-        "utf-8"
-      );
-      assert.strictEqual(written, updated);
+      assert.strictEqual(canonical, "# Canonical requirements");
     });
 
     it("rejects missing content argument", () => {
       const result = executeDeviseTool(
-        { id: "tc1", name: "update_requirements", arguments: "{}" },
+        {
+          id: "tc1",
+          name: "update_requirements_draft",
+          arguments: "{}",
+        },
         "/tmp"
       );
 

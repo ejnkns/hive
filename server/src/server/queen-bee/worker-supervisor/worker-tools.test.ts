@@ -25,12 +25,12 @@ describe("worker tools", () => {
     const repoPath = createGitRepository();
     const names = WORKER_TOOLS.map((tool) => tool.function.name);
 
-    assert.equal(names.includes("update_requirements"), false);
+    assert.equal(names.includes("update_requirements_draft"), false);
     assert.equal(names.includes("commit_work"), true);
     assert.equal(names.includes("submit_work"), true);
 
     const result = await executeWorkerTool(
-      toolCall("update_requirements", {
+      toolCall("update_requirements_draft", {
         content: "# Worker-authored requirements",
       }),
       repoPath

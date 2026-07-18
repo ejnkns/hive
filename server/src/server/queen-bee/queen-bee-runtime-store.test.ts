@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
@@ -83,6 +83,32 @@ describe("QueenBeeRuntimeStore", () => {
       },
       workAttempts: [],
     });
+  });
+
+  it("persists complete Devise Agent sessions under the shared Hive directory", () => {
+    const rootDirectory = createRoot();
+    const store = createQueenBeeRuntimeStore(rootDirectory);
+    store.saveDeviseSession({
+      sessionId: "session-1",
+      projectId: "project-1",
+      messages: [{ role: "user", content: "Build it" }],
+      status: "active",
+      baseRequirementsRevision: "requirements-1",
+      draftRequirements: "# Draft",
+      startedAt: "2026-07-19T00:00:00.000Z",
+      updatedAt: "2026-07-19T00:01:00.000Z",
+    });
+
+    assert.equal(
+      existsSync(
+        join(rootDirectory, "devise-sessions", "project-1", "session-1.json")
+      ),
+      true
+    );
+    assert.equal(
+      store.getDeviseSessions("project-1")[0]?.draftRequirements,
+      "# Draft"
+    );
   });
 
   function createRoot(): string {

@@ -5,6 +5,7 @@ let {
   onApprove,
   initialMessages,
   initialStatus,
+  initialDraftRequirements,
 }: Props = $props();
 
 type Props = {
@@ -13,6 +14,7 @@ type Props = {
   onApprove?: () => void;
   initialMessages?: { role: string; content: string }[];
   initialStatus?: string;
+  initialDraftRequirements?: string;
 };
 
 type Message = {
@@ -25,6 +27,7 @@ let input = $state("");
 let loading = $state(false);
 let complete = $state(false);
 let spec = $state("");
+let draftRequirements = $state("");
 let error = $state<string | null>(null);
 
 $effect(() => {
@@ -37,6 +40,9 @@ $effect(() => {
     if (complete && initialMessages.length > 0) {
       spec = initialMessages[initialMessages.length - 1].content;
     }
+  }
+  if (initialDraftRequirements) {
+    draftRequirements = initialDraftRequirements;
   }
 });
 
@@ -59,7 +65,11 @@ async function startDevise(prompt: string) {
       throw new Error(data.error ?? "Failed to start devise session");
     }
 
-    const data = (await res.json()) as { question: string };
+    const data = (await res.json()) as {
+      question: string;
+      draftRequirements?: string;
+    };
+    draftRequirements = data.draftRequirements ?? draftRequirements;
     messages.push({ role: "model", content: data.question });
   } catch (err) {
     error = err instanceof Error ? err.message : "Unknown error";
@@ -89,8 +99,10 @@ async function respond(answer: string) {
     }
 
     const data = (await res.json()) as
-      | { question: string }
-      | { complete: true; spec: string };
+      | { question: string; draftRequirements?: string }
+      | { complete: true; spec: string; draftRequirements: string };
+
+    draftRequirements = data.draftRequirements ?? draftRequirements;
 
     if ("complete" in data) {
       complete = true;
@@ -162,6 +174,16 @@ function submit() {
       </div>
     {/if}
   </div>
+
+  {#if draftRequirements}
+    <div class="draft-panel">
+      <div class="role-label">Live requirements draft</div>
+      <pre class="spec">{draftRequirements}</pre>
+      <div class="draft-note">
+        Canonical requirements remain unchanged until you approve this draft.
+      </div>
+    </div>
+  {/if}
 
   <div class="input-area">
     <input
@@ -272,6 +294,24 @@ function submit() {
   .input-area {
     display: flex;
     gap: 0.5rem;
+  }
+
+  .draft-panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    max-height: 320px;
+    overflow: auto;
+    padding: 0.75rem 1rem;
+  }
+
+  .draft-note {
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.6875rem;
+    margin-top: 0.75rem;
+    padding-top: 0.5rem;
   }
 
   input {

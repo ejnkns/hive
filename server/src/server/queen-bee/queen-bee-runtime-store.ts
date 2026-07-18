@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   renameSync,
   writeFileSync,
@@ -11,6 +12,7 @@ import {
 import { join } from "node:path";
 import type { Card, CardActivityEvent } from "shared/board-types";
 import { HIVE_DIR } from "shared/hive-dir";
+import type { Message } from "shared/message";
 import type { ReviewPackage } from "./reviewer";
 
 export type { ActivityActor, CardActivityEvent } from "shared/board-types";
@@ -28,6 +30,18 @@ export type CardRuntimeState = Pick<
   | "archivedAt"
 >;
 
+export type PersistedDeviseSession = {
+  sessionId: string;
+  projectId: string;
+  cardId?: string;
+  messages: Message[];
+  status: "active" | "complete";
+  baseRequirementsRevision: string;
+  draftRequirements?: string;
+  startedAt: string;
+  updatedAt: string;
+};
+
 export type QueenBeeRuntimeStore = {
   saveReviewPackage(projectId: string, reviewPackage: ReviewPackage): void;
   getReviewPackage(projectId: string, packageId: string): ReviewPackage | null;
@@ -43,10 +57,12 @@ export type QueenBeeRuntimeStore = {
     state: CardRuntimeState
   ): void;
   getCardState(projectId: string, cardId: string): CardRuntimeState | null;
+  saveDeviseSession(session: PersistedDeviseSession): void;
+  getDeviseSessions(projectId: string): PersistedDeviseSession[];
 };
 
 export function createQueenBeeRuntimeStore(
-  rootDirectory = join(HIVE_DIR, "queen-bee")
+  rootDirectory = HIVE_DIR
 ): QueenBeeRuntimeStore {
   return {
     saveReviewPackage(projectId, reviewPackage) {
@@ -102,11 +118,40 @@ export function createQueenBeeRuntimeStore(
         cardStatePath(rootDirectory, projectId, cardId)
       );
     },
+
+    saveDeviseSession(session) {
+      writeJson(
+        deviseSessionPath(rootDirectory, session.projectId, session.sessionId),
+        session
+      );
+    },
+
+    getDeviseSessions(projectId) {
+      const directory = deviseSessionDirectory(rootDirectory, projectId);
+      try {
+        return readdirSync(directory)
+          .filter((name) => name.endsWith(".json"))
+          .map((name) =>
+            readJson<PersistedDeviseSession>(join(directory, name))
+          )
+          .filter((session): session is PersistedDeviseSession =>
+            Boolean(session)
+          )
+          .sort((left, right) => left.updatedAt.localeCompare(right.updatedAt));
+      } catch {
+        return [];
+      }
+    },
   };
 }
 
 function projectDirectory(rootDirectory: string, projectId: string): string {
-  return join(rootDirectory, "projects", encodeURIComponent(projectId));
+  return join(
+    rootDirectory,
+    "queen-bee",
+    "projects",
+    encodeURIComponent(projectId)
+  );
 }
 
 function reviewPackagePath(
@@ -142,6 +187,24 @@ function cardStatePath(
     projectDirectory(rootDirectory, projectId),
     "card-state",
     `${encodeURIComponent(cardId)}.json`
+  );
+}
+
+function deviseSessionDirectory(
+  rootDirectory: string,
+  projectId: string
+): string {
+  return join(rootDirectory, "devise-sessions", encodeURIComponent(projectId));
+}
+
+function deviseSessionPath(
+  rootDirectory: string,
+  projectId: string,
+  sessionId: string
+): string {
+  return join(
+    deviseSessionDirectory(rootDirectory, projectId),
+    `${encodeURIComponent(sessionId)}.json`
   );
 }
 

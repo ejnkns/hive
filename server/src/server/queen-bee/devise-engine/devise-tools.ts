@@ -1,13 +1,7 @@
 /** @private — only imported by create-devise-model-caller.ts */
 
 import { execSync } from "node:child_process";
-import {
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
 export type ToolDefinition = {
@@ -48,9 +42,9 @@ export const DEVISE_TOOLS: ToolDefinition[] = [
   {
     type: "function",
     function: {
-      name: "update_requirements",
+      name: "update_requirements_draft",
       description:
-        "Write the current requirements document to .hive/requirements.md. This is the ONLY file you can write — it stores the requirements spec, not source code. Call this whenever you add, remove, or refine requirements. Pass the FULL document content — this replaces the file entirely.",
+        "Replace the session's proposed requirements draft. This never mutates the canonical requirements document. Call this whenever answers change the draft and pass the full document so the user can see live updates.",
       parameters: {
         type: "object",
         properties: {
@@ -126,8 +120,8 @@ export function executeDeviseTool(
 ): ToolResult {
   try {
     switch (toolCall.name) {
-      case "update_requirements":
-        return updateRequirements(toolCall, workspacePath);
+      case "update_requirements_draft":
+        return updateRequirementsDraft(toolCall);
       case "list_directory":
         return listDirectory(toolCall, workspacePath);
       case "read_file":
@@ -150,10 +144,7 @@ export function executeDeviseTool(
   }
 }
 
-function updateRequirements(
-  toolCall: ToolCall,
-  workspacePath: string
-): ToolResult {
+function updateRequirementsDraft(toolCall: ToolCall): ToolResult {
   const args = JSON.parse(toolCall.arguments) as { content?: string };
   if (!args.content) {
     return {
@@ -163,13 +154,9 @@ function updateRequirements(
     };
   }
 
-  const hiveDir = join(workspacePath, ".hive");
-  mkdirSync(hiveDir, { recursive: true });
-  writeFileSync(join(hiveDir, "requirements.md"), args.content, "utf-8");
-
   return {
     toolCallId: toolCall.id,
-    content: "Requirements document updated",
+    content: "Requirements draft updated for explicit user approval",
     isError: false,
   };
 }

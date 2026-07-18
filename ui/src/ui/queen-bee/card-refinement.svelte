@@ -80,15 +80,15 @@ async function respond() {
     const result = (await response.json()) as {
       question?: string;
       complete?: boolean;
-      card?: Card;
+      cardProposal?: Partial<Card>;
+      draftRequirements?: string;
       error?: string;
     };
     if (!response.ok) {
       throw new Error(result.error ?? "Could not continue card refinement");
     }
     input = "";
-    if (result.complete && result.card) {
-      onCardUpdated(result.card);
+    if (result.complete && result.cardProposal) {
       stage = "confirmation";
       return;
     }
@@ -109,11 +109,9 @@ async function confirmReady() {
   error = null;
   try {
     const response = await fetch(
-      `/api/queen-bee/${projectId}/cards/${card.id}`,
+      `/api/queen-bee/${projectId}/cards/${card.id}/devise/approve`,
       {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ column: "ready" }),
+        method: "POST",
       }
     );
     const result = (await response.json()) as { card?: Card; error?: string };
@@ -143,10 +141,10 @@ async function confirmReady() {
     </div>
   {:else}
     <div class="confirmation">
-      <div class="confirmation-title">Card and requirements updated</div>
+      <div class="confirmation-title">Card and requirements ready to approve</div>
       <div>
-        Review the updated card above. Confirm only when it is aligned with the
-        project requirements and ready for a worker.
+        Confirm to apply the proposed card and requirements together, then move
+        the card to Ready.
       </div>
     </div>
   {/if}

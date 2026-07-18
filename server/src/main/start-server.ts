@@ -59,8 +59,8 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     emitProjectEvent("");
   });
 
-  const deviseEngine = createDeviseEngine();
   const runtimeStore = createQueenBeeRuntimeStore();
+  const deviseEngine = createDeviseEngine(undefined, runtimeStore);
   const boardStore = createBoardStore((projectId) => {
     emitBoardEvent(projectId);
   }, runtimeStore);

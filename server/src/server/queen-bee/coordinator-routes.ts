@@ -72,7 +72,7 @@ export function registerCoordinatorRoutes(
             `Current card description: ${card.description}`,
             `Coordinator rationale: ${suggestion.rationale}`,
             "Ask the user for the decision needed to make this card fulfillable.",
-            "When complete, output CARD_UPDATE followed by a json code fence containing description, acceptanceCriteria, relevantFiles, and requirementRefs for this card, then REQUIREMENTS_COMPLETE. Also call update_requirements with the full aligned project requirements document.",
+            "When complete, output CARD_UPDATE followed by a json code fence containing description, acceptanceCriteria, relevantFiles, and requirementRefs for this card, then REQUIREMENTS_COMPLETE. Also call update_requirements_draft with the full aligned project requirements document.",
           ].join("\n"),
           project.repoPath
         );

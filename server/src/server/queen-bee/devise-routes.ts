@@ -6,7 +6,11 @@ import type { FastifyInstance } from "fastify";
 import type { BoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
 import type { DeviseEngine } from "./devise-engine";
-import { readRequirements, requirementsRevision } from "./requirements-store";
+import {
+  readRequirements,
+  requirementsRevision,
+  writeRequirements,
+} from "./requirements-store";
 
 export function registerDeviseRoutes(
   server: FastifyInstance,
@@ -52,6 +56,7 @@ export function registerDeviseRoutes(
         );
         return reply.send({
           question: result.question,
+          draftRequirements: result.draftRequirements,
           projectId,
           redevise: true,
         });
@@ -94,11 +99,16 @@ export function registerDeviseRoutes(
             `Card title: ${card.title}`,
             `Current card description: ${card.description}`,
             `User context: ${body.prompt}`,
-            "When complete, output CARD_UPDATE followed by a json code fence containing description, acceptanceCriteria, relevantFiles, and requirementRefs for this card, then REQUIREMENTS_COMPLETE. Also call update_requirements with the full aligned project requirements document.",
+            "When complete, output CARD_UPDATE followed by a json code fence containing description, acceptanceCriteria, relevantFiles, and requirementRefs for this card, then REQUIREMENTS_COMPLETE. Also call update_requirements_draft with the full aligned project requirements document.",
           ].join("\n"),
           project.repoPath
         );
-        return reply.send({ question: result.question, projectId, cardId });
+        return reply.send({
+          question: result.question,
+          draftRequirements: result.draftRequirements,
+          projectId,
+          cardId,
+        });
       } catch (err) {
         return reply.status(500).send({
           error:
@@ -133,17 +143,10 @@ export function registerDeviseRoutes(
           project.repoPath
         );
         if (result.type === "complete") {
-          if (
-            !cardSessionUpdatedRequirements(
-              deps.engine,
-              projectId,
-              cardId,
-              project.repoPath
-            )
-          ) {
+          if (!result.draftRequirements.trim()) {
             return reply.status(422).send({
               error:
-                "Card devise completed without updating the project requirements",
+                "Card devise completed without an aligned requirements draft",
             });
           }
           const patch = parseCardPatch(result.spec);
@@ -152,25 +155,21 @@ export function registerDeviseRoutes(
               error: "Card devise completed without a structured card update",
             });
           }
-          const card = deps.boardStore.updateCard(
-            projectId,
-            project.repoPath,
-            cardId,
-            {
-              ...patch,
-              handover: undefined,
-              coordinatorLog: undefined,
-            }
-          );
           return reply.send({
             complete: true,
             spec: result.spec,
+            draftRequirements: result.draftRequirements,
+            cardProposal: patch,
             projectId,
             cardId,
-            card,
           });
         }
-        return reply.send({ question: result.question, projectId, cardId });
+        return reply.send({
+          question: result.question,
+          draftRequirements: result.draftRequirements,
+          projectId,
+          cardId,
+        });
       } catch (err) {
         return reply.status(500).send({
           error:
@@ -203,7 +202,11 @@ export function registerDeviseRoutes(
           body.prompt,
           project.repoPath
         );
-        return reply.send({ question: result.question, projectId });
+        return reply.send({
+          question: result.question,
+          draftRequirements: result.draftRequirements,
+          projectId,
+        });
       } catch (err) {
         return reply.status(500).send({
           error: err instanceof Error ? err.message : "Devise session failed",
@@ -237,14 +240,88 @@ export function registerDeviseRoutes(
         );
 
         if (result.type === "complete") {
-          return reply.send({ complete: true, spec: result.spec, projectId });
+          return reply.send({
+            complete: true,
+            spec: result.spec,
+            draftRequirements: result.draftRequirements,
+            projectId,
+          });
         }
 
-        return reply.send({ question: result.question, projectId });
+        return reply.send({
+          question: result.question,
+          draftRequirements: result.draftRequirements,
+          projectId,
+        });
       } catch (err) {
         return reply.status(500).send({
           error: err instanceof Error ? err.message : "Devise response failed",
         });
+      }
+    }
+  );
+
+  server.post(
+    "/api/queen-bee/:projectId/devise/approve",
+    async (request, reply) => {
+      const { projectId } = request.params as { projectId: string };
+      const project = deps.projectStore
+        .getAll()
+        .find((item) => item.id === projectId);
+      if (!project) {
+        return reply.status(404).send({ error: "Project not found" });
+      }
+      const draft = approvedDraft(
+        deps.engine.getSession(projectId),
+        project.repoPath
+      );
+      if (!draft.ok) return reply.status(409).send({ error: draft.error });
+
+      writeRequirements(project.repoPath, draft.content);
+      return reply.send({
+        approved: true,
+        requirementsRevision: requirementsRevision(draft.content),
+      });
+    }
+  );
+
+  server.post(
+    "/api/queen-bee/:projectId/cards/:cardId/devise/approve",
+    async (request, reply) => {
+      const { projectId, cardId } = request.params as {
+        projectId: string;
+        cardId: string;
+      };
+      const project = deps.projectStore
+        .getAll()
+        .find((item) => item.id === projectId);
+      if (!project) {
+        return reply.status(404).send({ error: "Project not found" });
+      }
+      const session = deps.engine.getCardSession(projectId, cardId);
+      const draft = approvedDraft(session, project.repoPath);
+      if (!draft.ok) return reply.status(409).send({ error: draft.error });
+      const patch = parseCardPatch(session?.messages.at(-1)?.content ?? "");
+      if (!patch) {
+        return reply.status(409).send({ error: "Card proposal is missing" });
+      }
+
+      writeRequirements(project.repoPath, draft.content);
+      try {
+        const card = deps.boardStore.updateCard(
+          projectId,
+          project.repoPath,
+          cardId,
+          {
+            ...patch,
+            column: "ready",
+            handover: undefined,
+            coordinatorLog: undefined,
+          }
+        );
+        return reply.send({ card, approved: true });
+      } catch {
+        return reply.status(404).send({ error: "Card not found" });
       }
     }
   );
@@ -319,24 +396,33 @@ export function registerDeviseRoutes(
       return reply.send({
         active: true,
         status: session.status,
+        draftRequirements: session.draftRequirements,
+        baseRequirementsRevision: session.baseRequirementsRevision,
+        cardId: session.cardId,
         messages: clientMessages,
       });
     }
   );
 }
 
-function cardSessionUpdatedRequirements(
-  engine: DeviseEngine,
-  projectId: string,
-  cardId: string,
+function approvedDraft(
+  session: ReturnType<DeviseEngine["getSession"]>,
   repoPath: string
-): boolean {
-  const session = engine.getCardSession(projectId, cardId);
-  return Boolean(
-    session?.requirementsRevision &&
-      session.requirementsRevision ===
-        requirementsRevision(readRequirements(repoPath))
-  );
+): { ok: true; content: string } | { ok: false; error: string } {
+  if (session?.status !== "complete" || !session.draftRequirements) {
+    return { ok: false, error: "Devise session has no completed draft" };
+  }
+  if (
+    requirementsRevision(readRequirements(repoPath)) !==
+    session.baseRequirementsRevision
+  ) {
+    return {
+      ok: false,
+      error:
+        "Canonical requirements changed after this Devise session started; start a new revision",
+    };
+  }
+  return { ok: true, content: session.draftRequirements };
 }
 
 function parseCardPatch(content: string): {

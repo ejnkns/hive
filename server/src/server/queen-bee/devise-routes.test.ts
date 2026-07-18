@@ -10,7 +10,11 @@ import type { ProjectStore } from "./create-project-store";
 import type { DeviseEngine } from "./devise-engine";
 import { registerDeviseRoutes } from "./devise-routes";
 import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
-import { requirementsRevision, writeRequirements } from "./requirements-store";
+import {
+  readRequirements,
+  requirementsRevision,
+  writeRequirements,
+} from "./requirements-store";
 
 describe("devise routes", () => {
   const directories: string[] = [];
@@ -59,12 +63,11 @@ describe("devise routes", () => {
   });
 
   it("keeps a refined card in Idea until the user confirms promotion", async () => {
-    const requirements = "# Requirements\n\n- Refined behavior";
-    const syncedRevision = requirementsRevision(requirements);
     const { server, boardStore, project } = createRouteFixture({
       async respondCard() {
         return {
           type: "complete" as const,
+          draftRequirements: "# Requirements\n\n- Refined behavior",
           spec: [
             "CARD_UPDATE",
             "```json",
@@ -78,11 +81,7 @@ describe("devise routes", () => {
           ].join("\n"),
         };
       },
-      getCardSession() {
-        return requirementsUpdatedSession(syncedRevision);
-      },
     });
-    writeRequirements(project.repoPath, requirements);
     const card = boardStore.addCard(project.id, project.repoPath, {
       title: "New idea",
       description: "",
@@ -107,15 +106,16 @@ describe("devise routes", () => {
 
     assert.equal(response.statusCode, 200);
     assert.equal(response.json().complete, true);
-    assert.equal(response.json().card.description, "Refined description");
-    assert.equal(response.json().card.column, "idea");
-    assert.equal(response.json().card.handover, undefined);
-    assert.equal(response.json().card.coordinatorLog, undefined);
+    assert.equal(
+      response.json().cardProposal.description,
+      "Refined description"
+    );
+    assert.match(response.json().draftRequirements, /Refined behavior/);
     assert.equal(
       boardStore
         .getBoard(project.id, project.repoPath)
-        .cards.find((candidate) => candidate.id === card.id)?.column,
-      "idea"
+        .cards.find((candidate) => candidate.id === card.id)?.description,
+      ""
     );
   });
 
@@ -124,6 +124,7 @@ describe("devise routes", () => {
       async respondCard() {
         return {
           type: "complete" as const,
+          draftRequirements: "",
           spec: 'CARD_UPDATE\n```json\n{"description":"Card only"}\n```',
         };
       },
@@ -149,6 +150,60 @@ describe("devise routes", () => {
       boardStore.getBoard(project.id, project.repoPath).cards[0]?.description,
       ""
     );
+  });
+
+  it("applies a completed requirements draft only after explicit approval", async () => {
+    const canonical = "# Requirements\n\n## Overview\nOriginal";
+    const draft = "# Requirements\n\n## Overview\nApproved revision";
+    const { server, project } = createRouteFixture({
+      getSession() {
+        return {
+          sessionId: "session-1",
+          projectId: project.id,
+          messages: [],
+          status: "complete",
+          baseRequirementsRevision: requirementsRevision(canonical),
+          draftRequirements: draft,
+          startedAt: "2026-07-19T00:00:00.000Z",
+          updatedAt: "2026-07-19T00:01:00.000Z",
+        };
+      },
+    });
+    writeRequirements(project.repoPath, canonical);
+
+    const response = await server.inject({
+      method: "POST",
+      url: `/api/queen-bee/${project.id}/devise/approve`,
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(readRequirements(project.repoPath), draft);
+  });
+
+  it("rejects approval when canonical requirements changed after session start", async () => {
+    const { server, project } = createRouteFixture({
+      getSession() {
+        return {
+          sessionId: "session-1",
+          projectId: project.id,
+          messages: [],
+          status: "complete",
+          baseRequirementsRevision: requirementsRevision("# Original"),
+          draftRequirements: "# Draft",
+          startedAt: "2026-07-19T00:00:00.000Z",
+          updatedAt: "2026-07-19T00:01:00.000Z",
+        };
+      },
+    });
+    writeRequirements(project.repoPath, "# Changed elsewhere");
+
+    const response = await server.inject({
+      method: "POST",
+      url: `/api/queen-bee/${project.id}/devise/approve`,
+    });
+
+    assert.equal(response.statusCode, 409);
+    assert.equal(readRequirements(project.repoPath), "# Changed elsewhere");
   });
 
   function createRouteFixture(overrides: Partial<DeviseEngine> = {}) {
@@ -189,25 +244,5 @@ describe("devise routes", () => {
     servers.push(server);
     registerDeviseRoutes(server, { engine, boardStore, projectStore });
     return { server, boardStore, project };
-  }
-
-  function requirementsUpdatedSession(revision: string) {
-    return {
-      projectId: "project-1",
-      cardId: "card-1",
-      status: "complete" as const,
-      requirementsRevision: revision,
-      messages: [
-        {
-          role: "assistant",
-          content: "",
-          tool_calls: [
-            {
-              function: { name: "update_requirements", arguments: "{}" },
-            },
-          ],
-        },
-      ],
-    };
   }
 });

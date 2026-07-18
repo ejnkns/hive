@@ -1,5 +1,5 @@
 import assert from "node:assert";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -11,6 +11,7 @@ import type {
 } from "./devise-engine/create-devise-model-caller";
 import { DEVISE_SYSTEM_PROMPT } from "./devise-engine/devise-system-prompt";
 import type { ToolCall } from "./devise-engine/devise-tools";
+import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
 
 function createMockCaller(responses: DeviseModelResponse[]): DeviseModelCaller {
   let index = 0;
@@ -38,6 +39,18 @@ function completionResponse(): DeviseModelResponse {
     toolCalls: [],
     finishReason: "stop",
   };
+}
+
+function draftResponse(): DeviseModelResponse {
+  return toolResponse("", [
+    {
+      id: "draft-1",
+      name: "update_requirements_draft",
+      arguments: JSON.stringify({
+        content: "# Requirements\n\n## Overview\nTest app",
+      }),
+    },
+  ]);
 }
 
 function toolResponse(
@@ -118,6 +131,7 @@ describe("DeviseEngine", () => {
   it("detects completion and returns spec", async () => {
     const caller = createMockCaller([
       emptyResponse("First question"),
+      draftResponse(),
       completionResponse(),
     ]);
     const engine = createDeviseEngine(caller);
@@ -144,6 +158,7 @@ describe("DeviseEngine", () => {
   it("clears session after completion", async () => {
     const caller = createMockCaller([
       emptyResponse("Q1"),
+      draftResponse(),
       completionResponse(),
     ]);
     const engine = createDeviseEngine(caller);
@@ -175,6 +190,60 @@ describe("DeviseEngine", () => {
     const userMsg = capturedMessages.find((m) => m.role === "user");
     assert.ok(userMsg, "user message present");
     assert.strictEqual(userMsg?.content, "Build X");
+  });
+
+  it("keeps draft requirements in the session without changing canonical requirements", async () => {
+    const workspace = createTempWorkspace();
+    mkdirSync(join(workspace, ".hive"), { recursive: true });
+    writeFileSync(join(workspace, ".hive", "requirements.md"), "# Canonical");
+    const caller = createMockCaller([draftResponse(), emptyResponse("Next?")]);
+    const engine = createDeviseEngine(caller);
+
+    const result = await engine.start("test", "Revise", workspace);
+
+    assert.strictEqual(
+      result.draftRequirements,
+      "# Requirements\n\n## Overview\nTest app"
+    );
+    assert.strictEqual(
+      engine.getSession("test")?.draftRequirements,
+      result.draftRequirements
+    );
+    assert.strictEqual(
+      readFileSync(join(workspace, ".hive", "requirements.md"), "utf-8"),
+      "# Canonical"
+    );
+  });
+
+  it("allows only one active Devise Agent session per project", async () => {
+    const caller = createMockCaller([emptyResponse("Question")]);
+    const engine = createDeviseEngine(caller);
+    await engine.start("test", "Project session", "/tmp");
+
+    await assert.rejects(
+      () => engine.startCard("test", "card-1", "Card session", "/tmp"),
+      /already has an active Devise Agent session/
+    );
+  });
+
+  it("restores a persisted session after the engine restarts", async () => {
+    const workspace = createTempWorkspace();
+    const runtimeStore = createQueenBeeRuntimeStore(
+      join(workspace, ".runtime")
+    );
+    const firstEngine = createDeviseEngine(
+      createMockCaller([draftResponse(), emptyResponse("Next question")]),
+      runtimeStore
+    );
+    await firstEngine.start("test", "Build it", workspace);
+
+    const restartedEngine = createDeviseEngine(undefined, runtimeStore);
+
+    assert.strictEqual(
+      restartedEngine.getSession("test")?.draftRequirements,
+      "# Requirements\n\n## Overview\nTest app"
+    );
+    assert.strictEqual(restartedEngine.getSession("test")?.status, "active");
   });
 
   it("runs tool calls in loop before returning question", async () => {
