@@ -232,7 +232,7 @@ async function runLoop(
 
       const result = executeWorkerTool(toolCall, worktreePath);
 
-      messages.push({
+      const assistantMsg: Message = {
         role: "assistant",
         content: response.content,
         tool_calls: [
@@ -245,7 +245,17 @@ async function runLoop(
             },
           },
         ],
-      });
+      };
+
+      if (response.reasoningContent) {
+        assistantMsg.reasoning_content = response.reasoningContent;
+      }
+
+      if (response.reasoning) {
+        assistantMsg.reasoning = response.reasoning;
+      }
+
+      messages.push(assistantMsg);
 
       messages.push({
         role: "tool",

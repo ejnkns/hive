@@ -23,7 +23,6 @@ export async function dispatchRequest(
   }
 
   const sanitized = sanitizePayloadForProvider(
-    node.providerName,
     JSON.parse(payload) as Record<string, unknown>
   );
 

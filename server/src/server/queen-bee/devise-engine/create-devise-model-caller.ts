@@ -23,6 +23,8 @@ export type DeviseModelResponse = {
   content: string;
   toolCalls: ToolCall[];
   finishReason: string;
+  reasoningContent?: string;
+  reasoning?: string;
 };
 
 export function createDeviseModelCaller(
@@ -57,6 +59,8 @@ async function consumeStream(
   _workspacePath: string
 ): Promise<DeviseModelResponse> {
   let content = "";
+  let reasoningContent = "";
+  let reasoning = "";
   let finishReason: string | null = null;
   let buffer = "";
 
@@ -94,6 +98,17 @@ async function consumeStream(
 
           if (delta?.content && typeof delta.content === "string") {
             content += delta.content;
+          }
+
+          if (
+            delta?.reasoning_content &&
+            typeof delta.reasoning_content === "string"
+          ) {
+            reasoningContent += delta.reasoning_content;
+          }
+
+          if (delta?.reasoning && typeof delta.reasoning === "string") {
+            reasoning += delta.reasoning;
           }
 
           if (
@@ -160,6 +175,8 @@ async function consumeStream(
         content,
         toolCalls: parsedToolCalls,
         finishReason: finishReason ?? "stop",
+        reasoningContent: reasoningContent || undefined,
+        reasoning: reasoning || undefined,
       });
     });
 

@@ -112,9 +112,10 @@ async function callWithToolLoop(
 
     for (const toolCall of response.toolCalls) {
       const result = executeDeviseTool(toolCall, workspacePath);
-      messages.push({
+
+      const assistantMsg: Message = {
         role: "assistant",
-        content: "",
+        content: response.content,
         tool_calls: [
           {
             id: toolCall.id,
@@ -125,7 +126,17 @@ async function callWithToolLoop(
             },
           },
         ],
-      });
+      };
+
+      if (response.reasoningContent) {
+        assistantMsg.reasoning_content = response.reasoningContent;
+      }
+
+      if (response.reasoning) {
+        assistantMsg.reasoning = response.reasoning;
+      }
+
+      messages.push(assistantMsg);
 
       const toolMessage: Message = {
         role: "tool",

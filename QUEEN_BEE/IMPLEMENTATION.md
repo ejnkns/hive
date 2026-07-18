@@ -505,3 +505,4 @@ A complete project management experience with AI workers, replacing the old orch
 - Keep the proxy layer untouched — Queen Bee is a layer above it, not inside it.
 - Board state and card files are committed to git alongside user code; they are source-of-truth project artifacts.
 - All files follow the fractal structure: kebab-case, one main export, same-named folders for private implementation, no index files.
+- Reasoning content (`reasoning_content`, `reasoning`) is captured from SSE stream deltas and preserved through all message reconstruction paths. The sanitizer only merges consecutive assistant+tool_calls messages; no fields are deleted. This is model-agnostic: any message with reasoning fields was produced by a model that accepts them back. Cross-provider normalization (canonical field mapping) is deferred to a future `normalizePayloadForModel` layer.
