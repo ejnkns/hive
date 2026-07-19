@@ -6,7 +6,7 @@ import { cpSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { ReviewReadiness } from "shared/board-types";
 import { parseMergeTreeResult } from "./integration-manager/parse-merge-tree";
-import { removeWorktree } from "./worker-supervisor/git-operations";
+import { removeWorktree } from "./worktree";
 
 export type IntegrationRevision = {
   branchName: typeof INTEGRATION_BRANCH;

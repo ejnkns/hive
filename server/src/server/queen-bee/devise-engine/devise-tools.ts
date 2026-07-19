@@ -1,8 +1,8 @@
-/** @private — only imported by create-devise-model-caller.ts */
+/** @private — shared tool definitions for Queen Bee agents */
 
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 export type ToolDefinition = {
   type: "function";
@@ -38,7 +38,7 @@ export type ToolResult = {
   isError: boolean;
 };
 
-export const DEVISE_TOOLS: ToolDefinition[] = [
+export const AGENT_TOOLS: ToolDefinition[] = [
   {
     type: "function",
     function: {
@@ -114,20 +114,21 @@ export const DEVISE_TOOLS: ToolDefinition[] = [
   },
 ];
 
-export function executeDeviseTool(
+export function executeAgentTool(
   toolCall: ToolCall,
-  workspacePath: string
+  workspacePath: string,
+  projectRevision?: string
 ): ToolResult {
   try {
     switch (toolCall.name) {
       case "update_requirements_draft":
         return updateRequirementsDraft(toolCall);
       case "list_directory":
-        return listDirectory(toolCall, workspacePath);
+        return listDirectory(toolCall, workspacePath, projectRevision);
       case "read_file":
-        return readFile(toolCall, workspacePath);
+        return readFile(toolCall, workspacePath, projectRevision);
       case "search_code":
-        return searchCode(toolCall, workspacePath);
+        return searchCode(toolCall, workspacePath, projectRevision);
       default:
         return {
           toolCallId: toolCall.id,
@@ -145,8 +146,8 @@ export function executeDeviseTool(
 }
 
 function updateRequirementsDraft(toolCall: ToolCall): ToolResult {
-  const args = JSON.parse(toolCall.arguments) as { content?: string };
-  if (!args.content) {
+  const args = toolArguments(toolCall);
+  if (typeof args.content !== "string" || !args.content) {
     return {
       toolCallId: toolCall.id,
       content: "content is required",
@@ -161,11 +162,42 @@ function updateRequirementsDraft(toolCall: ToolCall): ToolResult {
   };
 }
 
-function listDirectory(toolCall: ToolCall, workspacePath: string): ToolResult {
-  const args = JSON.parse(toolCall.arguments) as { path?: string };
-  const dirPath = resolve(workspacePath, args.path ?? ".");
+function listDirectory(
+  toolCall: ToolCall,
+  workspacePath: string,
+  projectRevision?: string
+): ToolResult {
+  const args = toolArguments(toolCall);
+  const requestedPath =
+    typeof args.path === "string" && args.path ? args.path : ".";
+  if (projectRevision) {
+    const normalizedPath = normalizeRelativePath(requestedPath);
+    const prefix = normalizedPath === "." ? "" : `${normalizedPath}/`;
+    const files = git(workspacePath, [
+      "ls-tree",
+      "-r",
+      "--name-only",
+      projectRevision,
+    ])
+      .split("\n")
+      .filter(Boolean)
+      .filter((file) => file.startsWith(prefix));
+    const entries = new Set<string>();
+    for (const file of files) {
+      const remainder = file.slice(prefix.length);
+      const [name, ...rest] = remainder.split("/");
+      if (!name || (name.startsWith(".") && name !== ".hive")) continue;
+      entries.add(rest.length > 0 ? `${prefix}${name}/` : `${prefix}${name}`);
+    }
+    return {
+      toolCallId: toolCall.id,
+      content: [...entries].sort().join("\n") || "(empty)",
+      isError: false,
+    };
+  }
+  const dirPath = resolve(workspacePath, requestedPath);
 
-  if (!dirPath.startsWith(workspacePath)) {
+  if (!isWithinWorkspace(workspacePath, dirPath)) {
     return {
       toolCallId: toolCall.id,
       content: "Path escapes workspace directory",
@@ -190,18 +222,34 @@ function listDirectory(toolCall: ToolCall, workspacePath: string): ToolResult {
   };
 }
 
-function readFile(toolCall: ToolCall, workspacePath: string): ToolResult {
-  const args = JSON.parse(toolCall.arguments) as { path?: string };
-  if (!args.path) {
+function readFile(
+  toolCall: ToolCall,
+  workspacePath: string,
+  projectRevision?: string
+): ToolResult {
+  const args = toolArguments(toolCall);
+  if (typeof args.path !== "string" || !args.path) {
     return {
       toolCallId: toolCall.id,
       content: "path is required",
       isError: true,
     };
   }
+  if (projectRevision) {
+    const path = normalizeRelativePath(args.path);
+    const content = git(workspacePath, ["show", `${projectRevision}:${path}`]);
+    if (Buffer.byteLength(content, "utf-8") > 100_000) {
+      return {
+        toolCallId: toolCall.id,
+        content: `File is larger than 100000 bytes`,
+        isError: true,
+      };
+    }
+    return { toolCallId: toolCall.id, content, isError: false };
+  }
 
   const filePath = resolve(workspacePath, args.path);
-  if (!filePath.startsWith(workspacePath)) {
+  if (!isWithinWorkspace(workspacePath, filePath)) {
     return {
       toolCallId: toolCall.id,
       content: "Path escapes workspace directory",
@@ -231,9 +279,13 @@ function readFile(toolCall: ToolCall, workspacePath: string): ToolResult {
   return { toolCallId: toolCall.id, content, isError: false };
 }
 
-function searchCode(toolCall: ToolCall, workspacePath: string): ToolResult {
-  const args = JSON.parse(toolCall.arguments) as { pattern?: string };
-  if (!args.pattern) {
+function searchCode(
+  toolCall: ToolCall,
+  workspacePath: string,
+  projectRevision?: string
+): ToolResult {
+  const args = toolArguments(toolCall);
+  if (typeof args.pattern !== "string" || !args.pattern) {
     return {
       toolCallId: toolCall.id,
       content: "pattern is required",
@@ -242,13 +294,36 @@ function searchCode(toolCall: ToolCall, workspacePath: string): ToolResult {
   }
 
   try {
-    const escaped = args.pattern.replace(/"/g, '\\"');
-    const result = execSync(`rg -n --no-heading -e "${escaped}" .`, {
-      cwd: workspacePath,
-      encoding: "utf-8",
-      maxBuffer: 1024 * 1024,
-      timeout: 10_000,
-    });
+    if (projectRevision) {
+      const result = git(workspacePath, [
+        "grep",
+        "-n",
+        "-e",
+        args.pattern,
+        projectRevision,
+        "--",
+      ]);
+      const lines = result.split("\n").filter(Boolean);
+      return {
+        toolCallId: toolCall.id,
+        content:
+          lines.slice(0, 100).join("\n") +
+          (lines.length > 100
+            ? `\n... (${String(lines.length - 100)} more matches)`
+            : ""),
+        isError: false,
+      };
+    }
+    const result = execFileSync(
+      "rg",
+      ["-n", "--no-heading", "-e", args.pattern, "."],
+      {
+        cwd: workspacePath,
+        encoding: "utf-8",
+        maxBuffer: 1024 * 1024,
+        timeout: 10_000,
+      }
+    );
 
     const lines = result.split("\n").filter(Boolean);
     const truncated = lines.slice(0, 100).join("\n");
@@ -263,11 +338,9 @@ function searchCode(toolCall: ToolCall, workspacePath: string): ToolResult {
       isError: false,
     };
   } catch (err: unknown) {
-    const stderr = (err as { stderr?: string })?.stderr ?? "";
-    if (
-      stderr.includes("No such file") ||
-      (err as { status?: number })?.status === 1
-    ) {
+    const status = errorProperty(err, "status");
+    const stderr = errorProperty(err, "stderr");
+    if (String(stderr ?? "").includes("No such file") || status === 1) {
       return {
         toolCallId: toolCall.id,
         content: "No matches found",
@@ -280,4 +353,51 @@ function searchCode(toolCall: ToolCall, workspacePath: string): ToolResult {
       isError: true,
     };
   }
+}
+
+function toolArguments(toolCall: ToolCall): Record<string, unknown> {
+  const value: unknown = JSON.parse(toolCall.arguments);
+  if (!isRecord(value)) {
+    throw new Error("Tool arguments must be a JSON object");
+  }
+  return value;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function errorProperty(error: unknown, property: "status" | "stderr"): unknown {
+  return isRecord(error) ? error[property] : undefined;
+}
+
+function isWithinWorkspace(workspacePath: string, targetPath: string): boolean {
+  const relativePath = relative(resolve(workspacePath), targetPath);
+  return (
+    relativePath === "" ||
+    (relativePath !== ".." &&
+      !relativePath.startsWith(`..${sep}`) &&
+      !isAbsolute(relativePath))
+  );
+}
+
+function normalizeRelativePath(path: string): string {
+  const normalized = path.replace(/^\.\//, "").replace(/\/$/, "") || ".";
+  if (
+    normalized === ".." ||
+    normalized.startsWith("../") ||
+    normalized.includes("/../")
+  ) {
+    throw new Error("Path escapes workspace directory");
+  }
+  return normalized;
+}
+
+function git(workspacePath: string, args: string[]): string {
+  return execFileSync("git", args, {
+    cwd: workspacePath,
+    encoding: "utf-8",
+    maxBuffer: 1024 * 1024,
+    timeout: 10_000,
+  }).trim();
 }

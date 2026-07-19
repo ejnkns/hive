@@ -3,24 +3,25 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
+import type { RequirementsFeedback } from "shared/board-types";
 import type { Message } from "shared/message";
-import { createDeviseEngine, extractSpec } from "./devise-engine";
+import { createRequirementsSessionManager, extractSpec } from "./devise-engine";
 import type {
-  DeviseModelCaller,
-  DeviseModelResponse,
+  AgentModelCaller,
+  AgentModelResponse,
 } from "./devise-engine/create-devise-model-caller";
-import { DEVISE_SYSTEM_PROMPT } from "./devise-engine/devise-system-prompt";
+import { REQUIREMENTS_AGENT_SYSTEM_PROMPT } from "./devise-engine/devise-system-prompt";
 import type { ToolCall } from "./devise-engine/devise-tools";
 import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
 
-function createMockCaller(responses: DeviseModelResponse[]): DeviseModelCaller {
+function createMockCaller(responses: AgentModelResponse[]): AgentModelCaller {
   let index = 0;
   return {
     call: async (
       _messages: Message[],
       _workspacePath: string,
       _includeTools: boolean
-    ): Promise<DeviseModelResponse> => {
+    ): Promise<AgentModelResponse> => {
       const response = responses[index];
       if (!response) throw new Error("No more mock responses");
       index++;
@@ -29,11 +30,11 @@ function createMockCaller(responses: DeviseModelResponse[]): DeviseModelCaller {
   };
 }
 
-function emptyResponse(content: string): DeviseModelResponse {
+function emptyResponse(content: string): AgentModelResponse {
   return { content, toolCalls: [], finishReason: "stop" };
 }
 
-function completionResponse(): DeviseModelResponse {
+function completionResponse(): AgentModelResponse {
   return {
     content: "# Requirements\n\n## Overview\nTest app\n\nREQUIREMENTS_COMPLETE",
     toolCalls: [],
@@ -41,7 +42,7 @@ function completionResponse(): DeviseModelResponse {
   };
 }
 
-function draftResponse(): DeviseModelResponse {
+function draftResponse(): AgentModelResponse {
   return toolResponse("", [
     {
       id: "draft-1",
@@ -56,7 +57,7 @@ function draftResponse(): DeviseModelResponse {
 function toolResponse(
   content: string,
   toolCalls: ToolCall[]
-): DeviseModelResponse {
+): AgentModelResponse {
   return { content, toolCalls, finishReason: "tool_calls" };
 }
 
@@ -68,19 +69,25 @@ function createTempWorkspace(): string {
   return dir;
 }
 
-describe("DEVISE_SYSTEM_PROMPT", () => {
+describe("REQUIREMENTS_AGENT_SYSTEM_PROMPT", () => {
   it("is non-empty", () => {
-    assert.ok(DEVISE_SYSTEM_PROMPT.length > 100);
+    assert.ok(REQUIREMENTS_AGENT_SYSTEM_PROMPT.length > 100);
   });
 
   it("contains key instructions", () => {
-    assert.ok(DEVISE_SYSTEM_PROMPT.includes("ONE question"));
-    assert.ok(DEVISE_SYSTEM_PROMPT.includes("RECOMMENDED ANSWER"));
-    assert.ok(DEVISE_SYSTEM_PROMPT.includes("BREADTH-FIRST"));
-    assert.ok(DEVISE_SYSTEM_PROMPT.includes("Codebase exploration"));
-    assert.ok(DEVISE_SYSTEM_PROMPT.includes("REQUIREMENTS_COMPLETE"));
+    assert.ok(REQUIREMENTS_AGENT_SYSTEM_PROMPT.includes("ONE question"));
+    assert.ok(REQUIREMENTS_AGENT_SYSTEM_PROMPT.includes("RECOMMENDED ANSWER"));
+    assert.ok(REQUIREMENTS_AGENT_SYSTEM_PROMPT.includes("BREADTH-FIRST"));
     assert.ok(
-      DEVISE_SYSTEM_PROMPT.includes("requirements analyst, not an implementer")
+      REQUIREMENTS_AGENT_SYSTEM_PROMPT.includes("Codebase exploration")
+    );
+    assert.ok(
+      REQUIREMENTS_AGENT_SYSTEM_PROMPT.includes("REQUIREMENTS_COMPLETE")
+    );
+    assert.ok(
+      REQUIREMENTS_AGENT_SYSTEM_PROMPT.includes(
+        "requirements analyst, not an implementer"
+      )
     );
   });
 });
@@ -102,10 +109,10 @@ describe("extractSpec", () => {
   });
 });
 
-describe("DeviseEngine", () => {
+describe("RequirementsSessionManager", () => {
   it("start creates session and returns model's first question", async () => {
     const caller = createMockCaller([emptyResponse("What are you building?")]);
-    const engine = createDeviseEngine(caller);
+    const engine = createRequirementsSessionManager(caller);
 
     const result = await engine.start("test", "Make a todo app", "/tmp");
 
@@ -117,7 +124,7 @@ describe("DeviseEngine", () => {
       emptyResponse("First question"),
       emptyResponse("What framework?"),
     ]);
-    const engine = createDeviseEngine(caller);
+    const engine = createRequirementsSessionManager(caller);
 
     await engine.start("test", "Make an app", "/tmp");
     const result = await engine.respond("test", "React", "/tmp");
@@ -134,7 +141,7 @@ describe("DeviseEngine", () => {
       draftResponse(),
       completionResponse(),
     ]);
-    const engine = createDeviseEngine(caller);
+    const engine = createRequirementsSessionManager(caller);
 
     await engine.start("test", "Make an app", "/tmp");
     const result = await engine.respond("test", "done", "/tmp");
@@ -148,10 +155,10 @@ describe("DeviseEngine", () => {
   });
 
   it("respond throws for unknown project", async () => {
-    const engine = createDeviseEngine();
+    const engine = createRequirementsSessionManager();
     await assert.rejects(
       () => engine.respond("unknown", "answer", "/tmp"),
-      /No active devise session/
+      /No active Requirements Session/
     );
   });
 
@@ -161,26 +168,26 @@ describe("DeviseEngine", () => {
       draftResponse(),
       completionResponse(),
     ]);
-    const engine = createDeviseEngine(caller);
+    const engine = createRequirementsSessionManager(caller);
 
     await engine.start("test", "Make an app", "/tmp");
     await engine.respond("test", "done", "/tmp");
 
     await assert.rejects(
       () => engine.respond("test", "more", "/tmp"),
-      /No active devise session/
+      /No active Requirements Session/
     );
   });
 
   it("includes system prompt in first model call", async () => {
     let capturedMessages: Message[] = [];
-    const caller: DeviseModelCaller = {
-      call: async (messages: Message[]): Promise<DeviseModelResponse> => {
+    const caller: AgentModelCaller = {
+      call: async (messages: Message[]): Promise<AgentModelResponse> => {
         capturedMessages = messages;
         return emptyResponse("Ok");
       },
     };
-    const engine = createDeviseEngine(caller);
+    const engine = createRequirementsSessionManager(caller);
 
     await engine.start("test", "Build X", "/tmp");
 
@@ -197,7 +204,7 @@ describe("DeviseEngine", () => {
     mkdirSync(join(workspace, ".hive"), { recursive: true });
     writeFileSync(join(workspace, ".hive", "requirements.md"), "# Canonical");
     const caller = createMockCaller([draftResponse(), emptyResponse("Next?")]);
-    const engine = createDeviseEngine(caller);
+    const engine = createRequirementsSessionManager(caller);
 
     const result = await engine.start("test", "Revise", workspace);
 
@@ -226,7 +233,7 @@ describe("DeviseEngine", () => {
     const draftPublished = new Promise<string>((resolve) => {
       receivedDraft = resolve;
     });
-    const caller: DeviseModelCaller = {
+    const caller: AgentModelCaller = {
       async call() {
         callCount += 1;
         if (callCount === 1) return draftResponse();
@@ -234,9 +241,13 @@ describe("DeviseEngine", () => {
         return emptyResponse("Next question");
       },
     };
-    const engine = createDeviseEngine(caller, undefined, (update) => {
-      receivedDraft?.(update.content);
-    });
+    const engine = createRequirementsSessionManager(
+      caller,
+      undefined,
+      (update) => {
+        receivedDraft?.(update.content);
+      }
+    );
 
     const started = engine.start("test", "Build", workspace);
     assert.equal(
@@ -247,14 +258,161 @@ describe("DeviseEngine", () => {
     await started;
   });
 
-  it("allows only one active Devise Agent session per project", async () => {
+  it("allows only one active requirements workflow per project", async () => {
     const caller = createMockCaller([emptyResponse("Question")]);
-    const engine = createDeviseEngine(caller);
+    const engine = createRequirementsSessionManager(caller);
     await engine.start("test", "Project session", "/tmp");
 
     await assert.rejects(
       () => engine.startCard("test", "card-1", "Card session", "/tmp"),
-      /already has an active Devise Agent session/
+      /already has an active requirements workflow/
+    );
+  });
+
+  it("blocks competing planning while allowing an explicit proposal replacement", async () => {
+    const workspace = createTempWorkspace();
+    const runtimeStore = createQueenBeeRuntimeStore(
+      join(workspace, ".runtime")
+    );
+    runtimeStore.savePlanningProposal({
+      id: "proposal-1",
+      projectId: "test",
+      status: "pending",
+      baseRequirementsRevision: "requirements-1",
+      baseBoardRevision: "board-1",
+      projectRevision: null,
+      runKind: "requirements_reconciliation",
+      proposedRequirements: "# Proposed",
+      changes: [],
+      createdAt: "2026-07-20T00:00:00.000Z",
+    });
+    const engine = createRequirementsSessionManager(
+      createMockCaller([emptyResponse("What should change?")]),
+      runtimeStore
+    );
+
+    await assert.rejects(
+      () => engine.start("test", "Competing workflow", workspace),
+      /open requirements-changing workflow/
+    );
+    const replacement = await engine.startRevision(
+      "test",
+      "Replace the pending proposal",
+      workspace,
+      "proposal-1"
+    );
+    assert.equal(replacement.question, "What should change?");
+  });
+
+  it("isolates Idea Elaboration and Requirements Repair context", async () => {
+    const workspace = createTempWorkspace();
+    mkdirSync(join(workspace, ".hive"), { recursive: true });
+    writeFileSync(
+      join(workspace, ".hive", "requirements.md"),
+      "# Canonical requirements"
+    );
+    let ideaMessages: Message[] = [];
+    const ideaEngine = createRequirementsSessionManager({
+      async call(messages) {
+        ideaMessages = structuredClone(messages);
+        return emptyResponse("What outcome should this Idea provide?");
+      },
+    });
+
+    await ideaEngine.startIdea(
+      "test",
+      {
+        id: "idea-1",
+        title: "Dark mode",
+        brief: "Support a dark appearance",
+        createdAt: "2026-07-20T00:00:00.000Z",
+      },
+      "Make it comfortable at night",
+      workspace
+    );
+
+    assert.equal(
+      ideaEngine.getIdeaSession("test", "idea-1")?.kind,
+      "idea_elaboration"
+    );
+    assert.ok(
+      ideaMessages.some(
+        (message) =>
+          message.role === "system" &&
+          message.content.includes('"title": "Dark mode"')
+      )
+    );
+    assert.ok(
+      ideaMessages.some(
+        (message) =>
+          message.role === "system" &&
+          message.content.includes("# Canonical requirements")
+      )
+    );
+
+    const feedback: RequirementsFeedback = {
+      kind: "requirements_feedback",
+      id: "feedback-1",
+      projectId: "test",
+      status: "pending",
+      projectRevision: null,
+      baseRequirementsRevision: "requirements-1",
+      baseBoardRevision: "board-1",
+      proposedRequirements: "# Draft requiring repair",
+      sourceIdeaId: "idea-1",
+      createdAt: "2026-07-20T00:01:00.000Z",
+      issues: [
+        {
+          requirementRefs: ["FR-1"],
+          category: "missing_decision",
+          explanation: "A choice is missing.",
+          evidence: [],
+          decisionNeeded: "Choose a behavior.",
+          recommendation: "Preserve the existing behavior.",
+        },
+      ],
+    };
+    let repairMessages: Message[] = [];
+    const repairRuntimeStore = createQueenBeeRuntimeStore(
+      join(workspace, ".repair-runtime")
+    );
+    repairRuntimeStore.saveRequirementsFeedback(feedback);
+    const repairEngine = createRequirementsSessionManager(
+      {
+        async call(messages) {
+          repairMessages = structuredClone(messages);
+          return emptyResponse("Which behavior should be canonical?");
+        },
+      },
+      repairRuntimeStore
+    );
+
+    await repairEngine.startRepair("test", feedback, workspace, {
+      id: "idea-1",
+      title: "Dark mode",
+      brief: "Support a dark appearance",
+      createdAt: "2026-07-20T00:00:00.000Z",
+    });
+
+    assert.equal(repairEngine.getSession("test")?.kind, "requirements_repair");
+    assert.equal(repairEngine.getSession("test")?.sourceIdeaId, "idea-1");
+    assert.equal(
+      repairRuntimeStore.getRequirementsFeedback("test", feedback.id)?.status,
+      "repairing"
+    );
+    assert.ok(
+      repairMessages.some(
+        (message) =>
+          message.role === "system" &&
+          message.content.includes("# Draft requiring repair") &&
+          message.content.includes("missing_decision")
+      )
+    );
+    assert.ok(
+      repairMessages.some(
+        (message) =>
+          message.role === "system" && message.content.includes("Dark mode")
+      )
     );
   });
 
@@ -263,13 +421,16 @@ describe("DeviseEngine", () => {
     const runtimeStore = createQueenBeeRuntimeStore(
       join(workspace, ".runtime")
     );
-    const firstEngine = createDeviseEngine(
+    const firstEngine = createRequirementsSessionManager(
       createMockCaller([draftResponse(), emptyResponse("Next question")]),
       runtimeStore
     );
     await firstEngine.start("test", "Build it", workspace);
 
-    const restartedEngine = createDeviseEngine(undefined, runtimeStore);
+    const restartedEngine = createRequirementsSessionManager(
+      undefined,
+      runtimeStore
+    );
 
     assert.strictEqual(
       restartedEngine.getSession("test")?.draftRequirements,
@@ -282,12 +443,12 @@ describe("DeviseEngine", () => {
     const workspace = createTempWorkspace();
 
     let toolCalled = false;
-    const caller: DeviseModelCaller = {
+    const caller: AgentModelCaller = {
       call: async (
         _messages: Message[],
         _ws: string,
         _includeTools: boolean
-      ): Promise<DeviseModelResponse> => {
+      ): Promise<AgentModelResponse> => {
         if (!toolCalled) {
           toolCalled = true;
           return toolResponse("", [
@@ -304,7 +465,7 @@ describe("DeviseEngine", () => {
       },
     };
 
-    const engine = createDeviseEngine(caller);
+    const engine = createRequirementsSessionManager(caller);
     await engine.start("test", "Add feature", workspace);
     const result = await engine.respond("test", "Proceed", workspace);
 
@@ -319,8 +480,8 @@ describe("DeviseEngine", () => {
     const workspace = createTempWorkspace();
 
     let respondCallCount = 0;
-    const caller: DeviseModelCaller = {
-      call: async (): Promise<DeviseModelResponse> => {
+    const caller: AgentModelCaller = {
+      call: async (): Promise<AgentModelResponse> => {
         respondCallCount++;
         return toolResponse("", [
           {
@@ -332,7 +493,7 @@ describe("DeviseEngine", () => {
       },
     };
 
-    const engine = createDeviseEngine(caller);
+    const engine = createRequirementsSessionManager(caller);
     // start will loop 10 times, then respond loops 10 times.
     // We reset the counter after start to measure only respond.
     await engine.start("test", "Build", workspace);

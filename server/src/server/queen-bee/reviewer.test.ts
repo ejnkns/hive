@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import type {
-  DeviseModelCaller,
-  DeviseModelResponse,
+  AgentModelCaller,
+  AgentModelResponse,
 } from "./devise-engine/create-devise-model-caller";
 import { createReviewer, REVIEWER_TOOLS, type ReviewPackage } from "./reviewer";
 
@@ -27,8 +27,8 @@ describe("Reviewer Agent", () => {
     );
     let calls = 0;
     let inspectedContent = "";
-    const modelCaller: DeviseModelCaller = {
-      async call(messages): Promise<DeviseModelResponse> {
+    const modelCaller: AgentModelCaller = {
+      async call(messages): Promise<AgentModelResponse> {
         calls += 1;
         if (calls === 1) {
           return toolResponse("read-1", "read_file", { path: "source.ts" });
@@ -109,7 +109,7 @@ describe("Reviewer Agent", () => {
     id: string,
     name: string,
     args: object
-  ): DeviseModelResponse {
+  ): AgentModelResponse {
     return {
       content: "",
       toolCalls: [{ id, name, arguments: JSON.stringify(args) }],

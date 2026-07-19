@@ -3,6 +3,7 @@
 import { execFileSync, execSync } from "node:child_process";
 import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { DEFAULT_MAX_CONCURRENT_WORKERS } from "shared/project-types";
 import type { Project, ProjectRegistry } from "../create-project-store";
 
 export function createProject(
@@ -19,7 +20,7 @@ export function createProject(
   const id = makeUnique(slug, registry);
   const createdAt = new Date().toISOString();
   const targetBranch = inferTargetBranch(resolved);
-  const maxConcurrentWorkers = 3;
+  const maxConcurrentWorkers = DEFAULT_MAX_CONCURRENT_WORKERS;
 
   const hiveDir = join(resolved, ".hive");
   if (!existsSync(hiveDir)) {

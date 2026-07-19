@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
@@ -34,6 +40,35 @@ describe("QueenBeeRuntimeStore", () => {
         }),
       /immutable/
     );
+  });
+
+  it("defaults legacy Review Packages to reviewing their Worker head", () => {
+    const rootDirectory = createRoot();
+    const packageDirectory = join(
+      rootDirectory,
+      "queen-bee",
+      "projects",
+      "project-1",
+      "review-packages"
+    );
+    mkdirSync(packageDirectory, { recursive: true });
+    const legacyPackage = packageFixture("legacy-package");
+    const { reviewCommit: _reviewCommit, ...legacyRevisions } =
+      legacyPackage.revisions;
+    writeFileSync(
+      join(packageDirectory, "legacy-package.json"),
+      JSON.stringify({
+        ...legacyPackage,
+        revisions: legacyRevisions,
+      })
+    );
+
+    const restored = createQueenBeeRuntimeStore(rootDirectory).getReviewPackage(
+      "project-1",
+      "legacy-package"
+    );
+
+    assert.equal(restored?.revisions.reviewCommit, "head-1");
   });
 
   it("replays actor-labelled card activity in insertion order", () => {
@@ -85,15 +120,17 @@ describe("QueenBeeRuntimeStore", () => {
     });
   });
 
-  it("persists complete Devise Agent sessions under the shared Hive directory", () => {
+  it("persists complete Requirements Sessions under the shared Hive directory", () => {
     const rootDirectory = createRoot();
     const store = createQueenBeeRuntimeStore(rootDirectory);
-    store.saveDeviseSession({
+    store.saveRequirementsSession({
       sessionId: "session-1",
       projectId: "project-1",
       messages: [{ role: "user", content: "Build it" }],
       status: "active",
+      kind: "initial_requirements",
       baseRequirementsRevision: "requirements-1",
+      projectRevision: "revision-1",
       draftRequirements: "# Draft",
       startedAt: "2026-07-19T00:00:00.000Z",
       updatedAt: "2026-07-19T00:01:00.000Z",
@@ -101,12 +138,17 @@ describe("QueenBeeRuntimeStore", () => {
 
     assert.equal(
       existsSync(
-        join(rootDirectory, "devise-sessions", "project-1", "session-1.json")
+        join(
+          rootDirectory,
+          "requirements-sessions",
+          "project-1",
+          "session-1.json"
+        )
       ),
       true
     );
     assert.equal(
-      store.getDeviseSessions("project-1")[0]?.draftRequirements,
+      store.getRequirementsSessions("project-1")[0]?.draftRequirements,
       "# Draft"
     );
   });

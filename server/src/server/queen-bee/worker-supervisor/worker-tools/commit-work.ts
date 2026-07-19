@@ -31,7 +31,7 @@ export function commitWork(
     if (PROTECTED_PATHS.has(normalized)) {
       return errorResult(
         toolCall.id,
-        `${normalized} is managed by the Devise workflow and cannot be committed by a Worker Agent`
+        `${normalized} is managed by the Requirements workflow and cannot be committed by a Worker Agent`
       );
     }
     normalizedPaths.push(normalized);

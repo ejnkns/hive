@@ -4,31 +4,40 @@ import type {
   Card,
   Column,
   CoordinatorAction,
+  Idea,
   PlanningProposal,
   ReviewReadiness,
+  RequirementsFeedback,
   WorkerAdmission,
 } from "shared/board-types";
 import KanbanCard from "./kanban-card.svelte";
 import CardDetail from "./card-detail.svelte";
+import IdeasBacklog from "./ideas-backlog.svelte";
 import { parseReviewReadinessResponse } from "./kanban-board/parse-review-readiness-response";
 import { parseWorkerRunResponse } from "./kanban-board/parse-worker-run-response";
 import ProjectWorkerSettings from "./project-worker-settings.svelte";
 
-let { projectId, onReDeviseStarted, onPlanningProposal }: Props = $props();
+let {
+  projectId,
+  onReDeviseStarted,
+  onPlanningProposal,
+  onRequirementsFeedback,
+}: Props = $props();
 
 type Props = {
   projectId: string;
   onReDeviseStarted?: () => void;
   onPlanningProposal?: (proposal: PlanningProposal) => void;
+  onRequirementsFeedback?: (feedback: RequirementsFeedback) => void;
 };
 
 type Board = {
   projectId: string;
+  ideas: Idea[];
   cards: Card[];
 };
 
 const COLUMNS: Column[] = [
-  "idea",
   "ready",
   "in_progress",
   "reviewing",
@@ -37,7 +46,6 @@ const COLUMNS: Column[] = [
 ];
 
 const COLUMN_LABELS: Record<Column, string> = {
-  idea: "Idea",
   ready: "Ready",
   in_progress: "In Progress",
   reviewing: "Reviewing",
@@ -124,7 +132,7 @@ async function submitRevision(confirmActive = false) {
   revisionError = null;
   try {
     const response = await fetch(
-      `/api/queen-bee/${projectId}/devise/redevise/start`,
+      `/api/queen-bee/${projectId}/requirements/revision/start`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -245,9 +253,15 @@ async function handleRemediate(
     const result = (await res.json()) as {
       card?: Card;
       proposal?: PlanningProposal;
+      feedback?: RequirementsFeedback;
       redevise?: boolean;
       question?: string;
     };
+    if (result.feedback) {
+      selectedCard = null;
+      onRequirementsFeedback?.(result.feedback);
+      return;
+    }
     if (result.proposal) {
       selectedCard = null;
       onPlanningProposal?.(result.proposal);
@@ -432,6 +446,13 @@ onMount(() => {
   {#if loading}
     <div class="loading">Loading board...</div>
   {:else if board}
+    <IdeasBacklog
+      {projectId}
+      ideas={board.ideas}
+      onChanged={loadBoard}
+      {onPlanningProposal}
+      {onRequirementsFeedback}
+    />
     <div class="columns">
       {#each COLUMNS as col}
         <div class="column" class:empty={cardsInColumn(col).length === 0}>
@@ -470,6 +491,7 @@ onMount(() => {
       }}
       onCardUpdated={handleCardUpdated}
       {onPlanningProposal}
+      {onRequirementsFeedback}
       onRun={runSelectedCard}
       onAccept={acceptSelectedCard}
       onRequestChanges={requestChangesForSelectedCard}

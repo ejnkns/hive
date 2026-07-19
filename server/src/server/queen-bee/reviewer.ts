@@ -2,8 +2,8 @@
 
 import type { Message } from "shared/message";
 import {
-  createDeviseModelCaller,
-  type DeviseModelCaller,
+  type AgentModelCaller,
+  createAgentModelCaller,
 } from "./devise-engine/create-devise-model-caller";
 import type { ToolCall } from "./devise-engine/devise-tools";
 import { REVIEWER_SYSTEM_PROMPT } from "./reviewer/reviewer-system-prompt";
@@ -25,6 +25,7 @@ export type ReviewPackage = {
     baseCommit: string;
     headCommit: string;
     reviewCommit: string;
+    reviewReference?: string;
     integrationCommit: string;
     cardRevision: string;
   };
@@ -68,7 +69,7 @@ export type Reviewer = {
 };
 
 export function createReviewer(
-  modelCaller: DeviseModelCaller = createDeviseModelCaller(REVIEWER_TOOLS)
+  modelCaller: AgentModelCaller = createAgentModelCaller(REVIEWER_TOOLS)
 ): Reviewer {
   return {
     async review(reviewPackage, worktreePath): Promise<ReviewerVerdict> {

@@ -14,9 +14,11 @@ import type {
   Card,
   CardActivityEvent,
   PlanningProposal,
+  RequirementsFeedback,
 } from "shared/board-types";
 import { HIVE_DIR } from "shared/hive-dir";
 import type { Message } from "shared/message";
+import type { RequirementsSessionKind } from "./devise-engine/devise-system-prompt";
 import type { ReviewPackage } from "./reviewer";
 
 export type { ActivityActor, CardActivityEvent } from "shared/board-types";
@@ -34,13 +36,18 @@ export type CardRuntimeState = Pick<
   | "archivedAt"
 >;
 
-export type PersistedDeviseSession = {
+export type PersistedRequirementsSession = {
   sessionId: string;
   projectId: string;
   cardId?: string;
+  ideaId?: string;
+  sourceIdeaId?: string;
+  sourceFeedbackId?: string;
+  kind: RequirementsSessionKind;
   messages: Message[];
   status: "active" | "complete";
   baseRequirementsRevision: string;
+  projectRevision: string | null;
   draftRequirements?: string;
   startedAt: string;
   updatedAt: string;
@@ -61,13 +68,20 @@ export type QueenBeeRuntimeStore = {
     state: CardRuntimeState
   ): void;
   getCardState(projectId: string, cardId: string): CardRuntimeState | null;
-  saveDeviseSession(session: PersistedDeviseSession): void;
-  getDeviseSessions(projectId: string): PersistedDeviseSession[];
+  saveRequirementsSession(session: PersistedRequirementsSession): void;
+  getRequirementsSessions(projectId: string): PersistedRequirementsSession[];
   savePlanningProposal(proposal: PlanningProposal): void;
   getPlanningProposal(
     projectId: string,
     proposalId: string
   ): PlanningProposal | null;
+  getPlanningProposals(projectId: string): PlanningProposal[];
+  saveRequirementsFeedback(feedback: RequirementsFeedback): void;
+  getRequirementsFeedback(
+    projectId: string,
+    feedbackId: string
+  ): RequirementsFeedback | null;
+  getRequirementsFeedbacks(projectId: string): RequirementsFeedback[];
 };
 
 export function createQueenBeeRuntimeStore(
@@ -93,9 +107,19 @@ export function createQueenBeeRuntimeStore(
     },
 
     getReviewPackage(projectId, packageId) {
-      return readJson<ReviewPackage>(
+      const reviewPackage = readJson<ReviewPackage>(
         reviewPackagePath(rootDirectory, projectId, packageId)
       );
+      if (!reviewPackage) return null;
+      return {
+        ...reviewPackage,
+        revisions: {
+          ...reviewPackage.revisions,
+          reviewCommit:
+            reviewPackage.revisions.reviewCommit ??
+            reviewPackage.revisions.headCommit,
+        },
+      };
     },
 
     appendActivity(projectId, cardId, event) {
@@ -128,22 +152,26 @@ export function createQueenBeeRuntimeStore(
       );
     },
 
-    saveDeviseSession(session) {
+    saveRequirementsSession(session) {
       writeJson(
-        deviseSessionPath(rootDirectory, session.projectId, session.sessionId),
+        requirementsSessionPath(
+          rootDirectory,
+          session.projectId,
+          session.sessionId
+        ),
         session
       );
     },
 
-    getDeviseSessions(projectId) {
-      const directory = deviseSessionDirectory(rootDirectory, projectId);
+    getRequirementsSessions(projectId) {
+      const directory = requirementsSessionDirectory(rootDirectory, projectId);
       try {
         return readdirSync(directory)
           .filter((name) => name.endsWith(".json"))
           .map((name) =>
-            readJson<PersistedDeviseSession>(join(directory, name))
+            readJson<PersistedRequirementsSession>(join(directory, name))
           )
-          .filter((session): session is PersistedDeviseSession =>
+          .filter((session): session is PersistedRequirementsSession =>
             Boolean(session)
           )
           .sort((left, right) => left.updatedAt.localeCompare(right.updatedAt));
@@ -162,6 +190,37 @@ export function createQueenBeeRuntimeStore(
     getPlanningProposal(projectId, proposalId) {
       return readJson<PlanningProposal>(
         planningProposalPath(rootDirectory, projectId, proposalId)
+      );
+    },
+
+    getPlanningProposals(projectId) {
+      return readJsonDirectory<PlanningProposal>(
+        planningProposalDirectory(rootDirectory, projectId),
+        (proposal) => proposal.createdAt
+      );
+    },
+
+    saveRequirementsFeedback(feedback) {
+      writeJson(
+        requirementsFeedbackPath(
+          rootDirectory,
+          feedback.projectId,
+          feedback.id
+        ),
+        feedback
+      );
+    },
+
+    getRequirementsFeedback(projectId, feedbackId) {
+      return readJson<RequirementsFeedback>(
+        requirementsFeedbackPath(rootDirectory, projectId, feedbackId)
+      );
+    },
+
+    getRequirementsFeedbacks(projectId) {
+      return readJsonDirectory<RequirementsFeedback>(
+        requirementsFeedbackDirectory(rootDirectory, projectId),
+        (feedback) => feedback.createdAt
       );
     },
   };
@@ -212,20 +271,24 @@ function cardStatePath(
   );
 }
 
-function deviseSessionDirectory(
+function requirementsSessionDirectory(
   rootDirectory: string,
   projectId: string
 ): string {
-  return join(rootDirectory, "devise-sessions", encodeURIComponent(projectId));
+  return join(
+    rootDirectory,
+    "requirements-sessions",
+    encodeURIComponent(projectId)
+  );
 }
 
-function deviseSessionPath(
+function requirementsSessionPath(
   rootDirectory: string,
   projectId: string,
   sessionId: string
 ): string {
   return join(
-    deviseSessionDirectory(rootDirectory, projectId),
+    requirementsSessionDirectory(rootDirectory, projectId),
     `${encodeURIComponent(sessionId)}.json`
   );
 }
@@ -236,10 +299,52 @@ function planningProposalPath(
   proposalId: string
 ): string {
   return join(
-    projectDirectory(rootDirectory, projectId),
-    "planning-proposals",
+    planningProposalDirectory(rootDirectory, projectId),
     `${encodeURIComponent(proposalId)}.json`
   );
+}
+
+function planningProposalDirectory(
+  rootDirectory: string,
+  projectId: string
+): string {
+  return join(projectDirectory(rootDirectory, projectId), "planning-proposals");
+}
+
+function requirementsFeedbackPath(
+  rootDirectory: string,
+  projectId: string,
+  feedbackId: string
+): string {
+  return join(
+    requirementsFeedbackDirectory(rootDirectory, projectId),
+    `${encodeURIComponent(feedbackId)}.json`
+  );
+}
+
+function requirementsFeedbackDirectory(
+  rootDirectory: string,
+  projectId: string
+): string {
+  return join(
+    projectDirectory(rootDirectory, projectId),
+    "requirements-feedback"
+  );
+}
+
+function readJsonDirectory<T>(
+  directory: string,
+  timestamp: (value: T) => string
+): T[] {
+  try {
+    return readdirSync(directory)
+      .filter((name) => name.endsWith(".json"))
+      .map((name) => readJson<T>(join(directory, name)))
+      .filter((value): value is T => value !== null)
+      .sort((left, right) => timestamp(left).localeCompare(timestamp(right)));
+  } catch {
+    return [];
+  }
 }
 
 function readJson<T>(path: string): T | null {

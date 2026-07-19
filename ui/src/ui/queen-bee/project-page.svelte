@@ -1,9 +1,13 @@
 <script lang="ts">
 import { onMount } from "svelte";
-import type { PlanningProposal } from "shared/board-types";
+import type {
+  PlanningProposal,
+  RequirementsFeedback,
+} from "shared/board-types";
 import DeviseChat from "./devise-chat.svelte";
 import KanbanBoard from "./kanban-board.svelte";
 import PlanningProposalView from "./planning-proposal.svelte";
+import RequirementsFeedbackView from "./requirements-feedback.svelte";
 import { parsePlanningProposalResponse } from "./parse-planning-proposal-response";
 import { projectHeader } from "./project-header-state.svelte";
 
@@ -23,48 +27,85 @@ let initialMessages = $state<{ role: string; content: string }[] | undefined>(
 let initialStatus = $state<string | undefined>(undefined);
 let initialDraftRequirements = $state<string | undefined>(undefined);
 let planningProposal = $state<PlanningProposal | null>(null);
+let requirementsFeedback = $state<RequirementsFeedback | null>(null);
 
 onMount(() => {
   projectHeader.projectId = projectId;
   checkStatus();
 });
 
-async function restoreSession() {
+async function restoreSession(): Promise<boolean> {
   try {
-    const res = await fetch(`/api/queen-bee/${projectId}/devise/session`);
-    if (!res.ok) return;
-    const data = (await res.json()) as {
-      active?: boolean;
-      status?: string;
-      messages?: { role: string; content: string }[];
-      draftRequirements?: string;
-    };
-    if (data.active && data.messages && data.messages.length > 0) {
+    const res = await fetch(`/api/queen-bee/${projectId}/requirements/session`);
+    if (!res.ok) return false;
+    const data: unknown = await res.json();
+    if (
+      isRecord(data) &&
+      data.active === true &&
+      isClientMessages(data.messages) &&
+      data.messages.length > 0
+    ) {
       initialMessages = data.messages;
-      initialStatus = data.status;
-      initialDraftRequirements = data.draftRequirements;
+      initialStatus = typeof data.status === "string" ? data.status : undefined;
+      initialDraftRequirements =
+        typeof data.draftRequirements === "string"
+          ? data.draftRequirements
+          : undefined;
+      return true;
     }
   } catch {
     // session restore is best-effort
   }
+  return false;
 }
 
 async function checkStatus() {
   loading = true;
   try {
-    const res = await fetch(`/api/queen-bee/${projectId}/devise/status`);
+    planningProposal = null;
+    requirementsFeedback = null;
+    const res = await fetch(`/api/queen-bee/${projectId}/requirements/status`);
     if (!res.ok) throw new Error("Failed to load project");
-    const data = (await res.json()) as { hasRequirements: boolean };
+    const data: unknown = await res.json();
+    if (!isRecord(data) || typeof data.hasRequirements !== "boolean") {
+      throw new Error("Invalid project status response");
+    }
+    const hasRequirementsSession = await restoreSession();
+    if (hasRequirementsSession) {
+      if (data.hasRequirements) await fetchRequirements();
+      hasBoard = false;
+      return;
+    }
+
+    const openPlanningResponse = await fetch(
+      `/api/queen-bee/${projectId}/planning/open`
+    );
+    if (openPlanningResponse.ok) {
+      const outcome = parsePlanningProposalResponse(
+        await openPlanningResponse.json()
+      );
+      if (outcome.proposal) {
+        planningProposal = outcome.proposal;
+        return;
+      }
+      if (outcome.feedback) {
+        requirementsFeedback = outcome.feedback;
+        return;
+      }
+    }
 
     if (data.hasRequirements) {
       await fetchRequirements();
-      await restoreSession();
       try {
         const boardRes = await fetch(`/api/queen-bee/${projectId}/board`);
         if (boardRes.ok) {
-          const boardData = (await boardRes.json()) as { cards: unknown[] };
+          const boardData: unknown = await boardRes.json();
+          if (!isRecord(boardData)) {
+            throw new Error("Invalid Board response");
+          }
           hasBoard =
-            Array.isArray(boardData.cards) && boardData.cards.length > 0;
+            (Array.isArray(boardData.cards) && boardData.cards.length > 0) ||
+            (Array.isArray(boardData.ideas) && boardData.ideas.length > 0);
         }
       } catch {
         hasBoard = false;
@@ -81,8 +122,10 @@ async function fetchRequirements() {
   try {
     const res = await fetch(`/api/queen-bee/${projectId}/requirements`);
     if (res.ok) {
-      const data = (await res.json()) as { content: string };
-      projectHeader.requirementsContent = data.content;
+      const data: unknown = await res.json();
+      if (isRecord(data) && typeof data.content === "string") {
+        projectHeader.requirementsContent = data.content;
+      }
     }
   } catch {
     // ignore
@@ -93,12 +136,19 @@ async function handleApprove() {
   planning = true;
   errorMessage = null;
   try {
-    const approval = await fetch(`/api/queen-bee/${projectId}/devise/approve`, {
-      method: "POST",
-    });
+    const approval = await fetch(
+      `/api/queen-bee/${projectId}/requirements/approve`,
+      {
+        method: "POST",
+      }
+    );
     const result = parsePlanningProposalResponse(await approval.json());
     if (!approval.ok) {
       throw new Error(result.error ?? "Requirements approval failed");
+    }
+    if (result.feedback) {
+      requirementsFeedback = result.feedback;
+      return;
     }
     if (!result.proposal) {
       throw new Error(result.error ?? "Planner returned no proposal");
@@ -110,6 +160,24 @@ async function handleApprove() {
   } finally {
     planning = false;
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isClientMessages(
+  value: unknown
+): value is Array<{ role: string; content: string }> {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (message) =>
+        isRecord(message) &&
+        typeof message.role === "string" &&
+        typeof message.content === "string"
+    )
+  );
 }
 </script>
 
@@ -127,6 +195,16 @@ async function handleApprove() {
       <div class="error-actions">
         <button class="btn btn-primary" onclick={handleApprove}>Retry</button>
       </div>
+    {:else if requirementsFeedback}
+      <RequirementsFeedbackView
+        {projectId}
+        feedback={requirementsFeedback}
+        onRepairStarted={() => {
+          requirementsFeedback = null;
+          hasBoard = false;
+          void restoreSession();
+        }}
+      />
     {:else if planningProposal}
       <PlanningProposalView
         {projectId}
@@ -139,12 +217,24 @@ async function handleApprove() {
           planningProposal = null;
           void checkStatus();
         }}
+        onRequirementsFeedback={(feedback) => {
+          planningProposal = null;
+          requirementsFeedback = feedback;
+        }}
+        onRequirementsRevisionStarted={() => {
+          planningProposal = null;
+          hasBoard = false;
+          void restoreSession();
+        }}
       />
     {:else if hasBoard}
       <KanbanBoard
         {projectId}
         onPlanningProposal={(proposal) => {
           planningProposal = proposal;
+        }}
+        onRequirementsFeedback={(feedback) => {
+          requirementsFeedback = feedback;
         }}
         onReDeviseStarted={() => {
           hasBoard = false;

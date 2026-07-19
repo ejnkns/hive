@@ -1,20 +1,33 @@
 <script lang="ts">
-import type { PlanningProposal } from "shared/board-types";
+import type {
+  PlanningProposal,
+  RequirementsFeedback,
+} from "shared/board-types";
 import { parsePlanningProposalResponse } from "./parse-planning-proposal-response";
 
-let { projectId, proposal, onApplied, onDiscard }: Props = $props();
+let {
+  projectId,
+  proposal,
+  onApplied,
+  onDiscard,
+  onRequirementsFeedback,
+  onRequirementsRevisionStarted,
+}: Props = $props();
 
 type Props = {
   projectId: string;
   proposal: PlanningProposal;
   onApplied: () => void;
   onDiscard: () => void;
+  onRequirementsFeedback: (feedback: RequirementsFeedback) => void;
+  onRequirementsRevisionStarted: () => void;
 };
 
 let updatedProposal = $state<PlanningProposal | null>(null);
 let current = $derived(updatedProposal ?? proposal);
 let busy = $state(false);
 let error = $state<string | null>(null);
+let revisionGuidance = $state("");
 
 async function decide(changeId: string, decision: "accepted" | "rejected") {
   busy = true;
@@ -67,6 +80,101 @@ function allAccepted() {
 function hasRejected() {
   return current.changes.some((change) => change.decision === "rejected");
 }
+
+async function replanCards() {
+  const guidance = revisionGuidance.trim();
+  if (!guidance) return;
+  busy = true;
+  error = null;
+  try {
+    const response = await fetch(
+      `/api/queen-bee/${projectId}/planning/${current.id}/replan`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ guidance }),
+      }
+    );
+    const result = parsePlanningProposalResponse(await response.json());
+    if (result.feedback) {
+      onRequirementsFeedback(result.feedback);
+      return;
+    }
+    if (!response.ok || !result.proposal) {
+      throw new Error(result.error ?? "Could not replan Cards");
+    }
+    updatedProposal = result.proposal;
+    revisionGuidance = "";
+  } catch (caught) {
+    error = caught instanceof Error ? caught.message : "Could not replan Cards";
+  } finally {
+    busy = false;
+  }
+}
+
+async function reviseRequirements() {
+  const guidance = revisionGuidance.trim();
+  if (!guidance) return;
+  busy = true;
+  error = null;
+  try {
+    const response = await fetch(
+      `/api/queen-bee/${projectId}/requirements/revision/start`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: guidance, proposalId: current.id }),
+      }
+    );
+    const value: unknown = await response.json();
+    if (!response.ok) {
+      throw new Error(
+        isRecord(value) && typeof value.error === "string"
+          ? value.error
+          : "Could not start Requirements Revision"
+      );
+    }
+    onRequirementsRevisionStarted();
+  } catch (caught) {
+    error =
+      caught instanceof Error
+        ? caught.message
+        : "Could not start Requirements Revision";
+  } finally {
+    busy = false;
+  }
+}
+
+async function cancelProposal() {
+  busy = true;
+  error = null;
+  try {
+    const response = await fetch(
+      `/api/queen-bee/${projectId}/planning/${current.id}/cancel`,
+      { method: "POST" }
+    );
+    const value: unknown = await response.json();
+    if (!response.ok) {
+      throw new Error(
+        isRecord(value) && typeof value.error === "string"
+          ? value.error
+          : "Could not cancel Planning Proposal"
+      );
+    }
+    onDiscard();
+  } catch (caught) {
+    error =
+      caught instanceof Error
+        ? caught.message
+        : "Could not cancel Planning Proposal";
+  } finally {
+    busy = false;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 </script>
 
 <div class="proposal">
@@ -98,7 +206,7 @@ function hasRejected() {
             <div>{change.proposedCard.relevantFiles.join(", ")}</div>
           </div>
         {/if}
-        {#if change.action !== "keep"}
+        {#if change.action !== "keep" || change.resolvesSourceIdea}
           <div class="actions">
             <button
               class="btn"
@@ -120,8 +228,27 @@ function hasRejected() {
 
   <div class="proposal-footer">
     {#if hasRejected()}
-      <button class="btn" onclick={onDiscard} disabled={busy}>Return to revise</button>
-      <span>Rejected card changes require a revised requirements proposal.</span>
+      <div class="revision-choice">
+        <textarea
+          bind:value={revisionGuidance}
+          rows="2"
+          placeholder="What should change?"
+          disabled={busy}
+        ></textarea>
+        <div class="actions">
+          <button
+            class="btn btn-primary"
+            onclick={replanCards}
+            disabled={busy || !revisionGuidance.trim()}
+          >Replan Cards</button>
+          <button
+            class="btn"
+            onclick={reviseRequirements}
+            disabled={busy || !revisionGuidance.trim()}
+          >Revise requirements</button>
+          <button class="btn" onclick={cancelProposal} disabled={busy}>Cancel proposal</button>
+        </div>
+      </div>
     {:else}
       <button
         class="btn btn-primary"
@@ -155,5 +282,7 @@ function hasRejected() {
   .btn:disabled { cursor: default; opacity: 0.5; }
   .btn-primary, .selected { background: var(--accent); border-color: var(--accent); color: #1b1601; }
   .proposal-footer { color: var(--muted); font-size: 0.6875rem; }
+  .revision-choice { display: flex; flex: 1; flex-direction: column; gap: 0.5rem; }
+  textarea { background: var(--bg); border: 1px solid var(--border); border-radius: 5px; color: var(--text); font: inherit; padding: 0.5rem; resize: vertical; }
   .error { color: #dc3c3c; font-size: 0.75rem; }
 </style>

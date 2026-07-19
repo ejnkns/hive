@@ -1,4 +1,4 @@
-/** @private — only imported by devise-engine.ts */
+/** @private — shared model transport for Queen Bee agents */
 
 import type { PassThrough, Readable } from "node:stream";
 
@@ -6,21 +6,21 @@ import type { Message } from "shared/message";
 
 import { handleChatCompletion } from "../../proxy";
 import {
-  DEVISE_TOOLS,
+  AGENT_TOOLS,
   type ToolCall,
   type ToolDefinition,
 } from "./devise-tools";
 
-export type DeviseModelCaller = {
+export type AgentModelCaller = {
   call(
     messages: Message[],
     workspacePath: string,
     includeTools: boolean,
     signal?: AbortSignal
-  ): Promise<DeviseModelResponse>;
+  ): Promise<AgentModelResponse>;
 };
 
-export type DeviseModelResponse = {
+export type AgentModelResponse = {
   content: string;
   toolCalls: ToolCall[];
   finishReason: string;
@@ -28,10 +28,10 @@ export type DeviseModelResponse = {
   reasoning?: string;
 };
 
-export function createDeviseModelCaller(
+export function createAgentModelCaller(
   tools?: ToolDefinition[]
-): DeviseModelCaller {
-  const activeTools = tools ?? DEVISE_TOOLS;
+): AgentModelCaller {
+  const activeTools = tools ?? AGENT_TOOLS;
 
   return {
     async call(messages, workspacePath, includeTools, signal) {
@@ -59,7 +59,7 @@ async function consumeStream(
   stream: Readable | PassThrough,
   _workspacePath: string,
   signal?: AbortSignal
-): Promise<DeviseModelResponse> {
+): Promise<AgentModelResponse> {
   let content = "";
   let reasoningContent = "";
   let reasoning = "";
@@ -74,7 +74,7 @@ async function consumeStream(
   };
   const toolCalls = new Map<number, ToolAccumulator>();
 
-  return new Promise<DeviseModelResponse>((resolve, reject) => {
+  return new Promise<AgentModelResponse>((resolve, reject) => {
     function abort(): void {
       stream.destroy(new Error("Model call cancelled"));
       reject(signal?.reason ?? new Error("Model call cancelled"));

@@ -16,6 +16,7 @@ export function saveCard(repoPath: string, card: Card): void {
     dependencies: card.dependencies,
     createdAt: card.createdAt,
     requirementRefs: card.requirementRefs,
+    originIdeaIds: card.originIdeaIds,
   };
 
   writeFileSync(cardPath, JSON.stringify(data, null, 2), "utf-8");

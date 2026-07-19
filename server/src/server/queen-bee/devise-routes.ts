@@ -3,26 +3,30 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
+import type { PlanningOutcome } from "shared/board-types";
 import type { BoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
-import type { DeviseEngine } from "./devise-engine";
-import type { Planner } from "./planner";
+import type { RequirementsSessionManager } from "./devise-engine";
+import type { PlanningManager } from "./planner";
+import { loadProjectContext } from "./project-context";
 import { readRequirements, requirementsRevision } from "./requirements-store";
 
-export function registerDeviseRoutes(
+export function registerRequirementsRoutes(
   server: FastifyInstance,
   deps: {
-    engine: DeviseEngine;
+    sessionManager: RequirementsSessionManager;
     projectStore: ProjectStore;
     boardStore: BoardStore;
-    planner: Planner;
+    planningManager: PlanningManager;
   }
 ): void {
+  // Fastify derives every `request.params` object below from its static route
+  // pattern; these casts bridge the untyped shared server instance.
   server.post(
-    "/api/queen-bee/:projectId/devise/redevise/start",
+    "/api/queen-bee/:projectId/requirements/revision/start",
     async (request, reply) => {
       const { projectId } = request.params as { projectId: string };
-      const body = request.body as { prompt?: string; confirmActive?: boolean };
+      const body = isRecord(request.body) ? request.body : {};
       if (!body.prompt || typeof body.prompt !== "string") {
         return reply.status(400).send({ error: "prompt is required" });
       }
@@ -47,11 +51,28 @@ export function registerDeviseRoutes(
       }
 
       try {
-        const result = await deps.engine.start(
+        const proposalId =
+          typeof body.proposalId === "string" ? body.proposalId : undefined;
+        if (proposalId) {
+          const proposal = deps.planningManager.getProposal(
+            projectId,
+            proposalId
+          );
+          if (proposal?.status !== "pending") {
+            return reply
+              .status(409)
+              .send({ error: "Replacement Planning Proposal is not pending" });
+          }
+        }
+        const result = await deps.sessionManager.startRevision(
           projectId,
-          `Re-devise the project requirements before regenerating the board. Preserve confirmed scope unless the user explicitly changes it.\n\nUser context: ${body.prompt}`,
-          project.repoPath
+          `Revise the project requirements before regenerating the board. Preserve confirmed scope unless the user explicitly changes it.\n\nUser context: ${body.prompt}`,
+          project.repoPath,
+          proposalId
         );
+        if (proposalId) {
+          deps.planningManager.cancelProposal(projectId, proposalId);
+        }
         return reply.send({
           question: result.question,
           draftRequirements: result.draftRequirements,
@@ -61,20 +82,222 @@ export function registerDeviseRoutes(
       } catch (err) {
         return reply.status(500).send({
           error:
-            err instanceof Error ? err.message : "Re-devise session failed",
+            err instanceof Error ? err.message : "Requirements Revision failed",
         });
       }
     }
   );
 
   server.post(
-    "/api/queen-bee/:projectId/cards/:cardId/devise/start",
+    "/api/queen-bee/:projectId/ideas/:ideaId/requirements/start",
+    async (request, reply) => {
+      const { projectId, ideaId } = request.params as {
+        projectId: string;
+        ideaId: string;
+      };
+      const project = deps.projectStore
+        .getAll()
+        .find((item) => item.id === projectId);
+      if (!project)
+        return reply.status(404).send({ error: "Project not found" });
+      const idea = deps.boardStore
+        .getBoard(projectId, project.repoPath)
+        .ideas.find((item) => item.id === ideaId);
+      if (!idea) return reply.status(404).send({ error: "Idea not found" });
+      const body = isRecord(request.body) ? request.body : {};
+      const prompt =
+        typeof body.prompt === "string" && body.prompt.trim()
+          ? body.prompt.trim()
+          : idea.brief;
+      try {
+        const result = await deps.sessionManager.startIdea(
+          projectId,
+          idea,
+          prompt,
+          project.repoPath
+        );
+        return reply.send({ ...result, projectId, ideaId });
+      } catch (error) {
+        return reply.status(409).send({
+          error:
+            error instanceof Error
+              ? error.message
+              : "Could not start Idea elaboration",
+        });
+      }
+    }
+  );
+
+  server.post(
+    "/api/queen-bee/:projectId/ideas/:ideaId/requirements/respond",
+    async (request, reply) => {
+      const { projectId, ideaId } = request.params as {
+        projectId: string;
+        ideaId: string;
+      };
+      const project = deps.projectStore
+        .getAll()
+        .find((item) => item.id === projectId);
+      if (!project)
+        return reply.status(404).send({ error: "Project not found" });
+      const body = isRecord(request.body) ? request.body : {};
+      if (typeof body.answer !== "string" || !body.answer.trim()) {
+        return reply.status(400).send({ error: "answer is required" });
+      }
+      try {
+        const result = await deps.sessionManager.respondIdea(
+          projectId,
+          ideaId,
+          body.answer.trim(),
+          project.repoPath
+        );
+        return reply.send({ ...result, complete: result.type === "complete" });
+      } catch (error) {
+        return reply.status(409).send({
+          error:
+            error instanceof Error ? error.message : "Idea elaboration failed",
+        });
+      }
+    }
+  );
+
+  server.post(
+    "/api/queen-bee/:projectId/ideas/:ideaId/requirements/approve",
+    async (request, reply) => {
+      const { projectId, ideaId } = request.params as {
+        projectId: string;
+        ideaId: string;
+      };
+      const project = deps.projectStore
+        .getAll()
+        .find((item) => item.id === projectId);
+      if (!project)
+        return reply.status(404).send({ error: "Project not found" });
+      const session = deps.sessionManager.getIdeaSession(projectId, ideaId);
+      const draft = approvedDraft(session, project.repoPath);
+      if (!draft.ok) return reply.status(409).send({ error: draft.error });
+      try {
+        const outcome = await deps.planningManager.propose(
+          projectId,
+          project.repoPath,
+          draft.content,
+          `Resolve Idea '${ideaId}' into one or more existing or new Cards.`,
+          { ideaId, target: "resolved" }
+        );
+        return reply.send({ approved: true, ...planningResponse(outcome) });
+      } catch (error) {
+        return reply.status(500).send({
+          error: error instanceof Error ? error.message : "Could not plan Idea",
+        });
+      }
+    }
+  );
+
+  server.post(
+    "/api/queen-bee/:projectId/requirements-feedback/:feedbackId/repair/start",
+    async (request, reply) => {
+      const { projectId, feedbackId } = request.params as {
+        projectId: string;
+        feedbackId: string;
+      };
+      const project = deps.projectStore
+        .getAll()
+        .find((item) => item.id === projectId);
+      if (!project)
+        return reply.status(404).send({ error: "Project not found" });
+      const feedback = deps.planningManager.getRequirementsFeedback(
+        projectId,
+        feedbackId
+      );
+      if (!feedback) {
+        return reply
+          .status(404)
+          .send({ error: "Requirements Feedback not found" });
+      }
+      if (
+        requirementsRevision(readRequirements(project.repoPath)) !==
+        feedback.baseRequirementsRevision
+      ) {
+        return reply.status(409).send({
+          error:
+            "Canonical requirements changed after this feedback was created; restart planning from the current requirements",
+        });
+      }
+      if (feedback.projectRevision !== null) {
+        try {
+          if (
+            loadProjectContext(projectId, project.repoPath).revision !==
+            feedback.projectRevision
+          ) {
+            return reply.status(409).send({
+              error:
+                "Project revision changed after this feedback was created; restart planning",
+            });
+          }
+        } catch {
+          return reply
+            .status(409)
+            .send({ error: "Could not verify the Project revision" });
+        }
+      }
+      try {
+        const sourceIdea = feedback.sourceIdeaId
+          ? deps.boardStore
+              .getBoard(projectId, project.repoPath)
+              .ideas.find((idea) => idea.id === feedback.sourceIdeaId)
+          : undefined;
+        if (feedback.sourceIdeaId && !sourceIdea) {
+          return reply.status(409).send({
+            error: "Source Idea is no longer available; restart Idea planning",
+          });
+        }
+        const result = await deps.sessionManager.startRepair(
+          projectId,
+          feedback,
+          project.repoPath,
+          sourceIdea
+        );
+        return reply.send({ ...result, feedbackId });
+      } catch (error) {
+        return reply.status(409).send({
+          error:
+            error instanceof Error
+              ? error.message
+              : "Could not start Requirements Repair",
+        });
+      }
+    }
+  );
+
+  server.get(
+    "/api/queen-bee/:projectId/ideas/:ideaId/requirements/session",
+    async (request, reply) => {
+      const { projectId, ideaId } = request.params as {
+        projectId: string;
+        ideaId: string;
+      };
+      const session = deps.sessionManager.getIdeaSession(projectId, ideaId);
+      if (!session) return reply.send({ active: false });
+      return reply.send({
+        active: true,
+        status: session.status,
+        kind: session.kind,
+        question: session.messages
+          .filter((message) => message.role === "assistant")
+          .at(-1)?.content,
+        draftRequirements: session.draftRequirements,
+      });
+    }
+  );
+
+  server.post(
+    "/api/queen-bee/:projectId/cards/:cardId/requirements/start",
     async (request, reply) => {
       const { projectId, cardId } = request.params as {
         projectId: string;
         cardId: string;
       };
-      const body = request.body as { prompt?: string };
+      const body = isRecord(request.body) ? request.body : {};
       if (!body.prompt || typeof body.prompt !== "string") {
         return reply.status(400).send({ error: "prompt is required" });
       }
@@ -89,15 +312,13 @@ export function registerDeviseRoutes(
       if (!card) return reply.status(404).send({ error: "Card not found" });
 
       try {
-        const result = await deps.engine.startCard(
+        const result = await deps.sessionManager.startCard(
           projectId,
           cardId,
           [
-            "Refine this one card while keeping the project requirements document aligned.",
-            `Card title: ${card.title}`,
-            `Current card description: ${card.description}`,
-            `User context: ${body.prompt}`,
-            "When complete, output CARD_UPDATE followed by a json code fence containing description, acceptanceCriteria, relevantFiles, and requirementRefs for this card, then REQUIREMENTS_COMPLETE. Also call update_requirements_draft with the full aligned project requirements document.",
+            "Repair the project requirements using the user's card-scoped concern without inspecting Board or Card content.",
+            `User decision context: ${body.prompt}`,
+            "Update only the complete project Requirements Draft. The Planner Agent will independently propose any Card changes after user approval.",
           ].join("\n"),
           project.repoPath
         );
@@ -110,20 +331,22 @@ export function registerDeviseRoutes(
       } catch (err) {
         return reply.status(500).send({
           error:
-            err instanceof Error ? err.message : "Card devise session failed",
+            err instanceof Error
+              ? err.message
+              : "Card Requirements Session failed",
         });
       }
     }
   );
 
   server.post(
-    "/api/queen-bee/:projectId/cards/:cardId/devise/respond",
+    "/api/queen-bee/:projectId/cards/:cardId/requirements/respond",
     async (request, reply) => {
       const { projectId, cardId } = request.params as {
         projectId: string;
         cardId: string;
       };
-      const body = request.body as { answer?: string };
+      const body = isRecord(request.body) ? request.body : {};
       if (!body.answer || typeof body.answer !== "string") {
         return reply.status(400).send({ error: "answer is required" });
       }
@@ -134,7 +357,7 @@ export function registerDeviseRoutes(
         return reply.status(404).send({ error: "Project not found" });
 
       try {
-        const result = await deps.engine.respondCard(
+        const result = await deps.sessionManager.respondCard(
           projectId,
           cardId,
           body.answer,
@@ -147,17 +370,10 @@ export function registerDeviseRoutes(
                 "Card devise completed without an aligned requirements draft",
             });
           }
-          const patch = parseCardPatch(result.spec);
-          if (!patch) {
-            return reply.status(422).send({
-              error: "Card devise completed without a structured card update",
-            });
-          }
           return reply.send({
             complete: true,
             spec: result.spec,
             draftRequirements: result.draftRequirements,
-            cardProposal: patch,
             projectId,
             cardId,
           });
@@ -171,17 +387,19 @@ export function registerDeviseRoutes(
       } catch (err) {
         return reply.status(500).send({
           error:
-            err instanceof Error ? err.message : "Card devise response failed",
+            err instanceof Error
+              ? err.message
+              : "Card Requirements Session response failed",
         });
       }
     }
   );
 
   server.post(
-    "/api/queen-bee/:projectId/devise/start",
+    "/api/queen-bee/:projectId/requirements/start",
     async (request, reply) => {
       const { projectId } = request.params as { projectId: string };
-      const body = request.body as { prompt?: string };
+      const body = isRecord(request.body) ? request.body : {};
 
       if (!body.prompt || typeof body.prompt !== "string") {
         return reply.status(400).send({ error: "prompt is required" });
@@ -195,7 +413,7 @@ export function registerDeviseRoutes(
       }
 
       try {
-        const result = await deps.engine.start(
+        const result = await deps.sessionManager.start(
           projectId,
           body.prompt,
           project.repoPath
@@ -207,17 +425,18 @@ export function registerDeviseRoutes(
         });
       } catch (err) {
         return reply.status(500).send({
-          error: err instanceof Error ? err.message : "Devise session failed",
+          error:
+            err instanceof Error ? err.message : "Requirements Session failed",
         });
       }
     }
   );
 
   server.post(
-    "/api/queen-bee/:projectId/devise/respond",
+    "/api/queen-bee/:projectId/requirements/respond",
     async (request, reply) => {
       const { projectId } = request.params as { projectId: string };
-      const body = request.body as { answer?: string };
+      const body = isRecord(request.body) ? request.body : {};
 
       if (!body.answer || typeof body.answer !== "string") {
         return reply.status(400).send({ error: "answer is required" });
@@ -231,7 +450,7 @@ export function registerDeviseRoutes(
       }
 
       try {
-        const result = await deps.engine.respond(
+        const result = await deps.sessionManager.respond(
           projectId,
           body.answer,
           project.repoPath
@@ -253,14 +472,17 @@ export function registerDeviseRoutes(
         });
       } catch (err) {
         return reply.status(500).send({
-          error: err instanceof Error ? err.message : "Devise response failed",
+          error:
+            err instanceof Error
+              ? err.message
+              : "Requirements Session response failed",
         });
       }
     }
   );
 
   server.post(
-    "/api/queen-bee/:projectId/devise/approve",
+    "/api/queen-bee/:projectId/requirements/approve",
     async (request, reply) => {
       const { projectId } = request.params as { projectId: string };
       const project = deps.projectStore
@@ -269,20 +491,27 @@ export function registerDeviseRoutes(
       if (!project) {
         return reply.status(404).send({ error: "Project not found" });
       }
-      const draft = approvedDraft(
-        deps.engine.getSession(projectId),
-        project.repoPath
-      );
+      const session = deps.sessionManager.getSession(projectId);
+      const draft = approvedDraft(session, project.repoPath);
       if (!draft.ok) return reply.status(409).send({ error: draft.error });
 
       try {
-        const proposal = await deps.planner.propose(
+        const outcome = await deps.planningManager.propose(
           projectId,
           project.repoPath,
           draft.content,
-          "The user explicitly approved this Devise Agent requirements draft. Reconcile every card before anything becomes canonical."
+          "The user explicitly approved this Requirements Agent draft. Reconcile every Card before anything becomes canonical.",
+          session?.sourceIdeaId
+            ? { ideaId: session.sourceIdeaId, target: "resolved" }
+            : undefined
         );
-        return reply.send({ approved: true, proposal });
+        if (session?.sourceFeedbackId) {
+          deps.planningManager.resolveRequirementsFeedback(
+            projectId,
+            session.sourceFeedbackId
+          );
+        }
+        return reply.send({ approved: true, ...planningResponse(outcome) });
       } catch (error) {
         return reply.status(500).send({
           error:
@@ -295,7 +524,7 @@ export function registerDeviseRoutes(
   );
 
   server.post(
-    "/api/queen-bee/:projectId/cards/:cardId/devise/approve",
+    "/api/queen-bee/:projectId/cards/:cardId/requirements/approve",
     async (request, reply) => {
       const { projectId, cardId } = request.params as {
         projectId: string;
@@ -307,28 +536,23 @@ export function registerDeviseRoutes(
       if (!project) {
         return reply.status(404).send({ error: "Project not found" });
       }
-      const session = deps.engine.getCardSession(projectId, cardId);
+      const session = deps.sessionManager.getCardSession(projectId, cardId);
       const draft = approvedDraft(session, project.repoPath);
       if (!draft.ok) return reply.status(409).send({ error: draft.error });
-      const patch = parseCardPatch(session?.messages.at(-1)?.content ?? "");
-      if (!patch) {
-        return reply.status(409).send({ error: "Card proposal is missing" });
-      }
 
       try {
-        const proposal = await deps.planner.propose(
+        const outcome = await deps.planningManager.propose(
           projectId,
           project.repoPath,
           draft.content,
           [
             `The user approved a refinement of card '${cardId}'.`,
-            "Use this exact approved card patch when reconciling that card:",
-            JSON.stringify(patch, null, 2),
-            "Reconcile every other card against the project-wide requirements draft. The selected card must remain provisional until the planning proposal is accepted.",
+            "Independently propose the complete Card Specification from the approved Requirements Draft and Project Context.",
+            "Reconcile every other Card without using Requirements Agent conversation history.",
           ].join("\n"),
           { cardId, target: "ready" }
         );
-        return reply.send({ proposal, approved: true });
+        return reply.send({ approved: true, ...planningResponse(outcome) });
       } catch (error) {
         return reply.status(500).send({
           error:
@@ -341,7 +565,7 @@ export function registerDeviseRoutes(
   );
 
   server.get(
-    "/api/queen-bee/:projectId/devise/status",
+    "/api/queen-bee/:projectId/requirements/status",
     async (request, reply) => {
       const { projectId } = request.params as { projectId: string };
 
@@ -391,10 +615,10 @@ export function registerDeviseRoutes(
   );
 
   server.get(
-    "/api/queen-bee/:projectId/devise/session",
+    "/api/queen-bee/:projectId/requirements/session",
     async (request, reply) => {
       const { projectId } = request.params as { projectId: string };
-      const session = deps.engine.getSession(projectId);
+      const session = deps.sessionManager.getSession(projectId);
 
       if (!session) {
         return reply.send({ active: false });
@@ -412,7 +636,11 @@ export function registerDeviseRoutes(
         status: session.status,
         draftRequirements: session.draftRequirements,
         baseRequirementsRevision: session.baseRequirementsRevision,
+        projectRevision: session.projectRevision,
+        kind: session.kind,
         cardId: session.cardId,
+        ideaId: session.ideaId,
+        sourceIdeaId: session.sourceIdeaId,
         messages: clientMessages,
       });
     }
@@ -420,11 +648,14 @@ export function registerDeviseRoutes(
 }
 
 function approvedDraft(
-  session: ReturnType<DeviseEngine["getSession"]>,
+  session: ReturnType<RequirementsSessionManager["getSession"]>,
   repoPath: string
 ): { ok: true; content: string } | { ok: false; error: string } {
   if (session?.status !== "complete" || !session.draftRequirements) {
-    return { ok: false, error: "Devise session has no completed draft" };
+    return {
+      ok: false,
+      error: "Requirements Session has no completed draft",
+    };
   }
   if (
     requirementsRevision(readRequirements(repoPath)) !==
@@ -433,45 +664,32 @@ function approvedDraft(
     return {
       ok: false,
       error:
-        "Canonical requirements changed after this Devise session started; start a new revision",
+        "Canonical requirements changed after this Requirements Session started; start a new revision",
     };
+  }
+  if (session.projectRevision !== null) {
+    try {
+      if (
+        loadProjectContext(session.projectId, repoPath).revision !==
+        session.projectRevision
+      ) {
+        return {
+          ok: false,
+          error:
+            "Project revision changed after this Requirements Session started; start a fresh session",
+        };
+      }
+    } catch {
+      return { ok: false, error: "Could not verify the Project revision" };
+    }
   }
   return { ok: true, content: session.draftRequirements };
 }
 
-function parseCardPatch(content: string): {
-  description?: string;
-  acceptanceCriteria?: string[];
-  relevantFiles?: string[];
-  requirementRefs?: string[];
-} | null {
-  const match = content.match(/CARD_UPDATE\s*```json\s*([\s\S]*?)```/i);
-  if (!match) return null;
-  try {
-    const value = JSON.parse(match[1]) as Record<string, unknown>;
-    const patch = {
-      description:
-        typeof value.description === "string" ? value.description : undefined,
-      acceptanceCriteria: Array.isArray(value.acceptanceCriteria)
-        ? value.acceptanceCriteria.filter(
-            (item): item is string => typeof item === "string"
-          )
-        : undefined,
-      relevantFiles: Array.isArray(value.relevantFiles)
-        ? value.relevantFiles.filter(
-            (item): item is string => typeof item === "string"
-          )
-        : undefined,
-      requirementRefs: Array.isArray(value.requirementRefs)
-        ? value.requirementRefs.filter(
-            (item): item is string => typeof item === "string"
-          )
-        : undefined,
-    };
-    return Object.values(patch).some((value) => value !== undefined)
-      ? patch
-      : null;
-  } catch {
-    return null;
-  }
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function planningResponse(outcome: PlanningOutcome) {
+  return "kind" in outcome ? { feedback: outcome } : { proposal: outcome };
 }

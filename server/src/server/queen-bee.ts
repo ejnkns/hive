@@ -8,14 +8,14 @@ export { createCoordinator } from "./queen-bee/coordinator";
 export { registerCoordinatorRoutes } from "./queen-bee/coordinator-routes";
 export type { Project, ProjectStore } from "./queen-bee/create-project-store";
 export { createProjectStore } from "./queen-bee/create-project-store";
-export type { DeviseEngine } from "./queen-bee/devise-engine";
-export { createDeviseEngine } from "./queen-bee/devise-engine";
-export { registerDeviseRoutes } from "./queen-bee/devise-routes";
+export type { RequirementsSessionManager } from "./queen-bee/devise-engine";
+export { createRequirementsSessionManager } from "./queen-bee/devise-engine";
+export { registerRequirementsRoutes } from "./queen-bee/devise-routes";
 export type { IntegrationManager } from "./queen-bee/integration-manager";
 export { createIntegrationManager } from "./queen-bee/integration-manager";
 export { registerIntegrationRoutes } from "./queen-bee/integration-routes";
-export type { Planner } from "./queen-bee/planner";
-export { createPlanner } from "./queen-bee/planner";
+export type { PlanningManager } from "./queen-bee/planner";
+export { createPlanningManager } from "./queen-bee/planner";
 export { registerProjectRoutes } from "./queen-bee/project-routes";
 export type {
   CardActivityEvent,

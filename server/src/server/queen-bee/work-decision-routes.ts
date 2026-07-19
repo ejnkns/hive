@@ -9,6 +9,7 @@ import type { QueenBeeRuntimeStore } from "./queen-bee-runtime-store";
 import {
   acquireReviewWorkspace,
   buildRefreshedReviewPackage,
+  releaseReviewReference,
 } from "./review-package";
 import type { Reviewer } from "./reviewer";
 
@@ -60,7 +61,7 @@ export function registerWorkDecisionRoutes(
     async (request, reply) => {
       const context = findReviewedCard(request.params, reply, deps);
       if (!context) return;
-      const { projectId, project, card } = context;
+      const { projectId, project, card, attempt } = context;
       const input = reviewedWorkInput(context);
       if (!input) {
         return reply.status(409).send({
@@ -69,7 +70,16 @@ export function registerWorkDecisionRoutes(
       }
 
       try {
+        const reviewPackage = attempt.reviewPackageId
+          ? deps.runtimeStore.getReviewPackage(
+              projectId,
+              attempt.reviewPackageId
+            )
+          : null;
         const integration = deps.integrationManager.accept(input);
+        if (reviewPackage) {
+          tryReleaseReviewReference(project.repoPath, reviewPackage);
+        }
         const decidedAt = new Date().toISOString();
         const updated = deps.boardStore.updateCard(
           projectId,
@@ -116,10 +126,19 @@ export function registerWorkDecisionRoutes(
       }
 
       try {
+        const reviewPackage = attempt.reviewPackageId
+          ? deps.runtimeStore.getReviewPackage(
+              projectId,
+              attempt.reviewPackageId
+            )
+          : null;
         deps.integrationManager.discardWorktree(
           project.repoPath,
           attempt.worktreePath
         );
+        if (reviewPackage) {
+          tryReleaseReviewReference(project.repoPath, reviewPackage);
+        }
         const decidedAt = new Date().toISOString();
         const updated = deps.boardStore.updateCard(
           projectId,
@@ -196,6 +215,7 @@ export function registerWorkDecisionRoutes(
           reviewPackage = refreshed.reviewPackage;
           reviewWorkspace = refreshed.workspace;
           deps.runtimeStore.saveReviewPackage(projectId, reviewPackage);
+          tryReleaseReviewReference(project.repoPath, previousPackage);
         } else if (readiness.state !== "current") {
           return reply.status(409).send({
             error: readiness.message,
@@ -259,6 +279,13 @@ export function registerWorkDecisionRoutes(
             reviewPackageId: reviewPackage.id,
             reviewedAt: new Date().toISOString(),
           },
+          workAttempts: updateAttempt(card, {
+            status: "review_error",
+            reviewedHead: reviewPackage.revisions.headCommit,
+            reviewedIntegrationRevision:
+              reviewPackage.revisions.integrationCommit,
+            reviewPackageId: reviewPackage.id,
+          }),
         });
         deps.runtimeStore.appendActivity(projectId, card.id, {
           actor: "reviewer",
@@ -381,4 +408,15 @@ function reviewedWorkInput(
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Work decision failed";
+}
+
+function tryReleaseReviewReference(
+  repoPath: string,
+  reviewPackage: Parameters<typeof releaseReviewReference>[1]
+): void {
+  try {
+    releaseReviewReference(repoPath, reviewPackage);
+  } catch {
+    // The completed decision is authoritative; stale hidden refs are safe to prune later.
+  }
 }

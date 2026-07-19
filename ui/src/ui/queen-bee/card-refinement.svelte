@@ -1,6 +1,10 @@
 <script lang="ts">
 import { onMount } from "svelte";
-import type { Card, PlanningProposal } from "shared/board-types";
+import type {
+  Card,
+  PlanningProposal,
+  RequirementsFeedback,
+} from "shared/board-types";
 import { parsePlanningProposalResponse } from "./parse-planning-proposal-response";
 
 let {
@@ -9,6 +13,7 @@ let {
   initialQuestion,
   onCardUpdated,
   onPlanningProposal,
+  onRequirementsFeedback,
   onCancel,
 }: Props = $props();
 
@@ -18,6 +23,7 @@ type Props = {
   initialQuestion?: string | null;
   onCardUpdated: (card: Card) => void;
   onPlanningProposal?: (proposal: PlanningProposal) => void;
+  onRequirementsFeedback?: (feedback: RequirementsFeedback) => void;
   onCancel: () => void;
 };
 
@@ -47,7 +53,7 @@ async function startRefinement() {
   error = null;
   try {
     const response = await fetch(
-      `/api/queen-bee/${projectId}/cards/${card.id}/devise/start`,
+      `/api/queen-bee/${projectId}/cards/${card.id}/requirements/start`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -82,7 +88,7 @@ async function respond() {
   error = null;
   try {
     const response = await fetch(
-      `/api/queen-bee/${projectId}/cards/${card.id}/devise/respond`,
+      `/api/queen-bee/${projectId}/cards/${card.id}/requirements/respond`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -92,7 +98,6 @@ async function respond() {
     const result = (await response.json()) as {
       question?: string;
       complete?: boolean;
-      cardProposal?: Partial<Card>;
       draftRequirements?: string;
       error?: string;
     };
@@ -101,7 +106,7 @@ async function respond() {
     }
     draftRequirements = result.draftRequirements ?? draftRequirements;
     input = "";
-    if (result.complete && result.cardProposal) {
+    if (result.complete) {
       stage = "confirmation";
       return;
     }
@@ -122,12 +127,17 @@ async function confirmReady() {
   error = null;
   try {
     const response = await fetch(
-      `/api/queen-bee/${projectId}/cards/${card.id}/devise/approve`,
+      `/api/queen-bee/${projectId}/cards/${card.id}/requirements/approve`,
       {
         method: "POST",
       }
     );
     const result = parsePlanningProposalResponse(await response.json());
+    if (result.feedback) {
+      onRequirementsFeedback?.(result.feedback);
+      onCancel();
+      return;
+    }
     if (!response.ok || !result.proposal) {
       throw new Error(result.error ?? "Could not reconcile card refinement");
     }
@@ -162,7 +172,8 @@ function cardDraftContent(
   project: string,
   selectedCard: string
 ): string | null {
-  if (!isRecord(value) || value.type !== "devise_draft_updated") return null;
+  if (!isRecord(value) || value.type !== "requirements_draft_updated")
+    return null;
   const data = value.data;
   if (
     !isRecord(data) ||
@@ -269,6 +280,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     color: var(--text);
     font-size: 0.75rem;
     line-height: 1.5;
+  }
+
+  .prompt,
+  .confirmation {
+    white-space: normal;
+  }
+
+  .question {
+    overflow-wrap: anywhere;
     white-space: pre-wrap;
   }
 
@@ -335,6 +355,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
   .actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.375rem;
   }
 
@@ -346,6 +367,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     cursor: pointer;
     font-size: 0.6875rem;
     padding: 0.375rem 0.625rem;
+    white-space: nowrap;
   }
 
   .btn:hover:not(:disabled) {

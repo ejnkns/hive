@@ -14,8 +14,8 @@ import { afterEach, describe, it } from "node:test";
 import { createBoardStore } from "./board-store";
 import type { Coordinator } from "./coordinator";
 import type {
-  DeviseModelCaller,
-  DeviseModelResponse,
+  AgentModelCaller,
+  AgentModelResponse,
 } from "./devise-engine/create-devise-model-caller";
 import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
 import type { Reviewer } from "./reviewer";
@@ -47,7 +47,7 @@ describe("WorkerSupervisor", () => {
     let callCount = 0;
     let completionCorrection = "";
     let reviewerCalls = 0;
-    const modelCaller: DeviseModelCaller = {
+    const modelCaller: AgentModelCaller = {
       async call(messages) {
         callCount += 1;
         if (callCount === 1) {
@@ -120,7 +120,7 @@ describe("WorkerSupervisor", () => {
       column: "ready",
     });
     let callCount = 0;
-    const modelCaller: DeviseModelCaller = {
+    const modelCaller: AgentModelCaller = {
       async call() {
         callCount += 1;
         if (callCount === 1) {
@@ -193,7 +193,7 @@ describe("WorkerSupervisor", () => {
       column: "ready",
     });
     let callCount = 0;
-    const modelCaller: DeviseModelCaller = {
+    const modelCaller: AgentModelCaller = {
       async call() {
         callCount += 1;
         if (callCount === 1) {
@@ -256,10 +256,10 @@ describe("WorkerSupervisor", () => {
     const modelCallStarted = new Promise<void>((resolve) => {
       enteredModelCall = resolve;
     });
-    const modelCaller: DeviseModelCaller = {
+    const modelCaller: AgentModelCaller = {
       call(_messages, _workspacePath, _includeTools, signal) {
         enteredModelCall?.();
-        return new Promise<DeviseModelResponse>((_resolve, reject) => {
+        return new Promise<AgentModelResponse>((_resolve, reject) => {
           signal?.addEventListener(
             "abort",
             () => reject(signal.reason ?? new Error("cancelled")),
@@ -307,8 +307,8 @@ describe("WorkerSupervisor", () => {
     let callCount = 0;
     let receivedToolContent: string | undefined;
 
-    const modelCaller: DeviseModelCaller = {
-      async call(messages): Promise<DeviseModelResponse> {
+    const modelCaller: AgentModelCaller = {
+      async call(messages): Promise<AgentModelResponse> {
         callCount += 1;
         if (callCount === 1) {
           return {
@@ -388,7 +388,7 @@ describe("WorkerSupervisor", () => {
     writeFileSync(join(worktreePath, "source.txt"), "interrupted change\n");
     let observedSource = "";
     let callCount = 0;
-    const modelCaller: DeviseModelCaller = {
+    const modelCaller: AgentModelCaller = {
       async call(_messages, workspacePath) {
         callCount += 1;
         if (callCount === 1) {
@@ -443,7 +443,7 @@ describe("WorkerSupervisor", () => {
     const originalHead = git(repoPath, ["rev-parse", `qb/${card.id}`]);
     let modelCallCount = 0;
     let observedWorkspace = "";
-    const modelCaller: DeviseModelCaller = {
+    const modelCaller: AgentModelCaller = {
       async call(_messages, workspacePath) {
         modelCallCount += 1;
         observedWorkspace ||= workspacePath;
@@ -565,7 +565,7 @@ describe("WorkerSupervisor", () => {
       interruptSecondCall = reject;
     });
     let callCount = 0;
-    const modelCaller: DeviseModelCaller = {
+    const modelCaller: AgentModelCaller = {
       async call() {
         callCount += 1;
         if (callCount === 1) {
@@ -713,7 +713,7 @@ describe("WorkerSupervisor", () => {
     };
   }
 
-  function terminalResponse(content: string): DeviseModelResponse {
+  function terminalResponse(content: string): AgentModelResponse {
     return { content, toolCalls: [], finishReason: "stop" };
   }
 
@@ -721,7 +721,7 @@ describe("WorkerSupervisor", () => {
     id: string,
     name: string,
     args: object
-  ): DeviseModelResponse {
+  ): AgentModelResponse {
     return {
       content: "",
       toolCalls: [{ id, name, arguments: JSON.stringify(args) }],

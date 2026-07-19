@@ -3,20 +3,24 @@
 import { createHash, randomUUID } from "node:crypto";
 import type {
   CardSpecification,
+  Idea,
   PlanningChange,
+  PlanningOutcome,
   PlanningProposal,
+  PlanningRunKind,
+  RequirementsFeedback,
 } from "shared/board-types";
 import { generateId } from "shared/generate-id";
 import type { Message } from "shared/message";
-import type { BoardStore, Card } from "./board-store";
+import type { Board, BoardStore, Card } from "./board-store";
 import {
-  createDeviseModelCaller,
-  type DeviseModelCaller,
+  type AgentModelCaller,
+  createAgentModelCaller,
 } from "./devise-engine/create-devise-model-caller";
-import { DEVISE_TOOLS, executeDeviseTool } from "./devise-engine/devise-tools";
+import { AGENT_TOOLS, executeAgentTool } from "./devise-engine/devise-tools";
 import type { IntegrationManager } from "./integration-manager";
 import { PLAN_SYSTEM_PROMPT } from "./planner/plan-system-prompt";
-import { loadProjectContext } from "./project-context";
+import { loadProjectContext, type ProjectContext } from "./project-context";
 import type { QueenBeeRuntimeStore } from "./queen-bee-runtime-store";
 import {
   readRequirements,
@@ -24,14 +28,14 @@ import {
   writeRequirements,
 } from "./requirements-store";
 
-export type Planner = {
+export type PlanningManager = {
   propose(
     projectId: string,
     repoPath: string,
     proposedRequirements: string,
     guidance?: string,
     disposition?: PlanningDisposition
-  ): Promise<PlanningProposal>;
+  ): Promise<PlanningOutcome>;
   decide(
     projectId: string,
     proposalId: string,
@@ -41,19 +45,38 @@ export type Planner = {
   acceptAll(projectId: string, repoPath: string, proposalId: string): Card[];
   apply(projectId: string, repoPath: string, proposalId: string): Card[];
   getProposal(projectId: string, proposalId: string): PlanningProposal | null;
+  getRequirementsFeedback(
+    projectId: string,
+    feedbackId: string
+  ): RequirementsFeedback | null;
+  getOpenOutcome(projectId: string): PlanningOutcome | null;
+  resolveRequirementsFeedback(
+    projectId: string,
+    feedbackId: string
+  ): RequirementsFeedback;
+  cancelProposal(projectId: string, proposalId: string): PlanningProposal;
 };
 
-export type PlanningDisposition = {
-  cardId: string;
-  target: "ready" | "archived";
-};
+export type PlanningDisposition =
+  | {
+      cardId: string;
+      target: "ready" | "archived";
+    }
+  | {
+      ideaId: string;
+      target: "resolved";
+    }
+  | {
+      proposalId: string;
+      target: "replanned";
+    };
 
-export function createPlanner(
+export function createPlanningManager(
   boardStore: BoardStore,
   runtimeStore: QueenBeeRuntimeStore,
   integrationManager: IntegrationManager,
-  modelCaller: DeviseModelCaller = createDeviseModelCaller(PLANNER_TOOLS)
-): Planner {
+  modelCaller: AgentModelCaller = createAgentModelCaller(PLANNER_TOOLS)
+): PlanningManager {
   return {
     async propose(
       projectId,
@@ -62,23 +85,86 @@ export function createPlanner(
       guidance,
       disposition
     ) {
-      const currentCards = boardStore.getBoard(projectId, repoPath).cards;
+      const currentBoard = boardStore.getBoard(projectId, repoPath);
+      const currentCards = currentBoard.cards;
       const sharedContext = projectContext(projectId, repoPath);
+      const currentRequirements = readRequirements(repoPath);
+      const previousProposal =
+        disposition && "proposalId" in disposition
+          ? requireProposal(runtimeStore, projectId, disposition.proposalId)
+          : undefined;
+      if (
+        previousProposal?.status !== undefined &&
+        previousProposal.status !== "pending"
+      ) {
+        throw new Error("Only a pending Planning Proposal can be replanned");
+      }
+      const runKind = planningRunKind(currentBoard, disposition);
       const messages: Message[] = [
         { role: "system", content: PLAN_SYSTEM_PROMPT },
         {
           role: "user",
           content: buildProposalPrompt(
             proposedRequirements,
+            currentRequirements,
             currentCards,
+            currentBoard.ideas,
             sharedContext,
-            guidance
+            guidance,
+            disposition,
+            previousProposal
           ),
         },
       ];
-      const result = await callWithToolLoop(modelCaller, messages, repoPath);
+      const result = await callWithToolLoop(
+        modelCaller,
+        messages,
+        repoPath,
+        "revision" in sharedContext ? sharedContext.revision : undefined
+      );
+      const feedbackIssues = parseRequirementsFeedback(result);
+      if (feedbackIssues) {
+        const feedback: RequirementsFeedback = {
+          kind: "requirements_feedback",
+          id: randomUUID(),
+          projectId,
+          status: "pending",
+          projectRevision:
+            "revision" in sharedContext ? sharedContext.revision : null,
+          baseRequirementsRevision: requirementsRevision(currentRequirements),
+          baseBoardRevision: boardRevision(currentBoard),
+          proposedRequirements,
+          ...(disposition && "ideaId" in disposition
+            ? { sourceIdeaId: disposition.ideaId }
+            : previousProposal?.sourceIdeaId
+              ? { sourceIdeaId: previousProposal.sourceIdeaId }
+              : {}),
+          issues: feedbackIssues,
+          createdAt: new Date().toISOString(),
+        };
+        runtimeStore.saveRequirementsFeedback(feedback);
+        return feedback;
+      }
       const changes = parseChanges(result, currentCards);
-      if (disposition) markCardDisposition(changes, disposition);
+      if (
+        runKind === "initial_planning" &&
+        !changes.some((change) => change.action === "create")
+      ) {
+        throw new Error("Initial planning must create at least one Ready Card");
+      }
+      if (disposition && "cardId" in disposition) {
+        markCardDisposition(changes, disposition);
+      }
+      const sourceIdeaId =
+        disposition && "ideaId" in disposition
+          ? disposition.ideaId
+          : previousProposal?.sourceIdeaId;
+      if (sourceIdeaId) {
+        if (!currentBoard.ideas.some((idea) => idea.id === sourceIdeaId)) {
+          throw new Error(`Source Idea not found: ${sourceIdeaId}`);
+        }
+        markIdeaResolution(changes, sourceIdeaId, currentCards);
+      }
       const proposal: PlanningProposal = {
         id: randomUUID(),
         projectId,
@@ -86,7 +172,11 @@ export function createPlanner(
         baseRequirementsRevision: requirementsRevision(
           readRequirements(repoPath)
         ),
-        baseBoardRevision: boardRevision(currentCards),
+        baseBoardRevision: boardRevision(currentBoard),
+        projectRevision:
+          "revision" in sharedContext ? sharedContext.revision : null,
+        runKind,
+        ...(sourceIdeaId ? { sourceIdeaId } : {}),
         proposedRequirements,
         changes,
         createdAt: new Date().toISOString(),
@@ -102,7 +192,7 @@ export function createPlanner(
       }
       const change = proposal.changes.find((item) => item.id === changeId);
       if (!change) throw new Error(`Planning change not found: ${changeId}`);
-      if (change.action === "keep") {
+      if (change.action === "keep" && !change.resolvesSourceIdea) {
         throw new Error("Unchanged cards do not require a decision");
       }
       change.decision = decision;
@@ -138,17 +228,62 @@ export function createPlanner(
     getProposal(projectId, proposalId) {
       return runtimeStore.getPlanningProposal(projectId, proposalId);
     },
+
+    getRequirementsFeedback(projectId, feedbackId) {
+      return runtimeStore.getRequirementsFeedback(projectId, feedbackId);
+    },
+
+    getOpenOutcome(projectId) {
+      const outcomes: PlanningOutcome[] = [
+        ...runtimeStore
+          .getPlanningProposals(projectId)
+          .filter((proposal) => proposal.status === "pending"),
+        ...runtimeStore
+          .getRequirementsFeedbacks(projectId)
+          .filter((feedback) => feedback.status !== "resolved"),
+      ];
+      return (
+        outcomes
+          .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+          .at(-1) ?? null
+      );
+    },
+
+    resolveRequirementsFeedback(projectId, feedbackId) {
+      const feedback = runtimeStore.getRequirementsFeedback(
+        projectId,
+        feedbackId
+      );
+      if (!feedback) {
+        throw new Error(`Requirements Feedback not found: ${feedbackId}`);
+      }
+      feedback.status = "resolved";
+      feedback.resolvedAt = new Date().toISOString();
+      runtimeStore.saveRequirementsFeedback(feedback);
+      return feedback;
+    },
+
+    cancelProposal(projectId, proposalId) {
+      const proposal = requireProposal(runtimeStore, projectId, proposalId);
+      if (proposal.status !== "pending") {
+        throw new Error("Only a pending Planning Proposal can be cancelled");
+      }
+      proposal.status = "cancelled";
+      runtimeStore.savePlanningProposal(proposal);
+      return proposal;
+    },
   };
 }
 
-const PLANNER_TOOLS = DEVISE_TOOLS.filter((tool) =>
+const PLANNER_TOOLS = AGENT_TOOLS.filter((tool) =>
   ["list_directory", "read_file", "search_code"].includes(tool.function.name)
 );
 
 async function callWithToolLoop(
-  modelCaller: DeviseModelCaller,
+  modelCaller: AgentModelCaller,
   messages: Message[],
   workspacePath: string,
+  projectRevision?: string,
   maxToolRounds = 10
 ): Promise<string> {
   for (let round = 0; round < maxToolRounds; round++) {
@@ -156,7 +291,7 @@ async function callWithToolLoop(
     if (response.toolCalls.length === 0) return response.content;
 
     for (const toolCall of response.toolCalls) {
-      const result = executeDeviseTool(toolCall, workspacePath);
+      const result = executeAgentTool(toolCall, workspacePath, projectRevision);
       messages.push(
         {
           role: "assistant",
@@ -185,16 +320,32 @@ async function callWithToolLoop(
 
 function buildProposalPrompt(
   proposedRequirements: string,
+  currentRequirements: string,
   currentCards: Card[],
+  currentIdeas: Idea[],
   sharedContext: unknown,
-  guidance?: string
+  guidance?: string,
+  disposition?: PlanningDisposition,
+  previousProposal?: PlanningProposal
 ): string {
   return [
     "Reconcile every current card against the proposed project requirements.",
+    "Canonical requirements:",
+    currentRequirements || "(none)",
     "Proposed requirements:",
     proposedRequirements,
+    "Deterministic requirements diff:",
+    requirementsDiff(currentRequirements, proposedRequirements),
     "Current cards:",
     JSON.stringify(currentCards.map(cardContext), null, 2),
+    "Unresolved ideas:",
+    JSON.stringify(currentIdeas, null, 2),
+    disposition && "ideaId" in disposition
+      ? `Resolve source idea '${disposition.ideaId}'. Mark every change that represents it with resolvesSourceIdea: true. At least one existing or created Card must represent the Idea.`
+      : "",
+    previousProposal
+      ? `Rejected Planning Proposal artifact:\n${JSON.stringify(previousProposal, null, 2)}`
+      : "",
     "Shared Project Context:",
     JSON.stringify(sharedContext, null, 2),
     guidance ? `User guidance:\n${guidance}` : "",
@@ -203,7 +354,10 @@ function buildProposalPrompt(
     .join("\n\n");
 }
 
-function projectContext(projectId: string, repoPath: string): unknown {
+function projectContext(
+  projectId: string,
+  repoPath: string
+): ProjectContext | { unavailable: true } {
   try {
     return loadProjectContext(projectId, repoPath);
   } catch {
@@ -246,7 +400,110 @@ function parseChanges(content: string, currentCards: Card[]): PlanningChange[] {
       throw new Error(`Planner Agent did not reconcile card '${card.id}'`);
     }
   }
+  if (addressed.size !== changes.filter((change) => change.cardId).length) {
+    throw new Error("Planner Agent must reconcile every Card exactly once");
+  }
+  validateDependencyGraph(changes, currentCards);
   return changes;
+}
+
+function validateDependencyGraph(
+  changes: PlanningChange[],
+  currentCards: Card[]
+): void {
+  const currentById = new Map(currentCards.map((card) => [card.id, card]));
+  const graph = new Map<string, string[]>();
+  for (const change of changes) {
+    if (change.action === "remove") continue;
+    const nodeId = change.action === "create" ? change.id : change.cardId;
+    if (!nodeId) continue;
+    const dependencies =
+      change.proposedCard?.dependencies ??
+      (change.cardId
+        ? currentById.get(change.cardId)?.dependencies
+        : undefined) ??
+      [];
+    graph.set(nodeId, dependencies);
+  }
+
+  for (const [nodeId, dependencies] of graph) {
+    for (const dependencyId of dependencies) {
+      if (!graph.has(dependencyId)) {
+        throw new Error(
+          `Planning dependency '${dependencyId}' for '${nodeId}' does not reference an active Card or created change`
+        );
+      }
+    }
+  }
+
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  function visit(nodeId: string): void {
+    if (visiting.has(nodeId)) {
+      throw new Error("Planning dependencies must form a DAG");
+    }
+    if (visited.has(nodeId)) return;
+    visiting.add(nodeId);
+    for (const dependencyId of graph.get(nodeId) ?? []) visit(dependencyId);
+    visiting.delete(nodeId);
+    visited.add(nodeId);
+  }
+  for (const nodeId of graph.keys()) visit(nodeId);
+}
+
+function parseRequirementsFeedback(
+  content: string
+): RequirementsFeedback["issues"] | null {
+  const match = content.match(/```json\s*([\s\S]*?)```/);
+  if (!match) return null;
+  const parsed: unknown = JSON.parse(match[1]);
+  if (!isRecord(parsed) || !Array.isArray(parsed.requirementsFeedback)) {
+    return null;
+  }
+  if ("changes" in parsed) {
+    throw new Error(
+      "Planner Agent must return either Requirements Feedback or Card changes, not both"
+    );
+  }
+  if (parsed.requirementsFeedback.length === 0) {
+    throw new Error("Requirements Feedback must contain at least one issue");
+  }
+  return parsed.requirementsFeedback.map((value) => {
+    if (!isRecord(value)) {
+      throw new Error("Requirements Feedback issue must be an object");
+    }
+    const category = value.category;
+    if (!isFeedbackCategory(category)) {
+      throw new Error("Requirements Feedback category is invalid");
+    }
+    return {
+      requirementRefs: stringArray(value.requirementRefs ?? []),
+      category,
+      explanation: requiredString(value.explanation, "feedback explanation"),
+      evidence: stringArray(value.evidence ?? []),
+      decisionNeeded: requiredString(
+        value.decisionNeeded,
+        "feedback decisionNeeded"
+      ),
+      recommendation: requiredString(
+        value.recommendation,
+        "feedback recommendation"
+      ),
+    };
+  });
+}
+
+function isFeedbackCategory(
+  value: unknown
+): value is RequirementsFeedback["issues"][number]["category"] {
+  return [
+    "contradiction",
+    "missing_decision",
+    "unobservable_acceptance",
+    "constraint_conflict",
+    "scope_loss",
+    "insufficient_detail",
+  ].includes(String(value));
 }
 
 function parseChange(
@@ -279,6 +536,7 @@ function parseChange(
     action === "create" || action === "update"
       ? parseCardSpecification(value.proposedCard)
       : undefined;
+  const resolvesSourceIdea = value.resolvesSourceIdea === true;
   return {
     id: `change-${String(index)}`,
     action,
@@ -286,7 +544,8 @@ function parseChange(
     ...(proposedCard ? { proposedCard } : {}),
     rationale:
       typeof value.rationale === "string" ? value.rationale : "No rationale",
-    decision: action === "keep" ? "accepted" : "pending",
+    decision: action === "keep" && !resolvesSourceIdea ? "accepted" : "pending",
+    resolvesSourceIdea,
   };
 }
 
@@ -337,37 +596,79 @@ function applyProposal(
   ) {
     throw new Error("Canonical requirements changed after planning started");
   }
+  if (proposal.projectRevision !== null) {
+    let currentProjectRevision: string;
+    try {
+      currentProjectRevision = loadProjectContext(
+        proposal.projectId,
+        repoPath
+      ).revision;
+    } catch {
+      throw new Error("Could not verify the Project revision");
+    }
+    if (currentProjectRevision !== proposal.projectRevision) {
+      throw new Error("Project revision changed after planning started");
+    }
+  }
 
-  const currentCards = boardStore.getBoard(proposal.projectId, repoPath).cards;
-  if (boardRevision(currentCards) !== proposal.baseBoardRevision) {
+  const currentBoard = boardStore.getBoard(proposal.projectId, repoPath);
+  const currentCards = currentBoard.cards;
+  if (boardRevision(currentBoard) !== proposal.baseBoardRevision) {
     throw new Error("Board cards changed after planning started");
   }
   const currentRequirements = readRequirements(repoPath);
   const byId = new Map(currentCards.map((card) => [card.id, card]));
+  const createdCardIds = new Map(
+    proposal.changes
+      .filter((change) => change.action === "create")
+      .map((change) => [change.id, generateId()])
+  );
+  const resolveDependencies = (dependencies: string[]) =>
+    dependencies.map(
+      (dependencyId) => createdCardIds.get(dependencyId) ?? dependencyId
+    );
   const result: Card[] = [];
   for (const change of proposal.changes) {
     if (change.action === "create") {
       if (change.decision === "accepted" && change.proposedCard) {
-        result.push(newCard(change.proposedCard));
+        result.push(
+          newCard(
+            {
+              ...change.proposedCard,
+              dependencies: resolveDependencies(
+                change.proposedCard.dependencies
+              ),
+            },
+            createdCardIds.get(change.id) ?? generateId(),
+            change.resolvesSourceIdea ? proposal.sourceIdeaId : undefined
+          )
+        );
       }
       continue;
     }
     const current = change.cardId ? byId.get(change.cardId) : undefined;
     if (!current) continue;
     if (change.action === "keep") {
-      result.push(current);
+      result.push(withIdeaOrigin(current, change, proposal.sourceIdeaId));
     } else if (change.action === "update" && change.proposedCard) {
-      result.push({
-        ...current,
-        ...change.proposedCard,
-        ...(change.targetColumn === "ready"
-          ? {
-              column: change.targetColumn,
-              handover: undefined,
-              coordinatorLog: undefined,
-            }
-          : {}),
-      });
+      result.push(
+        withIdeaOrigin(
+          {
+            ...current,
+            ...change.proposedCard,
+            dependencies: resolveDependencies(change.proposedCard.dependencies),
+            ...(change.targetColumn === "ready"
+              ? {
+                  column: change.targetColumn,
+                  handover: undefined,
+                  coordinatorLog: undefined,
+                }
+              : {}),
+          },
+          change,
+          proposal.sourceIdeaId
+        )
+      );
     } else if (change.action === "remove") {
       result.push({ ...current, archivedAt: new Date().toISOString() });
     }
@@ -376,10 +677,22 @@ function applyProposal(
   try {
     writeRequirements(repoPath, proposal.proposedRequirements);
     boardStore.saveCards(proposal.projectId, repoPath, result);
+    if (proposal.sourceIdeaId) {
+      boardStore.saveIdeas(
+        proposal.projectId,
+        repoPath,
+        currentBoard.ideas.map((idea) =>
+          idea.id === proposal.sourceIdeaId
+            ? { ...idea, archivedAt: new Date().toISOString() }
+            : idea
+        )
+      );
+    }
     integrationManager.commitPlanningSnapshot(repoPath, proposal.id);
   } catch (error) {
     writeRequirements(repoPath, currentRequirements);
     boardStore.saveCards(proposal.projectId, repoPath, currentCards);
+    boardStore.saveIdeas(proposal.projectId, repoPath, currentBoard.ideas);
     throw error;
   }
   proposal.status = "applied";
@@ -390,7 +703,7 @@ function applyProposal(
 
 function markCardDisposition(
   changes: PlanningChange[],
-  disposition: PlanningDisposition
+  disposition: Extract<PlanningDisposition, { cardId: string }>
 ): void {
   const change = changes.find(
     (candidate) => candidate.cardId === disposition.cardId
@@ -411,8 +724,8 @@ function markCardDisposition(
   }
 }
 
-function boardRevision(cards: Card[]): string {
-  const specifications = cards
+function boardRevision(board: Board): string {
+  const specifications = board.cards
     .map((card) => ({
       id: card.id,
       title: card.title,
@@ -426,18 +739,75 @@ function boardRevision(cards: Card[]): string {
     }))
     .sort((left, right) => left.id.localeCompare(right.id));
   return createHash("sha256")
-    .update(JSON.stringify(specifications))
+    .update(JSON.stringify({ ideas: board.ideas, cards: specifications }))
     .digest("hex");
 }
 
-function newCard(specification: CardSpecification): Card {
+function newCard(
+  specification: CardSpecification,
+  id: string,
+  originIdeaId?: string
+): Card {
   return {
-    id: generateId(),
+    id,
     ...specification,
     requirementRefs: specification.requirementRefs ?? [],
-    column: "idea",
+    column: "ready",
     createdAt: new Date().toISOString(),
+    ...(originIdeaId ? { originIdeaIds: [originIdeaId] } : {}),
   };
+}
+
+function withIdeaOrigin(
+  card: Card,
+  change: PlanningChange,
+  sourceIdeaId?: string
+): Card {
+  if (!change.resolvesSourceIdea || !sourceIdeaId) return card;
+  return {
+    ...card,
+    originIdeaIds: [...new Set([...(card.originIdeaIds ?? []), sourceIdeaId])],
+  };
+}
+
+function markIdeaResolution(
+  changes: PlanningChange[],
+  ideaId: string,
+  currentCards: Card[]
+): void {
+  const linkedChanges = changes.filter((change) => change.resolvesSourceIdea);
+  if (linkedChanges.length === 0) {
+    throw new Error(
+      `Planner Agent must link Idea '${ideaId}' to at least one Card`
+    );
+  }
+  if (linkedChanges.some((change) => change.action === "remove")) {
+    throw new Error(
+      `Planner Agent may only resolve Idea '${ideaId}' to a surviving Card`
+    );
+  }
+  for (const change of linkedChanges) {
+    if (change.action === "create") continue;
+    const card = currentCards.find(
+      (candidate) => candidate.id === change.cardId
+    );
+    if (card?.column !== "ready") {
+      throw new Error(
+        `Planner Agent may only resolve Idea '${ideaId}' to a Ready Card`
+      );
+    }
+  }
+}
+
+function planningRunKind(
+  board: Board,
+  disposition?: PlanningDisposition
+): PlanningRunKind {
+  if (disposition && "ideaId" in disposition) return "idea_resolution";
+  if (disposition && "proposalId" in disposition) return "card_replanning";
+  return board.cards.length === 0
+    ? "initial_planning"
+    : "requirements_reconciliation";
 }
 
 function requireProposal(
@@ -470,4 +840,32 @@ function stringArray(value: unknown): string[] {
     throw new Error("Proposed card list fields must be string arrays");
   }
   return value;
+}
+
+function requirementsDiff(before: string, after: string): string {
+  const beforeLines = before.split("\n");
+  const afterLines = after.split("\n");
+  let start = 0;
+  while (
+    start < beforeLines.length &&
+    start < afterLines.length &&
+    beforeLines[start] === afterLines[start]
+  ) {
+    start += 1;
+  }
+  let beforeEnd = beforeLines.length;
+  let afterEnd = afterLines.length;
+  while (
+    beforeEnd > start &&
+    afterEnd > start &&
+    beforeLines[beforeEnd - 1] === afterLines[afterEnd - 1]
+  ) {
+    beforeEnd -= 1;
+    afterEnd -= 1;
+  }
+  const removed = beforeLines
+    .slice(start, beforeEnd)
+    .map((line) => `- ${line}`);
+  const added = afterLines.slice(start, afterEnd).map((line) => `+ ${line}`);
+  return [...removed, ...added].join("\n") || "(no changes)";
 }

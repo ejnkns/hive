@@ -9,6 +9,7 @@ export function saveBoard(repoPath: string, board: Board): void {
 
   const data = {
     projectId: board.projectId,
+    ideas: board.ideas,
     cards: board.cards.map((c) => ({
       id: c.id,
       title: c.title,
@@ -18,6 +19,7 @@ export function saveBoard(repoPath: string, board: Board): void {
       dependencies: c.dependencies,
       createdAt: c.createdAt,
       requirementRefs: c.requirementRefs,
+      originIdeaIds: c.originIdeaIds,
     })),
   };
 

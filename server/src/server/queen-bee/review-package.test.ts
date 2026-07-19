@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -12,7 +12,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import type { Card } from "./board-store";
-import { buildRefreshedReviewPackage } from "./review-package";
+import {
+  acquireReviewWorkspace,
+  buildRefreshedReviewPackage,
+  releaseReviewReference,
+} from "./review-package";
 import type { ReviewPackage } from "./reviewer";
 
 describe("refreshed Review Packages", () => {
@@ -71,6 +75,28 @@ describe("refreshed Review Packages", () => {
     const reviewPath = refreshed.workspace.path;
     refreshed.workspace.release();
     assert.equal(existsSync(reviewPath), false);
+    const reviewReference = refreshed.reviewPackage.revisions.reviewReference;
+    assert.ok(reviewReference);
+    assert.equal(
+      git(repoPath, ["rev-parse", reviewReference]),
+      refreshed.reviewPackage.revisions.reviewCommit
+    );
+    git(repoPath, ["gc", "--prune=now"]);
+    const retryWorkspace = acquireReviewWorkspace(
+      repoPath,
+      workerPath,
+      refreshed.reviewPackage
+    );
+    assert.equal(
+      readFileSync(join(retryWorkspace.path, "accepted.txt"), "utf-8"),
+      "accepted\n"
+    );
+    retryWorkspace.release();
+    releaseReviewReference(repoPath, refreshed.reviewPackage);
+    assert.equal(
+      gitSucceeds(repoPath, ["show-ref", "--verify", reviewReference]),
+      false
+    );
   });
 
   function createRepository(): string {
@@ -136,4 +162,8 @@ function git(repoPath: string, args: string[]): string {
     cwd: repoPath,
     encoding: "utf-8",
   }).trim();
+}
+
+function gitSucceeds(repoPath: string, args: string[]): boolean {
+  return spawnSync("git", args, { cwd: repoPath }).status === 0;
 }

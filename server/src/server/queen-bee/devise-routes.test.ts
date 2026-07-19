@@ -4,12 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import Fastify, { type FastifyInstance } from "fastify";
+import type { RequirementsFeedback } from "shared/board-types";
 import type { ProjectListItem } from "shared/project-types";
 import { createBoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
-import type { DeviseEngine } from "./devise-engine";
-import { registerDeviseRoutes } from "./devise-routes";
-import type { Planner } from "./planner";
+import type { RequirementsSessionManager } from "./devise-engine";
+import { registerRequirementsRoutes } from "./devise-routes";
+import type { PlanningManager } from "./planner";
 import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
 import {
   readRequirements,
@@ -17,7 +18,7 @@ import {
   writeRequirements,
 } from "./requirements-store";
 
-describe("devise routes", () => {
+describe("requirements routes", () => {
   const directories: string[] = [];
   const servers: FastifyInstance[] = [];
 
@@ -31,7 +32,7 @@ describe("devise routes", () => {
   it("requires explicit confirmation before revising around active work", async () => {
     let starts = 0;
     const { server, boardStore, project } = createRouteFixture({
-      async start() {
+      async startRevision() {
         starts += 1;
         return { question: "What should change?" };
       },
@@ -47,7 +48,7 @@ describe("devise routes", () => {
 
     const blocked = await server.inject({
       method: "POST",
-      url: `/api/queen-bee/${project.id}/devise/redevise/start`,
+      url: `/api/queen-bee/${project.id}/requirements/revision/start`,
       payload: { prompt: "Change the scope" },
     });
     assert.equal(blocked.statusCode, 409);
@@ -56,14 +57,176 @@ describe("devise routes", () => {
 
     const confirmed = await server.inject({
       method: "POST",
-      url: `/api/queen-bee/${project.id}/devise/redevise/start`,
+      url: `/api/queen-bee/${project.id}/requirements/revision/start`,
       payload: { prompt: "Change the scope", confirmActive: true },
     });
     assert.equal(confirmed.statusCode, 200);
     assert.equal(starts, 1);
   });
 
-  it("keeps a refined card in Idea until the user confirms promotion", async () => {
+  it("replaces an explicitly identified pending Planning Proposal", async () => {
+    const proposal = {
+      id: "proposal-1",
+      projectId: "project-1",
+      status: "pending" as const,
+      baseRequirementsRevision: "requirements-1",
+      baseBoardRevision: "board-1",
+      projectRevision: null,
+      runKind: "requirements_reconciliation" as const,
+      proposedRequirements: "# Proposed",
+      changes: [],
+      createdAt: "2026-07-20T00:00:00.000Z",
+    };
+    let allowedProposalId: string | undefined;
+    let cancelledProposalId = "";
+    const { server, project } = createRouteFixture(
+      {
+        async startRevision(
+          _projectId,
+          _prompt,
+          _workspacePath,
+          replacesProposalId
+        ) {
+          allowedProposalId = replacesProposalId;
+          return { question: "What should change?" };
+        },
+      },
+      {
+        getProposal: () => proposal,
+        cancelProposal: (_projectId, proposalId) => {
+          cancelledProposalId = proposalId;
+          return { ...proposal, status: "cancelled" };
+        },
+      }
+    );
+
+    const response = await server.inject({
+      method: "POST",
+      url: `/api/queen-bee/${project.id}/requirements/revision/start`,
+      payload: { prompt: "Change the scope", proposalId: proposal.id },
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(allowedProposalId, proposal.id);
+    assert.equal(cancelledProposalId, proposal.id);
+  });
+
+  it("starts Idea Elaboration with the persisted source Idea", async () => {
+    let startedIdeaId = "";
+    const { server, boardStore, project } = createRouteFixture({
+      async startIdea(_projectId, idea) {
+        startedIdeaId = idea.id;
+        return { question: "What outcome should this add?" };
+      },
+    });
+    const idea = boardStore.addIdea(project.id, project.repoPath, {
+      title: "Dark mode",
+      brief: "Support a dark appearance",
+    });
+
+    const response = await server.inject({
+      method: "POST",
+      url: `/api/queen-bee/${project.id}/ideas/${idea.id}/requirements/start`,
+      payload: {},
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(startedIdeaId, idea.id);
+    assert.equal(response.json().question, "What outcome should this add?");
+  });
+
+  it("starts a fresh Requirements Repair from structured feedback", async () => {
+    const feedback: RequirementsFeedback = {
+      kind: "requirements_feedback",
+      id: "feedback-1",
+      projectId: "project-1",
+      status: "pending",
+      projectRevision: null,
+      baseRequirementsRevision: requirementsRevision(""),
+      baseBoardRevision: "board-1",
+      proposedRequirements: "# Draft",
+      createdAt: "2026-07-20T00:00:00.000Z",
+      issues: [
+        {
+          requirementRefs: ["FR-1"],
+          category: "missing_decision",
+          explanation: "A decision is missing.",
+          evidence: [],
+          decisionNeeded: "Choose the behavior.",
+          recommendation: "Preserve current behavior.",
+        },
+      ],
+    };
+    let repairedFeedbackId = "";
+    const { server, project } = createRouteFixture(
+      {
+        async startRepair(_projectId, received) {
+          repairedFeedbackId = received.id;
+          return { question: "Which behavior should be canonical?" };
+        },
+      },
+      {
+        getRequirementsFeedback: () => feedback,
+      }
+    );
+
+    const response = await server.inject({
+      method: "POST",
+      url: `/api/queen-bee/${project.id}/requirements-feedback/${feedback.id}/repair/start`,
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(repairedFeedbackId, feedback.id);
+    assert.equal(
+      response.json().question,
+      "Which behavior should be canonical?"
+    );
+  });
+
+  it("rejects stale Requirements Feedback before starting repair", async () => {
+    const feedback: RequirementsFeedback = {
+      kind: "requirements_feedback",
+      id: "feedback-stale",
+      projectId: "project-1",
+      status: "pending",
+      projectRevision: null,
+      baseRequirementsRevision: requirementsRevision("# Earlier"),
+      baseBoardRevision: "board-1",
+      proposedRequirements: "# Draft",
+      createdAt: "2026-07-20T00:00:00.000Z",
+      issues: [
+        {
+          requirementRefs: [],
+          category: "scope_loss",
+          explanation: "Scope was lost.",
+          evidence: [],
+          decisionNeeded: "Restore or remove it.",
+          recommendation: "Restore it.",
+        },
+      ],
+    };
+    let starts = 0;
+    const { server, project } = createRouteFixture(
+      {
+        async startRepair() {
+          starts += 1;
+          return { question: "Should not start" };
+        },
+      },
+      { getRequirementsFeedback: () => feedback }
+    );
+    writeRequirements(project.repoPath, "# Current");
+
+    const response = await server.inject({
+      method: "POST",
+      url: `/api/queen-bee/${project.id}/requirements-feedback/${feedback.id}/repair/start`,
+    });
+
+    assert.equal(response.statusCode, 409);
+    assert.equal(starts, 0);
+  });
+
+  it("keeps Card authorship out of the Requirements Agent response", async () => {
     const { server, boardStore, project } = createRouteFixture({
       async respondCard() {
         return {
@@ -89,7 +252,7 @@ describe("devise routes", () => {
       acceptanceCriteria: [],
       relevantFiles: [],
       dependencies: [],
-      column: "idea",
+      column: "ready",
       handover: {
         problem: "Old requirements conflict",
         attempted: [],
@@ -101,16 +264,13 @@ describe("devise routes", () => {
 
     const response = await server.inject({
       method: "POST",
-      url: `/api/queen-bee/${project.id}/cards/${card.id}/devise/respond`,
+      url: `/api/queen-bee/${project.id}/cards/${card.id}/requirements/respond`,
       payload: { answer: "That covers it" },
     });
 
     assert.equal(response.statusCode, 200);
     assert.equal(response.json().complete, true);
-    assert.equal(
-      response.json().cardProposal.description,
-      "Refined description"
-    );
+    assert.equal(response.json().cardProposal, undefined);
     assert.match(response.json().draftRequirements, /Refined behavior/);
     assert.equal(
       boardStore
@@ -136,12 +296,12 @@ describe("devise routes", () => {
       acceptanceCriteria: [],
       relevantFiles: [],
       dependencies: [],
-      column: "idea",
+      column: "ready",
     });
 
     const response = await server.inject({
       method: "POST",
-      url: `/api/queen-bee/${project.id}/cards/${card.id}/devise/respond`,
+      url: `/api/queen-bee/${project.id}/cards/${card.id}/requirements/respond`,
       payload: { answer: "Done" },
     });
 
@@ -163,7 +323,9 @@ describe("devise routes", () => {
           projectId: project.id,
           messages: [],
           status: "complete",
+          kind: "requirements_revision",
           baseRequirementsRevision: requirementsRevision(canonical),
+          projectRevision: null,
           draftRequirements: draft,
           startedAt: "2026-07-19T00:00:00.000Z",
           updatedAt: "2026-07-19T00:01:00.000Z",
@@ -174,12 +336,125 @@ describe("devise routes", () => {
 
     const response = await server.inject({
       method: "POST",
-      url: `/api/queen-bee/${project.id}/devise/approve`,
+      url: `/api/queen-bee/${project.id}/requirements/approve`,
     });
 
     assert.equal(response.statusCode, 200);
     assert.equal(response.json().proposal.proposedRequirements, draft);
     assert.equal(readRequirements(project.repoPath), canonical);
+  });
+
+  it("preserves source Idea lineage when an approved repair returns to planning", async () => {
+    const canonical = "# Requirements\n\nOriginal";
+    const draft = "# Requirements\n\nRepaired Idea";
+    let receivedDisposition: unknown;
+    const { server, project } = createRouteFixture(
+      {
+        getSession() {
+          return {
+            sessionId: "repair-1",
+            projectId: project.id,
+            sourceIdeaId: "idea-1",
+            messages: [],
+            status: "complete",
+            kind: "requirements_repair",
+            baseRequirementsRevision: requirementsRevision(canonical),
+            projectRevision: null,
+            draftRequirements: draft,
+            startedAt: "2026-07-20T00:00:00.000Z",
+            updatedAt: "2026-07-20T00:01:00.000Z",
+          };
+        },
+      },
+      {
+        async propose(
+          projectId,
+          _repoPath,
+          proposedRequirements,
+          _guidance,
+          disposition
+        ) {
+          receivedDisposition = disposition;
+          return {
+            id: "proposal-idea-1",
+            projectId,
+            status: "pending",
+            baseRequirementsRevision: requirementsRevision(canonical),
+            baseBoardRevision: "board-1",
+            projectRevision: null,
+            runKind: "idea_resolution",
+            sourceIdeaId: "idea-1",
+            proposedRequirements,
+            changes: [],
+            createdAt: "2026-07-20T00:02:00.000Z",
+          };
+        },
+      }
+    );
+    writeRequirements(project.repoPath, canonical);
+
+    const response = await server.inject({
+      method: "POST",
+      url: `/api/queen-bee/${project.id}/requirements/approve`,
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(receivedDisposition, {
+      ideaId: "idea-1",
+      target: "resolved",
+    });
+  });
+
+  it("resolves repaired Requirements Feedback after planning succeeds", async () => {
+    const canonical = "# Requirements\n\nOriginal";
+    const draft = "# Requirements\n\nRepaired";
+    let resolvedFeedbackId = "";
+    const { server, project } = createRouteFixture(
+      {
+        getSession() {
+          return {
+            sessionId: "repair-1",
+            projectId: project.id,
+            sourceFeedbackId: "feedback-1",
+            messages: [],
+            status: "complete",
+            kind: "requirements_repair",
+            baseRequirementsRevision: requirementsRevision(canonical),
+            projectRevision: null,
+            draftRequirements: draft,
+            startedAt: "2026-07-20T00:00:00.000Z",
+            updatedAt: "2026-07-20T00:01:00.000Z",
+          };
+        },
+      },
+      {
+        resolveRequirementsFeedback(_projectId, feedbackId) {
+          resolvedFeedbackId = feedbackId;
+          return {
+            kind: "requirements_feedback",
+            id: feedbackId,
+            projectId: project.id,
+            status: "resolved",
+            projectRevision: null,
+            baseRequirementsRevision: requirementsRevision(canonical),
+            baseBoardRevision: "board-1",
+            proposedRequirements: draft,
+            issues: [],
+            createdAt: "2026-07-20T00:00:00.000Z",
+            resolvedAt: "2026-07-20T00:02:00.000Z",
+          };
+        },
+      }
+    );
+    writeRequirements(project.repoPath, canonical);
+
+    const response = await server.inject({
+      method: "POST",
+      url: `/api/queen-bee/${project.id}/requirements/approve`,
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(resolvedFeedbackId, "feedback-1");
   });
 
   it("rejects approval when canonical requirements changed after session start", async () => {
@@ -190,7 +465,9 @@ describe("devise routes", () => {
           projectId: project.id,
           messages: [],
           status: "complete",
+          kind: "requirements_revision",
           baseRequirementsRevision: requirementsRevision("# Original"),
+          projectRevision: null,
           draftRequirements: "# Draft",
           startedAt: "2026-07-19T00:00:00.000Z",
           updatedAt: "2026-07-19T00:01:00.000Z",
@@ -201,7 +478,7 @@ describe("devise routes", () => {
 
     const response = await server.inject({
       method: "POST",
-      url: `/api/queen-bee/${project.id}/devise/approve`,
+      url: `/api/queen-bee/${project.id}/requirements/approve`,
     });
 
     assert.equal(response.statusCode, 409);
@@ -226,7 +503,9 @@ describe("devise routes", () => {
             },
           ],
           status: "complete",
+          kind: "requirements_repair",
           baseRequirementsRevision: requirementsRevision(canonical),
+          projectRevision: null,
           draftRequirements: draft,
           startedAt: "2026-07-19T00:00:00.000Z",
           updatedAt: "2026-07-19T00:01:00.000Z",
@@ -240,13 +519,13 @@ describe("devise routes", () => {
       acceptanceCriteria: ["Original"],
       relevantFiles: ["source.ts"],
       dependencies: [],
-      column: "idea",
+      column: "ready",
     });
     cardId = card.id;
 
     const response = await server.inject({
       method: "POST",
-      url: `/api/queen-bee/${project.id}/cards/${card.id}/devise/approve`,
+      url: `/api/queen-bee/${project.id}/cards/${card.id}/requirements/approve`,
     });
 
     assert.equal(response.statusCode, 200);
@@ -258,7 +537,10 @@ describe("devise routes", () => {
     );
   });
 
-  function createRouteFixture(overrides: Partial<DeviseEngine> = {}) {
+  function createRouteFixture(
+    overrides: Partial<RequirementsSessionManager> = {},
+    plannerOverrides: Partial<PlanningManager> = {}
+  ) {
     const repoPath = mkdtempSync(join(tmpdir(), "hive-devise-routes-"));
     directories.push(repoPath);
     const project: ProjectListItem = {
@@ -279,10 +561,18 @@ describe("devise routes", () => {
       updateMaxConcurrentWorkers: () => project,
       unlink: () => {},
     };
-    const engine: DeviseEngine = {
+    const engine: RequirementsSessionManager = {
       start: async () => ({ question: "Question" }),
+      startRevision: async () => ({ question: "Question" }),
+      startIdea: async () => ({ question: "Idea question" }),
+      startRepair: async () => ({ question: "Repair question" }),
       respond: async () => ({ type: "question", question: "Question" }),
+      respondIdea: async () => ({
+        type: "question",
+        question: "Idea question",
+      }),
       getSession: () => undefined,
+      getIdeaSession: () => undefined,
       startCard: async () => ({ question: "Card question" }),
       respondCard: async () => ({
         type: "question",
@@ -295,7 +585,7 @@ describe("devise routes", () => {
       () => {},
       createQueenBeeRuntimeStore(join(repoPath, ".runtime"))
     );
-    const planner: Planner = {
+    const planner: PlanningManager = {
       async propose(projectId, _repoPath, proposedRequirements) {
         return {
           id: "proposal-1",
@@ -305,6 +595,8 @@ describe("devise routes", () => {
             readRequirements(repoPath)
           ),
           baseBoardRevision: "board-1",
+          projectRevision: "revision-1",
+          runKind: "requirements_reconciliation",
           proposedRequirements,
           changes: [],
           createdAt: "2026-07-19T00:02:00.000Z",
@@ -316,10 +608,24 @@ describe("devise routes", () => {
       acceptAll: () => [],
       apply: () => [],
       getProposal: () => null,
+      getRequirementsFeedback: () => null,
+      getOpenOutcome: () => null,
+      resolveRequirementsFeedback: () => {
+        throw new Error("Not used");
+      },
+      cancelProposal: () => {
+        throw new Error("Not used");
+      },
+      ...plannerOverrides,
     };
     const server = Fastify();
     servers.push(server);
-    registerDeviseRoutes(server, { engine, boardStore, projectStore, planner });
+    registerRequirementsRoutes(server, {
+      sessionManager: engine,
+      boardStore,
+      projectStore,
+      planningManager: planner,
+    });
     return { server, boardStore, project };
   }
 });

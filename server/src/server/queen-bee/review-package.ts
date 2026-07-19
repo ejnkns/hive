@@ -8,11 +8,17 @@ import type { Card } from "./board-store";
 import { readRequirements, requirementsRevision } from "./requirements-store";
 import type { ReviewPackage } from "./reviewer";
 import type { WorkerCompletion } from "./worker-completion";
-import { removeWorktree } from "./worker-supervisor/git-operations";
+import { removeWorktree } from "./worktree";
 
 export type ReviewWorkspace = {
   path: string;
   release(): void;
+};
+
+export type ReviewRevisionOverrides = {
+  workerHeadCommit?: string;
+  integrationCommit?: string;
+  reviewReference?: string;
 };
 
 export function buildReviewPackage(
@@ -21,12 +27,11 @@ export function buildReviewPackage(
   worktreePath: string,
   baseCommit: string,
   completion: WorkerCompletion,
-  workerHeadCommit?: string,
-  integrationCommit?: string
+  revisionOverrides: ReviewRevisionOverrides = {}
 ): ReviewPackage {
   const requirementsContent = readRequirements(repoPath);
   const reviewCommit = git(worktreePath, ["rev-parse", "HEAD"]);
-  const headCommit = workerHeadCommit ?? reviewCommit;
+  const headCommit = revisionOverrides.workerHeadCommit ?? reviewCommit;
   const reviewData: Omit<ReviewPackage, "id"> = {
     card: {
       id: card.id,
@@ -43,8 +48,12 @@ export function buildReviewPackage(
       baseCommit,
       headCommit,
       reviewCommit,
+      ...(revisionOverrides.reviewReference
+        ? { reviewReference: revisionOverrides.reviewReference }
+        : {}),
       integrationCommit:
-        integrationCommit ?? git(repoPath, ["rev-parse", "hive-main"]),
+        revisionOverrides.integrationCommit ??
+        git(repoPath, ["rev-parse", "hive-main"]),
       cardRevision: digest({
         title: card.title,
         description: card.description,
@@ -98,14 +107,17 @@ export function buildRefreshedReviewPackage(
     workerHeadCommit,
   ]).split("\n")[0];
   if (!mergedTree) throw new Error("Git did not produce a merged review tree");
-  const reviewCommit = createReviewCommit(
+  const reviewAnchor = createReviewCommit(
     repoPath,
     mergedTree,
     integrationCommit,
     workerHeadCommit,
     card.id
   );
-  const workspace = acquireDetachedReviewWorkspace(repoPath, reviewCommit);
+  const workspace = acquireDetachedReviewWorkspace(
+    repoPath,
+    reviewAnchor.commit
+  );
   try {
     return {
       reviewPackage: buildReviewPackage(
@@ -114,13 +126,17 @@ export function buildRefreshedReviewPackage(
         workspace.path,
         integrationCommit,
         workerCompletionFrom(previousPackage),
-        workerHeadCommit,
-        integrationCommit
+        {
+          workerHeadCommit,
+          integrationCommit,
+          reviewReference: reviewAnchor.reference,
+        }
       ),
       workspace,
     };
   } catch (error) {
     workspace.release();
+    git(repoPath, ["update-ref", "-d", reviewAnchor.reference]);
     throw error;
   }
 }
@@ -139,6 +155,15 @@ export function acquireReviewWorkspace(
     repoPath,
     reviewPackage.revisions.reviewCommit
   );
+}
+
+export function releaseReviewReference(
+  repoPath: string,
+  reviewPackage: ReviewPackage
+): void {
+  const reference = reviewPackage.revisions.reviewReference;
+  if (!reference) return;
+  git(repoPath, ["update-ref", "-d", reference]);
 }
 
 export function workerCompletionFrom(
@@ -185,7 +210,7 @@ function createReviewCommit(
   integrationCommit: string,
   workerHeadCommit: string,
   cardId: string
-): string {
+): { commit: string; reference: string } {
   const identity = {
     GIT_AUTHOR_NAME: "Hive Supervisor",
     GIT_AUTHOR_EMAIL: "supervisor@hive.local",
@@ -194,7 +219,7 @@ function createReviewCommit(
     GIT_COMMITTER_EMAIL: "supervisor@hive.local",
     GIT_COMMITTER_DATE: "2000-01-01T00:00:00Z",
   };
-  return execFileSync(
+  const commit = execFileSync(
     "git",
     [
       "commit-tree",
@@ -213,6 +238,9 @@ function createReviewCommit(
       env: { ...process.env, ...identity },
     }
   ).trim();
+  const reference = `refs/hive/reviews/${commit}`;
+  git(repoPath, ["update-ref", reference, commit]);
+  return { commit, reference };
 }
 
 function acquireDetachedReviewWorkspace(

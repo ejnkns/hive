@@ -5,12 +5,12 @@ import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
 import type { BoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
-import type { DeviseDraftUpdate } from "./devise-engine";
+import type { RequirementsDraftUpdate } from "./devise-engine";
 import { evaluateWorkerAdmission } from "./worker-admission";
 import {
   boardEventBus,
-  deviseEventBus,
   projectEventBus,
+  requirementsEventBus,
   workerEventBus,
 } from "./worker-event-bus";
 import type { WorkerEvent, WorkerSupervisor } from "./worker-supervisor";
@@ -130,10 +130,10 @@ export function registerWorkerRoutes(
       }
     };
 
-    function deviseHandler(update: DeviseDraftUpdate): void {
+    function requirementsHandler(update: RequirementsDraftUpdate): void {
       try {
         socket.send(
-          JSON.stringify({ type: "devise_draft_updated", data: update })
+          JSON.stringify({ type: "requirements_draft_updated", data: update })
         );
       } catch {
         // socket closed
@@ -143,13 +143,13 @@ export function registerWorkerRoutes(
     workerEventBus.on("event", workerHandler);
     boardEventBus.on("change", boardHandler);
     projectEventBus.on("change", projectHandler);
-    deviseEventBus.on("draft", deviseHandler);
+    requirementsEventBus.on("draft", requirementsHandler);
 
     socket.on("close", () => {
       workerEventBus.off("event", workerHandler);
       boardEventBus.off("change", boardHandler);
       projectEventBus.off("change", projectHandler);
-      deviseEventBus.off("draft", deviseHandler);
+      requirementsEventBus.off("draft", requirementsHandler);
     });
   });
 

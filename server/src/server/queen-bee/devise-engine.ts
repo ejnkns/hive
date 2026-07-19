@@ -1,90 +1,191 @@
 /** @public */
 
 import { randomUUID } from "node:crypto";
+import type { Idea, RequirementsFeedback } from "shared/board-types";
 import type { Message } from "shared/message";
 import {
-  createDeviseModelCaller,
-  type DeviseModelCaller,
+  type AgentModelCaller,
+  createAgentModelCaller,
 } from "./devise-engine/create-devise-model-caller";
-import { DEVISE_SYSTEM_PROMPT } from "./devise-engine/devise-system-prompt";
-import { executeDeviseTool } from "./devise-engine/devise-tools";
+import {
+  type RequirementsSessionKind,
+  requirementsAgentSystemPrompt,
+} from "./devise-engine/devise-system-prompt";
+import { executeAgentTool } from "./devise-engine/devise-tools";
 import { loadProjectContext } from "./project-context";
 import type {
-  PersistedDeviseSession,
+  PersistedRequirementsSession,
   QueenBeeRuntimeStore,
 } from "./queen-bee-runtime-store";
 import { readRequirements, requirementsRevision } from "./requirements-store";
 
-export type DeviseSession = PersistedDeviseSession;
+export type RequirementsSession = PersistedRequirementsSession;
 
-export type DeviseDraftUpdate = {
+export type RequirementsDraftUpdate = {
   projectId: string;
   sessionId: string;
   cardId?: string;
+  ideaId?: string;
   content: string;
 };
 
-export type DeviseEngine = {
+export type RequirementsSessionManager = {
   start(
     projectId: string,
     prompt: string,
     workspacePath: string
-  ): Promise<DeviseStartResult>;
+  ): Promise<RequirementsStartResult>;
+  startRevision(
+    projectId: string,
+    prompt: string,
+    workspacePath: string,
+    replacesProposalId?: string
+  ): Promise<RequirementsStartResult>;
+  startIdea(
+    projectId: string,
+    idea: Idea,
+    prompt: string,
+    workspacePath: string
+  ): Promise<RequirementsStartResult>;
+  startRepair(
+    projectId: string,
+    feedback: RequirementsFeedback,
+    workspacePath: string,
+    sourceIdea?: Idea
+  ): Promise<RequirementsStartResult>;
+  respondIdea(
+    projectId: string,
+    ideaId: string,
+    answer: string,
+    workspacePath: string
+  ): Promise<RequirementsRespondResult>;
+  getIdeaSession(
+    projectId: string,
+    ideaId: string
+  ): RequirementsSession | undefined;
   respond(
     projectId: string,
     answer: string,
     workspacePath: string
-  ): Promise<DeviseRespondResult>;
-  getSession(projectId: string): DeviseSession | undefined;
+  ): Promise<RequirementsRespondResult>;
+  getSession(projectId: string): RequirementsSession | undefined;
   startCard(
     projectId: string,
     cardId: string,
     prompt: string,
     workspacePath: string
-  ): Promise<DeviseStartResult>;
+  ): Promise<RequirementsStartResult>;
   respondCard(
     projectId: string,
     cardId: string,
     answer: string,
     workspacePath: string
-  ): Promise<DeviseRespondResult>;
-  getCardSession(projectId: string, cardId: string): DeviseSession | undefined;
+  ): Promise<RequirementsRespondResult>;
+  getCardSession(
+    projectId: string,
+    cardId: string
+  ): RequirementsSession | undefined;
 };
 
-export type DeviseStartResult = {
+export type RequirementsStartResult = {
   question: string;
   draftRequirements?: string;
 };
 
-export type DeviseRespondResult =
+export type RequirementsRespondResult =
   | { type: "question"; question: string; draftRequirements?: string }
   | { type: "complete"; spec: string; draftRequirements: string };
 
-export function createDeviseEngine(
-  modelCaller?: DeviseModelCaller,
+type StartRequirementsSessionInput = {
+  sessionKey: string;
+  projectId: string;
+  kind: RequirementsSessionKind;
+  prompt: string;
+  workspacePath: string;
+  cardId?: string;
+  sourceIdea?: Idea;
+  feedback?: RequirementsFeedback;
+  sourceIdeaId?: string;
+  sourceFeedbackId?: string;
+  allowedProposalId?: string;
+};
+
+export function createRequirementsSessionManager(
+  modelCaller?: AgentModelCaller,
   runtimeStore?: QueenBeeRuntimeStore,
-  onDraftUpdate: (update: DeviseDraftUpdate) => void = () => {}
-): DeviseEngine {
-  const caller = modelCaller ?? createDeviseModelCaller();
-  const sessions = new Map<string, DeviseSession>();
+  onDraftUpdate: (update: RequirementsDraftUpdate) => void = () => {}
+): RequirementsSessionManager {
+  const caller = modelCaller ?? createAgentModelCaller();
+  const sessions = new Map<string, RequirementsSession>();
 
   return {
     async start(projectId, prompt, workspacePath) {
-      return startSession(projectId, projectId, prompt, workspacePath);
+      return startSession({
+        sessionKey: projectId,
+        projectId,
+        kind: "initial_requirements",
+        prompt,
+        workspacePath,
+      });
+    },
+
+    async startRevision(projectId, prompt, workspacePath, replacesProposalId) {
+      return startSession({
+        sessionKey: projectId,
+        projectId,
+        kind: "requirements_revision",
+        prompt,
+        workspacePath,
+        allowedProposalId: replacesProposalId,
+      });
+    },
+
+    async startIdea(projectId, idea, prompt, workspacePath) {
+      return startSession({
+        sessionKey: ideaSessionKey(projectId, idea.id),
+        projectId,
+        kind: "idea_elaboration",
+        prompt,
+        workspacePath,
+        sourceIdea: idea,
+      });
+    },
+
+    async startRepair(projectId, feedback, workspacePath, sourceIdea) {
+      return startSession({
+        sessionKey: projectId,
+        projectId,
+        kind: "requirements_repair",
+        prompt: "Resolve the structured Requirements Feedback with the user.",
+        workspacePath,
+        sourceIdea,
+        feedback,
+        sourceIdeaId: feedback.sourceIdeaId,
+        sourceFeedbackId: feedback.id,
+      });
     },
 
     async startCard(projectId, cardId, prompt, workspacePath) {
-      return startSession(
-        cardSessionKey(projectId, cardId),
+      return startSession({
+        sessionKey: cardSessionKey(projectId, cardId),
         projectId,
+        kind: "requirements_repair",
         prompt,
         workspacePath,
-        cardId
-      );
+        cardId,
+      });
     },
 
     async respond(projectId, answer, workspacePath) {
       return respondSession(projectId, answer, workspacePath);
+    },
+
+    async respondIdea(projectId, ideaId, answer, workspacePath) {
+      return respondSession(
+        ideaSessionKey(projectId, ideaId),
+        answer,
+        workspacePath
+      );
     },
 
     async respondCard(projectId, cardId, answer, workspacePath) {
@@ -98,8 +199,18 @@ export function createDeviseEngine(
     getSession(projectId) {
       restoreProject(projectId);
       return [...sessions.values()]
-        .filter((session) => session.projectId === projectId && !session.cardId)
+        .filter(
+          (session) =>
+            session.projectId === projectId &&
+            !session.cardId &&
+            !session.ideaId
+        )
         .at(-1);
+    },
+
+    getIdeaSession(projectId, ideaId) {
+      restoreProject(projectId);
+      return sessions.get(ideaSessionKey(projectId, ideaId));
     },
 
     getCardSession(projectId, cardId) {
@@ -109,12 +220,21 @@ export function createDeviseEngine(
   };
 
   async function startSession(
-    sessionKey: string,
-    projectId: string,
-    prompt: string,
-    workspacePath: string,
-    cardId?: string
-  ): Promise<DeviseStartResult> {
+    input: StartRequirementsSessionInput
+  ): Promise<RequirementsStartResult> {
+    const {
+      sessionKey,
+      projectId,
+      kind,
+      prompt,
+      workspacePath,
+      cardId,
+      sourceIdea,
+      feedback,
+      sourceIdeaId,
+      sourceFeedbackId,
+      allowedProposalId,
+    } = input;
     restoreProject(projectId);
     const activeSession = [...sessions.values()].find(
       (session) =>
@@ -122,12 +242,50 @@ export function createDeviseEngine(
     );
     if (activeSession) {
       throw new Error(
-        "This project already has an active Devise Agent session"
+        "This project already has an active requirements workflow"
       );
     }
+    if (runtimeStore) {
+      const competingProposal = runtimeStore
+        .getPlanningProposals(projectId)
+        .find(
+          (proposal) =>
+            proposal.status === "pending" && proposal.id !== allowedProposalId
+        );
+      const competingFeedback = runtimeStore
+        .getRequirementsFeedbacks(projectId)
+        .find(
+          (candidate) =>
+            candidate.status !== "resolved" && candidate.id !== sourceFeedbackId
+        );
+      if (competingProposal || competingFeedback) {
+        throw new Error(
+          "This project already has an open requirements-changing workflow"
+        );
+      }
+    }
+    const context = projectContext(projectId, workspacePath);
     const messages: Message[] = [
-      { role: "system", content: DEVISE_SYSTEM_PROMPT },
-      ...projectContextMessages(projectId, workspacePath),
+      { role: "system", content: requirementsAgentSystemPrompt(kind) },
+      ...projectContextMessages(context),
+      {
+        role: "system",
+        content: `Canonical Requirements Document at session start:\n${readRequirements(workspacePath) || "(none)"}`,
+      },
+      ...(sourceIdea
+        ? [
+            systemMessage(
+              `Source Idea:\n${JSON.stringify(sourceIdea, null, 2)}`
+            ),
+          ]
+        : []),
+      ...(feedback
+        ? [
+            systemMessage(
+              `Requirements Draft requiring repair:\n${feedback.proposedRequirements}\n\nStructured Requirements Feedback:\n${JSON.stringify(feedback.issues, null, 2)}`
+            ),
+          ]
+        : []),
       { role: "user", content: prompt },
     ];
 
@@ -136,27 +294,44 @@ export function createDeviseEngine(
       caller,
       messages,
       workspacePath,
-      (content) => onDraftUpdate({ projectId, sessionId, cardId, content })
+      (content) =>
+        onDraftUpdate({
+          projectId,
+          sessionId,
+          cardId,
+          ideaId: kind === "idea_elaboration" ? sourceIdea?.id : undefined,
+          content,
+        }),
+      context?.revision
     );
 
     messages.push({ role: "assistant", content: result.content });
 
     const now = new Date().toISOString();
-    const session: DeviseSession = {
+    const session: RequirementsSession = {
       sessionId,
       projectId,
       cardId,
+      ideaId: kind === "idea_elaboration" ? sourceIdea?.id : undefined,
+      sourceIdeaId,
+      sourceFeedbackId,
+      kind,
       messages,
       status: "active",
       baseRequirementsRevision: requirementsRevision(
         readRequirements(workspacePath)
       ),
+      projectRevision: context?.revision ?? null,
       draftRequirements: result.draftRequirements,
       startedAt: now,
       updatedAt: now,
     };
     sessions.set(sessionKey, session);
-    runtimeStore?.saveDeviseSession(session);
+    runtimeStore?.saveRequirementsSession(session);
+    if (runtimeStore && feedback) {
+      feedback.status = "repairing";
+      runtimeStore.saveRequirementsFeedback(feedback);
+    }
 
     return {
       question: result.content,
@@ -168,12 +343,12 @@ export function createDeviseEngine(
     sessionKey: string,
     answer: string,
     workspacePath: string
-  ): Promise<DeviseRespondResult> {
-    const projectId = sessionKey.split(":card:")[0] ?? sessionKey;
+  ): Promise<RequirementsRespondResult> {
+    const projectId = sessionKey.split(/:(?:card|idea):/)[0] ?? sessionKey;
     restoreProject(projectId);
     const session = sessions.get(sessionKey);
     if (!session || session.status === "complete") {
-      throw new Error("No active devise session for this project");
+      throw new Error("No active Requirements Session for this project");
     }
 
     session.messages.push({ role: "user", content: answer });
@@ -185,14 +360,16 @@ export function createDeviseEngine(
       (content) => {
         session.draftRequirements = content;
         session.updatedAt = new Date().toISOString();
-        runtimeStore?.saveDeviseSession(session);
+        runtimeStore?.saveRequirementsSession(session);
         onDraftUpdate({
           projectId: session.projectId,
           sessionId: session.sessionId,
           cardId: session.cardId,
+          ideaId: session.ideaId,
           content,
         });
-      }
+      },
+      session.projectRevision === null ? undefined : session.projectRevision
     );
 
     if (result.draftRequirements) {
@@ -208,12 +385,12 @@ export function createDeviseEngine(
     if (isComplete) {
       if (!session.draftRequirements) {
         throw new Error(
-          "Devise Agent completed without submitting a requirements draft"
+          "Requirements Agent completed without submitting a requirements draft"
         );
       }
       session.status = "complete";
       session.updatedAt = new Date().toISOString();
-      runtimeStore?.saveDeviseSession(session);
+      runtimeStore?.saveRequirementsSession(session);
       return {
         type: "complete",
         spec: extractSpec(result.content),
@@ -222,7 +399,7 @@ export function createDeviseEngine(
     }
 
     session.updatedAt = new Date().toISOString();
-    runtimeStore?.saveDeviseSession(session);
+    runtimeStore?.saveRequirementsSession(session);
     return {
       type: "question",
       question: result.content,
@@ -232,10 +409,12 @@ export function createDeviseEngine(
 
   function restoreProject(projectId: string): void {
     if (!runtimeStore) return;
-    for (const session of runtimeStore.getDeviseSessions(projectId)) {
-      const key = session.cardId
-        ? cardSessionKey(projectId, session.cardId)
-        : projectId;
+    for (const session of runtimeStore.getRequirementsSessions(projectId)) {
+      const key = session.ideaId
+        ? ideaSessionKey(projectId, session.ideaId)
+        : session.cardId
+          ? cardSessionKey(projectId, session.cardId)
+          : projectId;
       const existing = sessions.get(key);
       if (!existing || existing.updatedAt < session.updatedAt) {
         sessions.set(key, session);
@@ -244,12 +423,25 @@ export function createDeviseEngine(
   }
 }
 
-function projectContextMessages(
+function systemMessage(content: string): Message {
+  return { role: "system", content };
+}
+
+function projectContext(
   projectId: string,
   workspacePath: string
-): Message[] {
+): ReturnType<typeof loadProjectContext> | null {
   try {
-    const context = loadProjectContext(projectId, workspacePath);
+    return loadProjectContext(projectId, workspacePath);
+  } catch {
+    return null;
+  }
+}
+
+function projectContextMessages(
+  context: ReturnType<typeof loadProjectContext> | null
+): Message[] {
+  if (context) {
     return [
       {
         role: "system",
@@ -260,20 +452,24 @@ function projectContextMessages(
         )}`,
       },
     ];
-  } catch {
-    return [];
   }
+  return [];
 }
 
 function cardSessionKey(projectId: string, cardId: string): string {
   return `${projectId}:card:${cardId}`;
 }
 
+function ideaSessionKey(projectId: string, ideaId: string): string {
+  return `${projectId}:idea:${ideaId}`;
+}
+
 async function callWithToolLoop(
-  caller: DeviseModelCaller,
+  caller: AgentModelCaller,
   messages: Message[],
   workspacePath: string,
   onDraftUpdate: (content: string) => void = () => {},
+  projectRevision?: string,
   maxToolRounds = 10
 ): Promise<{ content: string; draftRequirements?: string }> {
   let draftRequirements: string | undefined;
@@ -288,7 +484,7 @@ async function callWithToolLoop(
     }
 
     for (const toolCall of response.toolCalls) {
-      const result = executeDeviseTool(toolCall, workspacePath);
+      const result = executeAgentTool(toolCall, workspacePath, projectRevision);
       if (toolCall.name === "update_requirements_draft" && !result.isError) {
         const args: unknown = JSON.parse(toolCall.arguments);
         if (isRecord(args) && typeof args.content === "string") {

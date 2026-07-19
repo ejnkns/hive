@@ -8,8 +8,8 @@ import type { ProjectListItem } from "shared/project-types";
 import { createBoardStore } from "./board-store";
 import { registerCoordinatorRoutes } from "./coordinator-routes";
 import type { ProjectStore } from "./create-project-store";
-import type { DeviseEngine } from "./devise-engine";
-import type { Planner } from "./planner";
+import type { RequirementsSessionManager } from "./devise-engine";
+import type { PlanningManager } from "./planner";
 import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
 
 describe("coordinator routes", () => {
@@ -80,10 +80,15 @@ describe("coordinator routes", () => {
       },
     });
     let startCardArgs: unknown[] | undefined;
-    const engine: DeviseEngine = {
+    const engine: RequirementsSessionManager = {
       start: async () => ({ question: "Question" }),
+      startRevision: async () => ({ question: "Question" }),
+      startIdea: async () => ({ question: "Question" }),
+      startRepair: async () => ({ question: "Question" }),
       respond: async () => ({ type: "question", question: "Question" }),
+      respondIdea: async () => ({ type: "question", question: "Question" }),
       getSession: () => undefined,
+      getIdeaSession: () => undefined,
       async startCard(...args) {
         startCardArgs = args;
         return { question: "Which behavior should win?" };
@@ -98,7 +103,7 @@ describe("coordinator routes", () => {
     servers.push(server);
     let plannerRequirements = "";
     let plannerDisposition: unknown;
-    const planner: Planner = {
+    const planner: PlanningManager = {
       async propose(
         projectId,
         _repoPath,
@@ -114,6 +119,8 @@ describe("coordinator routes", () => {
           status: "pending",
           baseRequirementsRevision: "requirements-1",
           baseBoardRevision: "board-1",
+          projectRevision: "revision-1",
+          runKind: "requirements_reconciliation",
           proposedRequirements,
           changes: [],
           createdAt: "2026-07-19T00:02:00.000Z",
@@ -125,12 +132,20 @@ describe("coordinator routes", () => {
       acceptAll: () => [],
       apply: () => [],
       getProposal: () => null,
+      getRequirementsFeedback: () => null,
+      getOpenOutcome: () => null,
+      resolveRequirementsFeedback: () => {
+        throw new Error("Not used");
+      },
+      cancelProposal: () => {
+        throw new Error("Not used");
+      },
     };
     registerCoordinatorRoutes(server, {
       boardStore,
       projectStore,
-      engine,
-      planner,
+      sessionManager: engine,
+      planningManager: planner,
     });
 
     const response = await server.inject({
@@ -142,7 +157,7 @@ describe("coordinator routes", () => {
     assert.equal(response.statusCode, 200);
     assert.equal(response.json().redevise, true);
     assert.equal(response.json().question, "Which behavior should win?");
-    assert.equal(response.json().card.column, "idea");
+    assert.equal(response.json().card.column, "unfulfillable");
     assert.equal(startCardArgs?.[0], project.id);
     assert.equal(startCardArgs?.[1], card.id);
     assert.match(String(startCardArgs?.[2]), /which behavior should win/i);

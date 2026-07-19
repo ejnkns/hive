@@ -72,10 +72,21 @@ describe("worker run admission", () => {
     registerWorkerRoutes(server, {
       workerSupervisor,
       boardStore: {
-        getBoard: () => ({ projectId: "project-1", cards: [target, active] }),
+        getBoard: () => ({
+          projectId: "project-1",
+          ideas: [],
+          cards: [target, active],
+        }),
         addCard: () => {
           throw new Error("Not used");
         },
+        addIdea: () => {
+          throw new Error("Not used");
+        },
+        archiveIdea: () => {
+          throw new Error("Not used");
+        },
+        saveIdeas: () => {},
         moveCard: () => {
           throw new Error("Not used");
         },

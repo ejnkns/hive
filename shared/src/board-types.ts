@@ -1,7 +1,6 @@
 /** @public */
 
 export type Column =
-  | "idea"
   | "ready"
   | "in_progress"
   | "reviewing"
@@ -62,7 +61,7 @@ export type ActivityActor =
   | "supervisor"
   | "worker"
   | "reviewer"
-  | "devise"
+  | "requirements"
   | "planner"
   | "user";
 
@@ -106,6 +105,136 @@ export type ReviewReadiness = {
   canRefreshReview: boolean;
   conflictingFiles: string[];
   message: string;
+};
+
+export type CardSpecification = Pick<
+  Card,
+  | "title"
+  | "description"
+  | "acceptanceCriteria"
+  | "relevantFiles"
+  | "dependencies"
+  | "requirementRefs"
+>;
+
+export type Idea = {
+  id: string;
+  title: string;
+  brief: string;
+  createdAt: string;
+  archivedAt?: string;
+};
+
+export type PlanningRunKind =
+  | "initial_planning"
+  | "requirements_reconciliation"
+  | "idea_resolution"
+  | "card_replanning";
+
+export type RequirementsFeedback = {
+  kind: "requirements_feedback";
+  id: string;
+  projectId: string;
+  status: "pending" | "repairing" | "resolved";
+  projectRevision: string | null;
+  baseRequirementsRevision: string;
+  baseBoardRevision: string;
+  proposedRequirements: string;
+  sourceIdeaId?: string;
+  createdAt: string;
+  resolvedAt?: string;
+  issues: Array<{
+    requirementRefs: string[];
+    category:
+      | "contradiction"
+      | "missing_decision"
+      | "unobservable_acceptance"
+      | "constraint_conflict"
+      | "scope_loss"
+      | "insufficient_detail";
+    explanation: string;
+    evidence: string[];
+    decisionNeeded: string;
+    recommendation: string;
+  }>;
+};
+
+export type PlanningOutcome = PlanningProposal | RequirementsFeedback;
+
+export type PlanningChange = {
+  id: string;
+  action: "keep" | "create" | "update" | "remove";
+  cardId?: string;
+  proposedCard?: CardSpecification;
+  rationale: string;
+  decision: "pending" | "accepted" | "rejected";
+  resolvesSourceIdea?: boolean;
+  targetColumn?: "ready";
+};
+
+export type PlanningProposal = {
+  id: string;
+  projectId: string;
+  status: "pending" | "applied" | "cancelled";
+  baseRequirementsRevision: string;
+  baseBoardRevision: string;
+  projectRevision: string | null;
+  runKind: PlanningRunKind;
+  sourceIdeaId?: string;
+  proposedRequirements: string;
+  changes: PlanningChange[];
+  createdAt: string;
+  appliedAt?: string;
+};
+
+export type WorkerHandover = {
+  problem: string;
+  attempted: string[];
+  blockedBy: string[];
+  occurredAt: string;
+};
+
+export type CoordinatorAction = "retry_with_patch" | "redevise" | "archive";
+
+export type CoordinatorSuggestion = {
+  id: string;
+  action: CoordinatorAction;
+  rationale: string;
+  cardPatch?: {
+    description?: string;
+    acceptanceCriteria?: string[];
+    relevantFiles?: string[];
+    requirementRefs?: string[];
+  };
+  requirementsContent?: string;
+};
+
+export type CoordinatorLog = {
+  status: "pending" | "complete" | "error";
+  analyzedAt?: string;
+  requirementsRevision?: string;
+  summary?: string;
+  suggestions?: CoordinatorSuggestion[];
+  error?: string;
+};
+
+export type Card = {
+  id: string;
+  title: string;
+  description: string;
+  acceptanceCriteria: string[];
+  relevantFiles: string[];
+  dependencies: string[];
+  column: Column;
+  createdAt: string;
+  workerLog?: WorkerLog;
+  reviewerLog?: ReviewerLog;
+  handover?: WorkerHandover;
+  coordinatorLog?: CoordinatorLog;
+  requirementRefs?: string[];
+  originIdeaIds?: string[];
+  workAttempts?: WorkAttempt[];
+  archivedAt?: string;
 };
 
 export function isWorkerAdmission(value: unknown): value is WorkerAdmission {
@@ -160,84 +289,3 @@ function isReviewReadinessState(
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-
-export type CardSpecification = Pick<
-  Card,
-  | "title"
-  | "description"
-  | "acceptanceCriteria"
-  | "relevantFiles"
-  | "dependencies"
-  | "requirementRefs"
->;
-
-export type PlanningChange = {
-  id: string;
-  action: "keep" | "create" | "update" | "remove";
-  cardId?: string;
-  proposedCard?: CardSpecification;
-  rationale: string;
-  decision: "pending" | "accepted" | "rejected";
-  targetColumn?: "ready";
-};
-
-export type PlanningProposal = {
-  id: string;
-  projectId: string;
-  status: "pending" | "applied";
-  baseRequirementsRevision: string;
-  baseBoardRevision: string;
-  proposedRequirements: string;
-  changes: PlanningChange[];
-  createdAt: string;
-  appliedAt?: string;
-};
-
-export type WorkerHandover = {
-  problem: string;
-  attempted: string[];
-  blockedBy: string[];
-  occurredAt: string;
-};
-
-export type CoordinatorAction = "retry_with_patch" | "redevise" | "archive";
-
-export type CoordinatorSuggestion = {
-  id: string;
-  action: CoordinatorAction;
-  rationale: string;
-  cardPatch?: {
-    description?: string;
-    acceptanceCriteria?: string[];
-    relevantFiles?: string[];
-    requirementRefs?: string[];
-  };
-  requirementsContent?: string;
-};
-
-export type CoordinatorLog = {
-  status: "pending" | "complete" | "error";
-  analyzedAt?: string;
-  requirementsRevision?: string;
-  summary?: string;
-  suggestions?: CoordinatorSuggestion[];
-  error?: string;
-};
-
-export type Card = {
-  id: string;
-  title: string;
-  description: string;
-  acceptanceCriteria: string[];
-  relevantFiles: string[];
-  dependencies: string[];
-  column: Column;
-  createdAt: string;
-  workerLog?: WorkerLog;
-  reviewerLog?: ReviewerLog;
-  handover?: WorkerHandover;
-  coordinatorLog?: CoordinatorLog;
-  requirementRefs?: string[];
-  workAttempts?: WorkAttempt[];
-  archivedAt?: string;
-};

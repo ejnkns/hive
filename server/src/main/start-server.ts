@@ -20,25 +20,25 @@ import {
 import {
   createBoardStore,
   createCoordinator,
-  createDeviseEngine,
   createIntegrationManager,
-  createPlanner,
+  createPlanningManager,
   createProjectStore,
   createQueenBeeRuntimeStore,
+  createRequirementsSessionManager,
   createReviewer,
   createWorkerSupervisor,
   registerBoardRoutes,
   registerCoordinatorRoutes,
-  registerDeviseRoutes,
   registerIntegrationRoutes,
   registerProjectRoutes,
+  registerRequirementsRoutes,
   registerWorkDecisionRoutes,
   registerWorkerRoutes,
 } from "../server/queen-bee";
 import {
   emitBoardEvent,
-  emitDeviseDraft,
   emitProjectEvent,
+  emitRequirementsDraft,
   emitWorkerEvent,
 } from "../server/queen-bee/worker-event-bus";
 
@@ -62,16 +62,20 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
   });
 
   const runtimeStore = createQueenBeeRuntimeStore();
-  const deviseEngine = createDeviseEngine(
+  const requirementsSessionManager = createRequirementsSessionManager(
     undefined,
     runtimeStore,
-    emitDeviseDraft
+    emitRequirementsDraft
   );
   const boardStore = createBoardStore((projectId) => {
     emitBoardEvent(projectId);
   }, runtimeStore);
   const integrationManager = createIntegrationManager();
-  const planner = createPlanner(boardStore, runtimeStore, integrationManager);
+  const planningManager = createPlanningManager(
+    boardStore,
+    runtimeStore,
+    integrationManager
+  );
   const reviewer = createReviewer();
   const coordinator = createCoordinator();
   const workerSupervisor = createWorkerSupervisor(
@@ -94,19 +98,23 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
   });
 
   registerProjectRoutes(server, projectStore);
-  registerDeviseRoutes(server, {
-    engine: deviseEngine,
+  registerRequirementsRoutes(server, {
+    sessionManager: requirementsSessionManager,
     projectStore,
     boardStore,
-    planner,
+    planningManager,
   });
-  registerBoardRoutes(server, { boardStore, planner, projectStore });
+  registerBoardRoutes(server, {
+    boardStore,
+    planningManager,
+    projectStore,
+  });
   registerIntegrationRoutes(server, { projectStore, integrationManager });
   registerCoordinatorRoutes(server, {
     boardStore,
     projectStore,
-    engine: deviseEngine,
-    planner,
+    sessionManager: requirementsSessionManager,
+    planningManager,
   });
   registerWorkerRoutes(server, {
     workerSupervisor,

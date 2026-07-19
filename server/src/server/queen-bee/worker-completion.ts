@@ -20,3 +20,19 @@ export type WorkerToolEvidence = {
   isError: boolean;
   headCommit: string;
 };
+
+export function buildVerificationEvidence(
+  completion: Pick<WorkerCompletion, "verificationCallIds">,
+  evidence: ReadonlyMap<string, WorkerToolEvidence>
+): WorkerCompletion["verificationEvidence"] {
+  return completion.verificationCallIds.map((callId) => {
+    const result = evidence.get(callId);
+    if (!result) throw new Error(`Missing verified evidence: ${callId}`);
+    return {
+      callId,
+      command: result.arguments,
+      output: result.output,
+      headCommit: result.headCommit,
+    };
+  });
+}

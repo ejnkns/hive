@@ -2,7 +2,11 @@
 
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ProjectListItem } from "shared/project-types";
+import {
+  DEFAULT_MAX_CONCURRENT_WORKERS,
+  isMaxConcurrentWorkers,
+  type ProjectListItem,
+} from "shared/project-types";
 import {
   createProject,
   inferTargetBranch,
@@ -118,7 +122,7 @@ export function createProjectStore(
     },
 
     updateMaxConcurrentWorkers(id: string, value: number): ProjectListItem {
-      if (!Number.isInteger(value) || value < 1 || value > 16) {
+      if (!isMaxConcurrentWorkers(value)) {
         throw new Error("Parallel workers must be an integer from 1 to 16");
       }
       const entry = registry.projects[id];
@@ -146,12 +150,8 @@ export function createProjectStore(
   };
 }
 
-const DEFAULT_MAX_CONCURRENT_WORKERS = 3;
-
 function parseMaxConcurrentWorkers(value: unknown): number {
-  return typeof value === "number" && Number.isInteger(value) && value > 0
-    ? value
-    : DEFAULT_MAX_CONCURRENT_WORKERS;
+  return isMaxConcurrentWorkers(value) ? value : DEFAULT_MAX_CONCURRENT_WORKERS;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

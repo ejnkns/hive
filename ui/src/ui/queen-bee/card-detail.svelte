@@ -5,6 +5,7 @@ import type {
   Column,
   PlanningProposal,
   ReviewReadiness,
+  RequirementsFeedback,
 } from "shared/board-types";
 import CardRefinement from "./card-refinement.svelte";
 
@@ -16,6 +17,7 @@ let {
   onClose,
   onCardUpdated,
   onPlanningProposal,
+  onRequirementsFeedback,
   onRun,
   onAccept,
   onRequestChanges,
@@ -31,6 +33,7 @@ type Props = {
   onClose: () => void;
   onCardUpdated: (card: Card) => void;
   onPlanningProposal?: (proposal: PlanningProposal) => void;
+  onRequirementsFeedback?: (feedback: RequirementsFeedback) => void;
   onRun?: () => void;
   onAccept?: () => Promise<void>;
   onRequestChanges?: (guidance: string) => Promise<void>;
@@ -78,13 +81,21 @@ $effect(() => {
 
 async function acceptWork() {
   if (!onAccept) return;
+  await runDecision(onAccept, "Could not accept work");
+}
+
+async function runDecision(
+  action: () => Promise<void>,
+  failureMessage: string
+): Promise<boolean> {
   deciding = true;
   decisionError = null;
   try {
-    await onAccept();
+    await action();
+    return true;
   } catch (error) {
-    decisionError =
-      error instanceof Error ? error.message : "Could not accept work";
+    decisionError = error instanceof Error ? error.message : failureMessage;
+    return false;
   } finally {
     deciding = false;
   }
@@ -132,7 +143,6 @@ $effect(() => {
 });
 
 const COLUMN_LABELS: Record<Column, string> = {
-  idea: "Idea",
   ready: "Ready",
   in_progress: "In Progress",
   reviewing: "Reviewing",
@@ -364,6 +374,7 @@ const COLUMN_LABELS: Record<Column, string> = {
           {card}
           {onCardUpdated}
           {onPlanningProposal}
+          {onRequirementsFeedback}
           initialQuestion={initialRefinementQuestion}
           onCancel={() => (refining = false)}
         />
@@ -401,11 +412,6 @@ const COLUMN_LABELS: Record<Column, string> = {
     </div>
 
     <div class="panel-actions">
-      {#if card.column === "idea" && !refining}
-        <button class="btn btn-run" onclick={() => (refining = true)}>
-          Refine card
-        </button>
-      {/if}
       {#if card.column === "ready" && onRun}
         <button class="btn btn-run" onclick={onRun}>
           Run Worker

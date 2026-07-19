@@ -14,13 +14,13 @@ import type {
   ToolDefinition,
   ToolResult,
 } from "../devise-engine/devise-tools";
-import { DEVISE_TOOLS } from "../devise-engine/devise-tools";
+import { AGENT_TOOLS } from "../devise-engine/devise-tools";
 import { getDiff, getStatus } from "./git-operations";
 import { commitWork } from "./worker-tools/commit-work";
 import { runCommand } from "./worker-tools/run-command";
 
 export const WORKER_TOOLS: ToolDefinition[] = [
-  ...DEVISE_TOOLS.filter(
+  ...AGENT_TOOLS.filter(
     (tool) => tool.function.name !== "update_requirements_draft"
   ),
   {
@@ -189,7 +189,7 @@ export async function executeWorkerTool(
           isError: false,
         };
       default:
-        return executeDeviseToolFallback(toolCall, workspacePath);
+        return executeAgentToolFallback(toolCall, workspacePath);
     }
   } catch (err) {
     return {
@@ -239,7 +239,7 @@ function writeFile(toolCall: ToolCall, workspacePath: string): ToolResult {
   };
 }
 
-function executeDeviseToolFallback(
+function executeAgentToolFallback(
   toolCall: ToolCall,
   workspacePath: string
 ): ToolResult {

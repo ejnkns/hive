@@ -56,7 +56,7 @@ async function startDevise(prompt: string) {
   spec = "";
 
   try {
-    const res = await fetch(`/api/queen-bee/${projectId}/devise/start`, {
+    const res = await fetch(`/api/queen-bee/${projectId}/requirements/start`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt }),
@@ -64,7 +64,7 @@ async function startDevise(prompt: string) {
 
     if (!res.ok) {
       const data = (await res.json()) as { error?: string };
-      throw new Error(data.error ?? "Failed to start devise session");
+      throw new Error(data.error ?? "Failed to start Requirements Session");
     }
 
     const data = (await res.json()) as {
@@ -89,11 +89,14 @@ async function respond(answer: string) {
   error = null;
 
   try {
-    const res = await fetch(`/api/queen-bee/${projectId}/devise/respond`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ answer: userMsg }),
-    });
+    const res = await fetch(
+      `/api/queen-bee/${projectId}/requirements/respond`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answer: userMsg }),
+      }
+    );
 
     if (!res.ok) {
       const data = (await res.json()) as { error?: string };
@@ -151,7 +154,8 @@ onMount(() => {
 });
 
 function projectDraftContent(value: unknown, project: string): string | null {
-  if (!isRecord(value) || value.type !== "devise_draft_updated") return null;
+  if (!isRecord(value) || value.type !== "requirements_draft_updated")
+    return null;
   const data = value.data;
   if (
     !isRecord(data) ||

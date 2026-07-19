@@ -1,11 +1,11 @@
 /** @private — only imported by queen-bee.ts */
 
 import type { FastifyInstance } from "fastify";
-import type { CoordinatorAction } from "shared/board-types";
+import type { CoordinatorAction, PlanningOutcome } from "shared/board-types";
 import type { BoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
-import type { DeviseEngine } from "./devise-engine";
-import type { Planner } from "./planner";
+import type { RequirementsSessionManager } from "./devise-engine";
+import type { PlanningManager } from "./planner";
 import { readRequirements, requirementsRevision } from "./requirements-store";
 
 export function registerCoordinatorRoutes(
@@ -13,8 +13,8 @@ export function registerCoordinatorRoutes(
   deps: {
     boardStore: BoardStore;
     projectStore: ProjectStore;
-    engine: DeviseEngine;
-    planner: Planner;
+    sessionManager: RequirementsSessionManager;
+    planningManager: PlanningManager;
   }
 ): void {
   server.post(
@@ -24,10 +24,7 @@ export function registerCoordinatorRoutes(
         projectId: string;
         cardId: string;
       };
-      const body = request.body as {
-        action?: CoordinatorAction;
-        suggestionId?: string;
-      };
+      const body = isRecord(request.body) ? request.body : {};
       const project = deps.projectStore
         .getAll()
         .find((item) => item.id === projectId);
@@ -38,8 +35,9 @@ export function registerCoordinatorRoutes(
         .getBoard(projectId, project.repoPath)
         .cards.find((item) => item.id === cardId);
       if (!card) return reply.status(404).send({ error: "Card not found" });
-      if (!body.action)
-        return reply.status(400).send({ error: "action is required" });
+      if (!isCoordinatorAction(body.action)) {
+        return reply.status(400).send({ error: "action is invalid" });
+      }
 
       const suggestion = card.coordinatorLog?.suggestions?.find(
         (item) => item.id === body.suggestionId && item.action === body.action
@@ -70,7 +68,7 @@ export function registerCoordinatorRoutes(
           });
         }
         try {
-          const proposal = await deps.planner.propose(
+          const outcome = await deps.planningManager.propose(
             projectId,
             project.repoPath,
             suggestion.requirementsContent,
@@ -81,7 +79,7 @@ export function registerCoordinatorRoutes(
             ].join("\n"),
             { cardId, target: "archived" }
           );
-          return reply.send({ proposal });
+          return reply.send(planningResponse(outcome));
         } catch (error) {
           return reply.status(500).send({
             error:
@@ -93,29 +91,19 @@ export function registerCoordinatorRoutes(
       }
 
       if (body.action === "redevise") {
-        const result = await deps.engine.startCard(
+        const result = await deps.sessionManager.startCard(
           projectId,
           cardId,
           [
-            "Resolve this card's unfulfillable handover by refining the card while keeping the project requirements document aligned.",
-            `Card title: ${card.title}`,
-            `Current card description: ${card.description}`,
-            `Coordinator rationale: ${suggestion.rationale}`,
+            "Repair the project requirements using structured Coordinator feedback without inspecting Board or Card content.",
+            `Structured feedback: ${suggestion.rationale}`,
             "Ask the user for the decision needed to make this card fulfillable.",
-            "When complete, output CARD_UPDATE followed by a json code fence containing description, acceptanceCriteria, relevantFiles, and requirementRefs for this card, then REQUIREMENTS_COMPLETE. Also call update_requirements_draft with the full aligned project requirements document.",
+            "When complete, call update_requirements_draft with the full aligned project Requirements Draft, then output REQUIREMENTS_COMPLETE. Do not author Card content; the Planner Agent will independently reconcile Cards after user approval.",
           ].join("\n"),
           project.repoPath
         );
-        const updated = deps.boardStore.updateCard(
-          projectId,
-          project.repoPath,
-          cardId,
-          {
-            column: "idea",
-          }
-        );
         return reply.send({
-          card: updated,
+          card,
           redevise: true,
           question: result.question,
         });
@@ -128,7 +116,7 @@ export function registerCoordinatorRoutes(
       }
 
       try {
-        const proposal = await deps.planner.propose(
+        const outcome = await deps.planningManager.propose(
           projectId,
           project.repoPath,
           suggestion.requirementsContent,
@@ -140,7 +128,7 @@ export function registerCoordinatorRoutes(
           ].join("\n"),
           { cardId, target: "ready" }
         );
-        return reply.send({ proposal });
+        return reply.send(planningResponse(outcome));
       } catch (error) {
         return reply.status(500).send({
           error:
@@ -151,4 +139,16 @@ export function registerCoordinatorRoutes(
       }
     }
   );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isCoordinatorAction(value: unknown): value is CoordinatorAction {
+  return ["retry_with_patch", "redevise", "archive"].includes(String(value));
+}
+
+function planningResponse(outcome: PlanningOutcome) {
+  return "kind" in outcome ? { feedback: outcome } : { proposal: outcome };
 }

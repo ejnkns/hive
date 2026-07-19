@@ -4,8 +4,8 @@ import type { CoordinatorSuggestion } from "shared/board-types";
 import type { Card } from "./board-store";
 import { COORDINATOR_SYSTEM_PROMPT } from "./coordinator/coordinator-system-prompt";
 import {
-  createDeviseModelCaller,
-  type DeviseModelCaller,
+  type AgentModelCaller,
+  createAgentModelCaller,
 } from "./devise-engine/create-devise-model-caller";
 
 export type CoordinatorAnalysis = {
@@ -20,10 +20,8 @@ export type Coordinator = {
   ): Promise<CoordinatorAnalysis>;
 };
 
-export function createCoordinator(
-  modelCaller?: DeviseModelCaller
-): Coordinator {
-  const caller = modelCaller ?? createDeviseModelCaller();
+export function createCoordinator(modelCaller?: AgentModelCaller): Coordinator {
+  const caller = modelCaller ?? createAgentModelCaller();
 
   return {
     async analyze(card, requirementsContent) {

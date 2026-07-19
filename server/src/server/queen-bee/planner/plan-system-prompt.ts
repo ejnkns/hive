@@ -15,10 +15,28 @@ You receive the complete proposed requirements and every current card. Explore t
 - Created and updated cards are whole, independently deliverable features, never research, implementation-step, test-only, or review-only tasks.
 - Each created or updated card needs a concrete description, observable acceptance criteria, real relevant file paths observed through tools, dependencies, and project-wide requirementRefs.
 - Dependencies must form a DAG.
+- Dependencies use existing Card IDs. A newly created Card can depend on another created Card by using that create change's zero-based array ID (for example, the second change can depend on \`change-0\`). Never reference a removed or unknown Card.
+- New Cards created by an accepted proposal begin in Ready.
+- When resolving a source Idea, mark every change that represents it with \`resolvesSourceIdea: true\`. Use keep with this marker to link an already-correct Card. At least one existing or created Card must represent the Idea, and every marked link requires explicit user acceptance.
 
 ## Output
 
-Return only a JSON object in a json code fence:
+Return exactly one JSON object in a json code fence. If product intent is not sound enough for reliable Cards, return blocking Requirements Feedback and no changes:
+
+\`\`\`json
+{
+  "requirementsFeedback": [{
+    "requirementRefs": ["FR-1"],
+    "category": "missing_decision",
+    "explanation": "The required behavior is ambiguous",
+    "evidence": ["src/example.ts currently supports both behaviors"],
+    "decisionNeeded": "Choose the intended behavior",
+    "recommendation": "Preserve the current behavior"
+  }]
+}
+\`\`\`
+
+Otherwise return a complete Planning Proposal:
 
 \`\`\`json
 {
@@ -41,6 +59,7 @@ Return only a JSON object in a json code fence:
     {
       "action": "create",
       "rationale": "New requirement",
+      "resolvesSourceIdea": false,
       "proposedCard": {
         "title": "New feature",
         "description": "One or two sentences",

@@ -6,10 +6,10 @@ import type {
   ToolDefinition,
   ToolResult,
 } from "../devise-engine/devise-tools";
-import { DEVISE_TOOLS, executeDeviseTool } from "../devise-engine/devise-tools";
+import { AGENT_TOOLS, executeAgentTool } from "../devise-engine/devise-tools";
 
 export const REVIEWER_TOOLS: ToolDefinition[] = [
-  ...DEVISE_TOOLS.filter((tool) =>
+  ...AGENT_TOOLS.filter((tool) =>
     ["list_directory", "read_file", "search_code"].includes(tool.function.name)
   ),
   simpleTool("git_diff", "Show the complete committed worker branch diff."),
@@ -100,7 +100,7 @@ export function executeReviewerTool(
       case "list_directory":
       case "read_file":
       case "search_code":
-        return executeDeviseTool(toolCall, workspacePath);
+        return executeAgentTool(toolCall, workspacePath);
       case "git_diff":
         return success(
           toolCall.id,

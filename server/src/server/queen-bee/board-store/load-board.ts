@@ -2,7 +2,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ReviewerLog, WorkAttempt } from "shared/board-types";
+import type { Idea, ReviewerLog, WorkAttempt } from "shared/board-types";
 import type { Board, Card } from "../board-store";
 import type { QueenBeeRuntimeStore } from "../queen-bee-runtime-store";
 
@@ -24,12 +24,15 @@ export function loadBoard(
   const _cardsDir = join(hiveDir, "cards");
 
   if (!existsSync(boardPath)) {
-    return { projectId, cards: [] };
+    return { projectId, ideas: [], cards: [] };
   }
 
   try {
     const raw = readFileSync(boardPath, "utf-8");
+    // Repository JSON is untyped at runtime; each field is validated while
+    // reconstructing the Board below, so this shape only names possible input.
     const parsed = JSON.parse(raw) as {
+      ideas?: Idea[];
       cards?: {
         id: string;
         title: string;
@@ -51,12 +54,16 @@ export function loadBoard(
         handover?: Card["handover"];
         coordinatorLog?: Card["coordinatorLog"];
         requirementRefs?: string[];
+        originIdeaIds?: string[];
         workAttempts?: WorkAttempt[];
         archivedAt?: string;
       }[];
     };
 
     const cards: Card[] = [];
+    const ideas = Array.isArray(parsed.ideas)
+      ? parsed.ideas.filter(isIdea)
+      : [];
 
     if (parsed.cards && Array.isArray(parsed.cards)) {
       for (const c of parsed.cards) {
@@ -74,10 +81,7 @@ export function loadBoard(
               : [],
             dependencies: Array.isArray(c.dependencies) ? c.dependencies : [],
             column:
-              runtime?.column ??
-              ((typeof c.column === "string"
-                ? c.column
-                : "idea") as Card["column"]),
+              runtime?.column ?? (isColumn(c.column) ? c.column : "ready"),
             createdAt: typeof c.createdAt === "string" ? c.createdAt : "",
             workerLog: runtime?.workerLog ?? c.workerLog,
             reviewerLog:
@@ -86,6 +90,9 @@ export function loadBoard(
             coordinatorLog: runtime?.coordinatorLog ?? c.coordinatorLog,
             requirementRefs: Array.isArray(c.requirementRefs)
               ? c.requirementRefs
+              : undefined,
+            originIdeaIds: Array.isArray(c.originIdeaIds)
+              ? c.originIdeaIds
               : undefined,
             workAttempts:
               runtime?.workAttempts ??
@@ -96,10 +103,36 @@ export function loadBoard(
       }
     }
 
-    return { projectId, cards };
+    return { projectId, ideas, cards };
   } catch {
-    return { projectId, cards: [] };
+    return { projectId, ideas: [], cards: [] };
   }
+}
+
+function isIdea(value: unknown): value is Idea {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return (
+    typeof value.id === "string" &&
+    typeof value.title === "string" &&
+    typeof value.brief === "string" &&
+    typeof value.createdAt === "string"
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isColumn(value: unknown): value is Card["column"] {
+  return [
+    "ready",
+    "in_progress",
+    "reviewing",
+    "done",
+    "unfulfillable",
+  ].includes(String(value));
 }
 
 function migrateReviewerLog(

@@ -3,6 +3,7 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type {
+  Idea,
   Card as SharedCard,
   Column as SharedColumn,
 } from "shared/board-types";
@@ -18,7 +19,6 @@ import type {
 export type Column = SharedColumn;
 
 export const COLUMNS: Column[] = [
-  "idea",
   "ready",
   "in_progress",
   "reviewing",
@@ -30,6 +30,7 @@ export type Card = SharedCard;
 
 export type Board = {
   projectId: string;
+  ideas: Idea[];
   cards: Card[];
 };
 
@@ -40,6 +41,13 @@ export type BoardStore = {
     repoPath: string,
     card: Omit<Card, "id" | "createdAt">
   ): Card;
+  addIdea(
+    projectId: string,
+    repoPath: string,
+    idea: Pick<Idea, "title" | "brief">
+  ): Idea;
+  archiveIdea(projectId: string, repoPath: string, ideaId: string): Idea;
+  saveIdeas(projectId: string, repoPath: string, ideas: Idea[]): void;
   moveCard(
     projectId: string,
     repoPath: string,
@@ -85,6 +93,38 @@ export function createBoardStore(
       onBoardChanged(projectId);
 
       return newCard;
+    },
+
+    addIdea(projectId, repoPath, idea) {
+      const board = loadBoard(projectId, repoPath, runtimeStore);
+      const newIdea: Idea = {
+        ...idea,
+        id: generateId(),
+        createdAt: new Date().toISOString(),
+      };
+      board.ideas.push(newIdea);
+      ensureHiveDir(repoPath);
+      saveBoard(repoPath, board);
+      onBoardChanged(projectId);
+      return newIdea;
+    },
+
+    archiveIdea(projectId, repoPath, ideaId) {
+      const board = loadBoard(projectId, repoPath, runtimeStore);
+      const idea = board.ideas.find((candidate) => candidate.id === ideaId);
+      if (!idea) throw new Error(`Idea not found: ${ideaId}`);
+      idea.archivedAt = new Date().toISOString();
+      ensureHiveDir(repoPath);
+      saveBoard(repoPath, board);
+      onBoardChanged(projectId);
+      return idea;
+    },
+
+    saveIdeas(projectId, repoPath, ideas) {
+      const board = loadBoard(projectId, repoPath, runtimeStore);
+      ensureHiveDir(repoPath);
+      saveBoard(repoPath, { ...board, ideas });
+      onBoardChanged(projectId);
     },
 
     moveCard(
@@ -142,7 +182,12 @@ export function createBoardStore(
         repoPath,
         runtimeStore
       ).cards.filter((card) => card.archivedAt);
-      const board: Board = { projectId, cards: [...cards, ...archivedCards] };
+      const current = loadBoard(projectId, repoPath, runtimeStore);
+      const board: Board = {
+        projectId,
+        ideas: current.ideas,
+        cards: [...cards, ...archivedCards],
+      };
       saveBoard(repoPath, board);
       for (const card of cards) {
         saveCard(repoPath, card);
@@ -171,7 +216,11 @@ function saveRuntimeState(
 }
 
 function visibleBoard(board: Board): Board {
-  return { ...board, cards: board.cards.filter((card) => !card.archivedAt) };
+  return {
+    ...board,
+    ideas: board.ideas.filter((idea) => !idea.archivedAt),
+    cards: board.cards.filter((card) => !card.archivedAt),
+  };
 }
 
 function ensureHiveDir(repoPath: string): void {

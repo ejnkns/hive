@@ -8,8 +8,8 @@ import type { Message } from "shared/message";
 import type { BoardStore, Card } from "./board-store";
 import type { Coordinator } from "./coordinator";
 import {
-  createDeviseModelCaller,
-  type DeviseModelCaller,
+  type AgentModelCaller,
+  createAgentModelCaller,
 } from "./devise-engine/create-devise-model-caller";
 import type {
   NewCardActivityEvent,
@@ -62,7 +62,7 @@ export function createWorkerSupervisor(
   reviewer: Reviewer,
   coordinator: Coordinator,
   runtimeStore: QueenBeeRuntimeStore,
-  modelCaller: DeviseModelCaller = createDeviseModelCaller(WORKER_TOOLS)
+  modelCaller: AgentModelCaller = createAgentModelCaller(WORKER_TOOLS)
 ): WorkerSupervisor {
   const abortControllers = new Map<
     string,
@@ -330,7 +330,7 @@ async function runLoop(
   baseCommit: string,
   cardId: string,
   onEvent: (event: WorkerEvent) => void,
-  modelCaller: ReturnType<typeof createDeviseModelCaller>,
+  modelCaller: ReturnType<typeof createAgentModelCaller>,
   log: NonNullable<Card["workerLog"]>,
   persistLog: () => void,
   recordActivity: (event: NewCardActivityEvent) => void,
@@ -453,7 +453,7 @@ async function runLoop(
 
 function appendToolExchange(
   messages: Message[],
-  response: Awaited<ReturnType<DeviseModelCaller["call"]>>,
+  response: Awaited<ReturnType<AgentModelCaller["call"]>>,
   toolCall: { id: string; name: string; arguments: string },
   content: string
 ): void {

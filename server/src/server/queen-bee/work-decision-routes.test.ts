@@ -166,10 +166,57 @@ describe("work decision routes", () => {
     );
   });
 
+  it("retries the refreshed package when combined-state review fails", async () => {
+    const fixture = createFixture({
+      readinessState: "stale",
+      reviewerError: true,
+      refreshedReviewBuilder(
+        card,
+        _repoPath,
+        _worktreePath,
+        integrationCommit
+      ) {
+        const refreshed = reviewPackage(card.id);
+        return {
+          reviewPackage: {
+            ...refreshed,
+            id: "package-2",
+            revisions: {
+              ...refreshed.revisions,
+              baseCommit: integrationCommit,
+              integrationCommit,
+            },
+          },
+          workspace: { path: "/tmp/combined-review", release() {} },
+        };
+      },
+    });
+    const card = fixture.reviewedCard();
+    fixture.runtimeStore.saveReviewPackage(
+      fixture.project.id,
+      reviewPackage(card.id)
+    );
+
+    const response = await fixture.server.inject({
+      method: "POST",
+      url: `/api/queen-bee/${fixture.project.id}/cards/${card.id}/restart-review`,
+    });
+
+    assert.equal(response.statusCode, 502);
+    const attempt = fixture.boardStore.getBoard(
+      fixture.project.id,
+      fixture.project.repoPath
+    ).cards[0]?.workAttempts?.[0];
+    assert.equal(attempt?.status, "review_error");
+    assert.equal(attempt?.reviewPackageId, "package-2");
+    assert.equal(attempt?.reviewedIntegrationRevision, "integration-2");
+  });
+
   function createFixture(
     options: {
       readinessState?: ReviewReadiness["state"];
       refreshedReviewBuilder?: typeof buildRefreshedReviewPackage;
+      reviewerError?: boolean;
     } = {}
   ) {
     const repoPath = mkdtempSync(join(tmpdir(), "hive-decisions-"));
@@ -200,6 +247,7 @@ describe("work decision routes", () => {
     const reviewer: Reviewer = {
       async review() {
         reviewCalls += 1;
+        if (options.reviewerError) throw new Error("Reviewer unavailable");
         return {
           verdict: "approved",
           findings: [],

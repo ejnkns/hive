@@ -2,9 +2,10 @@
 
 import { execFileSync } from "node:child_process";
 import type { ToolCall } from "../devise-engine/devise-tools";
-import type {
-  WorkerCompletion,
-  WorkerToolEvidence,
+import {
+  buildVerificationEvidence,
+  type WorkerCompletion,
+  type WorkerToolEvidence,
 } from "../worker-completion";
 
 export type CompletionGateResult =
@@ -52,7 +53,7 @@ export function evaluateCompletion(
   ]);
   if (changedFiles.includes(".hive/requirements.md")) {
     return rejected(
-      ".hive/requirements.md is protected project-wide state. Revert that Worker Agent change; requirements may only change through an approved Devise workflow."
+      ".hive/requirements.md is protected project-wide state. Revert that Worker Agent change; requirements may only change through an approved Requirements workflow."
     );
   }
 
@@ -75,16 +76,7 @@ export function evaluateCompletion(
     ok: true,
     completion: {
       ...completion,
-      verificationEvidence: completion.verificationCallIds.map((callId) => {
-        const result = evidence.get(callId);
-        if (!result) throw new Error(`Missing verified evidence: ${callId}`);
-        return {
-          callId,
-          command: result.arguments,
-          output: result.output,
-          headCommit: result.headCommit,
-        };
-      }),
+      verificationEvidence: buildVerificationEvidence(completion, evidence),
     },
   };
 }

@@ -1,9 +1,10 @@
 import assert from "node:assert";
+import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { DEVISE_TOOLS, executeDeviseTool } from "./devise-tools";
+import { AGENT_TOOLS, executeAgentTool } from "./devise-tools";
 
 function createTempWorkspace(): string {
   const dir = mkdtempSync(join(tmpdir(), "hive-tool-test-"));
@@ -21,10 +22,10 @@ function createTempWorkspace(): string {
   return dir;
 }
 
-describe("DEVISE_TOOLS", () => {
+describe("AGENT_TOOLS", () => {
   it("registers three tools", () => {
-    assert.strictEqual(DEVISE_TOOLS.length, 4);
-    const names = DEVISE_TOOLS.map((t) => t.function.name);
+    assert.strictEqual(AGENT_TOOLS.length, 4);
+    const names = AGENT_TOOLS.map((t) => t.function.name);
     assert.deepStrictEqual(names.sort(), [
       "list_directory",
       "read_file",
@@ -34,17 +35,17 @@ describe("DEVISE_TOOLS", () => {
   });
 
   it("all tools have required parameters", () => {
-    for (const tool of DEVISE_TOOLS) {
+    for (const tool of AGENT_TOOLS) {
       assert.ok(tool.function.parameters.required.length > 0);
     }
   });
 });
 
-describe("executeDeviseTool", () => {
+describe("executeAgentTool", () => {
   describe("list_directory", () => {
     it("lists directory contents", () => {
       const workspace = createTempWorkspace();
-      const result = executeDeviseTool(
+      const result = executeAgentTool(
         { id: "tc1", name: "list_directory", arguments: '{"path":"."}' },
         workspace
       );
@@ -59,7 +60,7 @@ describe("executeDeviseTool", () => {
       mkdirSync(join(workspace, ".hive"), { recursive: true });
       writeFileSync(join(workspace, ".hive", "project.json"), "{}");
 
-      const result = executeDeviseTool(
+      const result = executeAgentTool(
         { id: "tc1", name: "list_directory", arguments: '{"path":"."}' },
         workspace
       );
@@ -70,7 +71,7 @@ describe("executeDeviseTool", () => {
 
     it("rejects path escape", () => {
       const workspace = createTempWorkspace();
-      const result = executeDeviseTool(
+      const result = executeAgentTool(
         {
           id: "tc1",
           name: "list_directory",
@@ -87,7 +88,7 @@ describe("executeDeviseTool", () => {
   describe("read_file", () => {
     it("reads file contents", () => {
       const workspace = createTempWorkspace();
-      const result = executeDeviseTool(
+      const result = executeAgentTool(
         { id: "tc1", name: "read_file", arguments: '{"path":"package.json"}' },
         workspace
       );
@@ -97,7 +98,7 @@ describe("executeDeviseTool", () => {
     });
 
     it("rejects missing path argument", () => {
-      const result = executeDeviseTool(
+      const result = executeAgentTool(
         { id: "tc1", name: "read_file", arguments: "{}" },
         "/tmp"
       );
@@ -107,7 +108,7 @@ describe("executeDeviseTool", () => {
 
     it("rejects path escape", () => {
       const workspace = createTempWorkspace();
-      const result = executeDeviseTool(
+      const result = executeAgentTool(
         {
           id: "tc1",
           name: "read_file",
@@ -122,7 +123,7 @@ describe("executeDeviseTool", () => {
 
     it("rejects directories", () => {
       const workspace = createTempWorkspace();
-      const result = executeDeviseTool(
+      const result = executeAgentTool(
         { id: "tc1", name: "read_file", arguments: '{"path":"src"}' },
         workspace
       );
@@ -130,12 +131,46 @@ describe("executeDeviseTool", () => {
       assert.strictEqual(result.isError, true);
       assert.ok(result.content.includes("directory"));
     });
+
+    it("reads the pinned project revision instead of uncommitted changes", () => {
+      const workspace = createTempWorkspace();
+      execFileSync("git", ["init"], { cwd: workspace });
+      execFileSync("git", ["config", "user.email", "tests@hive.local"], {
+        cwd: workspace,
+      });
+      execFileSync("git", ["config", "user.name", "Hive Tests"], {
+        cwd: workspace,
+      });
+      execFileSync("git", ["add", "."], { cwd: workspace });
+      execFileSync("git", ["commit", "-m", "test: create fixture"], {
+        cwd: workspace,
+      });
+      const revision = execFileSync("git", ["rev-parse", "HEAD"], {
+        cwd: workspace,
+        encoding: "utf-8",
+      }).trim();
+      writeFileSync(join(workspace, "package.json"), '{"name":"changed"}');
+
+      const result = executeAgentTool(
+        {
+          id: "tc1",
+          name: "read_file",
+          arguments: '{"path":"package.json"}',
+        },
+        workspace,
+        revision
+      );
+
+      assert.strictEqual(result.isError, false);
+      assert.ok(result.content.includes("test-app"));
+      assert.ok(!result.content.includes("changed"));
+    });
   });
 
   describe("search_code", () => {
     it("finds matches using rg", () => {
       const workspace = createTempWorkspace();
-      const result = executeDeviseTool(
+      const result = executeAgentTool(
         { id: "tc1", name: "search_code", arguments: '{"pattern":"hello"}' },
         workspace
       );
@@ -146,7 +181,7 @@ describe("executeDeviseTool", () => {
 
     it("returns no matches for unknown pattern", () => {
       const workspace = createTempWorkspace();
-      const result = executeDeviseTool(
+      const result = executeAgentTool(
         {
           id: "tc1",
           name: "search_code",
@@ -160,7 +195,7 @@ describe("executeDeviseTool", () => {
     });
 
     it("rejects missing pattern argument", () => {
-      const result = executeDeviseTool(
+      const result = executeAgentTool(
         { id: "tc1", name: "search_code", arguments: "{}" },
         "/tmp"
       );
@@ -171,7 +206,7 @@ describe("executeDeviseTool", () => {
 
   describe("unknown tool", () => {
     it("returns error for unknown tool name", () => {
-      const result = executeDeviseTool(
+      const result = executeAgentTool(
         { id: "tc1", name: "unknown_tool", arguments: "{}" },
         "/tmp"
       );
@@ -191,7 +226,7 @@ describe("executeDeviseTool", () => {
       );
       const content = "# Proposed requirements\n\n## Overview\nTest spec";
 
-      const result = executeDeviseTool(
+      const result = executeAgentTool(
         {
           id: "tc1",
           name: "update_requirements_draft",
@@ -214,7 +249,7 @@ describe("executeDeviseTool", () => {
     });
 
     it("rejects missing content argument", () => {
-      const result = executeDeviseTool(
+      const result = executeAgentTool(
         {
           id: "tc1",
           name: "update_requirements_draft",
