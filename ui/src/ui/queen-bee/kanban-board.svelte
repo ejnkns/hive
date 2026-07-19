@@ -58,6 +58,7 @@ let pendingAdmission = $state<{
   admission: WorkerAdmission;
 } | null>(null);
 let reviewReadiness = $state<Record<string, ReviewReadiness>>({});
+let readinessRequest = 0;
 
 async function loadBoard() {
   loading = true;
@@ -80,6 +81,7 @@ async function loadBoard() {
 }
 
 async function loadReviewReadiness(cards: Card[]) {
+  const request = ++readinessRequest;
   const entries = await Promise.all(
     cards
       .filter((card) => card.column === "reviewing")
@@ -99,6 +101,7 @@ async function loadReviewReadiness(cards: Card[]) {
         }
       })
   );
+  if (request !== readinessRequest) return;
   reviewReadiness = Object.fromEntries(
     entries.filter(
       (entry): entry is [string, ReviewReadiness] => entry !== null
