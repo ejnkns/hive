@@ -18,12 +18,9 @@ import type {
 import { readRequirements, requirementsRevision } from "./requirements-store";
 import { buildReviewPackage } from "./review-package";
 import type { Reviewer } from "./reviewer";
+import type { WorkerCompletion, WorkerToolEvidence } from "./worker-completion";
 import { buildWorkerContext } from "./worker-supervisor/build-worker-context";
-import {
-  evaluateCompletion,
-  type WorkerCompletion,
-  type WorkerToolEvidence,
-} from "./worker-supervisor/completion-gate";
+import { evaluateCompletion } from "./worker-supervisor/completion-gate";
 import { prepareWorktree } from "./worker-supervisor/git-operations";
 import { parseWorkerHandover } from "./worker-supervisor/parse-worker-handover";
 import {

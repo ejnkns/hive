@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { cpSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { ReviewReadiness } from "shared/board-types";
+import { parseMergeTreeResult } from "./integration-manager/parse-merge-tree";
 import { removeWorktree } from "./worker-supervisor/git-operations";
 
 export type IntegrationRevision = {
@@ -271,16 +272,16 @@ function assertReviewedWorkCurrent(input: AcceptWorkInput): void {
 function reviewReadiness(input: AcceptWorkInput): ReviewReadiness {
   const integrationRevision = ensureIntegrationBranch(input.repoPath).revision;
   const branchHead = git(input.repoPath, ["rev-parse", input.branchName]);
-  const base = {
+  const revisionState = {
     integrationRevision,
     reviewedIntegrationRevision: input.reviewedIntegrationRevision,
     branchHead,
     reviewedHead: input.reviewedHead,
-    conflictingFiles: [] as string[],
+    conflictingFiles: [],
   };
   if (branchHead !== input.reviewedHead) {
     return {
-      ...base,
+      ...revisionState,
       state: "branch_changed",
       canAccept: false,
       canRefreshReview: false,
@@ -293,7 +294,7 @@ function reviewReadiness(input: AcceptWorkInput): ReviewReadiness {
     git(input.worktreePath, ["status", "--porcelain"])
   ) {
     return {
-      ...base,
+      ...revisionState,
       state: "dirty",
       canAccept: false,
       canRefreshReview: false,
@@ -302,7 +303,7 @@ function reviewReadiness(input: AcceptWorkInput): ReviewReadiness {
   }
   if (integrationRevision === input.reviewedIntegrationRevision) {
     return {
-      ...base,
+      ...revisionState,
       state: "current",
       canAccept: true,
       canRefreshReview: false,
@@ -310,10 +311,10 @@ function reviewReadiness(input: AcceptWorkInput): ReviewReadiness {
     };
   }
 
-  const conflictingFiles = mergeConflicts(input.repoPath, input.branchName);
-  if (conflictingFiles === null) {
+  const mergeResult = analyzeMerge(input.repoPath, input.branchName);
+  if (mergeResult.state === "mergeable") {
     return {
-      ...base,
+      ...revisionState,
       state: "stale",
       canAccept: false,
       canRefreshReview: true,
@@ -321,20 +322,29 @@ function reviewReadiness(input: AcceptWorkInput): ReviewReadiness {
         "hive-main changed since review; refresh review against the latest accepted work",
     };
   }
+  if (mergeResult.state === "error") {
+    return {
+      ...revisionState,
+      state: "error",
+      canAccept: false,
+      canRefreshReview: false,
+      message: `Could not determine review readiness: ${mergeResult.message}`,
+    };
+  }
   return {
-    ...base,
+    ...revisionState,
     state: "conflicted",
     canAccept: false,
     canRefreshReview: false,
-    conflictingFiles,
+    conflictingFiles: mergeResult.files,
     message:
-      conflictingFiles.length > 0
-        ? `Reviewed work conflicts with hive-main in: ${conflictingFiles.join(", ")}`
+      mergeResult.files.length > 0
+        ? `Reviewed work conflicts with hive-main in: ${mergeResult.files.join(", ")}`
         : "Reviewed work conflicts with the latest hive-main",
   };
 }
 
-function mergeConflicts(repoPath: string, branchName: string): string[] | null {
+function analyzeMerge(repoPath: string, branchName: string) {
   const result = spawnSync(
     "git",
     ["merge-tree", "--write-tree", "--name-only", "hive-main", branchName],
@@ -345,12 +355,13 @@ function mergeConflicts(repoPath: string, branchName: string): string[] | null {
       maxBuffer: 10 * 1024 * 1024,
     }
   );
-  if (result.status === 0) return null;
-  const output = `${result.stdout}\n${result.stderr}`;
-  const conflicts = [...output.matchAll(/CONFLICT .* in (.+)$/gm)].map(
-    (match) => match[1]?.trim() ?? ""
-  );
-  return [...new Set(conflicts.filter(Boolean))].sort();
+  return parseMergeTreeResult({
+    status: result.status,
+    stdout: result.stdout,
+    stderr: result.stderr,
+    ...(result.error ? { error: result.error } : {}),
+    signal: result.signal,
+  });
 }
 
 function acquireIntegrationWorktree(repoPath: string): {

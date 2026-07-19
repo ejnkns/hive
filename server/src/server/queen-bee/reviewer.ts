@@ -24,6 +24,7 @@ export type ReviewPackage = {
   revisions: {
     baseCommit: string;
     headCommit: string;
+    reviewCommit: string;
     integrationCommit: string;
     cardRevision: string;
   };

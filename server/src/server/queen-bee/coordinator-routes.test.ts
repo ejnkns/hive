@@ -41,6 +41,7 @@ describe("coordinator routes", () => {
       create: () => {
         throw new Error("Not used");
       },
+      updateMaxConcurrentWorkers: () => project,
       unlink: () => {},
     };
     const boardStore = createBoardStore(

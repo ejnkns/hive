@@ -56,7 +56,7 @@ export function registerWorkerRoutes(
           .send({ error: "Worker Agent is already running" });
       }
 
-      const body = (request.body ?? {}) as { confirmRisks?: boolean };
+      const body = isRecord(request.body) ? request.body : {};
       const admission = evaluateWorkerAdmission({
         card,
         cards: board.cards,
@@ -175,6 +175,10 @@ export function registerWorkerRoutes(
       return reply.send({ cancelled: true, cardId });
     }
   );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function toWorkerSocketMessage(

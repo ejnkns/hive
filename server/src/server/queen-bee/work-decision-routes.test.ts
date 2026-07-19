@@ -10,7 +10,7 @@ import { createBoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
 import type { IntegrationManager } from "./integration-manager";
 import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
-import type { buildReviewPackage } from "./review-package";
+import type { buildRefreshedReviewPackage } from "./review-package";
 import type { Reviewer, ReviewPackage } from "./reviewer";
 import { registerWorkDecisionRoutes } from "./work-decision-routes";
 
@@ -121,17 +121,25 @@ describe("work decision routes", () => {
     let refreshedBase = "";
     const fixture = createFixture({
       readinessState: "stale",
-      reviewPackageBuilder(card, _repoPath, _worktreePath, baseCommit) {
-        refreshedBase = baseCommit;
+      refreshedReviewBuilder(
+        card,
+        _repoPath,
+        _worktreePath,
+        integrationCommit
+      ) {
+        refreshedBase = integrationCommit;
         const refreshed = reviewPackage(card.id);
         return {
-          ...refreshed,
-          id: "package-2",
-          revisions: {
-            ...refreshed.revisions,
-            baseCommit,
-            integrationCommit: baseCommit,
+          reviewPackage: {
+            ...refreshed,
+            id: "package-2",
+            revisions: {
+              ...refreshed.revisions,
+              baseCommit: integrationCommit,
+              integrationCommit,
+            },
           },
+          workspace: { path: "/tmp/combined-review", release() {} },
         };
       },
     });
@@ -161,7 +169,7 @@ describe("work decision routes", () => {
   function createFixture(
     options: {
       readinessState?: ReviewReadiness["state"];
-      reviewPackageBuilder?: typeof buildReviewPackage;
+      refreshedReviewBuilder?: typeof buildRefreshedReviewPackage;
     } = {}
   ) {
     const repoPath = mkdtempSync(join(tmpdir(), "hive-decisions-"));
@@ -181,6 +189,7 @@ describe("work decision routes", () => {
       create: () => {
         throw new Error("Not used");
       },
+      updateMaxConcurrentWorkers: () => project,
       unlink: () => {},
     };
     const runtimeStore = createQueenBeeRuntimeStore(join(repoPath, "runtime"));
@@ -258,7 +267,7 @@ describe("work decision routes", () => {
       integrationManager,
       runtimeStore,
       reviewer,
-      reviewPackageBuilder: options.reviewPackageBuilder,
+      refreshedReviewBuilder: options.refreshedReviewBuilder,
     });
 
     return {
@@ -322,6 +331,7 @@ describe("work decision routes", () => {
       revisions: {
         baseCommit: "base-1",
         headCommit: "head-1",
+        reviewCommit: "head-1",
         integrationCommit: "integration-1",
         cardRevision: "card-revision-1",
       },

@@ -131,6 +131,7 @@ describe("QueenBeeRuntimeStore", () => {
       revisions: {
         baseCommit: "base-1",
         headCommit: "head-1",
+        reviewCommit: "head-1",
         integrationCommit: "integration-1",
         cardRevision: "card-1-revision",
       },

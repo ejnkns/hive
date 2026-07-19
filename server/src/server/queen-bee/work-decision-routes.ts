@@ -6,8 +6,11 @@ import type { BoardStore, Card } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
 import type { IntegrationManager } from "./integration-manager";
 import type { QueenBeeRuntimeStore } from "./queen-bee-runtime-store";
-import { buildReviewPackage } from "./review-package";
-import type { Reviewer, ReviewPackage } from "./reviewer";
+import {
+  acquireReviewWorkspace,
+  buildRefreshedReviewPackage,
+} from "./review-package";
+import type { Reviewer } from "./reviewer";
 
 export function registerWorkDecisionRoutes(
   server: FastifyInstance,
@@ -17,7 +20,7 @@ export function registerWorkDecisionRoutes(
     integrationManager: IntegrationManager;
     runtimeStore: QueenBeeRuntimeStore;
     reviewer: Reviewer;
-    reviewPackageBuilder?: typeof buildReviewPackage;
+    refreshedReviewBuilder?: typeof buildRefreshedReviewPackage;
   }
 ): void {
   server.get(
@@ -176,17 +179,22 @@ export function registerWorkDecisionRoutes(
         });
       }
       let reviewPackage = previousPackage;
+      let reviewWorkspace: ReturnType<typeof acquireReviewWorkspace> | null =
+        null;
       try {
         const readiness = deps.integrationManager.reviewReadiness(input);
         if (readiness.state === "stale" && readiness.canRefreshReview) {
-          const builder = deps.reviewPackageBuilder ?? buildReviewPackage;
-          reviewPackage = builder(
+          const builder =
+            deps.refreshedReviewBuilder ?? buildRefreshedReviewPackage;
+          const refreshed = builder(
             card,
             project.repoPath,
             attempt.worktreePath,
             readiness.integrationRevision,
-            completionFrom(previousPackage)
+            previousPackage
           );
+          reviewPackage = refreshed.reviewPackage;
+          reviewWorkspace = refreshed.workspace;
           deps.runtimeStore.saveReviewPackage(projectId, reviewPackage);
         } else if (readiness.state !== "current") {
           return reply.status(409).send({
@@ -200,9 +208,14 @@ export function registerWorkDecisionRoutes(
           reviewedIntegrationRevision:
             reviewPackage.revisions.integrationCommit,
         });
+        reviewWorkspace ??= acquireReviewWorkspace(
+          project.repoPath,
+          attempt.worktreePath,
+          reviewPackage
+        );
         const verdict = await deps.reviewer.review(
           reviewPackage,
-          attempt.worktreePath
+          reviewWorkspace.path
         );
         const reviewedAt = new Date().toISOString();
         const updated = deps.boardStore.updateCard(
@@ -254,6 +267,8 @@ export function registerWorkDecisionRoutes(
           detail: message,
         });
         return reply.status(502).send({ error: message });
+      } finally {
+        reviewWorkspace?.release();
       }
     }
   );
@@ -361,28 +376,6 @@ function reviewedWorkInput(
     worktreePath: attempt.worktreePath,
     reviewedHead: attempt.reviewedHead,
     reviewedIntegrationRevision: attempt.reviewedIntegrationRevision,
-  };
-}
-
-function completionFrom(
-  reviewPackage: ReviewPackage
-): Parameters<typeof buildReviewPackage>[4] {
-  return {
-    outcome: reviewPackage.noChangeRationale
-      ? "already_satisfied"
-      : "implemented",
-    verificationCallIds: reviewPackage.verification.commands.map(
-      (command) => command.callId
-    ),
-    verificationEvidence: reviewPackage.verification.commands,
-    ...(reviewPackage.verification.notRunReason
-      ? {
-          verificationNotRunReason: reviewPackage.verification.notRunReason,
-        }
-      : {}),
-    ...(reviewPackage.noChangeRationale
-      ? { noChangeRationale: reviewPackage.noChangeRationale }
-      : {}),
   };
 }
 

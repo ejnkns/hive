@@ -265,7 +265,7 @@ const COLUMN_LABELS: Record<Column, string> = {
               class="readiness-message"
               class:readiness-current={reviewReadiness.state === "current"}
               class:readiness-warning={reviewReadiness.state === "stale"}
-              class:readiness-conflict={reviewReadiness.state === "conflicted" || reviewReadiness.state === "dirty" || reviewReadiness.state === "branch_changed"}
+              class:readiness-conflict={reviewReadiness.state === "conflicted" || reviewReadiness.state === "dirty" || reviewReadiness.state === "branch_changed" || reviewReadiness.state === "error"}
             >
               {reviewReadiness.message}
             </div>
@@ -411,42 +411,23 @@ const COLUMN_LABELS: Record<Column, string> = {
           Run Worker
         </button>
       {/if}
-      {#if card.column === "reviewing" && card.reviewerLog?.status === "complete" && reviewReadiness?.canAccept && onAccept && onRequestChanges}
-        <button class="btn btn-run" onclick={acceptWork} disabled={deciding}>
-          {deciding ? "Applying decision..." : "Accept into hive-main"}
-        </button>
-        {#if !requestingChanges}
-          <button
-            class="btn"
-            onclick={() => (requestingChanges = true)}
-            disabled={deciding}
-          >Request changes</button>
+      {#if card.column === "reviewing"}
+        {#if card.reviewerLog?.status === "complete"}
+          {#if reviewReadiness?.canAccept && onAccept}
+            <button class="btn btn-run" onclick={acceptWork} disabled={deciding}>
+              {deciding ? "Applying decision..." : "Accept into hive-main"}
+            </button>
+          {:else if reviewReadiness?.canRefreshReview && onRestartReview}
+            <button class="btn btn-run" onclick={restartReview} disabled={deciding}>
+              {deciding ? "Refreshing..." : "Refresh review"}
+            </button>
+          {/if}
+        {:else if card.reviewerLog?.status === "error" && onRestartReview}
+          <button class="btn btn-run" onclick={restartReview} disabled={deciding}>
+            {deciding ? "Restarting..." : "Retry review"}
+          </button>
         {/if}
-      {/if}
-      {#if card.column === "reviewing" && card.reviewerLog?.status === "complete" && reviewReadiness?.canRefreshReview && onRestartReview && onRequestChanges}
-        <button class="btn btn-run" onclick={restartReview} disabled={deciding}>
-          {deciding ? "Refreshing..." : "Refresh review"}
-        </button>
-        {#if !requestingChanges}
-          <button
-            class="btn"
-            onclick={() => (requestingChanges = true)}
-            disabled={deciding}
-          >Request changes</button>
-        {/if}
-      {/if}
-      {#if card.column === "reviewing" && card.reviewerLog?.status === "complete" && reviewReadiness && !reviewReadiness.canAccept && !reviewReadiness.canRefreshReview && onRequestChanges && !requestingChanges}
-        <button
-          class="btn"
-          onclick={() => (requestingChanges = true)}
-          disabled={deciding}
-        >Request changes</button>
-      {/if}
-      {#if card.column === "reviewing" && card.reviewerLog?.status === "error" && onRestartReview && onRequestChanges}
-        <button class="btn btn-run" onclick={restartReview} disabled={deciding}>
-          {deciding ? "Restarting..." : "Retry review"}
-        </button>
-        {#if !requestingChanges}
+        {#if onRequestChanges && !requestingChanges}
           <button
             class="btn"
             onclick={() => (requestingChanges = true)}

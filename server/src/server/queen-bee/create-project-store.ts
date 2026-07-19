@@ -1,6 +1,6 @@
 /** @public */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ProjectListItem } from "shared/project-types";
 import {
@@ -29,6 +29,7 @@ export type ProjectRegistry = {
 export type ProjectStore = {
   getAll(): ProjectListItem[];
   create(repoPath: string, name?: string): Project;
+  updateMaxConcurrentWorkers(id: string, value: number): ProjectListItem;
   unlink(id: string): void;
 };
 
@@ -88,27 +89,53 @@ export function createProjectStore(
     }
   }
 
+  function listProjects(): ProjectListItem[] {
+    return Object.entries(registry.projects).map(([id, entry]) => {
+      const meta = readProjectMeta(entry.path);
+      return {
+        id,
+        name: meta.name,
+        repoPath: entry.path,
+        createdAt: meta.createdAt,
+        systemPrompt: meta.systemPrompt,
+        codingGuidelines: meta.codingGuidelines,
+        targetBranch: meta.targetBranch,
+        maxConcurrentWorkers: meta.maxConcurrentWorkers,
+      };
+    });
+  }
+
   return {
     getAll(): ProjectListItem[] {
-      return Object.entries(registry.projects).map(([id, entry]) => {
-        const meta = readProjectMeta(entry.path);
-        return {
-          id,
-          name: meta.name,
-          repoPath: entry.path,
-          createdAt: meta.createdAt,
-          systemPrompt: meta.systemPrompt,
-          codingGuidelines: meta.codingGuidelines,
-          targetBranch: meta.targetBranch,
-          maxConcurrentWorkers: meta.maxConcurrentWorkers,
-        };
-      });
+      return listProjects();
     },
 
     create(repoPath: string, name?: string): Project {
       const project = createProject(repoPath, name, registry);
       registry.projects[project.id] = { path: project.repoPath };
       save();
+      return project;
+    },
+
+    updateMaxConcurrentWorkers(id: string, value: number): ProjectListItem {
+      if (!Number.isInteger(value) || value < 1 || value > 16) {
+        throw new Error("Parallel workers must be an integer from 1 to 16");
+      }
+      const entry = registry.projects[id];
+      if (!entry) throw new Error("Project not found");
+      const projectFile = join(entry.path, ".hive", "project.json");
+      const parsed: unknown = JSON.parse(readFileSync(projectFile, "utf-8"));
+      if (!isRecord(parsed))
+        throw new Error("Project configuration is invalid");
+      const temporaryFile = `${projectFile}.tmp`;
+      writeFileSync(
+        temporaryFile,
+        `${JSON.stringify({ ...parsed, maxConcurrentWorkers: value }, null, 2)}\n`
+      );
+      renameSync(temporaryFile, projectFile);
+      onProjectsChanged();
+      const project = listProjects().find((candidate) => candidate.id === id);
+      if (!project) throw new Error("Project not found");
       return project;
     },
 
@@ -125,4 +152,8 @@ function parseMaxConcurrentWorkers(value: unknown): number {
   return typeof value === "number" && Number.isInteger(value) && value > 0
     ? value
     : DEFAULT_MAX_CONCURRENT_WORKERS;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

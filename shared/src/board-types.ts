@@ -91,7 +91,13 @@ export type WorkerAdmission = {
 };
 
 export type ReviewReadiness = {
-  state: "current" | "stale" | "conflicted" | "branch_changed" | "dirty";
+  state:
+    | "current"
+    | "stale"
+    | "conflicted"
+    | "branch_changed"
+    | "dirty"
+    | "error";
   integrationRevision: string;
   reviewedIntegrationRevision: string;
   branchHead: string;
@@ -101,6 +107,59 @@ export type ReviewReadiness = {
   conflictingFiles: string[];
   message: string;
 };
+
+export function isWorkerAdmission(value: unknown): value is WorkerAdmission {
+  if (!isRecord(value) || !Array.isArray(value.blockers)) return false;
+  return (
+    typeof value.allowed === "boolean" &&
+    typeof value.canOverride === "boolean" &&
+    typeof value.activeWorkers === "number" &&
+    typeof value.maxConcurrentWorkers === "number" &&
+    value.blockers.every(
+      (blocker) =>
+        isRecord(blocker) &&
+        (blocker.kind === "capacity" ||
+          blocker.kind === "dependency" ||
+          blocker.kind === "file_overlap") &&
+        typeof blocker.message === "string" &&
+        Array.isArray(blocker.cardIds) &&
+        blocker.cardIds.every((cardId) => typeof cardId === "string")
+    )
+  );
+}
+
+export function isReviewReadiness(value: unknown): value is ReviewReadiness {
+  if (!isRecord(value)) return false;
+  return (
+    isReviewReadinessState(value.state) &&
+    typeof value.integrationRevision === "string" &&
+    typeof value.reviewedIntegrationRevision === "string" &&
+    typeof value.branchHead === "string" &&
+    typeof value.reviewedHead === "string" &&
+    typeof value.canAccept === "boolean" &&
+    typeof value.canRefreshReview === "boolean" &&
+    Array.isArray(value.conflictingFiles) &&
+    value.conflictingFiles.every((file) => typeof file === "string") &&
+    typeof value.message === "string"
+  );
+}
+
+function isReviewReadinessState(
+  value: unknown
+): value is ReviewReadiness["state"] {
+  return (
+    value === "current" ||
+    value === "stale" ||
+    value === "conflicted" ||
+    value === "branch_changed" ||
+    value === "dirty" ||
+    value === "error"
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 export type CardSpecification = Pick<
   Card,

@@ -10,6 +10,9 @@ import type {
 } from "shared/board-types";
 import KanbanCard from "./kanban-card.svelte";
 import CardDetail from "./card-detail.svelte";
+import { parseReviewReadinessResponse } from "./kanban-board/parse-review-readiness-response";
+import { parseWorkerRunResponse } from "./kanban-board/parse-worker-run-response";
+import ProjectWorkerSettings from "./project-worker-settings.svelte";
 
 let { projectId, onReDeviseStarted, onPlanningProposal }: Props = $props();
 
@@ -90,9 +93,7 @@ async function loadReviewReadiness(cards: Card[]) {
           const response = await fetch(
             `/api/queen-bee/${projectId}/cards/${card.id}/review-readiness`
           );
-          const result = (await response.json()) as {
-            readiness?: ReviewReadiness;
-          };
+          const result = parseReviewReadinessResponse(await response.json());
           return response.ok && result.readiness
             ? [card.id, result.readiness]
             : null;
@@ -163,10 +164,7 @@ async function handleRunCard(cardId: string, confirmRisks = false) {
         body: JSON.stringify({ confirmRisks }),
       }
     );
-    const result = (await response.json()) as {
-      admission?: WorkerAdmission;
-      error?: string;
-    };
+    const result = parseWorkerRunResponse(await response.json());
     if (!response.ok) {
       if (result.admission?.canOverride) {
         pendingAdmission = { cardId, admission: result.admission };
@@ -282,9 +280,42 @@ function handleCardUpdated(updatedCard: Card) {
   void loadReviewReadiness(board?.cards ?? [updatedCard]);
 }
 
+function confirmPendingAdmission() {
+  const pending = pendingAdmission;
+  if (pending) void handleRunCard(pending.cardId, true);
+}
+
 function selectCard(card: Card) {
   refinementQuestion = null;
   selectedCard = card;
+}
+
+function runSelectedCard() {
+  const card = selectedCard;
+  if (card) void handleRunCard(card.id);
+}
+
+function acceptSelectedCard() {
+  const card = selectedCard;
+  return card ? handleAcceptCard(card.id) : Promise.resolve();
+}
+
+function requestChangesForSelectedCard(guidance: string) {
+  const card = selectedCard;
+  return card ? handleRequestChanges(card.id, guidance) : Promise.resolve();
+}
+
+function restartReviewForSelectedCard() {
+  const card = selectedCard;
+  return card ? handleRestartReview(card.id) : Promise.resolve();
+}
+
+function remediateSelectedCard(
+  action: CoordinatorAction,
+  suggestionId?: string
+) {
+  const card = selectedCard;
+  if (card) void handleRemediate(card.id, action, suggestionId);
 }
 
 function cardsInColumn(col: Column): Card[] {
@@ -320,6 +351,7 @@ onMount(() => {
   <div class="board-header">
     <h2>Board</h2>
     <div class="board-actions">
+      <ProjectWorkerSettings {projectId} />
       <button class="btn btn-outline" onclick={toggleRevision} disabled={revising}>
         {revising ? "Starting revision..." : "Revise"}
       </button>
@@ -385,7 +417,7 @@ onMount(() => {
       <div class="worker-risk-actions">
         <button
           class="btn btn-danger"
-          onclick={() => handleRunCard(pendingAdmission!.cardId, true)}
+          onclick={confirmPendingAdmission}
           disabled={running === pendingAdmission.cardId}
         >
           {running === pendingAdmission.cardId ? "Starting..." : "Run anyway"}
@@ -438,13 +470,11 @@ onMount(() => {
       }}
       onCardUpdated={handleCardUpdated}
       {onPlanningProposal}
-      onRun={() => handleRunCard(selectedCard!.id)}
-      onAccept={() => handleAcceptCard(selectedCard!.id)}
-      onRequestChanges={(guidance) =>
-        handleRequestChanges(selectedCard!.id, guidance)}
-      onRestartReview={() => handleRestartReview(selectedCard!.id)}
-      onRemediate={(action, suggestionId) =>
-        handleRemediate(selectedCard!.id, action, suggestionId)}
+      onRun={runSelectedCard}
+      onAccept={acceptSelectedCard}
+      onRequestChanges={requestChangesForSelectedCard}
+      onRestartReview={restartReviewForSelectedCard}
+      onRemediate={remediateSelectedCard}
     />
   {/if}
 </div>

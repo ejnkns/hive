@@ -53,6 +53,8 @@ type Props = {
     <div class="card-integration conflicted">integration conflict</div>
   {:else if reviewReadiness?.state === "dirty" || reviewReadiness?.state === "branch_changed"}
     <div class="card-integration conflicted">branch changed</div>
+  {:else if reviewReadiness?.state === "error"}
+    <div class="card-integration conflicted">readiness error</div>
   {/if}
 </div>
 

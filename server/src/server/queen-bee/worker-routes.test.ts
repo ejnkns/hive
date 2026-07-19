@@ -64,6 +64,9 @@ describe("worker run admission", () => {
       create: () => {
         throw new Error("Not used");
       },
+      updateMaxConcurrentWorkers: () => {
+        throw new Error("Not used");
+      },
       unlink: () => {},
     };
     registerWorkerRoutes(server, {

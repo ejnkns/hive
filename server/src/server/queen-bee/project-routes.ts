@@ -12,14 +12,17 @@ export function registerProjectRoutes(
   });
 
   server.post("/api/queen-bee/projects", async (request, reply) => {
-    const body = request.body as { path?: string; name?: string };
+    const body = isRecord(request.body) ? request.body : {};
 
     if (!body.path || typeof body.path !== "string") {
       return reply.status(400).send({ error: "path is required" });
     }
 
     try {
-      const project = store.create(body.path, body.name);
+      const project = store.create(
+        body.path,
+        typeof body.name === "string" ? body.name : undefined
+      );
       return reply.status(201).send({ project });
     } catch (err) {
       return reply.status(400).send({
@@ -27,6 +30,35 @@ export function registerProjectRoutes(
       });
     }
   });
+
+  server.patch(
+    "/api/queen-bee/projects/:projectId/config",
+    async (request, reply) => {
+      const params = isRecord(request.params) ? request.params : {};
+      const body = isRecord(request.body) ? request.body : {};
+      if (typeof params.projectId !== "string") {
+        return reply.status(400).send({ error: "projectId is required" });
+      }
+      if (typeof body.maxConcurrentWorkers !== "number") {
+        return reply
+          .status(400)
+          .send({ error: "maxConcurrentWorkers must be a number" });
+      }
+      try {
+        const project = store.updateMaxConcurrentWorkers(
+          params.projectId,
+          body.maxConcurrentWorkers
+        );
+        return reply.send({ project });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Invalid project config";
+        return reply
+          .status(message === "Project not found" ? 404 : 400)
+          .send({ error: message });
+      }
+    }
+  );
 
   server.delete(
     "/api/queen-bee/projects/:projectId",
@@ -43,4 +75,8 @@ export function registerProjectRoutes(
       }
     }
   );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

@@ -84,6 +84,7 @@ describe("Reviewer Agent", () => {
       revisions: {
         baseCommit: "base-commit",
         headCommit: "head-commit",
+        reviewCommit: "head-commit",
         integrationCommit: "base-commit",
         cardRevision: "card-revision",
       },

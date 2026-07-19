@@ -276,6 +276,7 @@ describe("devise routes", () => {
       create: () => {
         throw new Error("Not used");
       },
+      updateMaxConcurrentWorkers: () => project,
       unlink: () => {},
     };
     const engine: DeviseEngine = {
