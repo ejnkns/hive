@@ -107,6 +107,77 @@ describe("WorkerSupervisor", () => {
     );
   });
 
+  it("releases Project worker capacity before Reviewer Agent completion", async () => {
+    const repoPath = createGitRepository();
+    const runtimeStore = createQueenBeeRuntimeStore(join(repoPath, ".runtime"));
+    const boardStore = createBoardStore(() => {}, runtimeStore);
+    const card = boardStore.addCard("project-1", repoPath, {
+      title: "Release worker capacity",
+      description: "Do not count review time as active worker time",
+      acceptanceCriteria: ["Reviewer latency does not occupy a worker slot"],
+      relevantFiles: ["source.txt"],
+      dependencies: [],
+      column: "ready",
+    });
+    let callCount = 0;
+    const modelCaller: DeviseModelCaller = {
+      async call() {
+        callCount += 1;
+        if (callCount === 1) {
+          return toolResponse("write-1", "write_file", {
+            path: "source.txt",
+            content: "implemented\n",
+          });
+        }
+        if (callCount === 2) {
+          return toolResponse("commit-1", "commit_work", {
+            message: "worker: release review capacity",
+            paths: ["source.txt"],
+          });
+        }
+        if (callCount === 3) {
+          return toolResponse("verify-1", "run_command", {
+            command: process.execPath,
+            args: ["-e", 'process.stdout.write("verified")'],
+          });
+        }
+        return toolResponse("submit-1", "submit_work", {
+          outcome: "implemented",
+          verificationCallIds: ["verify-1"],
+        });
+      },
+    };
+    let reviewerStarted = () => {};
+    const reviewStarted = new Promise<void>((resolve) => {
+      reviewerStarted = resolve;
+    });
+    let finishReview = () => {};
+    const reviewer: Reviewer = {
+      async review() {
+        reviewerStarted();
+        return await new Promise((resolve) => {
+          finishReview = () => resolve(approvedVerdict("Reviewed"));
+        });
+      },
+    };
+    const supervisor = createWorkerSupervisor(
+      boardStore,
+      reviewer,
+      unusedCoordinator(),
+      runtimeStore,
+      modelCaller
+    );
+
+    const run = supervisor.run("project-1", card, repoPath, "", "", () => {});
+    await reviewStarted;
+
+    assert.deepEqual(supervisor.runningCardIds("project-1"), []);
+    assert.equal(supervisor.isRunning("project-1", card.id), false);
+    assert.equal(supervisor.cancel("project-1", card.id), false);
+    finishReview();
+    await run;
+  });
+
   it("preserves dirty work after three rejected completion submissions", async () => {
     const repoPath = createGitRepository();
     const boardStore = createBoardStore(

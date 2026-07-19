@@ -69,7 +69,12 @@ export function createWorkerSupervisor(
 ): WorkerSupervisor {
   const abortControllers = new Map<
     string,
-    { projectId: string; cardId: string; controller: AbortController }
+    {
+      projectId: string;
+      cardId: string;
+      phase: "worker" | "reviewer";
+      controller: AbortController;
+    }
   >();
 
   return {
@@ -91,6 +96,7 @@ export function createWorkerSupervisor(
       abortControllers.set(attemptKey, {
         projectId,
         cardId: card.id,
+        phase: "worker",
         controller,
       });
 
@@ -110,12 +116,18 @@ export function createWorkerSupervisor(
     },
 
     isRunning(projectId: string, cardId: string) {
-      return abortControllers.has(runningAttemptKey(projectId, cardId));
+      return (
+        abortControllers.get(runningAttemptKey(projectId, cardId))?.phase ===
+        "worker"
+      );
     },
 
     runningCardIds(projectId: string) {
       return [...abortControllers.values()]
-        .filter((attempt) => attempt.projectId === projectId)
+        .filter(
+          (attempt) =>
+            attempt.projectId === projectId && attempt.phase === "worker"
+        )
         .map((attempt) => attempt.cardId);
     },
 
@@ -123,7 +135,7 @@ export function createWorkerSupervisor(
       const attempt = abortControllers.get(
         runningAttemptKey(projectId, cardId)
       );
-      if (attempt) {
+      if (attempt?.phase === "worker") {
         attempt.controller.abort();
         return true;
       }
@@ -263,6 +275,10 @@ export function createWorkerSupervisor(
         detail: completionDescription(result.completion),
       });
       boardStore.moveCard(projectId, repoPath, card.id, "reviewing");
+      const activeAttempt = abortControllers.get(
+        runningAttemptKey(projectId, card.id)
+      );
+      if (activeAttempt) activeAttempt.phase = "reviewer";
 
       await runReviewer(
         card,
