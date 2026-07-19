@@ -72,6 +72,9 @@ describe("integration routes", () => {
         calls.push(`integrate:${targetBranch}`);
         return status("integrated");
       },
+      reviewReadiness: () => {
+        throw new Error("Not used");
+      },
       assertCurrent: () => {},
       accept: () => ({ branchName: "hive-main", revision: "hive-1" }),
       discardWorktree: () => {},

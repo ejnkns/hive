@@ -110,6 +110,59 @@ describe("IntegrationManager", () => {
     assert.equal(existsSync(worktreePath), true);
   });
 
+  it("reports a parallel reviewed branch as refreshable after unrelated work is accepted", () => {
+    const repoPath = createRepository();
+    const manager = createIntegrationManager();
+    const integration = manager.ensure(repoPath);
+    const first = createAttempt(repoPath, "card-1", "first.txt", "first\n");
+    const second = createAttempt(repoPath, "card-2", "second.txt", "second\n");
+
+    manager.accept({
+      repoPath,
+      cardId: "card-1",
+      ...first,
+      reviewedIntegrationRevision: integration.revision,
+    });
+
+    const readiness = manager.reviewReadiness({
+      repoPath,
+      cardId: "card-2",
+      ...second,
+      reviewedIntegrationRevision: integration.revision,
+    });
+
+    assert.equal(readiness.state, "stale");
+    assert.equal(readiness.canAccept, false);
+    assert.equal(readiness.canRefreshReview, true);
+    assert.deepEqual(readiness.conflictingFiles, []);
+  });
+
+  it("reports conflicting files when parallel reviewed work cannot merge", () => {
+    const repoPath = createRepository();
+    const manager = createIntegrationManager();
+    const integration = manager.ensure(repoPath);
+    const first = createAttempt(repoPath, "card-1", "source.txt", "first\n");
+    const second = createAttempt(repoPath, "card-2", "source.txt", "second\n");
+
+    manager.accept({
+      repoPath,
+      cardId: "card-1",
+      ...first,
+      reviewedIntegrationRevision: integration.revision,
+    });
+
+    const readiness = manager.reviewReadiness({
+      repoPath,
+      cardId: "card-2",
+      ...second,
+      reviewedIntegrationRevision: integration.revision,
+    });
+
+    assert.equal(readiness.state, "conflicted");
+    assert.equal(readiness.canRefreshReview, false);
+    assert.deepEqual(readiness.conflictingFiles, ["source.txt"]);
+  });
+
   it("refuses to discard an attempt with uncommitted changes", () => {
     const repoPath = createRepository();
     const manager = createIntegrationManager();
@@ -262,6 +315,36 @@ describe("IntegrationManager", () => {
     git(repoPath, ["add", "source.txt"]);
     git(repoPath, ["commit", "-m", "source: add base"]);
     return repoPath;
+  }
+
+  function createAttempt(
+    repoPath: string,
+    cardId: string,
+    filename: string,
+    content: string
+  ): {
+    branchName: string;
+    worktreePath: string;
+    reviewedHead: string;
+  } {
+    const branchName = `hive/${cardId}/attempt-1`;
+    const worktreePath = join(repoPath, ".worktrees", cardId);
+    git(repoPath, [
+      "worktree",
+      "add",
+      "-b",
+      branchName,
+      worktreePath,
+      "hive-main",
+    ]);
+    writeFileSync(join(worktreePath, filename), content);
+    git(worktreePath, ["add", filename]);
+    git(worktreePath, ["commit", "-m", `feature: implement ${cardId}`]);
+    return {
+      branchName,
+      worktreePath,
+      reviewedHead: git(worktreePath, ["rev-parse", "HEAD"]),
+    };
   }
 
   function git(repoPath: string, args: string[]): string {

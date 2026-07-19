@@ -4,11 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import Fastify, { type FastifyInstance } from "fastify";
+import type { ReviewReadiness } from "shared/board-types";
 import type { ProjectListItem } from "shared/project-types";
 import { createBoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
 import type { IntegrationManager } from "./integration-manager";
 import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
+import type { buildReviewPackage } from "./review-package";
 import type { Reviewer, ReviewPackage } from "./reviewer";
 import { registerWorkDecisionRoutes } from "./work-decision-routes";
 
@@ -115,7 +117,53 @@ describe("work decision routes", () => {
     assert.equal(fixture.reviewCalls, 1);
   });
 
-  function createFixture() {
+  it("creates a new immutable Review Package when hive-main advanced cleanly", async () => {
+    let refreshedBase = "";
+    const fixture = createFixture({
+      readinessState: "stale",
+      reviewPackageBuilder(card, _repoPath, _worktreePath, baseCommit) {
+        refreshedBase = baseCommit;
+        const refreshed = reviewPackage(card.id);
+        return {
+          ...refreshed,
+          id: "package-2",
+          revisions: {
+            ...refreshed.revisions,
+            baseCommit,
+            integrationCommit: baseCommit,
+          },
+        };
+      },
+    });
+    const card = fixture.reviewedCard();
+    fixture.runtimeStore.saveReviewPackage(
+      fixture.project.id,
+      reviewPackage(card.id)
+    );
+
+    const response = await fixture.server.inject({
+      method: "POST",
+      url: `/api/queen-bee/${fixture.project.id}/cards/${card.id}/restart-review`,
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(refreshedBase, "integration-2");
+    assert.equal(response.json().card.reviewerLog.reviewPackageId, "package-2");
+    assert.equal(
+      response.json().card.workAttempts[0].reviewedIntegrationRevision,
+      "integration-2"
+    );
+    assert.ok(
+      fixture.runtimeStore.getReviewPackage(fixture.project.id, "package-2")
+    );
+  });
+
+  function createFixture(
+    options: {
+      readinessState?: ReviewReadiness["state"];
+      reviewPackageBuilder?: typeof buildReviewPackage;
+    } = {}
+  ) {
     const repoPath = mkdtempSync(join(tmpdir(), "hive-decisions-"));
     directories.push(repoPath);
     const project: ProjectListItem = {
@@ -175,6 +223,20 @@ describe("work decision routes", () => {
         behind: 0,
         canIntegrate: false,
       }),
+      reviewReadiness: (input) => ({
+        state: options.readinessState ?? "current",
+        integrationRevision:
+          options.readinessState === "stale"
+            ? "integration-2"
+            : input.reviewedIntegrationRevision,
+        reviewedIntegrationRevision: input.reviewedIntegrationRevision,
+        branchHead: input.reviewedHead,
+        reviewedHead: input.reviewedHead,
+        canAccept: options.readinessState !== "stale",
+        canRefreshReview: options.readinessState === "stale",
+        conflictingFiles: [],
+        message: "Reviewed work is current with hive-main",
+      }),
       assertCurrent: () => {},
       accept: (input) => {
         acceptedBranches.push(input.branchName);
@@ -196,6 +258,7 @@ describe("work decision routes", () => {
       integrationManager,
       runtimeStore,
       reviewer,
+      reviewPackageBuilder: options.reviewPackageBuilder,
     });
 
     return {

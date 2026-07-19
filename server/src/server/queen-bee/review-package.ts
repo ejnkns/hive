@@ -1,11 +1,11 @@
-/** @private — only imported by worker-supervisor.ts */
+/** @public */
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import type { Card } from "../board-store";
-import { readRequirements, requirementsRevision } from "../requirements-store";
-import type { ReviewPackage } from "../reviewer";
-import type { WorkerCompletion } from "./completion-gate";
+import type { Card } from "./board-store";
+import { readRequirements, requirementsRevision } from "./requirements-store";
+import type { ReviewPackage } from "./reviewer";
+import type { WorkerCompletion } from "./worker-supervisor/completion-gate";
 
 export function buildReviewPackage(
   card: Card,

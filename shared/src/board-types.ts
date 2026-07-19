@@ -90,6 +90,18 @@ export type WorkerAdmission = {
   blockers: WorkerAdmissionBlocker[];
 };
 
+export type ReviewReadiness = {
+  state: "current" | "stale" | "conflicted" | "branch_changed" | "dirty";
+  integrationRevision: string;
+  reviewedIntegrationRevision: string;
+  branchHead: string;
+  reviewedHead: string;
+  canAccept: boolean;
+  canRefreshReview: boolean;
+  conflictingFiles: string[];
+  message: string;
+};
+
 export type CardSpecification = Pick<
   Card,
   | "title"

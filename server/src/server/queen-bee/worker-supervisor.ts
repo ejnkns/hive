@@ -16,8 +16,8 @@ import type {
   QueenBeeRuntimeStore,
 } from "./queen-bee-runtime-store";
 import { readRequirements, requirementsRevision } from "./requirements-store";
+import { buildReviewPackage } from "./review-package";
 import type { Reviewer } from "./reviewer";
-import { buildReviewPackage } from "./worker-supervisor/build-review-package";
 import { buildWorkerContext } from "./worker-supervisor/build-worker-context";
 import {
   evaluateCompletion,

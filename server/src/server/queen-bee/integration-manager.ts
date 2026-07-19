@@ -1,9 +1,10 @@
 /** @public */
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { cpSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
+import type { ReviewReadiness } from "shared/board-types";
 import { removeWorktree } from "./worker-supervisor/git-operations";
 
 export type IntegrationRevision = {
@@ -33,6 +34,7 @@ export type IntegrationManager = {
   ensure(repoPath: string): IntegrationRevision;
   status(repoPath: string, targetBranch: string): IntegrationStatus;
   integrate(repoPath: string, targetBranch: string): IntegrationStatus;
+  reviewReadiness(input: AcceptWorkInput): ReviewReadiness;
   assertCurrent(input: AcceptWorkInput): void;
   accept(input: AcceptWorkInput): IntegrationRevision;
   discardWorktree(repoPath: string, worktreePath: string): void;
@@ -47,6 +49,7 @@ export function createIntegrationManager(): IntegrationManager {
     ensure: ensureIntegrationBranch,
     status: integrationStatus,
     integrate: integrateTargetBranch,
+    reviewReadiness,
     assertCurrent: assertReviewedWorkCurrent,
     accept: acceptWork,
     commitPlanningSnapshot,
@@ -261,24 +264,93 @@ function acceptWork(input: AcceptWorkInput): IntegrationRevision {
 }
 
 function assertReviewedWorkCurrent(input: AcceptWorkInput): void {
-  const integration = ensureIntegrationBranch(input.repoPath);
-  if (integration.revision !== input.reviewedIntegrationRevision) {
-    throw new Error(
-      "Hive integration branch changed since review; restart review before accepting"
-    );
-  }
+  const readiness = reviewReadiness(input);
+  if (!readiness.canAccept) throw new Error(readiness.message);
+}
+
+function reviewReadiness(input: AcceptWorkInput): ReviewReadiness {
+  const integrationRevision = ensureIntegrationBranch(input.repoPath).revision;
   const branchHead = git(input.repoPath, ["rev-parse", input.branchName]);
+  const base = {
+    integrationRevision,
+    reviewedIntegrationRevision: input.reviewedIntegrationRevision,
+    branchHead,
+    reviewedHead: input.reviewedHead,
+    conflictingFiles: [] as string[],
+  };
   if (branchHead !== input.reviewedHead) {
-    throw new Error(
-      "Worker branch changed since review; restart review before accepting"
-    );
+    return {
+      ...base,
+      state: "branch_changed",
+      canAccept: false,
+      canRefreshReview: false,
+      message:
+        "Worker branch changed since review; request changes before continuing",
+    };
   }
   if (
     existsSync(input.worktreePath) &&
     git(input.worktreePath, ["status", "--porcelain"])
   ) {
-    throw new Error("Worker worktree has uncommitted changes");
+    return {
+      ...base,
+      state: "dirty",
+      canAccept: false,
+      canRefreshReview: false,
+      message: "Worker worktree has uncommitted changes",
+    };
   }
+  if (integrationRevision === input.reviewedIntegrationRevision) {
+    return {
+      ...base,
+      state: "current",
+      canAccept: true,
+      canRefreshReview: false,
+      message: "Reviewed work is current with hive-main",
+    };
+  }
+
+  const conflictingFiles = mergeConflicts(input.repoPath, input.branchName);
+  if (conflictingFiles === null) {
+    return {
+      ...base,
+      state: "stale",
+      canAccept: false,
+      canRefreshReview: true,
+      message:
+        "hive-main changed since review; refresh review against the latest accepted work",
+    };
+  }
+  return {
+    ...base,
+    state: "conflicted",
+    canAccept: false,
+    canRefreshReview: false,
+    conflictingFiles,
+    message:
+      conflictingFiles.length > 0
+        ? `Reviewed work conflicts with hive-main in: ${conflictingFiles.join(", ")}`
+        : "Reviewed work conflicts with the latest hive-main",
+  };
+}
+
+function mergeConflicts(repoPath: string, branchName: string): string[] | null {
+  const result = spawnSync(
+    "git",
+    ["merge-tree", "--write-tree", "--name-only", "hive-main", branchName],
+    {
+      cwd: repoPath,
+      encoding: "utf-8",
+      timeout: 30_000,
+      maxBuffer: 10 * 1024 * 1024,
+    }
+  );
+  if (result.status === 0) return null;
+  const output = `${result.stdout}\n${result.stderr}`;
+  const conflicts = [...output.matchAll(/CONFLICT .* in (.+)$/gm)].map(
+    (match) => match[1]?.trim() ?? ""
+  );
+  return [...new Set(conflicts.filter(Boolean))].sort();
 }
 
 function acquireIntegrationWorktree(repoPath: string): {

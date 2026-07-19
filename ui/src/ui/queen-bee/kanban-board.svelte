@@ -5,6 +5,7 @@ import type {
   Column,
   CoordinatorAction,
   PlanningProposal,
+  ReviewReadiness,
   WorkerAdmission,
 } from "shared/board-types";
 import KanbanCard from "./kanban-card.svelte";
@@ -56,6 +57,7 @@ let pendingAdmission = $state<{
   cardId: string;
   admission: WorkerAdmission;
 } | null>(null);
+let reviewReadiness = $state<Record<string, ReviewReadiness>>({});
 
 async function loadBoard() {
   loading = true;
@@ -65,6 +67,7 @@ async function loadBoard() {
     if (!res.ok) throw new Error("Failed to load board");
     const loadedBoard = (await res.json()) as Board;
     board = loadedBoard;
+    void loadReviewReadiness(loadedBoard.cards);
     if (selectedCard) {
       selectedCard =
         loadedBoard.cards.find((card) => card.id === selectedCard?.id) ?? null;
@@ -74,6 +77,33 @@ async function loadBoard() {
   } finally {
     loading = false;
   }
+}
+
+async function loadReviewReadiness(cards: Card[]) {
+  const entries = await Promise.all(
+    cards
+      .filter((card) => card.column === "reviewing")
+      .map(async (card): Promise<[string, ReviewReadiness] | null> => {
+        try {
+          const response = await fetch(
+            `/api/queen-bee/${projectId}/cards/${card.id}/review-readiness`
+          );
+          const result = (await response.json()) as {
+            readiness?: ReviewReadiness;
+          };
+          return response.ok && result.readiness
+            ? [card.id, result.readiness]
+            : null;
+        } catch {
+          return null;
+        }
+      })
+  );
+  reviewReadiness = Object.fromEntries(
+    entries.filter(
+      (entry): entry is [string, ReviewReadiness] => entry !== null
+    )
+  );
 }
 
 function toggleRevision() {
@@ -246,6 +276,7 @@ function handleCardUpdated(updatedCard: Card) {
     };
   }
   selectedCard = updatedCard;
+  void loadReviewReadiness(board?.cards ?? [updatedCard]);
 }
 
 function selectCard(card: Card) {
@@ -377,6 +408,7 @@ onMount(() => {
             {#each cardsInColumn(col) as card (card.id)}
               <KanbanCard
                 {card}
+                reviewReadiness={reviewReadiness[card.id]}
                 onSelect={() => selectCard(card)}
                 onRun={() => handleRunCard(card.id)}
               />
@@ -394,6 +426,7 @@ onMount(() => {
   {#if selectedCard}
     <CardDetail
       card={selectedCard}
+      reviewReadiness={reviewReadiness[selectedCard.id]}
       {projectId}
       initialRefinementQuestion={refinementQuestion}
       onClose={() => {

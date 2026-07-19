@@ -378,6 +378,9 @@ describe("Planner Agent reconciliation", () => {
         behind: 0,
         canIntegrate: false,
       }),
+      reviewReadiness: () => {
+        throw new Error("Not used");
+      },
       assertCurrent: () => {},
       accept: () => ({ branchName: "hive-main", revision: "integration-2" }),
       discardWorktree: () => {},

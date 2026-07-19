@@ -1,10 +1,11 @@
 <script lang="ts">
-import type { Card } from "shared/board-types";
+import type { Card, ReviewReadiness } from "shared/board-types";
 
-let { card, onSelect, onRun }: Props = $props();
+let { card, reviewReadiness, onSelect, onRun }: Props = $props();
 
 type Props = {
   card: Card;
+  reviewReadiness?: ReviewReadiness;
   onSelect: () => void;
   onRun?: () => void;
 };
@@ -45,6 +46,13 @@ type Props = {
           ? "approved"
           : "changes"}
     </div>
+  {/if}
+  {#if reviewReadiness?.state === "stale"}
+    <div class="card-integration stale">refresh review</div>
+  {:else if reviewReadiness?.state === "conflicted"}
+    <div class="card-integration conflicted">integration conflict</div>
+  {:else if reviewReadiness?.state === "dirty" || reviewReadiness?.state === "branch_changed"}
+    <div class="card-integration conflicted">branch changed</div>
   {/if}
 </div>
 
@@ -110,6 +118,21 @@ type Props = {
 
   .review-changes,
   .review-error {
+    color: #dc3c3c;
+  }
+
+  .card-integration {
+    margin-top: 0.375rem;
+    font-size: 0.5625rem;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .card-integration.stale {
+    color: #c89522;
+  }
+
+  .card-integration.conflicted {
     color: #dc3c3c;
   }
 </style>

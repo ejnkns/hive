@@ -4,12 +4,14 @@ import type {
   CardActivityEvent,
   Column,
   PlanningProposal,
+  ReviewReadiness,
 } from "shared/board-types";
 import CardRefinement from "./card-refinement.svelte";
 
 let {
   projectId,
   card,
+  reviewReadiness,
   initialRefinementQuestion,
   onClose,
   onCardUpdated,
@@ -24,6 +26,7 @@ let {
 type Props = {
   projectId: string;
   card: Card;
+  reviewReadiness?: ReviewReadiness;
   initialRefinementQuestion?: string | null;
   onClose: () => void;
   onCardUpdated: (card: Card) => void;
@@ -252,6 +255,31 @@ const COLUMN_LABELS: Record<Column, string> = {
         </div>
       {/if}
 
+      {#if card.column === "reviewing"}
+        <div class="section review-readiness">
+          <div class="section-label">Integration readiness</div>
+          {#if !reviewReadiness}
+            <div class="section-value">Checking hive-main…</div>
+          {:else}
+            <div
+              class="readiness-message"
+              class:readiness-current={reviewReadiness.state === "current"}
+              class:readiness-warning={reviewReadiness.state === "stale"}
+              class:readiness-conflict={reviewReadiness.state === "conflicted" || reviewReadiness.state === "dirty" || reviewReadiness.state === "branch_changed"}
+            >
+              {reviewReadiness.message}
+            </div>
+            {#if reviewReadiness.conflictingFiles.length > 0}
+              <div class="file-list">
+                {#each reviewReadiness.conflictingFiles as file}
+                  <code class="file">{file}</code>
+                {/each}
+              </div>
+            {/if}
+          {/if}
+        </div>
+      {/if}
+
       {#if activity.length > 0 || activityError}
         <div class="section">
           <div class="section-label">Activity</div>
@@ -383,7 +411,7 @@ const COLUMN_LABELS: Record<Column, string> = {
           Run Worker
         </button>
       {/if}
-      {#if card.column === "reviewing" && card.reviewerLog?.status === "complete" && onAccept && onRequestChanges}
+      {#if card.column === "reviewing" && card.reviewerLog?.status === "complete" && reviewReadiness?.canAccept && onAccept && onRequestChanges}
         <button class="btn btn-run" onclick={acceptWork} disabled={deciding}>
           {deciding ? "Applying decision..." : "Accept into hive-main"}
         </button>
@@ -394,6 +422,25 @@ const COLUMN_LABELS: Record<Column, string> = {
             disabled={deciding}
           >Request changes</button>
         {/if}
+      {/if}
+      {#if card.column === "reviewing" && card.reviewerLog?.status === "complete" && reviewReadiness?.canRefreshReview && onRestartReview && onRequestChanges}
+        <button class="btn btn-run" onclick={restartReview} disabled={deciding}>
+          {deciding ? "Refreshing..." : "Refresh review"}
+        </button>
+        {#if !requestingChanges}
+          <button
+            class="btn"
+            onclick={() => (requestingChanges = true)}
+            disabled={deciding}
+          >Request changes</button>
+        {/if}
+      {/if}
+      {#if card.column === "reviewing" && card.reviewerLog?.status === "complete" && reviewReadiness && !reviewReadiness.canAccept && !reviewReadiness.canRefreshReview && onRequestChanges && !requestingChanges}
+        <button
+          class="btn"
+          onclick={() => (requestingChanges = true)}
+          disabled={deciding}
+        >Request changes</button>
       {/if}
       {#if card.column === "reviewing" && card.reviewerLog?.status === "error" && onRestartReview && onRequestChanges}
         <button class="btn btn-run" onclick={restartReview} disabled={deciding}>
@@ -629,6 +676,29 @@ const COLUMN_LABELS: Record<Column, string> = {
     color: var(--muted);
     font-size: 0.6875rem;
     margin-top: 0.25rem;
+  }
+
+  .readiness-message {
+    border-left: 2px solid var(--border);
+    color: var(--muted);
+    font-size: 0.75rem;
+    line-height: 1.45;
+    padding-left: 0.5rem;
+  }
+
+  .readiness-current {
+    border-left-color: #7cb342;
+    color: #7cb342;
+  }
+
+  .readiness-warning {
+    border-left-color: #c89522;
+    color: #c89522;
+  }
+
+  .readiness-conflict {
+    border-left-color: #dc3c3c;
+    color: #dc3c3c;
   }
 
   .decision-input textarea {

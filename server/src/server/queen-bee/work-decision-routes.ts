@@ -6,7 +6,8 @@ import type { BoardStore, Card } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
 import type { IntegrationManager } from "./integration-manager";
 import type { QueenBeeRuntimeStore } from "./queen-bee-runtime-store";
-import type { Reviewer } from "./reviewer";
+import { buildReviewPackage } from "./review-package";
+import type { Reviewer, ReviewPackage } from "./reviewer";
 
 export function registerWorkDecisionRoutes(
   server: FastifyInstance,
@@ -16,6 +17,7 @@ export function registerWorkDecisionRoutes(
     integrationManager: IntegrationManager;
     runtimeStore: QueenBeeRuntimeStore;
     reviewer: Reviewer;
+    reviewPackageBuilder?: typeof buildReviewPackage;
   }
 ): void {
   server.get(
@@ -29,27 +31,42 @@ export function registerWorkDecisionRoutes(
     }
   );
 
+  server.get(
+    "/api/queen-bee/:projectId/cards/:cardId/review-readiness",
+    async (request, reply) => {
+      const context = findDecisionCard(request.params, reply, deps);
+      if (!context) return;
+      const input = reviewedWorkInput(context);
+      if (!input) {
+        return reply.status(409).send({
+          error: "Reviewed Git revisions are missing; restart the Worker Agent",
+        });
+      }
+      try {
+        return reply.send({
+          readiness: deps.integrationManager.reviewReadiness(input),
+        });
+      } catch (error) {
+        return reply.status(409).send({ error: errorMessage(error) });
+      }
+    }
+  );
+
   server.post(
     "/api/queen-bee/:projectId/cards/:cardId/accept",
     async (request, reply) => {
       const context = findReviewedCard(request.params, reply, deps);
       if (!context) return;
-      const { projectId, project, card, attempt } = context;
-      if (!attempt.reviewedHead || !attempt.reviewedIntegrationRevision) {
+      const { projectId, project, card } = context;
+      const input = reviewedWorkInput(context);
+      if (!input) {
         return reply.status(409).send({
           error: "Reviewed Git revisions are missing; restart review",
         });
       }
 
       try {
-        const integration = deps.integrationManager.accept({
-          repoPath: project.repoPath,
-          cardId: card.id,
-          branchName: attempt.branchName,
-          worktreePath: attempt.worktreePath,
-          reviewedHead: attempt.reviewedHead,
-          reviewedIntegrationRevision: attempt.reviewedIntegrationRevision,
-        });
+        const integration = deps.integrationManager.accept(input);
         const decidedAt = new Date().toISOString();
         const updated = deps.boardStore.updateCard(
           projectId,
@@ -136,25 +153,49 @@ export function registerWorkDecisionRoutes(
       const context = findDecisionCard(request.params, reply, deps);
       if (!context) return;
       const { projectId, project, card, attempt } = context;
-      if (attempt.status !== "review_error" || !attempt.reviewPackageId) {
+      if (
+        (attempt.status !== "review_error" && attempt.status !== "reviewed") ||
+        !attempt.reviewPackageId
+      ) {
         return reply.status(409).send({
-          error: "Card does not have a retryable Reviewer Agent error",
+          error: "Card does not have a review that can be restarted",
         });
       }
-      const reviewPackage = deps.runtimeStore.getReviewPackage(
+      const previousPackage = deps.runtimeStore.getReviewPackage(
         projectId,
         attempt.reviewPackageId
       );
-      if (!reviewPackage) {
+      if (!previousPackage) {
         return reply.status(409).send({ error: "Review Package is missing" });
       }
 
+      const input = reviewedWorkInput(context);
+      if (!input) {
+        return reply.status(409).send({
+          error: "Reviewed Git revisions are missing; restart the Worker Agent",
+        });
+      }
+      let reviewPackage = previousPackage;
       try {
+        const readiness = deps.integrationManager.reviewReadiness(input);
+        if (readiness.state === "stale" && readiness.canRefreshReview) {
+          const builder = deps.reviewPackageBuilder ?? buildReviewPackage;
+          reviewPackage = builder(
+            card,
+            project.repoPath,
+            attempt.worktreePath,
+            readiness.integrationRevision,
+            completionFrom(previousPackage)
+          );
+          deps.runtimeStore.saveReviewPackage(projectId, reviewPackage);
+        } else if (readiness.state !== "current") {
+          return reply.status(409).send({
+            error: readiness.message,
+            readiness,
+          });
+        }
         deps.integrationManager.assertCurrent({
-          repoPath: project.repoPath,
-          cardId: card.id,
-          branchName: attempt.branchName,
-          worktreePath: attempt.worktreePath,
+          ...input,
           reviewedHead: reviewPackage.revisions.headCommit,
           reviewedIntegrationRevision:
             reviewPackage.revisions.integrationCommit,
@@ -177,7 +218,13 @@ export function registerWorkDecisionRoutes(
               reviewPackageId: reviewPackage.id,
               reviewedAt,
             },
-            workAttempts: updateAttempt(card, { status: "reviewed" }),
+            workAttempts: updateAttempt(card, {
+              status: "reviewed",
+              reviewedHead: reviewPackage.revisions.headCommit,
+              reviewedIntegrationRevision:
+                reviewPackage.revisions.integrationCommit,
+              reviewPackageId: reviewPackage.id,
+            }),
           }
         );
         deps.runtimeStore.appendActivity(projectId, card.id, {
@@ -298,6 +345,45 @@ function updateAttempt(card: Card, patch: Partial<WorkAttempt>): WorkAttempt[] {
   return (card.workAttempts ?? []).map((attempt, index, attempts) =>
     index === attempts.length - 1 ? { ...attempt, ...patch } : attempt
   );
+}
+
+function reviewedWorkInput(
+  context: DecisionContext
+): Parameters<IntegrationManager["reviewReadiness"]>[0] | null {
+  const { project, card, attempt } = context;
+  if (!attempt.reviewedHead || !attempt.reviewedIntegrationRevision) {
+    return null;
+  }
+  return {
+    repoPath: project.repoPath,
+    cardId: card.id,
+    branchName: attempt.branchName,
+    worktreePath: attempt.worktreePath,
+    reviewedHead: attempt.reviewedHead,
+    reviewedIntegrationRevision: attempt.reviewedIntegrationRevision,
+  };
+}
+
+function completionFrom(
+  reviewPackage: ReviewPackage
+): Parameters<typeof buildReviewPackage>[4] {
+  return {
+    outcome: reviewPackage.noChangeRationale
+      ? "already_satisfied"
+      : "implemented",
+    verificationCallIds: reviewPackage.verification.commands.map(
+      (command) => command.callId
+    ),
+    verificationEvidence: reviewPackage.verification.commands,
+    ...(reviewPackage.verification.notRunReason
+      ? {
+          verificationNotRunReason: reviewPackage.verification.notRunReason,
+        }
+      : {}),
+    ...(reviewPackage.noChangeRationale
+      ? { noChangeRationale: reviewPackage.noChangeRationale }
+      : {}),
+  };
 }
 
 function errorMessage(error: unknown): string {
