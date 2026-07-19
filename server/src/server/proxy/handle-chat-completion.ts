@@ -1,4 +1,4 @@
-import type { PassThrough } from "node:stream";
+import type { Readable } from "node:stream";
 import { generateId } from "shared/generate-id";
 import { logger } from "shared/logger";
 import type { Message } from "shared/message";
@@ -12,8 +12,10 @@ import { extractRequiredFeatures } from "./handle-chat-completion/execute-proxy-
 import { getMetricsForNode } from "./handle-chat-completion/execute-proxy-request/get-metrics-for-node";
 import { filterHeaders } from "./handle-chat-completion/filter-headers";
 import { resolveSessionId } from "./handle-chat-completion/resolve-session-id";
+import { tryExactRoute } from "./handle-chat-completion/try-exact-route";
 import { tryOverrideRoute } from "./handle-chat-completion/try-override-route";
 import { setLastUsed } from "./last-used-state";
+import { isProviderRequestCancelledError } from "./provider-request-cancelled-error";
 import { getProviders } from "./providers-state";
 import type { ProxyResponse } from "./proxy-response";
 import { routingMemory } from "./routing-memory";
@@ -21,7 +23,7 @@ import { getServerState } from "./server-state";
 
 export type ChatCompletionResult = {
   success: boolean;
-  stream?: PassThrough;
+  stream?: Readable;
   provider?: string;
   model?: string;
   statusCode?: number;
@@ -30,9 +32,21 @@ export type ChatCompletionResult = {
 
 export async function handleChatCompletion(
   body: string | Record<string, unknown>,
-  incomingHeaders: Record<string, string | string[] | undefined> = {}
+  incomingHeaders: Record<string, string | string[] | undefined> = {},
+  signal?: AbortSignal
 ): Promise<ChatCompletionResult> {
   const state = getServerState();
+  const exactRoute = parseExactDiagnosticRoute(incomingHeaders);
+  const playgroundAuto =
+    headerValue(incomingHeaders["x-hive-playground-mode"]) === "auto";
+  if (!exactRoute.valid) {
+    return {
+      success: false,
+      statusCode: 400,
+      error: exactRoute.error,
+    };
+  }
+  const exactNode = exactRoute.node;
   const parsed:
     | Record<string, unknown>
     | { messages?: Array<Record<string, unknown>> } =
@@ -44,6 +58,16 @@ export async function handleChatCompletion(
     const key = process.env[p.apiKeyEnvVar];
     return key && key.length > 0 && !state.isProviderDisabled(p.name);
   });
+
+  if (exactNode && !qualified.some((p) => p.name === exactNode.providerName)) {
+    return {
+      success: false,
+      provider: exactNode.providerName,
+      model: exactNode.modelName,
+      statusCode: 503,
+      error: `Selected playground provider '${exactNode.providerName}' is unavailable`,
+    };
+  }
 
   if (qualified.length === 0) {
     logger.debug("no configured providers available — set a provider API key");
@@ -102,9 +126,18 @@ export async function handleChatCompletion(
     node: Node,
     payload: string
   ): Promise<ProxyResponse> =>
-    dispatchRequest(node, payload, qualified, headers, requestId);
+    dispatchRequest(node, payload, qualified, headers, requestId, signal);
 
-  const override = state.getOverride();
+  const exactResult = await tryExactRoute({
+    exactNode,
+    dispatch: boundDispatchRequest,
+    payloadStr,
+    requestId,
+    onSuccess: (provider, model) => setLastUsed(provider, model),
+  });
+  if (exactResult) return exactResult;
+
+  const override = playgroundAuto ? null : state.getOverride();
   const overrideNode =
     override && qualified.some((p) => p.name === override.provider)
       ? { providerName: override.provider, modelName: override.model }
@@ -130,6 +163,9 @@ export async function handleChatCompletion(
       sessionId,
     });
   } catch (err: unknown) {
+    if (isProviderRequestCancelledError(err)) {
+      return { success: false, statusCode: 499, error: err.message };
+    }
     logger.error(`request ${requestId} — all providers failed`, err);
     return {
       success: false,
@@ -152,7 +188,7 @@ export async function handleChatCompletion(
 
     return {
       success: true,
-      stream: response.getStream() as PassThrough,
+      stream: response.getStream(),
       provider: provider ?? undefined,
       model: model ?? undefined,
       statusCode: response.status,
@@ -168,4 +204,34 @@ export async function handleChatCompletion(
     statusCode: response.status,
     error: "Upstream returned no stream",
   };
+}
+
+type ExactDiagnosticRoute =
+  | { valid: true; node: Node | null }
+  | { valid: false; error: string };
+
+function parseExactDiagnosticRoute(
+  headers: Record<string, string | string[] | undefined>
+): ExactDiagnosticRoute {
+  const providerName = headerValue(headers["x-hive-playground-provider"]);
+  const modelName = headerValue(headers["x-hive-playground-model"]);
+  if ((providerName && !modelName) || (!providerName && modelName)) {
+    return {
+      valid: false,
+      error: "Exact playground routing requires both provider and model",
+    };
+  }
+  return {
+    valid: true,
+    node: providerName && modelName ? { providerName, modelName } : null,
+  };
+}
+
+function headerValue(value: string | string[] | undefined): string | null {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (Array.isArray(value)) {
+    const first = value.find((item) => item.trim());
+    return first?.trim() ?? null;
+  }
+  return null;
 }

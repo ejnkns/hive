@@ -7,7 +7,6 @@ import {
   listen,
   loadProviders,
 } from "../server";
-import { createOrchestratorHandler } from "../server/orchestrator";
 import {
   getLastUsed,
   getProviderStates,
@@ -55,8 +54,6 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
 
   start();
 
-  const workspacePath = process.env.HIVE_WORKSPACE_PATH ?? process.cwd();
-
   const projectStore = createProjectStore(() => {
     emitProjectEvent("");
   });
@@ -89,12 +86,8 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     getProviders: () => getProviders(),
     getProviderStates: () => getProviderStates(),
     getLastUsed: () => getLastUsed(),
-    handleChatCompletion: (body, headers) =>
-      handleChatCompletion(body, headers),
-    handleOrchestrate: createOrchestratorHandler({
-      getProviders: () => getProviders(),
-      workspacePath,
-    }),
+    handleChatCompletion: (body, headers, signal) =>
+      handleChatCompletion(body, headers, signal),
   });
 
   registerProjectRoutes(server, projectStore);

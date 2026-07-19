@@ -11,7 +11,6 @@ import {
   enableProvider,
   isProviderDisabled,
 } from "../disabled-providers-state";
-import type { HandleOrchestrate } from "../orchestrator/create-handler";
 import { clearOverride, getOverride, setOverride } from "../override";
 import type { Provider } from "../providers";
 import { getModelId } from "../providers";
@@ -31,9 +30,9 @@ export type RouteDeps = {
   getLastUsed: () => { provider: string | null; model: string | null };
   handleChatCompletion: (
     body: Record<string, unknown>,
-    headers: Record<string, string | string[] | undefined>
+    headers: Record<string, string | string[] | undefined>,
+    signal?: AbortSignal
   ) => Promise<ChatCompletionResult>;
-  handleOrchestrate: HandleOrchestrate;
 };
 
 export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
@@ -98,7 +97,13 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
     const availableProviders = configProviders.map((p) => ({
       name: p.name,
       displayName: p.displayName,
-      models: p.models.map((entry) => getModelId(entry)),
+      models: [
+        ...new Set(
+          (p.models.length > 0 ? p.models : [p.defaultModel]).map((entry) =>
+            getModelId(entry)
+          )
+        ),
+      ],
       keyConfigured: !!process.env[p.apiKeyEnvVar],
       disabled: isProviderDisabled(p.name),
     }));
@@ -281,56 +286,6 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
             void broadcastTelemetry();
           }
         }
-        if (parsed?.type === "orchestrate_start") {
-          const messages = parsed.messages;
-          const sessionId =
-            typeof parsed.sessionId === "string"
-              ? parsed.sessionId
-              : `orch-${crypto.randomUUID().slice(0, 8)}`;
-          if (!Array.isArray(messages)) return;
-          const send = (data: Record<string, unknown>) => {
-            if (socket.readyState === 1) {
-              socket.send(JSON.stringify(data));
-            }
-          };
-          void deps
-            .handleOrchestrate(
-              { messages, max_iterations: parsed.max_iterations },
-              { "x-session-id": sessionId },
-              (event) => {
-                send({
-                  type: "orchestrator_event",
-                  data: { sessionId, ...event },
-                });
-              }
-            )
-            .then((result) => {
-              send({
-                type: "orchestrator_complete",
-                data: {
-                  sessionId,
-                  messages: result.messages,
-                  finish_reason: result.finishReason,
-                  final_content: result.finalContent,
-                  iterations: result.iterations,
-                  error: result.error,
-                },
-              });
-            })
-            .catch((err) => {
-              send({
-                type: "orchestrator_complete",
-                data: {
-                  sessionId,
-                  messages: [],
-                  finish_reason: "error",
-                  final_content: "",
-                  iterations: 0,
-                  error: err instanceof Error ? err.message : String(err),
-                },
-              });
-            });
-        }
       } catch {
         logger.debug(
           `received WS message: ${typeof msg === "string" ? msg : JSON.stringify(msg)}`
@@ -389,10 +344,15 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
   server.post("/v1/chat/completions", async (request, reply) => {
     const requestId = crypto.randomUUID();
     logger.info(`request ${requestId} — handling chat completion`);
+    const controller = new AbortController();
+    reply.raw.once("close", () => {
+      if (!reply.raw.writableEnded) controller.abort();
+    });
     // Fastify body is typed as unknown; API contract guarantees JSON object
     const result = await deps.handleChatCompletion(
       request.body as Record<string, unknown>,
-      request.headers
+      request.headers,
+      controller.signal
     );
 
     if (!result.success) {
@@ -409,34 +369,10 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
       `request ${requestId} — chat completion success → routing via ${result.provider ?? ""} (model: ${result.model ?? ""})`
     );
     reply.header("Content-Type", "text/event-stream");
+    reply.header("Cache-Control", "no-cache");
+    if (result.provider) reply.header("X-Hive-Provider", result.provider);
+    if (result.model) reply.header("X-Hive-Model", result.model);
     return reply.send(result.stream);
-  });
-
-  server.post("/api/orchestrate", async (request, reply) => {
-    const requestId = crypto.randomUUID();
-    logger.info(`request ${requestId} — handling orchestrate`);
-    const result = await deps.handleOrchestrate(
-      request.body as Record<string, unknown>,
-      request.headers
-    );
-
-    if (result.finishReason === "error") {
-      logger.error(
-        `request ${requestId} — orchestrate failed`,
-        result.error ?? ""
-      );
-      return reply.status(500).send({ error: result.error });
-    }
-
-    logger.info(
-      `request ${requestId} — orchestrate done (${result.finishReason}, ${String(result.iterations)} iterations)`
-    );
-    return reply.send({
-      messages: result.messages,
-      finish_reason: result.finishReason,
-      final_content: result.finalContent,
-      iterations: result.iterations,
-    });
   });
 
   server.get("/api/providers", async (_request, reply) => {

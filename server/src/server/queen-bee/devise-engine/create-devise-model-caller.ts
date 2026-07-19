@@ -44,7 +44,7 @@ export function createAgentModelCaller(
         payload.tools = activeTools;
       }
 
-      const result = await handleChatCompletion(payload, {});
+      const result = await handleChatCompletion(payload, {}, signal);
 
       if (!result.success || !result.stream) {
         throw new Error(result.error ?? "Model call failed");

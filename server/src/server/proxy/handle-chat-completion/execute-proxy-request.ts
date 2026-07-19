@@ -1,6 +1,7 @@
 import { logger } from "shared/logger";
 import type { Node, RequestMetric } from "telemetry";
 import { emitFlowEvent } from "../flow-events";
+import { isProviderRequestCancelledError } from "../provider-request-cancelled-error";
 import type { ProxyResponse } from "../proxy-response";
 import { routingMemory } from "../routing-memory";
 import { selectBestNode } from "./execute-proxy-request/select-best-node";
@@ -85,6 +86,7 @@ export async function executeProxyRequest(
       );
       return response;
     } catch (err: unknown) {
+      if (isProviderRequestCancelledError(err)) throw err;
       logger.debug(
         `attempt ${String(attempts)}/${String(maxAttempts)} — ${compoundKey} network failure: ${err instanceof Error ? err.message : String(err)}`
       );

@@ -7,6 +7,7 @@ import type { FinishReason, StreamPhaseEvent, TelemetrySink } from "telemetry";
 import { classifyError, createStreamCounter, detectRefusal } from "telemetry";
 import { emitFlowEvent } from "./flow-events";
 import type { MutatedRequest } from "./mutate-request";
+import { ProviderRequestCancelledError } from "./provider-request-cancelled-error";
 import { ProxyResponse } from "./proxy-response";
 
 type RouteRequestOptions = {
@@ -17,6 +18,7 @@ type RouteRequestOptions = {
   modelName: string;
   requestId: string;
   telemetrySink: TelemetrySink;
+  signal?: AbortSignal;
 };
 
 type RouteResult = {
@@ -34,12 +36,16 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
     modelName,
     requestId,
     telemetrySink,
+    signal,
   } = opts;
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const url = new URL(upstreamUrl);
     const start = Date.now();
 
     const bodyBuffer = Buffer.from(mutated.body);
+    let upstreamResponse: http.IncomingMessage | null = null;
+    let downstreamStream: PassThrough | null = null;
+    let recorded = false;
 
     emitFlowEvent({
       type: "node_dispatched",
@@ -81,6 +87,9 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
         toolCallFailed: boolean;
       }
     ) => {
+      if (recorded) return;
+      recorded = true;
+      signal?.removeEventListener("abort", abort);
       const totalLatency = Date.now() - start;
       const outputTokens =
         stats?.outputTokensFromUsage ??
@@ -130,6 +139,7 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
 
     const requester = url.protocol === "https:" ? https : http;
     const req = requester.request(requestOptions, (res) => {
+      upstreamResponse = res;
       const statusCode = res.statusCode ?? 500;
 
       if (statusCode >= 400) {
@@ -155,6 +165,7 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
       }
 
       const passThrough = new PassThrough();
+      downstreamStream = passThrough;
       let ttft = timeoutMs;
       let initialByteReceived = false;
       let streamErrored = false;
@@ -300,6 +311,15 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
       });
     });
 
+    function abort(): void {
+      recorded = true;
+      signal?.removeEventListener("abort", abort);
+      downstreamStream?.destroy();
+      upstreamResponse?.destroy();
+      req.destroy();
+      reject(new ProviderRequestCancelledError(signal?.reason));
+    }
+
     req.on("timeout", () => {
       logger.debug(
         `upstream ${providerName}:${modelName} — timeout after ${String(timeoutMs)}ms`
@@ -325,6 +345,12 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
         requestId,
       });
     });
+
+    if (signal?.aborted) {
+      abort();
+      return;
+    }
+    signal?.addEventListener("abort", abort, { once: true });
 
     req.write(bodyBuffer);
     req.end();

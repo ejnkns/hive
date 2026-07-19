@@ -1,8 +1,8 @@
-import type { PassThrough } from "node:stream";
 import { logger } from "shared/logger";
 import type { Node } from "telemetry";
 import { emitFlowEvent } from "../flow-events";
 import type { ChatCompletionResult } from "../handle-chat-completion";
+import { isProviderRequestCancelledError } from "../provider-request-cancelled-error";
 import type { ProxyResponse } from "../proxy-response";
 import { routingMemory } from "../routing-memory";
 
@@ -29,7 +29,7 @@ export async function tryOverrideRoute(params: {
       );
       return {
         success: true,
-        stream: response.getStream() as PassThrough,
+        stream: response.getStream(),
         provider: overrideNode.providerName,
         model: overrideNode.modelName,
         statusCode: response.status,
@@ -74,6 +74,9 @@ export async function tryOverrideRoute(params: {
       errorBody,
     });
   } catch (err: unknown) {
+    if (isProviderRequestCancelledError(err)) {
+      return { success: false, statusCode: 499, error: err.message };
+    }
     const compoundKey = `${overrideNode.providerName}:${overrideNode.modelName}`;
     routingMemory.recordNetworkFailure(compoundKey);
 

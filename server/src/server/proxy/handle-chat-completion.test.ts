@@ -28,6 +28,37 @@ await describe("handleChatCompletion", async () => {
     assert.strictEqual(result.statusCode, 503);
     assert.ok(result.error?.includes("No configured providers") ?? false);
   });
+
+  await it("requires provider and model together for an exact playground route", async () => {
+    const result = await handleChatCompletion(
+      {
+        model: "test-model",
+        messages: [{ role: "user", content: "hello" }],
+      },
+      { "x-hive-playground-provider": "test-provider" }
+    );
+
+    assert.equal(result.success, false);
+    assert.equal(result.statusCode, 400);
+    assert.match(result.error ?? "", /both provider and model/);
+  });
+
+  await it("reports an unavailable exact playground provider", async () => {
+    const result = await handleChatCompletion(
+      {
+        model: "test-model",
+        messages: [{ role: "user", content: "hello" }],
+      },
+      {
+        "x-hive-playground-provider": "test-provider",
+        "x-hive-playground-model": "test-model",
+      }
+    );
+
+    assert.equal(result.success, false);
+    assert.equal(result.statusCode, 503);
+    assert.match(result.error ?? "", /unavailable/);
+  });
 });
 
 await describe("lastUsedState", async () => {

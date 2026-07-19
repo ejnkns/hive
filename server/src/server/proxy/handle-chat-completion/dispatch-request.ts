@@ -12,7 +12,8 @@ export async function dispatchRequest(
   payload: string,
   qualified: ReadonlyArray<Provider>,
   headers: IncomingHttpHeaders,
-  requestId: string
+  requestId: string,
+  signal?: AbortSignal
 ): Promise<ProxyResponse> {
   const provider = qualified.find((p) => p.name === node.providerName);
   if (!provider) {
@@ -41,6 +42,7 @@ export async function dispatchRequest(
     modelName: node.modelName,
     requestId,
     telemetrySink: createTelemetrySink(),
+    signal,
   });
 
   logger.debug(
