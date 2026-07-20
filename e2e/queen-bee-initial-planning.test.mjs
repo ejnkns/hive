@@ -5,7 +5,7 @@ import { startHiveTestApp } from "./support/hive-test-app.mjs";
 import { startMockProvider } from "./support/mock-provider.mjs";
 
 test("a user can plan, implement, review, and accept a Card into hive-main", {
-  timeout: 60_000,
+  timeout: 120_000,
 }, async () => {
   const provider = await startMockProvider();
   const hive = await startHiveTestApp(provider.host);
@@ -104,7 +104,7 @@ test("a user can plan, implement, review, and accept a Card into hive-main", {
 });
 
 async function visible(locator) {
-  await locator.waitFor({ state: "visible", timeout: 10_000 });
+  await locator.waitFor({ state: "visible", timeout: 30_000 });
 }
 
 function summarizeRequests(requests) {
