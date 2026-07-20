@@ -292,27 +292,31 @@ async function callWithToolLoop(
 
     for (const toolCall of response.toolCalls) {
       const result = executeAgentTool(toolCall, workspacePath, projectRevision);
-      messages.push(
-        {
-          role: "assistant",
-          content: response.content,
-          tool_calls: [
-            {
-              id: toolCall.id,
-              type: "function",
-              function: {
-                name: toolCall.name,
-                arguments: toolCall.arguments,
-              },
+      const assistantMessage: Message = {
+        role: "assistant",
+        content: response.content,
+        tool_calls: [
+          {
+            id: toolCall.id,
+            type: "function",
+            function: {
+              name: toolCall.name,
+              arguments: toolCall.arguments,
             },
-          ],
-        },
-        {
-          role: "tool",
-          content: result.content,
-          tool_call_id: toolCall.id,
-        }
-      );
+          },
+        ],
+      };
+      if (response.reasoningContent) {
+        assistantMessage.reasoning_content = response.reasoningContent;
+      }
+      if (response.reasoning) {
+        assistantMessage.reasoning = response.reasoning;
+      }
+      messages.push(assistantMessage, {
+        role: "tool",
+        content: result.content,
+        tool_call_id: toolCall.id,
+      });
     }
   }
   throw new Error("Planner Agent reached the maximum tool-call limit");

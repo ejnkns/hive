@@ -605,6 +605,66 @@ describe("Planner Agent reconciliation", () => {
     );
   });
 
+  it("preserves provider reasoning across Planner tool-call turns", async () => {
+    const repoPath = createWorkspace();
+    const runtimeStore = createQueenBeeRuntimeStore(join(repoPath, ".runtime"));
+    let callCount = 0;
+    const planner = createPlanningManager(
+      createBoardStore(() => {}, runtimeStore),
+      runtimeStore,
+      integrationManager(),
+      {
+        async call(messages) {
+          callCount += 1;
+          if (callCount === 1) {
+            return {
+              content: "Inspecting the current requirements.",
+              reasoningContent: "provider thinking payload",
+              reasoning: "provider reasoning payload",
+              toolCalls: [
+                {
+                  id: "read-requirements",
+                  name: "read_file",
+                  arguments: JSON.stringify({
+                    path: ".hive/requirements.md",
+                  }),
+                },
+              ],
+              finishReason: "tool_calls",
+            };
+          }
+
+          const toolTurn = messages.find(
+            (message) =>
+              message.role === "assistant" &&
+              message.reasoning_content === "provider thinking payload"
+          );
+          assert.equal(
+            toolTurn?.reasoning_content,
+            "provider thinking payload"
+          );
+          assert.equal(toolTurn?.reasoning, "provider reasoning payload");
+          return {
+            content: `\`\`\`json\n${JSON.stringify({
+              changes: [
+                {
+                  action: "create",
+                  rationale: "Implement the initial requirements",
+                  proposedCard: cardSpec("Initial Card"),
+                },
+              ],
+            })}\n\`\`\``,
+            toolCalls: [],
+            finishReason: "stop",
+          };
+        },
+      }
+    );
+
+    await planner.propose("project-1", repoPath, "# Proposed requirements");
+    assert.equal(callCount, 2);
+  });
+
   it("rejects Planner output that mixes feedback with Card changes", async () => {
     const repoPath = createWorkspace();
     const runtimeStore = createQueenBeeRuntimeStore(join(repoPath, ".runtime"));
