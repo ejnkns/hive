@@ -9,6 +9,7 @@ import {
   type AgentModelCaller,
   createAgentModelCaller,
 } from "./devise-engine/create-devise-model-caller";
+import type { ToolCall } from "./devise-engine/devise-tools";
 import type {
   NewCardActivityEvent,
   QueenBeeRuntimeStore,
@@ -337,6 +338,7 @@ async function runLoop(
   maxIterations = 20
 ): Promise<WorkerLoopResult> {
   const evidence = new Map<string, WorkerToolEvidence>();
+  const failedCommands = new Map<string, number>();
   let rejectedCompletions = 0;
 
   for (let iteration = 0; iteration < maxIterations; iteration++) {
@@ -426,6 +428,7 @@ async function runLoop(
     }
 
     const exchanges = [];
+    let repeatedCommand: ToolCall | undefined;
     for (const toolCall of response.toolCalls) {
       log.toolCalls.push({
         name: toolCall.name,
@@ -444,6 +447,12 @@ async function runLoop(
       });
       exchanges.push({ toolCall, content: result.content });
 
+      if (toolCall.name === "run_command" && result.isError) {
+        const failures = (failedCommands.get(toolCall.arguments) ?? 0) + 1;
+        failedCommands.set(toolCall.arguments, failures);
+        if (failures >= 2) repeatedCommand = toolCall;
+      }
+
       onEvent({
         type: "worker_tool",
         cardId,
@@ -457,9 +466,39 @@ async function runLoop(
       });
     }
     appendAgentToolExchanges(messages, response, exchanges);
+    if (repeatedCommand) {
+      return repeatedCommandHandover(repeatedCommand);
+    }
+    if (
+      response.toolCalls.some(
+        (toolCall) =>
+          toolCall.name === "run_command" &&
+          (failedCommands.get(toolCall.arguments) ?? 0) === 1
+      )
+    ) {
+      messages.push({
+        role: "system",
+        content:
+          "A command failed. Do not repeat the identical command unless you first change the implementation or identify a new diagnostic reason. Use a finite, targeted check; interactive applications and services are not suitable run_command verification.",
+      });
+    }
   }
 
   throw new Error("Reached maximum iterations");
+}
+
+function repeatedCommandHandover(toolCall: ToolCall): WorkerLoopResult {
+  return {
+    type: "handover",
+    handover: {
+      problem: "Worker Agent repeated the same failed command.",
+      attempted: [`Repeated run_command: ${toolCall.arguments}`],
+      blockedBy: [
+        "The identical command failed twice. Change the implementation or use a different finite diagnostic before retrying.",
+      ],
+      occurredAt: new Date().toISOString(),
+    },
+  };
 }
 
 function currentHead(worktreePath: string): string {

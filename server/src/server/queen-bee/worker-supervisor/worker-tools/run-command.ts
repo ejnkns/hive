@@ -32,7 +32,8 @@ const GIT_MUTATIONS = new Set([
 export function runCommand(
   toolCall: ToolCall,
   workspacePath: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  timeoutMs = 30_000
 ): Promise<ToolResult> {
   const parsed: unknown = JSON.parse(toolCall.arguments);
   if (!isRecord(parsed) || typeof parsed.command !== "string") {
@@ -73,13 +74,33 @@ export function runCommand(
       args,
       {
         cwd: workspacePath,
-        timeout: 30_000,
+        timeout: timeoutMs,
         maxBuffer: 1024 * 1024,
         signal,
       },
       (error, stdout, stderr) => {
         if (error) {
-          resolveResult(errorResult(toolCall.id, error.message));
+          if (error.killed || error.code === "ETIMEDOUT") {
+            resolveResult(
+              errorResult(
+                toolCall.id,
+                `Command timed out after ${timeoutMs}ms: ${commandLine(command, args)}. Do not use run_command to launch interactive or long-running applications; use a finite automated check instead.`
+              )
+            );
+            return;
+          }
+          resolveResult(
+            errorResult(
+              toolCall.id,
+              [
+                `Command failed: ${commandLine(command, args)}`,
+                stderr,
+                error.message,
+              ]
+                .filter(Boolean)
+                .join("\n")
+            )
+          );
           return;
         }
 
@@ -94,6 +115,10 @@ export function runCommand(
       }
     );
   });
+}
+
+function commandLine(command: string, args: string[]): string {
+  return [command, ...args].join(" ");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

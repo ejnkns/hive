@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import { executeWorkerTool, WORKER_TOOLS } from "./worker-tools";
+import { runCommand } from "./worker-tools/run-command";
 
 describe("worker tools", () => {
   const repositories: string[] = [];
@@ -74,6 +75,24 @@ describe("worker tools", () => {
     assert.equal(result.isError, true);
     assert.match(result.content, /commit_work/);
     assert.equal(git(repoPath, ["rev-list", "--count", "HEAD"]), "1");
+  });
+
+  it("reports a command timeout distinctly from a command failure", async () => {
+    const repoPath = createGitRepository();
+
+    const result = await runCommand(
+      toolCall("run_command", {
+        command: process.execPath,
+        args: ["-e", "setInterval(() => {}, 1000)"],
+      }),
+      repoPath,
+      undefined,
+      10
+    );
+
+    assert.equal(result.isError, true);
+    assert.match(result.content, /timed out/i);
+    assert.match(result.content, /interactive|long-running/i);
   });
 
   it("commits only explicitly declared files through repository hooks", async () => {

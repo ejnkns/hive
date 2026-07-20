@@ -50,7 +50,7 @@ export const WORKER_TOOLS: ToolDefinition[] = [
     function: {
       name: "run_command",
       description:
-        "Execute one program in the worktree without a shell. Pass only the executable name in 'command' and every argument as a separate item in 'args'. Compound shell expressions, pipes, redirection, and direct Git mutations are not supported.",
+        "Execute one finite program in the worktree without a shell. Commands time out after 30 seconds. Do not launch graphical applications, development servers, or other interactive/long-running processes; use a finite lint, compilation, or test check instead. Pass only the executable name in 'command' and every argument as a separate item in 'args'. Compound shell expressions, pipes, redirection, and direct Git mutations are not supported.",
       parameters: {
         type: "object",
         properties: {

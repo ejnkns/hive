@@ -8,7 +8,7 @@ export const WORKER_SYSTEM_PROMPT = `You are an AI software engineer implementin
 2. Search the codebase for patterns, conventions, and related code.
 3. Understand the project structure, build system, and dependencies.
 
-If any assigned file does not exist, the task is not coherent against the codebase, or a critical dependency is missing, explain the problem clearly and stop.
+If an assigned file is explicitly named as a new file in the task, create it. Otherwise, if the task is not coherent against the codebase or a critical dependency is missing, explain the problem clearly and stop.
 
 ## Implementation
 
@@ -21,7 +21,7 @@ If any assigned file does not exist, the task is not coherent against the codeba
 
 - Use \`commit_work\` after each coherent implementation milestone. Declare exactly which paths belong in the commit and follow the repository's documented commit conventions.
 - Never mutate Git through \`run_command\`. Use \`git_status\`, \`git_diff\`, and \`git_log\` for inspection.
-- Use \`run_command\` for linting and tests after the final implementation commit. Pass the executable in \`command\` and each argument as a separate item in \`args\`; shell expressions are unsupported.
+- Use \`run_command\` for finite linting, compilation, and tests after the final implementation commit. Pass the executable in \`command\` and each argument as a separate item in \`args\`; shell expressions are unsupported. Do not launch interactive applications, graphical windows, development servers, or other long-running processes: they time out and are not automated verification. Prefer a finite static or headless check; if no applicable automated check exists, use \`verificationNotRunReason\` when submitting.
 
 ## When complete
 

@@ -167,6 +167,45 @@ describe("WorkerSupervisor", () => {
     );
   });
 
+  it("hands over after repeating an identical failed command", async () => {
+    const repoPath = createGitRepository();
+    const runtimeStore = createQueenBeeRuntimeStore(join(repoPath, ".runtime"));
+    const boardStore = createBoardStore(() => {}, runtimeStore);
+    const card = boardStore.addCard("project-1", repoPath, {
+      title: "Avoid repeated failed verification",
+      description: "Verify a command without repeating identical failures.",
+      acceptanceCriteria: ["The Worker stops after repeated failures"],
+      relevantFiles: ["source.txt"],
+      dependencies: [],
+      column: "ready",
+    });
+    let calls = 0;
+    const supervisor = createWorkerSupervisor(
+      boardStore,
+      failingReviewer(),
+      unusedCoordinator(),
+      runtimeStore,
+      {
+        async call() {
+          calls += 1;
+          return toolResponse(`failed-${calls}`, "run_command", {
+            command: process.execPath,
+            args: ["-e", "process.exit(1)"],
+          });
+        },
+      }
+    );
+
+    await supervisor.run("project-1", card, repoPath, "", "", () => {});
+
+    const updated = boardStore
+      .getBoard("project-1", repoPath)
+      .cards.find((candidate) => candidate.id === card.id);
+    assert.equal(calls, 2);
+    assert.equal(updated?.column, "unfulfillable");
+    assert.match(updated?.handover?.problem ?? "", /repeated.*failed command/i);
+  });
+
   it("releases Project worker capacity before Reviewer Agent completion", async () => {
     const repoPath = createGitRepository();
     const runtimeStore = createQueenBeeRuntimeStore(join(repoPath, ".runtime"));
