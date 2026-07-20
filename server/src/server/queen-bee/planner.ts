@@ -290,34 +290,35 @@ async function callWithToolLoop(
     const response = await modelCaller.call(messages, workspacePath, true);
     if (response.toolCalls.length === 0) return response.content;
 
-    for (const toolCall of response.toolCalls) {
-      const result = executeAgentTool(toolCall, workspacePath, projectRevision);
-      const assistantMessage: Message = {
-        role: "assistant",
-        content: response.content,
-        tool_calls: [
-          {
-            id: toolCall.id,
-            type: "function",
-            function: {
-              name: toolCall.name,
-              arguments: toolCall.arguments,
-            },
-          },
-        ],
-      };
-      if (response.reasoningContent) {
-        assistantMessage.reasoning_content = response.reasoningContent;
-      }
-      if (response.reasoning) {
-        assistantMessage.reasoning = response.reasoning;
-      }
-      messages.push(assistantMessage, {
-        role: "tool",
-        content: result.content,
-        tool_call_id: toolCall.id,
-      });
+    const assistantMessage: Message = {
+      role: "assistant",
+      content: response.content,
+      tool_calls: response.toolCalls.map((toolCall) => ({
+        id: toolCall.id,
+        type: "function",
+        function: {
+          name: toolCall.name,
+          arguments: toolCall.arguments,
+        },
+      })),
+    };
+    if (response.reasoningContent) {
+      assistantMessage.reasoning_content = response.reasoningContent;
     }
+    if (response.reasoning) {
+      assistantMessage.reasoning = response.reasoning;
+    }
+    messages.push(
+      assistantMessage,
+      ...response.toolCalls.map(
+        (toolCall): Message => ({
+          role: "tool",
+          content: executeAgentTool(toolCall, workspacePath, projectRevision)
+            .content,
+          tool_call_id: toolCall.id,
+        })
+      )
+    );
   }
   throw new Error("Planner Agent reached the maximum tool-call limit");
 }

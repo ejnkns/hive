@@ -629,6 +629,11 @@ describe("Planner Agent reconciliation", () => {
                     path: ".hive/requirements.md",
                   }),
                 },
+                {
+                  id: "list-project",
+                  name: "list_directory",
+                  arguments: JSON.stringify({ path: "." }),
+                },
               ],
               finishReason: "tool_calls",
             };
@@ -644,6 +649,16 @@ describe("Planner Agent reconciliation", () => {
             "provider thinking payload"
           );
           assert.equal(toolTurn?.reasoning, "provider reasoning payload");
+          assert.ok(Array.isArray(toolTurn?.tool_calls));
+          assert.equal(toolTurn.tool_calls.length, 2);
+          assert.equal(
+            messages.filter((message) => message.role === "assistant").length,
+            1
+          );
+          assert.equal(
+            messages.filter((message) => message.role === "tool").length,
+            2
+          );
           return {
             content: `\`\`\`json\n${JSON.stringify({
               changes: [
