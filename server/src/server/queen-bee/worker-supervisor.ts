@@ -1,8 +1,6 @@
 /** @public */
 
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
 import type { WorkAttempt, WorkerHandover } from "shared/board-types";
 import type { Message } from "shared/message";
 import type { BoardStore, Card } from "./board-store";
@@ -501,7 +499,10 @@ function summarizeProgress(content: string): string {
   return firstLine.length > 160 ? `${firstLine.slice(0, 157)}...` : firstLine;
 }
 
-function validateCard(card: Card, worktreePath: string): WorkerHandover | null {
+function validateCard(
+  card: Card,
+  _worktreePath: string
+): WorkerHandover | null {
   if (!card.relevantFiles || card.relevantFiles.length === 0) {
     return {
       problem: `Card "${card.title}" has no relevant files.`,
@@ -509,23 +510,6 @@ function validateCard(card: Card, worktreePath: string): WorkerHandover | null {
       blockedBy: [
         "The worker has no grounded starting point in the workspace.",
       ],
-      occurredAt: new Date().toISOString(),
-    };
-  }
-
-  const missing: string[] = [];
-  for (const file of card.relevantFiles) {
-    const filePath = join(worktreePath, file);
-    if (!existsSync(filePath)) {
-      missing.push(file);
-    }
-  }
-
-  if (missing.length > 0) {
-    return {
-      problem: `Validation failed for card "${card.title}": assigned files are missing.`,
-      attempted: ["Checked every assigned relevant file in the worktree."],
-      blockedBy: missing,
       occurredAt: new Date().toISOString(),
     };
   }

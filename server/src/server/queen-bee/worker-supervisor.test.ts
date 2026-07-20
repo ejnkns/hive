@@ -107,6 +107,66 @@ describe("WorkerSupervisor", () => {
     );
   });
 
+  it("allows a Ready Card to create an explicitly named new file", async () => {
+    const repoPath = createGitRepository();
+    const runtimeStore = createQueenBeeRuntimeStore(join(repoPath, ".runtime"));
+    const boardStore = createBoardStore(() => {}, runtimeStore);
+    const card = boardStore.addCard("project-1", repoPath, {
+      title: "Create the application entry point",
+      description: "Create main.py as the project entry point.",
+      acceptanceCriteria: ["main.py exists and can be executed"],
+      relevantFiles: ["main.py"],
+      dependencies: [],
+      column: "ready",
+    });
+    let callCount = 0;
+    const supervisor = createWorkerSupervisor(
+      boardStore,
+      failingReviewer(),
+      unusedCoordinator(),
+      runtimeStore,
+      {
+        async call() {
+          callCount += 1;
+          if (callCount === 1) {
+            return toolResponse("write-entry", "write_file", {
+              path: "main.py",
+              content: 'print("hello")\n',
+            });
+          }
+          if (callCount === 2) {
+            return toolResponse("commit-entry", "commit_work", {
+              message: "app: add entry point",
+              paths: ["main.py"],
+            });
+          }
+          if (callCount === 3) {
+            return toolResponse("verify-entry", "run_command", {
+              command: process.execPath,
+              args: ["-e", 'process.stdout.write("verified")'],
+            });
+          }
+          return toolResponse("submit-entry", "submit_work", {
+            outcome: "implemented",
+            verificationCallIds: ["verify-entry"],
+          });
+        },
+      }
+    );
+
+    await supervisor.run("project-1", card, repoPath, "", "", () => {});
+
+    const updated = boardStore
+      .getBoard("project-1", repoPath)
+      .cards.find((candidate) => candidate.id === card.id);
+    assert.equal(callCount, 4);
+    assert.equal(updated?.column, "reviewing");
+    assert.equal(
+      git(repoPath, ["show", `hive/${card.id}/attempt-1:main.py`]),
+      'print("hello")'
+    );
+  });
+
   it("releases Project worker capacity before Reviewer Agent completion", async () => {
     const repoPath = createGitRepository();
     const runtimeStore = createQueenBeeRuntimeStore(join(repoPath, ".runtime"));

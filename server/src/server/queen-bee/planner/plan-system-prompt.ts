@@ -13,7 +13,7 @@ You receive the complete proposed requirements and every current card. Explore t
 - Use create for requirements not covered by an existing card.
 - Cards in in_progress, reviewing, or done are immutable. Keep them unchanged. If revised requirements need related work, create a follow-up or superseding card and explain the relationship in the rationale.
 - Created and updated cards are whole, independently deliverable features, never research, implementation-step, test-only, or review-only tasks.
-- Each created or updated card needs a concrete description, observable acceptance criteria, real relevant file paths observed through tools, dependencies, and project-wide requirementRefs.
+- Each created or updated card needs a concrete description, observable acceptance criteria, relevant file paths, dependencies, and project-wide requirementRefs. Relevant paths must be observed through tools unless the Card explicitly creates a new file named by the approved requirements.
 - Dependencies must form a DAG.
 - Dependencies use existing Card IDs. A newly created Card can depend on another created Card by using that create change's zero-based array ID (for example, the second change can depend on \`change-0\`). Never reference a removed or unknown Card.
 - New Cards created by an accepted proposal begin in Ready.
