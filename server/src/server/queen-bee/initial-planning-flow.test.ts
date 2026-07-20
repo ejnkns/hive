@@ -170,6 +170,43 @@ describe("initial planning flow", () => {
       url: `/api/queen-bee/${project.id}/planning/open`,
     });
     assert.deepEqual(noOpenPlan.json(), {});
+
+    await restartedServer.close();
+    servers.splice(servers.indexOf(restartedServer), 1);
+    const reloadedBoardStore = createBoardStore(() => {}, runtimeStore);
+    const reloadedServer = registerFlowServer({
+      boardStore: reloadedBoardStore,
+      planningManager: createPlanningManager(
+        reloadedBoardStore,
+        runtimeStore,
+        integrationManager(),
+        unavailableCaller()
+      ),
+      projectStore,
+      sessionManager: createRequirementsSessionManager(undefined, runtimeStore),
+    });
+
+    const reloadedBoard = await reloadedServer.inject({
+      method: "GET",
+      url: `/api/queen-bee/${project.id}/board`,
+    });
+    assert.deepEqual(
+      reloadedBoard.json().cards.map((card: { title: string }) => card.title),
+      ["Initial Card"]
+    );
+    const reloadedSession = await reloadedServer.inject({
+      method: "GET",
+      url: `/api/queen-bee/${project.id}/requirements/session`,
+    });
+    assert.deepEqual(reloadedSession.json(), {
+      active: false,
+      status: "submitted",
+    });
+    const reloadedOpenPlan = await reloadedServer.inject({
+      method: "GET",
+      url: `/api/queen-bee/${project.id}/planning/open`,
+    });
+    assert.deepEqual(reloadedOpenPlan.json(), {});
   });
 
   function registerFlowServer(

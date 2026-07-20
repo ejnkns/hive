@@ -207,8 +207,10 @@ function isRequirementsSessionKind(
       <div class="loading">Loading...</div>
     {:else if planning}
       <div class="planning">
-        <div class="planning-text">Generating cards...</div>
-        <div class="planning-hint">Exploring codebase and planning features from requirements</div>
+        <div class="planning-text">Generating project plan...</div>
+        <div class="planning-hint">
+          Preparing proposed requirements and their corresponding Ready Cards
+        </div>
       </div>
     {:else if errorMessage}
       <div class="error">{errorMessage}</div>
