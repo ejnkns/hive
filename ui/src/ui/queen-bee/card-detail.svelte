@@ -41,7 +41,7 @@ type Props = {
   onRemediate?: (
     action: "retry_with_patch" | "redevise" | "archive",
     suggestionId?: string
-  ) => void;
+  ) => Promise<void>;
 };
 
 let refining = $state(false);
@@ -52,6 +52,8 @@ let decisionError = $state<string | null>(null);
 let deciding = $state(false);
 let activity = $state<CardActivityEvent[]>([]);
 let activityError = $state<string | null>(null);
+let remediating = $state(false);
+let remediationError = $state<string | null>(null);
 
 async function loadActivity() {
   activityError = null;
@@ -129,6 +131,23 @@ async function restartReview() {
       error instanceof Error ? error.message : "Could not restart review";
   } finally {
     deciding = false;
+  }
+}
+
+async function remediate(
+  action: "retry_with_patch" | "redevise" | "archive",
+  suggestionId: string
+) {
+  if (!onRemediate || remediating) return;
+  remediating = true;
+  remediationError = null;
+  try {
+    await onRemediate(action, suggestionId);
+  } catch (error) {
+    remediationError =
+      error instanceof Error ? error.message : "Could not apply remediation";
+  } finally {
+    remediating = false;
   }
 }
 
@@ -347,15 +366,19 @@ const COLUMN_LABELS: Record<Column, string> = {
             <div class="log-error">{card.coordinatorLog.error ?? "Analysis failed"}</div>
           {:else}
             <div class="section-value">{card.coordinatorLog.summary}</div>
+            {#if remediationError}<div class="log-error">{remediationError}</div>{/if}
             {#each card.coordinatorLog.suggestions ?? [] as suggestion}
               <div class="suggestion">
                 <div>{suggestion.rationale}</div>
                 {#if onRemediate}
                   <button
                     class="btn btn-sm"
-                    onclick={() => onRemediate(suggestion.action, suggestion.id)}
+                    onclick={() => void remediate(suggestion.action, suggestion.id)}
+                    disabled={remediating}
                   >
-                    {suggestion.action === "retry_with_patch"
+                    {remediating
+                      ? "Preparing…"
+                      : suggestion.action === "retry_with_patch"
                       ? "Accept patch"
                       : suggestion.action === "redevise"
                         ? "Revise requirements"

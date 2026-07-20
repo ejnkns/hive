@@ -27,12 +27,14 @@ let updatedProposal = $state<PlanningProposal | null>(null);
 let current = $derived(updatedProposal ?? proposal);
 let busy = $state(false);
 let error = $state<string | null>(null);
+let stale = $state(false);
 let revisionGuidance = $state("");
 let isInitialPlan = $derived(current.runKind === "initial_planning");
 
 async function decide(changeId: string, decision: "accepted" | "rejected") {
   busy = true;
   error = null;
+  stale = false;
   try {
     const response = await fetch(
       `/api/queen-bee/${projectId}/planning/${current.id}/changes/${changeId}`,
@@ -49,6 +51,7 @@ async function decide(changeId: string, decision: "accepted" | "rejected") {
     updatedProposal = result.proposal;
   } catch (caught) {
     error = caught instanceof Error ? caught.message : "Planning failed";
+    stale = /changed after planning started/i.test(error);
   } finally {
     busy = false;
   }
@@ -57,6 +60,7 @@ async function decide(changeId: string, decision: "accepted" | "rejected") {
 async function finish(action: "accept-all" | "apply") {
   busy = true;
   error = null;
+  stale = false;
   try {
     const response = await fetch(
       `/api/queen-bee/${projectId}/planning/${current.id}/${action}`,
@@ -69,6 +73,7 @@ async function finish(action: "accept-all" | "apply") {
     onApplied();
   } catch (caught) {
     error = caught instanceof Error ? caught.message : "Planning failed";
+    stale = /changed after planning started/i.test(error);
   } finally {
     busy = false;
   }
@@ -238,7 +243,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   </div>
 
   <div class="proposal-footer">
-    {#if hasRejected()}
+    {#if stale}
+      <div class="revision-choice">
+        <div>
+          This proposal is stale because the project changed while it was being prepared.
+          Discard it to return to the current Board.
+        </div>
+        <div class="actions">
+          <button class="btn" onclick={cancelProposal} disabled={busy}>
+            Discard stale proposal
+          </button>
+        </div>
+      </div>
+    {:else if hasRejected()}
       <div class="revision-choice">
         <textarea
           bind:value={revisionGuidance}
@@ -266,6 +283,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
         onclick={() => finish("apply")}
         disabled={busy || !allAccepted()}
       >Apply accepted changes</button>
+      <button class="btn" onclick={cancelProposal} disabled={busy}>
+        Cancel proposal
+      </button>
       {#if !allAccepted()}<span>Accept every changed card before applying.</span>{/if}
     {/if}
   </div>

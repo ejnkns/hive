@@ -17,6 +17,8 @@ export function registerCoordinatorRoutes(
     planningManager: PlanningManager;
   }
 ): void {
+  const inFlightRemediations = new Set<string>();
+
   server.post(
     "/api/queen-bee/:projectId/cards/:cardId/remediate",
     async (request, reply) => {
@@ -60,24 +62,82 @@ export function registerCoordinatorRoutes(
         });
       }
 
-      if (body.action === "archive") {
-        if (!suggestion.requirementsContent) {
-          return reply.status(400).send({
-            error:
-              "Archive requires a complete requirements revision that removes or defers the abandoned scope",
+      const remediationKey = `${projectId}:${cardId}`;
+      if (inFlightRemediations.has(remediationKey)) {
+        return reply.status(409).send({
+          error: "A remediation is already being prepared for this Card",
+        });
+      }
+      inFlightRemediations.add(remediationKey);
+
+      try {
+        if (body.action === "archive") {
+          if (!suggestion.requirementsContent) {
+            return reply.status(400).send({
+              error:
+                "Archive requires a complete requirements revision that removes or defers the abandoned scope",
+            });
+          }
+          try {
+            const outcome = await deps.planningManager.propose(
+              projectId,
+              project.repoPath,
+              suggestion.requirementsContent,
+              [
+                `The user selected the Coordinator's archive remediation for card '${cardId}'.`,
+                `Rationale: ${suggestion.rationale}`,
+                "Remove this card from the active plan and reconcile every other card against the revised requirements.",
+              ].join("\n"),
+              { cardId, target: "archived" }
+            );
+            return reply.send(planningResponse(outcome));
+          } catch (error) {
+            return reply.status(500).send({
+              error:
+                error instanceof Error
+                  ? error.message
+                  : "Could not reconcile the archive",
+            });
+          }
+        }
+
+        if (body.action === "redevise") {
+          const result = await deps.sessionManager.startCard(
+            projectId,
+            cardId,
+            [
+              "Repair the project requirements using structured Coordinator feedback without inspecting Board or Card content.",
+              `Structured feedback: ${suggestion.rationale}`,
+              "Ask the user for the decision needed to make this card fulfillable.",
+              "When complete, call update_requirements_draft with the full aligned project Requirements Draft, then output REQUIREMENTS_COMPLETE. Do not author Card content; the Planner Agent will independently reconcile Cards after user approval.",
+            ].join("\n"),
+            project.repoPath
+          );
+          return reply.send({
+            card,
+            redevise: true,
+            question: result.question,
           });
         }
+
+        if (!suggestion.cardPatch || !suggestion.requirementsContent) {
+          return reply.status(400).send({
+            error: "Suggestion does not include a complete remediation patch",
+          });
+        }
+
         try {
           const outcome = await deps.planningManager.propose(
             projectId,
             project.repoPath,
             suggestion.requirementsContent,
             [
-              `The user selected the Coordinator's archive remediation for card '${cardId}'.`,
-              `Rationale: ${suggestion.rationale}`,
-              "Remove this card from the active plan and reconcile every other card against the revised requirements.",
+              `The user selected the Coordinator's retry_with_patch remediation for card '${cardId}'.`,
+              "Use this approved card patch when reconciling that card:",
+              JSON.stringify(suggestion.cardPatch, null, 2),
+              "Reconcile every other card against the updated project requirements before applying anything.",
             ].join("\n"),
-            { cardId, target: "archived" }
+            { cardId, target: "ready" }
           );
           return reply.send(planningResponse(outcome));
         } catch (error) {
@@ -85,57 +145,11 @@ export function registerCoordinatorRoutes(
             error:
               error instanceof Error
                 ? error.message
-                : "Could not reconcile the archive",
+                : "Could not reconcile the remediation",
           });
         }
-      }
-
-      if (body.action === "redevise") {
-        const result = await deps.sessionManager.startCard(
-          projectId,
-          cardId,
-          [
-            "Repair the project requirements using structured Coordinator feedback without inspecting Board or Card content.",
-            `Structured feedback: ${suggestion.rationale}`,
-            "Ask the user for the decision needed to make this card fulfillable.",
-            "When complete, call update_requirements_draft with the full aligned project Requirements Draft, then output REQUIREMENTS_COMPLETE. Do not author Card content; the Planner Agent will independently reconcile Cards after user approval.",
-          ].join("\n"),
-          project.repoPath
-        );
-        return reply.send({
-          card,
-          redevise: true,
-          question: result.question,
-        });
-      }
-
-      if (!suggestion.cardPatch || !suggestion.requirementsContent) {
-        return reply.status(400).send({
-          error: "Suggestion does not include a complete remediation patch",
-        });
-      }
-
-      try {
-        const outcome = await deps.planningManager.propose(
-          projectId,
-          project.repoPath,
-          suggestion.requirementsContent,
-          [
-            `The user selected the Coordinator's retry_with_patch remediation for card '${cardId}'.`,
-            "Use this approved card patch when reconciling that card:",
-            JSON.stringify(suggestion.cardPatch, null, 2),
-            "Reconcile every other card against the updated project requirements before applying anything.",
-          ].join("\n"),
-          { cardId, target: "ready" }
-        );
-        return reply.send(planningResponse(outcome));
-      } catch (error) {
-        return reply.status(500).send({
-          error:
-            error instanceof Error
-              ? error.message
-              : "Could not reconcile the remediation",
-        });
+      } finally {
+        inFlightRemediations.delete(remediationKey);
       }
     }
   );

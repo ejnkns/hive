@@ -237,48 +237,44 @@ async function handleRemediate(
   action: CoordinatorAction,
   suggestionId?: string
 ) {
-  try {
-    const res = await fetch(
-      `/api/queen-bee/${projectId}/cards/${cardId}/remediate`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, suggestionId }),
-      }
-    );
-    if (!res.ok) {
-      const data = (await res.json()) as { error?: string };
-      throw new Error(data.error ?? "Remediation failed");
+  const res = await fetch(
+    `/api/queen-bee/${projectId}/cards/${cardId}/remediate`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, suggestionId }),
     }
-    const result = (await res.json()) as {
-      card?: Card;
-      proposal?: PlanningProposal;
-      feedback?: RequirementsFeedback;
-      redevise?: boolean;
-      question?: string;
-    };
-    if (result.feedback) {
-      selectedCard = null;
-      onRequirementsFeedback?.(result.feedback);
-      return;
-    }
-    if (result.proposal) {
-      selectedCard = null;
-      onPlanningProposal?.(result.proposal);
-      return;
-    }
-    if (!result.card) throw new Error("Remediation returned no result");
-    handleCardUpdated(result.card);
-    if (result.redevise && result.question) {
-      refinementQuestion = result.question;
-      return;
-    }
-    refinementQuestion = null;
-    selectedCard = null;
-    await loadBoard();
-  } catch (err) {
-    error = err instanceof Error ? err.message : "Remediation failed";
+  );
+  if (!res.ok) {
+    const data = (await res.json()) as { error?: string };
+    throw new Error(data.error ?? "Remediation failed");
   }
+  const result = (await res.json()) as {
+    card?: Card;
+    proposal?: PlanningProposal;
+    feedback?: RequirementsFeedback;
+    redevise?: boolean;
+    question?: string;
+  };
+  if (result.feedback) {
+    selectedCard = null;
+    onRequirementsFeedback?.(result.feedback);
+    return;
+  }
+  if (result.proposal) {
+    selectedCard = null;
+    onPlanningProposal?.(result.proposal);
+    return;
+  }
+  if (!result.card) throw new Error("Remediation returned no result");
+  handleCardUpdated(result.card);
+  if (result.redevise && result.question) {
+    refinementQuestion = result.question;
+    return;
+  }
+  refinementQuestion = null;
+  selectedCard = null;
+  await loadBoard();
 }
 
 function handleCardUpdated(updatedCard: Card) {
@@ -329,7 +325,9 @@ function remediateSelectedCard(
   suggestionId?: string
 ) {
   const card = selectedCard;
-  if (card) void handleRemediate(card.id, action, suggestionId);
+  return card
+    ? handleRemediate(card.id, action, suggestionId)
+    : Promise.resolve();
 }
 
 function cardsInColumn(col: Column): Card[] {
