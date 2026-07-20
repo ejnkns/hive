@@ -406,7 +406,17 @@ async function runLoop(
       if (rejectedCompletions >= 3) {
         return completionGateHandover(gate.correction);
       }
-      appendToolExchange(messages, response, submission, gate.correction);
+      appendToolExchanges(
+        messages,
+        response,
+        response.toolCalls.map((toolCall) => ({
+          toolCall,
+          content:
+            toolCall.id === submission.id
+              ? gate.correction
+              : "Tool call skipped because submit_work must be the only tool call.",
+        }))
+      );
       onEvent({
         type: "worker_tool",
         cardId,
@@ -416,6 +426,7 @@ async function runLoop(
       continue;
     }
 
+    const exchanges: ToolExchange[] = [];
     for (const toolCall of response.toolCalls) {
       log.toolCalls.push({
         name: toolCall.name,
@@ -432,7 +443,7 @@ async function runLoop(
         isError: result.isError,
         headCommit: currentHead(worktreePath),
       });
-      appendToolExchange(messages, response, toolCall, result.content);
+      exchanges.push({ toolCall, content: result.content });
 
       onEvent({
         type: "worker_tool",
@@ -446,37 +457,45 @@ async function runLoop(
         detail: result.content,
       });
     }
+    appendToolExchanges(messages, response, exchanges);
   }
 
   throw new Error("Reached maximum iterations");
 }
 
-function appendToolExchange(
+type ToolExchange = {
+  toolCall: { id: string; name: string; arguments: string };
+  content: string;
+};
+
+function appendToolExchanges(
   messages: Message[],
   response: Awaited<ReturnType<AgentModelCaller["call"]>>,
-  toolCall: { id: string; name: string; arguments: string },
-  content: string
+  exchanges: ToolExchange[]
 ): void {
   const assistantMessage: Message = {
     role: "assistant",
     content: response.content,
-    tool_calls: [
-      {
-        id: toolCall.id,
-        type: "function",
-        function: { name: toolCall.name, arguments: toolCall.arguments },
-      },
-    ],
+    tool_calls: response.toolCalls.map((toolCall) => ({
+      id: toolCall.id,
+      type: "function",
+      function: { name: toolCall.name, arguments: toolCall.arguments },
+    })),
   };
   if (response.reasoningContent) {
     assistantMessage.reasoning_content = response.reasoningContent;
   }
   if (response.reasoning) assistantMessage.reasoning = response.reasoning;
-  messages.push(assistantMessage, {
-    role: "tool",
-    content,
-    tool_call_id: toolCall.id,
-  });
+  messages.push(
+    assistantMessage,
+    ...exchanges.map(
+      ({ toolCall, content }): Message => ({
+        role: "tool",
+        content,
+        tool_call_id: toolCall.id,
+      })
+    )
+  );
 }
 
 function currentHead(worktreePath: string): string {

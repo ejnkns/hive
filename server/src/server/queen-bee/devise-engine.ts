@@ -506,6 +506,7 @@ async function callWithToolLoop(
       };
     }
 
+    const toolMessages: Message[] = [];
     for (const toolCall of response.toolCalls) {
       const result = executeAgentTool(toolCall, workspacePath, projectRevision);
       if (toolCall.name === "update_requirements_draft" && !result.isError) {
@@ -516,38 +517,32 @@ async function callWithToolLoop(
         }
       }
 
-      const assistantMsg: Message = {
-        role: "assistant",
-        content: response.content,
-        tool_calls: [
-          {
-            id: toolCall.id,
-            type: "function",
-            function: {
-              name: toolCall.name,
-              arguments: toolCall.arguments,
-            },
-          },
-        ],
-      };
-
-      if (response.reasoningContent) {
-        assistantMsg.reasoning_content = response.reasoningContent;
-      }
-
-      if (response.reasoning) {
-        assistantMsg.reasoning = response.reasoning;
-      }
-
-      messages.push(assistantMsg);
-
-      const toolMessage: Message = {
+      toolMessages.push({
         role: "tool",
         content: result.content,
         tool_call_id: toolCall.id,
-      };
-      messages.push(toolMessage);
+      });
     }
+
+    const assistantMsg: Message = {
+      role: "assistant",
+      content: response.content,
+      tool_calls: response.toolCalls.map((toolCall) => ({
+        id: toolCall.id,
+        type: "function",
+        function: {
+          name: toolCall.name,
+          arguments: toolCall.arguments,
+        },
+      })),
+    };
+    if (response.reasoningContent) {
+      assistantMsg.reasoning_content = response.reasoningContent;
+    }
+    if (response.reasoning) {
+      assistantMsg.reasoning = response.reasoning;
+    }
+    messages.push(assistantMsg, ...toolMessages);
   }
 
   return {

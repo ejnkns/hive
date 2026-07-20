@@ -31,9 +31,38 @@ describe("Reviewer Agent", () => {
       async call(messages): Promise<AgentModelResponse> {
         calls += 1;
         if (calls === 1) {
-          return toolResponse("read-1", "read_file", { path: "source.ts" });
+          return {
+            content: "Inspecting the immutable package.",
+            reasoningContent: "provider reviewer thinking",
+            toolCalls: [
+              {
+                id: "read-1",
+                name: "read_file",
+                arguments: JSON.stringify({ path: "source.ts" }),
+              },
+              {
+                id: "list-1",
+                name: "list_directory",
+                arguments: JSON.stringify({ path: "." }),
+              },
+            ],
+            finishReason: "tool_calls",
+          };
         }
-        inspectedContent = messages.at(-1)?.content ?? "";
+        const assistantTurns = messages.filter(
+          (message) => message.role === "assistant"
+        );
+        assert.equal(assistantTurns.length, 1);
+        assert.equal(
+          assistantTurns[0]?.reasoning_content,
+          "provider reviewer thinking"
+        );
+        assert.equal(assistantTurns[0]?.tool_calls?.length, 2);
+        inspectedContent =
+          messages.find(
+            (message) =>
+              message.role === "tool" && message.tool_call_id === "read-1"
+          )?.content ?? "";
         return toolResponse("review-1", "submit_review", {
           verdict: "approved",
           findings: [],

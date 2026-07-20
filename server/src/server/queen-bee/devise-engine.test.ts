@@ -119,6 +119,62 @@ describe("RequirementsSessionManager", () => {
     assert.strictEqual(result.question, "What are you building?");
   });
 
+  it("preserves one provider assistant turn with every Requirements tool call", async () => {
+    const workspace = createTempWorkspace();
+    let callCount = 0;
+    const engine = createRequirementsSessionManager({
+      async call(messages) {
+        callCount += 1;
+        if (callCount === 1) {
+          return {
+            content: "Inspecting the project.",
+            reasoningContent: "provider thinking payload",
+            reasoning: "provider reasoning payload",
+            toolCalls: [
+              {
+                id: "list-project",
+                name: "list_directory",
+                arguments: JSON.stringify({ path: "." }),
+              },
+              {
+                id: "read-entry",
+                name: "read_file",
+                arguments: JSON.stringify({ path: "src/index.ts" }),
+              },
+            ],
+            finishReason: "tool_calls",
+          };
+        }
+
+        const assistantTurns = messages.filter(
+          (message) => message.role === "assistant"
+        );
+        assert.strictEqual(assistantTurns.length, 1);
+        assert.strictEqual(
+          assistantTurns[0]?.reasoning_content,
+          "provider thinking payload"
+        );
+        assert.strictEqual(
+          assistantTurns[0]?.reasoning,
+          "provider reasoning payload"
+        );
+        assert.strictEqual(assistantTurns[0]?.tool_calls?.length, 2);
+        assert.deepStrictEqual(
+          messages
+            .filter((message) => message.role === "tool")
+            .map((message) => message.tool_call_id),
+          ["list-project", "read-entry"]
+        );
+        return emptyResponse("What behavior should change?");
+      },
+    });
+
+    const result = await engine.start("test", "Improve the app", workspace);
+
+    assert.strictEqual(result.question, "What behavior should change?");
+    assert.strictEqual(callCount, 2);
+  });
+
   it("respond returns next question from model", async () => {
     const caller = createMockCaller([
       emptyResponse("First question"),

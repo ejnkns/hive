@@ -313,6 +313,7 @@ describe("WorkerSupervisor", () => {
         if (callCount === 1) {
           return {
             content: "I will run the verification command.",
+            reasoningContent: "provider worker thinking",
             toolCalls: [
               {
                 id: "command-1",
@@ -322,11 +323,25 @@ describe("WorkerSupervisor", () => {
                   args: ["-e", 'process.stdout.write("command complete")'],
                 }),
               },
+              {
+                id: "status-1",
+                name: "git_status",
+                arguments: JSON.stringify({}),
+              },
             ],
             finishReason: "tool_calls",
           };
         }
         if (callCount === 2) {
+          const assistantTurns = messages.filter(
+            (message) => message.role === "assistant"
+          );
+          assert.equal(assistantTurns.length, 1);
+          assert.equal(
+            assistantTurns[0]?.reasoning_content,
+            "provider worker thinking"
+          );
+          assert.equal(assistantTurns[0]?.tool_calls?.length, 2);
           receivedToolContent = messages.find(
             (message) => message.role === "tool"
           )?.content;
