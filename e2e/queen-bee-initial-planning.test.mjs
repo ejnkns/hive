@@ -47,6 +47,24 @@ test("a user can plan, implement, review, and accept a Card into hive-main", {
 
     await page.reload();
     await visible(page.getByRole("button", { name: "Accept plan" }));
+    const staleApplyRoute = /\/api\/queen-bee\/[^/]+\/planning\/[^/]+\/accept-all$/;
+    await page.route(staleApplyRoute, (route) =>
+      route.fulfill({
+        status: 409,
+        contentType: "application/json",
+        body: JSON.stringify({
+          error: "Project revision changed after planning started",
+        }),
+      })
+    );
+    await page.getByRole("button", { name: "Accept plan" }).click();
+    await visible(
+      page.getByText(
+        "This proposal is stale because the project changed while it was being prepared."
+      )
+    );
+    await visible(page.getByRole("button", { name: "Discard stale proposal" }));
+    await page.unroute(staleApplyRoute);
     await page.getByRole("button", { name: "Accept plan" }).click();
     await visible(
       page.getByText("Render deterministic greeting", { exact: true })
