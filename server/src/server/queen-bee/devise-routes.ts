@@ -184,6 +184,11 @@ export function registerRequirementsRoutes(
           `Resolve Idea '${ideaId}' into one or more existing or new Cards.`,
           { ideaId, target: "resolved" }
         );
+        deps.sessionManager.submitForPlanning(
+          projectId,
+          session!.sessionId,
+          outcome.id
+        );
         return reply.send({ approved: true, ...planningResponse(outcome) });
       } catch (error) {
         return reply.status(500).send({
@@ -278,6 +283,9 @@ export function registerRequirementsRoutes(
       };
       const session = deps.sessionManager.getIdeaSession(projectId, ideaId);
       if (!session) return reply.send({ active: false });
+      if (session.status === "submitted") {
+        return reply.send({ active: false, status: session.status });
+      }
       return reply.send({
         active: true,
         status: session.status,
@@ -505,6 +513,11 @@ export function registerRequirementsRoutes(
             ? { ideaId: session.sourceIdeaId, target: "resolved" }
             : undefined
         );
+        deps.sessionManager.submitForPlanning(
+          projectId,
+          session!.sessionId,
+          outcome.id
+        );
         if (session?.sourceFeedbackId) {
           deps.planningManager.resolveRequirementsFeedback(
             projectId,
@@ -551,6 +564,11 @@ export function registerRequirementsRoutes(
             "Reconcile every other Card without using Requirements Agent conversation history.",
           ].join("\n"),
           { cardId, target: "ready" }
+        );
+        deps.sessionManager.submitForPlanning(
+          projectId,
+          session!.sessionId,
+          outcome.id
         );
         return reply.send({ approved: true, ...planningResponse(outcome) });
       } catch (error) {
@@ -622,6 +640,9 @@ export function registerRequirementsRoutes(
 
       if (!session) {
         return reply.send({ active: false });
+      }
+      if (session.status === "submitted") {
+        return reply.send({ active: false, status: session.status });
       }
 
       const clientMessages = session.messages

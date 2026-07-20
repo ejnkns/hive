@@ -344,6 +344,42 @@ describe("requirements routes", () => {
     assert.equal(readRequirements(project.repoPath), canonical);
   });
 
+  it("submits the completed session only after planning succeeds", async () => {
+    const canonical = "# Requirements\n\n## Overview\nOriginal";
+    const draft = "# Requirements\n\n## Overview\nApproved revision";
+    const submissions: Array<[string, string, string]> = [];
+    const { server, project } = createRouteFixture({
+      getSession() {
+        return {
+          sessionId: "session-1",
+          projectId: project.id,
+          messages: [],
+          status: "complete",
+          kind: "requirements_revision",
+          baseRequirementsRevision: requirementsRevision(canonical),
+          projectRevision: null,
+          draftRequirements: draft,
+          startedAt: "2026-07-19T00:00:00.000Z",
+          updatedAt: "2026-07-19T00:01:00.000Z",
+        };
+      },
+      submitForPlanning(projectId, sessionId, outcomeId) {
+        submissions.push([projectId, sessionId, outcomeId]);
+      },
+    });
+    writeRequirements(project.repoPath, canonical);
+
+    const response = await server.inject({
+      method: "POST",
+      url: `/api/queen-bee/${project.id}/requirements/approve`,
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(submissions, [
+      [project.id, "session-1", response.json().proposal.id],
+    ]);
+  });
+
   it("preserves source Idea lineage when an approved repair returns to planning", async () => {
     const canonical = "# Requirements\n\nOriginal";
     const draft = "# Requirements\n\nRepaired Idea";
@@ -572,6 +608,7 @@ describe("requirements routes", () => {
         question: "Idea question",
       }),
       getSession: () => undefined,
+      submitForPlanning: () => {},
       getIdeaSession: () => undefined,
       startCard: async () => ({ question: "Card question" }),
       respondCard: async () => ({

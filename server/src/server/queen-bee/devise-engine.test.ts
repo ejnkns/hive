@@ -439,6 +439,46 @@ describe("RequirementsSessionManager", () => {
     assert.strictEqual(restartedEngine.getSession("test")?.status, "active");
   });
 
+  it("retires a completed session after it is submitted for planning", async () => {
+    const workspace = createTempWorkspace();
+    const runtimeStore = createQueenBeeRuntimeStore(
+      join(workspace, ".runtime")
+    );
+    const engine = createRequirementsSessionManager(
+      createMockCaller([
+        emptyResponse("What should this project do?"),
+        draftResponse(),
+        emptyResponse(
+          "REQUIREMENTS_COMPLETE\n```markdown\n# Requirements\n```"
+        ),
+      ]),
+      runtimeStore
+    );
+
+    await engine.start("test", "Build it", workspace);
+    await engine.respond("test", "That is complete", workspace);
+    const session = engine.getSession("test");
+    assert.equal(session?.status, "complete");
+
+    engine.submitForPlanning("test", session!.sessionId, "proposal-1");
+
+    assert.deepEqual(
+      {
+        status: engine.getSession("test")?.status,
+        planningOutcomeId: engine.getSession("test")?.planningOutcomeId,
+      },
+      { status: "submitted", planningOutcomeId: "proposal-1" }
+    );
+    await assert.rejects(
+      () => engine.respond("test", "Change it again", workspace),
+      /No active Requirements Session/
+    );
+    assert.equal(
+      runtimeStore.getRequirementsSessions("test").at(-1)?.status,
+      "submitted"
+    );
+  });
+
   it("runs tool calls in loop before returning question", async () => {
     const workspace = createTempWorkspace();
 

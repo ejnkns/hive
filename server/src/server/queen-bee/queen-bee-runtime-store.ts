@@ -45,7 +45,9 @@ export type PersistedRequirementsSession = {
   sourceFeedbackId?: string;
   kind: RequirementsSessionKind;
   messages: Message[];
-  status: "active" | "complete";
+  status: "active" | "complete" | "submitted";
+  planningOutcomeId?: string;
+  submittedAt?: string;
   baseRequirementsRevision: string;
   projectRevision: string | null;
   draftRequirements?: string;

@@ -88,6 +88,7 @@ describe("coordinator routes", () => {
       respond: async () => ({ type: "question", question: "Question" }),
       respondIdea: async () => ({ type: "question", question: "Question" }),
       getSession: () => undefined,
+      submitForPlanning: () => {},
       getIdeaSession: () => undefined,
       async startCard(...args) {
         startCardArgs = args;

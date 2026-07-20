@@ -69,6 +69,11 @@ export type RequirementsSessionManager = {
     workspacePath: string
   ): Promise<RequirementsRespondResult>;
   getSession(projectId: string): RequirementsSession | undefined;
+  submitForPlanning(
+    projectId: string,
+    sessionId: string,
+    planningOutcomeId: string
+  ): void;
   startCard(
     projectId: string,
     cardId: string,
@@ -206,6 +211,23 @@ export function createRequirementsSessionManager(
             !session.ideaId
         )
         .at(-1);
+    },
+
+    submitForPlanning(projectId, sessionId, planningOutcomeId) {
+      restoreProject(projectId);
+      const session = [...sessions.values()].find(
+        (candidate) =>
+          candidate.projectId === projectId && candidate.sessionId === sessionId
+      );
+      if (!session || session.status !== "complete") {
+        throw new Error("Requirements Session is not ready for planning");
+      }
+      const submittedAt = new Date().toISOString();
+      session.status = "submitted";
+      session.planningOutcomeId = planningOutcomeId;
+      session.submittedAt = submittedAt;
+      session.updatedAt = submittedAt;
+      runtimeStore?.saveRequirementsSession(session);
     },
 
     getIdeaSession(projectId, ideaId) {
@@ -347,7 +369,7 @@ export function createRequirementsSessionManager(
     const projectId = sessionKey.split(/:(?:card|idea):/)[0] ?? sessionKey;
     restoreProject(projectId);
     const session = sessions.get(sessionKey);
-    if (!session || session.status === "complete") {
+    if (!session || session.status !== "active") {
       throw new Error("No active Requirements Session for this project");
     }
 
