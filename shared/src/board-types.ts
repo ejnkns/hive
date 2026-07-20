@@ -131,6 +131,12 @@ export type PlanningRunKind =
   | "idea_resolution"
   | "card_replanning";
 
+export type RequirementsSessionKind =
+  | "initial_requirements"
+  | "requirements_revision"
+  | "idea_elaboration"
+  | "requirements_repair";
+
 export type RequirementsFeedback = {
   kind: "requirements_feedback";
   id: string;

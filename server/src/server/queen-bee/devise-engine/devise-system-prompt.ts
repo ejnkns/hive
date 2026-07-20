@@ -1,5 +1,7 @@
 /** @public */
 
+import type { RequirementsSessionKind } from "shared/board-types";
+
 export const REQUIREMENTS_AGENT_SYSTEM_PROMPT = `You are the Requirements Agent. Conduct a requirements elicitation interview that turns user intent into a concrete, precise project-wide requirements specification that a developer could implement without guessing.
 
 ## Your role
@@ -94,12 +96,6 @@ Items explicitly excluded. A user saying "just a todo app" has ruled out user ac
 ### For later
 Items the user seems interested in but can't be specified precisely yet. These are the "fog of war" — you know they're coming but can't pin them down until present decisions are resolved.
 `;
-
-export type RequirementsSessionKind =
-  | "initial_requirements"
-  | "requirements_revision"
-  | "idea_elaboration"
-  | "requirements_repair";
 
 export function requirementsAgentSystemPrompt(
   kind: RequirementsSessionKind

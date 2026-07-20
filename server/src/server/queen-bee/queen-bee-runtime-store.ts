@@ -15,10 +15,10 @@ import type {
   CardActivityEvent,
   PlanningProposal,
   RequirementsFeedback,
+  RequirementsSessionKind,
 } from "shared/board-types";
 import { HIVE_DIR } from "shared/hive-dir";
 import type { Message } from "shared/message";
-import type { RequirementsSessionKind } from "./devise-engine/devise-system-prompt";
 import type { ReviewPackage } from "./reviewer";
 
 export type { ActivityActor, CardActivityEvent } from "shared/board-types";

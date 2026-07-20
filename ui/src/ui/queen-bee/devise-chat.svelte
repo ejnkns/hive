@@ -1,5 +1,6 @@
 <script lang="ts">
 import { onMount } from "svelte";
+import type { RequirementsSessionKind } from "shared/board-types";
 
 let {
   projectId,
@@ -10,12 +11,6 @@ let {
   initialKind = "initial_requirements",
   initialDraftRequirements,
 }: Props = $props();
-
-type RequirementsSessionKind =
-  | "initial_requirements"
-  | "requirements_revision"
-  | "idea_elaboration"
-  | "requirements_repair";
 
 type Props = {
   projectId: string;

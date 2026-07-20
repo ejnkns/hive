@@ -3,6 +3,7 @@ import { onMount } from "svelte";
 import type {
   PlanningProposal,
   RequirementsFeedback,
+  RequirementsSessionKind,
 } from "shared/board-types";
 import DeviseChat from "./devise-chat.svelte";
 import KanbanBoard from "./kanban-board.svelte";
@@ -29,12 +30,6 @@ let initialKind = $state<RequirementsSessionKind>("initial_requirements");
 let initialDraftRequirements = $state<string | undefined>(undefined);
 let planningProposal = $state<PlanningProposal | null>(null);
 let requirementsFeedback = $state<RequirementsFeedback | null>(null);
-
-type RequirementsSessionKind =
-  | "initial_requirements"
-  | "requirements_revision"
-  | "idea_elaboration"
-  | "requirements_repair";
 
 onMount(() => {
   projectHeader.projectId = projectId;

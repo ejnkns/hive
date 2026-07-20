@@ -1,16 +1,17 @@
 /** @public */
 
 import { randomUUID } from "node:crypto";
-import type { Idea, RequirementsFeedback } from "shared/board-types";
+import type {
+  Idea,
+  RequirementsFeedback,
+  RequirementsSessionKind,
+} from "shared/board-types";
 import type { Message } from "shared/message";
 import {
   type AgentModelCaller,
   createAgentModelCaller,
 } from "./devise-engine/create-devise-model-caller";
-import {
-  type RequirementsSessionKind,
-  requirementsAgentSystemPrompt,
-} from "./devise-engine/devise-system-prompt";
+import { requirementsAgentSystemPrompt } from "./devise-engine/devise-system-prompt";
 import { executeAgentTool } from "./devise-engine/devise-tools";
 import { loadProjectContext } from "./project-context";
 import type {
