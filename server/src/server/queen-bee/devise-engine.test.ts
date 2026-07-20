@@ -459,8 +459,9 @@ describe("RequirementsSessionManager", () => {
     await engine.respond("test", "That is complete", workspace);
     const session = engine.getSession("test");
     assert.equal(session?.status, "complete");
+    if (!session) assert.fail("Expected a completed Requirements Session");
 
-    engine.submitForPlanning("test", session!.sessionId, "proposal-1");
+    engine.submitForPlanning("test", session.sessionId, "proposal-1");
 
     assert.deepEqual(
       {

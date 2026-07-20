@@ -28,6 +28,7 @@ let current = $derived(updatedProposal ?? proposal);
 let busy = $state(false);
 let error = $state<string | null>(null);
 let revisionGuidance = $state("");
+let isInitialPlan = $derived(current.runKind === "initial_planning");
 
 async function decide(changeId: string, decision: "accepted" | "rejected") {
   busy = true;
@@ -180,17 +181,27 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 <div class="proposal">
   <div class="proposal-header">
     <div>
-      <h2>Review card reconciliation</h2>
-      <p>The Planner Agent compared every card with the approved requirements.</p>
+      <h2>{isInitialPlan ? "Review project plan" : "Review requirements and Card changes"}</h2>
+      <p>
+        {isInitialPlan
+          ? "Review the proposed project requirements and Ready Cards before they become authoritative."
+          : "Review the proposed requirements and their corresponding Card changes as one consistent update."}
+      </p>
     </div>
     <button class="btn btn-primary" onclick={() => finish("accept-all")} disabled={busy}>
-      Accept all
+      {isInitialPlan ? "Accept plan" : "Accept and apply all"}
     </button>
   </div>
 
   {#if error}<div class="error">{error}</div>{/if}
 
+  <section class="requirements-preview">
+    <h3>Proposed requirements</h3>
+    <pre>{current.proposedRequirements}</pre>
+  </section>
+
   <div class="changes">
+    <h3>Card changes</h3>
     {#each current.changes as change (change.id)}
       <div class="change">
         <div class="change-heading">
@@ -267,8 +278,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   }
   .proposal-header { justify-content: space-between; }
   h2 { color: var(--text); font-size: 1rem; margin: 0; }
+  h3 { color: var(--text); font-size: 0.75rem; margin: 0; }
   p { color: var(--muted); font-size: 0.75rem; margin: 0.25rem 0 0; }
   .changes { display: flex; flex-direction: column; gap: 0.625rem; }
+  .requirements-preview { display: flex; flex-direction: column; gap: 0.5rem; }
+  .requirements-preview pre { background: var(--card); border: 1px solid var(--border); border-radius: 7px; color: var(--text); font: inherit; font-size: 0.6875rem; line-height: 1.5; margin: 0; max-height: 24rem; overflow: auto; padding: 0.75rem; white-space: pre-wrap; }
   .change { background: var(--card); border: 1px solid var(--border); border-radius: 7px; padding: 0.75rem; }
   .change-heading strong { color: var(--text); font-size: 0.8125rem; }
   .action, .decision { color: var(--muted); font-size: 0.625rem; text-transform: uppercase; }

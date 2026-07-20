@@ -380,6 +380,38 @@ describe("requirements routes", () => {
     ]);
   });
 
+  it("reports a submitted Requirements Session as historical", async () => {
+    const { server, project } = createRouteFixture({
+      getSession() {
+        return {
+          sessionId: "session-1",
+          projectId: project.id,
+          messages: [{ role: "assistant", content: "Completed draft" }],
+          status: "submitted",
+          planningOutcomeId: "proposal-1",
+          submittedAt: "2026-07-20T00:02:00.000Z",
+          kind: "initial_requirements",
+          baseRequirementsRevision: requirementsRevision(""),
+          projectRevision: null,
+          draftRequirements: "# Requirements",
+          startedAt: "2026-07-20T00:00:00.000Z",
+          updatedAt: "2026-07-20T00:02:00.000Z",
+        };
+      },
+    });
+
+    const response = await server.inject({
+      method: "GET",
+      url: `/api/queen-bee/${project.id}/requirements/session`,
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.json(), {
+      active: false,
+      status: "submitted",
+    });
+  });
+
   it("preserves source Idea lineage when an approved repair returns to planning", async () => {
     const canonical = "# Requirements\n\nOriginal";
     const draft = "# Requirements\n\nRepaired Idea";

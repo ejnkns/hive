@@ -25,9 +25,16 @@ let initialMessages = $state<{ role: string; content: string }[] | undefined>(
   undefined
 );
 let initialStatus = $state<string | undefined>(undefined);
+let initialKind = $state<RequirementsSessionKind>("initial_requirements");
 let initialDraftRequirements = $state<string | undefined>(undefined);
 let planningProposal = $state<PlanningProposal | null>(null);
 let requirementsFeedback = $state<RequirementsFeedback | null>(null);
+
+type RequirementsSessionKind =
+  | "initial_requirements"
+  | "requirements_revision"
+  | "idea_elaboration"
+  | "requirements_repair";
 
 onMount(() => {
   projectHeader.projectId = projectId;
@@ -47,6 +54,9 @@ async function restoreSession(): Promise<boolean> {
     ) {
       initialMessages = data.messages;
       initialStatus = typeof data.status === "string" ? data.status : undefined;
+      initialKind = isRequirementsSessionKind(data.kind)
+        ? data.kind
+        : "initial_requirements";
       initialDraftRequirements =
         typeof data.draftRequirements === "string"
           ? data.draftRequirements
@@ -64,19 +74,16 @@ async function checkStatus() {
   try {
     planningProposal = null;
     requirementsFeedback = null;
+    initialMessages = undefined;
+    initialStatus = undefined;
+    initialKind = "initial_requirements";
+    initialDraftRequirements = undefined;
     const res = await fetch(`/api/queen-bee/${projectId}/requirements/status`);
     if (!res.ok) throw new Error("Failed to load project");
     const data: unknown = await res.json();
     if (!isRecord(data) || typeof data.hasRequirements !== "boolean") {
       throw new Error("Invalid project status response");
     }
-    const hasRequirementsSession = await restoreSession();
-    if (hasRequirementsSession) {
-      if (data.hasRequirements) await fetchRequirements();
-      hasBoard = false;
-      return;
-    }
-
     const openPlanningResponse = await fetch(
       `/api/queen-bee/${projectId}/planning/open`
     );
@@ -92,6 +99,13 @@ async function checkStatus() {
         requirementsFeedback = outcome.feedback;
         return;
       }
+    }
+
+    const hasRequirementsSession = await restoreSession();
+    if (hasRequirementsSession) {
+      if (data.hasRequirements) await fetchRequirements();
+      hasBoard = false;
+      return;
     }
 
     if (data.hasRequirements) {
@@ -179,6 +193,17 @@ function isClientMessages(
     )
   );
 }
+
+function isRequirementsSessionKind(
+  value: unknown
+): value is RequirementsSessionKind {
+  return (
+    value === "initial_requirements" ||
+    value === "requirements_revision" ||
+    value === "idea_elaboration" ||
+    value === "requirements_repair"
+  );
+}
 </script>
 
 <div class="project-page">
@@ -246,6 +271,7 @@ function isClientMessages(
         {projectId}
         initialMessages={initialMessages}
         initialStatus={initialStatus}
+        {initialKind}
         {initialDraftRequirements}
         onApprove={handleApprove}
         onComplete={() => {

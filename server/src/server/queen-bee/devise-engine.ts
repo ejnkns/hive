@@ -219,7 +219,7 @@ export function createRequirementsSessionManager(
         (candidate) =>
           candidate.projectId === projectId && candidate.sessionId === sessionId
       );
-      if (!session || session.status !== "complete") {
+      if (session?.status !== "complete") {
         throw new Error("Requirements Session is not ready for planning");
       }
       const submittedAt = new Date().toISOString();
@@ -369,7 +369,7 @@ export function createRequirementsSessionManager(
     const projectId = sessionKey.split(/:(?:card|idea):/)[0] ?? sessionKey;
     restoreProject(projectId);
     const session = sessions.get(sessionKey);
-    if (!session || session.status !== "active") {
+    if (session?.status !== "active") {
       throw new Error("No active Requirements Session for this project");
     }
 

@@ -186,7 +186,7 @@ export function registerRequirementsRoutes(
         );
         deps.sessionManager.submitForPlanning(
           projectId,
-          session!.sessionId,
+          draft.sessionId,
           outcome.id
         );
         return reply.send({ approved: true, ...planningResponse(outcome) });
@@ -515,7 +515,7 @@ export function registerRequirementsRoutes(
         );
         deps.sessionManager.submitForPlanning(
           projectId,
-          session!.sessionId,
+          draft.sessionId,
           outcome.id
         );
         if (session?.sourceFeedbackId) {
@@ -567,7 +567,7 @@ export function registerRequirementsRoutes(
         );
         deps.sessionManager.submitForPlanning(
           projectId,
-          session!.sessionId,
+          draft.sessionId,
           outcome.id
         );
         return reply.send({ approved: true, ...planningResponse(outcome) });
@@ -671,7 +671,9 @@ export function registerRequirementsRoutes(
 function approvedDraft(
   session: ReturnType<RequirementsSessionManager["getSession"]>,
   repoPath: string
-): { ok: true; content: string } | { ok: false; error: string } {
+):
+  | { ok: true; content: string; sessionId: string }
+  | { ok: false; error: string } {
   if (session?.status !== "complete" || !session.draftRequirements) {
     return {
       ok: false,
@@ -704,7 +706,11 @@ function approvedDraft(
       return { ok: false, error: "Could not verify the Project revision" };
     }
   }
-  return { ok: true, content: session.draftRequirements };
+  return {
+    ok: true,
+    content: session.draftRequirements,
+    sessionId: session.sessionId,
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

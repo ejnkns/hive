@@ -139,7 +139,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
       title={`${status.targetBranch} and hive-main require explicit reconciliation`}
     >Branches diverged</span>
   {:else if status}
-    <span class="status integrated">{status.targetBranch} includes Hive work</span>
+    <span class="status integrated">{status.targetBranch} is up to date</span>
   {/if}
 </div>
 

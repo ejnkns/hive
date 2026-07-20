@@ -7,8 +7,15 @@ let {
   onApprove,
   initialMessages,
   initialStatus,
+  initialKind = "initial_requirements",
   initialDraftRequirements,
 }: Props = $props();
+
+type RequirementsSessionKind =
+  | "initial_requirements"
+  | "requirements_revision"
+  | "idea_elaboration"
+  | "requirements_repair";
 
 type Props = {
   projectId: string;
@@ -16,6 +23,7 @@ type Props = {
   onApprove?: () => void;
   initialMessages?: { role: string; content: string }[];
   initialStatus?: string;
+  initialKind?: RequirementsSessionKind;
   initialDraftRequirements?: string;
 };
 
@@ -197,7 +205,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
             <pre class="spec">{msg.content}</pre>
             {#if onApprove}
               <div class="approve-inside">
-                <button class="btn btn-approve" onclick={onApprove}>Approve Plan</button>
+                <button class="btn btn-approve" onclick={onApprove}>
+                  {initialKind === "initial_requirements"
+                    ? "Generate project plan"
+                    : "Generate change proposal"}
+                </button>
                 <span class="approve-hint">or continue the conversation to refine</span>
               </div>
             {/if}
@@ -221,7 +233,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
       <div class="role-label">Live requirements draft</div>
       <pre class="spec">{draftRequirements}</pre>
       <div class="draft-note">
-        Canonical requirements remain unchanged until you approve this draft.
+        {initialKind === "initial_requirements"
+          ? "Confirm this draft to generate a project plan. Requirements and Cards become authoritative together when you accept that plan."
+          : "Current project requirements remain unchanged until you accept the resulting change proposal."}
       </div>
     </div>
   {/if}
