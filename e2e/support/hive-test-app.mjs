@@ -14,10 +14,6 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
 
-const repositoryPath = dirname(
-  dirname(dirname(fileURLToPath(import.meta.url)))
-);
-
 export async function startHiveTestApp(mockProviderHost) {
   const runtimePath = mkdtempSync(join(tmpdir(), "hive-e2e-"));
   const dataPath = join(runtimePath, ".hive");
@@ -82,6 +78,10 @@ export async function startHiveTestApp(mockProviderHost) {
     },
   };
 }
+
+const repositoryPath = dirname(
+  dirname(dirname(fileURLToPath(import.meta.url)))
+);
 
 function createGitProject(runtimePath) {
   const projectPath = join(runtimePath, "project");

@@ -8,6 +8,7 @@ import {
 import type { ToolCall } from "./devise-engine/devise-tools";
 import { REVIEWER_SYSTEM_PROMPT } from "./reviewer/reviewer-system-prompt";
 import { executeReviewerTool, REVIEWER_TOOLS } from "./reviewer/reviewer-tools";
+import { appendAgentToolExchanges } from "./shared/append-agent-tool-exchanges";
 
 export { REVIEWER_TOOLS } from "./reviewer/reviewer-tools";
 
@@ -99,12 +100,12 @@ export function createReviewer(
               "Reviewer Agent failed to submit a valid structured review"
             );
           }
-          appendToolExchanges(
+          appendAgentToolExchanges(
             messages,
             response,
             response.toolCalls.map((toolCall) => ({
               toolCall,
-              resultContent:
+              content:
                 toolCall.id === submission.id
                   ? "Review rejected: submit_review must be the only tool call and must match the required schema."
                   : "Tool call skipped because submit_review must be the only tool call.",
@@ -134,9 +135,9 @@ export function createReviewer(
             worktreePath,
             reviewPackage.revisions.baseCommit
           );
-          return { toolCall, resultContent: result.content };
+          return { toolCall, content: result.content };
         });
-        appendToolExchanges(messages, response, exchanges);
+        appendAgentToolExchanges(messages, response, exchanges);
       }
 
       throw new Error("Reviewer Agent reached the maximum iteration limit");
@@ -194,41 +195,6 @@ function parseVerificationAssessment(
   }
   if (typeof value.notes !== "string") return null;
   return { status: value.status, notes: value.notes };
-}
-
-function appendToolExchanges(
-  messages: Message[],
-  response: Awaited<ReturnType<AgentModelCaller["call"]>>,
-  exchanges: Array<{ toolCall: ToolCall; resultContent: string }>
-): void {
-  const assistantMessage: Message = {
-    role: "assistant",
-    content: response.content,
-    tool_calls: response.toolCalls.map((toolCall) => ({
-      id: toolCall.id,
-      type: "function",
-      function: {
-        name: toolCall.name,
-        arguments: toolCall.arguments,
-      },
-    })),
-  };
-  if (response.reasoningContent) {
-    assistantMessage.reasoning_content = response.reasoningContent;
-  }
-  if (response.reasoning) {
-    assistantMessage.reasoning = response.reasoning;
-  }
-  messages.push(
-    assistantMessage,
-    ...exchanges.map(
-      ({ toolCall, resultContent }): Message => ({
-        role: "tool",
-        content: resultContent,
-        tool_call_id: toolCall.id,
-      })
-    )
-  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -19,6 +19,7 @@ import type {
   QueenBeeRuntimeStore,
 } from "./queen-bee-runtime-store";
 import { readRequirements, requirementsRevision } from "./requirements-store";
+import { appendAgentToolExchanges } from "./shared/append-agent-tool-exchanges";
 
 export type RequirementsSession = PersistedRequirementsSession;
 
@@ -506,7 +507,7 @@ async function callWithToolLoop(
       };
     }
 
-    const toolMessages: Message[] = [];
+    const exchanges = [];
     for (const toolCall of response.toolCalls) {
       const result = executeAgentTool(toolCall, workspacePath, projectRevision);
       if (toolCall.name === "update_requirements_draft" && !result.isError) {
@@ -517,32 +518,9 @@ async function callWithToolLoop(
         }
       }
 
-      toolMessages.push({
-        role: "tool",
-        content: result.content,
-        tool_call_id: toolCall.id,
-      });
+      exchanges.push({ toolCall, content: result.content });
     }
-
-    const assistantMsg: Message = {
-      role: "assistant",
-      content: response.content,
-      tool_calls: response.toolCalls.map((toolCall) => ({
-        id: toolCall.id,
-        type: "function",
-        function: {
-          name: toolCall.name,
-          arguments: toolCall.arguments,
-        },
-      })),
-    };
-    if (response.reasoningContent) {
-      assistantMsg.reasoning_content = response.reasoningContent;
-    }
-    if (response.reasoning) {
-      assistantMsg.reasoning = response.reasoning;
-    }
-    messages.push(assistantMsg, ...toolMessages);
+    appendAgentToolExchanges(messages, response, exchanges);
   }
 
   return {
