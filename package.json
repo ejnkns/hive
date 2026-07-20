@@ -12,7 +12,9 @@
     "start": "node server/dist/main.mjs start",
     "test:build": "pnpm build && node scripts/built-server-smoke.mjs",
     "test:dev-proxy": "node scripts/dev-proxy-smoke.mjs",
-    "test": "pnpm run test:dev-proxy && pnpm -r test && pnpm run test:build",
+    "test:e2e:built": "node --test e2e/*.test.mjs",
+    "test:e2e": "pnpm build && pnpm run test:e2e:built",
+    "test": "pnpm run test:dev-proxy && pnpm -r test && pnpm run test:build && pnpm run test:e2e:built",
     "typecheck": "pnpm -r typecheck",
     "lint": "biome lint .",
     "format": "biome format --write .",
@@ -20,6 +22,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.1",
-    "lefthook": "^2.1.9"
+    "lefthook": "^2.1.9",
+    "playwright-core": "^1.61.1"
   }
 }
