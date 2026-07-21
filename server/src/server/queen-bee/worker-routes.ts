@@ -114,8 +114,17 @@ export function registerWorkerRoutes(
 
     const boardHandler = (projectId: string) => {
       try {
+        const project = deps.projectStore
+          .getAll()
+          .find((candidate) => candidate.id === projectId);
+        if (!project) return;
         socket.send(
-          JSON.stringify({ type: "board_updated", data: { projectId } })
+          JSON.stringify(
+            toBoardSocketMessage(
+              projectId,
+              deps.boardStore.getBoard(projectId, project.repoPath)
+            )
+          )
         );
       } catch {
         // socket closed
@@ -220,4 +229,14 @@ export function toWorkerSocketMessage(
       error: event.error ?? null,
     },
   };
+}
+
+export function toBoardSocketMessage(
+  projectId: string,
+  board: ReturnType<BoardStore["getBoard"]>
+): {
+  type: "board_updated";
+  data: { projectId: string; board: ReturnType<BoardStore["getBoard"]> };
+} {
+  return { type: "board_updated", data: { projectId, board } };
 }

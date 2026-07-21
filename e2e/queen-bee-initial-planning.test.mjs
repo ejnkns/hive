@@ -79,8 +79,26 @@ test("a user can plan, implement, review, and accept a Card into hive-main", {
     await visible(page.getByRole("button", { name: "Run worker" }));
     await visible(page.getByText("1 commit ready"));
 
+    const staleBoard = await page.evaluate(async () => {
+      const response = await fetch(
+        "/api/queen-bee/e2e-project/board"
+      );
+      return response.json();
+    });
+    const boardRoute = /\/api\/queen-bee\/e2e-project\/board$/;
+    await page.route(boardRoute, async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(staleBoard),
+      });
+    });
     await page.getByRole("button", { name: "Run worker" }).click();
     await visible(page.getByText("approved", { exact: true }));
+    await page.waitForTimeout(2_100);
+    await visible(page.getByText("approved", { exact: true }));
+    await page.unroute(boardRoute);
     await page
       .getByText("Render deterministic greeting", { exact: true })
       .click();

@@ -70,24 +70,33 @@ let pendingAdmission = $state<{
 } | null>(null);
 let reviewReadiness = $state<Record<string, ReviewReadiness>>({});
 let readinessRequest = 0;
+let boardRequest = 0;
 
 async function loadBoard() {
-  loading = true;
+  const request = ++boardRequest;
+  if (board === null) loading = true;
   error = null;
   try {
     const res = await fetch(`/api/queen-bee/${projectId}/board`);
     if (!res.ok) throw new Error("Failed to load board");
     const loadedBoard = (await res.json()) as Board;
-    board = loadedBoard;
-    void loadReviewReadiness(loadedBoard.cards);
-    if (selectedCard) {
-      selectedCard =
-        loadedBoard.cards.find((card) => card.id === selectedCard?.id) ?? null;
-    }
+    if (request !== boardRequest) return;
+    applyBoard(loadedBoard);
   } catch (err) {
+    if (request !== boardRequest) return;
     error = err instanceof Error ? err.message : "Unknown error";
   } finally {
-    loading = false;
+    if (request === boardRequest) loading = false;
+  }
+}
+
+function applyBoard(nextBoard: Board) {
+  board = nextBoard;
+  loading = false;
+  void loadReviewReadiness(nextBoard.cards);
+  if (selectedCard) {
+    selectedCard =
+      nextBoard.cards.find((card) => card.id === selectedCard?.id) ?? null;
   }
 }
 
@@ -345,10 +354,18 @@ onMount(() => {
     try {
       const message = JSON.parse(String(event.data)) as {
         type?: string;
-        data?: { projectId?: string };
+        data?: { projectId?: string; board?: Board };
       };
-      if (message.data?.projectId === projectId) {
-        void loadBoard();
+      if (
+        message.type === "board_updated" &&
+        message.data?.projectId === projectId
+      ) {
+        if (message.data.board) {
+          boardRequest += 1;
+          applyBoard(message.data.board);
+        } else {
+          void loadBoard();
+        }
       }
     } catch {
       // Ignore malformed events.
