@@ -10,38 +10,34 @@ const REGISTRY_PATH = join(HIVE_DIR, "project-registry.json");
 export function loadProjectRegistry(): ProjectRegistry {
   try {
     const raw = readFileSync(REGISTRY_PATH, "utf-8");
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const projects = parsed.projects as ProjectRegistry["projects"] | undefined;
+    const parsed: unknown = JSON.parse(raw);
+    if (!isRecord(parsed)) return { projects: {} };
+    const projects = parsed.projects;
 
-    if (!projects || typeof projects !== "object") {
+    if (!isRecord(projects)) {
       return { projects: {} };
     }
 
     const valid: ProjectRegistry["projects"] = {};
     for (const [id, entry] of Object.entries(projects)) {
-      if (
-        entry &&
-        typeof entry === "object" &&
-        typeof (entry as Record<string, unknown>).path === "string"
-      ) {
-        const value = entry as Record<string, unknown>;
+      if (isRecord(entry) && typeof entry.path === "string") {
         valid[id] = {
-          path: value.path as string,
-          ...(typeof value.name === "string" ? { name: value.name } : {}),
-          ...(typeof value.createdAt === "string"
-            ? { createdAt: value.createdAt }
+          path: entry.path,
+          ...(typeof entry.name === "string" ? { name: entry.name } : {}),
+          ...(typeof entry.createdAt === "string"
+            ? { createdAt: entry.createdAt }
             : {}),
-          ...(typeof value.systemPrompt === "string"
-            ? { systemPrompt: value.systemPrompt }
+          ...(typeof entry.systemPrompt === "string"
+            ? { systemPrompt: entry.systemPrompt }
             : {}),
-          ...(typeof value.codingGuidelines === "string"
-            ? { codingGuidelines: value.codingGuidelines }
+          ...(typeof entry.codingGuidelines === "string"
+            ? { codingGuidelines: entry.codingGuidelines }
             : {}),
-          ...(typeof value.targetBranch === "string"
-            ? { targetBranch: value.targetBranch }
+          ...(typeof entry.targetBranch === "string"
+            ? { targetBranch: entry.targetBranch }
             : {}),
-          ...(typeof value.maxConcurrentWorkers === "number"
-            ? { maxConcurrentWorkers: value.maxConcurrentWorkers }
+          ...(typeof entry.maxConcurrentWorkers === "number"
+            ? { maxConcurrentWorkers: entry.maxConcurrentWorkers }
             : {}),
         };
       }
@@ -51,6 +47,10 @@ export function loadProjectRegistry(): ProjectRegistry {
   } catch {
     return { projects: {} };
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function getRegistryPath(): string {

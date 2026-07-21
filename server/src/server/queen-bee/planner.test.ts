@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,6 +8,7 @@ import { createBoardStore } from "./board-store";
 import type { AgentModelCaller } from "./devise-engine/create-devise-model-caller";
 import type { IntegrationManager } from "./integration-manager";
 import { createPlanningManager } from "./planner";
+import type { ProjectSpecificationStore } from "./project-specification-store";
 import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
 import { readRequirements, writeRequirements } from "./requirements-store";
 
@@ -139,7 +141,12 @@ describe("Planner Agent reconciliation", () => {
             proposedCard: cardSpec("Changed card"),
           },
         ],
-      })
+      }),
+      {
+        apply() {
+          throw new Error("Commit hook rejected");
+        },
+      } satisfies ProjectSpecificationStore
     );
     const proposal = await planner.propose(
       "project-1",
@@ -796,7 +803,19 @@ describe("Planner Agent reconciliation", () => {
     const repoPath = mkdtempSync(join(tmpdir(), "hive-planner-"));
     directories.push(repoPath);
     writeRequirements(repoPath, "# Original requirements");
+    git(repoPath, ["init", "-b", "main"]);
+    git(repoPath, ["config", "user.name", "Hive Test"]);
+    git(repoPath, ["config", "user.email", "hive@example.test"]);
+    git(repoPath, ["add", ".hive/requirements.md"]);
+    git(repoPath, ["commit", "-m", "source: initialize requirements"]);
     return repoPath;
+  }
+
+  function git(repoPath: string, args: string[]): string {
+    return execFileSync("git", args, {
+      cwd: repoPath,
+      encoding: "utf-8",
+    }).trim();
   }
 
   function responseCaller(output: unknown): AgentModelCaller {

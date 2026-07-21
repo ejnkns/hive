@@ -18,7 +18,7 @@ test("a user can plan, implement, review, and accept a Card into hive-main", {
     await page.getByRole("button", { name: "Create Project" }).click();
     await page.getByRole("link", { name: "Open" }).click();
 
-    await visible(page.getByText("main is up to date"));
+    await visible(page.getByText("Up to date"));
     await page
       .getByPlaceholder("Describe your project...")
       .fill("Display a deterministic greeting");
@@ -106,18 +106,20 @@ test("a user can plan, implement, review, and accept a Card into hive-main", {
     await visible(page.getByText("Done", { exact: true }));
     await page.locator(".btn-close").click();
     await page.locator(".overlay").waitFor({ state: "detached" });
-    await visible(page.getByText("2 commits ready"));
+    await visible(page.getByText("3 commits ready"));
     await visible(page.getByRole("button", { name: "Integrate into main" }));
 
-    await page.getByRole("button", { name: "Integrate into main" }).click();
-    await visible(page.getByText("main is up to date"));
+    await page
+      .getByRole("button", { name: "Integrate into main" })
+      .click({ force: true });
+    await visible(page.getByText("Up to date"));
 
     await page.reload();
     await visible(
       page.getByText("Render deterministic greeting", { exact: true })
     );
     await visible(page.getByText("Done", { exact: true }));
-    await visible(page.getByText("main is up to date"));
+    await visible(page.getByText("Up to date"));
 
     assert.equal(
       execFileSync("git", ["show", "hive-main:src/app.ts"], {

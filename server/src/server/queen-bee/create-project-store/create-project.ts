@@ -5,6 +5,7 @@ import { statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { DEFAULT_MAX_CONCURRENT_WORKERS } from "shared/project-types";
 import type { Project, ProjectRegistry } from "../create-project-store";
+import { ensureIntegrationBranch } from "../integration-manager";
 
 export function createProject(
   repoPath: string,
@@ -14,6 +15,7 @@ export function createProject(
   const resolved = resolveRepoPath(repoPath);
   validateGitRepo(resolved);
   ensureRepoInitialized(resolved);
+  ensureIntegrationBranch(resolved);
 
   const projectName = name ?? repoPath.split("/").pop() ?? repoPath;
   const slug = slugify(projectName);

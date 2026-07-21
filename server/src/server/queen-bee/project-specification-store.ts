@@ -57,7 +57,7 @@ function writeSpecification(
 ): void {
   const hiveDirectory = join(worktreePath, ".hive");
   const cardsDirectory = join(hiveDirectory, "cards");
-  mkdirSync(cardsDirectory, { recursive: true });
+  mkdirSync(hiveDirectory, { recursive: true });
   rmSync(cardsDirectory, { recursive: true, force: true });
   mkdirSync(cardsDirectory, { recursive: true });
 
@@ -95,6 +95,7 @@ function persistedCard(card: Card) {
     createdAt: card.createdAt,
     requirementRefs: card.requirementRefs,
     originIdeaIds: card.originIdeaIds,
+    archivedAt: card.archivedAt,
   };
 }
 

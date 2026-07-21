@@ -25,12 +25,9 @@ import type {
   ApprovedProjectSpecification,
   ProjectSpecificationStore,
 } from "./project-specification-store";
+import { createProjectSpecificationStore } from "./project-specification-store";
 import type { QueenBeeRuntimeStore } from "./queen-bee-runtime-store";
-import {
-  readRequirements,
-  requirementsRevision,
-  writeRequirements,
-} from "./requirements-store";
+import { readRequirements, requirementsRevision } from "./requirements-store";
 
 export type PlanningManager = {
   propose(
@@ -78,9 +75,9 @@ export type PlanningDisposition =
 export function createPlanningManager(
   boardStore: BoardStore,
   runtimeStore: QueenBeeRuntimeStore,
-  integrationManager: IntegrationManager,
+  _integrationManager: IntegrationManager,
   modelCaller: AgentModelCaller = createAgentModelCaller(PLANNER_TOOLS),
-  specificationStore?: ProjectSpecificationStore
+  specificationStore: ProjectSpecificationStore = createProjectSpecificationStore()
 ): PlanningManager {
   return {
     async propose(
@@ -214,7 +211,6 @@ export function createPlanningManager(
       return applyProposal(
         boardStore,
         runtimeStore,
-        integrationManager,
         specificationStore,
         repoPath,
         proposal
@@ -225,7 +221,6 @@ export function createPlanningManager(
       return applyProposal(
         boardStore,
         runtimeStore,
-        integrationManager,
         specificationStore,
         repoPath,
         requireProposal(runtimeStore, projectId, proposalId)
@@ -587,8 +582,7 @@ function parseCardSpecification(value: unknown): CardSpecification {
 function applyProposal(
   boardStore: BoardStore,
   runtimeStore: QueenBeeRuntimeStore,
-  integrationManager: IntegrationManager,
-  specificationStore: ProjectSpecificationStore | undefined,
+  specificationStore: ProjectSpecificationStore,
   repoPath: string,
   proposal: PlanningProposal
 ): Card[] {
@@ -629,7 +623,6 @@ function applyProposal(
   if (boardRevision(currentBoard) !== proposal.baseBoardRevision) {
     throw new Error("Board cards changed after planning started");
   }
-  const currentRequirements = readRequirements(repoPath);
   const byId = new Map(currentCards.map((card) => [card.id, card]));
   const createdCardIds = new Map(
     proposal.changes
@@ -694,27 +687,13 @@ function applyProposal(
           : idea
       )
     : currentBoard.ideas;
-  if (specificationStore) {
-    const specification: ApprovedProjectSpecification = {
-      projectId: proposal.projectId,
-      requirements: proposal.proposedRequirements,
-      cards: result,
-    };
-    specificationStore.apply(repoPath, proposal.id, specification);
-    boardStore.saveIdeas(proposal.projectId, repoPath, archivedIdeas);
-  } else {
-    try {
-      writeRequirements(repoPath, proposal.proposedRequirements);
-      boardStore.saveCards(proposal.projectId, repoPath, result);
-      boardStore.saveIdeas(proposal.projectId, repoPath, archivedIdeas);
-      integrationManager.commitPlanningSnapshot(repoPath, proposal.id);
-    } catch (error) {
-      writeRequirements(repoPath, currentRequirements);
-      boardStore.saveCards(proposal.projectId, repoPath, currentCards);
-      boardStore.saveIdeas(proposal.projectId, repoPath, currentBoard.ideas);
-      throw error;
-    }
-  }
+  const specification: ApprovedProjectSpecification = {
+    projectId: proposal.projectId,
+    requirements: proposal.proposedRequirements,
+    cards: result,
+  };
+  specificationStore.apply(repoPath, proposal.id, specification);
+  boardStore.saveIdeas(proposal.projectId, repoPath, archivedIdeas);
   proposal.status = "applied";
   proposal.appliedAt = new Date().toISOString();
   runtimeStore.savePlanningProposal(proposal);

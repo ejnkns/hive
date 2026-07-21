@@ -113,7 +113,6 @@ export function loadBoard(
 }
 
 function readBoard(repoPath: string, boardPath: string): string | null {
-  if (existsSync(boardPath)) return readFileSync(boardPath, "utf-8");
   try {
     return execFileSync("git", ["show", "hive-main:.hive/board.json"], {
       cwd: repoPath,
@@ -122,7 +121,40 @@ function readBoard(repoPath: string, boardPath: string): string | null {
       stdio: "pipe",
     });
   } catch {
-    return null;
+    if (hasIntegrationBranch(repoPath) && hasIntegrationFile(repoPath))
+      return null;
+    return existsSync(boardPath) ? readFileSync(boardPath, "utf-8") : null;
+  }
+}
+
+function hasIntegrationFile(repoPath: string): boolean {
+  try {
+    execFileSync("git", ["cat-file", "-e", "hive-main:.hive/board.json"], {
+      cwd: repoPath,
+      timeout: 5_000,
+      stdio: "pipe",
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function hasIntegrationBranch(repoPath: string): boolean {
+  try {
+    execFileSync(
+      "git",
+      ["show-ref", "--verify", "--quiet", "refs/heads/hive-main"],
+      {
+        cwd: repoPath,
+        encoding: "utf-8",
+        timeout: 5_000,
+        stdio: "pipe",
+      }
+    );
+    return true;
+  } catch {
+    return false;
   }
 }
 

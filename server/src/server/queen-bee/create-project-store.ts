@@ -1,6 +1,5 @@
 /** @public */
 
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   DEFAULT_MAX_CONCURRENT_WORKERS,
@@ -69,43 +68,15 @@ export function createProjectStore(
     targetBranch: string;
     maxConcurrentWorkers: number;
   } {
-    try {
-      const raw = readFileSync(
-        join(repoPath, ".hive", "project.json"),
-        "utf-8"
-      );
-      const parsed = JSON.parse(raw) as Record<string, unknown>;
-      return {
-        name:
-          typeof parsed.name === "string" && parsed.name.length > 0
-            ? parsed.name
-            : (repoPath.split("/").pop() ?? repoPath),
-        systemPrompt:
-          typeof parsed.systemPrompt === "string" ? parsed.systemPrompt : "",
-        codingGuidelines:
-          typeof parsed.codingGuidelines === "string"
-            ? parsed.codingGuidelines
-            : "",
-        createdAt: typeof parsed.createdAt === "string" ? parsed.createdAt : "",
-        targetBranch:
-          typeof parsed.targetBranch === "string" && parsed.targetBranch
-            ? parsed.targetBranch
-            : inferTargetBranch(repoPath),
-        maxConcurrentWorkers: parseMaxConcurrentWorkers(
-          parsed.maxConcurrentWorkers
-        ),
-      };
-    } catch {
-      return {
-        name: entry.name ?? repoPath.split("/").pop() ?? repoPath,
-        systemPrompt: entry.systemPrompt ?? "",
-        codingGuidelines: entry.codingGuidelines ?? "",
-        createdAt: entry.createdAt ?? "",
-        targetBranch: entry.targetBranch ?? inferTargetBranch(repoPath),
-        maxConcurrentWorkers:
-          entry.maxConcurrentWorkers ?? DEFAULT_MAX_CONCURRENT_WORKERS,
-      };
-    }
+    return {
+      name: entry.name ?? repoPath.split("/").pop() ?? repoPath,
+      systemPrompt: entry.systemPrompt ?? "",
+      codingGuidelines: entry.codingGuidelines ?? "",
+      createdAt: entry.createdAt ?? "",
+      targetBranch: entry.targetBranch ?? inferTargetBranch(repoPath),
+      maxConcurrentWorkers:
+        entry.maxConcurrentWorkers ?? DEFAULT_MAX_CONCURRENT_WORKERS,
+    };
   }
 
   function listProjects(): ProjectListItem[] {
@@ -162,8 +133,4 @@ export function createProjectStore(
       save();
     },
   };
-}
-
-function parseMaxConcurrentWorkers(value: unknown): number {
-  return isMaxConcurrentWorkers(value) ? value : DEFAULT_MAX_CONCURRENT_WORKERS;
 }

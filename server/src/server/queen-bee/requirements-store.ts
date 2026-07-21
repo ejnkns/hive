@@ -13,7 +13,6 @@ import { join } from "node:path";
 
 export function readRequirements(repoPath: string): string {
   const path = join(repoPath, ".hive", "requirements.md");
-  if (existsSync(path)) return readFileSync(path, "utf-8");
   try {
     return execFileSync("git", ["show", "hive-main:.hive/requirements.md"], {
       cwd: repoPath,
@@ -22,7 +21,25 @@ export function readRequirements(repoPath: string): string {
       stdio: "pipe",
     });
   } catch {
-    return "";
+    if (hasIntegrationBranch(repoPath)) return "";
+    return existsSync(path) ? readFileSync(path, "utf-8") : "";
+  }
+}
+
+function hasIntegrationBranch(repoPath: string): boolean {
+  try {
+    execFileSync(
+      "git",
+      ["show-ref", "--verify", "--quiet", "refs/heads/hive-main"],
+      {
+        cwd: repoPath,
+        timeout: 5_000,
+        stdio: "pipe",
+      }
+    );
+    return true;
+  } catch {
+    return false;
   }
 }
 

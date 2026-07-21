@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -31,6 +32,11 @@ describe("initial planning flow", () => {
     const repoPath = mkdtempSync(join(tmpdir(), "hive-initial-flow-"));
     directories.push(repoPath);
     writeRequirements(repoPath, "");
+    git(repoPath, ["init", "-b", "main"]);
+    git(repoPath, ["config", "user.name", "Hive Test"]);
+    git(repoPath, ["config", "user.email", "hive@example.test"]);
+    git(repoPath, ["add", ".hive/requirements.md"]);
+    git(repoPath, ["commit", "-m", "source: initialize requirements"]);
     const project = projectAt(repoPath);
     const projectStore = projectStoreFor(project);
     const runtimeStore = createQueenBeeRuntimeStore(join(repoPath, ".runtime"));
@@ -317,4 +323,11 @@ function integrationManager(): IntegrationManager {
       revision: "integration-2",
     }),
   };
+}
+
+function git(repoPath: string, args: string[]): string {
+  return execFileSync("git", args, {
+    cwd: repoPath,
+    encoding: "utf-8",
+  }).trim();
 }
