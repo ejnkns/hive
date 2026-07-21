@@ -38,6 +38,7 @@ function applySpecification(
   try {
     writeSpecification(worktree.path, specification);
     git(worktree.path, ["add", "-A", "--", ".hive"]);
+    git(worktree.path, ["add", "-f", "--", ".hive/requirements.md"]);
     if (!gitSucceeds(worktree.path, ["diff", "--cached", "--quiet"])) {
       git(worktree.path, [
         "commit",

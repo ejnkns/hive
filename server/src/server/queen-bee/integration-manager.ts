@@ -195,6 +195,7 @@ function commitPlanningSnapshot(
       }
     }
     git(integrationWorktree.path, ["add", "-A", "--", ".hive"]);
+    git(integrationWorktree.path, ["add", "-f", "--", ".hive/requirements.md"]);
     if (
       !gitSucceeds(integrationWorktree.path, ["diff", "--cached", "--quiet"])
     ) {
