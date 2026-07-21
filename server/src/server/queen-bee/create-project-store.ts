@@ -1,6 +1,5 @@
 /** @public */
 
-import { join } from "node:path";
 import {
   DEFAULT_MAX_CONCURRENT_WORKERS,
   isMaxConcurrentWorkers,
