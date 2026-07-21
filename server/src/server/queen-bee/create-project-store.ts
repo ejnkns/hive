@@ -1,6 +1,6 @@
 /** @public */
 
-import { readFileSync, renameSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   DEFAULT_MAX_CONCURRENT_WORKERS,
@@ -27,7 +27,18 @@ export type Project = {
 };
 
 export type ProjectRegistry = {
-  projects: Record<string, { path: string }>;
+  projects: Record<
+    string,
+    {
+      path: string;
+      name?: string;
+      createdAt?: string;
+      systemPrompt?: string;
+      codingGuidelines?: string;
+      targetBranch?: string;
+      maxConcurrentWorkers?: number;
+    }
+  >;
 };
 
 export type ProjectStore = {
@@ -47,7 +58,10 @@ export function createProjectStore(
     onProjectsChanged();
   }
 
-  function readProjectMeta(repoPath: string): {
+  function readProjectMeta(
+    repoPath: string,
+    entry: ProjectRegistry["projects"][string]
+  ): {
     name: string;
     systemPrompt: string;
     codingGuidelines: string;
@@ -83,19 +97,20 @@ export function createProjectStore(
       };
     } catch {
       return {
-        name: repoPath.split("/").pop() ?? repoPath,
-        systemPrompt: "",
-        codingGuidelines: "",
-        createdAt: "",
-        targetBranch: inferTargetBranch(repoPath),
-        maxConcurrentWorkers: DEFAULT_MAX_CONCURRENT_WORKERS,
+        name: entry.name ?? repoPath.split("/").pop() ?? repoPath,
+        systemPrompt: entry.systemPrompt ?? "",
+        codingGuidelines: entry.codingGuidelines ?? "",
+        createdAt: entry.createdAt ?? "",
+        targetBranch: entry.targetBranch ?? inferTargetBranch(repoPath),
+        maxConcurrentWorkers:
+          entry.maxConcurrentWorkers ?? DEFAULT_MAX_CONCURRENT_WORKERS,
       };
     }
   }
 
   function listProjects(): ProjectListItem[] {
     return Object.entries(registry.projects).map(([id, entry]) => {
-      const meta = readProjectMeta(entry.path);
+      const meta = readProjectMeta(entry.path, entry);
       return {
         id,
         name: meta.name,
@@ -116,7 +131,15 @@ export function createProjectStore(
 
     create(repoPath: string, name?: string): Project {
       const project = createProject(repoPath, name, registry);
-      registry.projects[project.id] = { path: project.repoPath };
+      registry.projects[project.id] = {
+        path: project.repoPath,
+        name: project.name,
+        createdAt: project.createdAt,
+        systemPrompt: project.systemPrompt,
+        codingGuidelines: project.codingGuidelines,
+        targetBranch: project.targetBranch,
+        maxConcurrentWorkers: project.maxConcurrentWorkers,
+      };
       save();
       return project;
     },
@@ -127,16 +150,7 @@ export function createProjectStore(
       }
       const entry = registry.projects[id];
       if (!entry) throw new Error("Project not found");
-      const projectFile = join(entry.path, ".hive", "project.json");
-      const parsed: unknown = JSON.parse(readFileSync(projectFile, "utf-8"));
-      if (!isRecord(parsed))
-        throw new Error("Project configuration is invalid");
-      const temporaryFile = `${projectFile}.tmp`;
-      writeFileSync(
-        temporaryFile,
-        `${JSON.stringify({ ...parsed, maxConcurrentWorkers: value }, null, 2)}\n`
-      );
-      renameSync(temporaryFile, projectFile);
+      entry.maxConcurrentWorkers = value;
       onProjectsChanged();
       const project = listProjects().find((candidate) => candidate.id === id);
       if (!project) throw new Error("Project not found");
@@ -152,8 +166,4 @@ export function createProjectStore(
 
 function parseMaxConcurrentWorkers(value: unknown): number {
   return isMaxConcurrentWorkers(value) ? value : DEFAULT_MAX_CONCURRENT_WORKERS;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import { createIntegrationManager } from "./integration-manager";
+import { createProjectSpecificationStore } from "./project-specification-store";
 
 describe("IntegrationManager", () => {
   const repositories: string[] = [];
@@ -243,6 +244,27 @@ describe("IntegrationManager", () => {
     );
   });
 
+  it("applies an approved specification without dirtying the checked-out target branch", () => {
+    const repoPath = createRepository();
+    const specifications = createProjectSpecificationStore();
+
+    specifications.apply(repoPath, "proposal-1", {
+      projectId: "project-1",
+      requirements: "# Approved requirements\n",
+      cards: [],
+    });
+
+    assert.equal(git(repoPath, ["status", "--porcelain"]), "");
+    assert.equal(
+      git(repoPath, ["show", "hive-main:.hive/requirements.md"]),
+      "# Approved requirements"
+    );
+    assert.deepEqual(
+      JSON.parse(git(repoPath, ["show", "hive-main:.hive/board.json"])),
+      { projectId: "project-1", ideas: [], cards: [] }
+    );
+  });
+
   it("reports accepted Hive work waiting to be integrated into the target branch", () => {
     const repoPath = createRepository();
     const manager = createIntegrationManager();
@@ -259,6 +281,27 @@ describe("IntegrationManager", () => {
     assert.equal(status.ahead, 1);
     assert.equal(status.behind, 0);
     assert.equal(status.canIntegrate, true);
+  });
+
+  it("refuses integration when the target checkout has user changes", () => {
+    const repoPath = createRepository();
+    const manager = createIntegrationManager();
+    manager.ensure(repoPath);
+    git(repoPath, ["switch", "hive-main"]);
+    writeFileSync(join(repoPath, "accepted.txt"), "accepted\n");
+    git(repoPath, ["add", "accepted.txt"]);
+    git(repoPath, ["commit", "-m", "feature: accept work"]);
+    git(repoPath, ["switch", "main"]);
+    writeFileSync(join(repoPath, "user-change.txt"), "do not overwrite\n");
+
+    assert.throws(
+      () => manager.integrate(repoPath, "main"),
+      /checked out with uncommitted changes/
+    );
+    assert.equal(
+      git(repoPath, ["status", "--porcelain"]),
+      "?? user-change.txt"
+    );
   });
 
   it("fast-forwards an explicitly selected target branch without switching branches", () => {

@@ -21,6 +21,10 @@ import { AGENT_TOOLS, executeAgentTool } from "./devise-engine/devise-tools";
 import type { IntegrationManager } from "./integration-manager";
 import { PLAN_SYSTEM_PROMPT } from "./planner/plan-system-prompt";
 import { loadProjectContext, type ProjectContext } from "./project-context";
+import type {
+  ApprovedProjectSpecification,
+  ProjectSpecificationStore,
+} from "./project-specification-store";
 import type { QueenBeeRuntimeStore } from "./queen-bee-runtime-store";
 import {
   readRequirements,
@@ -75,7 +79,8 @@ export function createPlanningManager(
   boardStore: BoardStore,
   runtimeStore: QueenBeeRuntimeStore,
   integrationManager: IntegrationManager,
-  modelCaller: AgentModelCaller = createAgentModelCaller(PLANNER_TOOLS)
+  modelCaller: AgentModelCaller = createAgentModelCaller(PLANNER_TOOLS),
+  specificationStore?: ProjectSpecificationStore
 ): PlanningManager {
   return {
     async propose(
@@ -210,6 +215,7 @@ export function createPlanningManager(
         boardStore,
         runtimeStore,
         integrationManager,
+        specificationStore,
         repoPath,
         proposal
       );
@@ -220,6 +226,7 @@ export function createPlanningManager(
         boardStore,
         runtimeStore,
         integrationManager,
+        specificationStore,
         repoPath,
         requireProposal(runtimeStore, projectId, proposalId)
       );
@@ -581,6 +588,7 @@ function applyProposal(
   boardStore: BoardStore,
   runtimeStore: QueenBeeRuntimeStore,
   integrationManager: IntegrationManager,
+  specificationStore: ProjectSpecificationStore | undefined,
   repoPath: string,
   proposal: PlanningProposal
 ): Card[] {
@@ -679,26 +687,33 @@ function applyProposal(
     }
   }
 
-  try {
-    writeRequirements(repoPath, proposal.proposedRequirements);
-    boardStore.saveCards(proposal.projectId, repoPath, result);
-    if (proposal.sourceIdeaId) {
-      boardStore.saveIdeas(
-        proposal.projectId,
-        repoPath,
-        currentBoard.ideas.map((idea) =>
-          idea.id === proposal.sourceIdeaId
-            ? { ...idea, archivedAt: new Date().toISOString() }
-            : idea
-        )
-      );
+  const archivedIdeas = proposal.sourceIdeaId
+    ? currentBoard.ideas.map((idea) =>
+        idea.id === proposal.sourceIdeaId
+          ? { ...idea, archivedAt: new Date().toISOString() }
+          : idea
+      )
+    : currentBoard.ideas;
+  if (specificationStore) {
+    const specification: ApprovedProjectSpecification = {
+      projectId: proposal.projectId,
+      requirements: proposal.proposedRequirements,
+      cards: result,
+    };
+    specificationStore.apply(repoPath, proposal.id, specification);
+    boardStore.saveIdeas(proposal.projectId, repoPath, archivedIdeas);
+  } else {
+    try {
+      writeRequirements(repoPath, proposal.proposedRequirements);
+      boardStore.saveCards(proposal.projectId, repoPath, result);
+      boardStore.saveIdeas(proposal.projectId, repoPath, archivedIdeas);
+      integrationManager.commitPlanningSnapshot(repoPath, proposal.id);
+    } catch (error) {
+      writeRequirements(repoPath, currentRequirements);
+      boardStore.saveCards(proposal.projectId, repoPath, currentCards);
+      boardStore.saveIdeas(proposal.projectId, repoPath, currentBoard.ideas);
+      throw error;
     }
-    integrationManager.commitPlanningSnapshot(repoPath, proposal.id);
-  } catch (error) {
-    writeRequirements(repoPath, currentRequirements);
-    boardStore.saveCards(proposal.projectId, repoPath, currentCards);
-    boardStore.saveIdeas(proposal.projectId, repoPath, currentBoard.ideas);
-    throw error;
   }
   proposal.status = "applied";
   proposal.appliedAt = new Date().toISOString();

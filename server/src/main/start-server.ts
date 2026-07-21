@@ -21,6 +21,7 @@ import {
   createCoordinator,
   createIntegrationManager,
   createPlanningManager,
+  createProjectSpecificationStore,
   createProjectStore,
   createQueenBeeRuntimeStore,
   createRequirementsSessionManager,
@@ -68,10 +69,13 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     emitBoardEvent(projectId);
   }, runtimeStore);
   const integrationManager = createIntegrationManager();
+  const specificationStore = createProjectSpecificationStore();
   const planningManager = createPlanningManager(
     boardStore,
     runtimeStore,
-    integrationManager
+    integrationManager,
+    undefined,
+    specificationStore
   );
   const reviewer = createReviewer();
   const coordinator = createCoordinator();

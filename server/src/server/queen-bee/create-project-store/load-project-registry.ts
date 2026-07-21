@@ -11,22 +11,39 @@ export function loadProjectRegistry(): ProjectRegistry {
   try {
     const raw = readFileSync(REGISTRY_PATH, "utf-8");
     const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const projects = parsed.projects as
-      | Record<string, { path: string }>
-      | undefined;
+    const projects = parsed.projects as ProjectRegistry["projects"] | undefined;
 
     if (!projects || typeof projects !== "object") {
       return { projects: {} };
     }
 
-    const valid: Record<string, { path: string }> = {};
+    const valid: ProjectRegistry["projects"] = {};
     for (const [id, entry] of Object.entries(projects)) {
       if (
         entry &&
         typeof entry === "object" &&
         typeof (entry as Record<string, unknown>).path === "string"
       ) {
-        valid[id] = { path: (entry as { path: string }).path };
+        const value = entry as Record<string, unknown>;
+        valid[id] = {
+          path: value.path as string,
+          ...(typeof value.name === "string" ? { name: value.name } : {}),
+          ...(typeof value.createdAt === "string"
+            ? { createdAt: value.createdAt }
+            : {}),
+          ...(typeof value.systemPrompt === "string"
+            ? { systemPrompt: value.systemPrompt }
+            : {}),
+          ...(typeof value.codingGuidelines === "string"
+            ? { codingGuidelines: value.codingGuidelines }
+            : {}),
+          ...(typeof value.targetBranch === "string"
+            ? { targetBranch: value.targetBranch }
+            : {}),
+          ...(typeof value.maxConcurrentWorkers === "number"
+            ? { maxConcurrentWorkers: value.maxConcurrentWorkers }
+            : {}),
+        };
       }
     }
 

@@ -1,7 +1,7 @@
 /** @private — only imported by create-project-store.ts */
 
 import { execFileSync, execSync } from "node:child_process";
-import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
+import { statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { DEFAULT_MAX_CONCURRENT_WORKERS } from "shared/project-types";
 import type { Project, ProjectRegistry } from "../create-project-store";
@@ -21,33 +21,6 @@ export function createProject(
   const createdAt = new Date().toISOString();
   const targetBranch = inferTargetBranch(resolved);
   const maxConcurrentWorkers = DEFAULT_MAX_CONCURRENT_WORKERS;
-
-  const hiveDir = join(resolved, ".hive");
-  if (!existsSync(hiveDir)) {
-    mkdirSync(hiveDir, { recursive: true });
-  }
-
-  const projectJson = {
-    name: projectName,
-    repoPath: resolved,
-    createdAt,
-    systemPrompt: "",
-    codingGuidelines: "",
-    targetBranch,
-    maxConcurrentWorkers,
-  };
-
-  writeFileSync(
-    join(hiveDir, "project.json"),
-    JSON.stringify(projectJson, null, 2),
-    "utf-8"
-  );
-
-  writeFileSync(
-    join(hiveDir, "requirements.md"),
-    REQUIREMENTS_TEMPLATE,
-    "utf-8"
-  );
 
   return {
     id,
@@ -138,21 +111,6 @@ function validateGitRepo(repoPath: string): void {
     throw new Error(`Not a git repository: ${repoPath}`);
   }
 }
-
-const REQUIREMENTS_TEMPLATE = `# Requirements
-
-## Overview
-
-## Functional requirements
-
-## Non-functional requirements
-
-## Acceptance criteria
-
-## Out of scope
-
-## For later
-`;
 
 function ensureRepoInitialized(repoPath: string): void {
   try {

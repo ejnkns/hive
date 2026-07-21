@@ -1,5 +1,6 @@
 /** @private — only imported by board-store.ts */
 
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Idea, ReviewerLog, WorkAttempt } from "shared/board-types";
@@ -21,14 +22,15 @@ export function loadBoard(
 ): Board {
   const hiveDir = join(repoPath, ".hive");
   const boardPath = join(hiveDir, "board.json");
-  const _cardsDir = join(hiveDir, "cards");
-
-  if (!existsSync(boardPath)) {
-    return { projectId, ideas: [], cards: [] };
-  }
+  const raw = readBoard(repoPath, boardPath);
+  if (!raw)
+    return {
+      projectId,
+      ideas: runtimeStore.getIdeas(projectId) ?? [],
+      cards: [],
+    };
 
   try {
-    const raw = readFileSync(boardPath, "utf-8");
     // Repository JSON is untyped at runtime; each field is validated while
     // reconstructing the Board below, so this shape only names possible input.
     const parsed = JSON.parse(raw) as {
@@ -61,9 +63,10 @@ export function loadBoard(
     };
 
     const cards: Card[] = [];
-    const ideas = Array.isArray(parsed.ideas)
+    const persistedIdeas = Array.isArray(parsed.ideas)
       ? parsed.ideas.filter(isIdea)
       : [];
+    const ideas = runtimeStore.getIdeas(projectId) ?? persistedIdeas;
 
     if (parsed.cards && Array.isArray(parsed.cards)) {
       for (const c of parsed.cards) {
@@ -106,6 +109,20 @@ export function loadBoard(
     return { projectId, ideas, cards };
   } catch {
     return { projectId, ideas: [], cards: [] };
+  }
+}
+
+function readBoard(repoPath: string, boardPath: string): string | null {
+  if (existsSync(boardPath)) return readFileSync(boardPath, "utf-8");
+  try {
+    return execFileSync("git", ["show", "hive-main:.hive/board.json"], {
+      cwd: repoPath,
+      encoding: "utf-8",
+      timeout: 5_000,
+      stdio: "pipe",
+    });
+  } catch {
+    return null;
   }
 }
 

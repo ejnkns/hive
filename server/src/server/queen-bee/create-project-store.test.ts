@@ -1,6 +1,6 @@
 import assert from "node:assert";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -27,7 +27,7 @@ function git(repoPath: string, args: string[]): string {
 }
 
 describe("createProject", () => {
-  it("creates .hive/project.json with correct fields", () => {
+  it("keeps the checked-out repository clean when linking a project", () => {
     const repoPath = createTempGitRepo();
     const project = createProject(repoPath, "my-project");
 
@@ -39,11 +39,7 @@ describe("createProject", () => {
     assert.strictEqual(project.targetBranch, "main");
     assert.strictEqual(project.maxConcurrentWorkers, 3);
 
-    const raw = readFileSync(join(repoPath, ".hive", "project.json"), "utf-8");
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    assert.strictEqual(parsed.name, "my-project");
-    assert.strictEqual(parsed.targetBranch, "main");
-    assert.strictEqual(parsed.maxConcurrentWorkers, 3);
+    assert.strictEqual(git(repoPath, ["status", "--porcelain"]), "");
   });
 
   it("generates slug-based ID from project name", () => {

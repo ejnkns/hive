@@ -1,7 +1,5 @@
 /** @private — only imported by queen-bee.ts */
 
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
 import type { PlanningOutcome } from "shared/board-types";
 import type { BoardStore } from "./board-store";
@@ -594,12 +592,7 @@ export function registerRequirementsRoutes(
         return reply.status(404).send({ error: "Project not found" });
       }
 
-      const requirementsPath = join(
-        project.repoPath,
-        ".hive",
-        "requirements.md"
-      );
-      const hasRequirements = existsSync(requirementsPath);
+      const hasRequirements = readRequirements(project.repoPath).length > 0;
 
       return reply.send({ projectId, hasRequirements });
     }
@@ -617,18 +610,11 @@ export function registerRequirementsRoutes(
         return reply.status(404).send({ error: "Project not found" });
       }
 
-      const requirementsPath = join(
-        project.repoPath,
-        ".hive",
-        "requirements.md"
-      );
-
-      try {
-        const content = readFileSync(requirementsPath, "utf-8");
+      const content = readRequirements(project.repoPath);
+      if (content) {
         return reply.send({ content });
-      } catch {
-        return reply.status(404).send({ error: "Requirements not found" });
       }
+      return reply.status(404).send({ error: "Requirements not found" });
     }
   );
 

@@ -102,9 +102,7 @@ export function createBoardStore(
         id: generateId(),
         createdAt: new Date().toISOString(),
       };
-      board.ideas.push(newIdea);
-      ensureHiveDir(repoPath);
-      saveBoard(repoPath, board);
+      runtimeStore.saveIdeas(projectId, [...board.ideas, newIdea]);
       onBoardChanged(projectId);
       return newIdea;
     },
@@ -113,17 +111,19 @@ export function createBoardStore(
       const board = loadBoard(projectId, repoPath, runtimeStore);
       const idea = board.ideas.find((candidate) => candidate.id === ideaId);
       if (!idea) throw new Error(`Idea not found: ${ideaId}`);
-      idea.archivedAt = new Date().toISOString();
-      ensureHiveDir(repoPath);
-      saveBoard(repoPath, board);
+      const archived = { ...idea, archivedAt: new Date().toISOString() };
+      runtimeStore.saveIdeas(
+        projectId,
+        board.ideas.map((candidate) =>
+          candidate.id === ideaId ? archived : candidate
+        )
+      );
       onBoardChanged(projectId);
-      return idea;
+      return archived;
     },
 
-    saveIdeas(projectId, repoPath, ideas) {
-      const board = loadBoard(projectId, repoPath, runtimeStore);
-      ensureHiveDir(repoPath);
-      saveBoard(repoPath, { ...board, ideas });
+    saveIdeas(projectId, _repoPath, ideas) {
+      runtimeStore.saveIdeas(projectId, ideas);
       onBoardChanged(projectId);
     },
 
@@ -138,9 +138,6 @@ export function createBoardStore(
       if (!card) throw new Error(`Card not found: ${cardId}`);
 
       card.column = column;
-      ensureHiveDir(repoPath);
-      saveBoard(repoPath, board);
-      saveCard(repoPath, card);
       saveRuntimeState(runtimeStore, projectId, card);
       onBoardChanged(projectId);
 
@@ -153,9 +150,11 @@ export function createBoardStore(
       if (!card) throw new Error(`Card not found: ${cardId}`);
 
       Object.assign(card, patch, { id: card.id, createdAt: card.createdAt });
-      ensureHiveDir(repoPath);
-      saveBoard(repoPath, board);
-      saveCard(repoPath, card);
+      if (changesSpecification(patch)) {
+        ensureHiveDir(repoPath);
+        saveBoard(repoPath, board);
+        saveCard(repoPath, card);
+      }
       saveRuntimeState(runtimeStore, projectId, card);
       onBoardChanged(projectId);
       return card;
@@ -167,9 +166,6 @@ export function createBoardStore(
       if (!card) throw new Error(`Card not found: ${cardId}`);
 
       card.archivedAt = new Date().toISOString();
-      ensureHiveDir(repoPath);
-      saveBoard(repoPath, board);
-      saveCard(repoPath, card);
       saveRuntimeState(runtimeStore, projectId, card);
       onBoardChanged(projectId);
       return card;
@@ -213,6 +209,20 @@ function saveRuntimeState(
     archivedAt: card.archivedAt,
   };
   runtimeStore.saveCardState(projectId, card.id, state);
+}
+
+function changesSpecification(
+  patch: Partial<Omit<Card, "id" | "createdAt">>
+): boolean {
+  return (
+    "title" in patch ||
+    "description" in patch ||
+    "acceptanceCriteria" in patch ||
+    "relevantFiles" in patch ||
+    "dependencies" in patch ||
+    "requirementRefs" in patch ||
+    "originIdeaIds" in patch
+  );
 }
 
 function visibleBoard(board: Board): Board {

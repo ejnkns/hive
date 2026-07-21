@@ -13,6 +13,7 @@ import { join } from "node:path";
 import type {
   Card,
   CardActivityEvent,
+  Idea,
   PlanningProposal,
   RequirementsFeedback,
   RequirementsSessionKind,
@@ -70,6 +71,8 @@ export type QueenBeeRuntimeStore = {
     state: CardRuntimeState
   ): void;
   getCardState(projectId: string, cardId: string): CardRuntimeState | null;
+  saveIdeas(projectId: string, ideas: Idea[]): void;
+  getIdeas(projectId: string): Idea[] | null;
   saveRequirementsSession(session: PersistedRequirementsSession): void;
   getRequirementsSessions(projectId: string): PersistedRequirementsSession[];
   savePlanningProposal(proposal: PlanningProposal): void;
@@ -152,6 +155,14 @@ export function createQueenBeeRuntimeStore(
       return readJson<CardRuntimeState>(
         cardStatePath(rootDirectory, projectId, cardId)
       );
+    },
+
+    saveIdeas(projectId, ideas) {
+      writeJson(ideasPath(rootDirectory, projectId), ideas);
+    },
+
+    getIdeas(projectId) {
+      return readJson<Idea[]>(ideasPath(rootDirectory, projectId));
     },
 
     saveRequirementsSession(session) {
@@ -271,6 +282,10 @@ function cardStatePath(
     "card-state",
     `${encodeURIComponent(cardId)}.json`
   );
+}
+
+function ideasPath(rootDirectory: string, projectId: string): string {
+  return join(projectDirectory(rootDirectory, projectId), "ideas.json");
 }
 
 function requirementsSessionDirectory(

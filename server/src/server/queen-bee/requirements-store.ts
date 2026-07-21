@@ -1,5 +1,6 @@
 /** @public */
 
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   existsSync,
@@ -12,7 +13,17 @@ import { join } from "node:path";
 
 export function readRequirements(repoPath: string): string {
   const path = join(repoPath, ".hive", "requirements.md");
-  return existsSync(path) ? readFileSync(path, "utf-8") : "";
+  if (existsSync(path)) return readFileSync(path, "utf-8");
+  try {
+    return execFileSync("git", ["show", "hive-main:.hive/requirements.md"], {
+      cwd: repoPath,
+      encoding: "utf-8",
+      timeout: 5_000,
+      stdio: "pipe",
+    });
+  } catch {
+    return "";
+  }
 }
 
 export function requirementsRevision(content: string): string {

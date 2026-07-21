@@ -18,6 +18,11 @@ export type { PlanningManager } from "./queen-bee/planner";
 export { createPlanningManager } from "./queen-bee/planner";
 export { registerProjectRoutes } from "./queen-bee/project-routes";
 export type {
+  ApprovedProjectSpecification,
+  ProjectSpecificationStore,
+} from "./queen-bee/project-specification-store";
+export { createProjectSpecificationStore } from "./queen-bee/project-specification-store";
+export type {
   CardActivityEvent,
   QueenBeeRuntimeStore,
 } from "./queen-bee/queen-bee-runtime-store";

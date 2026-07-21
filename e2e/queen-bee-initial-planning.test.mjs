@@ -47,7 +47,8 @@ test("a user can plan, implement, review, and accept a Card into hive-main", {
 
     await page.reload();
     await visible(page.getByRole("button", { name: "Accept plan" }));
-    const staleApplyRoute = /\/api\/queen-bee\/[^/]+\/planning\/[^/]+\/accept-all$/;
+    const staleApplyRoute =
+      /\/api\/queen-bee\/[^/]+\/planning\/[^/]+\/accept-all$/;
     await page.route(staleApplyRoute, (route) =>
       route.fulfill({
         status: 409,
@@ -80,9 +81,7 @@ test("a user can plan, implement, review, and accept a Card into hive-main", {
     await visible(page.getByText("1 commit ready"));
 
     const staleBoard = await page.evaluate(async () => {
-      const response = await fetch(
-        "/api/queen-bee/e2e-project/board"
-      );
+      const response = await fetch("/api/queen-bee/e2e-project/board");
       return response.json();
     });
     const boardRoute = /\/api\/queen-bee\/e2e-project\/board$/;
@@ -107,15 +106,18 @@ test("a user can plan, implement, review, and accept a Card into hive-main", {
     await visible(page.getByText("Done", { exact: true }));
     await page.locator(".btn-close").click();
     await page.locator(".overlay").waitFor({ state: "detached" });
-    await visible(page.getByText("3 commits ready"));
+    await visible(page.getByText("2 commits ready"));
     await visible(page.getByRole("button", { name: "Integrate into main" }));
+
+    await page.getByRole("button", { name: "Integrate into main" }).click();
+    await visible(page.getByText("main is up to date"));
 
     await page.reload();
     await visible(
       page.getByText("Render deterministic greeting", { exact: true })
     );
     await visible(page.getByText("Done", { exact: true }));
-    await visible(page.getByText("3 commits ready"));
+    await visible(page.getByText("main is up to date"));
 
     assert.equal(
       execFileSync("git", ["show", "hive-main:src/app.ts"], {
@@ -123,6 +125,20 @@ test("a user can plan, implement, review, and accept a Card into hive-main", {
         encoding: "utf-8",
       }),
       'export const greeting = "Hello from Hive";\n'
+    );
+    assert.equal(
+      execFileSync("git", ["show", "main:.hive/requirements.md"], {
+        cwd: hive.projectPath,
+        encoding: "utf-8",
+      }).includes("Hello from Hive"),
+      true
+    );
+    assert.equal(
+      execFileSync("git", ["status", "--porcelain"], {
+        cwd: hive.projectPath,
+        encoding: "utf-8",
+      }),
+      ""
     );
     assert.deepEqual(provider.failures, []);
   } catch (error) {
