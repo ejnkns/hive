@@ -341,7 +341,7 @@ $effect(() => {
   const snapshot = projectSocket.boardSnapshot;
   if (snapshot) {
     boardRequest += 1;
-    applyBoard(snapshot as Board);
+    applyBoard(snapshot);
   } else {
     void loadBoard();
   }

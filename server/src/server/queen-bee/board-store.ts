@@ -92,7 +92,7 @@ export function createBoardStore(
       saveCard(repoPath, newCard);
       saveRuntimeState(runtimeStore, projectId, newCard);
       onBoardChanged(projectId);
-      emitBoardSnapshot(loadBoard(projectId, repoPath, runtimeStore));
+      emitBoardSnapshot(board);
 
       return newCard;
     },
@@ -145,7 +145,7 @@ export function createBoardStore(
       card.column = column;
       saveRuntimeState(runtimeStore, projectId, card);
       onBoardChanged(projectId);
-      emitBoardSnapshot(loadBoard(projectId, repoPath, runtimeStore));
+      emitBoardSnapshot(board);
 
       return card;
     },
@@ -163,7 +163,7 @@ export function createBoardStore(
       }
       saveRuntimeState(runtimeStore, projectId, card);
       onBoardChanged(projectId);
-      emitBoardSnapshot(loadBoard(projectId, repoPath, runtimeStore));
+      emitBoardSnapshot(board);
       return card;
     },
 
@@ -175,7 +175,7 @@ export function createBoardStore(
       card.archivedAt = new Date().toISOString();
       saveRuntimeState(runtimeStore, projectId, card);
       onBoardChanged(projectId);
-      emitBoardSnapshot(loadBoard(projectId, repoPath, runtimeStore));
+      emitBoardSnapshot(board);
       return card;
     },
 
@@ -198,7 +198,7 @@ export function createBoardStore(
         saveRuntimeState(runtimeStore, projectId, card);
       }
       onBoardChanged(projectId);
-      emitBoardSnapshot(loadBoard(projectId, repoPath, runtimeStore));
+      emitBoardSnapshot(board);
     },
   };
 }

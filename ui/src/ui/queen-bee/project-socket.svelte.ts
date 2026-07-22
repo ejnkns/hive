@@ -1,3 +1,4 @@
+import type { Board } from "shared/board-types";
 import type { QueenBeeEvent } from "shared/queen-bee-events";
 
 let boardVersion = $state(0);
@@ -7,18 +8,25 @@ let draftUpdate = $state<{
   ideaId?: string;
   content: string;
 } | null>(null);
-let boardSnapshot = $state<{
-  projectId: string;
-  ideas: unknown[];
-  cards: unknown[];
-} | null>(null);
+let boardSnapshot = $state<Board | null>(null);
 
 let socket: WebSocket | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let reconnectDelay = 1_000;
 let currentProjectId = "";
 
+function scheduleReconnect() {
+  if (!currentProjectId) return;
+  reconnectDelay = Math.min(reconnectDelay * 2, 30_000);
+  reconnectTimer = setTimeout(() => {
+    connect(currentProjectId);
+  }, reconnectDelay);
+}
+
 function connect(projectId: string) {
-  if (socket) socket.close();
+  closeSocket();
   currentProjectId = projectId;
+  reconnectDelay = 1_000;
 
   const protocol = window.location.protocol === "http:" ? "ws:" : "wss:";
   socket = new WebSocket(
@@ -26,6 +34,8 @@ function connect(projectId: string) {
   );
   socket.onmessage = (event) => {
     try {
+      // The WS payload is the QueenBeeEvent discriminated union; the switch
+      // narrows message to the correct variant with full type information.
       const message = JSON.parse(String(event.data)) as QueenBeeEvent;
 
       switch (message.type) {
@@ -63,11 +73,24 @@ function connect(projectId: string) {
       // Ignore malformed events.
     }
   };
+  socket.onclose = () => {
+    socket = null;
+    scheduleReconnect();
+  };
+}
+
+function closeSocket() {
+  if (reconnectTimer !== null) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  socket?.close();
+  socket = null;
 }
 
 function disconnect() {
-  socket?.close();
-  socket = null;
+  closeSocket();
+  currentProjectId = "";
 }
 
 export function connectProjectSocket(projectId: string) {
@@ -90,11 +113,7 @@ export const projectSocket = {
   } | null {
     return draftUpdate;
   },
-  get boardSnapshot(): {
-    projectId: string;
-    ideas: unknown[];
-    cards: unknown[];
-  } | null {
+  get boardSnapshot(): Board | null {
     return boardSnapshot;
   },
 };
