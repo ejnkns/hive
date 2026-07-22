@@ -6,6 +6,7 @@ import type {
   RequirementsFeedback,
 } from "shared/board-types";
 import { parsePlanningProposalResponse } from "./parse-planning-proposal-response";
+import { isRecord } from "../check-record";
 
 let {
   projectId,
@@ -184,10 +185,6 @@ function cardDraftContent(
     return null;
   }
   return data.content;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 </script>
 

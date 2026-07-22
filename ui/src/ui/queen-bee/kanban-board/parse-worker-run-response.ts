@@ -1,6 +1,7 @@
 /** @private — only imported by kanban-board.svelte */
 
 import { isWorkerAdmission, type WorkerAdmission } from "shared/board-types";
+import { isRecord } from "../../check-record";
 
 export type WorkerRunResponse = {
   admission?: WorkerAdmission;
@@ -15,8 +16,4 @@ export function parseWorkerRunResponse(value: unknown): WorkerRunResponse {
       : {}),
     ...(typeof value.error === "string" ? { error: value.error } : {}),
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

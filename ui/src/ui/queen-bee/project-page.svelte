@@ -11,6 +11,7 @@ import PlanningProposalView from "./planning-proposal.svelte";
 import RequirementsFeedbackView from "./requirements-feedback.svelte";
 import { parsePlanningProposalResponse } from "./parse-planning-proposal-response";
 import { projectHeader } from "./project-header-state.svelte";
+import { isRecord } from "../check-record";
 
 let { projectId }: Props = $props();
 
@@ -169,10 +170,6 @@ async function handleApprove() {
   } finally {
     planning = false;
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isClientMessages(

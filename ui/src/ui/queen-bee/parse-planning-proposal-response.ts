@@ -3,6 +3,7 @@ import type {
   PlanningProposal,
   RequirementsFeedback,
 } from "shared/board-types";
+import { isRecord } from "../check-record";
 
 export function parsePlanningProposalResponse(value: unknown): {
   proposal?: PlanningProposal;
@@ -83,8 +84,4 @@ function isPlanningChange(value: unknown): value is PlanningChange {
     typeof value.rationale === "string" &&
     ["pending", "accepted", "rejected"].includes(String(value.decision))
   );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

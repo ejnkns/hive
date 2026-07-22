@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { RequirementsFeedback } from "shared/board-types";
+import { isRecord } from "../check-record";
 
 let { projectId, feedback, onRepairStarted }: Props = $props();
 
@@ -37,10 +38,6 @@ async function startRepair() {
   } finally {
     busy = false;
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 </script>
 

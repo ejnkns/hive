@@ -1,6 +1,7 @@
 <script lang="ts">
 import { onMount } from "svelte";
 import type { RequirementsSessionKind } from "shared/board-types";
+import { isRecord } from "../check-record";
 
 let {
   projectId,
@@ -169,10 +170,6 @@ function projectDraftContent(value: unknown, project: string): string | null {
     return null;
   }
   return data.content;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 </script>
 

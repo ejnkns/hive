@@ -1,6 +1,7 @@
 <script lang="ts">
 import { onMount } from "svelte";
 import type { ProjectIntegrationStatus } from "shared/project-types";
+import { isRecord } from "../check-record";
 
 let { projectId }: { projectId: string } = $props();
 
@@ -113,10 +114,6 @@ function readError(value: unknown): string | null {
   return isRecord(value) && typeof value.error === "string"
     ? value.error
     : null;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 </script>
 
