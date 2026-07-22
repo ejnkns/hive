@@ -6,7 +6,6 @@ import type { FastifyInstance } from "fastify";
 import type { QueenBeeEvent } from "shared/queen-bee-events";
 import type { BoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
-import type { RequirementsDraftUpdate } from "./devise-engine";
 import { evaluateWorkerAdmission } from "./worker-admission";
 import {
   boardEventBus,
