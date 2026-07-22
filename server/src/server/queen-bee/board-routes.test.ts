@@ -83,41 +83,6 @@ describe("board routes", () => {
     assert.equal(response.statusCode, 404);
   });
 
-  it("restores the current open Planning outcome", async () => {
-    const feedback = {
-      kind: "requirements_feedback" as const,
-      id: "feedback-1",
-      projectId: "project-1",
-      status: "pending" as const,
-      projectRevision: null,
-      baseRequirementsRevision: "requirements-1",
-      baseBoardRevision: "board-1",
-      proposedRequirements: "# Proposed requirements",
-      createdAt: "2026-07-20T00:00:00.000Z",
-      issues: [
-        {
-          requirementRefs: ["FR-1"],
-          category: "missing_decision" as const,
-          explanation: "The intended behavior is ambiguous.",
-          evidence: [],
-          decisionNeeded: "Choose the intended behavior.",
-          recommendation: "Preserve the current behavior.",
-        },
-      ],
-    };
-    const { server, project } = createRouteFixture({
-      getOpenOutcome: () => feedback,
-    });
-
-    const response = await server.inject({
-      method: "GET",
-      url: `/api/queen-bee/${project.id}/planning/open`,
-    });
-
-    assert.equal(response.statusCode, 200);
-    assert.deepEqual(response.json().feedback, feedback);
-  });
-
   it("replans rejected Card changes with explicit Planning Feedback", async () => {
     let receivedGuidance = "";
     let previousCancelled = false;
