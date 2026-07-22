@@ -32,11 +32,7 @@ function connect(projectId: string) {
         case "board_snapshot":
           if (message.board.projectId === projectId) {
             boardVersion++;
-            boardSnapshot = message.board as unknown as {
-              projectId: string;
-              ideas: unknown[];
-              cards: unknown[];
-            };
+            boardSnapshot = message.board;
           }
           break;
         case "card_moved":

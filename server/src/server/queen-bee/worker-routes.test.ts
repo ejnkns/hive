@@ -2,53 +2,10 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import websocket from "@fastify/websocket";
 import Fastify, { type FastifyInstance } from "fastify";
-import type { Board, Card } from "./board-store";
+import type { Card } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
-import {
-  registerWorkerRoutes,
-  toBoardSocketMessage,
-  toWorkerSocketMessage,
-} from "./worker-routes";
+import { registerWorkerRoutes } from "./worker-routes";
 import type { WorkerSupervisor } from "./worker-supervisor";
-
-describe("worker route events", () => {
-  it("publishes the authoritative board snapshot with a board update", () => {
-    const board: Board = {
-      projectId: "project-1",
-      ideas: [],
-      cards: [card("card-1", ["source.ts"], "reviewing")],
-    };
-
-    assert.deepEqual(toBoardSocketMessage("project-1", board), {
-      type: "board_updated",
-      data: { projectId: "project-1", board },
-    });
-  });
-
-  it("preserves the unfulfillable handover event contract", () => {
-    assert.deepEqual(
-      toWorkerSocketMessage(
-        {
-          type: "unfulfillable_handover",
-          cardId: "card-1",
-          content: "Requirements conflict",
-          suggestions: ["Revise the requirement"],
-        },
-        "project-1"
-      ),
-      {
-        type: "unfulfillable_handover",
-        data: {
-          projectId: "project-1",
-          cardId: "card-1",
-          content: "Requirements conflict",
-          suggestions: ["Revise the requirement"],
-          error: null,
-        },
-      }
-    );
-  });
-});
 
 describe("worker run admission", () => {
   const servers: FastifyInstance[] = [];
