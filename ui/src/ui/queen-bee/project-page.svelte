@@ -37,34 +37,6 @@ onMount(() => {
   checkStatus();
 });
 
-async function restoreSession(): Promise<boolean> {
-  try {
-    const res = await fetch(`/api/queen-bee/${projectId}/requirements/session`);
-    if (!res.ok) return false;
-    const data: unknown = await res.json();
-    if (
-      isRecord(data) &&
-      data.active === true &&
-      isClientMessages(data.messages) &&
-      data.messages.length > 0
-    ) {
-      initialMessages = data.messages;
-      initialStatus = typeof data.status === "string" ? data.status : undefined;
-      initialKind = isRequirementsSessionKind(data.kind)
-        ? data.kind
-        : "initial_requirements";
-      initialDraftRequirements =
-        typeof data.draftRequirements === "string"
-          ? data.draftRequirements
-          : undefined;
-      return true;
-    }
-  } catch {
-    // session restore is best-effort
-  }
-  return false;
-}
-
 async function checkStatus() {
   loading = true;
   try {
@@ -74,53 +46,51 @@ async function checkStatus() {
     initialStatus = undefined;
     initialKind = "initial_requirements";
     initialDraftRequirements = undefined;
-    const res = await fetch(`/api/queen-bee/${projectId}/requirements/status`);
+    const res = await fetch(`/api/queen-bee/${projectId}/phase`);
     if (!res.ok) throw new Error("Failed to load project");
-    const data: unknown = await res.json();
-    if (!isRecord(data) || typeof data.hasRequirements !== "boolean") {
-      throw new Error("Invalid project status response");
-    }
-    const openPlanningResponse = await fetch(
-      `/api/queen-bee/${projectId}/planning/open`
-    );
-    if (openPlanningResponse.ok) {
-      const outcome = parsePlanningProposalResponse(
-        await openPlanningResponse.json()
-      );
-      if (outcome.proposal) {
-        planningProposal = outcome.proposal;
-        return;
-      }
-      if (outcome.feedback) {
-        requirementsFeedback = outcome.feedback;
-        return;
-      }
+    const data = await res.json();
+    if (!isRecord(data) || typeof data.phase !== "string") {
+      throw new Error("Invalid project phase response");
     }
 
-    const hasRequirementsSession = await restoreSession();
-    if (hasRequirementsSession) {
-      if (data.hasRequirements) await fetchRequirements();
+    if (data.phase === "planning") {
+      const outcome = parsePlanningProposalResponse(data.outcome ?? {});
+      if (outcome.proposal) {
+        planningProposal = outcome.proposal;
+      } else if (outcome.feedback) {
+        requirementsFeedback = outcome.feedback;
+      }
+      return;
+    }
+
+    if (typeof data.requirementsContent === "string") {
+      projectHeader.requirementsContent = data.requirementsContent;
+    }
+
+    if (data.phase === "requirements") {
+      const session = isRecord(data.session) ? data.session : null;
+      if (session && isClientMessages(session.messages)) {
+        initialMessages = session.messages;
+        initialStatus =
+          typeof session.status === "string" ? session.status : undefined;
+        initialKind = isRequirementsSessionKind(session.kind)
+          ? session.kind
+          : "initial_requirements";
+        initialDraftRequirements =
+          typeof session.draftRequirements === "string"
+            ? session.draftRequirements
+            : undefined;
+      }
       hasBoard = false;
       return;
     }
 
-    if (data.hasRequirements) {
-      await fetchRequirements();
-      try {
-        const boardRes = await fetch(`/api/queen-bee/${projectId}/board`);
-        if (boardRes.ok) {
-          const boardData: unknown = await boardRes.json();
-          if (!isRecord(boardData)) {
-            throw new Error("Invalid Board response");
-          }
-          hasBoard =
-            (Array.isArray(boardData.cards) && boardData.cards.length > 0) ||
-            (Array.isArray(boardData.ideas) && boardData.ideas.length > 0);
-        }
-      } catch {
-        hasBoard = false;
-      }
+    if (data.phase === "board") {
+      hasBoard = Boolean(data.hasBoard);
+      return;
     }
+
+    hasBoard = false;
   } catch {
     hasBoard = null;
   } finally {
@@ -221,7 +191,7 @@ function isRequirementsSessionKind(
         onRepairStarted={() => {
           requirementsFeedback = null;
           hasBoard = false;
-          void restoreSession();
+          void checkStatus();
         }}
       />
     {:else if planningProposal}
@@ -243,7 +213,7 @@ function isRequirementsSessionKind(
         onRequirementsRevisionStarted={() => {
           planningProposal = null;
           hasBoard = false;
-          void restoreSession();
+          void checkStatus();
         }}
       />
     {:else if hasBoard}
@@ -257,7 +227,7 @@ function isRequirementsSessionKind(
         }}
         onReDeviseStarted={() => {
           hasBoard = false;
-          void restoreSession();
+          void checkStatus();
         }}
       />
     {:else}
