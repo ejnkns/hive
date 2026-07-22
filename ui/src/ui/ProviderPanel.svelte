@@ -1,10 +1,14 @@
 <script lang="ts">
-import type { ConversationData, MetricData, ProviderData } from "./types";
+import type {
+  ConversationData,
+  MetricData,
+  ProviderPayload,
+} from "shared/dashboard-types";
 import { formatNumber, healthColor } from "./utils";
 import Providers from "./Providers.svelte";
 
 let {
-  data = [] as ProviderData[],
+  data = [] as ProviderPayload[],
   metrics = [] as MetricData[],
   conversations = [] as ConversationData[],
   overrideKey = null as string | null,
@@ -13,7 +17,7 @@ let {
   onRowClick: onRowClickCallback,
   onToggleProvider,
 } = $props<{
-  data?: ProviderData[];
+  data?: ProviderPayload[];
   metrics?: MetricData[];
   conversations?: ConversationData[];
   overrideKey?: string | null;
@@ -26,8 +30,8 @@ let {
 let expanded = $state(false);
 
 const groups = $derived.by(() => {
-  const grouped = new Map<string, ProviderData[]>();
-  data.forEach((x: ProviderData) => {
+  const grouped = new Map<string, ProviderPayload[]>();
+  data.forEach((x: ProviderPayload) => {
     const existing = grouped.get(x.name);
     if (existing) existing.push(x);
     else grouped.set(x.name, [x]);
@@ -54,16 +58,17 @@ const groups = $derived.by(() => {
 const currentEntry = $derived(
   lastProvider && lastModel
     ? (data.find(
-        (e: ProviderData) => e.name === lastProvider && e.model === lastModel
+        (e: ProviderPayload) => e.name === lastProvider && e.model === lastModel
       ) ?? null)
     : null
 );
 
 const bestEntry = $derived(
   data
-    .filter((e: ProviderData) => e.keyConfigured)
+    .filter((e: ProviderPayload) => e.keyConfigured)
     .sort(
-      (a: ProviderData, b: ProviderData) => b.stabilityScore - a.stabilityScore
+      (a: ProviderPayload, b: ProviderPayload) =>
+        b.stabilityScore - a.stabilityScore
     )[0] ?? null
 );
 

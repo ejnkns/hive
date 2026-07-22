@@ -1,4 +1,26 @@
-import type { ConversationMessage } from "./types";
+import type {
+  AvailableProvider,
+  ConversationMessage,
+  OverrideState,
+} from "shared/dashboard-types";
+
+export type HeaderData = {
+  online: boolean;
+  serverAddr: string;
+  lastProvider: string | null;
+  lastModel: string | null;
+  override: OverrideState;
+  availableProviders: AvailableProvider[];
+  bestProvider: string | null;
+  bestModel: string | null;
+  bestScore: number | null;
+  routingStrategy: string;
+  contextWindowWeight: number;
+  traffic: number;
+  successRate: number | null;
+  activeProviders: number;
+  avgLatency: number | null;
+};
 
 export function sc(c: number): string {
   return c >= 70

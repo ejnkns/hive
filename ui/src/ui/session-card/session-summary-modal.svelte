@@ -1,11 +1,6 @@
 <script lang="ts">
-import type { RequestState, SessionState } from "../types";
-import {
-  formatToolCallLabel,
-  groupToolCalls,
-  normalizeContent,
-  resolveToolName,
-} from "../utils";
+import type { RequestState, SessionState } from "shared/dashboard-types";
+import ConversationView from "../dashboard/ConversationView.svelte";
 import Modal from "../Modal.svelte";
 import TruncatableText from "../TruncatableText.svelte";
 import Timeline from "./timeline.svelte";
@@ -54,51 +49,10 @@ function handleTimelineClick(req: RequestState) {
     {#if hasConversation && latest}
       <div class="section">
         <div class="section-title">latest request conversation</div>
-        <div class="conv-messages">
-          {#each latest.conversationPrompt ?? [] as msg}
-            {@const toolName =
-              msg.role === "tool" && msg.tool_call_id
-                ? resolveToolName(
-                    latest.conversationPrompt ?? [],
-                    msg.tool_call_id
-                  )
-                : null}
-            {@const hasToolCalls =
-              msg.role === "assistant" &&
-              msg.tool_calls &&
-              msg.tool_calls.length > 0}
-            {@const hasContent = normalizeContent(msg.content).length > 0}
-            <div class="conv-msg {msg.role}">
-              <span class="conv-role">{toolName ?? msg.role}</span>
-              <div class="conv-content">
-                {#if hasToolCalls}
-                  <div class="tool-call-list">
-                    {#each groupToolCalls(msg.tool_calls ?? []) as tc}
-                      <span class="tool-call-badge"
-                        >{formatToolCallLabel(tc)}</span
-                      >
-                    {/each}
-                  </div>
-                {/if}
-                {#if hasContent || (!hasToolCalls && !hasContent)}
-                  <TruncatableText
-                    text={normalizeContent(msg.content)}
-                  />
-                {/if}
-              </div>
-            </div>
-          {/each}
-          {#if latest.responseText}
-            <div class="conv-msg assistant">
-              <span class="conv-role">assistant</span>
-              <div class="conv-content">
-                <TruncatableText
-                  text={latest.responseText}
-                />
-              </div>
-            </div>
-          {/if}
-        </div>
+        <ConversationView
+          messages={latest.conversationPrompt ?? []}
+          responseText={latest.responseText}
+        />
       </div>
     {:else if latest?.prompt}
       <div class="section">
@@ -157,67 +111,5 @@ function handleTimelineClick(req: RequestState) {
     font-weight: 700;
     text-transform: uppercase;
     color: var(--muted);
-  }
-
-  .conv-messages {
-    display: flex;
-    flex-direction: column;
-    gap: 0.375rem;
-    max-height: 30vh;
-    overflow-y: auto;
-  }
-
-  .conv-msg {
-    display: flex;
-    gap: 0.375rem;
-    font-size: 0.75rem;
-  }
-
-  .conv-role {
-    font-size: 0.5625rem;
-    font-weight: 700;
-    min-width: 55px;
-    text-transform: uppercase;
-    color: var(--muted);
-    flex-shrink: 0;
-  }
-
-  .conv-msg.system .conv-role {
-    color: var(--accent);
-  }
-
-  .conv-msg.user .conv-role {
-    color: var(--text);
-  }
-
-  .conv-msg.assistant .conv-role {
-    color: var(--success);
-  }
-
-  .conv-msg.tool .conv-role {
-    color: var(--warning);
-  }
-
-  .conv-content {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .tool-call-list {
-    display: flex;
-    gap: 0.25rem;
-    flex-wrap: wrap;
-    margin-bottom: 0.25rem;
-  }
-
-  .tool-call-badge {
-    display: inline-block;
-    font-size: 0.5rem;
-    font-weight: 700;
-    padding: 0.0625rem 0.25rem;
-    text-transform: uppercase;
-    color: var(--accent);
-    background: rgba(var(--border-rgb), 0.15);
-    border: 1px solid rgba(var(--border-rgb), 0.3);
   }
 </style>

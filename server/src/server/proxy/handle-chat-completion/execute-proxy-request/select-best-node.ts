@@ -1,8 +1,9 @@
+import type { CandidateInfo } from "shared/dashboard-types";
 import { logger } from "shared/logger";
 import type { RequestMetric } from "telemetry";
 import { calculateNodeScore, type Node, type RoutingStrategy } from "telemetry";
-import { type CandidateInfo, emitFlowEvent } from "../../flow-events";
 import { routingMemory } from "../../routing-memory";
+import { recordSelectionRound } from "../../session-aggregator";
 
 export function selectBestNode(
   nodes: Node[],
@@ -86,8 +87,7 @@ export function selectBestNode(
 
   if (candidates.length === 0) {
     logger.debug(`no eligible candidates from ${String(nodes.length)} nodes`);
-    emitFlowEvent({
-      type: "selection_round",
+    recordSelectionRound({
       requestId: sessionId ?? "",
       strategy: config.strategy,
       candidates: allCandidates,
@@ -129,8 +129,7 @@ export function selectBestNode(
     selectedNode = qualifiedPool[0].node;
   }
 
-  emitFlowEvent({
-    type: "selection_round",
+  recordSelectionRound({
     requestId: sessionId ?? "",
     strategy: config.strategy,
     candidates: allCandidates,

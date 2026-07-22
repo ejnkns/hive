@@ -109,6 +109,22 @@ export function registerWorkerRoutes(
     };
     onQueenBeeEvent(queenBeeHandler);
 
+    // Send initial board snapshot for each project
+    for (const project of deps.projectStore.getAll()) {
+      try {
+        const board = deps.boardStore.getBoard(project.id, project.repoPath);
+        socket.send(
+          JSON.stringify({
+            type: "board_snapshot",
+            version: 1,
+            board,
+          })
+        );
+      } catch {
+        // project not ready, skip
+      }
+    }
+
     socket.on("close", () => {
       offQueenBeeEvent(queenBeeHandler);
     });

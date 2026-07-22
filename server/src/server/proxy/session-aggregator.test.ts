@@ -1,38 +1,49 @@
 import assert from "node:assert";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { emitFlowEvent } from "./flow-events";
-import { getSessionSnapshot, onSessionPatch } from "./session-aggregator";
+import type { SessionSnapshot } from "shared/dashboard-types";
+import {
+  getSessionSnapshot,
+  recordCircuitBreak,
+  recordFailoverAttempt,
+  recordNodeDispatched,
+  recordRequestReceived,
+  recordResponseComplete,
+  recordSelectionRound,
+  setAggregatorCallbacks,
+} from "./session-aggregator";
 
 function ts(offset = 0) {
   return Date.now() + offset;
 }
 
 await describe("session aggregator failover chaining", async () => {
-  let patches: unknown[] = [];
-  let unsubscribe: () => void;
+  let snapshots: SessionSnapshot[] = [];
+  let pipelineEvents: unknown[] = [];
 
   beforeEach(() => {
-    patches = [];
-    unsubscribe = onSessionPatch((p) => patches.push(p));
+    snapshots = [];
+    pipelineEvents = [];
+    setAggregatorCallbacks({
+      onSnapshot: (s) => snapshots.push(s),
+      onPipelineState: (e) => pipelineEvents.push(e),
+    });
   });
 
   afterEach(() => {
-    unsubscribe();
+    setAggregatorCallbacks({ onSnapshot() {}, onPipelineState() {} });
   });
 
   await it("creates separate request entries for each dispatch in a failover chain", () => {
     const requestId = "req-1";
 
-    emitFlowEvent({
-      type: "request_received",
+    recordRequestReceived({
       requestId,
       sessionId: "sess-1",
       timestamp: ts(0),
       promptPreview: "hello",
     });
 
-    emitFlowEvent({
-      type: "selection_round",
+    recordSelectionRound({
       requestId,
       strategy: "balanced",
       candidates: [],
@@ -40,16 +51,14 @@ await describe("session aggregator failover chaining", async () => {
       poolSize: 3,
     });
 
-    emitFlowEvent({
-      type: "node_dispatched",
+    recordNodeDispatched({
       requestId,
       provider: "alpha",
       model: "m1",
       attempt: 1,
     });
 
-    emitFlowEvent({
-      type: "response_complete",
+    recordResponseComplete({
       requestId,
       provider: "alpha",
       model: "m1",
@@ -63,16 +72,14 @@ await describe("session aggregator failover chaining", async () => {
       errorType: "server-error",
     });
 
-    emitFlowEvent({
-      type: "circuit_break",
+    recordCircuitBreak({
       requestId,
       provider: "alpha",
       model: "m1",
       cooldownDurationSec: 30,
     });
 
-    emitFlowEvent({
-      type: "failover_attempt",
+    recordFailoverAttempt({
       requestId,
       failedProvider: "alpha",
       failedModel: "m1",
@@ -80,8 +87,7 @@ await describe("session aggregator failover chaining", async () => {
       attempt: 1,
     });
 
-    emitFlowEvent({
-      type: "selection_round",
+    recordSelectionRound({
       requestId,
       strategy: "balanced",
       candidates: [],
@@ -89,16 +95,14 @@ await describe("session aggregator failover chaining", async () => {
       poolSize: 2,
     });
 
-    emitFlowEvent({
-      type: "node_dispatched",
+    recordNodeDispatched({
       requestId,
       provider: "beta",
       model: "m2",
       attempt: 2,
     });
 
-    emitFlowEvent({
-      type: "response_complete",
+    recordResponseComplete({
       requestId,
       provider: "beta",
       model: "m2",
@@ -113,7 +117,8 @@ await describe("session aggregator failover chaining", async () => {
     });
 
     const sessions = getSessionSnapshot();
-    const session = sessions.find((s) => s.sessionId === "sess-1");
+    const allSessions = [...sessions.active, ...sessions.completed];
+    const session = allSessions.find((s) => s.sessionId === "sess-1");
     assert.ok(session, "session should exist");
 
     assert.strictEqual(

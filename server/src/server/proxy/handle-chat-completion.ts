@@ -3,7 +3,6 @@ import { generateId } from "shared/generate-id";
 import { logger } from "shared/logger";
 import type { Message } from "shared/message";
 import { conversationStore, loadCache, type Node } from "telemetry";
-import { emitFlowEvent } from "./flow-events";
 import { buildPromptPreview } from "./handle-chat-completion/build-prompt-preview";
 import { dispatchRequest } from "./handle-chat-completion/dispatch-request";
 import { executeProxyRequest } from "./handle-chat-completion/execute-proxy-request";
@@ -20,6 +19,7 @@ import { getProviders } from "./providers-state";
 import type { ProxyResponse } from "./proxy-response";
 import { routingMemory } from "./routing-memory";
 import { getServerState } from "./server-state";
+import { recordRequestReceived } from "./session-aggregator";
 
 export type ChatCompletionResult = {
   success: boolean;
@@ -90,8 +90,7 @@ export async function handleChatCompletion(
   const lastMsg = typedMessages.at(-1);
 
   const promptPreview = buildPromptPreview(lastMsg);
-  emitFlowEvent({
-    type: "request_received",
+  recordRequestReceived({
     requestId,
     sessionId,
     timestamp: Date.now(),

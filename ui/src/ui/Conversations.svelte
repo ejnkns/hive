@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { ConversationData } from "./types";
+import type { ConversationData } from "shared/dashboard-types";
 import { esc, formatNumber, normalizeContent } from "./utils";
 
 let { data = [] as ConversationData[] } = $props();
