@@ -1,25 +1,7 @@
 <script lang="ts">
 import { onDestroy, onMount } from "svelte";
-import { type LogEntry, logger } from "shared/logger";
-import { getServerConfig } from "shared/server-config";
-import type {
-  PipelineStateMessage,
-  ProviderPayload,
-  SessionSnapshot,
-  StatsData,
-  TelemetryData,
-  WsServerMessage,
-} from "shared/dashboard-types";
-import type {
-  AvailableProvider,
-  ConversationData,
-  FlowEvent,
-  HeaderData,
-  MetricData,
-  OverrideState,
-  ProviderData,
-  SessionState,
-} from "./types";
+import type { HeaderData, MetricData, ProviderData } from "./types";
+import { dashboardSocket } from "./dashboard/dashboard-socket.svelte";
 import "../app.css";
 import Header from "./Header.svelte";
 import Stats from "./Stats.svelte";
@@ -30,7 +12,6 @@ import BottomDrawer from "./BottomDrawer.svelte";
 import LivePipeline from "./LivePipeline.svelte";
 import Logs from "./Logs.svelte";
 import DetailOverlay from "./DetailOverlay.svelte";
-import { createSessionStore } from "./use-sessions.svelte";
 import CanvasHost from "./canvas/CanvasHost.svelte";
 import ProjectOverview from "./queen-bee/project-overview.svelte";
 import ProjectPage from "./queen-bee/project-page.svelte";
@@ -40,26 +21,8 @@ import {
   togglePanel,
 } from "./queen-bee/project-header-state.svelte";
 
-let ws: WebSocket | null = null;
-let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-let reconnectDelay = 1000;
-
-let override: OverrideState = $state({
-  active: false,
-  provider: null,
-  model: null,
-});
-let flowEvents: (FlowEvent | PipelineStateMessage)[] = $state([]);
-let logEntries: LogEntry[] = $state([]);
-let metrics: MetricData[] = $state([]);
-let conversations: ConversationData[] = $state([]);
-
-let telemetry: TelemetryData | null = $state(null);
-
 let detailMetric: MetricData | null = $state(null);
 let detailAllMetrics: MetricData[] = $state([]);
-
-const sessionStore = createSessionStore();
 let drawerOpen = $state(false);
 
 let currentHash = $state(window.location.hash);
@@ -68,39 +31,44 @@ onMount(() => {
     currentHash = window.location.hash;
   };
   window.addEventListener("hashchange", onHashChange);
-  return () => window.removeEventListener("hashchange", onHashChange);
+  dashboardSocket.connect();
+  return () => {
+    window.removeEventListener("hashchange", onHashChange);
+    dashboardSocket.disconnect();
+  };
 });
 
 let headerData = $derived.by(() => {
-  const t = telemetry;
-  if (!t) return null as HeaderData | null;
-  const sorted = t.providers
-    .filter((p) => p.keyConfigured)
+  const p = dashboardSocket.providers;
+  if (p.length === 0 && !dashboardSocket.connected)
+    return null as HeaderData | null;
+  const sorted = p
+    .filter((x) => x.keyConfigured)
     .sort((a, b) => b.stabilityScore - a.stabilityScore);
   const bestEntry = sorted[0] ?? null;
-  const total = t.metrics.length;
-  const okCount = t.metrics.filter((r) => r.success).length;
+  const total = dashboardSocket.metrics.length;
+  const okCount = dashboardSocket.metrics.filter((r) => r.success).length;
   const rate = total > 0 ? Math.round((okCount / total) * 100) : null;
-  const names = new Set(
-    t.providers.filter((x) => x.keyConfigured).map((x) => x.name)
-  );
-  const flights = t.metrics.filter((r) => r.success).map((r) => r.ttft);
+  const names = new Set(p.filter((x) => x.keyConfigured).map((x) => x.name));
+  const flights = dashboardSocket.metrics
+    .filter((r) => r.success)
+    .map((r) => r.ttft);
   const avg =
     flights.length > 0
       ? Math.round(flights.reduce((a, b) => a + b, 0) / flights.length)
       : null;
   return {
-    online: true,
-    serverAddr: `${t.serverHost}:${t.serverPort}`,
-    lastProvider: t.lastProvider,
-    lastModel: t.lastModel,
-    override,
-    availableProviders: t.availableProviders,
+    online: dashboardSocket.connected,
+    serverAddr: `${dashboardSocket.serverHost}:${dashboardSocket.serverPort}`,
+    lastProvider: null,
+    lastModel: null,
+    override: dashboardSocket.override,
+    availableProviders: dashboardSocket.availableProviders,
     bestProvider: bestEntry?.name ?? null,
     bestModel: bestEntry?.model ?? null,
     bestScore: bestEntry?.stabilityScore ?? null,
-    routingStrategy: t.routingStrategy,
-    contextWindowWeight: t.contextWindowWeight,
+    routingStrategy: dashboardSocket.routingStrategy,
+    contextWindowWeight: dashboardSocket.contextWindowWeight,
     traffic: total,
     successRate: rate,
     activeProviders: names.size,
@@ -109,36 +77,36 @@ let headerData = $derived.by(() => {
 });
 
 let statsData = $derived.by(() => {
-  const t = telemetry;
-  if (!t) return null;
-  const okCount = t.metrics.filter((r) => r.success).length;
-  const rate =
-    t.metrics.length > 0
-      ? Math.round((okCount / t.metrics.length) * 100)
-      : null;
-  const flights = t.metrics.filter((r) => r.success).map((r) => r.ttft);
+  const p = dashboardSocket.providers;
+  if (p.length === 0 && !dashboardSocket.connected) return null;
+  const total = dashboardSocket.metrics.length;
+  const okCount = dashboardSocket.metrics.filter((r) => r.success).length;
+  const rate = total > 0 ? Math.round((okCount / total) * 100) : null;
+  const flights = dashboardSocket.metrics
+    .filter((r) => r.success)
+    .map((r) => r.ttft);
   const avg =
     flights.length > 0
       ? Math.round(flights.reduce((a, b) => a + b, 0) / flights.length)
       : null;
-  const names = new Set(
-    t.providers.filter((x) => x.keyConfigured).map((x) => x.name)
-  );
+  const names = new Set(p.filter((x) => x.keyConfigured).map((x) => x.name));
+  const sorted = p
+    .filter((x) => x.keyConfigured)
+    .sort((a, b) => b.stabilityScore - a.stabilityScore);
+  const bestEntry = sorted[0] ?? null;
   return {
-    traffic: t.metrics.length,
+    traffic: total,
     successRate: rate,
     activeProviders: names.size,
     avgLatency: avg,
-    bestProvider: t.bestProvider,
-    bestModel: t.bestModel,
-    bestScore: t.bestScore,
+    bestProvider: bestEntry?.name ?? null,
+    bestModel: bestEntry?.model ?? null,
+    bestScore: bestEntry?.stabilityScore ?? null,
   };
 });
 
 let providersData = $derived.by(() => {
-  const t = telemetry;
-  if (!t) return [] as ProviderData[];
-  return t.providers.map((x) => ({
+  return dashboardSocket.providers.map((x) => ({
     name: x.name,
     displayName: x.displayName,
     model: x.model,
@@ -159,175 +127,12 @@ let providersData = $derived.by(() => {
 });
 
 let overrideKey = $derived(
-  override.active && override.provider && override.model
-    ? `${override.provider}:${override.model}`
+  dashboardSocket.override.active &&
+    dashboardSocket.override.provider &&
+    dashboardSocket.override.model
+    ? `${dashboardSocket.override.provider}:${dashboardSocket.override.model}`
     : null
 );
-
-function connect() {
-  if (reconnectTimer !== null) {
-    clearTimeout(reconnectTimer);
-    reconnectTimer = null;
-  }
-  const protocol = window.location.protocol === "http:" ? "ws:" : "wss:";
-  const cfg = getServerConfig();
-  const url = `${protocol}//${cfg.host}:${String(cfg.port)}/ws`;
-  try {
-    ws = new WebSocket(url);
-  } catch (e) {
-    logger.error("websocket error", e);
-    scheduleReconnect();
-    return;
-  }
-  ws.onopen = () => {
-    reconnectDelay = 1000;
-  };
-  ws.onmessage = (e: MessageEvent) => {
-    try {
-      const msg = JSON.parse(String(e.data)) as WsServerMessage;
-      handleMessage(msg);
-    } catch {
-      /* ignore malformed frames */
-    }
-  };
-  ws.onclose = () => {
-    scheduleReconnect();
-  };
-}
-
-function scheduleReconnect() {
-  reconnectTimer = setTimeout(() => {
-    reconnectDelay = Math.min(reconnectDelay * 2, 30_000);
-    connect();
-  }, reconnectDelay);
-}
-
-function closeWs() {
-  if (reconnectTimer !== null) {
-    clearTimeout(reconnectTimer);
-    reconnectTimer = null;
-  }
-  ws?.close();
-  ws = null;
-}
-
-function handleMessage(msg: WsServerMessage) {
-  if (msg.type === "session_snapshot") {
-    sessionStore.replaceAll(msg.sessions);
-    return;
-  }
-  if (msg.type === "pipeline_state") {
-    flowEvents.push(msg);
-    if (flowEvents.length > 100) flowEvents.shift();
-    return;
-  }
-  if (msg.type === "flow") {
-    flowEvents.push(msg.data);
-    if (flowEvents.length > 100) flowEvents.shift();
-    return;
-  }
-  if (msg.type === "log") {
-    logEntries.push(msg.data);
-    if (logEntries.length > 500) logEntries.shift();
-    return;
-  }
-  if (msg.type === "session_state") {
-    sessionStore.applyPatch(msg.data);
-    return;
-  }
-  if (msg.type === "session_init") {
-    sessionStore.initSessions(msg.data);
-    return;
-  }
-  if (msg.type === "override_update") {
-    override = msg.override;
-    return;
-  }
-  if (msg.type === "provider_update") {
-    if (telemetry) telemetry = { ...telemetry, providers: msg.providers };
-    return;
-  }
-  if (msg.type === "metrics_update") {
-    metrics = msg.metrics;
-    conversations = [];
-    if (telemetry) {
-      telemetry = {
-        ...telemetry,
-        metrics: msg.metrics,
-        conversations: [],
-      };
-    }
-    return;
-  }
-  if (msg.type === "stats_update") {
-    // stats are derived from telemetry; handled by reactive derivations
-    return;
-  }
-  if (msg.type === "available_providers_update") {
-    if (telemetry)
-      telemetry = {
-        ...telemetry,
-        availableProviders: msg.availableProviders,
-      };
-    return;
-  }
-  if (msg.type === "session_detail") {
-    // detail responses are handled per-consumer
-    return;
-  }
-  // Legacy init/update with data wrapper
-  if ("data" in msg) {
-    telemetry = msg.data;
-    override = {
-      active: msg.data.overrideActive,
-      provider: msg.data.overrideProvider,
-      model: msg.data.overrideModel,
-    };
-    metrics = msg.data.metrics;
-    conversations = msg.data.conversations;
-    return;
-  }
-  // New init format: fields at top level
-  if (msg.type === "init") {
-    const m = msg as unknown as {
-      providers: ProviderPayload[];
-      availableProviders: AvailableProvider[];
-      metrics: MetricData[];
-      override: OverrideState;
-      sessions: SessionSnapshot;
-      serverHost: string;
-      serverPort: string;
-      routingStrategy: string;
-      contextWindowWeight: number;
-      pending: number;
-      stats: StatsData;
-    };
-    telemetry = {
-      providers: m.providers,
-      serverHost: m.serverHost,
-      serverPort: m.serverPort,
-      lastProvider: null,
-      lastModel: null,
-      overrideActive: m.override.active,
-      overrideProvider: m.override.provider,
-      overrideModel: m.override.model,
-      availableProviders: m.availableProviders,
-      metrics: m.metrics,
-      pending: m.pending,
-      conversations: [],
-      bestProvider: m.stats.bestProvider,
-      bestModel: m.stats.bestModel,
-      bestScore: m.stats.bestScore,
-      routingStrategy: m.routingStrategy,
-      contextWindowWeight: m.contextWindowWeight,
-    };
-    override = m.override;
-    metrics = m.metrics;
-    conversations = [];
-    sessionStore.replaceAll(m.sessions);
-    return;
-  }
-}
 
 function handleMetricClick(metric: MetricData, allMetrics: MetricData[]) {
   detailMetric = metric;
@@ -335,47 +140,28 @@ function handleMetricClick(metric: MetricData, allMetrics: MetricData[]) {
 }
 
 function handleOverrideSet(provider: string, model: string) {
-  if (ws?.readyState === WebSocket.OPEN)
-    ws.send(
-      JSON.stringify({ type: "override", provider, model, enabled: true })
-    );
+  dashboardSocket.setOverride(provider, model);
 }
 
 function handleOverrideClear() {
-  if (
-    ws?.readyState === WebSocket.OPEN &&
-    override.provider &&
-    override.model
-  ) {
-    ws.send(
-      JSON.stringify({
-        type: "override",
-        provider: override.provider,
-        model: override.model,
-        enabled: false,
-      })
-    );
+  const o = dashboardSocket.override;
+  if (o.provider && o.model) {
+    dashboardSocket.clearOverride(o.provider, o.model);
   }
 }
 
 function handleToggleProvider(provider: string, disabled: boolean) {
-  if (ws?.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: "toggle_provider", provider, disabled }));
-  }
+  dashboardSocket.toggleProvider(provider, disabled);
 }
-
-onMount(() => {
-  connect();
-});
-
-onDestroy(() => {
-  closeWs();
-});
 </script>
 
 <div class="app">
   <div class="top-bar">
-    <Header data={headerData ?? undefined} onOverrideSet={handleOverrideSet} onOverrideClear={handleOverrideClear} />
+    <Header
+      data={headerData ?? undefined}
+      onOverrideSet={handleOverrideSet}
+      onOverrideClear={handleOverrideClear}
+    />
     {#if currentHash.startsWith('#/project/') && projectHeader.projectId}
       <div class="project-header">
         <div class="project-header-row">
@@ -405,7 +191,7 @@ onDestroy(() => {
       </div>
     {/if}
   </div>
-  
+
   {#if currentHash === '#/canvas'}
     <CanvasHost />
   {:else if currentHash === '#/dashboard'}
@@ -413,15 +199,24 @@ onDestroy(() => {
       <Stats data={statsData} />
       <div>
         <div class="section-head" style="margin-top:1.5rem">Live Sessions</div>
-        <Sessions sessions={sessionStore.sessions} />
-        <ProviderPanel data={providersData} {metrics} {conversations} overrideKey={overrideKey} onRowClick={handleMetricClick} onToggleProvider={handleToggleProvider} lastProvider={headerData?.lastProvider ?? null} lastModel={headerData?.lastModel ?? null} />
+        <Sessions sessions={dashboardSocket.sessions} />
+        <ProviderPanel
+          data={providersData}
+          metrics={dashboardSocket.metrics}
+          conversations={[]}
+          overrideKey={overrideKey}
+          onRowClick={handleMetricClick}
+          onToggleProvider={handleToggleProvider}
+          lastProvider={headerData?.lastProvider ?? null}
+          lastModel={headerData?.lastModel ?? null}
+        />
       </div>
       <div class="section-head" style="margin-top:1.5rem">Pipeline</div>
-      <LivePipeline events={flowEvents} providers={providersData} />
-      <Logs entries={logEntries} />
+      <LivePipeline events={dashboardSocket.flowEvents} providers={providersData} />
+      <Logs entries={dashboardSocket.logEntries} />
     </div>
     <BottomDrawer bind:open={drawerOpen} title="Provider playground">
-      <ProviderPlayground providers={telemetry?.availableProviders ?? []} />
+      <ProviderPlayground providers={dashboardSocket.availableProviders} />
     </BottomDrawer>
     <DetailOverlay {detailMetric} {detailAllMetrics} />
   {:else if currentHash.startsWith('#/project/')}
@@ -432,7 +227,9 @@ onDestroy(() => {
 </div>
 
 <style>
-  .app { display: block; }
+  .app {
+    display: block;
+  }
   .top-bar {
     position: sticky;
     top: 0;
