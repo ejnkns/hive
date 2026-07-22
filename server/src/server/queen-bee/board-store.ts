@@ -15,6 +15,7 @@ import type {
   CardRuntimeState,
   QueenBeeRuntimeStore,
 } from "./queen-bee-runtime-store";
+import { emitBoardSnapshot } from "./worker-event-bus";
 
 export type Column = SharedColumn;
 
@@ -91,6 +92,7 @@ export function createBoardStore(
       saveCard(repoPath, newCard);
       saveRuntimeState(runtimeStore, projectId, newCard);
       onBoardChanged(projectId);
+      emitBoardSnapshot(loadBoard(projectId, repoPath, runtimeStore));
 
       return newCard;
     },
@@ -104,6 +106,7 @@ export function createBoardStore(
       };
       runtimeStore.saveIdeas(projectId, [...board.ideas, newIdea]);
       onBoardChanged(projectId);
+      emitBoardSnapshot(loadBoard(projectId, repoPath, runtimeStore));
       return newIdea;
     },
 
@@ -119,12 +122,14 @@ export function createBoardStore(
         )
       );
       onBoardChanged(projectId);
+      emitBoardSnapshot(loadBoard(projectId, repoPath, runtimeStore));
       return archived;
     },
 
     saveIdeas(projectId, _repoPath, ideas) {
       runtimeStore.saveIdeas(projectId, ideas);
       onBoardChanged(projectId);
+      emitBoardSnapshot(loadBoard(projectId, _repoPath, runtimeStore));
     },
 
     moveCard(
@@ -140,6 +145,7 @@ export function createBoardStore(
       card.column = column;
       saveRuntimeState(runtimeStore, projectId, card);
       onBoardChanged(projectId);
+      emitBoardSnapshot(loadBoard(projectId, repoPath, runtimeStore));
 
       return card;
     },
@@ -157,6 +163,7 @@ export function createBoardStore(
       }
       saveRuntimeState(runtimeStore, projectId, card);
       onBoardChanged(projectId);
+      emitBoardSnapshot(loadBoard(projectId, repoPath, runtimeStore));
       return card;
     },
 
@@ -168,6 +175,7 @@ export function createBoardStore(
       card.archivedAt = new Date().toISOString();
       saveRuntimeState(runtimeStore, projectId, card);
       onBoardChanged(projectId);
+      emitBoardSnapshot(loadBoard(projectId, repoPath, runtimeStore));
       return card;
     },
 
@@ -190,6 +198,7 @@ export function createBoardStore(
         saveRuntimeState(runtimeStore, projectId, card);
       }
       onBoardChanged(projectId);
+      emitBoardSnapshot(loadBoard(projectId, repoPath, runtimeStore));
     },
   };
 }

@@ -19,6 +19,11 @@ import { buildReviewPackage } from "./review-package";
 import type { Reviewer } from "./reviewer";
 import { appendAgentToolExchanges } from "./shared/append-agent-tool-exchanges";
 import type { WorkerCompletion, WorkerToolEvidence } from "./worker-completion";
+import {
+  emitCardReviewComplete,
+  emitCardUnfulfillable,
+  emitCardWorkerProgress,
+} from "./worker-event-bus";
 import { buildWorkerContext } from "./worker-supervisor/build-worker-context";
 import { evaluateCompletion } from "./worker-supervisor/completion-gate";
 import { prepareWorktree } from "./worker-supervisor/git-operations";
@@ -362,6 +367,12 @@ async function runLoop(
         cardId,
         content: response.content,
       });
+      emitCardWorkerProgress(
+        cardId,
+        log.iterations,
+        log.toolCalls.map((tc) => ({ name: tc.name, args: tc.args })),
+        response.content
+      );
       recordActivity({
         actor: "worker",
         type: "progress",
@@ -458,6 +469,11 @@ async function runLoop(
         cardId,
         toolName: toolCall.name,
       });
+      emitCardWorkerProgress(
+        cardId,
+        log.iterations,
+        log.toolCalls.map((tc) => ({ name: tc.name, args: tc.args }))
+      );
       recordActivity({
         actor: "worker",
         type: result.isError ? "error" : "tool",
@@ -629,6 +645,7 @@ async function runReviewer(
           ? "Reviewer Agent approved the immutable Review Package. Awaiting user acceptance."
           : `Reviewer Agent requested changes with ${String(verdict.findings.length)} finding(s). Awaiting user decision.`,
     });
+    emitCardReviewComplete(card.id, verdict.verdict);
     runtimeStore.appendActivity(projectId, card.id, {
       actor: "reviewer",
       type: "decision",
@@ -758,11 +775,13 @@ async function handleHandover(
         (suggestion) => suggestion.rationale
       ),
     });
+    emitCardUnfulfillable(card.id, handover);
   } catch (err) {
     const error = err instanceof Error ? err.message : "Coordinator failed";
     boardStore.updateCard(projectId, repoPath, card.id, {
       coordinatorLog: { status: "error", error },
     });
     onEvent({ type: "unfulfillable_handover", cardId: card.id, error });
+    emitCardUnfulfillable(card.id, handover);
   }
 }

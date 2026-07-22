@@ -7,11 +7,7 @@ import type { QueenBeeEvent } from "shared/queen-bee-events";
 import type { BoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
 import { evaluateWorkerAdmission } from "./worker-admission";
-import {
-  boardEventBus,
-  offQueenBeeEvent,
-  onQueenBeeEvent,
-} from "./worker-event-bus";
+import { offQueenBeeEvent, onQueenBeeEvent } from "./worker-event-bus";
 import type { WorkerEvent, WorkerSupervisor } from "./worker-supervisor";
 
 export function registerWorkerRoutes(
@@ -103,27 +99,6 @@ export function registerWorkerRoutes(
   );
 
   server.get("/api/queen-bee/ws", { websocket: true }, (socket) => {
-    const boardHandler = (projectId: string) => {
-      try {
-        const project = deps.projectStore
-          .getAll()
-          .find((candidate) => candidate.id === projectId);
-        if (!project) return;
-        socket.send(
-          JSON.stringify(
-            toBoardSocketMessage(
-              projectId,
-              deps.boardStore.getBoard(projectId, project.repoPath)
-            )
-          )
-        );
-      } catch {
-        // socket closed
-      }
-    };
-
-    boardEventBus.on("change", boardHandler);
-
     const queenBeeHandler = (event: QueenBeeEvent) => {
       try {
         socket.send(JSON.stringify(event));
@@ -134,7 +109,6 @@ export function registerWorkerRoutes(
     onQueenBeeEvent(queenBeeHandler);
 
     socket.on("close", () => {
-      boardEventBus.off("change", boardHandler);
       offQueenBeeEvent(queenBeeHandler);
     });
   });

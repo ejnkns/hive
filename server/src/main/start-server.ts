@@ -36,7 +36,6 @@ import {
   registerWorkerRoutes,
 } from "../server/queen-bee";
 import {
-  emitBoardEvent,
   emitDraftUpdated,
   emitProjectsChanged,
 } from "../server/queen-bee/worker-event-bus";
@@ -68,9 +67,7 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
       emitDraftUpdated(scope, scopeId, update.content);
     }
   );
-  const boardStore = createBoardStore((projectId) => {
-    emitBoardEvent(projectId);
-  }, runtimeStore);
+  const boardStore = createBoardStore(() => {}, runtimeStore);
   const integrationManager = createIntegrationManager();
   const specificationStore = createProjectSpecificationStore();
   const planningManager = createPlanningManager(

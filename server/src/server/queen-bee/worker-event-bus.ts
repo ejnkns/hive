@@ -136,11 +136,3 @@ export function emitIntegrationChanged(status: ProjectIntegrationStatus): void {
 export function emitProjectsChanged(): void {
   emit({ type: "projects_changed", version: nextVersion() });
 }
-
-export const boardEventBus = new EventEmitter<{
-  change: [string];
-}>();
-
-export function emitBoardEvent(projectId: string): void {
-  boardEventBus.emit("change", projectId);
-}

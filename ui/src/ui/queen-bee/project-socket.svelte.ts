@@ -39,7 +39,6 @@ function connect(projectId: string) {
             };
           }
           break;
-
         case "card_moved":
         case "card_worker_progress":
         case "card_review_complete":
@@ -47,13 +46,10 @@ function connect(projectId: string) {
         case "card_changes_requested":
         case "card_unfulfillable":
         case "cards_created":
+        case "ideas_changed":
         case "planning_outcome":
         case "integration_changed":
         case "projects_changed":
-          boardVersion++;
-          break;
-
-        case "ideas_changed":
           boardVersion++;
           break;
 
@@ -66,26 +62,6 @@ function connect(projectId: string) {
             content: message.content,
           };
           break;
-
-        default: {
-          const oldMsg = message as unknown as {
-            type?: string;
-            data?: Record<string, unknown>;
-          };
-          if (
-            oldMsg.type === "board_updated" &&
-            oldMsg.data?.projectId === projectId
-          ) {
-            boardVersion++;
-            if (oldMsg.data.board) {
-              boardSnapshot = oldMsg.data.board as {
-                projectId: string;
-                ideas: unknown[];
-                cards: unknown[];
-              };
-            }
-          }
-        }
       }
     } catch {
       // Ignore malformed events.
