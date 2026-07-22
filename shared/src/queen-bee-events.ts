@@ -2,7 +2,6 @@
 
 import type {
   Board,
-  Card,
   Column,
   Idea,
   PlanningOutcome,

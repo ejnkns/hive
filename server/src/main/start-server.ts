@@ -37,7 +37,6 @@ import {
 } from "../server/queen-bee";
 import {
   emitBoardEvent,
-  emitBoardSnapshot,
   emitDraftUpdated,
   emitProjectEvent,
   emitProjectsChanged,

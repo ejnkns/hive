@@ -2,6 +2,7 @@
 import { onMount } from "svelte";
 import { projectSocket } from "./project-socket.svelte";
 import type {
+  Board,
   Card,
   Column,
   CoordinatorAction,
@@ -31,12 +32,6 @@ type Props = {
   onReDeviseStarted?: () => void;
   onPlanningProposal?: (proposal: PlanningProposal) => void;
   onRequirementsFeedback?: (feedback: RequirementsFeedback) => void;
-};
-
-type Board = {
-  projectId: string;
-  ideas: Idea[];
-  cards: Card[];
 };
 
 const COLUMNS: Column[] = [

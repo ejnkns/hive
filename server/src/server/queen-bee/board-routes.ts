@@ -28,21 +28,6 @@ export function registerBoardRoutes(
     return reply.send(board);
   });
 
-  server.get(
-    "/api/queen-bee/:projectId/planning/open",
-    async (request, reply) => {
-      const { projectId } = request.params as { projectId: string };
-      const project = deps.projectStore
-        .getAll()
-        .find((candidate) => candidate.id === projectId);
-      if (!project) {
-        return reply.status(404).send({ error: "Project not found" });
-      }
-      const outcome = deps.planningManager.getOpenOutcome(projectId);
-      return reply.send(outcome ? planningResponse(outcome) : {});
-    }
-  );
-
   server.post("/api/queen-bee/:projectId/ideas", async (request, reply) => {
     const { projectId } = request.params as { projectId: string };
     const project = deps.projectStore.getAll().find((p) => p.id === projectId);

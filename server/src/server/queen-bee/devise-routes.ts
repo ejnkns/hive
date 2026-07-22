@@ -580,24 +580,6 @@ export function registerRequirementsRoutes(
     }
   );
 
-  server.get(
-    "/api/queen-bee/:projectId/requirements/status",
-    async (request, reply) => {
-      const { projectId } = request.params as { projectId: string };
-
-      const project = deps.projectStore
-        .getAll()
-        .find((p) => p.id === projectId);
-      if (!project) {
-        return reply.status(404).send({ error: "Project not found" });
-      }
-
-      const hasRequirements = readRequirements(project.repoPath).length > 0;
-
-      return reply.send({ projectId, hasRequirements });
-    }
-  );
-
   server.get("/api/queen-bee/:projectId/phase", async (request, reply) => {
     const { projectId } = request.params as { projectId: string };
 
@@ -664,41 +646,6 @@ export function registerRequirementsRoutes(
         return reply.send({ content });
       }
       return reply.status(404).send({ error: "Requirements not found" });
-    }
-  );
-
-  server.get(
-    "/api/queen-bee/:projectId/requirements/session",
-    async (request, reply) => {
-      const { projectId } = request.params as { projectId: string };
-      const session = deps.sessionManager.getSession(projectId);
-
-      if (!session) {
-        return reply.send({ active: false });
-      }
-      if (session.status === "submitted") {
-        return reply.send({ active: false, status: session.status });
-      }
-
-      const clientMessages = session.messages
-        .filter((m) => m.role === "user" || m.role === "assistant")
-        .map((m) => ({
-          role: m.role,
-          content: m.content,
-        }));
-
-      return reply.send({
-        active: true,
-        status: session.status,
-        draftRequirements: session.draftRequirements,
-        baseRequirementsRevision: session.baseRequirementsRevision,
-        projectRevision: session.projectRevision,
-        kind: session.kind,
-        cardId: session.cardId,
-        ideaId: session.ideaId,
-        sourceIdeaId: session.sourceIdeaId,
-        messages: clientMessages,
-      });
     }
   );
 }

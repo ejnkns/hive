@@ -1,7 +1,6 @@
 import { EventEmitter } from "node:events";
 import type {
   Board,
-  Card,
   Column,
   Idea,
   PlanningOutcome,
