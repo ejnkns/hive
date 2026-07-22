@@ -7,7 +7,6 @@ import type {
   FlowEvent,
   MetricData,
   OverrideState,
-  ProviderPayload,
   RequestState,
   SessionPatch,
   SessionStage,
@@ -16,7 +15,6 @@ import type {
   SubScores,
   ToolCall,
 } from "shared/dashboard-types";
-import type { FinishReason } from "telemetry";
 
 export type {
   AvailableProvider,
