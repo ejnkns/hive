@@ -111,15 +111,15 @@ test("a user can plan, implement, review, and accept a Card into hive-main", {
 
     await page
       .getByRole("button", { name: "Integrate into main" })
-      .click({ force: true });
-    await visible(page.getByText("Up to date"));
+      .dispatchEvent("click");
+    await visible(page.getByText("is up to date"));
 
     await page.reload();
     await visible(
       page.getByText("Render deterministic greeting", { exact: true })
     );
     await visible(page.getByText("Done", { exact: true }));
-    await visible(page.getByText("Up to date"));
+    await visible(page.getByText("is up to date"));
 
     assert.equal(
       execFileSync("git", ["show", "hive-main:src/app.ts"], {
