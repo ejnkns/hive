@@ -6,7 +6,7 @@ import type {
 } from "shared/board-types";
 import { parsePlanningProposalResponse } from "./parse-planning-proposal-response";
 import { projectSocket } from "./project-socket.svelte";
-import { isRecord } from "../check-record";
+import { isRecord } from "shared/board-types";
 
 let {
   projectId,

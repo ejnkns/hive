@@ -15,7 +15,7 @@ import {
   connectProjectSocket,
   disconnectProjectSocket,
 } from "./project-socket.svelte";
-import { isRecord } from "../check-record";
+import { isRecord } from "shared/board-types";
 
 let { projectId }: Props = $props();
 

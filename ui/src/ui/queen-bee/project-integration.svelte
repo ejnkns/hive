@@ -2,7 +2,7 @@
 import { onMount } from "svelte";
 import type { ProjectIntegrationStatus } from "shared/project-types";
 import { projectSocket } from "./project-socket.svelte";
-import { isRecord } from "../check-record";
+import { isRecord } from "shared/board-types";
 
 let { projectId }: { projectId: string } = $props();
 

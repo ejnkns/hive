@@ -4,7 +4,7 @@ import {
   MAX_MAX_CONCURRENT_WORKERS,
   MIN_MAX_CONCURRENT_WORKERS,
 } from "shared/project-types";
-import { isRecord } from "../check-record";
+import { isRecord } from "shared/board-types";
 
 let { projectId }: Props = $props();
 

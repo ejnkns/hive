@@ -2,8 +2,11 @@ import type {
   PlanningProposal,
   RequirementsFeedback,
 } from "shared/board-types";
-import { isPlanningProposal, isRequirementsFeedback } from "shared/board-types";
-import { isRecord } from "../check-record";
+import {
+  isPlanningProposal,
+  isRecord,
+  isRequirementsFeedback,
+} from "shared/board-types";
 
 export function parsePlanningProposalResponse(value: unknown): {
   proposal?: PlanningProposal;

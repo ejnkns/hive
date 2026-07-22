@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { RequirementsFeedback } from "shared/board-types";
-import { isRecord } from "../check-record";
+import { isRecord } from "shared/board-types";
 
 let { projectId, feedback, onRepairStarted }: Props = $props();
 

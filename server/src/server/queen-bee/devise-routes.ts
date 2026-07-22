@@ -1,11 +1,11 @@
 /** @private — only imported by queen-bee.ts */
 
 import type { FastifyInstance } from "fastify";
-import type { PlanningOutcome } from "shared/board-types";
 import type { BoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
 import type { RequirementsSessionManager } from "./devise-engine";
 import type { PlanningManager } from "./planner";
+import { planningResponse } from "./planning-response";
 import { loadProjectContext } from "./project-context";
 import { readRequirements, requirementsRevision } from "./requirements-store";
 
@@ -697,8 +697,4 @@ function approvedDraft(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function planningResponse(outcome: PlanningOutcome) {
-  return "kind" in outcome ? { feedback: outcome } : { proposal: outcome };
 }

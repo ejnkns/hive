@@ -1,7 +1,10 @@
 /** @private — only imported by kanban-board.svelte */
 
-import { isReviewReadiness, type ReviewReadiness } from "shared/board-types";
-import { isRecord } from "../../check-record";
+import {
+  isRecord,
+  isReviewReadiness,
+  type ReviewReadiness,
+} from "shared/board-types";
 
 export function parseReviewReadinessResponse(
   value: unknown

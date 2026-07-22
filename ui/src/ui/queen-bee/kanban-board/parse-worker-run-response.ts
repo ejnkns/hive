@@ -1,7 +1,10 @@
 /** @private — only imported by kanban-board.svelte */
 
-import { isWorkerAdmission, type WorkerAdmission } from "shared/board-types";
-import { isRecord } from "../../check-record";
+import {
+  isRecord,
+  isWorkerAdmission,
+  type WorkerAdmission,
+} from "shared/board-types";
 
 export type WorkerRunResponse = {
   admission?: WorkerAdmission;
