@@ -11,6 +11,10 @@ import PlanningProposalView from "./planning-proposal.svelte";
 import RequirementsFeedbackView from "./requirements-feedback.svelte";
 import { parsePlanningProposalResponse } from "./parse-planning-proposal-response";
 import { projectHeader } from "./project-header-state.svelte";
+import {
+  connectProjectSocket,
+  disconnectProjectSocket,
+} from "./project-socket.svelte";
 import { isRecord } from "../check-record";
 
 let { projectId }: Props = $props();
@@ -34,7 +38,9 @@ let requirementsFeedback = $state<RequirementsFeedback | null>(null);
 
 onMount(() => {
   projectHeader.projectId = projectId;
+  connectProjectSocket(projectId);
   checkStatus();
+  return () => disconnectProjectSocket();
 });
 
 async function checkStatus() {

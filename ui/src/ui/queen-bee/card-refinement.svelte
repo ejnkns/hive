@@ -1,12 +1,11 @@
 <script lang="ts">
-import { onMount } from "svelte";
 import type {
   Card,
   PlanningProposal,
   RequirementsFeedback,
 } from "shared/board-types";
+import { projectSocket } from "./project-socket.svelte";
 import { parsePlanningProposalResponse } from "./parse-planning-proposal-response";
-import { isRecord } from "../check-record";
 
 let {
   projectId,
@@ -151,41 +150,12 @@ async function confirmReady() {
   }
 }
 
-onMount(() => {
-  const protocol = window.location.protocol === "http:" ? "ws:" : "wss:";
-  const socket = new WebSocket(
-    `${protocol}//${window.location.host}/api/queen-bee/ws`
-  );
-  socket.onmessage = (event) => {
-    try {
-      const message: unknown = JSON.parse(String(event.data));
-      const content = cardDraftContent(message, projectId, card.id);
-      if (content !== null) draftRequirements = content;
-    } catch {
-      // Ignore malformed events.
-    }
-  };
-  return () => socket.close();
-});
-
-function cardDraftContent(
-  value: unknown,
-  project: string,
-  selectedCard: string
-): string | null {
-  if (!isRecord(value) || value.type !== "requirements_draft_updated")
-    return null;
-  const data = value.data;
-  if (
-    !isRecord(data) ||
-    data.projectId !== project ||
-    data.cardId !== selectedCard ||
-    typeof data.content !== "string"
-  ) {
-    return null;
+$effect(() => {
+  const update = projectSocket.draftUpdate;
+  if (update && update.cardId === card.id) {
+    draftRequirements = update.content;
   }
-  return data.content;
-}
+});
 </script>
 
 <div class="refinement">

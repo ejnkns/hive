@@ -1,5 +1,6 @@
 <script lang="ts">
 import { onMount } from "svelte";
+import { projectSocket } from "./project-socket.svelte";
 import type {
   Card,
   Column,
@@ -345,34 +346,12 @@ function cardsInColumn(col: Column): Card[] {
 
 onMount(() => {
   void loadBoard();
+});
 
-  const protocol = window.location.protocol === "http:" ? "ws:" : "wss:";
-  const socket = new WebSocket(
-    `${protocol}//${window.location.host}/api/queen-bee/ws`
-  );
-  socket.onmessage = (event) => {
-    try {
-      const message = JSON.parse(String(event.data)) as {
-        type?: string;
-        data?: { projectId?: string; board?: Board };
-      };
-      if (
-        message.type === "board_updated" &&
-        message.data?.projectId === projectId
-      ) {
-        if (message.data.board) {
-          boardRequest += 1;
-          applyBoard(message.data.board);
-        } else {
-          void loadBoard();
-        }
-      }
-    } catch {
-      // Ignore malformed events.
-    }
-  };
-
-  return () => socket.close();
+$effect(() => {
+  // Reactive dependency: re-runs on every board_updated event
+  projectSocket.boardVersion;
+  void loadBoard();
 });
 </script>
 

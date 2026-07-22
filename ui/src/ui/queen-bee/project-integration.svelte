@@ -1,6 +1,7 @@
 <script lang="ts">
 import { onMount } from "svelte";
 import type { ProjectIntegrationStatus } from "shared/project-types";
+import { projectSocket } from "./project-socket.svelte";
 import { isRecord } from "../check-record";
 
 let { projectId }: { projectId: string } = $props();
@@ -49,28 +50,17 @@ async function integrate() {
 
 onMount(() => {
   void loadStatus();
-  const protocol = window.location.protocol === "http:" ? "ws:" : "wss:";
-  const socket = new WebSocket(
-    `${protocol}//${window.location.host}/api/queen-bee/ws`
-  );
-  socket.onmessage = (event) => {
-    try {
-      const message: unknown = JSON.parse(String(event.data));
-      if (isProjectBoardUpdate(message, projectId)) {
-        void loadStatus();
-      }
-    } catch {
-      // Ignore malformed events.
-    }
-  };
+
   function refreshOnFocus() {
     void loadStatus();
   }
   window.addEventListener("focus", refreshOnFocus);
-  return () => {
-    socket.close();
-    window.removeEventListener("focus", refreshOnFocus);
-  };
+  return () => window.removeEventListener("focus", refreshOnFocus);
+});
+
+$effect(() => {
+  projectSocket.boardVersion;
+  void loadStatus();
 });
 
 async function readIntegrationResponse(
@@ -103,11 +93,6 @@ function isIntegrationStatus(
     typeof value.behind === "number" &&
     typeof value.canIntegrate === "boolean"
   );
-}
-
-function isProjectBoardUpdate(value: unknown, project: string): boolean {
-  if (!isRecord(value) || value.type !== "board_updated") return false;
-  return isRecord(value.data) && value.data.projectId === project;
 }
 
 function readError(value: unknown): string | null {

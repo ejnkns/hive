@@ -1,7 +1,6 @@
 <script lang="ts">
-import { onMount } from "svelte";
 import type { RequirementsSessionKind } from "shared/board-types";
-import { isRecord } from "../check-record";
+import { projectSocket } from "./project-socket.svelte";
 
 let {
   projectId,
@@ -140,37 +139,12 @@ function submit() {
   }
 }
 
-onMount(() => {
-  const protocol = window.location.protocol === "http:" ? "ws:" : "wss:";
-  const socket = new WebSocket(
-    `${protocol}//${window.location.host}/api/queen-bee/ws`
-  );
-  socket.onmessage = (event) => {
-    try {
-      const message: unknown = JSON.parse(String(event.data));
-      const content = projectDraftContent(message, projectId);
-      if (content !== null) draftRequirements = content;
-    } catch {
-      // Ignore malformed events.
-    }
-  };
-  return () => socket.close();
-});
-
-function projectDraftContent(value: unknown, project: string): string | null {
-  if (!isRecord(value) || value.type !== "requirements_draft_updated")
-    return null;
-  const data = value.data;
-  if (
-    !isRecord(data) ||
-    data.projectId !== project ||
-    data.cardId !== undefined ||
-    typeof data.content !== "string"
-  ) {
-    return null;
+$effect(() => {
+  const update = projectSocket.draftUpdate;
+  if (update && !update.cardId) {
+    draftRequirements = update.content;
   }
-  return data.content;
-}
+});
 </script>
 
 <div class="devise-chat">
