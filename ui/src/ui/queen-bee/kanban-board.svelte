@@ -11,6 +11,7 @@ import type {
   RequirementsFeedback,
   WorkerAdmission,
 } from "shared/board-types";
+import { COLUMN_LABELS } from "shared/board-types";
 import KanbanCard from "./kanban-card.svelte";
 import CardDetail from "./card-detail.svelte";
 import IdeasBacklog from "./ideas-backlog.svelte";
@@ -45,14 +46,6 @@ const COLUMNS: Column[] = [
   "done",
   "unfulfillable",
 ];
-
-const COLUMN_LABELS: Record<Column, string> = {
-  ready: "Ready",
-  in_progress: "In Progress",
-  reviewing: "Reviewing",
-  done: "Done",
-  unfulfillable: "Unfulfillable",
-};
 
 let board: Board | null = $state(null);
 let loading = $state(true);

@@ -2,11 +2,11 @@
 import type {
   Card,
   CardActivityEvent,
-  Column,
   PlanningProposal,
   ReviewReadiness,
   RequirementsFeedback,
 } from "shared/board-types";
+import { COLUMN_LABELS } from "shared/board-types";
 import CardRefinement from "./card-refinement.svelte";
 
 let {
@@ -160,14 +160,6 @@ $effect(() => {
     refining = true;
   }
 });
-
-const COLUMN_LABELS: Record<Column, string> = {
-  ready: "Ready",
-  in_progress: "In Progress",
-  reviewing: "Reviewing",
-  done: "Done",
-  unfulfillable: "Unfulfillable",
-};
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->

@@ -7,6 +7,14 @@ export type Column =
   | "done"
   | "unfulfillable";
 
+export const COLUMN_LABELS: Record<Column, string> = {
+  ready: "Ready",
+  in_progress: "In Progress",
+  reviewing: "Reviewing",
+  done: "Done",
+  unfulfillable: "Unfulfillable",
+};
+
 export type WorkerLog = {
   startedAt: string;
   finishedAt: string;
