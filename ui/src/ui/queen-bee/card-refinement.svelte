@@ -1,10 +1,10 @@
 <script lang="ts">
-import { onMount } from "svelte";
 import type {
   Card,
   PlanningProposal,
   RequirementsFeedback,
 } from "shared/board-types";
+import { projectSocket } from "./project-socket.svelte";
 import { parsePlanningProposalResponse } from "./parse-planning-proposal-response";
 
 let {
@@ -36,6 +36,7 @@ let busy = $state(false);
 let error = $state<string | null>(null);
 let consumedInitialQuestion = $state("");
 let draftRequirements = $state("");
+let settled = $state(true);
 
 $effect(() => {
   if (initialQuestion && initialQuestion !== consumedInitialQuestion) {
@@ -49,6 +50,7 @@ async function startRefinement() {
   const prompt = input.trim();
   if (!prompt) return;
 
+  settled = false;
   busy = true;
   error = null;
   try {
@@ -77,6 +79,7 @@ async function startRefinement() {
       err instanceof Error ? err.message : "Could not start card refinement";
   } finally {
     busy = false;
+    settled = true;
   }
 }
 
@@ -84,6 +87,7 @@ async function respond() {
   const answer = input.trim();
   if (!answer) return;
 
+  settled = false;
   busy = true;
   error = null;
   try {
@@ -119,6 +123,7 @@ async function respond() {
       err instanceof Error ? err.message : "Could not continue card refinement";
   } finally {
     busy = false;
+    settled = true;
   }
 }
 
@@ -150,45 +155,11 @@ async function confirmReady() {
   }
 }
 
-onMount(() => {
-  const protocol = window.location.protocol === "http:" ? "ws:" : "wss:";
-  const socket = new WebSocket(
-    `${protocol}//${window.location.host}/api/queen-bee/ws`
-  );
-  socket.onmessage = (event) => {
-    try {
-      const message: unknown = JSON.parse(String(event.data));
-      const content = cardDraftContent(message, projectId, card.id);
-      if (content !== null) draftRequirements = content;
-    } catch {
-      // Ignore malformed events.
-    }
-  };
-  return () => socket.close();
+$effect(() => {
+  const update = projectSocket.draftUpdate;
+  if (settled || !update || update.cardId !== card.id) return;
+  draftRequirements = update.content;
 });
-
-function cardDraftContent(
-  value: unknown,
-  project: string,
-  selectedCard: string
-): string | null {
-  if (!isRecord(value) || value.type !== "requirements_draft_updated")
-    return null;
-  const data = value.data;
-  if (
-    !isRecord(data) ||
-    data.projectId !== project ||
-    data.cardId !== selectedCard ||
-    typeof data.content !== "string"
-  ) {
-    return null;
-  }
-  return data.content;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 </script>
 
 <div class="refinement">

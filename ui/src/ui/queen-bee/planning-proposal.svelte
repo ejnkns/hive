@@ -4,6 +4,7 @@ import type {
   RequirementsFeedback,
 } from "shared/board-types";
 import { parsePlanningProposalResponse } from "./parse-planning-proposal-response";
+import { isRecord } from "shared/board-types";
 
 let {
   projectId,
@@ -176,10 +177,6 @@ async function cancelProposal() {
   } finally {
     busy = false;
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 </script>
 

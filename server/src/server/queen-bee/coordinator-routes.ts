@@ -1,11 +1,13 @@
 /** @private — only imported by queen-bee.ts */
 
 import type { FastifyInstance } from "fastify";
-import type { CoordinatorAction, PlanningOutcome } from "shared/board-types";
+import type { CoordinatorAction } from "shared/board-types";
+import { isRecord } from "shared/board-types";
 import type { BoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
 import type { RequirementsSessionManager } from "./devise-engine";
 import type { PlanningManager } from "./planner";
+import { planningResponse } from "./planning-response";
 import { readRequirements, requirementsRevision } from "./requirements-store";
 
 export function registerCoordinatorRoutes(
@@ -115,7 +117,7 @@ export function registerCoordinatorRoutes(
           );
           return reply.send({
             card,
-            redevise: true,
+            kind: "redevise" as const,
             question: result.question,
           });
         }
@@ -155,14 +157,6 @@ export function registerCoordinatorRoutes(
   );
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function isCoordinatorAction(value: unknown): value is CoordinatorAction {
   return ["retry_with_patch", "redevise", "archive"].includes(String(value));
-}
-
-function planningResponse(outcome: PlanningOutcome) {
-  return "kind" in outcome ? { feedback: outcome } : { proposal: outcome };
 }

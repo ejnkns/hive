@@ -2,6 +2,7 @@
 
 import { execFileSync } from "node:child_process";
 import { isAbsolute, relative, resolve } from "node:path";
+import { isRecord } from "shared/board-types";
 import type { ToolCall, ToolResult } from "../../devise-engine/devise-tools";
 
 const PROTECTED_PATHS = new Set([".hive/requirements.md"]);
@@ -83,10 +84,6 @@ export function commitWork(
       error instanceof Error ? error.message : "Commit failed"
     );
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function stringArray(value: unknown): string[] | null {

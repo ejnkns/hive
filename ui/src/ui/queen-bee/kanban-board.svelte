@@ -1,6 +1,8 @@
 <script lang="ts">
 import { onMount } from "svelte";
+import { projectSocket } from "./project-socket.svelte";
 import type {
+  Board,
   Card,
   Column,
   CoordinatorAction,
@@ -10,6 +12,7 @@ import type {
   RequirementsFeedback,
   WorkerAdmission,
 } from "shared/board-types";
+import { COLUMN_LABELS } from "shared/board-types";
 import KanbanCard from "./kanban-card.svelte";
 import CardDetail from "./card-detail.svelte";
 import IdeasBacklog from "./ideas-backlog.svelte";
@@ -31,12 +34,6 @@ type Props = {
   onRequirementsFeedback?: (feedback: RequirementsFeedback) => void;
 };
 
-type Board = {
-  projectId: string;
-  ideas: Idea[];
-  cards: Card[];
-};
-
 const COLUMNS: Column[] = [
   "ready",
   "in_progress",
@@ -44,14 +41,6 @@ const COLUMNS: Column[] = [
   "done",
   "unfulfillable",
 ];
-
-const COLUMN_LABELS: Record<Column, string> = {
-  ready: "Ready",
-  in_progress: "In Progress",
-  reviewing: "Reviewing",
-  done: "Done",
-  unfulfillable: "Unfulfillable",
-};
 
 let board: Board | null = $state(null);
 let loading = $state(true);
@@ -259,25 +248,25 @@ async function handleRemediate(
     throw new Error(data.error ?? "Remediation failed");
   }
   const result = (await res.json()) as {
+    kind?: string;
     card?: Card;
     proposal?: PlanningProposal;
     feedback?: RequirementsFeedback;
-    redevise?: boolean;
     question?: string;
   };
-  if (result.feedback) {
+  if (result.kind === "feedback" && result.feedback) {
     selectedCard = null;
     onRequirementsFeedback?.(result.feedback);
     return;
   }
-  if (result.proposal) {
+  if (result.kind === "proposal" && result.proposal) {
     selectedCard = null;
     onPlanningProposal?.(result.proposal);
     return;
   }
   if (!result.card) throw new Error("Remediation returned no result");
   handleCardUpdated(result.card);
-  if (result.redevise && result.question) {
+  if (result.kind === "redevise" && result.question) {
     refinementQuestion = result.question;
     return;
   }
@@ -345,34 +334,17 @@ function cardsInColumn(col: Column): Card[] {
 
 onMount(() => {
   void loadBoard();
+});
 
-  const protocol = window.location.protocol === "http:" ? "ws:" : "wss:";
-  const socket = new WebSocket(
-    `${protocol}//${window.location.host}/api/queen-bee/ws`
-  );
-  socket.onmessage = (event) => {
-    try {
-      const message = JSON.parse(String(event.data)) as {
-        type?: string;
-        data?: { projectId?: string; board?: Board };
-      };
-      if (
-        message.type === "board_updated" &&
-        message.data?.projectId === projectId
-      ) {
-        if (message.data.board) {
-          boardRequest += 1;
-          applyBoard(message.data.board);
-        } else {
-          void loadBoard();
-        }
-      }
-    } catch {
-      // Ignore malformed events.
-    }
-  };
-
-  return () => socket.close();
+$effect(() => {
+  projectSocket.boardVersion;
+  const snapshot = projectSocket.boardSnapshot;
+  if (snapshot) {
+    boardRequest += 1;
+    applyBoard(snapshot);
+  } else {
+    void loadBoard();
+  }
 });
 </script>
 

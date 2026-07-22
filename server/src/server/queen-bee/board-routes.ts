@@ -1,10 +1,11 @@
 /** @private — only imported by queen-bee.ts */
 
 import type { FastifyInstance } from "fastify";
-import type { PlanningOutcome } from "shared/board-types";
+import { isRecord } from "shared/board-types";
 import type { BoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
 import type { PlanningManager } from "./planner";
+import { planningResponse } from "./planning-response";
 import { readRequirements } from "./requirements-store";
 
 export function registerBoardRoutes(
@@ -27,21 +28,6 @@ export function registerBoardRoutes(
     const board = deps.boardStore.getBoard(projectId, project.repoPath);
     return reply.send(board);
   });
-
-  server.get(
-    "/api/queen-bee/:projectId/planning/open",
-    async (request, reply) => {
-      const { projectId } = request.params as { projectId: string };
-      const project = deps.projectStore
-        .getAll()
-        .find((candidate) => candidate.id === projectId);
-      if (!project) {
-        return reply.status(404).send({ error: "Project not found" });
-      }
-      const outcome = deps.planningManager.getOpenOutcome(projectId);
-      return reply.send(outcome ? planningResponse(outcome) : {});
-    }
-  );
 
   server.post("/api/queen-bee/:projectId/ideas", async (request, reply) => {
     const { projectId } = request.params as { projectId: string };
@@ -265,12 +251,4 @@ export function registerBoardRoutes(
       }
     }
   );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function planningResponse(outcome: PlanningOutcome) {
-  return "kind" in outcome ? { feedback: outcome } : { proposal: outcome };
 }

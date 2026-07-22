@@ -2,6 +2,7 @@
 
 import { execFile } from "node:child_process";
 import { basename } from "node:path";
+import { isRecord } from "shared/board-types";
 import type { ToolCall, ToolResult } from "../../devise-engine/devise-tools";
 
 const GIT_MUTATIONS = new Set([
@@ -119,10 +120,6 @@ export function runCommand(
 
 function commandLine(command: string, args: string[]): string {
   return [command, ...args].join(" ");
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function stringArray(value: unknown): string[] | null {

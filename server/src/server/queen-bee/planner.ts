@@ -10,6 +10,7 @@ import type {
   PlanningRunKind,
   RequirementsFeedback,
 } from "shared/board-types";
+import { isRecord } from "shared/board-types";
 import { generateId } from "shared/generate-id";
 import type { Message } from "shared/message";
 import type { Board, BoardStore, Card } from "./board-store";
@@ -28,6 +29,7 @@ import type {
 import { createProjectSpecificationStore } from "./project-specification-store";
 import type { QueenBeeRuntimeStore } from "./queen-bee-runtime-store";
 import { readRequirements, requirementsRevision } from "./requirements-store";
+import { emitPlanningOutcome } from "./worker-event-bus";
 
 export type PlanningManager = {
   propose(
@@ -145,6 +147,7 @@ export function createPlanningManager(
           createdAt: new Date().toISOString(),
         };
         runtimeStore.saveRequirementsFeedback(feedback);
+        emitPlanningOutcome(feedback);
         return feedback;
       }
       const changes = parseChanges(result, currentCards);
@@ -184,6 +187,7 @@ export function createPlanningManager(
         createdAt: new Date().toISOString(),
       };
       runtimeStore.savePlanningProposal(proposal);
+      emitPlanningOutcome(proposal);
       return proposal;
     },
 
@@ -821,10 +825,6 @@ function requireProposal(
 
 function isAction(value: unknown): value is PlanningChange["action"] {
   return ["keep", "create", "update", "remove"].includes(String(value));
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function requiredString(value: unknown, name: string): string {

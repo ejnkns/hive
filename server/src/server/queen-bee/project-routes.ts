@@ -1,6 +1,7 @@
 /** @private — only imported by queen-bee.ts */
 
 import type { FastifyInstance } from "fastify";
+import { isRecord } from "shared/board-types";
 import type { ProjectStore } from "./create-project-store";
 
 export function registerProjectRoutes(
@@ -75,8 +76,4 @@ export function registerProjectRoutes(
       }
     }
   );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

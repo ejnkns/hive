@@ -3,6 +3,7 @@
 import type { FastifyInstance } from "fastify";
 import type { ProjectStore } from "./create-project-store";
 import type { IntegrationManager } from "./integration-manager";
+import { emitIntegrationChanged } from "./worker-event-bus";
 
 export function registerIntegrationRoutes(
   server: FastifyInstance,
@@ -42,9 +43,12 @@ export function registerIntegrationRoutes(
       if (!project)
         return reply.status(404).send({ error: "Project not found" });
       try {
-        return reply.send(
-          integrationManager.integrate(project.repoPath, project.targetBranch)
+        const status = integrationManager.integrate(
+          project.repoPath,
+          project.targetBranch
         );
+        emitIntegrationChanged(status);
+        return reply.send(status);
       } catch (error) {
         return reply.status(409).send({ error: errorMessage(error) });
       }

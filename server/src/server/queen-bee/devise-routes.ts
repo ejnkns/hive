@@ -1,11 +1,12 @@
 /** @private — only imported by queen-bee.ts */
 
 import type { FastifyInstance } from "fastify";
-import type { PlanningOutcome } from "shared/board-types";
+import { isRecord } from "shared/board-types";
 import type { BoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
 import type { RequirementsSessionManager } from "./devise-engine";
 import type { PlanningManager } from "./planner";
+import { planningResponse } from "./planning-response";
 import { loadProjectContext } from "./project-context";
 import { readRequirements, requirementsRevision } from "./requirements-store";
 
@@ -580,23 +581,54 @@ export function registerRequirementsRoutes(
     }
   );
 
-  server.get(
-    "/api/queen-bee/:projectId/requirements/status",
-    async (request, reply) => {
-      const { projectId } = request.params as { projectId: string };
+  server.get("/api/queen-bee/:projectId/phase", async (request, reply) => {
+    const { projectId } = request.params as { projectId: string };
 
-      const project = deps.projectStore
-        .getAll()
-        .find((p) => p.id === projectId);
-      if (!project) {
-        return reply.status(404).send({ error: "Project not found" });
-      }
-
-      const hasRequirements = readRequirements(project.repoPath).length > 0;
-
-      return reply.send({ projectId, hasRequirements });
+    const project = deps.projectStore.getAll().find((p) => p.id === projectId);
+    if (!project) {
+      return reply.status(404).send({ error: "Project not found" });
     }
-  );
+
+    const requirementsContent = readRequirements(project.repoPath);
+    const hasRequirements = requirementsContent.length > 0;
+
+    const openOutcome = deps.planningManager.getOpenOutcome(projectId);
+    if (openOutcome) {
+      return reply.send({
+        phase: "planning",
+        outcome:
+          "kind" in openOutcome
+            ? { feedback: openOutcome }
+            : { proposal: openOutcome },
+        requirementsContent: hasRequirements ? requirementsContent : null,
+      });
+    }
+
+    const session = deps.sessionManager.getSession(projectId);
+    if (session && session.status !== "submitted") {
+      return reply.send({
+        phase: "requirements",
+        requirementsContent: hasRequirements ? requirementsContent : null,
+        session: {
+          status: session.status,
+          kind: session.kind,
+          draftRequirements: session.draftRequirements,
+          messages: session.messages
+            .filter((m) => m.role === "user" || m.role === "assistant")
+            .map((m) => ({ role: m.role, content: m.content })),
+        },
+      });
+    }
+
+    const board = deps.boardStore.getBoard(projectId, project.repoPath);
+    const hasBoard = board.cards.length > 0 || board.ideas.length > 0;
+
+    return reply.send({
+      phase: hasRequirements ? "board" : "no_requirements",
+      requirementsContent: hasRequirements ? requirementsContent : null,
+      hasBoard,
+    });
+  });
 
   server.get(
     "/api/queen-bee/:projectId/requirements",
@@ -615,41 +647,6 @@ export function registerRequirementsRoutes(
         return reply.send({ content });
       }
       return reply.status(404).send({ error: "Requirements not found" });
-    }
-  );
-
-  server.get(
-    "/api/queen-bee/:projectId/requirements/session",
-    async (request, reply) => {
-      const { projectId } = request.params as { projectId: string };
-      const session = deps.sessionManager.getSession(projectId);
-
-      if (!session) {
-        return reply.send({ active: false });
-      }
-      if (session.status === "submitted") {
-        return reply.send({ active: false, status: session.status });
-      }
-
-      const clientMessages = session.messages
-        .filter((m) => m.role === "user" || m.role === "assistant")
-        .map((m) => ({
-          role: m.role,
-          content: m.content,
-        }));
-
-      return reply.send({
-        active: true,
-        status: session.status,
-        draftRequirements: session.draftRequirements,
-        baseRequirementsRevision: session.baseRequirementsRevision,
-        projectRevision: session.projectRevision,
-        kind: session.kind,
-        cardId: session.cardId,
-        ideaId: session.ideaId,
-        sourceIdeaId: session.sourceIdeaId,
-        messages: clientMessages,
-      });
     }
   );
 }
@@ -697,12 +694,4 @@ function approvedDraft(
     content: session.draftRequirements,
     sessionId: session.sessionId,
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function planningResponse(outcome: PlanningOutcome) {
-  return "kind" in outcome ? { feedback: outcome } : { proposal: outcome };
 }

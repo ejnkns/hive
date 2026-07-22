@@ -3,16 +3,12 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
+import { isRecord } from "shared/board-types";
+import type { QueenBeeEvent } from "shared/queen-bee-events";
 import type { BoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
-import type { RequirementsDraftUpdate } from "./devise-engine";
 import { evaluateWorkerAdmission } from "./worker-admission";
-import {
-  boardEventBus,
-  projectEventBus,
-  requirementsEventBus,
-  workerEventBus,
-} from "./worker-event-bus";
+import { offQueenBeeEvent, onQueenBeeEvent } from "./worker-event-bus";
 import type { WorkerEvent, WorkerSupervisor } from "./worker-supervisor";
 
 export function registerWorkerRoutes(
@@ -21,7 +17,7 @@ export function registerWorkerRoutes(
     workerSupervisor: WorkerSupervisor;
     boardStore: BoardStore;
     projectStore: ProjectStore;
-    onWorkerEvent: (projectId: string, event: WorkerEvent) => void;
+    onWorkerEvent?: (projectId: string, event: WorkerEvent) => void;
   }
 ): void {
   server.post(
@@ -98,67 +94,23 @@ export function registerWorkerRoutes(
         project.repoPath,
         systemPrompt,
         codingGuidelines,
-        (event) => deps.onWorkerEvent(projectId, event)
+        (event) => deps.onWorkerEvent?.(projectId, event)
       );
     }
   );
 
   server.get("/api/queen-bee/ws", { websocket: true }, (socket) => {
-    const workerHandler = (event: WorkerEvent, projectId: string) => {
+    const queenBeeHandler = (event: QueenBeeEvent) => {
       try {
-        socket.send(JSON.stringify(toWorkerSocketMessage(event, projectId)));
+        socket.send(JSON.stringify(event));
       } catch {
         // socket closed
       }
     };
-
-    const boardHandler = (projectId: string) => {
-      try {
-        const project = deps.projectStore
-          .getAll()
-          .find((candidate) => candidate.id === projectId);
-        if (!project) return;
-        socket.send(
-          JSON.stringify(
-            toBoardSocketMessage(
-              projectId,
-              deps.boardStore.getBoard(projectId, project.repoPath)
-            )
-          )
-        );
-      } catch {
-        // socket closed
-      }
-    };
-
-    const projectHandler = () => {
-      try {
-        socket.send(JSON.stringify({ type: "projects_changed" }));
-      } catch {
-        // socket closed
-      }
-    };
-
-    function requirementsHandler(update: RequirementsDraftUpdate): void {
-      try {
-        socket.send(
-          JSON.stringify({ type: "requirements_draft_updated", data: update })
-        );
-      } catch {
-        // socket closed
-      }
-    }
-
-    workerEventBus.on("event", workerHandler);
-    boardEventBus.on("change", boardHandler);
-    projectEventBus.on("change", projectHandler);
-    requirementsEventBus.on("draft", requirementsHandler);
+    onQueenBeeEvent(queenBeeHandler);
 
     socket.on("close", () => {
-      workerEventBus.off("event", workerHandler);
-      boardEventBus.off("change", boardHandler);
-      projectEventBus.off("change", projectHandler);
-      requirementsEventBus.off("draft", requirementsHandler);
+      offQueenBeeEvent(queenBeeHandler);
     });
   });
 
@@ -184,59 +136,4 @@ export function registerWorkerRoutes(
       return reply.send({ cancelled: true, cardId });
     }
   );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-export function toWorkerSocketMessage(
-  event: WorkerEvent,
-  projectId: string
-): {
-  type: string;
-  data: Record<string, unknown>;
-} {
-  if (event.type === "worker_complete") {
-    return {
-      type: "worker_complete",
-      data: {
-        projectId,
-        cardId: event.cardId,
-        content: event.content ?? "",
-      },
-    };
-  }
-  if (event.type === "unfulfillable_handover") {
-    return {
-      type: "unfulfillable_handover",
-      data: {
-        projectId,
-        cardId: event.cardId,
-        content: event.content ?? "",
-        suggestions: event.suggestions ?? [],
-        error: event.error ?? null,
-      },
-    };
-  }
-  return {
-    type: "worker_progress",
-    data: {
-      projectId,
-      cardId: event.cardId,
-      content: event.content ?? "",
-      toolName: event.toolName ?? null,
-      error: event.error ?? null,
-    },
-  };
-}
-
-export function toBoardSocketMessage(
-  projectId: string,
-  board: ReturnType<BoardStore["getBoard"]>
-): {
-  type: "board_updated";
-  data: { projectId: string; board: ReturnType<BoardStore["getBoard"]> };
-} {
-  return { type: "board_updated", data: { projectId, board } };
 }

@@ -1,6 +1,7 @@
 /** @private — only imported by reviewer.ts */
 
 import { execFileSync } from "node:child_process";
+import { isRecord } from "shared/board-types";
 import type {
   ToolCall,
   ToolDefinition,
@@ -180,8 +181,4 @@ function git(workspacePath: string, args: string[]): string {
 
 function success(toolCallId: string, content: string): ToolResult {
   return { toolCallId, content: content || "(no output)", isError: false };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

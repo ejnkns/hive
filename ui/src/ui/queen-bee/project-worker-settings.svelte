@@ -4,6 +4,7 @@ import {
   MAX_MAX_CONCURRENT_WORKERS,
   MIN_MAX_CONCURRENT_WORKERS,
 } from "shared/project-types";
+import { isRecord } from "shared/board-types";
 
 let { projectId }: Props = $props();
 
@@ -143,10 +144,6 @@ function viewState(): WorkerLimitViewState {
 function canRunPrimaryAction(): boolean {
   const state = viewState();
   return state === "load_error" || state === "save_error" || state === "dirty";
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 </script>
 

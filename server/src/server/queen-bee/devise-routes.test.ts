@@ -402,14 +402,11 @@ describe("requirements routes", () => {
 
     const response = await server.inject({
       method: "GET",
-      url: `/api/queen-bee/${project.id}/requirements/session`,
+      url: `/api/queen-bee/${project.id}/phase`,
     });
 
     assert.equal(response.statusCode, 200);
-    assert.deepEqual(response.json(), {
-      active: false,
-      status: "submitted",
-    });
+    assert.equal(response.json().phase, "no_requirements");
   });
 
   it("preserves source Idea lineage when an approved repair returns to planning", async () => {

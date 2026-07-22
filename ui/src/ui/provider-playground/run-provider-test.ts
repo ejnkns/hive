@@ -1,3 +1,5 @@
+import { isRecord } from "shared/board-types";
+
 export type PlaygroundRoute = {
   providerName: string;
   modelName: string;
@@ -134,8 +136,4 @@ async function responseError(response: Response): Promise<string> {
     // Use the upstream text below.
   }
   return text || `Provider test failed with HTTP ${String(response.status)}`;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

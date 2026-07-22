@@ -121,12 +121,9 @@ describe("initial planning flow", () => {
 
     const historicalSession = await firstServer.inject({
       method: "GET",
-      url: `/api/queen-bee/${project.id}/requirements/session`,
+      url: `/api/queen-bee/${project.id}/phase`,
     });
-    assert.deepEqual(historicalSession.json(), {
-      active: false,
-      status: "submitted",
-    });
+    assert.notEqual(historicalSession.json().phase, "requirements");
 
     await firstServer.close();
     servers.splice(servers.indexOf(firstServer), 1);
@@ -149,9 +146,10 @@ describe("initial planning flow", () => {
 
     const restoredPlan = await restartedServer.inject({
       method: "GET",
-      url: `/api/queen-bee/${project.id}/planning/open`,
+      url: `/api/queen-bee/${project.id}/phase`,
     });
-    assert.equal(restoredPlan.json().proposal.id, proposalId);
+    assert.equal(restoredPlan.json().phase, "planning");
+    assert.equal(restoredPlan.json().outcome.proposal.id, proposalId);
 
     const accepted = await restartedServer.inject({
       method: "POST",
@@ -173,9 +171,9 @@ describe("initial planning flow", () => {
     );
     const noOpenPlan = await restartedServer.inject({
       method: "GET",
-      url: `/api/queen-bee/${project.id}/planning/open`,
+      url: `/api/queen-bee/${project.id}/phase`,
     });
-    assert.deepEqual(noOpenPlan.json(), {});
+    assert.notEqual(noOpenPlan.json().phase, "planning");
 
     await restartedServer.close();
     servers.splice(servers.indexOf(restartedServer), 1);
@@ -202,17 +200,14 @@ describe("initial planning flow", () => {
     );
     const reloadedSession = await reloadedServer.inject({
       method: "GET",
-      url: `/api/queen-bee/${project.id}/requirements/session`,
+      url: `/api/queen-bee/${project.id}/phase`,
     });
-    assert.deepEqual(reloadedSession.json(), {
-      active: false,
-      status: "submitted",
-    });
+    assert.notEqual(reloadedSession.json().phase, "requirements");
     const reloadedOpenPlan = await reloadedServer.inject({
       method: "GET",
-      url: `/api/queen-bee/${project.id}/planning/open`,
+      url: `/api/queen-bee/${project.id}/phase`,
     });
-    assert.deepEqual(reloadedOpenPlan.json(), {});
+    assert.notEqual(reloadedOpenPlan.json().phase, "planning");
   });
 
   function registerFlowServer(

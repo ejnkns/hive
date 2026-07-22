@@ -1,11 +1,12 @@
 <script lang="ts">
-import { onMount } from "svelte";
 import type {
   Idea,
   PlanningProposal,
   RequirementsFeedback,
 } from "shared/board-types";
 import { parsePlanningProposalResponse } from "./parse-planning-proposal-response";
+import { projectSocket } from "./project-socket.svelte";
+import { isRecord } from "shared/board-types";
 
 let {
   projectId,
@@ -28,6 +29,7 @@ type IdeaSession = {
   status?: "active" | "complete";
   question?: string;
   draftRequirements?: string;
+  settled?: boolean;
 };
 
 let expanded = $state(true);
@@ -40,34 +42,23 @@ let answer = $state("");
 let busy = $state(false);
 let error = $state<string | null>(null);
 
-onMount(() => {
-  const protocol = window.location.protocol === "http:" ? "ws:" : "wss:";
-  const socket = new WebSocket(
-    `${protocol}//${window.location.host}/api/queen-bee/ws`
-  );
-  socket.onmessage = (event) => {
-    try {
-      const message: unknown = JSON.parse(String(event.data));
-      const update = ideaDraftUpdate(message, projectId);
-      if (!update) return;
-      sessions = {
-        ...sessions,
-        [update.ideaId]: {
-          ...sessions[update.ideaId],
-          active: true,
-          status: "active",
-          draftRequirements: update.content,
-        },
-      };
-    } catch {
-      // Ignore malformed events.
-    }
-  };
-  return () => socket.close();
+$effect(() => {
+  for (const idea of ideas) void loadSession(idea.id);
 });
 
 $effect(() => {
-  for (const idea of ideas) void loadSession(idea.id);
+  const update = projectSocket.draftUpdate;
+  if (!update?.ideaId) return;
+  if (sessions[update.ideaId]?.settled === true) return;
+  sessions = {
+    ...sessions,
+    [update.ideaId]: {
+      ...sessions[update.ideaId],
+      active: true,
+      status: "active",
+      draftRequirements: update.content,
+    },
+  };
 });
 
 async function loadSession(ideaId: string) {
@@ -92,6 +83,7 @@ async function loadSession(ideaId: string) {
           typeof value.draftRequirements === "string"
             ? value.draftRequirements
             : undefined,
+        settled: true,
       },
     };
   } catch {
@@ -130,6 +122,10 @@ async function createIdea(startElaboration: boolean) {
 }
 
 async function startSession(idea: Idea) {
+  sessions = {
+    ...sessions,
+    [idea.id]: { ...sessions[idea.id], settled: false },
+  };
   busy = true;
   error = null;
   try {
@@ -157,6 +153,10 @@ async function startSession(idea: Idea) {
 async function respond(ideaId: string) {
   const responseText = answer.trim();
   if (!responseText) return;
+  sessions = {
+    ...sessions,
+    [ideaId]: { ...sessions[ideaId], settled: false },
+  };
   busy = true;
   error = null;
   try {
@@ -232,29 +232,6 @@ function statusLabel(ideaId: string): string {
   const session = sessions[ideaId];
   if (!session?.active) return "Unelaborated";
   return session.status === "complete" ? "Draft approval" : "Elaborating";
-}
-
-function ideaDraftUpdate(
-  value: unknown,
-  project: string
-): { ideaId: string; content: string } | null {
-  if (!isRecord(value) || value.type !== "requirements_draft_updated") {
-    return null;
-  }
-  const data = value.data;
-  if (
-    !isRecord(data) ||
-    data.projectId !== project ||
-    typeof data.ideaId !== "string" ||
-    typeof data.content !== "string"
-  ) {
-    return null;
-  }
-  return { ideaId: data.ideaId, content: data.content };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isIdea(value: unknown): value is Idea {

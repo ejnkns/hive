@@ -6,6 +6,7 @@ import type {
   RequirementsFeedback,
   RequirementsSessionKind,
 } from "shared/board-types";
+import { isRecord } from "shared/board-types";
 import type { Message } from "shared/message";
 import {
   type AgentModelCaller,
@@ -527,10 +528,6 @@ async function callWithToolLoop(
     content: "",
     draftRequirements,
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function detectCompletion(content: string): boolean {

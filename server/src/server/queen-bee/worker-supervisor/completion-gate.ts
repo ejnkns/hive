@@ -1,6 +1,7 @@
 /** @private — only imported by worker-supervisor.ts */
 
 import { execFileSync } from "node:child_process";
+import { isRecord } from "shared/board-types";
 import type { ToolCall } from "../devise-engine/devise-tools";
 import {
   buildVerificationEvidence,
@@ -147,10 +148,6 @@ function git(workspacePath: string, args: string[]): string {
 
 function gitLines(workspacePath: string, args: string[]): string[] {
   return git(workspacePath, args).split("\n").filter(Boolean);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function stringArray(value: unknown): string[] | null {

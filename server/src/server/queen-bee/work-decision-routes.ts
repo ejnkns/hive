@@ -12,6 +12,7 @@ import {
   releaseReviewReference,
 } from "./review-package";
 import type { Reviewer } from "./reviewer";
+import { emitCardAccepted, emitCardChangesRequested } from "./worker-event-bus";
 
 export function registerWorkDecisionRoutes(
   server: FastifyInstance,
@@ -99,6 +100,7 @@ export function registerWorkDecisionRoutes(
           summary: "User accepted reviewed work into hive-main",
           detail: integration.revision,
         });
+        emitCardAccepted(card.id);
         return reply.send({ card: updated, integration });
       } catch (error) {
         return reply.status(409).send({ error: errorMessage(error) });
@@ -162,6 +164,7 @@ export function registerWorkDecisionRoutes(
           summary: "User requested another Worker Agent attempt",
           detail: guidance,
         });
+        emitCardChangesRequested(card.id);
         return reply.send({ card: updated });
       } catch (error) {
         return reply.status(409).send({ error: errorMessage(error) });
