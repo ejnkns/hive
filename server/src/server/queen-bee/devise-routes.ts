@@ -1,6 +1,7 @@
 /** @private — only imported by queen-bee.ts */
 
 import type { FastifyInstance } from "fastify";
+import { isRecord } from "shared/board-types";
 import type { BoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
 import type { RequirementsSessionManager } from "./devise-engine";
@@ -693,8 +694,4 @@ function approvedDraft(
     content: session.draftRequirements,
     sessionId: session.sessionId,
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

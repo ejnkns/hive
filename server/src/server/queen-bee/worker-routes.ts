@@ -3,6 +3,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
+import { isRecord } from "shared/board-types";
 import type { QueenBeeEvent } from "shared/queen-bee-events";
 import type { BoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
@@ -135,8 +136,4 @@ export function registerWorkerRoutes(
       return reply.send({ cancelled: true, cardId });
     }
   );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

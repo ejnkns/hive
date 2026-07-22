@@ -2,6 +2,7 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { isRecord } from "shared/board-types";
 import { HIVE_DIR } from "shared/hive-dir";
 import type { ProjectRegistry } from "../create-project-store";
 
@@ -47,10 +48,6 @@ export function loadProjectRegistry(): ProjectRegistry {
   } catch {
     return { projects: {} };
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function getRegistryPath(): string {

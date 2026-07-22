@@ -3,6 +3,7 @@
 import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { isRecord } from "shared/board-types";
 
 export type ToolDefinition = {
   type: "function";
@@ -361,10 +362,6 @@ function toolArguments(toolCall: ToolCall): Record<string, unknown> {
     throw new Error("Tool arguments must be a JSON object");
   }
   return value;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function errorProperty(error: unknown, property: "status" | "stderr"): unknown {

@@ -10,6 +10,7 @@ import type {
   PlanningRunKind,
   RequirementsFeedback,
 } from "shared/board-types";
+import { isRecord } from "shared/board-types";
 import { generateId } from "shared/generate-id";
 import type { Message } from "shared/message";
 import type { Board, BoardStore, Card } from "./board-store";
@@ -824,10 +825,6 @@ function requireProposal(
 
 function isAction(value: unknown): value is PlanningChange["action"] {
   return ["keep", "create", "update", "remove"].includes(String(value));
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function requiredString(value: unknown, name: string): string {

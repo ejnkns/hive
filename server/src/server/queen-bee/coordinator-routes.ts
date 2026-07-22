@@ -2,6 +2,7 @@
 
 import type { FastifyInstance } from "fastify";
 import type { CoordinatorAction } from "shared/board-types";
+import { isRecord } from "shared/board-types";
 import type { BoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
 import type { RequirementsSessionManager } from "./devise-engine";
@@ -154,10 +155,6 @@ export function registerCoordinatorRoutes(
       }
     }
   );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isCoordinatorAction(value: unknown): value is CoordinatorAction {

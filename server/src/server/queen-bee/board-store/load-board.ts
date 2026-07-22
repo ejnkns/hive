@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Idea, ReviewerLog, WorkAttempt } from "shared/board-types";
+import { isRecord } from "shared/board-types";
 import type { Board, Card } from "../board-store";
 import type { QueenBeeRuntimeStore } from "../queen-bee-runtime-store";
 
@@ -168,10 +169,6 @@ function isIdea(value: unknown): value is Idea {
     typeof value.brief === "string" &&
     typeof value.createdAt === "string"
   );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isColumn(value: unknown): value is Card["column"] {

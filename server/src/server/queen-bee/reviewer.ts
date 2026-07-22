@@ -1,5 +1,6 @@
 /** @public */
 
+import { isRecord } from "shared/board-types";
 import type { Message } from "shared/message";
 import {
   type AgentModelCaller,
@@ -195,8 +196,4 @@ function parseVerificationAssessment(
   }
   if (typeof value.notes !== "string") return null;
   return { status: value.status, notes: value.notes };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
