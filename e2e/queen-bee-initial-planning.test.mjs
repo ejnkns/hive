@@ -70,14 +70,14 @@ test("a user can plan, implement, review, and accept a Card into hive-main", {
     await visible(
       page.getByText("Render deterministic greeting", { exact: true })
     );
-    await visible(page.getByRole("button", { name: "Run worker" }));
+    await visible(page.getByRole("button", { name: "Run Worker Agent" }));
     await visible(page.getByText("1 commit ready"));
 
     await page.reload();
     await visible(
       page.getByText("Render deterministic greeting", { exact: true })
     );
-    await visible(page.getByRole("button", { name: "Run worker" }));
+    await visible(page.getByRole("button", { name: "Run Worker Agent" }));
     await visible(page.getByText("1 commit ready"));
 
     const staleBoard = await page.evaluate(async () => {
@@ -93,7 +93,7 @@ test("a user can plan, implement, review, and accept a Card into hive-main", {
         body: JSON.stringify(staleBoard),
       });
     });
-    await page.getByRole("button", { name: "Run worker" }).click();
+    await page.getByRole("button", { name: "Run Worker Agent" }).click();
     await visible(page.getByText("approved", { exact: true }));
     await page.waitForTimeout(2_100);
     await visible(page.getByText("approved", { exact: true }));
@@ -101,8 +101,8 @@ test("a user can plan, implement, review, and accept a Card into hive-main", {
     await page
       .getByText("Render deterministic greeting", { exact: true })
       .click();
-    await visible(page.getByRole("button", { name: "Accept into hive-main" }));
-    await page.getByRole("button", { name: "Accept into hive-main" }).click();
+    await visible(page.getByRole("button", { name: "Accept work" }));
+    await page.getByRole("button", { name: "Accept work" }).click();
     await visible(page.getByText("Done", { exact: true }));
     await page.locator(".btn-close").click();
     await page.locator(".overlay").waitFor({ state: "detached" });

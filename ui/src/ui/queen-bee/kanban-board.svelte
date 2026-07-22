@@ -337,9 +337,14 @@ onMount(() => {
 });
 
 $effect(() => {
-  // Reactive dependency: re-runs on every board_updated event
   projectSocket.boardVersion;
-  void loadBoard();
+  const snapshot = projectSocket.boardSnapshot;
+  if (snapshot) {
+    boardRequest += 1;
+    applyBoard(snapshot as Board);
+  } else {
+    void loadBoard();
+  }
 });
 </script>
 

@@ -7,6 +7,11 @@ let draftUpdate = $state<{
   ideaId?: string;
   content: string;
 } | null>(null);
+let boardSnapshot = $state<{
+  projectId: string;
+  ideas: unknown[];
+  cards: unknown[];
+} | null>(null);
 
 let socket: WebSocket | null = null;
 let currentProjectId = "";
@@ -27,6 +32,11 @@ function connect(projectId: string) {
         case "board_snapshot":
           if (message.board.projectId === projectId) {
             boardVersion++;
+            boardSnapshot = message.board as unknown as {
+              projectId: string;
+              ideas: unknown[];
+              cards: unknown[];
+            };
           }
           break;
 
@@ -68,6 +78,13 @@ function connect(projectId: string) {
             oldMsg.data?.projectId === projectId
           ) {
             boardVersion++;
+            if (oldMsg.data.board) {
+              boardSnapshot = oldMsg.data.board as {
+                projectId: string;
+                ideas: unknown[];
+                cards: unknown[];
+              };
+            }
           } else if (
             oldMsg.type === "requirements_draft_updated" &&
             oldMsg.data?.projectId === projectId &&
@@ -118,5 +135,12 @@ export const projectSocket = {
     content: string;
   } | null {
     return draftUpdate;
+  },
+  get boardSnapshot(): {
+    projectId: string;
+    ideas: unknown[];
+    cards: unknown[];
+  } | null {
+    return boardSnapshot;
   },
 };
