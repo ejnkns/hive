@@ -337,13 +337,10 @@ onMount(() => {
 });
 
 $effect(() => {
-  projectSocket.boardVersion;
   const snapshot = projectSocket.boardSnapshot;
   if (snapshot) {
     boardRequest += 1;
     applyBoard(snapshot);
-  } else {
-    void loadBoard();
   }
 });
 </script>
