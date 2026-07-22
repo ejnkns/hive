@@ -28,6 +28,7 @@ import type {
 import { createProjectSpecificationStore } from "./project-specification-store";
 import type { QueenBeeRuntimeStore } from "./queen-bee-runtime-store";
 import { readRequirements, requirementsRevision } from "./requirements-store";
+import { emitPlanningOutcome } from "./worker-event-bus";
 
 export type PlanningManager = {
   propose(
@@ -145,6 +146,7 @@ export function createPlanningManager(
           createdAt: new Date().toISOString(),
         };
         runtimeStore.saveRequirementsFeedback(feedback);
+        emitPlanningOutcome(feedback);
         return feedback;
       }
       const changes = parseChanges(result, currentCards);
@@ -184,6 +186,7 @@ export function createPlanningManager(
         createdAt: new Date().toISOString(),
       };
       runtimeStore.savePlanningProposal(proposal);
+      emitPlanningOutcome(proposal);
       return proposal;
     },
 

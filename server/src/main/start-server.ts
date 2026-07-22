@@ -38,10 +38,7 @@ import {
 import {
   emitBoardEvent,
   emitDraftUpdated,
-  emitProjectEvent,
   emitProjectsChanged,
-  emitRequirementsDraft,
-  emitWorkerEvent,
 } from "../server/queen-bee/worker-event-bus";
 
 export async function startServer(overrides?: Partial<ServerConfig>) {
@@ -58,7 +55,6 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
   start();
 
   const projectStore = createProjectStore(() => {
-    emitProjectEvent("");
     emitProjectsChanged();
   });
 
@@ -67,7 +63,6 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     undefined,
     runtimeStore,
     (update) => {
-      emitRequirementsDraft(update);
       const scope = update.cardId ? "card" : update.ideaId ? "idea" : "project";
       const scopeId = update.cardId ?? update.ideaId;
       emitDraftUpdated(scope, scopeId, update.content);
@@ -125,9 +120,7 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     workerSupervisor,
     boardStore,
     projectStore,
-    onWorkerEvent: (projectId, event) => {
-      emitWorkerEvent(event, projectId);
-    },
+    onWorkerEvent: () => {},
   });
   registerWorkDecisionRoutes(server, {
     boardStore,

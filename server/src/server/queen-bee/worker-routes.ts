@@ -12,9 +12,6 @@ import {
   boardEventBus,
   offQueenBeeEvent,
   onQueenBeeEvent,
-  projectEventBus,
-  requirementsEventBus,
-  workerEventBus,
 } from "./worker-event-bus";
 import type { WorkerEvent, WorkerSupervisor } from "./worker-supervisor";
 
@@ -107,14 +104,6 @@ export function registerWorkerRoutes(
   );
 
   server.get("/api/queen-bee/ws", { websocket: true }, (socket) => {
-    const workerHandler = (event: WorkerEvent, projectId: string) => {
-      try {
-        socket.send(JSON.stringify(toWorkerSocketMessage(event, projectId)));
-      } catch {
-        // socket closed
-      }
-    };
-
     const boardHandler = (projectId: string) => {
       try {
         const project = deps.projectStore
@@ -134,28 +123,7 @@ export function registerWorkerRoutes(
       }
     };
 
-    const projectHandler = () => {
-      try {
-        socket.send(JSON.stringify({ type: "projects_changed" }));
-      } catch {
-        // socket closed
-      }
-    };
-
-    function requirementsHandler(update: RequirementsDraftUpdate): void {
-      try {
-        socket.send(
-          JSON.stringify({ type: "requirements_draft_updated", data: update })
-        );
-      } catch {
-        // socket closed
-      }
-    }
-
-    workerEventBus.on("event", workerHandler);
     boardEventBus.on("change", boardHandler);
-    projectEventBus.on("change", projectHandler);
-    requirementsEventBus.on("draft", requirementsHandler);
 
     const queenBeeHandler = (event: QueenBeeEvent) => {
       try {
@@ -167,10 +135,7 @@ export function registerWorkerRoutes(
     onQueenBeeEvent(queenBeeHandler);
 
     socket.on("close", () => {
-      workerEventBus.off("event", workerHandler);
       boardEventBus.off("change", boardHandler);
-      projectEventBus.off("change", projectHandler);
-      requirementsEventBus.off("draft", requirementsHandler);
       offQueenBeeEvent(queenBeeHandler);
     });
   });

@@ -68,7 +68,6 @@ function connect(projectId: string) {
           break;
 
         default: {
-          // Fallback: handle old message format
           const oldMsg = message as unknown as {
             type?: string;
             data?: Record<string, unknown>;
@@ -85,23 +84,6 @@ function connect(projectId: string) {
                 cards: unknown[];
               };
             }
-          } else if (
-            oldMsg.type === "requirements_draft_updated" &&
-            oldMsg.data?.projectId === projectId &&
-            typeof oldMsg.data.content === "string"
-          ) {
-            draftUpdate = {
-              projectId,
-              cardId:
-                typeof oldMsg.data.cardId === "string"
-                  ? oldMsg.data.cardId
-                  : undefined,
-              ideaId:
-                typeof oldMsg.data.ideaId === "string"
-                  ? oldMsg.data.ideaId
-                  : undefined,
-              content: oldMsg.data.content,
-            };
           }
         }
       }
