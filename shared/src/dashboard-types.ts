@@ -391,7 +391,22 @@ export type WsServerMessage =
       provider: string | null;
       model: string | null;
       timestamp: number;
-    };
+    }
+  | {
+      type: "session_detail";
+      requestId: string;
+      conversationPrompt: ConversationMessage[];
+      responseText: string;
+    }
+  | { type: "provider_update"; providers: ProviderPayload[] }
+  | { type: "metrics_update"; metrics: MetricData[] }
+  | { type: "stats_update"; stats: StatsData }
+  | { type: "override_update"; override: OverrideState }
+  | {
+      type: "available_providers_update";
+      availableProviders: AvailableProvider[];
+    }
+  | InitMessage;
 
 /**
  * Consolidated protocol: sent once on WebSocket connect. Contains the

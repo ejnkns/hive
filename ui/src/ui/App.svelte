@@ -4,6 +4,10 @@ import { type LogEntry, logger } from "shared/logger";
 import { getServerConfig } from "shared/server-config";
 import type {
   PipelineStateMessage,
+  ProviderPayload,
+  SessionSnapshot,
+  StatsData,
+  TelemetryData,
   WsServerMessage,
 } from "shared/dashboard-types";
 import type {
@@ -35,9 +39,6 @@ import {
   projectHeader,
   togglePanel,
 } from "./queen-bee/project-header-state.svelte";
-
-import type { TelemetryData } from "shared/dashboard-types";
-import type { ProviderPayload } from "shared/dashboard-types";
 
 let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -238,14 +239,94 @@ function handleMessage(msg: WsServerMessage) {
     sessionStore.initSessions(msg.data);
     return;
   }
-  telemetry = msg.data;
-  override = {
-    active: msg.data.overrideActive,
-    provider: msg.data.overrideProvider,
-    model: msg.data.overrideModel,
-  };
-  metrics = msg.data.metrics;
-  conversations = msg.data.conversations;
+  if (msg.type === "override_update") {
+    override = msg.override;
+    return;
+  }
+  if (msg.type === "provider_update") {
+    if (telemetry) telemetry = { ...telemetry, providers: msg.providers };
+    return;
+  }
+  if (msg.type === "metrics_update") {
+    metrics = msg.metrics;
+    conversations = [];
+    if (telemetry) {
+      telemetry = {
+        ...telemetry,
+        metrics: msg.metrics,
+        conversations: [],
+      };
+    }
+    return;
+  }
+  if (msg.type === "stats_update") {
+    // stats are derived from telemetry; handled by reactive derivations
+    return;
+  }
+  if (msg.type === "available_providers_update") {
+    if (telemetry)
+      telemetry = {
+        ...telemetry,
+        availableProviders: msg.availableProviders,
+      };
+    return;
+  }
+  if (msg.type === "session_detail") {
+    // detail responses are handled per-consumer
+    return;
+  }
+  // Legacy init/update with data wrapper
+  if ("data" in msg) {
+    telemetry = msg.data;
+    override = {
+      active: msg.data.overrideActive,
+      provider: msg.data.overrideProvider,
+      model: msg.data.overrideModel,
+    };
+    metrics = msg.data.metrics;
+    conversations = msg.data.conversations;
+    return;
+  }
+  // New init format: fields at top level
+  if (msg.type === "init") {
+    const m = msg as unknown as {
+      providers: ProviderPayload[];
+      availableProviders: AvailableProvider[];
+      metrics: MetricData[];
+      override: OverrideState;
+      sessions: SessionSnapshot;
+      serverHost: string;
+      serverPort: string;
+      routingStrategy: string;
+      contextWindowWeight: number;
+      pending: number;
+      stats: StatsData;
+    };
+    telemetry = {
+      providers: m.providers,
+      serverHost: m.serverHost,
+      serverPort: m.serverPort,
+      lastProvider: null,
+      lastModel: null,
+      overrideActive: m.override.active,
+      overrideProvider: m.override.provider,
+      overrideModel: m.override.model,
+      availableProviders: m.availableProviders,
+      metrics: m.metrics,
+      pending: m.pending,
+      conversations: [],
+      bestProvider: m.stats.bestProvider,
+      bestModel: m.stats.bestModel,
+      bestScore: m.stats.bestScore,
+      routingStrategy: m.routingStrategy,
+      contextWindowWeight: m.contextWindowWeight,
+    };
+    override = m.override;
+    metrics = m.metrics;
+    conversations = [];
+    sessionStore.replaceAll(m.sessions);
+    return;
+  }
 }
 
 function handleMetricClick(metric: MetricData, allMetrics: MetricData[]) {
