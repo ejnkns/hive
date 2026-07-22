@@ -3,6 +3,10 @@ import { onDestroy, onMount } from "svelte";
 import { type LogEntry, logger } from "shared/logger";
 import { getServerConfig } from "shared/server-config";
 import type {
+  PipelineStateMessage,
+  WsServerMessage,
+} from "shared/dashboard-types";
+import type {
   AvailableProvider,
   ConversationData,
   FlowEvent,
@@ -10,9 +14,7 @@ import type {
   MetricData,
   OverrideState,
   ProviderData,
-  SessionPatch,
   SessionState,
-  SubScores,
 } from "./types";
 import "../app.css";
 import Header from "./Header.svelte";
@@ -34,51 +36,8 @@ import {
   togglePanel,
 } from "./queen-bee/project-header-state.svelte";
 
-type ProviderPayload = {
-  name: string;
-  displayName: string;
-  model: string;
-  keyConfigured: boolean;
-  stabilityScore: number;
-  subscores: SubScores;
-  p95Latency: number | null;
-  meanTokensPerSecond: number | null;
-  requestCount: number;
-  recentSuccessRate: number;
-  truncationRate: number;
-  refusalRate: number;
-  contentFilterRate: number;
-  trippedUntil: number | null;
-  disabledFeatures: string[];
-  disabled: boolean;
-};
-
-type TelemetryData = {
-  providers: ProviderPayload[];
-  serverHost: string;
-  serverPort: string;
-  lastProvider: string | null;
-  lastModel: string | null;
-  overrideActive: boolean;
-  overrideProvider: string | null;
-  overrideModel: string | null;
-  availableProviders: AvailableProvider[];
-  metrics: MetricData[];
-  pending: number;
-  conversations: ConversationData[];
-  bestProvider: string | null;
-  bestModel: string | null;
-  bestScore: number | null;
-  routingStrategy: string;
-  contextWindowWeight: number;
-};
-
-type WsMessage =
-  | { type: "init" | "update"; data: TelemetryData }
-  | { type: "log"; data: LogEntry }
-  | { type: "flow"; data: FlowEvent }
-  | { type: "session_state"; data: SessionPatch }
-  | { type: "session_init"; data: SessionState[] };
+import type { TelemetryData } from "shared/dashboard-types";
+import type { ProviderPayload } from "shared/dashboard-types";
 
 let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -89,7 +48,7 @@ let override: OverrideState = $state({
   provider: null,
   model: null,
 });
-let flowEvents: FlowEvent[] = $state([]);
+let flowEvents: (FlowEvent | PipelineStateMessage)[] = $state([]);
 let logEntries: LogEntry[] = $state([]);
 let metrics: MetricData[] = $state([]);
 let conversations: ConversationData[] = $state([]);
@@ -167,8 +126,11 @@ let statsData = $derived.by(() => {
   return {
     traffic: t.metrics.length,
     successRate: rate,
-    providers: names.size,
+    activeProviders: names.size,
     avgLatency: avg,
+    bestProvider: t.bestProvider,
+    bestModel: t.bestModel,
+    bestScore: t.bestScore,
   };
 });
 
@@ -221,7 +183,7 @@ function connect() {
   };
   ws.onmessage = (e: MessageEvent) => {
     try {
-      const msg = JSON.parse(String(e.data)) as WsMessage;
+      const msg = JSON.parse(String(e.data)) as WsServerMessage;
       handleMessage(msg);
     } catch {
       /* ignore malformed frames */
@@ -248,7 +210,16 @@ function closeWs() {
   ws = null;
 }
 
-function handleMessage(msg: WsMessage) {
+function handleMessage(msg: WsServerMessage) {
+  if (msg.type === "session_snapshot") {
+    sessionStore.replaceAll(msg.sessions);
+    return;
+  }
+  if (msg.type === "pipeline_state") {
+    flowEvents.push(msg);
+    if (flowEvents.length > 100) flowEvents.shift();
+    return;
+  }
   if (msg.type === "flow") {
     flowEvents.push(msg.data);
     if (flowEvents.length > 100) flowEvents.shift();

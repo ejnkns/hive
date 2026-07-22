@@ -16,11 +16,9 @@ import type { Provider } from "../providers";
 import { getModelId } from "../providers";
 import type { ChatCompletionResult, ProviderState } from "../proxy";
 import {
-  type FlowEvent,
   getSessionSnapshot,
-  onFlowEvent,
-  onSessionPatch,
   routingMemory,
+  setAggregatorCallbacks,
 } from "../proxy";
 import { getCanvasState, setCanvasState } from "./assign-routes/canvas-state";
 
@@ -175,35 +173,32 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
     }
   });
 
-  const flowEventBuffer: FlowEvent[] = [];
-  const MAX_FLOW_BUFFER = 50;
-
-  onFlowEvent((event) => {
-    flowEventBuffer.push(event);
-    if (flowEventBuffer.length > MAX_FLOW_BUFFER) {
-      flowEventBuffer.shift();
-    }
-    if (activeSockets.size === 0) return;
-    const payload = JSON.stringify({ type: "flow", data: event });
-    for (const socket of activeSockets) {
-      try {
-        socket.send(payload);
-      } catch {
-        // ignore
+  setAggregatorCallbacks({
+    onSnapshot: (snapshot) => {
+      if (activeSockets.size === 0) return;
+      const payload = JSON.stringify({
+        type: "session_snapshot",
+        sessions: snapshot,
+      });
+      for (const socket of activeSockets) {
+        try {
+          socket.send(payload);
+        } catch {
+          // ignore
+        }
       }
-    }
-  });
-
-  onSessionPatch((patch) => {
-    if (activeSockets.size === 0) return;
-    const payload = JSON.stringify({ type: "session_state", data: patch });
-    for (const socket of activeSockets) {
-      try {
-        socket.send(payload);
-      } catch {
-        // ignore
+    },
+    onPipelineState: (event) => {
+      if (activeSockets.size === 0) return;
+      const payload = JSON.stringify(event);
+      for (const socket of activeSockets) {
+        try {
+          socket.send(payload);
+        } catch {
+          // ignore
+        }
       }
-    }
+    },
   });
 
   server.get("/ws", { websocket: true }, (socket) => {
@@ -215,20 +210,13 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
         const initPayload = await getTelemetryPayload();
         socket.send(JSON.stringify({ ...initPayload, type: "init" }));
 
-        // Send recent logs
         const recentLogs = getRecentLogs();
         for (const log of recentLogs) {
           socket.send(JSON.stringify({ type: "log", data: log }));
         }
 
-        // Send buffered flow events
-        for (const event of flowEventBuffer) {
-          socket.send(JSON.stringify({ type: "flow", data: event }));
-        }
-
-        // Send session snapshot
         const sessions = getSessionSnapshot();
-        socket.send(JSON.stringify({ type: "session_init", data: sessions }));
+        socket.send(JSON.stringify({ type: "session_snapshot", sessions }));
       } catch (err) {
         logger.error("failed to send initial ws payload", err);
       }

@@ -1,10 +1,14 @@
 import { logger } from "shared/logger";
 import type { Node } from "telemetry";
-import { emitFlowEvent } from "../flow-events";
 import type { ChatCompletionResult } from "../handle-chat-completion";
 import { isProviderRequestCancelledError } from "../provider-request-cancelled-error";
 import type { ProxyResponse } from "../proxy-response";
 import { routingMemory } from "../routing-memory";
+import {
+  recordCircuitBreak,
+  recordFailoverAttempt,
+  recordOverrideFailed,
+} from "../session-aggregator";
 
 export async function tryOverrideRoute(params: {
   overrideNode: { providerName: string; modelName: string } | null;
@@ -40,16 +44,14 @@ export async function tryOverrideRoute(params: {
     const compoundKey = `${overrideNode.providerName}:${overrideNode.modelName}`;
     routingMemory.recordUpstreamError(compoundKey, normalized.type, []);
 
-    emitFlowEvent({
-      type: "circuit_break",
+    recordCircuitBreak({
       requestId,
       provider: overrideNode.providerName,
       model: overrideNode.modelName,
       cooldownDurationSec: 30,
     });
 
-    emitFlowEvent({
-      type: "failover_attempt",
+    recordFailoverAttempt({
       requestId,
       failedProvider: overrideNode.providerName,
       failedModel: overrideNode.modelName,
@@ -64,8 +66,7 @@ export async function tryOverrideRoute(params: {
     logger.debug(
       `request ${requestId} — override error body: ${errorBody.slice(0, 1000)}`
     );
-    emitFlowEvent({
-      type: "override_failed",
+    recordOverrideFailed({
       requestId,
       provider: overrideNode.providerName,
       model: overrideNode.modelName,
@@ -80,16 +81,14 @@ export async function tryOverrideRoute(params: {
     const compoundKey = `${overrideNode.providerName}:${overrideNode.modelName}`;
     routingMemory.recordNetworkFailure(compoundKey);
 
-    emitFlowEvent({
-      type: "circuit_break",
+    recordCircuitBreak({
       requestId,
       provider: overrideNode.providerName,
       model: overrideNode.modelName,
       cooldownDurationSec: 30,
     });
 
-    emitFlowEvent({
-      type: "failover_attempt",
+    recordFailoverAttempt({
       requestId,
       failedProvider: overrideNode.providerName,
       failedModel: overrideNode.modelName,
