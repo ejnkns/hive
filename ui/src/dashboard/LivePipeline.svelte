@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { FlowEvent, ProviderData } from "./types";
+import type { FlowEvent, ProviderData } from "../shared/types";
 
 let { events = [] as FlowEvent[], providers = [] as ProviderData[] } = $props();
 

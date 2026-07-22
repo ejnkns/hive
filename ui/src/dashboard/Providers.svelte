@@ -1,6 +1,10 @@
 <script lang="ts">
-import type { ConversationData, MetricData, ProviderData } from "./types";
-import { formatNumber, healthColor, sc } from "./utils";
+import type {
+  ConversationData,
+  MetricData,
+  ProviderData,
+} from "../shared/types";
+import { formatNumber, healthColor, sc } from "../shared/utils";
 import ActivityLog from "./ActivityLog.svelte";
 import Conversations from "./Conversations.svelte";
 

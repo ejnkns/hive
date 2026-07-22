@@ -1,6 +1,10 @@
 <script lang="ts">
-import type { ConversationData, MetricData, ProviderData } from "./types";
-import { formatNumber, healthColor } from "./utils";
+import type {
+  ConversationData,
+  MetricData,
+  ProviderData,
+} from "../shared/types";
+import { formatNumber, healthColor } from "../shared/utils";
 import Providers from "./Providers.svelte";
 
 let {

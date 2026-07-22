@@ -1,6 +1,6 @@
 <script lang="ts">
-import type { RequestState, SessionStage } from "../types";
-import { formatNumber, formatTime } from "../utils";
+import type { RequestState, SessionStage } from "../../shared/types";
+import { formatNumber, formatTime } from "../../shared/utils";
 
 let {
   requests = [] as RequestState[],

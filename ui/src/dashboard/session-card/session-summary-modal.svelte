@@ -1,13 +1,13 @@
 <script lang="ts">
-import type { RequestState, SessionState } from "../types";
+import type { RequestState, SessionState } from "../../shared/types";
 import {
   formatToolCallLabel,
   groupToolCalls,
   normalizeContent,
   resolveToolName,
-} from "../utils";
-import Modal from "../Modal.svelte";
-import TruncatableText from "../TruncatableText.svelte";
+} from "../../shared/utils";
+import Modal from "../../shared/Modal.svelte";
+import TruncatableText from "../../shared/TruncatableText.svelte";
 import Timeline from "./timeline.svelte";
 import RequestDetailModal from "./request-detail-modal.svelte";
 

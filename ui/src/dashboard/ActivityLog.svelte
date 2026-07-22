@@ -1,6 +1,6 @@
 <script lang="ts">
-import type { MetricData } from "./types";
-import { formatNumber, formatTime } from "./utils";
+import type { MetricData } from "../shared/types";
+import { formatNumber, formatTime } from "../shared/utils";
 
 let {
   data = [] as MetricData[],

@@ -1,6 +1,6 @@
 <script lang="ts">
-import type { ConversationData } from "./types";
-import { esc, formatNumber, normalizeContent } from "./utils";
+import type { ConversationData } from "../shared/types";
+import { esc, formatNumber, normalizeContent } from "../shared/utils";
 
 let { data = [] as ConversationData[] } = $props();
 </script>

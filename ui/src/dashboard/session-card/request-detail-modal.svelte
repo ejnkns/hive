@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { RequestState, SessionStage } from "../types";
+import type { RequestState, SessionStage } from "../../shared/types";
 import {
   formatNumber,
   formatTime,
@@ -8,9 +8,9 @@ import {
   normalizeContent,
   resolveToolName,
   sc,
-} from "../utils";
-import Modal from "../Modal.svelte";
-import TruncatableText from "../TruncatableText.svelte";
+} from "../../shared/utils";
+import Modal from "../../shared/Modal.svelte";
+import TruncatableText from "../../shared/TruncatableText.svelte";
 
 let {
   open = $bindable(false),

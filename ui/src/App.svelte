@@ -13,18 +13,18 @@ import type {
   SessionPatch,
   SessionState,
   SubScores,
-} from "./types";
-import "../app.css";
-import Header from "./Header.svelte";
-import Stats from "./Stats.svelte";
-import ProviderPanel from "./ProviderPanel.svelte";
-import Sessions from "./Sessions.svelte";
-import ProviderPlayground from "./ProviderPlayground.svelte";
-import BottomDrawer from "./BottomDrawer.svelte";
-import LivePipeline from "./LivePipeline.svelte";
-import Logs from "./Logs.svelte";
-import DetailOverlay from "./DetailOverlay.svelte";
-import { createSessionStore } from "./use-sessions.svelte";
+} from "./shared/types";
+import "./app.css";
+import Header from "./shared/Header.svelte";
+import Stats from "./dashboard/Stats.svelte";
+import ProviderPanel from "./dashboard/ProviderPanel.svelte";
+import Sessions from "./dashboard/Sessions.svelte";
+import ProviderPlayground from "./dashboard/ProviderPlayground.svelte";
+import BottomDrawer from "./shared/BottomDrawer.svelte";
+import LivePipeline from "./dashboard/LivePipeline.svelte";
+import Logs from "./dashboard/Logs.svelte";
+import DetailOverlay from "./shared/DetailOverlay.svelte";
+import { createSessionStore } from "./shared/use-sessions.svelte";
 import CanvasHost from "./canvas/CanvasHost.svelte";
 import ProjectOverview from "./queen-bee/project-overview.svelte";
 import ProjectPage from "./queen-bee/project-page.svelte";

@@ -1,6 +1,6 @@
 <script lang="ts">
-import type { RequestState, SessionStage, SessionState } from "./types";
-import { formatNumber } from "./utils";
+import type { RequestState, SessionStage, SessionState } from "../shared/types";
+import { formatNumber } from "../shared/utils";
 import RequestDetailModal from "./session-card/request-detail-modal.svelte";
 import SessionSummaryModal from "./session-card/session-summary-modal.svelte";
 
