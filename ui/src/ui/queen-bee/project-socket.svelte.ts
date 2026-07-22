@@ -1,3 +1,5 @@
+import type { QueenBeeEvent } from "shared/queen-bee-events";
+
 let boardVersion = $state(0);
 let draftUpdate = $state<{
   projectId: string;
@@ -19,28 +21,71 @@ function connect(projectId: string) {
   );
   socket.onmessage = (event) => {
     try {
-      const message = JSON.parse(String(event.data)) as {
-        type?: string;
-        data?: Record<string, unknown>;
-      };
-      if (message.type === "board_updated") {
-        const data = message.data;
-        if (data && data.projectId === projectId) {
+      const message = JSON.parse(String(event.data)) as QueenBeeEvent;
+
+      switch (message.type) {
+        case "board_snapshot":
+          if (message.board.projectId === projectId) {
+            boardVersion++;
+          }
+          break;
+
+        case "card_moved":
+        case "card_worker_progress":
+        case "card_review_complete":
+        case "card_accepted":
+        case "card_changes_requested":
+        case "card_unfulfillable":
+        case "cards_created":
+        case "planning_outcome":
+        case "integration_changed":
+        case "projects_changed":
           boardVersion++;
-        }
-      } else if (message.type === "requirements_draft_updated") {
-        const data = message.data;
-        if (
-          data &&
-          data.projectId === projectId &&
-          typeof data.content === "string"
-        ) {
+          break;
+
+        case "ideas_changed":
+          boardVersion++;
+          break;
+
+        case "draft_updated":
+        case "draft_finalized":
           draftUpdate = {
             projectId,
-            cardId: typeof data.cardId === "string" ? data.cardId : undefined,
-            ideaId: typeof data.ideaId === "string" ? data.ideaId : undefined,
-            content: data.content,
+            cardId: message.scope === "card" ? message.scopeId : undefined,
+            ideaId: message.scope === "idea" ? message.scopeId : undefined,
+            content: message.content,
           };
+          break;
+
+        default: {
+          // Fallback: handle old message format
+          const oldMsg = message as unknown as {
+            type?: string;
+            data?: Record<string, unknown>;
+          };
+          if (
+            oldMsg.type === "board_updated" &&
+            oldMsg.data?.projectId === projectId
+          ) {
+            boardVersion++;
+          } else if (
+            oldMsg.type === "requirements_draft_updated" &&
+            oldMsg.data?.projectId === projectId &&
+            typeof oldMsg.data.content === "string"
+          ) {
+            draftUpdate = {
+              projectId,
+              cardId:
+                typeof oldMsg.data.cardId === "string"
+                  ? oldMsg.data.cardId
+                  : undefined,
+              ideaId:
+                typeof oldMsg.data.ideaId === "string"
+                  ? oldMsg.data.ideaId
+                  : undefined,
+              content: oldMsg.data.content,
+            };
+          }
         }
       }
     } catch {

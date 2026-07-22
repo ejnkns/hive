@@ -133,6 +133,12 @@ export type Idea = {
   archivedAt?: string;
 };
 
+export type Board = {
+  projectId: string;
+  ideas: Idea[];
+  cards: Card[];
+};
+
 export type PlanningRunKind =
   | "initial_planning"
   | "requirements_reconciliation"

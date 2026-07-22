@@ -37,7 +37,10 @@ import {
 } from "../server/queen-bee";
 import {
   emitBoardEvent,
+  emitBoardSnapshot,
+  emitDraftUpdated,
   emitProjectEvent,
+  emitProjectsChanged,
   emitRequirementsDraft,
   emitWorkerEvent,
 } from "../server/queen-bee/worker-event-bus";
@@ -57,13 +60,19 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
 
   const projectStore = createProjectStore(() => {
     emitProjectEvent("");
+    emitProjectsChanged();
   });
 
   const runtimeStore = createQueenBeeRuntimeStore();
   const requirementsSessionManager = createRequirementsSessionManager(
     undefined,
     runtimeStore,
-    emitRequirementsDraft
+    (update) => {
+      emitRequirementsDraft(update);
+      const scope = update.cardId ? "card" : update.ideaId ? "idea" : "project";
+      const scopeId = update.cardId ?? update.ideaId;
+      emitDraftUpdated(scope, scopeId, update.content);
+    }
   );
   const boardStore = createBoardStore((projectId) => {
     emitBoardEvent(projectId);

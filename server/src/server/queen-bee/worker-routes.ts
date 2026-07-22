@@ -3,12 +3,15 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
+import type { QueenBeeEvent } from "shared/queen-bee-events";
 import type { BoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
 import type { RequirementsDraftUpdate } from "./devise-engine";
 import { evaluateWorkerAdmission } from "./worker-admission";
 import {
   boardEventBus,
+  offQueenBeeEvent,
+  onQueenBeeEvent,
   projectEventBus,
   requirementsEventBus,
   workerEventBus,
@@ -154,11 +157,21 @@ export function registerWorkerRoutes(
     projectEventBus.on("change", projectHandler);
     requirementsEventBus.on("draft", requirementsHandler);
 
+    const queenBeeHandler = (event: QueenBeeEvent) => {
+      try {
+        socket.send(JSON.stringify(event));
+      } catch {
+        // socket closed
+      }
+    };
+    onQueenBeeEvent(queenBeeHandler);
+
     socket.on("close", () => {
       workerEventBus.off("event", workerHandler);
       boardEventBus.off("change", boardHandler);
       projectEventBus.off("change", projectHandler);
       requirementsEventBus.off("draft", requirementsHandler);
+      offQueenBeeEvent(queenBeeHandler);
     });
   });
 
