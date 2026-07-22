@@ -1,10 +1,10 @@
 <script lang="ts">
-import type { FlowEvent, ProviderData } from "./types";
+import type { FlowEvent, ProviderPayload } from "shared/dashboard-types";
 import type { PipelineStateMessage } from "shared/dashboard-types";
 
 let {
   events = [] as (FlowEvent | PipelineStateMessage)[],
-  providers = [] as ProviderData[],
+  providers = [] as ProviderPayload[],
 } = $props();
 
 const PADDING_TOP = 32;

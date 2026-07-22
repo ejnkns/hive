@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { RequestState, SessionState } from "./types";
+import type { RequestState, SessionState } from "shared/dashboard-types";
 import { formatNumber } from "./utils";
 import RequestDetailModal from "./session-card/request-detail-modal.svelte";
 import SessionSummaryModal from "./session-card/session-summary-modal.svelte";
@@ -108,18 +108,7 @@ function handleSelectRequest(requestId: string) {
         >
           <span class="row-label">{requestLabel(i)}</span>
           {#if req.path.length > 0}
-            <span class="mini-dots">
-              {#each req.path as stage, si}
-                <span
-                  class="mini-dot {isTerminal(stage)
-                    ? 'mini-dot-complete'
-                    : ''} {stage === 'failed' ? 'mini-dot-error' : ''}"
-                ></span>
-                {#if si < req.path.length - 1}
-                  <span class="mini-line"></span>
-                {/if}
-              {/each}
-            </span>
+            <StagePathDots path={req.path} size="mini" />
           {/if}
           <span class="row-prov"
             >{req.provider ?? "—"}:{req.model ?? "—"}</span
@@ -292,36 +281,6 @@ function handleSelectRequest(requestId: string) {
     color: var(--accent);
     font-weight: 700;
     width: 28px;
-    flex-shrink: 0;
-  }
-
-  .mini-dots {
-    display: flex;
-    align-items: center;
-    gap: 0;
-    min-width: 30px;
-  }
-
-  .mini-dot {
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background: var(--success);
-    flex-shrink: 0;
-  }
-
-  .mini-dot-complete {
-    background: var(--success);
-  }
-
-  .mini-dot-error {
-    background: var(--error);
-  }
-
-  .mini-line {
-    width: 4px;
-    height: 1px;
-    background: var(--success);
     flex-shrink: 0;
   }
 

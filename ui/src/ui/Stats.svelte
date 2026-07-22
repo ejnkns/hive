@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { StatsData } from "./types";
+import type { StatsData } from "shared/dashboard-types";
 import { formatNumber, sc } from "./utils";
 
 let { data }: { data: StatsData | null } = $props();

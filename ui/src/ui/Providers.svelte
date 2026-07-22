@@ -1,18 +1,22 @@
 <script lang="ts">
-import type { ConversationData, MetricData, ProviderData } from "./types";
+import type {
+  ConversationData,
+  MetricData,
+  ProviderPayload,
+} from "shared/dashboard-types";
 import { formatNumber, healthColor, sc } from "./utils";
 import ActivityLog from "./ActivityLog.svelte";
 import Conversations from "./Conversations.svelte";
 
 let {
-  data = [] as ProviderData[],
+  data = [] as ProviderPayload[],
   metrics = [] as MetricData[],
   conversations = [] as ConversationData[],
   overrideKey = null as string | null,
   onRowClick: onRowClickCallback,
   onToggleProvider,
 } = $props<{
-  data?: ProviderData[];
+  data?: ProviderPayload[];
   metrics?: MetricData[];
   conversations?: ConversationData[];
   overrideKey?: string | null;
@@ -25,8 +29,8 @@ let expandedModels = $state<Record<string, boolean>>({});
 let activeTabs = $state<Record<string, "activity" | "conversations">>({});
 
 const groups = $derived.by(() => {
-  const grouped = new Map<string, ProviderData[]>();
-  data.forEach((x: ProviderData) => {
+  const grouped = new Map<string, ProviderPayload[]>();
+  data.forEach((x: ProviderPayload) => {
     const existing = grouped.get(x.name);
     if (existing) existing.push(x);
     else grouped.set(x.name, [x]);
@@ -56,7 +60,7 @@ const groups = $derived.by(() => {
 let tick = $state(0);
 $effect(() => {
   const hasTripped = data.some(
-    (e: ProviderData) => e.trippedUntil && e.trippedUntil > Date.now()
+    (e: ProviderPayload) => e.trippedUntil && e.trippedUntil > Date.now()
   );
   if (!hasTripped) return;
   const interval = setInterval(() => {

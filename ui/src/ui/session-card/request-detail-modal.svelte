@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { RequestState } from "../types";
+import type { RequestState } from "shared/dashboard-types";
 import { formatNumber, formatTime, sc } from "../utils";
 import { isTerminal } from "../dashboard/stage-utils";
 import StagePathDots from "../dashboard/StagePathDots.svelte";

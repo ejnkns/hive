@@ -1,4 +1,7 @@
 import type {
+  AvailableProvider,
+  FlowEvent,
+  MetricData,
   OverrideState,
   PipelineStateMessage,
   ProviderPayload,
@@ -7,7 +10,6 @@ import type {
 } from "shared/dashboard-types";
 import { type LogEntry, logger } from "shared/logger";
 import { getServerConfig } from "shared/server-config";
-import type { AvailableProvider, FlowEvent, MetricData } from "../types";
 import { createSessionStore } from "../use-sessions.svelte";
 
 let socket: WebSocket | null = null;
@@ -123,24 +125,7 @@ function handleMessage(msg: WsServerMessage) {
     availableProviders = msg.availableProviders;
     return;
   }
-  // Legacy init/update with data wrapper
-  if ("data" in msg) {
-    const d = msg.data;
-    providers = d.providers;
-    availableProviders = d.availableProviders;
-    metrics = d.metrics;
-    override = {
-      active: d.overrideActive,
-      provider: d.overrideProvider,
-      model: d.overrideModel,
-    };
-    serverHost = d.serverHost;
-    serverPort = d.serverPort;
-    routingStrategy = d.routingStrategy;
-    contextWindowWeight = d.contextWindowWeight;
-    pendingCount = d.pending;
-  }
-  // New init format
+  // New init format (check first — discriminated by "sessions" vs "data")
   if (msg.type === "init" && "sessions" in msg) {
     const m = msg as unknown as {
       providers: ProviderPayload[];
@@ -164,6 +149,24 @@ function handleMessage(msg: WsServerMessage) {
     contextWindowWeight = m.contextWindowWeight;
     pendingCount = m.pending;
     sessionStore.replaceAll(m.sessions);
+    return;
+  }
+  // Legacy init/update with data wrapper
+  if ("data" in msg) {
+    const d = msg.data;
+    providers = d.providers;
+    availableProviders = d.availableProviders;
+    metrics = d.metrics;
+    override = {
+      active: d.overrideActive,
+      provider: d.overrideProvider,
+      model: d.overrideModel,
+    };
+    serverHost = d.serverHost;
+    serverPort = d.serverPort;
+    routingStrategy = d.routingStrategy;
+    contextWindowWeight = d.contextWindowWeight;
+    pendingCount = d.pending;
   }
 }
 

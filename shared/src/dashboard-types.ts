@@ -53,6 +53,23 @@ export type SessionStage =
   | "complete"
   | "failed";
 
+export function isSessionStage(value: string): value is SessionStage {
+  return [
+    "received",
+    "selection",
+    "dispatched",
+    "thinking",
+    "streaming",
+    "tool_use",
+    "complete",
+    "failed",
+  ].includes(value);
+}
+
+export function isTerminal(stage: SessionStage): boolean {
+  return stage === "complete" || stage === "failed";
+}
+
 export type FinishReason = "stop" | "length" | "content-filter" | null;
 
 export type ErrorType =

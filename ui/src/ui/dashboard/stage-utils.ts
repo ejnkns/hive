@@ -1,8 +1,6 @@
 import type { SessionStage } from "shared/dashboard-types";
 
-export function isTerminal(stage: SessionStage): boolean {
-  return stage === "complete" || stage === "failed";
-}
+export { isTerminal } from "shared/dashboard-types";
 
 export const STAGE_LABELS: Record<SessionStage, string> = {
   received: "rec",

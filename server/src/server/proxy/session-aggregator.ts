@@ -1,50 +1,13 @@
 import type {
   CandidateInfo,
   PipelineStateMessage,
+  RequestState,
   SessionSnapshot,
   SessionStage,
   SessionState,
 } from "shared/dashboard-types";
+import { isTerminal } from "shared/dashboard-types";
 import { conversationStore } from "telemetry/conversation-store";
-
-type RequestState = {
-  requestId: string;
-  path: SessionStage[];
-  timestamp: number;
-  prompt?: string;
-  provider?: string;
-  model?: string;
-  candidates?: CandidateInfo[];
-  selected?: string;
-  strategy?: string;
-  poolSize?: number;
-  outputChars?: number;
-  thinkingChars?: number;
-  tokensPerSecond?: number;
-  failovers: { provider: string; model: string; errorType: string }[];
-  toolLoopDetected?: boolean;
-  overrideError?: {
-    provider: string;
-    model: string;
-    statusCode: number;
-    errorType: string;
-    errorBody: string;
-  };
-  conversationPrompt?: import("shared/dashboard-types").ConversationMessage[];
-  responseText?: string;
-  response?: {
-    provider: string;
-    model: string;
-    statusCode: number;
-    success: boolean;
-    ttft: number;
-    totalLatency: number;
-    outputTokens: number | null;
-    finishReason: string | null;
-    toolCallFailed: boolean;
-    errorType: string | null;
-  };
-};
 
 type AggregatorCallbacks = {
   onSnapshot: (snapshot: SessionSnapshot) => void;
@@ -79,14 +42,14 @@ function buildSessionSnapshot(): SessionSnapshot {
   const active = all.filter((s) =>
     s.requests.some((r) => {
       const last = r.path[r.path.length - 1];
-      return last !== "complete" && last !== "failed";
+      return last === undefined || !isTerminal(last);
     })
   );
   const completed = all.filter(
     (s) =>
       !s.requests.some((r) => {
         const last = r.path[r.path.length - 1];
-        return last !== "complete" && last !== "failed";
+        return last === undefined || !isTerminal(last);
       })
   );
   active.sort((a, b) => b.lastActivity - a.lastActivity);
@@ -145,7 +108,7 @@ function evictIfNeeded() {
     for (const [id, s] of sessionMap) {
       const hasActive = s.requests.some((r) => {
         const last = r.path.at(-1);
-        return last !== "complete" && last !== "failed";
+        return last === undefined || !isTerminal(last);
       });
       if (!hasActive && s.lastActivity < oldestActivity) {
         oldestActivity = s.lastActivity;
@@ -195,14 +158,14 @@ export function getSessionSnapshot(): SessionSnapshot {
   const active = all.filter((s) =>
     s.requests.some((r) => {
       const last = r.path[r.path.length - 1];
-      return last !== "complete" && last !== "failed";
+      return last === undefined || !isTerminal(last);
     })
   );
   const completed = all.filter(
     (s) =>
       !s.requests.some((r) => {
         const last = r.path[r.path.length - 1];
-        return last !== "complete" && last !== "failed";
+        return last === undefined || !isTerminal(last);
       })
   );
   active.sort((a, b) => b.lastActivity - a.lastActivity);

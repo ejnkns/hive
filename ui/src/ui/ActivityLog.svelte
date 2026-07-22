@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { MetricData } from "./types";
+import type { MetricData } from "shared/dashboard-types";
 import { formatNumber, formatTime } from "./utils";
 
 let {

@@ -1,7 +1,8 @@
 <script lang="ts">
 import { onDestroy, onMount } from "svelte";
-import type { HeaderData, MetricData, ProviderData } from "./types";
+import type { MetricData, ProviderPayload } from "shared/dashboard-types";
 import { dashboardSocket } from "./dashboard/dashboard-socket.svelte";
+import type { HeaderData } from "./utils";
 import "../app.css";
 import Header from "./Header.svelte";
 import Stats from "./Stats.svelte";
@@ -105,7 +106,7 @@ let statsData = $derived.by(() => {
   };
 });
 
-let providersData = $derived.by(() => {
+let providersData = $derived.by((): ProviderPayload[] => {
   return dashboardSocket.providers.map((x) => ({
     name: x.name,
     displayName: x.displayName,
