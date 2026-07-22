@@ -117,7 +117,6 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     workerSupervisor,
     boardStore,
     projectStore,
-    onWorkerEvent: () => {},
   });
   registerWorkDecisionRoutes(server, {
     boardStore,

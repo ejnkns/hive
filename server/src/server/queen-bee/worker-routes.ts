@@ -16,7 +16,7 @@ export function registerWorkerRoutes(
     workerSupervisor: WorkerSupervisor;
     boardStore: BoardStore;
     projectStore: ProjectStore;
-    onWorkerEvent: (projectId: string, event: WorkerEvent) => void;
+    onWorkerEvent?: (projectId: string, event: WorkerEvent) => void;
   }
 ): void {
   server.post(
@@ -93,7 +93,7 @@ export function registerWorkerRoutes(
         project.repoPath,
         systemPrompt,
         codingGuidelines,
-        (event) => deps.onWorkerEvent(projectId, event)
+        (event) => deps.onWorkerEvent?.(projectId, event)
       );
     }
   );

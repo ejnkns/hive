@@ -115,7 +115,7 @@ export function registerCoordinatorRoutes(
           );
           return reply.send({
             card,
-            redevise: true,
+            kind: "redevise" as const,
             question: result.question,
           });
         }
@@ -164,5 +164,7 @@ function isCoordinatorAction(value: unknown): value is CoordinatorAction {
 }
 
 function planningResponse(outcome: PlanningOutcome) {
-  return "kind" in outcome ? { feedback: outcome } : { proposal: outcome };
+  return "kind" in outcome
+    ? { kind: "feedback" as const, feedback: outcome }
+    : { kind: "proposal" as const, proposal: outcome };
 }

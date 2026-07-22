@@ -248,25 +248,25 @@ async function handleRemediate(
     throw new Error(data.error ?? "Remediation failed");
   }
   const result = (await res.json()) as {
+    kind?: string;
     card?: Card;
     proposal?: PlanningProposal;
     feedback?: RequirementsFeedback;
-    redevise?: boolean;
     question?: string;
   };
-  if (result.feedback) {
+  if (result.kind === "feedback" && result.feedback) {
     selectedCard = null;
     onRequirementsFeedback?.(result.feedback);
     return;
   }
-  if (result.proposal) {
+  if (result.kind === "proposal" && result.proposal) {
     selectedCard = null;
     onPlanningProposal?.(result.proposal);
     return;
   }
   if (!result.card) throw new Error("Remediation returned no result");
   handleCardUpdated(result.card);
-  if (result.redevise && result.question) {
+  if (result.kind === "redevise" && result.question) {
     refinementQuestion = result.question;
     return;
   }
