@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { RequestState, SessionStage } from "../types";
+import type { RequestState } from "../types";
 import {
   formatNumber,
   formatTime,
@@ -9,6 +9,8 @@ import {
   resolveToolName,
   sc,
 } from "../utils";
+import { isTerminal } from "../dashboard/stage-utils";
+import StagePathDots from "../dashboard/StagePathDots.svelte";
 import Modal from "../Modal.svelte";
 import TruncatableText from "../TruncatableText.svelte";
 
@@ -23,21 +25,6 @@ let {
   activeRequestId: string;
   onSelectRequest?: (requestId: string) => void;
 } = $props();
-
-const STAGE_LABELS: Record<SessionStage, string> = {
-  received: "rec",
-  selection: "sel",
-  dispatched: "dis",
-  thinking: "thk",
-  streaming: "str",
-  tool_use: "too",
-  complete: "com",
-  failed: "err",
-};
-
-function isTerminal(stage: SessionStage): boolean {
-  return stage === "complete" || stage === "failed";
-}
 
 const request = $derived(
   requests.find((r) => r.requestId === activeRequestId) ?? null
@@ -103,30 +90,7 @@ const hasConversation = $derived(
       </div>
 
       {#if request.path.length > 0}
-        <div class="detail-section">
-          <div class="section-title">stage path</div>
-          <div class="path-dots">
-            {#each request.path as stage, si}
-              <span class="dot-wrapper">
-                <span
-                  class="dot"
-                  class:dot-error={stage === "failed"}
-                  class:dot-complete={stage === "complete"}
-                  class:dot-active={si ===
-                    request.path.length - 1 &&
-                    !isTerminal(stage)}
-                  class:dot-filled={si <
-                    request.path.length - 1 ||
-                    isTerminal(stage)}
-                ></span>
-                <span class="dot-label">{STAGE_LABELS[stage]}</span>
-              </span>
-              {#if si < request.path.length - 1}
-                <span class="dot-line dot-line-filled"></span>
-              {/if}
-            {/each}
-          </div>
-        </div>
+        <StagePathDots path={request.path} showSectionTitle={true} />
       {/if}
 
       {#if request.prompt}
@@ -402,70 +366,6 @@ const hasConversation = $derived(
     font-size: 0.6875rem;
     white-space: pre-wrap;
     word-break: break-word;
-  }
-
-  .path-dots {
-    display: flex;
-    align-items: center;
-    gap: 0;
-  }
-
-  .dot-wrapper {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.125rem;
-  }
-
-  .dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-  }
-
-  .dot-filled {
-    background: var(--success);
-  }
-
-  .dot-complete {
-    background: var(--success);
-  }
-
-  .dot-error {
-    background: var(--error);
-  }
-
-  .dot-active {
-    background: var(--success);
-    animation: pulse 1.2s ease-in-out infinite;
-  }
-
-  @keyframes pulse {
-    0%,
-    100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.35;
-    }
-  }
-
-  .dot-label {
-    font-size: 0.4375rem;
-    color: var(--muted);
-    text-transform: uppercase;
-    text-align: center;
-  }
-
-  .dot-line {
-    width: 12px;
-    height: 1px;
-    background: var(--border);
-    margin-bottom: 10px;
-  }
-
-  .dot-line-filled {
-    background: var(--success);
   }
 
   .selection-header {

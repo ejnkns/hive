@@ -1,6 +1,7 @@
 <script lang="ts">
-import type { RequestState, SessionStage } from "../types";
+import type { RequestState } from "../types";
 import { formatNumber, formatTime } from "../utils";
+import { isTerminal } from "../dashboard/stage-utils";
 
 let {
   requests = [] as RequestState[],
@@ -9,10 +10,6 @@ let {
   requests: RequestState[];
   onRequestClick?: (req: RequestState) => void;
 } = $props();
-
-function isTerminal(stage: SessionStage): boolean {
-  return stage === "complete" || stage === "failed";
-}
 
 function nodeColor(req: RequestState): string {
   const last = req.path.at(-1);

@@ -1,25 +1,16 @@
 <script lang="ts">
-import type { RequestState, SessionStage, SessionState } from "./types";
+import type { RequestState, SessionState } from "./types";
 import { formatNumber } from "./utils";
 import RequestDetailModal from "./session-card/request-detail-modal.svelte";
 import SessionSummaryModal from "./session-card/session-summary-modal.svelte";
+import StagePathDots from "./dashboard/StagePathDots.svelte";
+import { isTerminal } from "./dashboard/stage-utils";
 
 let {
   session,
 }: {
   session: SessionState;
 } = $props();
-
-const STAGE_LABELS: Record<SessionStage, string> = {
-  received: "rec",
-  selection: "sel",
-  dispatched: "dis",
-  thinking: "thk",
-  streaming: "str",
-  tool_use: "too",
-  complete: "com",
-  failed: "err",
-};
 
 const latest = $derived(session.requests.at(-1) ?? null);
 const allRequestsNewestFirst = $derived([...session.requests].reverse());
@@ -33,10 +24,6 @@ let detailModalOpen = $state(false);
 $effect(() => {
   if (!detailModalOpen) detailModalTarget = null;
 });
-
-function isTerminal(stage: SessionStage): boolean {
-  return stage === "complete" || stage === "failed";
-}
 
 function requestLabel(i: number): string {
   const req = allRequestsNewestFirst[i];
@@ -93,29 +80,7 @@ function handleSelectRequest(requestId: string) {
     </div>
 
     {#if latest}
-      {#if latest.path.length > 0}
-        <div class="path-dots">
-          {#each latest.path as stage, si}
-            <span class="dot-wrapper">
-              <span
-                class="dot"
-                class:dot-error={stage === "failed"}
-                class:dot-complete={stage === "complete"}
-                class:dot-active={si ===
-                  latest.path.length - 1 &&
-                  !isTerminal(stage)}
-                class:dot-filled={si <
-                  latest.path.length - 1 ||
-                  isTerminal(stage)}
-              ></span>
-              <span class="dot-label">{STAGE_LABELS[stage]}</span>
-            </span>
-            {#if si < latest.path.length - 1}
-              <span class="dot-line dot-line-filled"></span>
-            {/if}
-          {/each}
-        </div>
-      {/if}
+      <StagePathDots path={latest.path} />
 
       <div class="summary-prompt">{latest.prompt ?? ""}</div>
 
@@ -270,70 +235,6 @@ function handleSelectRequest(requestId: string) {
     overflow: hidden;
     text-overflow: ellipsis;
     cursor: help;
-  }
-
-  .path-dots {
-    display: flex;
-    align-items: center;
-    gap: 0;
-  }
-
-  .dot-wrapper {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.125rem;
-  }
-
-  .dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-  }
-
-  .dot-filled {
-    background: var(--success);
-  }
-
-  .dot-complete {
-    background: var(--success);
-  }
-
-  .dot-error {
-    background: var(--error);
-  }
-
-  .dot-active {
-    background: var(--success);
-    animation: pulse 1.2s ease-in-out infinite;
-  }
-
-  @keyframes pulse {
-    0%,
-    100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.35;
-    }
-  }
-
-  .dot-label {
-    font-size: 0.4375rem;
-    color: var(--muted);
-    text-transform: uppercase;
-    text-align: center;
-  }
-
-  .dot-line {
-    width: 12px;
-    height: 1px;
-    background: var(--border);
-    margin-bottom: 10px;
-  }
-
-  .dot-line-filled {
-    background: var(--success);
   }
 
   .list-toggle {
