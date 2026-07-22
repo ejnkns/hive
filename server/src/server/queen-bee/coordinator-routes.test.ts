@@ -156,7 +156,7 @@ describe("coordinator routes", () => {
     });
 
     assert.equal(response.statusCode, 200);
-    assert.equal(response.json().redevise, true);
+    assert.equal(response.json().kind, "redevise");
     assert.equal(response.json().question, "Which behavior should win?");
     assert.equal(response.json().card.column, "unfulfillable");
     assert.equal(startCardArgs?.[0], project.id);
