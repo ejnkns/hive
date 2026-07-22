@@ -250,7 +250,7 @@ const COLUMN_LABELS: Record<Column, string> = {
 
       {#if card.reviewerLog}
         <div class="section">
-          <div class="section-label">Review</div>
+          <div class="section-label">Review Package</div>
           <div
             class="review-verdict"
             class:verdict-approved={card.reviewerLog.verdict === "approved"}
@@ -437,14 +437,14 @@ const COLUMN_LABELS: Record<Column, string> = {
     <div class="panel-actions">
       {#if card.column === "ready" && onRun}
         <button class="btn btn-run" onclick={onRun}>
-          Run Worker
+          Run Worker Agent
         </button>
       {/if}
       {#if card.column === "reviewing"}
         {#if card.reviewerLog?.status === "complete"}
           {#if reviewReadiness?.canAccept && onAccept}
             <button class="btn btn-run" onclick={acceptWork} disabled={deciding}>
-              {deciding ? "Applying decision..." : "Accept into hive-main"}
+              {deciding ? "Applying decision..." : "Accept work"}
             </button>
           {:else if reviewReadiness?.canRefreshReview && onRestartReview}
             <button class="btn btn-run" onclick={restartReview} disabled={deciding}>

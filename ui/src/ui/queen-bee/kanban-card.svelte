@@ -18,7 +18,7 @@ type Props = {
   {#if card.column === "ready" && onRun}
     <button
       class="run"
-      aria-label="Run worker"
+      aria-label="Run Worker Agent"
       onclick={(event) => {
         event.stopPropagation();
         onRun?.();
