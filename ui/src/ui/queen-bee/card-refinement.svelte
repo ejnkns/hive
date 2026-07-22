@@ -36,6 +36,7 @@ let busy = $state(false);
 let error = $state<string | null>(null);
 let consumedInitialQuestion = $state("");
 let draftRequirements = $state("");
+let settled = $state(true);
 
 $effect(() => {
   if (initialQuestion && initialQuestion !== consumedInitialQuestion) {
@@ -49,6 +50,7 @@ async function startRefinement() {
   const prompt = input.trim();
   if (!prompt) return;
 
+  settled = false;
   busy = true;
   error = null;
   try {
@@ -77,6 +79,7 @@ async function startRefinement() {
       err instanceof Error ? err.message : "Could not start card refinement";
   } finally {
     busy = false;
+    settled = true;
   }
 }
 
@@ -84,6 +87,7 @@ async function respond() {
   const answer = input.trim();
   if (!answer) return;
 
+  settled = false;
   busy = true;
   error = null;
   try {
@@ -119,6 +123,7 @@ async function respond() {
       err instanceof Error ? err.message : "Could not continue card refinement";
   } finally {
     busy = false;
+    settled = true;
   }
 }
 
@@ -152,9 +157,8 @@ async function confirmReady() {
 
 $effect(() => {
   const update = projectSocket.draftUpdate;
-  if (update && update.cardId === card.id) {
-    draftRequirements = update.content;
-  }
+  if (settled || !update || update.cardId !== card.id) return;
+  draftRequirements = update.content;
 });
 </script>
 

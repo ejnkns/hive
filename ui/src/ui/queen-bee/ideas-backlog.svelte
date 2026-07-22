@@ -29,6 +29,7 @@ type IdeaSession = {
   status?: "active" | "complete";
   question?: string;
   draftRequirements?: string;
+  settled?: boolean;
 };
 
 let expanded = $state(true);
@@ -47,7 +48,8 @@ $effect(() => {
 
 $effect(() => {
   const update = projectSocket.draftUpdate;
-  if (!update || !update.ideaId) return;
+  if (!update?.ideaId) return;
+  if (sessions[update.ideaId]?.settled === true) return;
   sessions = {
     ...sessions,
     [update.ideaId]: {
@@ -81,6 +83,7 @@ async function loadSession(ideaId: string) {
           typeof value.draftRequirements === "string"
             ? value.draftRequirements
             : undefined,
+        settled: true,
       },
     };
   } catch {
@@ -119,6 +122,10 @@ async function createIdea(startElaboration: boolean) {
 }
 
 async function startSession(idea: Idea) {
+  sessions = {
+    ...sessions,
+    [idea.id]: { ...sessions[idea.id], settled: false },
+  };
   busy = true;
   error = null;
   try {
@@ -146,6 +153,10 @@ async function startSession(idea: Idea) {
 async function respond(ideaId: string) {
   const responseText = answer.trim();
   if (!responseText) return;
+  sessions = {
+    ...sessions,
+    [ideaId]: { ...sessions[ideaId], settled: false },
+  };
   busy = true;
   error = null;
   try {

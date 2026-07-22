@@ -32,6 +32,7 @@ let input = $state("");
 let loading = $state(false);
 let complete = $state(false);
 let spec = $state("");
+let settled = $state(true);
 let draftRequirements = $state("");
 let error = $state<string | null>(null);
 
@@ -80,6 +81,7 @@ async function startDevise(prompt: string) {
     error = err instanceof Error ? err.message : "Unknown error";
   } finally {
     loading = false;
+    settled = true;
   }
 }
 
@@ -124,10 +126,12 @@ async function respond(answer: string) {
     error = err instanceof Error ? err.message : "Unknown error";
   } finally {
     loading = false;
+    settled = true;
   }
 }
 
 function submit() {
+  settled = false;
   const text = input.trim();
   if (!text) return;
   input = "";
@@ -141,9 +145,8 @@ function submit() {
 
 $effect(() => {
   const update = projectSocket.draftUpdate;
-  if (update && !update.cardId) {
-    draftRequirements = update.content;
-  }
+  if (settled || !update || update.cardId) return;
+  draftRequirements = update.content;
 });
 </script>
 
