@@ -1,9 +1,12 @@
 import { logger } from "shared/logger";
 import type { Node, RequestMetric } from "telemetry";
-import { emitFlowEvent } from "../flow-events";
 import { isProviderRequestCancelledError } from "../provider-request-cancelled-error";
 import type { ProxyResponse } from "../proxy-response";
 import { routingMemory } from "../routing-memory";
+import {
+  recordCircuitBreak,
+  recordFailoverAttempt,
+} from "../session-aggregator";
 import { selectBestNode } from "./execute-proxy-request/select-best-node";
 
 export type FailoverContext = {
@@ -63,15 +66,13 @@ export async function executeProxyRequest(
           normalized.type,
           ctx.requiredFeatures
         );
-        emitFlowEvent({
-          type: "circuit_break",
+        recordCircuitBreak({
           requestId: ctx.sessionId ?? "",
           provider: node.providerName,
           model: node.modelName,
           cooldownDurationSec: 30,
         });
-        emitFlowEvent({
-          type: "failover_attempt",
+        recordFailoverAttempt({
           requestId: ctx.sessionId ?? "",
           failedProvider: node.providerName,
           failedModel: node.modelName,
@@ -91,15 +92,13 @@ export async function executeProxyRequest(
         `attempt ${String(attempts)}/${String(maxAttempts)} — ${compoundKey} network failure: ${err instanceof Error ? err.message : String(err)}`
       );
       routingMemory.recordNetworkFailure(compoundKey);
-      emitFlowEvent({
-        type: "circuit_break",
+      recordCircuitBreak({
         requestId: ctx.sessionId ?? "",
         provider: node.providerName,
         model: node.modelName,
         cooldownDurationSec: 30,
       });
-      emitFlowEvent({
-        type: "failover_attempt",
+      recordFailoverAttempt({
         requestId: ctx.sessionId ?? "",
         failedProvider: node.providerName,
         failedModel: node.modelName,

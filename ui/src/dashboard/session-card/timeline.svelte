@@ -1,6 +1,8 @@
 <script lang="ts">
-import type { RequestState, SessionStage } from "../../shared/types";
+import type { RequestState } from "shared/dashboard-types";
 import { formatNumber, formatTime } from "../../shared/utils";
+import { isTerminal } from "../stage-utils";
+import StagePathDots from "../StagePathDots.svelte";
 
 let {
   requests = [] as RequestState[],
@@ -9,10 +11,6 @@ let {
   requests: RequestState[];
   onRequestClick?: (req: RequestState) => void;
 } = $props();
-
-function isTerminal(stage: SessionStage): boolean {
-  return stage === "complete" || stage === "failed";
-}
 
 function nodeColor(req: RequestState): string {
   const last = req.path.at(-1);
@@ -67,18 +65,7 @@ function nodeLabel(req: RequestState, i: number): string {
           {/if}
         </div>
         {#if req.path.length > 0}
-          <div class="node-mini-dots">
-            {#each req.path as stage, si}
-              <span
-                class="node-mini-dot {isTerminal(stage)
-                  ? 'mini-dot-complete'
-                  : ''} {stage === 'failed' ? 'mini-dot-error' : ''}"
-              ></span>
-              {#if si < req.path.length - 1}
-                <span class="node-mini-line"></span>
-              {/if}
-            {/each}
-          </div>
+          <StagePathDots path={req.path} size="mini" />
         {/if}
       </button>
     </div>
@@ -174,34 +161,5 @@ function nodeLabel(req: RequestState, i: number): string {
 
   .node-latency {
     color: var(--muted);
-  }
-
-  .node-mini-dots {
-    display: flex;
-    align-items: center;
-    gap: 0;
-  }
-
-  .node-mini-dot {
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background: var(--success);
-    flex-shrink: 0;
-  }
-
-  .mini-dot-complete {
-    background: var(--success);
-  }
-
-  .mini-dot-error {
-    background: var(--error);
-  }
-
-  .node-mini-line {
-    width: 4px;
-    height: 1px;
-    background: var(--success);
-    flex-shrink: 0;
   }
 </style>

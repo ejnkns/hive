@@ -1,6 +1,6 @@
 <script lang="ts">
 import { runProviderTest } from "./provider-playground/run-provider-test";
-import type { AvailableProvider } from "../shared/types";
+import type { AvailableProvider } from "shared/dashboard-types";
 
 let { providers }: { providers: AvailableProvider[] } = $props();
 

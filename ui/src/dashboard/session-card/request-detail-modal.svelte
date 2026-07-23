@@ -1,16 +1,10 @@
 <script lang="ts">
-import type { RequestState, SessionStage } from "../../shared/types";
-import {
-  formatNumber,
-  formatTime,
-  formatToolCallLabel,
-  groupToolCalls,
-  normalizeContent,
-  resolveToolName,
-  sc,
-} from "../../shared/utils";
+import type { RequestState } from "shared/dashboard-types";
+import { formatNumber, formatTime, sc } from "../../shared/utils";
+import { isTerminal } from "../stage-utils";
+import StagePathDots from "../StagePathDots.svelte";
+import ConversationView from "../ConversationView.svelte";
 import Modal from "../../shared/Modal.svelte";
-import TruncatableText from "../../shared/TruncatableText.svelte";
 
 let {
   open = $bindable(false),
@@ -23,21 +17,6 @@ let {
   activeRequestId: string;
   onSelectRequest?: (requestId: string) => void;
 } = $props();
-
-const STAGE_LABELS: Record<SessionStage, string> = {
-  received: "rec",
-  selection: "sel",
-  dispatched: "dis",
-  thinking: "thk",
-  streaming: "str",
-  tool_use: "too",
-  complete: "com",
-  failed: "err",
-};
-
-function isTerminal(stage: SessionStage): boolean {
-  return stage === "complete" || stage === "failed";
-}
 
 const request = $derived(
   requests.find((r) => r.requestId === activeRequestId) ?? null
@@ -103,30 +82,7 @@ const hasConversation = $derived(
       </div>
 
       {#if request.path.length > 0}
-        <div class="detail-section">
-          <div class="section-title">stage path</div>
-          <div class="path-dots">
-            {#each request.path as stage, si}
-              <span class="dot-wrapper">
-                <span
-                  class="dot"
-                  class:dot-error={stage === "failed"}
-                  class:dot-complete={stage === "complete"}
-                  class:dot-active={si ===
-                    request.path.length - 1 &&
-                    !isTerminal(stage)}
-                  class:dot-filled={si <
-                    request.path.length - 1 ||
-                    isTerminal(stage)}
-                ></span>
-                <span class="dot-label">{STAGE_LABELS[stage]}</span>
-              </span>
-              {#if si < request.path.length - 1}
-                <span class="dot-line dot-line-filled"></span>
-              {/if}
-            {/each}
-          </div>
-        </div>
+        <StagePathDots path={request.path} showSectionTitle={true} />
       {/if}
 
       {#if request.prompt}
@@ -270,53 +226,10 @@ const hasConversation = $derived(
       {#if hasConversation}
         <div class="detail-section">
           <div class="section-title">conversation</div>
-          <div class="conv-messages">
-            {#each request.conversationPrompt ?? [] as msg}
-              {@const toolName =
-                msg.role === "tool" && msg.tool_call_id
-                  ? resolveToolName(
-                      request.conversationPrompt ?? [],
-                      msg.tool_call_id
-                    )
-                  : null}
-              {@const hasToolCalls =
-                msg.role === "assistant" &&
-                msg.tool_calls &&
-                msg.tool_calls.length > 0}
-              {@const hasContent = normalizeContent(msg.content).length > 0}
-              <div class="conv-msg {msg.role}">
-                <span class="conv-role"
-                  >{toolName ?? msg.role}</span
-                >
-                <div class="conv-content">
-                  {#if hasToolCalls}
-                    <div class="tool-call-list">
-                      {#each groupToolCalls(msg.tool_calls ?? []) as tc}
-                        <span class="tool-call-badge"
-                          >{formatToolCallLabel(tc)}</span
-                        >
-                      {/each}
-                    </div>
-                  {/if}
-                  {#if hasContent || (!hasToolCalls && !hasContent)}
-                    <TruncatableText
-                      text={normalizeContent(msg.content)}
-                    />
-                  {/if}
-                </div>
-              </div>
-            {/each}
-            {#if request.responseText}
-              <div class="conv-msg assistant">
-                <span class="conv-role">assistant</span>
-                <div class="conv-content">
-                  <TruncatableText
-                    text={request.responseText}
-                  />
-                </div>
-              </div>
-            {/if}
-          </div>
+          <ConversationView
+            messages={request?.conversationPrompt ?? []}
+            responseText={request?.responseText}
+          />
         </div>
       {/if}
     {/if}
@@ -402,70 +315,6 @@ const hasConversation = $derived(
     font-size: 0.6875rem;
     white-space: pre-wrap;
     word-break: break-word;
-  }
-
-  .path-dots {
-    display: flex;
-    align-items: center;
-    gap: 0;
-  }
-
-  .dot-wrapper {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.125rem;
-  }
-
-  .dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-  }
-
-  .dot-filled {
-    background: var(--success);
-  }
-
-  .dot-complete {
-    background: var(--success);
-  }
-
-  .dot-error {
-    background: var(--error);
-  }
-
-  .dot-active {
-    background: var(--success);
-    animation: pulse 1.2s ease-in-out infinite;
-  }
-
-  @keyframes pulse {
-    0%,
-    100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.35;
-    }
-  }
-
-  .dot-label {
-    font-size: 0.4375rem;
-    color: var(--muted);
-    text-transform: uppercase;
-    text-align: center;
-  }
-
-  .dot-line {
-    width: 12px;
-    height: 1px;
-    background: var(--border);
-    margin-bottom: 10px;
-  }
-
-  .dot-line-filled {
-    background: var(--success);
   }
 
   .selection-header {
@@ -572,67 +421,5 @@ const hasConversation = $derived(
 
   .dot-sep {
     color: var(--border);
-  }
-
-  .conv-messages {
-    display: flex;
-    flex-direction: column;
-    gap: 0.375rem;
-    max-height: 40vh;
-    overflow-y: auto;
-  }
-
-  .conv-msg {
-    display: flex;
-    gap: 0.375rem;
-    font-size: 0.75rem;
-  }
-
-  .conv-role {
-    font-size: 0.5625rem;
-    font-weight: 700;
-    min-width: 55px;
-    text-transform: uppercase;
-    color: var(--muted);
-    flex-shrink: 0;
-  }
-
-  .conv-msg.system .conv-role {
-    color: var(--accent);
-  }
-
-  .conv-msg.user .conv-role {
-    color: var(--text);
-  }
-
-  .conv-msg.assistant .conv-role {
-    color: var(--success);
-  }
-
-  .conv-msg.tool .conv-role {
-    color: var(--warning);
-  }
-
-  .conv-content {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .tool-call-list {
-    display: flex;
-    gap: 0.25rem;
-    flex-wrap: wrap;
-    margin-bottom: 0.25rem;
-  }
-
-  .tool-call-badge {
-    display: inline-block;
-    font-size: 0.5rem;
-    font-weight: 700;
-    padding: 0.0625rem 0.25rem;
-    text-transform: uppercase;
-    color: var(--accent);
-    background: rgba(var(--border-rgb), 0.15);
-    border: 1px solid rgba(var(--border-rgb), 0.3);
   }
 </style>

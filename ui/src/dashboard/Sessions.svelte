@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { SessionState } from "../shared/types";
+import type { SessionState } from "shared/dashboard-types";
 import SessionCard from "./SessionCard.svelte";
 
 let { sessions = [] as SessionState[] } = $props();

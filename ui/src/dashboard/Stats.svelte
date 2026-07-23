@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { StatsData } from "../shared/types";
+import type { StatsData } from "shared/dashboard-types";
 import { formatNumber, sc } from "../shared/utils";
 
 let { data }: { data: StatsData | null } = $props();
@@ -16,7 +16,7 @@ let { data }: { data: StatsData | null } = $props();
   </div>
   <div class="stat">
     <span class="stat-label">Providers</span>
-    <span class="stat-value">{data?.providers ?? "—"}</span>
+    <span class="stat-value">{data?.activeProviders ?? "—"}</span>
   </div>
   <div class="stat">
     <span class="stat-label">Latency</span>

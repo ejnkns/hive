@@ -1,7 +1,11 @@
 <script lang="ts">
-import type { FlowEvent, ProviderData } from "../shared/types";
+import type { FlowEvent, ProviderPayload } from "shared/dashboard-types";
+import type { PipelineStateMessage } from "shared/dashboard-types";
 
-let { events = [] as FlowEvent[], providers = [] as ProviderData[] } = $props();
+let {
+  events = [] as (FlowEvent | PipelineStateMessage)[],
+  providers = [] as ProviderPayload[],
+} = $props();
 
 const PADDING_TOP = 32;
 const ROW_HEIGHT = 32;
@@ -23,6 +27,17 @@ type PipelineSession = {
   model: string | null;
   affinity: boolean;
   timestamp: number;
+};
+
+const PIPELINE_PHASE: Record<string, PipelineSession["phase"]> = {
+  received: "scoring",
+  selection: "scoring",
+  dispatched: "dispatched",
+  thinking: "thinking",
+  streaming: "streaming",
+  complete: "complete",
+  failed: "failed",
+  tool_use: "streaming",
 };
 
 const sessions = $derived.by(() => {
@@ -65,6 +80,12 @@ const sessions = $derived.by(() => {
         break;
       case "response_complete":
         session.phase = event.success ? "complete" : "failed";
+        break;
+      case "pipeline_state":
+        session.provider = event.provider;
+        session.model = event.model;
+        session.timestamp = event.timestamp;
+        session.phase = PIPELINE_PHASE[event.stage] ?? "scoring";
         break;
     }
 

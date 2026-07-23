@@ -1,4 +1,9 @@
-import type { RequestState, SessionPatch, SessionState } from "./types";
+import type {
+  RequestState,
+  SessionPatch,
+  SessionSnapshot,
+  SessionState,
+} from "shared/dashboard-types";
 
 export function createSessionStore() {
   const map = new Map<string, SessionState>();
@@ -132,11 +137,23 @@ export function createSessionStore() {
     rebuild();
   }
 
+  function replaceAll(snapshot: SessionSnapshot) {
+    map.clear();
+    for (const s of snapshot.active) {
+      map.set(s.sessionId, s);
+    }
+    for (const s of snapshot.completed) {
+      map.set(s.sessionId, s);
+    }
+    sessions = [...snapshot.active, ...snapshot.completed];
+  }
+
   return {
     get sessions() {
       return sessions;
     },
     applyPatch,
     initSessions,
+    replaceAll,
   };
 }

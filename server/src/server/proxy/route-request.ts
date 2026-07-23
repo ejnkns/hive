@@ -5,10 +5,17 @@ import { URL } from "node:url";
 import { logger } from "shared/logger";
 import type { FinishReason, StreamPhaseEvent, TelemetrySink } from "telemetry";
 import { classifyError, createStreamCounter, detectRefusal } from "telemetry";
-import { emitFlowEvent } from "./flow-events";
 import type { MutatedRequest } from "./mutate-request";
 import { ProviderRequestCancelledError } from "./provider-request-cancelled-error";
 import { ProxyResponse } from "./proxy-response";
+import {
+  recordNodeDispatched,
+  recordResponseComplete,
+  recordStreamingStarted,
+  recordThinkingStarted,
+  recordTokenTick,
+  recordToolAccumulating,
+} from "./session-aggregator";
 
 type RouteRequestOptions = {
   upstreamUrl: string;
@@ -47,8 +54,7 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
     let downstreamStream: PassThrough | null = null;
     let recorded = false;
 
-    emitFlowEvent({
-      type: "node_dispatched",
+    recordNodeDispatched({
       requestId,
       provider: providerName,
       model: modelName,
@@ -121,8 +127,7 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
         toolCallFailed: stats?.toolCallFailed ?? false,
       });
 
-      emitFlowEvent({
-        type: "response_complete",
+      recordResponseComplete({
         requestId,
         provider: providerName,
         model: modelName,
@@ -172,24 +177,21 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
       const counter = createStreamCounter(start, (evt: StreamPhaseEvent) => {
         switch (evt.kind) {
           case "thinking_started":
-            emitFlowEvent({
-              type: "thinking_started",
+            recordThinkingStarted({
               requestId,
               provider: providerName,
               model: modelName,
             });
             break;
           case "streaming_started":
-            emitFlowEvent({
-              type: "streaming_started",
+            recordStreamingStarted({
               requestId,
               provider: providerName,
               model: modelName,
             });
             break;
           case "tool_accumulating":
-            emitFlowEvent({
-              type: "tool_accumulating",
+            recordToolAccumulating({
               requestId,
               provider: providerName,
               model: modelName,
@@ -200,8 +202,7 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
             const elapsedSec = evt.elapsedMs / 1000;
             const tps =
               elapsedSec > 0 ? Math.round(evt.outputChars / elapsedSec) : 0;
-            emitFlowEvent({
-              type: "token_tick",
+            recordTokenTick({
               requestId,
               provider: providerName,
               model: modelName,

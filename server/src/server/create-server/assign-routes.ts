@@ -16,11 +16,9 @@ import type { Provider } from "../providers";
 import { getModelId } from "../providers";
 import type { ChatCompletionResult, ProviderState } from "../proxy";
 import {
-  type FlowEvent,
   getSessionSnapshot,
-  onFlowEvent,
-  onSessionPatch,
   routingMemory,
+  setAggregatorCallbacks,
 } from "../proxy";
 import { getCanvasState, setCanvasState } from "./assign-routes/canvas-state";
 
@@ -84,11 +82,21 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
     });
   }
 
-  const getTelemetryPayload = async () => {
+  function broadcast(msg: object) {
+    if (activeSockets.size === 0) return;
+    const payload = JSON.stringify(msg);
+    for (const socket of activeSockets) {
+      try {
+        socket.send(payload);
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  async function buildInitPayload() {
     const configProviders = deps.getProviders();
     const providers = await buildProvidersPayload();
-
-    const lastUsed = deps.getLastUsed();
     const cache = await loadCache();
     const conversations = conversationStore.getConversations();
 
@@ -113,124 +121,156 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
         .filter((p) => p.keyConfigured)
         .sort((a, b) => b.stabilityScore - a.stabilityScore)[0] ?? null;
 
-    const bestProvider = bestEntry.name;
-    const bestModel = bestEntry.model;
-    const bestScore = bestEntry.stabilityScore;
-
-    const overrideProvider = overrideState ? overrideState.provider : null;
-    const overrideModel = overrideState ? overrideState.model : null;
+    const okCount = cache.metrics.filter((r) => r.success).length;
+    const rate =
+      cache.metrics.length > 0
+        ? Math.round((okCount / cache.metrics.length) * 100)
+        : null;
+    const flights = cache.metrics.filter((r) => r.success).map((r) => r.ttft);
+    const avg =
+      flights.length > 0
+        ? Math.round(flights.reduce((a, b) => a + b, 0) / flights.length)
+        : null;
+    const names = new Set(
+      providers.filter((x) => x.keyConfigured).map((x) => x.name)
+    );
 
     return {
-      type: "update",
-      data: {
-        providers,
-        serverPort: String(getServerConfig().port),
-        serverHost: getServerConfig().host,
-        lastProvider: lastUsed.provider,
-        lastModel: lastUsed.model,
-        overrideActive: overrideState !== null,
-        overrideProvider,
-        overrideModel,
-        availableProviders,
-        metrics: cache.metrics,
-        pending: telemetryRecorder.getPendingCount(),
-        conversations,
-        bestProvider,
-        bestModel,
-        bestScore,
-        routingStrategy: process.env.HIVE_ROUTING_STRATEGY || "balanced",
-        contextWindowWeight:
-          Number(process.env.HIVE_CONTEXT_WINDOW_WEIGHT) || 0,
+      providers,
+      availableProviders,
+      metrics: cache.metrics.map((m) => {
+        const conv = conversations.find((c) => c.requestId === m.requestId);
+        return { ...m, prompt: conv?.prompt, responseText: conv?.responseText };
+      }),
+      override: {
+        active: overrideState !== null,
+        provider: overrideState ? overrideState.provider : null,
+        model: overrideState ? overrideState.model : null,
+      },
+      serverHost: getServerConfig().host,
+      serverPort: String(getServerConfig().port),
+      routingStrategy: process.env.HIVE_ROUTING_STRATEGY || "balanced",
+      contextWindowWeight: Number(process.env.HIVE_CONTEXT_WINDOW_WEIGHT) || 0,
+      pending: telemetryRecorder.getPendingCount(),
+      stats: {
+        traffic: cache.metrics.length,
+        successRate: rate,
+        activeProviders: names.size,
+        avgLatency: avg,
+        bestProvider: bestEntry ? bestEntry.name : null,
+        bestModel: bestEntry ? bestEntry.model : null,
+        bestScore: bestEntry ? bestEntry.stabilityScore : null,
       },
     };
-  };
+  }
 
-  const broadcastTelemetry = async () => {
-    if (activeSockets.size === 0) return;
-    try {
-      const payload = JSON.stringify(await getTelemetryPayload());
-      for (const socket of activeSockets) {
-        socket.send(payload);
-      }
-    } catch (err) {
-      logger.error("broadcastTelemetry failed", err);
-    }
-  };
+  async function broadcastOverrideUpdate() {
+    const overrideState = getOverride();
+    broadcast({
+      type: "override_update",
+      override: {
+        active: overrideState !== null,
+        provider: overrideState ? overrideState.provider : null,
+        model: overrideState ? overrideState.model : null,
+      },
+    });
+  }
+
+  async function broadcastProviderUpdate() {
+    broadcast({
+      type: "provider_update",
+      providers: await buildProvidersPayload(),
+    });
+  }
+
+  async function broadcastAvailableProvidersUpdate() {
+    const configProviders = deps.getProviders();
+    broadcast({
+      type: "available_providers_update",
+      availableProviders: configProviders.map((p) => ({
+        name: p.name,
+        displayName: p.displayName,
+        models: [
+          ...new Set(
+            (p.models.length > 0 ? p.models : [p.defaultModel]).map((entry) =>
+              getModelId(entry)
+            )
+          ),
+        ],
+        keyConfigured: !!process.env[p.apiKeyEnvVar],
+        disabled: isProviderDisabled(p.name),
+      })),
+    });
+  }
+
+  async function broadcastMetricsUpdate() {
+    const cache = await loadCache();
+    const conversations = conversationStore.getConversations();
+    broadcast({
+      type: "metrics_update",
+      metrics: cache.metrics.map((m) => {
+        const conv = conversations.find((c) => c.requestId === m.requestId);
+        return { ...m, prompt: conv?.prompt, responseText: conv?.responseText };
+      }),
+    });
+  }
 
   // Broadcast metrics when updated
   telemetryRecorder.onChange(() => {
-    void broadcastTelemetry();
+    void broadcastMetricsUpdate();
   });
 
   // Broadcast logs when received
   addLogListener((log) => {
-    if (activeSockets.size === 0) return;
-    const payload = JSON.stringify({ type: "log", data: log });
-    for (const socket of activeSockets) {
-      try {
-        socket.send(payload);
-      } catch {
-        // ignore
-      }
-    }
+    broadcast({ type: "log", data: log });
   });
 
-  const flowEventBuffer: FlowEvent[] = [];
-  const MAX_FLOW_BUFFER = 50;
-
-  onFlowEvent((event) => {
-    flowEventBuffer.push(event);
-    if (flowEventBuffer.length > MAX_FLOW_BUFFER) {
-      flowEventBuffer.shift();
-    }
-    if (activeSockets.size === 0) return;
-    const payload = JSON.stringify({ type: "flow", data: event });
-    for (const socket of activeSockets) {
-      try {
-        socket.send(payload);
-      } catch {
-        // ignore
+  setAggregatorCallbacks({
+    onSnapshot: (snapshot) => {
+      if (activeSockets.size === 0) return;
+      const payload = JSON.stringify({
+        type: "session_snapshot",
+        sessions: snapshot,
+      });
+      for (const socket of activeSockets) {
+        try {
+          socket.send(payload);
+        } catch {
+          // ignore
+        }
       }
-    }
-  });
-
-  onSessionPatch((patch) => {
-    if (activeSockets.size === 0) return;
-    const payload = JSON.stringify({ type: "session_state", data: patch });
-    for (const socket of activeSockets) {
-      try {
-        socket.send(payload);
-      } catch {
-        // ignore
+    },
+    onPipelineState: (event) => {
+      if (activeSockets.size === 0) return;
+      const payload = JSON.stringify(event);
+      for (const socket of activeSockets) {
+        try {
+          socket.send(payload);
+        } catch {
+          // ignore
+        }
       }
-    }
+    },
   });
 
   server.get("/ws", { websocket: true }, (socket) => {
     activeSockets.add(socket);
 
-    // Send initial state immediately
     void (async () => {
       try {
-        const initPayload = await getTelemetryPayload();
-        socket.send(JSON.stringify({ ...initPayload, type: "init" }));
-
-        // Send recent logs
-        const recentLogs = getRecentLogs();
-        for (const log of recentLogs) {
-          socket.send(JSON.stringify({ type: "log", data: log }));
-        }
-
-        // Send buffered flow events
-        for (const event of flowEventBuffer) {
-          socket.send(JSON.stringify({ type: "flow", data: event }));
-        }
-
-        // Send session snapshot
+        const init = await buildInitPayload();
         const sessions = getSessionSnapshot();
-        socket.send(JSON.stringify({ type: "session_init", data: sessions }));
+        const logs = getRecentLogs();
+        socket.send(
+          JSON.stringify({
+            type: "init",
+            ...init,
+            sessions,
+            logs,
+          })
+        );
       } catch (err) {
-        logger.error("failed to send initial ws payload", err);
+        logger.error("failed to send ws connect init", err);
       }
     })();
 
@@ -263,7 +303,7 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
             clearOverride();
             logger.debug("override cleared");
           }
-          void broadcastTelemetry();
+          void broadcastOverrideUpdate();
         }
         if (parsed?.type === "toggle_provider") {
           const provider = parsed.provider;
@@ -283,7 +323,35 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
               enableProvider(provider);
               logger.debug(`provider enabled: ${provider}`);
             }
-            void broadcastTelemetry();
+            void broadcastProviderUpdate();
+            void broadcastAvailableProvidersUpdate();
+          }
+        }
+        if (parsed?.type === "session_detail") {
+          if (
+            typeof parsed.sessionId === "string" &&
+            typeof parsed.requestId === "string"
+          ) {
+            const sessions = getSessionSnapshot();
+            const allSessions = [...sessions.active, ...sessions.completed];
+            const session = allSessions.find(
+              (s) => s.sessionId === parsed.sessionId
+            );
+            if (session) {
+              const request = session.requests.find(
+                (r) => r.requestId === parsed.requestId
+              );
+              if (request) {
+                socket.send(
+                  JSON.stringify({
+                    type: "session_detail",
+                    requestId: request.requestId,
+                    conversationPrompt: request.conversationPrompt ?? [],
+                    responseText: request.responseText ?? "",
+                  })
+                );
+              }
+            }
           }
         }
       } catch {

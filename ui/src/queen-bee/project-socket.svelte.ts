@@ -114,6 +114,8 @@ export const projectSocket = {
     return draftUpdate;
   },
   get boardSnapshot(): Board | null {
-    return boardSnapshot;
+    const snapshot = boardSnapshot;
+    boardSnapshot = null;
+    return snapshot;
   },
 };

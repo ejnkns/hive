@@ -1,5 +1,6 @@
 <script lang="ts">
-import type { HeaderData } from "./types";
+import type { AvailableProvider, OverrideState } from "shared/dashboard-types";
+import type { HeaderData } from "./utils";
 
 let {
   data = $bindable({
