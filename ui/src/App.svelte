@@ -7,6 +7,7 @@ import "./app.css";
 import CanvasHost from "./canvas/CanvasHost.svelte";
 import LivePipeline from "./dashboard/LivePipeline.svelte";
 import Logs from "./dashboard/Logs.svelte";
+import ModelPriorityModal from "./dashboard/ModelPriorityModal.svelte";
 import ProviderPanel from "./dashboard/ProviderPanel.svelte";
 import ProviderPlayground from "./dashboard/ProviderPlayground.svelte";
 import Sessions from "./dashboard/Sessions.svelte";
@@ -25,6 +26,7 @@ import Header from "./shared/Header.svelte";
 let detailMetric: MetricData | null = $state(null);
 let detailAllMetrics: MetricData[] = $state([]);
 let drawerOpen = $state(false);
+let modelPriorityModalOpen = $state(false);
 
 let currentHash = $state(window.location.hash);
 onMount(() => {
@@ -162,6 +164,7 @@ function handleToggleProvider(provider: string, disabled: boolean) {
       data={headerData ?? undefined}
       onOverrideSet={handleOverrideSet}
       onOverrideClear={handleOverrideClear}
+      onOpenModelPriority={() => (modelPriorityModalOpen = true)}
     />
     {#if currentHash.startsWith('#/project/') && projectHeader.projectId}
       <div class="project-header">
@@ -228,6 +231,7 @@ function handleToggleProvider(provider: string, disabled: boolean) {
       <ProviderPlayground providers={dashboardSocket.availableProviders} />
     </BottomDrawer>
     <DetailOverlay {detailMetric} {detailAllMetrics} />
+    <ModelPriorityModal bind:open={modelPriorityModalOpen} />
   {:else if currentHash.startsWith('#/project/')}
     <ProjectPage projectId={currentHash.slice('#/project/'.length)} />
   {:else}

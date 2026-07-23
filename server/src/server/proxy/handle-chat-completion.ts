@@ -12,8 +12,10 @@ import { getMetricsForNode } from "./handle-chat-completion/execute-proxy-reques
 import { filterHeaders } from "./handle-chat-completion/filter-headers";
 import { resolveSessionId } from "./handle-chat-completion/resolve-session-id";
 import { tryExactRoute } from "./handle-chat-completion/try-exact-route";
+import { tryModelPriorityRoute } from "./handle-chat-completion/try-model-priority-route";
 import { tryOverrideRoute } from "./handle-chat-completion/try-override-route";
 import { setLastUsed } from "./last-used-state";
+import { getModelPriority } from "./model-priority-config";
 import { isProviderRequestCancelledError } from "./provider-request-cancelled-error";
 import { getProviders } from "./providers-state";
 import type { ProxyResponse } from "./proxy-response";
@@ -150,6 +152,23 @@ export async function handleChatCompletion(
     onSuccess: (provider, model) => setLastUsed(provider, model),
   });
   if (overrideResult) return overrideResult;
+
+  const modelPriority = getModelPriority();
+  if (modelPriority) {
+    const priorityResult = await tryModelPriorityRoute({
+      modelPriority: modelPriority.modelPriority,
+      providerPriority: modelPriority.providerPriority,
+      nodes,
+      dispatch: boundDispatchRequest,
+      payloadStr,
+      requestId,
+      getMetricsForNode: boundGetMetricsForNode,
+      sessionId,
+      onSuccess: (provider, model) => setLastUsed(provider, model),
+    });
+    if (priorityResult) return priorityResult;
+  }
+
   let response: ProxyResponse | null;
 
   try {

@@ -2,6 +2,7 @@ import type {
   AvailableProvider,
   FlowEvent,
   MetricData,
+  ModelPriority,
   OverrideState,
   PipelineStateMessage,
   ProviderPayload,
@@ -32,6 +33,7 @@ let serverPort = $state("");
 let routingStrategy = $state("");
 let contextWindowWeight = $state(0);
 let pendingCount = $state(0);
+let modelPriorityConfig = $state<ModelPriority | null>(null);
 
 const sessionStore = createSessionStore();
 
@@ -125,6 +127,10 @@ function handleMessage(msg: WsServerMessage) {
     availableProviders = msg.availableProviders;
     return;
   }
+  if (msg.type === "model_priority_update") {
+    modelPriorityConfig = msg.config;
+    return;
+  }
   // New init format (check first — discriminated by "sessions" vs "data")
   if (msg.type === "init" && "sessions" in msg) {
     const m = msg as unknown as {
@@ -138,6 +144,7 @@ function handleMessage(msg: WsServerMessage) {
       routingStrategy: string;
       contextWindowWeight: number;
       pending: number;
+      modelPriorityConfig: ModelPriority | null;
     };
     providers = m.providers;
     availableProviders = m.availableProviders;
@@ -148,6 +155,7 @@ function handleMessage(msg: WsServerMessage) {
     routingStrategy = m.routingStrategy;
     contextWindowWeight = m.contextWindowWeight;
     pendingCount = m.pending;
+    modelPriorityConfig = m.modelPriorityConfig;
     sessionStore.replaceAll(m.sessions);
     return;
   }
@@ -202,6 +210,10 @@ export function requestSessionDetail(sessionId: string, requestId: string) {
   send({ type: "session_detail", sessionId, requestId });
 }
 
+export function updateModelPriority(config: ModelPriority) {
+  send({ type: "update_model_priority", config });
+}
+
 export const dashboardSocket = {
   connect,
   get connected() {
@@ -240,6 +252,9 @@ export const dashboardSocket = {
   get pendingCount() {
     return pendingCount;
   },
+  get modelPriorityConfig() {
+    return modelPriorityConfig;
+  },
   get sessions() {
     return sessionStore.sessions;
   },
@@ -247,5 +262,6 @@ export const dashboardSocket = {
   clearOverride,
   toggleProvider,
   requestSessionDetail,
+  updateModelPriority,
   disconnect: closeSocket,
 };

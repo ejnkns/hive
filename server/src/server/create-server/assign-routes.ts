@@ -20,6 +20,10 @@ import {
   routingMemory,
   setAggregatorCallbacks,
 } from "../proxy";
+import {
+  getModelPriority,
+  saveModelPriority,
+} from "../proxy/model-priority-config";
 import { getCanvasState, setCanvasState } from "./assign-routes/canvas-state";
 
 export type RouteDeps = {
@@ -147,6 +151,7 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
         provider: overrideState ? overrideState.provider : null,
         model: overrideState ? overrideState.model : null,
       },
+      modelPriorityConfig: getModelPriority(),
       serverHost: getServerConfig().host,
       serverPort: String(getServerConfig().port),
       routingStrategy: process.env.HIVE_ROUTING_STRATEGY || "balanced",
@@ -173,6 +178,13 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
         provider: overrideState ? overrideState.provider : null,
         model: overrideState ? overrideState.model : null,
       },
+    });
+  }
+
+  function broadcastModelPriorityUpdate() {
+    broadcast({
+      type: "model_priority_update",
+      config: getModelPriority(),
     });
   }
 
@@ -354,6 +366,22 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
             }
           }
         }
+        if (parsed?.type === "update_model_priority") {
+          const config = parsed.config as Record<string, unknown> | undefined;
+          if (
+            config &&
+            Array.isArray(config.modelPriority) &&
+            typeof config.modelPriority[0] === "string"
+          ) {
+            saveModelPriority({
+              modelPriority: config.modelPriority as string[],
+              providerPriority: Array.isArray(config.providerPriority)
+                ? (config.providerPriority as string[])
+                : undefined,
+            });
+            broadcastModelPriorityUpdate();
+          }
+        }
       } catch {
         logger.debug(
           `received WS message: ${typeof msg === "string" ? msg : JSON.stringify(msg)}`
@@ -466,6 +494,32 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
     reply.send({
       conversations: conversationStore.getConversations(),
     });
+  });
+
+  server.get("/api/model-priority", async (_request, reply) => {
+    reply.send({ config: getModelPriority() });
+  });
+
+  server.put("/api/model-priority", async (request, reply) => {
+    const body = request.body as Record<string, unknown> | undefined;
+    if (
+      !body ||
+      !Array.isArray(body.modelPriority) ||
+      body.modelPriority.length === 0
+    ) {
+      return reply
+        .status(400)
+        .send({ error: "modelPriority must be a non-empty array" });
+    }
+    const config = {
+      modelPriority: body.modelPriority as string[],
+      providerPriority: Array.isArray(body.providerPriority)
+        ? (body.providerPriority as string[])
+        : undefined,
+    };
+    saveModelPriority(config);
+    broadcastModelPriorityUpdate();
+    reply.send({ ok: true });
   });
 
   server.get("/api/canvas-state/:sessionId", async (request, reply) => {
