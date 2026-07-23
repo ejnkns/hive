@@ -18,6 +18,7 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "biome lint .",
     "format": "biome format --write .",
+    "check:biome": "biome check --write --no-errors-on-unmatched",
     "prepare": "lefthook install"
   },
   "devDependencies": {
