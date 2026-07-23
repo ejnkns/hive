@@ -20,6 +20,7 @@ import {
   routingMemory,
   setAggregatorCallbacks,
 } from "../proxy";
+import { getPresetsConfig, savePresetsConfig } from "../proxy/presets-config";
 import { getCanvasState, setCanvasState } from "./assign-routes/canvas-state";
 
 export type RouteDeps = {
@@ -147,6 +148,7 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
         provider: overrideState ? overrideState.provider : null,
         model: overrideState ? overrideState.model : null,
       },
+      presetsConfig: getPresetsConfig(),
       serverHost: getServerConfig().host,
       serverPort: String(getServerConfig().port),
       routingStrategy: process.env.HIVE_ROUTING_STRATEGY || "balanced",
@@ -173,6 +175,13 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
         provider: overrideState ? overrideState.provider : null,
         model: overrideState ? overrideState.model : null,
       },
+    });
+  }
+
+  function broadcastPresetsUpdate() {
+    broadcast({
+      type: "presets_update",
+      config: getPresetsConfig(),
     });
   }
 
@@ -354,6 +363,22 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
             }
           }
         }
+        if (parsed?.type === "update_presets") {
+          const config = parsed.config as Record<string, unknown> | undefined;
+          if (
+            config &&
+            Array.isArray(config.modelPriority) &&
+            typeof config.modelPriority[0] === "string"
+          ) {
+            savePresetsConfig({
+              modelPriority: config.modelPriority as string[],
+              providerPriority: Array.isArray(config.providerPriority)
+                ? (config.providerPriority as string[])
+                : undefined,
+            });
+            broadcastPresetsUpdate();
+          }
+        }
       } catch {
         logger.debug(
           `received WS message: ${typeof msg === "string" ? msg : JSON.stringify(msg)}`
@@ -466,6 +491,32 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
     reply.send({
       conversations: conversationStore.getConversations(),
     });
+  });
+
+  server.get("/api/presets", async (_request, reply) => {
+    reply.send({ presets: getPresetsConfig() });
+  });
+
+  server.put("/api/presets", async (request, reply) => {
+    const body = request.body as Record<string, unknown> | undefined;
+    if (
+      !body ||
+      !Array.isArray(body.modelPriority) ||
+      body.modelPriority.length === 0
+    ) {
+      return reply
+        .status(400)
+        .send({ error: "modelPriority must be a non-empty array" });
+    }
+    const config = {
+      modelPriority: body.modelPriority as string[],
+      providerPriority: Array.isArray(body.providerPriority)
+        ? (body.providerPriority as string[])
+        : undefined,
+    };
+    savePresetsConfig(config);
+    broadcastPresetsUpdate();
+    reply.send({ ok: true });
   });
 
   server.get("/api/canvas-state/:sessionId", async (request, reply) => {

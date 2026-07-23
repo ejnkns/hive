@@ -13,7 +13,9 @@ import { filterHeaders } from "./handle-chat-completion/filter-headers";
 import { resolveSessionId } from "./handle-chat-completion/resolve-session-id";
 import { tryExactRoute } from "./handle-chat-completion/try-exact-route";
 import { tryOverrideRoute } from "./handle-chat-completion/try-override-route";
+import { tryPresetRoute } from "./handle-chat-completion/try-preset-route";
 import { setLastUsed } from "./last-used-state";
+import { getPresetsConfig } from "./presets-config";
 import { isProviderRequestCancelledError } from "./provider-request-cancelled-error";
 import { getProviders } from "./providers-state";
 import type { ProxyResponse } from "./proxy-response";
@@ -150,6 +152,23 @@ export async function handleChatCompletion(
     onSuccess: (provider, model) => setLastUsed(provider, model),
   });
   if (overrideResult) return overrideResult;
+
+  const presets = getPresetsConfig();
+  if (presets) {
+    const presetResult = await tryPresetRoute({
+      modelPriority: presets.modelPriority,
+      providerPriority: presets.providerPriority,
+      nodes,
+      dispatch: boundDispatchRequest,
+      payloadStr,
+      requestId,
+      getMetricsForNode: boundGetMetricsForNode,
+      sessionId,
+      onSuccess: (provider, model) => setLastUsed(provider, model),
+    });
+    if (presetResult) return presetResult;
+  }
+
   let response: ProxyResponse | null;
 
   try {

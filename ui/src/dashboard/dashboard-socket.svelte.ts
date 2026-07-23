@@ -4,6 +4,7 @@ import type {
   MetricData,
   OverrideState,
   PipelineStateMessage,
+  PresetsConfig,
   ProviderPayload,
   SessionSnapshot,
   WsServerMessage,
@@ -32,6 +33,7 @@ let serverPort = $state("");
 let routingStrategy = $state("");
 let contextWindowWeight = $state(0);
 let pendingCount = $state(0);
+let presetsConfig = $state<PresetsConfig | null>(null);
 
 const sessionStore = createSessionStore();
 
@@ -125,6 +127,10 @@ function handleMessage(msg: WsServerMessage) {
     availableProviders = msg.availableProviders;
     return;
   }
+  if (msg.type === "presets_update") {
+    presetsConfig = msg.config;
+    return;
+  }
   // New init format (check first — discriminated by "sessions" vs "data")
   if (msg.type === "init" && "sessions" in msg) {
     const m = msg as unknown as {
@@ -138,6 +144,7 @@ function handleMessage(msg: WsServerMessage) {
       routingStrategy: string;
       contextWindowWeight: number;
       pending: number;
+      presetsConfig: PresetsConfig | null;
     };
     providers = m.providers;
     availableProviders = m.availableProviders;
@@ -148,6 +155,7 @@ function handleMessage(msg: WsServerMessage) {
     routingStrategy = m.routingStrategy;
     contextWindowWeight = m.contextWindowWeight;
     pendingCount = m.pending;
+    presetsConfig = m.presetsConfig;
     sessionStore.replaceAll(m.sessions);
     return;
   }
@@ -202,6 +210,10 @@ export function requestSessionDetail(sessionId: string, requestId: string) {
   send({ type: "session_detail", sessionId, requestId });
 }
 
+export function updatePresets(config: PresetsConfig) {
+  send({ type: "update_presets", config });
+}
+
 export const dashboardSocket = {
   connect,
   get connected() {
@@ -240,6 +252,9 @@ export const dashboardSocket = {
   get pendingCount() {
     return pendingCount;
   },
+  get presetsConfig() {
+    return presetsConfig;
+  },
   get sessions() {
     return sessionStore.sessions;
   },
@@ -247,5 +262,6 @@ export const dashboardSocket = {
   clearOverride,
   toggleProvider,
   requestSessionDetail,
+  updatePresets,
   disconnect: closeSocket,
 };

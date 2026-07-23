@@ -20,8 +20,9 @@ let {
     activeProviders: 0,
     avgLatency: null,
   } as HeaderData),
-  onOverrideSet = () => {},
+  onOverrideSet = (_provider: string, _model: string) => {},
   onOverrideClear = () => {},
+  onOpenPresets = () => {},
 } = $props();
 
 let pendingProvider: string | null = $state(null);
@@ -197,6 +198,14 @@ function toggleTheme() {
     </div>
     <button type="button" class="theme-btn" onclick={toggleTheme}>
       {document.documentElement.classList.contains("light") ? "dark" : "light"}
+    </button>
+    <button
+      type="button"
+      class="theme-btn"
+      onclick={() => onOpenPresets()}
+      title="Routing presets"
+    >
+      presets
     </button>
   </div>
 </div>

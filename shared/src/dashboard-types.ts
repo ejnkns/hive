@@ -1,6 +1,9 @@
 /** @public — WebSocket protocol contract for the dashboard. Import from here, not from server or UI internals. */
 
 import type { LogEntry } from "./logger";
+import type { PresetsConfig } from "./presets-types";
+
+export type { PresetsConfig };
 
 // ---------------------------------------------------------------------------
 // Leaf types
@@ -423,6 +426,7 @@ export type WsServerMessage =
       type: "available_providers_update";
       availableProviders: AvailableProvider[];
     }
+  | { type: "presets_update"; config: PresetsConfig | null }
   | InitMessage;
 
 /**
@@ -593,8 +597,14 @@ export type SessionDetailCommand = {
   requestId: string;
 };
 
+export type UpdatePresetsCommand = {
+  type: "update_presets";
+  config: PresetsConfig;
+};
+
 /** All messages the client may send over the dashboard WebSocket. */
 export type WsClientMessage =
   | OverrideCommand
   | ToggleProviderCommand
-  | SessionDetailCommand;
+  | SessionDetailCommand
+  | UpdatePresetsCommand;

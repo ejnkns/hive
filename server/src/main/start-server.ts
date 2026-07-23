@@ -16,6 +16,7 @@ import {
   shutdown,
   start,
 } from "../server/proxy";
+import { loadPresetsConfig } from "../server/proxy/presets-config";
 import {
   createBoardStore,
   createCoordinator,
@@ -50,6 +51,8 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     isProviderDisabled,
     getProviders: loadProviders,
   });
+
+  loadPresetsConfig();
 
   start();
 
