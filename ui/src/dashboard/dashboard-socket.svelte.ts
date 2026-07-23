@@ -10,7 +10,7 @@ import type {
 } from "shared/dashboard-types";
 import { type LogEntry, logger } from "shared/logger";
 import { getServerConfig } from "shared/server-config";
-import { createSessionStore } from "../use-sessions.svelte";
+import { createSessionStore } from "../shared/use-sessions.svelte";
 
 let socket: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;

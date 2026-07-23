@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { StatsData } from "shared/dashboard-types";
-import { formatNumber, sc } from "./utils";
+import { formatNumber, sc } from "../shared/utils";
 
 let { data }: { data: StatsData | null } = $props();
 </script>

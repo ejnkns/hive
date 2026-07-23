@@ -5,8 +5,8 @@ import {
   groupToolCalls,
   normalizeContent,
   resolveToolName,
-} from "../utils";
-import TruncatableText from "../TruncatableText.svelte";
+} from "../shared/utils";
+import TruncatableText from "../shared/TruncatableText.svelte";
 
 let {
   messages = [] as ConversationMessage[],

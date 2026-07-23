@@ -4,7 +4,7 @@ import type {
   MetricData,
   ProviderPayload,
 } from "shared/dashboard-types";
-import { formatNumber, healthColor } from "./utils";
+import { formatNumber, healthColor } from "../shared/utils";
 import Providers from "./Providers.svelte";
 
 let {

@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { MetricData } from "shared/dashboard-types";
-import { formatNumber, formatTime } from "./utils";
+import { formatNumber, formatTime } from "../shared/utils";
 
 let {
   data = [] as MetricData[],

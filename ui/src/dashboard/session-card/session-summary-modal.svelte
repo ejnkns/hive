@@ -1,8 +1,8 @@
 <script lang="ts">
 import type { RequestState, SessionState } from "shared/dashboard-types";
-import ConversationView from "../dashboard/ConversationView.svelte";
-import Modal from "../Modal.svelte";
-import TruncatableText from "../TruncatableText.svelte";
+import ConversationView from "../ConversationView.svelte";
+import Modal from "../../shared/Modal.svelte";
+import TruncatableText from "../../shared/TruncatableText.svelte";
 import Timeline from "./timeline.svelte";
 import RequestDetailModal from "./request-detail-modal.svelte";
 

@@ -1,10 +1,10 @@
 <script lang="ts">
 import type { RequestState } from "shared/dashboard-types";
-import { formatNumber, formatTime, sc } from "../utils";
-import { isTerminal } from "../dashboard/stage-utils";
-import StagePathDots from "../dashboard/StagePathDots.svelte";
-import ConversationView from "../dashboard/ConversationView.svelte";
-import Modal from "../Modal.svelte";
+import { formatNumber, formatTime, sc } from "../../shared/utils";
+import { isTerminal } from "../stage-utils";
+import StagePathDots from "../StagePathDots.svelte";
+import ConversationView from "../ConversationView.svelte";
+import Modal from "../../shared/Modal.svelte";
 
 let {
   open = $bindable(false),

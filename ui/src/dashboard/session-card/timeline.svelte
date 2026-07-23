@@ -1,8 +1,8 @@
 <script lang="ts">
 import type { RequestState } from "shared/dashboard-types";
-import { formatNumber, formatTime } from "../utils";
-import { isTerminal } from "../dashboard/stage-utils";
-import StagePathDots from "../dashboard/StagePathDots.svelte";
+import { formatNumber, formatTime } from "../../shared/utils";
+import { isTerminal } from "../stage-utils";
+import StagePathDots from "../StagePathDots.svelte";
 
 let {
   requests = [] as RequestState[],

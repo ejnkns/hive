@@ -4,7 +4,7 @@ import type {
   MetricData,
   ProviderPayload,
 } from "shared/dashboard-types";
-import { formatNumber, healthColor, sc } from "./utils";
+import { formatNumber, healthColor, sc } from "../shared/utils";
 import ActivityLog from "./ActivityLog.svelte";
 import Conversations from "./Conversations.svelte";
 

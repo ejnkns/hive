@@ -1,10 +1,10 @@
 <script lang="ts">
 import type { RequestState, SessionState } from "shared/dashboard-types";
-import { formatNumber } from "./utils";
+import { formatNumber } from "../shared/utils";
 import RequestDetailModal from "./session-card/request-detail-modal.svelte";
 import SessionSummaryModal from "./session-card/session-summary-modal.svelte";
-import StagePathDots from "./dashboard/StagePathDots.svelte";
-import { isTerminal } from "./dashboard/stage-utils";
+import StagePathDots from "./StagePathDots.svelte";
+import { isTerminal } from "./stage-utils";
 
 let {
   session,
