@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { PresetsConfig } from "shared/dashboard-types";
+import { normalizeModelId } from "shared/model-normalization";
 import Modal from "../shared/Modal.svelte";
 import { dashboardSocket } from "./dashboard-socket.svelte";
 
@@ -9,22 +10,33 @@ let {
   open?: boolean;
 } = $props();
 
-const allModels = $derived(
-  [
-    ...new Set(
-      dashboardSocket.availableProviders
-        .filter((p) => p.keyConfigured)
-        .flatMap((p) => p.models)
-    ),
-  ].sort()
-);
+const canonicalModels = $derived.by(() => {
+  const map = new Map<string, string>();
+  for (const p of dashboardSocket.availableProviders) {
+    if (!p.keyConfigured) continue;
+    for (const raw of p.models) {
+      const canonical = normalizeModelId(raw);
+      const existing = map.get(canonical);
+      if (!existing || raw.length < existing.length) {
+        map.set(canonical, raw);
+      }
+    }
+  }
+  return map;
+});
+
+const allCanonicalIds = $derived([...canonicalModels.keys()].sort());
 
 const modelProviders = $derived(
   new Map(
-    allModels.map((modelId) => [
-      modelId,
+    allCanonicalIds.map((canonical) => [
+      canonical,
       dashboardSocket.availableProviders
-        .filter((p) => p.keyConfigured && p.models.includes(modelId))
+        .filter(
+          (p) =>
+            p.keyConfigured &&
+            p.models.some((m) => normalizeModelId(m) === canonical)
+        )
         .map((p) => p.displayName)
         .sort(),
     ])
@@ -65,10 +77,10 @@ let providerDropdownRect = $state<{
 
 const filteredModels = $derived(
   modelSearch.trim()
-    ? allModels.filter((m) =>
+    ? allCanonicalIds.filter((m) =>
         m.toLowerCase().includes(modelSearch.toLowerCase())
       )
-    : allModels.slice(0, 20)
+    : allCanonicalIds.slice(0, 20)
 );
 
 const filteredProviders = $derived(
@@ -102,7 +114,7 @@ $effect(() => {
 
 function isValidModel(id: string): boolean {
   if (!dataLoaded) return true;
-  return allModels.includes(id);
+  return allCanonicalIds.includes(id);
 }
 
 function isValidProvider(name: string): boolean {
