@@ -48,9 +48,20 @@ let initialized = $state(false);
 let modelSearch = $state("");
 let modelDropdownOpen = $state(false);
 let modelInputEl = $state<HTMLInputElement>();
+let modelDropdownRect = $state<{
+  top: number;
+  left: number;
+  width: number;
+} | null>(null);
+
 let providerSearch = $state("");
 let providerDropdownOpen = $state(false);
 let providerInputEl = $state<HTMLInputElement>();
+let providerDropdownRect = $state<{
+  top: number;
+  left: number;
+  width: number;
+} | null>(null);
 
 const filteredModels = $derived(
   modelSearch.trim()
@@ -82,8 +93,10 @@ $effect(() => {
     initialized = false;
     modelSearch = "";
     modelDropdownOpen = false;
+    modelDropdownRect = null;
     providerSearch = "";
     providerDropdownOpen = false;
+    providerDropdownRect = null;
   }
 });
 
@@ -101,12 +114,18 @@ function modelProviderBadges(modelId: string): string[] {
   return modelProviders.get(modelId) ?? [];
 }
 
+function captureDropdownRect(el: HTMLInputElement) {
+  const r = el.getBoundingClientRect();
+  return { top: r.bottom, left: r.left, width: r.width };
+}
+
 function addModel(modelId: string) {
   if (modelId && !modelItems.includes(modelId)) {
     modelItems = [...modelItems, modelId];
   }
   modelSearch = "";
   modelDropdownOpen = false;
+  modelDropdownRect = null;
   modelInputEl?.focus();
 }
 
@@ -116,6 +135,7 @@ function addProvider(name: string) {
   }
   providerSearch = "";
   providerDropdownOpen = false;
+  providerDropdownRect = null;
   providerInputEl?.focus();
 }
 
@@ -196,10 +216,21 @@ function cancel() {
   open = false;
 }
 
+function openModelDropdown() {
+  if (modelInputEl) modelDropdownRect = captureDropdownRect(modelInputEl);
+  modelDropdownOpen = true;
+}
+
 function closeModelDropdown() {
   setTimeout(() => {
     modelDropdownOpen = false;
   }, 150);
+}
+
+function openProviderDropdown() {
+  if (providerInputEl)
+    providerDropdownRect = captureDropdownRect(providerInputEl);
+  providerDropdownOpen = true;
 }
 
 function closeProviderDropdown() {
@@ -264,35 +295,22 @@ function closeProviderDropdown() {
               placeholder="Search model..."
               bind:value={modelSearch}
               bind:this={modelInputEl}
-              onfocus={() => (modelDropdownOpen = true)}
+              onfocus={openModelDropdown}
               onblur={closeModelDropdown}
               onkeydown={handleModelKeydown}
-              oninput={() => (modelDropdownOpen = true)}
+              oninput={openModelDropdown}
             >
-            {#if modelDropdownOpen && filteredModels.length > 0}
-              <div class="dropdown">
-                {#each filteredModels as suggestion}
-                  <button
-                    type="button"
-                    class="dropdown-item"
-                    onmousedown={(e) => e.preventDefault()}
-                    onclick={() => addModel(suggestion)}
-                  >
-                    <span class="dropdown-item-name">{suggestion}</span>
-                    <span class="dropdown-item-providers">
-                      {modelProviders.get(suggestion)?.join(", ") ?? ""}
-                    </span>
-                  </button>
-                {/each}
-              </div>
-            {/if}
           </div>
         </div>
       </div>
 
       <div class="list-section">
         <label class="section-label">
-          <input type="checkbox" bind:checked={providerEnabled}>
+          <input
+            type="checkbox"
+            bind:checked={providerEnabled}
+            class="provider-checkbox"
+          >
           Provider Priority
         </label>
         {#if providerEnabled}
@@ -339,25 +357,11 @@ function closeProviderDropdown() {
                 placeholder="Search provider..."
                 bind:value={providerSearch}
                 bind:this={providerInputEl}
-                onfocus={() => (providerDropdownOpen = true)}
+                onfocus={openProviderDropdown}
                 onblur={closeProviderDropdown}
                 onkeydown={handleProviderKeydown}
-                oninput={() => (providerDropdownOpen = true)}
+                oninput={openProviderDropdown}
               >
-              {#if providerDropdownOpen && filteredProviders.length > 0}
-                <div class="dropdown">
-                  {#each filteredProviders as suggestion}
-                    <button
-                      type="button"
-                      class="dropdown-item"
-                      onmousedown={(e) => e.preventDefault()}
-                      onclick={() => addProvider(suggestion)}
-                    >
-                      <span class="dropdown-item-name">{suggestion}</span>
-                    </button>
-                  {/each}
-                </div>
-              {/if}
             </div>
           </div>
         {/if}
@@ -377,6 +381,45 @@ function closeProviderDropdown() {
     </div>
   </div>
 </Modal>
+
+{#if modelDropdownOpen && modelDropdownRect && filteredModels.length > 0}
+  <div
+    class="dropdown-fixed"
+    style="top:{modelDropdownRect.top}px;left:{modelDropdownRect.left}px;width:{modelDropdownRect.width}px"
+  >
+    {#each filteredModels as suggestion}
+      <button
+        type="button"
+        class="dropdown-item"
+        onmousedown={(e) => e.preventDefault()}
+        onclick={() => addModel(suggestion)}
+      >
+        <span class="dropdown-item-name">{suggestion}</span>
+        <span class="dropdown-item-providers">
+          {modelProviders.get(suggestion)?.join(", ") ?? ""}
+        </span>
+      </button>
+    {/each}
+  </div>
+{/if}
+
+{#if providerDropdownOpen && providerDropdownRect && filteredProviders.length > 0}
+  <div
+    class="dropdown-fixed"
+    style="top:{providerDropdownRect.top}px;left:{providerDropdownRect.left}px;width:{providerDropdownRect.width}px"
+  >
+    {#each filteredProviders as suggestion}
+      <button
+        type="button"
+        class="dropdown-item"
+        onmousedown={(e) => e.preventDefault()}
+        onclick={() => addProvider(suggestion)}
+      >
+        <span class="dropdown-item-name">{suggestion}</span>
+      </button>
+    {/each}
+  </div>
+{/if}
 
 <style>
 .presets-body {
@@ -398,8 +441,9 @@ function closeProviderDropdown() {
   align-items: center;
   gap: 0.375rem;
 }
-.section-label input[type="checkbox"] {
+.provider-checkbox {
   width: auto;
+  accent-color: var(--accent);
 }
 .list-items {
   display: flex;
@@ -454,7 +498,6 @@ function closeProviderDropdown() {
   gap: 0.25rem;
 }
 .search-wrap {
-  position: relative;
   flex: 1;
 }
 .search-input {
@@ -474,16 +517,13 @@ function closeProviderDropdown() {
 .search-input::placeholder {
   color: var(--muted);
 }
-.dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
+.dropdown-fixed {
+  position: fixed;
   max-height: 160px;
   overflow-y: auto;
   border: 1px solid var(--accent);
   background: var(--card);
-  z-index: 110;
+  z-index: 200;
 }
 .dropdown-item {
   display: flex;
