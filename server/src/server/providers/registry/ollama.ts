@@ -3,8 +3,8 @@ import type { Provider } from "../registry";
 export const ollama = {
   name: "ollama",
   displayName: "Ollama",
-  chatEndpoint: (process.env.OLLAMA_HOST || "http://127.0.0.1:11434") + "/v1/chat/completions",
-  modelsEndpoint: (process.env.OLLAMA_HOST || "http://127.0.0.1:11434") + "/v1/models",
+  chatEndpoint: `${process.env.OLLAMA_HOST || "http://127.0.0.1:11434"}/v1/chat/completions`,
+  modelsEndpoint: `${process.env.OLLAMA_HOST || "http://127.0.0.1:11434"}/v1/models`,
   apiKeyEnvVar: "OLLAMA_API_KEY",
   models: [
     "llama3.1",

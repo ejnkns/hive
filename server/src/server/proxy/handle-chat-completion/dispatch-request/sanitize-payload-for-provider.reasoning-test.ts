@@ -124,7 +124,7 @@ function inspect(r: {
 
 async function main() {
   const env = loadEnv();
-  const key = env["OPENCODE_ZEN_API_KEY"];
+  const key = env.OPENCODE_ZEN_API_KEY;
 
   // Free models (likely to work without credits)
   const freeModels = [
