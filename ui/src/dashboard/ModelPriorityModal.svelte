@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { PresetsConfig } from "shared/dashboard-types";
+import type { ModelPriority } from "shared/dashboard-types";
 import { normalizeModelId } from "shared/model-normalization";
 import Modal from "../shared/Modal.svelte";
 import { dashboardSocket } from "./dashboard-socket.svelte";
@@ -93,7 +93,7 @@ const filteredProviders = $derived(
 
 $effect(() => {
   if (open && !initialized) {
-    const config = dashboardSocket.presetsConfig;
+    const config = dashboardSocket.modelPriorityConfig;
     modelItems = config?.modelPriority ? [...config.modelPriority] : [];
     providerItems = config?.providerPriority
       ? [...config.providerPriority]
@@ -216,11 +216,11 @@ function moveProvider(index: number, direction: -1 | 1) {
 }
 
 function save() {
-  const config: PresetsConfig = {
+  const config: ModelPriority = {
     modelPriority: modelItems,
     providerPriority: providerEnabled ? providerItems : undefined,
   };
-  dashboardSocket.updatePresets(config);
+  dashboardSocket.updateModelPriority(config);
   open = false;
 }
 
@@ -252,7 +252,7 @@ function closeProviderDropdown() {
 }
 </script>
 
-<Modal bind:open title="Routing Presets">
+<Modal bind:open title="Model Priority">
   <div class="presets-body">
     {#if !dataLoaded && dashboardSocket.connected}
       <div class="loading">Loading available models...</div>

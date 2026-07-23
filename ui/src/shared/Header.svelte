@@ -22,7 +22,7 @@ let {
   } as HeaderData),
   onOverrideSet = (_provider: string, _model: string) => {},
   onOverrideClear = () => {},
-  onOpenPresets = () => {},
+  onOpenModelPriority = () => {},
 } = $props();
 
 let pendingProvider: string | null = $state(null);
@@ -202,10 +202,10 @@ function toggleTheme() {
     <button
       type="button"
       class="theme-btn"
-      onclick={() => onOpenPresets()}
-      title="Routing presets"
+      onclick={() => onOpenModelPriority()}
+      title="Model priority"
     >
-      presets
+      priority
     </button>
   </div>
 </div>

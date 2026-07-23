@@ -20,7 +20,10 @@ import {
   routingMemory,
   setAggregatorCallbacks,
 } from "../proxy";
-import { getPresetsConfig, savePresetsConfig } from "../proxy/presets-config";
+import {
+  getModelPriority,
+  saveModelPriority,
+} from "../proxy/model-priority-config";
 import { getCanvasState, setCanvasState } from "./assign-routes/canvas-state";
 
 export type RouteDeps = {
@@ -148,7 +151,7 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
         provider: overrideState ? overrideState.provider : null,
         model: overrideState ? overrideState.model : null,
       },
-      presetsConfig: getPresetsConfig(),
+      modelPriorityConfig: getModelPriority(),
       serverHost: getServerConfig().host,
       serverPort: String(getServerConfig().port),
       routingStrategy: process.env.HIVE_ROUTING_STRATEGY || "balanced",
@@ -178,10 +181,10 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
     });
   }
 
-  function broadcastPresetsUpdate() {
+  function broadcastModelPriorityUpdate() {
     broadcast({
-      type: "presets_update",
-      config: getPresetsConfig(),
+      type: "model_priority_update",
+      config: getModelPriority(),
     });
   }
 
@@ -363,20 +366,20 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
             }
           }
         }
-        if (parsed?.type === "update_presets") {
+        if (parsed?.type === "update_model_priority") {
           const config = parsed.config as Record<string, unknown> | undefined;
           if (
             config &&
             Array.isArray(config.modelPriority) &&
             typeof config.modelPriority[0] === "string"
           ) {
-            savePresetsConfig({
+            saveModelPriority({
               modelPriority: config.modelPriority as string[],
               providerPriority: Array.isArray(config.providerPriority)
                 ? (config.providerPriority as string[])
                 : undefined,
             });
-            broadcastPresetsUpdate();
+            broadcastModelPriorityUpdate();
           }
         }
       } catch {
@@ -493,11 +496,11 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
     });
   });
 
-  server.get("/api/presets", async (_request, reply) => {
-    reply.send({ presets: getPresetsConfig() });
+  server.get("/api/model-priority", async (_request, reply) => {
+    reply.send({ config: getModelPriority() });
   });
 
-  server.put("/api/presets", async (request, reply) => {
+  server.put("/api/model-priority", async (request, reply) => {
     const body = request.body as Record<string, unknown> | undefined;
     if (
       !body ||
@@ -514,8 +517,8 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
         ? (body.providerPriority as string[])
         : undefined,
     };
-    savePresetsConfig(config);
-    broadcastPresetsUpdate();
+    saveModelPriority(config);
+    broadcastModelPriorityUpdate();
     reply.send({ ok: true });
   });
 

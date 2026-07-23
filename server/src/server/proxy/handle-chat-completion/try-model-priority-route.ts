@@ -12,7 +12,7 @@ import { selectBestNode } from "./execute-proxy-request/select-best-node";
 
 type DispatchFn = (node: Node, payload: string) => Promise<ProxyResponse>;
 
-export async function tryPresetRoute(params: {
+export async function tryModelPriorityRoute(params: {
   modelPriority: string[];
   providerPriority: string[] | undefined;
   nodes: Node[];
@@ -39,7 +39,7 @@ export async function tryPresetRoute(params: {
     const modelNodes = nodes.filter((n) => n.modelName === modelName);
     if (modelNodes.length === 0) {
       logger.debug(
-        `request ${requestId} — preset model "${modelName}" not found on any qualified provider, skipping`
+        `request ${requestId} — model priority "${modelName}" not found on any qualified provider, skipping`
       );
       continue;
     }
@@ -52,7 +52,7 @@ export async function tryPresetRoute(params: {
         const compoundKey = `${providerName}:${modelName}`;
         if (routingMemory.isCircuitBroken(compoundKey)) {
           logger.debug(
-            `request ${requestId} — preset node ${compoundKey} circuit-broken, skipping`
+            `request ${requestId} — model priority node ${compoundKey} circuit-broken, skipping`
           );
           continue;
         }
@@ -77,7 +77,7 @@ export async function tryPresetRoute(params: {
       );
       if (!bestNode) {
         logger.debug(
-          `request ${requestId} — no eligible nodes for preset model "${modelName}"`
+          `request ${requestId} — no eligible nodes for model priority "${modelName}"`
         );
         continue;
       }
@@ -85,7 +85,7 @@ export async function tryPresetRoute(params: {
       const compoundKey = `${bestNode.providerName}:${bestNode.modelName}`;
       if (routingMemory.isCircuitBroken(compoundKey)) {
         logger.debug(
-          `request ${requestId} — selected preset node ${compoundKey} circuit-broken`
+          `request ${requestId} — selected model priority node ${compoundKey} circuit-broken`
         );
         continue;
       }
@@ -116,14 +116,14 @@ async function tryDispatchNode(params: {
   const compoundKey = `${node.providerName}:${node.modelName}`;
 
   logger.debug(
-    `request ${requestId} — trying preset node ${node.providerName}:${node.modelName}`
+    `request ${requestId} — trying model priority node ${node.providerName}:${node.modelName}`
   );
 
   try {
     const response = await dispatch(node, payloadStr);
     if (response.isOk()) {
       logger.debug(
-        `request ${requestId} — preset success via ${node.providerName}:${node.modelName}`
+        `request ${requestId} — model priority success via ${node.providerName}:${node.modelName}`
       );
       return {
         success: true,
@@ -154,10 +154,10 @@ async function tryDispatchNode(params: {
 
     const errorBody = await response.getBodyAsString();
     logger.debug(
-      `request ${requestId} — preset node ${compoundKey} returned ${String(response.status)}, continuing cascade`
+      `request ${requestId} — model priority node ${compoundKey} returned ${String(response.status)}, continuing cascade`
     );
     logger.debug(
-      `request ${requestId} — preset error body: ${errorBody.slice(0, 1000)}`
+      `request ${requestId} — model priority error body: ${errorBody.slice(0, 1000)}`
     );
   } catch (err: unknown) {
     if (isProviderRequestCancelledError(err)) {
@@ -181,7 +181,7 @@ async function tryDispatchNode(params: {
     });
 
     logger.debug(
-      `request ${requestId} — preset node threw: ${err instanceof Error ? err.message : String(err)}, continuing cascade`
+      `request ${requestId} — model priority node threw: ${err instanceof Error ? err.message : String(err)}, continuing cascade`
     );
   }
 

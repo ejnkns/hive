@@ -1,9 +1,9 @@
 /** @public — WebSocket protocol contract for the dashboard. Import from here, not from server or UI internals. */
 
 import type { LogEntry } from "./logger";
-import type { PresetsConfig } from "./presets-types";
+import type { ModelPriority } from "./model-priority-types";
 
-export type { PresetsConfig };
+export type { ModelPriority };
 
 // ---------------------------------------------------------------------------
 // Leaf types
@@ -426,7 +426,7 @@ export type WsServerMessage =
       type: "available_providers_update";
       availableProviders: AvailableProvider[];
     }
-  | { type: "presets_update"; config: PresetsConfig | null }
+  | { type: "model_priority_update"; config: ModelPriority | null }
   | InitMessage;
 
 /**
@@ -597,9 +597,9 @@ export type SessionDetailCommand = {
   requestId: string;
 };
 
-export type UpdatePresetsCommand = {
-  type: "update_presets";
-  config: PresetsConfig;
+export type UpdateModelPriorityCommand = {
+  type: "update_model_priority";
+  config: ModelPriority;
 };
 
 /** All messages the client may send over the dashboard WebSocket. */
@@ -607,4 +607,4 @@ export type WsClientMessage =
   | OverrideCommand
   | ToggleProviderCommand
   | SessionDetailCommand
-  | UpdatePresetsCommand;
+  | UpdateModelPriorityCommand;

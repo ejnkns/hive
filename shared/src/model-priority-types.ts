@@ -1,4 +1,4 @@
-export type PresetsConfig = {
+export type ModelPriority = {
   modelPriority: string[];
   providerPriority?: string[];
 };

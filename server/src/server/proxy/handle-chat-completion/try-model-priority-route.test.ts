@@ -3,7 +3,7 @@ import { beforeEach, describe, it } from "node:test";
 import type { Node, RequestMetric } from "telemetry";
 import type { ProxyResponse } from "../proxy-response";
 import { routingMemory } from "../routing-memory";
-import { tryPresetRoute } from "./try-preset-route";
+import { tryModelPriorityRoute } from "./try-model-priority-route";
 
 function mockProxyResponse(status: number): ProxyResponse {
   return {
@@ -27,13 +27,13 @@ function emptyMetrics(): RequestMetric[] {
   return [];
 }
 
-await describe("tryPresetRoute", async () => {
+await describe("tryModelPriorityRoute", async () => {
   beforeEach(() => {
     routingMemory.reset();
   });
 
   await it("succeeds via first model in auto-routing mode (no providerPriority)", async () => {
-    const result = await tryPresetRoute({
+    const result = await tryModelPriorityRoute({
       modelPriority: ["model-a"],
       providerPriority: undefined,
       nodes: [node("prov-a", "model-a")],
@@ -50,7 +50,7 @@ await describe("tryPresetRoute", async () => {
   });
 
   await it("succeeds via first model+provider in strict providerPriority mode", async () => {
-    const result = await tryPresetRoute({
+    const result = await tryModelPriorityRoute({
       modelPriority: ["model-a"],
       providerPriority: ["prov-a"],
       nodes: [node("prov-a", "model-a")],
@@ -67,7 +67,7 @@ await describe("tryPresetRoute", async () => {
   });
 
   await it("skips model not on any qualified provider, succeeds on next model", async () => {
-    const result = await tryPresetRoute({
+    const result = await tryModelPriorityRoute({
       modelPriority: ["model-missing", "model-b"],
       providerPriority: undefined,
       nodes: [node("prov-b", "model-b")],
@@ -90,7 +90,7 @@ await describe("tryPresetRoute", async () => {
       return mockProxyResponse(200);
     };
 
-    const result = await tryPresetRoute({
+    const result = await tryModelPriorityRoute({
       modelPriority: ["model-a", "model-b"],
       providerPriority: undefined,
       nodes: [node("prov-a", "model-a"), node("prov-b", "model-b")],
@@ -117,7 +117,7 @@ await describe("tryPresetRoute", async () => {
       return mockProxyResponse(200);
     };
 
-    const result = await tryPresetRoute({
+    const result = await tryModelPriorityRoute({
       modelPriority: ["model-a"],
       providerPriority: ["prov-x", "prov-a"],
       nodes: [node("prov-a", "model-a")],
@@ -133,7 +133,7 @@ await describe("tryPresetRoute", async () => {
 
   await it("returns null when no models match any nodes", async () => {
     let dispatched = false;
-    const result = await tryPresetRoute({
+    const result = await tryModelPriorityRoute({
       modelPriority: ["model-x", "model-y"],
       providerPriority: undefined,
       nodes: [],
@@ -154,7 +154,7 @@ await describe("tryPresetRoute", async () => {
     let callbackProvider: string | null = null;
     let callbackModel: string | null = null;
 
-    await tryPresetRoute({
+    await tryModelPriorityRoute({
       modelPriority: ["model-a"],
       providerPriority: undefined,
       nodes: [node("prov-a", "model-a")],

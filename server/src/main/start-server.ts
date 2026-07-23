@@ -16,7 +16,7 @@ import {
   shutdown,
   start,
 } from "../server/proxy";
-import { loadPresetsConfig } from "../server/proxy/presets-config";
+import { loadModelPriority } from "../server/proxy/model-priority-config";
 import {
   createBoardStore,
   createCoordinator,
@@ -52,7 +52,7 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     getProviders: loadProviders,
   });
 
-  loadPresetsConfig();
+  loadModelPriority();
 
   start();
 
