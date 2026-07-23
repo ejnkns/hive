@@ -23,6 +23,15 @@
       }
     }
   },
+  "html": {
+    "formatter": {
+      "enabled": true
+    },
+    "linter": {
+      "enabled": true
+    },
+    "experimentalFullSupportEnabled": true
+  },
   "javascript": {
     "formatter": {
       "quoteStyle": "double",
@@ -46,16 +55,16 @@
             "useConst": "off",
             "useImportType": "off"
           },
-          "correctness": {
-            "noUnusedVariables": "off",
-            "noUnusedImports": "off"
+          "a11y": {
+            "noStaticElementInteractions": "off",
+            "useSemanticElements": "off"
           }
         }
       },
       "assist": {
         "actions": {
           "source": {
-            "organizeImports": "off"
+            "organizeImports": "on"
           }
         }
       }

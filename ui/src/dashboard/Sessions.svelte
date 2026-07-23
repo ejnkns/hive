@@ -42,7 +42,7 @@ function toggleArchive() {
   {/if}
 
   {#if archived.length > 0}
-    <button class="archive-toggle" onclick={toggleArchive}>
+    <button type="button" class="archive-toggle" onclick={toggleArchive}>
       <span class="archive-arrow">{archiveOpen ? "\u25BE" : "\u25B8"}</span>
       Previous Sessions ({archived.length})
     </button>
@@ -55,31 +55,31 @@ function toggleArchive() {
 {/if}
 
 <style>
-  .no-data {
-    padding: 1.5rem;
-    text-align: center;
-    color: var(--muted);
-    font-size: 0.8125rem;
-  }
-  .archive-toggle {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.25rem 0.5rem;
-    background: none;
-    border: 1px solid var(--border);
-    color: var(--muted);
-    font-family: monospace;
-    font-size: 0.625rem;
-    cursor: pointer;
-    width: 100%;
-    text-align: left;
-    margin-bottom: 0.25rem;
-  }
-  .archive-toggle:hover {
-    background: rgba(var(--border-rgb), 0.08);
-  }
-  .archive-arrow {
-    font-size: 0.625rem;
-  }
+.no-data {
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.archive-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-family: monospace;
+  font-size: 0.625rem;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  margin-bottom: 0.25rem;
+}
+.archive-toggle:hover {
+  background: rgba(var(--border-rgb), 0.08);
+}
+.archive-arrow {
+  font-size: 0.625rem;
+}
 </style>

@@ -71,112 +71,112 @@ const lineClass = $derived(
 
 {#if size === "full"}
   <style>
-    .path-dots {
-      display: flex;
-      align-items: center;
-      gap: 0;
-    }
+  .path-dots {
+    display: flex;
+    align-items: center;
+    gap: 0;
+  }
 
-    .detail-section {
-      margin-bottom: 0.75rem;
-    }
+  .detail-section {
+    margin-bottom: 0.75rem;
+  }
 
-    .section-title {
-      font-size: 0.5625rem;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 0.25rem;
-    }
+  .section-title {
+    font-size: 0.5625rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.25rem;
+  }
 
-    .dot-wrapper {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0.125rem;
-    }
+  .dot-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.125rem;
+  }
 
-    .dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-    }
+  .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+  }
 
-    .dot-filled {
-      background: var(--success);
-    }
+  .dot-filled {
+    background: var(--success);
+  }
 
-    .dot-complete {
-      background: var(--success);
-    }
+  .dot-complete {
+    background: var(--success);
+  }
 
-    .dot-error {
-      background: var(--error);
-    }
+  .dot-error {
+    background: var(--error);
+  }
 
-    .dot-active {
-      background: var(--success);
-      animation: pulse 1.2s ease-in-out infinite;
-    }
+  .dot-active {
+    background: var(--success);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
 
-    @keyframes pulse {
-      0%,
-      100% {
-        opacity: 1;
-      }
-      50% {
-        opacity: 0.35;
-      }
+  @keyframes pulse {
+    0%,
+    100% {
+      opacity: 1;
     }
+    50% {
+      opacity: 0.35;
+    }
+  }
 
-    .dot-label {
-      font-size: 0.4375rem;
-      color: var(--muted);
-      text-transform: uppercase;
-      text-align: center;
-    }
+  .dot-label {
+    font-size: 0.4375rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    text-align: center;
+  }
 
-    .dot-line {
-      width: 12px;
-      height: 1px;
-      background: var(--border);
-      margin-bottom: 10px;
-    }
+  .dot-line {
+    width: 12px;
+    height: 1px;
+    background: var(--border);
+    margin-bottom: 10px;
+  }
 
-    .dot-line-filled {
-      background: var(--success);
-    }
+  .dot-line-filled {
+    background: var(--success);
+  }
   </style>
 {/if}
 
 <style>
-  .mini-dots {
-    display: flex;
-    align-items: center;
-    gap: 0;
-    min-width: 30px;
-  }
+.mini-dots {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-width: 30px;
+}
 
-  .mini-dot {
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background: var(--success);
-    flex-shrink: 0;
-  }
+.mini-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--success);
+  flex-shrink: 0;
+}
 
-  .mini-dot-complete {
-    background: var(--success);
-  }
+.mini-dot-complete {
+  background: var(--success);
+}
 
-  .mini-dot-error {
-    background: var(--error);
-  }
+.mini-dot-error {
+  background: var(--error);
+}
 
-  .mini-line {
-    width: 4px;
-    height: 1px;
-    background: var(--success);
-    flex-shrink: 0;
-  }
+.mini-line {
+  width: 4px;
+  height: 1px;
+  background: var(--success);
+  flex-shrink: 0;
+}
 </style>

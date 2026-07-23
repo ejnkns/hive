@@ -1,10 +1,10 @@
 <script lang="ts">
 import type { RequestState, SessionState } from "shared/dashboard-types";
-import ConversationView from "../ConversationView.svelte";
 import Modal from "../../shared/Modal.svelte";
 import TruncatableText from "../../shared/TruncatableText.svelte";
-import Timeline from "./timeline.svelte";
+import ConversationView from "../ConversationView.svelte";
 import RequestDetailModal from "./request-detail-modal.svelte";
+import Timeline from "./timeline.svelte";
 
 let {
   open = $bindable(false),
@@ -72,44 +72,44 @@ function handleTimelineClick(req: RequestState) {
 </Modal>
 
 <style>
-  .modal-body {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
+.modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
 
-  .session-info {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 0.125rem 0.75rem;
-    font-size: 0.6875rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid var(--border);
-  }
+.session-info {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.125rem 0.75rem;
+  font-size: 0.6875rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
 
-  .info-label {
-    color: var(--muted);
-  }
+.info-label {
+  color: var(--muted);
+}
 
-  .info-val {
-    color: var(--text);
-  }
+.info-val {
+  color: var(--text);
+}
 
-  .info-val.mono {
-    font-family: monospace;
-    font-size: 0.5625rem;
-  }
+.info-val.mono {
+  font-family: monospace;
+  font-size: 0.5625rem;
+}
 
-  .section {
-    display: flex;
-    flex-direction: column;
-    gap: 0.375rem;
-  }
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
 
-  .section-title {
-    font-size: 0.5625rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    color: var(--muted);
-  }
+.section-title {
+  font-size: 0.5625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--muted);
+}
 </style>

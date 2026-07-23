@@ -155,8 +155,8 @@ $effect(() => {
     <div class="intro">
       <h2>What are we building?</h2>
       <p>
-        Describe the feature or application you want to build. I'll ask clarifying
-        questions until we have a concrete requirements spec.
+        Describe the feature or application you want to build. I'll ask
+        clarifying questions until we have a concrete requirements spec.
       </p>
     </div>
   {/if}
@@ -167,19 +167,31 @@ $effect(() => {
 
   <div class="messages" class:has-messages={messages.length > 0}>
     {#each messages as msg}
-      <div class="message" class:model={msg.role === "model"} class:user={msg.role === "user"}>
-        <div class="role-label">{msg.role === "model" ? "Queen Bee" : "You"}</div>
+      <div
+        class="message"
+        class:model={msg.role === "model"}
+        class:user={msg.role === "user"}
+      >
+        <div class="role-label">
+          {msg.role === "model" ? "Queen Bee" : "You"}
+        </div>
         <div class="content">
           {#if msg.role === "model" && complete && msg.content === spec}
             <pre class="spec">{msg.content}</pre>
             {#if onApprove}
               <div class="approve-inside">
-                <button class="btn btn-approve" onclick={onApprove}>
+                <button
+                  type="button"
+                  class="btn btn-approve"
+                  onclick={onApprove}
+                >
                   {initialKind === "initial_requirements"
                     ? "Generate project plan"
                     : "Generate change proposal"}
                 </button>
-                <span class="approve-hint">or continue the conversation to refine</span>
+                <span class="approve-hint"
+                  >or continue the conversation to refine</span
+                >
               </div>
             {/if}
           {:else}
@@ -213,200 +225,203 @@ $effect(() => {
     <input
       type="text"
       bind:value={input}
-      placeholder={
-        messages.length === 0
+      placeholder={messages.length === 0
           ? "Describe your project..."
-          : "Your answer..."
-      }
+          : "Your answer..."}
       disabled={loading}
       onkeydown={(e) => {
         if (e.key === "Enter") submit();
       }}
-    />
-    <button class="btn btn-primary" onclick={submit} disabled={loading || !input.trim()}>
+    >
+    <button
+      type="button"
+      class="btn btn-primary"
+      onclick={submit}
+      disabled={loading || !input.trim()}
+    >
       {loading ? "..." : "Send"}
     </button>
   </div>
 </div>
 
 <style>
-  .devise-chat {
-    max-width: 680px;
-    margin: 0 auto;
-    padding: 1.5rem 1.25rem;
-  }
+.devise-chat {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem;
+}
 
-  .intro {
-    text-align: center;
-    padding: 2rem 1rem;
-  }
+.intro {
+  text-align: center;
+  padding: 2rem 1rem;
+}
 
-  .intro h2 {
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: var(--text);
-    margin: 0 0 0.5rem 0;
-  }
+.intro h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 0.5rem 0;
+}
 
-  .intro p {
-    font-size: 0.875rem;
-    color: var(--muted);
-    margin: 0;
-    line-height: 1.5;
-  }
+.intro p {
+  font-size: 0.875rem;
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.5;
+}
 
-  .error {
-    background: rgba(220, 60, 60, 0.1);
-    border: 1px solid rgba(220, 60, 60, 0.3);
-    color: #dc3c3c;
-    padding: 0.75rem 1rem;
-    border-radius: 6px;
-    font-size: 0.8125rem;
-    margin-bottom: 1rem;
-  }
+.error {
+  background: rgba(220, 60, 60, 0.1);
+  border: 1px solid rgba(220, 60, 60, 0.3);
+  color: #dc3c3c;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  margin-bottom: 1rem;
+}
 
-  .messages {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
+.messages {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
 
-  .messages.has-messages {
-    margin-bottom: 1.5rem;
-  }
+.messages.has-messages {
+  margin-bottom: 1.5rem;
+}
 
-  .message {
-    padding: 0.75rem 1rem;
-    border-radius: 8px;
-    font-size: 0.875rem;
-    line-height: 1.55;
-  }
+.message {
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
 
-  .message.model {
-    background: var(--card);
-    border: 1px solid var(--border);
-    color: var(--text);
-  }
+.message.model {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
 
-  .message.user {
-    background: rgba(var(--accent-rgb), 0.08);
-    border: 1px solid rgba(var(--accent-rgb), 0.15);
-    color: var(--text);
-  }
+.message.user {
+  background: rgba(var(--accent-rgb), 0.08);
+  border: 1px solid rgba(var(--accent-rgb), 0.15);
+  color: var(--text);
+}
 
-  .role-label {
-    font-size: 0.6875rem;
-    font-weight: 600;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: 0.375rem;
-  }
+.role-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.375rem;
+}
 
-  .spec {
-    font-family: var(--font-mono, monospace);
-    font-size: 0.8125rem;
-    white-space: pre-wrap;
-    margin: 0;
-    color: var(--text);
-  }
+.spec {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.8125rem;
+  white-space: pre-wrap;
+  margin: 0;
+  color: var(--text);
+}
 
-  .loading-dots {
-    color: var(--muted);
-  }
+.loading-dots {
+  color: var(--muted);
+}
 
-  .input-area {
-    display: flex;
-    gap: 0.5rem;
-  }
+.input-area {
+  display: flex;
+  gap: 0.5rem;
+}
 
-  .draft-panel {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    margin-bottom: 1rem;
-    max-height: 320px;
-    overflow: auto;
-    padding: 0.75rem 1rem;
-  }
+.draft-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  max-height: 320px;
+  overflow: auto;
+  padding: 0.75rem 1rem;
+}
 
-  .draft-note {
-    border-top: 1px solid var(--border);
-    color: var(--muted);
-    font-size: 0.6875rem;
-    margin-top: 0.75rem;
-    padding-top: 0.5rem;
-  }
+.draft-note {
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.6875rem;
+  margin-top: 0.75rem;
+  padding-top: 0.5rem;
+}
 
-  input {
-    flex: 1;
-    padding: 0.625rem 0.75rem;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    color: var(--text);
-    font-size: 0.875rem;
-    font-family: inherit;
-  }
+input {
+  flex: 1;
+  padding: 0.625rem 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.875rem;
+  font-family: inherit;
+}
 
-  input:focus {
-    outline: none;
-    border-color: var(--accent);
-  }
+input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
 
-  input:disabled {
-    opacity: 0.5;
-  }
+input:disabled {
+  opacity: 0.5;
+}
 
-  .btn {
-    padding: 0.625rem 1rem;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    font-size: 0.8125rem;
-    font-weight: 500;
-    cursor: pointer;
-    background: var(--surface);
-    color: var(--text);
-    white-space: nowrap;
-  }
+.btn {
+  padding: 0.625rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  background: var(--surface);
+  color: var(--text);
+  white-space: nowrap;
+}
 
-  .btn:hover:not(:disabled) {
-    background: var(--border);
-  }
+.btn:hover:not(:disabled) {
+  background: var(--border);
+}
 
-  .btn:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
 
-  .btn-primary {
-    background: var(--accent);
-    color: #1b1601;
-    border-color: var(--accent);
-  }
+.btn-primary {
+  background: var(--accent);
+  color: #1b1601;
+  border-color: var(--accent);
+}
 
-  .approve-inside {
-    margin-top: 0.75rem;
-    padding-top: 0.75rem;
-    border-top: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-  }
+.approve-inside {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
 
-  .btn-approve {
-    padding: 0.5rem 1.25rem;
-    border: none;
-    border-radius: 6px;
-    font-size: 0.8125rem;
-    font-weight: 600;
-    cursor: pointer;
-    background: var(--accent);
-    color: #1b1601;
-  }
+.btn-approve {
+  padding: 0.5rem 1.25rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--accent);
+  color: #1b1601;
+}
 
-  .approve-hint {
-    font-size: 0.75rem;
-    color: var(--muted);
-  }
+.approve-hint {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
 </style>

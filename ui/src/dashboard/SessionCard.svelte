@@ -1,9 +1,9 @@
 <script lang="ts">
 import type { RequestState, SessionState } from "shared/dashboard-types";
 import { formatNumber } from "../shared/utils";
+import StagePathDots from "./StagePathDots.svelte";
 import RequestDetailModal from "./session-card/request-detail-modal.svelte";
 import SessionSummaryModal from "./session-card/session-summary-modal.svelte";
-import StagePathDots from "./StagePathDots.svelte";
 import { isTerminal } from "./stage-utils";
 
 let {
@@ -57,7 +57,11 @@ function handleSelectRequest(requestId: string) {
 </script>
 
 <div class="session-card">
-  <button class="summary-card" onclick={() => (summaryModalOpen = true)}>
+  <button
+    type="button"
+    class="summary-card"
+    onclick={() => (summaryModalOpen = true)}
+  >
     <div class="summary-header">
       <span class="summary-prov">
         {latest?.provider ?? "—"}:{latest?.model ?? "—"}
@@ -86,16 +90,22 @@ function handleSelectRequest(requestId: string) {
 
       {#if latest.overrideError}
         <div class="override-error" title={latest.overrideError.errorBody}>
-          pinned {latest.overrideError.provider}:{latest.overrideError.model} returned {latest.overrideError.statusCode}
+          pinned {latest.overrideError.provider}:{latest.overrideError.model}
+          returned {latest.overrideError.statusCode}
         </div>
       {/if}
     {/if}
   </button>
 
   {#if requestCount > 1}
-    <button class="list-toggle" onclick={() => (listOpen = !listOpen)}>
+    <button
+      type="button"
+      class="list-toggle"
+      onclick={() => (listOpen = !listOpen)}
+    >
       <span class="list-arrow">{listOpen ? "\u25BE" : "\u25B8"}</span>
-      {requestCount} request{requestCount !== 1 ? "s" : ""}
+      {requestCount}
+      request{requestCount !== 1 ? "s" : ""}
     </button>
   {/if}
 
@@ -103,6 +113,7 @@ function handleSelectRequest(requestId: string) {
     <div class="request-list">
       {#each allRequestsNewestFirst as req, i}
         <button
+          type="button"
           class="request-row"
           onclick={() => openDetailModal(req)}
         >
@@ -110,9 +121,7 @@ function handleSelectRequest(requestId: string) {
           {#if req.path.length > 0}
             <StagePathDots path={req.path} size="mini" />
           {/if}
-          <span class="row-prov"
-            >{req.provider ?? "—"}:{req.model ?? "—"}</span
-          >
+          <span class="row-prov">{req.provider ?? "—"}:{req.model ?? "—"}</span>
           {#if req.response}
             <span
               style="color:{req.response.success
@@ -150,154 +159,154 @@ function handleSelectRequest(requestId: string) {
 {/if}
 
 <style>
-  .session-card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    padding: 0.5rem 0.75rem;
-    margin-bottom: 0.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.375rem;
-  }
+.session-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
 
-  .summary-card {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    background: none;
-    border: none;
-    padding: 0;
-    margin: 0;
-    cursor: pointer;
-    text-align: left;
-    font-family: inherit;
-    color: var(--text);
-    width: 100%;
-  }
+.summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  color: var(--text);
+  width: 100%;
+}
 
-  .summary-card:hover {
-    opacity: 0.85;
-  }
+.summary-card:hover {
+  opacity: 0.85;
+}
 
-  .summary-header {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
+.summary-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
 
-  .summary-prov {
-    color: var(--accent);
-    font-family: monospace;
-    font-size: 0.75rem;
-    font-weight: 700;
-    margin-right: auto;
-  }
+.summary-prov {
+  color: var(--accent);
+  font-family: monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin-right: auto;
+}
 
-  .summary-status {
-    font-family: monospace;
-    font-size: 0.6875rem;
-    font-weight: 700;
-  }
+.summary-status {
+  font-family: monospace;
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
 
-  .summary-latency {
-    color: var(--muted);
-    font-family: monospace;
-    font-size: 0.6875rem;
-  }
+.summary-latency {
+  color: var(--muted);
+  font-family: monospace;
+  font-size: 0.6875rem;
+}
 
-  .summary-prompt {
-    color: var(--text);
-    font-size: 0.6875rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
+.summary-prompt {
+  color: var(--text);
+  font-size: 0.6875rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
-  .override-error {
-    color: #e2a93b;
-    font-family: monospace;
-    font-size: 0.5625rem;
-    padding: 0.125rem 0.375rem;
-    background: rgba(226, 169, 59, 0.08);
-    border: 1px solid rgba(226, 169, 59, 0.15);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    cursor: help;
-  }
+.override-error {
+  color: #e2a93b;
+  font-family: monospace;
+  font-size: 0.5625rem;
+  padding: 0.125rem 0.375rem;
+  background: rgba(226, 169, 59, 0.08);
+  border: 1px solid rgba(226, 169, 59, 0.15);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: help;
+}
 
-  .list-toggle {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    background: none;
-    border: none;
-    color: var(--muted);
-    font-family: monospace;
-    font-size: 0.5625rem;
-    cursor: pointer;
-    padding: 0;
-    width: 100%;
-    text-align: left;
-  }
+.list-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-family: monospace;
+  font-size: 0.5625rem;
+  cursor: pointer;
+  padding: 0;
+  width: 100%;
+  text-align: left;
+}
 
-  .list-toggle:hover {
-    color: var(--accent);
-  }
+.list-toggle:hover {
+  color: var(--accent);
+}
 
-  .list-arrow {
-    font-size: 0.625rem;
-  }
+.list-arrow {
+  font-size: 0.625rem;
+}
 
-  .request-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.125rem;
-    margin-left: 0.25rem;
-    padding-left: 0.5rem;
-    border-left: 2px solid var(--border);
-  }
+.request-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  margin-left: 0.25rem;
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--border);
+}
 
-  .request-row {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.125rem 0;
-    background: none;
-    border: none;
-    cursor: pointer;
-    text-align: left;
-    font-family: monospace;
-    font-size: 0.5625rem;
-    color: var(--text);
-    width: 100%;
-  }
+.request-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.125rem 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: monospace;
+  font-size: 0.5625rem;
+  color: var(--text);
+  width: 100%;
+}
 
-  .request-row:hover {
-    background: rgba(var(--border-rgb), 0.08);
-  }
+.request-row:hover {
+  background: rgba(var(--border-rgb), 0.08);
+}
 
-  .row-label {
-    color: var(--accent);
-    font-weight: 700;
-    width: 28px;
-    flex-shrink: 0;
-  }
+.row-label {
+  color: var(--accent);
+  font-weight: 700;
+  width: 28px;
+  flex-shrink: 0;
+}
 
-  .row-prov {
-    color: var(--accent);
-    font-size: 0.5rem;
-  }
+.row-prov {
+  color: var(--accent);
+  font-size: 0.5rem;
+}
 
-  .row-latency {
-    color: var(--muted);
-  }
+.row-latency {
+  color: var(--muted);
+}
 
-  .row-prompt {
-    color: var(--text);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 200px;
-  }
+.row-prompt {
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
 </style>

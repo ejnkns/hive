@@ -1,6 +1,9 @@
 <script lang="ts">
-import type { FlowEvent, ProviderPayload } from "shared/dashboard-types";
-import type { PipelineStateMessage } from "shared/dashboard-types";
+import type {
+  FlowEvent,
+  PipelineStateMessage,
+  ProviderPayload,
+} from "shared/dashboard-types";
 
 let {
   events = [] as (FlowEvent | PipelineStateMessage)[],
@@ -203,15 +206,16 @@ function getPathClass(session: PipelineSession): string {
 }
 </script>
 
-<svg viewBox="0 0 {SVG_WIDTH} {svgHeight}" class="pipeline">
+<svg
+  viewBox="0 0 {SVG_WIDTH} {svgHeight}"
+  class="pipeline"
+  aria-label="Pipeline"
+>
+  <title>Pipeline visualization</title>
   {#each rows as row, i}
     {@const y = getRowY(i)}
     {#if row.kind === "provider"}
-      <text
-        x={PROVIDER_X + 4}
-        y={y + 4}
-        class="provider-header"
-      >
+      <text x={PROVIDER_X + 4} y={y + 4} class="provider-header">
         {row.displayName}
       </text>
     {:else}
@@ -222,7 +226,9 @@ function getPathClass(session: PipelineSession): string {
         />
         <text x="12" y="4" class="model-label">{row.model}</text>
         {#if row.cooldownSec > 0}
-          <text x="12" y="16" class="cooldown-label">{String(row.cooldownSec)}s</text>
+          <text x="12" y="16" class="cooldown-label">
+            {String(row.cooldownSec)}s
+          </text>
         {/if}
       </g>
     {/if}
@@ -272,124 +278,126 @@ function getPathClass(session: PipelineSession): string {
 </svg>
 
 <style>
-  .pipeline {
-    width: 100%;
-    display: block;
-    background: var(--card);
-    border: 1px solid var(--border);
-    overflow: hidden;
-  }
+.pipeline {
+  width: 100%;
+  display: block;
+  background: var(--card);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
 
-  .no-data {
-    fill: var(--muted);
-    font-size: 0.625rem;
-  }
+.no-data {
+  fill: var(--muted);
+  font-size: 0.625rem;
+}
 
-  .ingress {
-    fill: var(--accent);
-  }
+.ingress {
+  fill: var(--accent);
+}
 
-  .ingress-label {
-    fill: var(--muted);
-    font-size: 0.5625rem;
-    font-family: monospace;
-  }
+.ingress-label {
+  fill: var(--muted);
+  font-size: 0.5625rem;
+  font-family: monospace;
+}
 
-  .provider-header {
-    fill: var(--muted);
-    font-size: 0.5rem;
-    font-family: monospace;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    dominant-baseline: middle;
-  }
+.provider-header {
+  fill: var(--muted);
+  font-size: 0.5rem;
+  font-family: monospace;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  dominant-baseline: middle;
+}
 
-  .model-node circle.active {
-    fill: var(--success);
-  }
+.model-node circle.active {
+  fill: var(--success);
+}
 
-  .model-node circle.inactive {
-    fill: var(--border);
-  }
+.model-node circle.inactive {
+  fill: var(--border);
+}
 
-  .model-node circle.cooldown {
-    fill: var(--error);
-  }
+.model-node circle.cooldown {
+  fill: var(--error);
+}
 
-  .model-label {
-    fill: var(--muted);
-    font-size: 0.5rem;
-    font-family: monospace;
-    dominant-baseline: middle;
-  }
+.model-label {
+  fill: var(--muted);
+  font-size: 0.5rem;
+  font-family: monospace;
+  dominant-baseline: middle;
+}
 
-  .cooldown-label {
-    fill: var(--error);
-    font-size: 0.5rem;
-    font-family: monospace;
-    dominant-baseline: middle;
-  }
+.cooldown-label {
+  fill: var(--error);
+  font-size: 0.5rem;
+  font-family: monospace;
+  dominant-baseline: middle;
+}
 
-  path {
-    fill: none;
-    stroke-width: 1.5;
-    stroke-linecap: round;
-    transition: stroke 300ms ease, opacity 500ms ease;
-  }
+path {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  transition:
+    stroke 300ms ease,
+    opacity 500ms ease;
+}
 
-  .path-active.path-scoring {
-    stroke: var(--accent);
-    stroke-dasharray: 4 4;
-    animation: dash-pulse 1.5s ease-in-out infinite;
-  }
+.path-active.path-scoring {
+  stroke: var(--accent);
+  stroke-dasharray: 4 4;
+  animation: dash-pulse 1.5s ease-in-out infinite;
+}
 
-  .path-active.path-dispatched {
-    stroke: var(--muted);
-    stroke-dasharray: 2 2;
-  }
+.path-active.path-dispatched {
+  stroke: var(--muted);
+  stroke-dasharray: 2 2;
+}
 
-  .path-active.path-thinking {
-    stroke: #e2a93b;
-    stroke-dasharray: 6 3;
-    animation: dash-slide 1s linear infinite;
-  }
+.path-active.path-thinking {
+  stroke: #e2a93b;
+  stroke-dasharray: 6 3;
+  animation: dash-slide 1s linear infinite;
+}
 
-  .path-active.path-streaming {
-    stroke: var(--success);
-    stroke-dasharray: 3 2;
-    animation: dash-flow 0.4s linear infinite;
-  }
+.path-active.path-streaming {
+  stroke: var(--success);
+  stroke-dasharray: 3 2;
+  animation: dash-flow 0.4s linear infinite;
+}
 
-  .path-done {
-    stroke: var(--success);
-    stroke-dasharray: none;
-  }
+.path-done {
+  stroke: var(--success);
+  stroke-dasharray: none;
+}
 
-  .path-failed {
-    stroke: var(--error);
-    opacity: 0.25;
-  }
+.path-failed {
+  stroke: var(--error);
+  opacity: 0.25;
+}
 
-  @keyframes dash-pulse {
-    0%,
-    100% {
-      opacity: 0.4;
-    }
-    50% {
-      opacity: 1;
-    }
+@keyframes dash-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
   }
+  50% {
+    opacity: 1;
+  }
+}
 
-  @keyframes dash-slide {
-    to {
-      stroke-dashoffset: -18;
-    }
+@keyframes dash-slide {
+  to {
+    stroke-dashoffset: -18;
   }
+}
 
-  @keyframes dash-flow {
-    to {
-      stroke-dashoffset: -10;
-    }
+@keyframes dash-flow {
+  to {
+    stroke-dashoffset: -10;
   }
+}
 </style>

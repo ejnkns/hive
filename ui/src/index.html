@@ -1,19 +1,19 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>hive</title>
-    <link rel="stylesheet" href="./app.css" />
+    <link rel="stylesheet" href="./app.css">
     <script>
-      (() => {
-        var t = localStorage.getItem("theme");
-        if (!t)
-          t = matchMedia("(prefers-color-scheme:light)").matches
-            ? "light"
-            : "dark";
-        if (t === "light") document.documentElement.classList.add("light");
-      })();
+    (() => {
+      var t = localStorage.getItem("theme");
+      if (!t)
+        t = matchMedia("(prefers-color-scheme:light)").matches
+          ? "light"
+          : "dark";
+      if (t === "light") document.documentElement.classList.add("light");
+    })();
     </script>
   </head>
   <body>

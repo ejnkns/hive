@@ -1,21 +1,21 @@
 <script lang="ts">
-import { onMount } from "svelte";
 import type {
   PlanningProposal,
   RequirementsFeedback,
   RequirementsSessionKind,
 } from "shared/board-types";
+import { isRecord } from "shared/board-types";
+import { onMount } from "svelte";
 import DeviseChat from "./devise-chat.svelte";
 import KanbanBoard from "./kanban-board.svelte";
-import PlanningProposalView from "./planning-proposal.svelte";
-import RequirementsFeedbackView from "./requirements-feedback.svelte";
 import { parsePlanningProposalResponse } from "./parse-planning-proposal-response";
+import PlanningProposalView from "./planning-proposal.svelte";
 import { projectHeader } from "./project-header-state.svelte";
 import {
   connectProjectSocket,
   disconnectProjectSocket,
 } from "./project-socket.svelte";
-import { isRecord } from "shared/board-types";
+import RequirementsFeedbackView from "./requirements-feedback.svelte";
 
 let { projectId }: Props = $props();
 
@@ -188,7 +188,9 @@ function isRequirementsSessionKind(
     {:else if errorMessage}
       <div class="error">{errorMessage}</div>
       <div class="error-actions">
-        <button class="btn btn-primary" onclick={handleApprove}>Retry</button>
+        <button type="button" class="btn btn-primary" onclick={handleApprove}>
+          Retry
+        </button>
       </div>
     {:else if requirementsFeedback}
       <RequirementsFeedbackView
@@ -239,8 +241,8 @@ function isRequirementsSessionKind(
     {:else}
       <DeviseChat
         {projectId}
-        initialMessages={initialMessages}
-        initialStatus={initialStatus}
+        {initialMessages}
+        {initialStatus}
         {initialKind}
         {initialDraftRequirements}
         onApprove={handleApprove}
@@ -253,75 +255,75 @@ function isRequirementsSessionKind(
 </div>
 
 <style>
-  .project-page {
-    max-width: 900px;
-    margin: 0 auto;
-    padding: 1.5rem 1.25rem;
-  }
+.project-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem;
+}
 
-  .loading {
-    text-align: center;
-    padding: 3rem 1rem;
-    color: var(--muted);
-    font-size: 0.875rem;
-  }
+.loading {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
 
-  .planning {
-    text-align: center;
-    padding: 3rem 1rem;
-  }
+.planning {
+  text-align: center;
+  padding: 3rem 1rem;
+}
 
-  .planning-text {
-    font-size: 0.9375rem;
-    color: var(--text);
-    font-weight: 500;
-    margin-bottom: 0.5rem;
-  }
+.planning-text {
+  font-size: 0.9375rem;
+  color: var(--text);
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
 
-  .planning-hint {
-    font-size: 0.75rem;
-    color: var(--muted);
-  }
+.planning-hint {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
 
-  .error {
-    background: rgba(220, 60, 60, 0.1);
-    border: 1px solid rgba(220, 60, 60, 0.3);
-    color: #dc3c3c;
-    padding: 0.75rem 1rem;
-    border-radius: 6px;
-    font-size: 0.8125rem;
-    margin-bottom: 1rem;
-  }
+.error {
+  background: rgba(220, 60, 60, 0.1);
+  border: 1px solid rgba(220, 60, 60, 0.3);
+  color: #dc3c3c;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  margin-bottom: 1rem;
+}
 
-  .error-actions {
-    text-align: center;
-    margin-bottom: 1.5rem;
-  }
+.error-actions {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
 
-  .btn {
-    padding: 0.375rem 0.625rem;
-    border: 1px solid var(--border);
-    border-radius: 5px;
-    font-size: 0.6875rem;
-    font-weight: 500;
-    cursor: pointer;
-    background: var(--surface);
-    color: var(--text);
-    white-space: nowrap;
-  }
+.btn {
+  padding: 0.375rem 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  cursor: pointer;
+  background: var(--surface);
+  color: var(--text);
+  white-space: nowrap;
+}
 
-  .btn:hover:not(:disabled) {
-    background: var(--border);
-  }
+.btn:hover:not(:disabled) {
+  background: var(--border);
+}
 
-  .btn:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
 
-  .btn-primary {
-    background: var(--accent);
-    color: #1b1601;
-    border-color: var(--accent);
-  }
+.btn-primary {
+  background: var(--accent);
+  color: #1b1601;
+  border-color: var(--accent);
+}
 </style>

@@ -101,30 +101,46 @@ const isPinned = $derived(
 </script>
 
 <div class="provider-panel">
-  <div
-    class="panel-header" role="button" tabindex="0"
+  <button
+    type="button"
+    class="panel-header"
     onclick={() => (expanded = !expanded)}
-    onkeydown={(e) => (e.key === "Enter" || e.key === " ") && (expanded = !expanded)}
+    onkeydown={(e) => {
+      if (e.key === "Enter" || e.key === " ") expanded = !expanded;
+    }}
   >
     <span class="panel-title">Providers</span>
     <span class="panel-meta">
       <span class="panel-count">{activeCount} configured</span>
       <span class="toggle-icon">{expanded ? "▲" : "▼"}</span>
     </span>
-  </div>
+  </button>
 
   {#if expanded}
-    <Providers {data} {metrics} {conversations} {overrideKey} onRowClick={onRowClickCallback} {onToggleProvider} />
+    <Providers
+      {data}
+      {metrics}
+      {conversations}
+      {overrideKey}
+      onRowClick={onRowClickCallback}
+      {onToggleProvider}
+    />
   {:else}
     {#if groups.length === 0}
       <div class="no-data">No providers registered</div>
     {:else if displayEntry && currentGroup}
       <div class="summary-card">
         <div class="summary-top">
-          <span class="rank-badge" style="background:{healthColor(currentGroup.maxScore, displayEntry.requestCount)};color:var(--bg)">#1</span>
+          <span
+            class="rank-badge"
+            style="background:{healthColor(currentGroup.maxScore, displayEntry.requestCount)};color:var(--bg)"
+            >#1</span
+          >
           <div class="summary-identity">
             <span class="provider-name">{currentGroup.displayName}</span>
-            <span class="key-badge {currentGroup.keyConfigured ? 'active' : 'no-key'}">
+            <span
+              class="key-badge {currentGroup.keyConfigured ? 'active' : 'no-key'}"
+            >
               {currentGroup.keyConfigured ? "active" : "no key"}
             </span>
           </div>
@@ -136,7 +152,10 @@ const isPinned = $derived(
           </div>
           <div class="metric-item">
             <span class="l">Output</span>
-            <span class="v">{formatNumber(displayEntry.meanTokensPerSecond)} t/s</span>
+            <span class="v"
+              >{formatNumber(displayEntry.meanTokensPerSecond)}
+              t/s</span
+            >
           </div>
           <div class="metric-item">
             <span class="l">Calls</span>
@@ -153,7 +172,9 @@ const isPinned = $derived(
             <span class="badge tripped">cooldown</span>
           {/if}
           {#if displayEntry.disabledFeatures && displayEntry.disabledFeatures.length > 0}
-            <span class="badge unsupported">no-{displayEntry.disabledFeatures.join(", ")}</span>
+            <span class="badge unsupported"
+              >no-{displayEntry.disabledFeatures.join(", ")}</span
+            >
           {/if}
         </div>
       </div>
@@ -181,160 +202,160 @@ const isPinned = $derived(
 </div>
 
 <style>
-  .provider-panel {
-    border: 1px solid var(--border);
-    background: var(--card);
-  }
-  .panel-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.625rem 0.875rem;
-    cursor: pointer;
-    user-select: none;
-  }
-  .panel-header:hover {
-    background: rgba(var(--border-rgb), 0.1);
-  }
-  .panel-title {
-    font-size: 0.625rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    font-weight: 700;
-    color: var(--muted);
-  }
-  .panel-meta {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-  .panel-count {
-    font-size: 0.5625rem;
-    color: var(--muted);
-  }
-  .toggle-icon {
-    font-size: 0.625rem;
-    color: var(--muted);
-  }
-  .no-data {
-    padding: 1rem;
-    text-align: center;
-    color: var(--muted);
-    font-size: 0.8125rem;
-  }
-  .summary-card {
-    padding: 0.75rem 0.875rem;
-  }
-  .summary-top {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-  }
-  .summary-identity {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-  .provider-name {
-    font-size: 1rem;
-    font-weight: 700;
-  }
-  .key-badge {
-    font-size: 0.5625rem;
-    padding: 0.0625rem 0.375rem;
-    font-weight: 700;
-    border: 1px solid currentColor;
-  }
-  .key-badge.active {
-    color: var(--success);
-    border-color: var(--success);
-    background: rgba(var(--success-rgb), 0.08);
-  }
-  .key-badge.no-key {
-    color: var(--muted);
-    border-color: var(--border);
-    background: transparent;
-  }
-  .rank-badge {
-      font-size: 0.625rem;
-      font-weight: 700;
-      padding: 0.125rem 0.375rem;
-    text-transform: uppercase;
-    flex-shrink: 0;
-  }
-  .summary-metrics {
-    display: flex;
-    gap: 1.5rem;
-    margin-top: 0.375rem;
-  }
-  .metric-item {
-    display: flex;
-    flex-direction: column;
-    gap: 0.125rem;
-    min-width: 60px;
-  }
-  .metric-item .l {
-    font-size: 0.5625rem;
-    color: var(--muted);
-    text-transform: uppercase;
-  }
-  .metric-item .v {
-    font-size: 0.875rem;
-    font-weight: 600;
-  }
-  .summary-model {
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
-    margin-top: 0.25rem;
-    font-size: 0.75rem;
-  }
-  .model-label {
-    color: var(--muted);
-  }
-  .model-name {
-    font-family: monospace;
-    color: var(--accent);
-  }
-  .other-providers {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.5rem 0.875rem;
-    border-top: 1px solid var(--border);
-    font-size: 0.6875rem;
-    color: var(--muted);
-    flex-wrap: wrap;
-  }
-  .other-chip {
-    font-weight: 500;
-  }
-  .other-chip.muted {
-    opacity: 0.5;
-  }
-  .sep {
-    opacity: 0.4;
-  }
-  .badge {
-    display: inline-block;
-    font-size: 0.5rem;
-    font-weight: 700;
-    padding: 0.0625rem 0.25rem;
-    text-transform: uppercase;
-    border-radius: 2px;
-  }
-  .badge.pinned {
-    background: rgba(var(--accent-rgb), 0.15);
-    color: var(--accent);
-    border: 1px solid var(--accent);
-  }
-  .badge.tripped {
-    background: rgba(var(--error-rgb), 0.15);
-    color: var(--error);
-  }
-  .badge.unsupported {
-    background: rgba(var(--accent-rgb), 0.15);
-    color: var(--accent);
-  }
+.provider-panel {
+  border: 1px solid var(--border);
+  background: var(--card);
+}
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.625rem 0.875rem;
+  cursor: pointer;
+  user-select: none;
+}
+.panel-header:hover {
+  background: rgba(var(--border-rgb), 0.1);
+}
+.panel-title {
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: var(--muted);
+}
+.panel-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.panel-count {
+  font-size: 0.5625rem;
+  color: var(--muted);
+}
+.toggle-icon {
+  font-size: 0.625rem;
+  color: var(--muted);
+}
+.no-data {
+  padding: 1rem;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.summary-card {
+  padding: 0.75rem 0.875rem;
+}
+.summary-top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.summary-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.provider-name {
+  font-size: 1rem;
+  font-weight: 700;
+}
+.key-badge {
+  font-size: 0.5625rem;
+  padding: 0.0625rem 0.375rem;
+  font-weight: 700;
+  border: 1px solid currentColor;
+}
+.key-badge.active {
+  color: var(--success);
+  border-color: var(--success);
+  background: rgba(var(--success-rgb), 0.08);
+}
+.key-badge.no-key {
+  color: var(--muted);
+  border-color: var(--border);
+  background: transparent;
+}
+.rank-badge {
+  font-size: 0.625rem;
+  font-weight: 700;
+  padding: 0.125rem 0.375rem;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.summary-metrics {
+  display: flex;
+  gap: 1.5rem;
+  margin-top: 0.375rem;
+}
+.metric-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 60px;
+}
+.metric-item .l {
+  font-size: 0.5625rem;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.metric-item .v {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.summary-model {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+}
+.model-label {
+  color: var(--muted);
+}
+.model-name {
+  font-family: monospace;
+  color: var(--accent);
+}
+.other-providers {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 0.875rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.6875rem;
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+.other-chip {
+  font-weight: 500;
+}
+.other-chip.muted {
+  opacity: 0.5;
+}
+.sep {
+  opacity: 0.4;
+}
+.badge {
+  display: inline-block;
+  font-size: 0.5rem;
+  font-weight: 700;
+  padding: 0.0625rem 0.25rem;
+  text-transform: uppercase;
+  border-radius: 2px;
+}
+.badge.pinned {
+  background: rgba(var(--accent-rgb), 0.15);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+.badge.tripped {
+  background: rgba(var(--error-rgb), 0.15);
+  color: var(--error);
+}
+.badge.unsupported {
+  background: rgba(var(--accent-rgb), 0.15);
+  color: var(--accent);
+}
 </style>

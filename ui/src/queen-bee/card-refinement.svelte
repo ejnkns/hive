@@ -4,8 +4,8 @@ import type {
   PlanningProposal,
   RequirementsFeedback,
 } from "shared/board-types";
-import { projectSocket } from "./project-socket.svelte";
 import { parsePlanningProposalResponse } from "./parse-planning-proposal-response";
+import { projectSocket } from "./project-socket.svelte";
 
 let {
   projectId,
@@ -175,7 +175,9 @@ $effect(() => {
     </div>
   {:else}
     <div class="confirmation">
-      <div class="confirmation-title">Card and requirements ready to approve</div>
+      <div class="confirmation-title">
+        Card and requirements ready to approve
+      </div>
       <div>
         Confirm to reconcile the proposed card and requirements against the
         whole board. You will review every affected card before applying them.
@@ -209,6 +211,7 @@ $effect(() => {
   <div class="actions">
     {#if stage === "context"}
       <button
+        type="button"
         class="btn btn-primary"
         onclick={startRefinement}
         disabled={busy || !input.trim()}
@@ -217,6 +220,7 @@ $effect(() => {
       </button>
     {:else if stage === "question"}
       <button
+        type="button"
         class="btn btn-primary"
         onclick={respond}
         disabled={busy || !input.trim()}
@@ -224,145 +228,150 @@ $effect(() => {
         {busy ? "Sending..." : "Send"}
       </button>
     {:else}
-      <button class="btn btn-primary" onclick={confirmReady} disabled={busy}>
+      <button
+        type="button"
+        class="btn btn-primary"
+        onclick={confirmReady}
+        disabled={busy}
+      >
         {busy ? "Reconciling..." : "Confirm and review changes"}
       </button>
     {/if}
-    <button class="btn" onclick={onCancel} disabled={busy}>
+    <button type="button" class="btn" onclick={onCancel} disabled={busy}>
       {stage === "confirmation" ? "Keep as Idea" : "Cancel"}
     </button>
   </div>
 </div>
 
 <style>
-  .refinement {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    display: flex;
-    flex-direction: column;
-    gap: 0.625rem;
-    padding: 0.75rem;
-  }
+.refinement {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  padding: 0.75rem;
+}
 
-  .prompt,
-  .question,
-  .confirmation {
-    color: var(--text);
-    font-size: 0.75rem;
-    line-height: 1.5;
-  }
+.prompt,
+.question,
+.confirmation {
+  color: var(--text);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
 
-  .prompt,
-  .confirmation {
-    white-space: normal;
-  }
+.prompt,
+.confirmation {
+  white-space: normal;
+}
 
-  .question {
-    overflow-wrap: anywhere;
-    white-space: pre-wrap;
-  }
+.question {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
 
-  .draft-panel {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 5px;
-    padding: 0.625rem;
-  }
+.draft-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0.625rem;
+}
 
-  .draft-panel pre {
-    color: var(--text);
-    font-family: inherit;
-    font-size: 0.6875rem;
-    line-height: 1.45;
-    margin: 0;
-    max-height: 14rem;
-    overflow: auto;
-    white-space: pre-wrap;
-  }
+.draft-panel pre {
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.6875rem;
+  line-height: 1.45;
+  margin: 0;
+  max-height: 14rem;
+  overflow: auto;
+  white-space: pre-wrap;
+}
 
-  .draft-note {
-    color: var(--muted);
-    font-size: 0.625rem;
-    margin-top: 0.375rem;
-  }
+.draft-note {
+  color: var(--muted);
+  font-size: 0.625rem;
+  margin-top: 0.375rem;
+}
 
-  .question {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 5px;
-    padding: 0.625rem;
-  }
+.question {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0.625rem;
+}
 
-  .role-label,
-  .confirmation-title {
-    color: var(--muted);
-    font-size: 0.625rem;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    margin-bottom: 0.25rem;
-    text-transform: uppercase;
-  }
+.role-label,
+.confirmation-title {
+  color: var(--muted);
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.25rem;
+  text-transform: uppercase;
+}
 
-  .confirmation-title {
-    color: var(--accent);
-  }
+.confirmation-title {
+  color: var(--accent);
+}
 
-  textarea {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 5px;
-    color: var(--text);
-    font-family: inherit;
-    font-size: 0.75rem;
-    padding: 0.5rem 0.625rem;
-    resize: vertical;
-  }
+textarea {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.75rem;
+  padding: 0.5rem 0.625rem;
+  resize: vertical;
+}
 
-  textarea:focus {
-    border-color: var(--accent);
-    outline: none;
-  }
+textarea:focus {
+  border-color: var(--accent);
+  outline: none;
+}
 
-  .actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.375rem;
-  }
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
 
-  .btn {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    color: var(--text);
-    cursor: pointer;
-    font-size: 0.6875rem;
-    padding: 0.375rem 0.625rem;
-    white-space: nowrap;
-  }
+.btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.6875rem;
+  padding: 0.375rem 0.625rem;
+  white-space: nowrap;
+}
 
-  .btn:hover:not(:disabled) {
-    background: var(--border);
-  }
+.btn:hover:not(:disabled) {
+  background: var(--border);
+}
 
-  .btn:disabled {
-    cursor: default;
-    opacity: 0.5;
-  }
+.btn:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
 
-  .btn-primary {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #1b1601;
-    font-weight: 600;
-  }
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #1b1601;
+  font-weight: 600;
+}
 
-  .error {
-    background: rgba(220, 60, 60, 0.1);
-    border: 1px solid rgba(220, 60, 60, 0.3);
-    border-radius: 5px;
-    color: #dc3c3c;
-    font-size: 0.6875rem;
-    padding: 0.375rem 0.5rem;
-  }
+.error {
+  background: rgba(220, 60, 60, 0.1);
+  border: 1px solid rgba(220, 60, 60, 0.3);
+  border-radius: 5px;
+  color: #dc3c3c;
+  font-size: 0.6875rem;
+  padding: 0.375rem 0.5rem;
+}
 </style>

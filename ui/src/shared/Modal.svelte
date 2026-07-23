@@ -40,7 +40,9 @@ function onKeydown(e: KeyboardEvent) {
       {#if title}
         <div class="header">
           <span class="title">{title}</span>
-          <button class="close-btn" onclick={close}>&times;</button>
+          <button type="button" class="close-btn" onclick={close}>
+            &times;
+          </button>
         </div>
       {/if}
       <div class="content">
@@ -51,51 +53,51 @@ function onKeydown(e: KeyboardEvent) {
 {/if}
 
 <style>
-  .backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 100;
-    background: rgba(0, 0, 0, 0.6);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .overlay {
-    background: var(--card);
-    border: 1px solid var(--border);
-    padding: 1.25rem;
-    max-width: 500px;
-    width: 90%;
-    max-height: 80vh;
-    overflow-y: auto;
-  }
-  .header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0.75rem;
-  }
-  .title {
-    font-size: 0.75rem;
-    font-weight: 700;
-    text-transform: uppercase;
-  }
-  .close-btn {
-    background: none;
-    border: none;
-    color: var(--muted);
-    cursor: pointer;
-    font-size: 1rem;
-    font-family: inherit;
-    padding: 0;
-    line-height: 1;
-  }
-  .close-btn:hover {
-    color: var(--accent);
-  }
-  .content {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.overlay {
+  background: var(--card);
+  border: 1px solid var(--border);
+  padding: 1.25rem;
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+.title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.close-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 1rem;
+  font-family: inherit;
+  padding: 0;
+  line-height: 1;
+}
+.close-btn:hover {
+  color: var(--accent);
+}
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
 </style>

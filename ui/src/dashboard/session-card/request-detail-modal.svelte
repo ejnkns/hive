@@ -1,10 +1,10 @@
 <script lang="ts">
 import type { RequestState } from "shared/dashboard-types";
-import { formatNumber, formatTime, sc } from "../../shared/utils";
-import { isTerminal } from "../stage-utils";
-import StagePathDots from "../StagePathDots.svelte";
-import ConversationView from "../ConversationView.svelte";
 import Modal from "../../shared/Modal.svelte";
+import { formatNumber, formatTime, sc } from "../../shared/utils";
+import ConversationView from "../ConversationView.svelte";
+import StagePathDots from "../StagePathDots.svelte";
+import { isTerminal } from "../stage-utils";
 
 let {
   open = $bindable(false),
@@ -45,9 +45,9 @@ const hasConversation = $derived(
       <div class="tabs">
         {#each requests as req, i}
           <button
+            type="button"
             class="tab {req.requestId === activeRequestId ? 'tab-active' : ''}"
             onclick={() => onSelectRequest?.(req.requestId)}
-            type="button"
           >
             {#if req.requestId === activeRequestId}
               <span class="tab-current"></span>
@@ -96,8 +96,10 @@ const hasConversation = $derived(
         <div class="detail-section">
           <div class="section-title">selection</div>
           <div class="selection-header">
-            {request.strategy ?? "—"} &middot;
-            {String(request.poolSize ?? 0)} candidates &middot;
+            {request.strategy ?? "—"}
+            &middot;
+            {String(request.poolSize ?? 0)}
+            candidates &middot;
             {request.selected ?? "none"}
           </div>
           {#each request.candidates as c}
@@ -108,13 +110,13 @@ const hasConversation = $derived(
               <span class="cand-prov">{c.provider}</span>
               <span class="cand-model">{c.model}</span>
               {#if c.status === "eligible"}
-                <span style="color:{sc(c.score)}"
-                  >{c.score.toFixed(1)}%</span
-                >
+                <span style="color:{sc(c.score)}">{c.score.toFixed(1)}%</span>
               {:else}
                 <span class="badge ineligible">{c.status}</span>
               {/if}
-              {#if c.affinity}<span class="badge">affinity</span>{/if}
+              {#if c.affinity}
+                <span class="badge">affinity</span>
+              {/if}
             </div>
           {/each}
         </div>
@@ -126,7 +128,8 @@ const hasConversation = $derived(
           <div class="failovers">
             {#each request.failovers as f}
               <span class="badge failover"
-                >{f.provider}:{f.model} &rarr; {f.errorType}</span
+                >{f.provider}:{f.model}
+                &rarr; {f.errorType}</span
               >
             {/each}
           </div>
@@ -137,8 +140,12 @@ const hasConversation = $derived(
         <div class="detail-section">
           <div class="section-title">pinned node error</div>
           <div class="override-detail">
-            <span class="od-prov">{request.overrideError.provider}:{request.overrideError.model}</span>
-            <span class="od-status">status {request.overrideError.statusCode}</span>
+            <span class="od-prov"
+              >{request.overrideError.provider}:{request.overrideError.model}</span
+            >
+            <span class="od-status"
+              >status {request.overrideError.statusCode}</span
+            >
             <span class="od-type">{request.overrideError.errorType}</span>
             <div class="od-body">{request.overrideError.errorBody}</div>
           </div>
@@ -191,9 +198,7 @@ const hasConversation = $derived(
             {#if request.response.toolCallFailed}
               <div class="field">
                 <span class="field-label">Tool Err</span>
-                <span class="field-val" style="color: var(--error)"
-                  >Yes</span
-                >
+                <span class="field-val" style="color: var(--error)">Yes</span>
               </div>
             {/if}
             {#if request.toolLoopDetected}
@@ -237,189 +242,189 @@ const hasConversation = $derived(
 </Modal>
 
 <style>
-  .modal-body {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
+.modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
 
-  .tabs {
-    display: flex;
-    gap: 0.125rem;
-    flex-wrap: wrap;
-    padding-bottom: 0.375rem;
-    border-bottom: 1px solid var(--border);
-  }
+.tabs {
+  display: flex;
+  gap: 0.125rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.375rem;
+  border-bottom: 1px solid var(--border);
+}
 
-  .tab {
-    background: none;
-    border: 1px solid var(--border);
-    color: var(--muted);
-    font-family: monospace;
-    font-size: 0.5625rem;
-    cursor: pointer;
-    padding: 0.0625rem 0.375rem;
-    text-transform: uppercase;
-  }
+.tab {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-family: monospace;
+  font-size: 0.5625rem;
+  cursor: pointer;
+  padding: 0.0625rem 0.375rem;
+  text-transform: uppercase;
+}
 
-  .tab:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
+.tab:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 
-  .tab-active {
-    border-color: var(--accent);
-    color: var(--accent);
-    font-weight: 700;
-  }
+.tab-active {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
 
-  .detail-section {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
+.detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
 
-  .section-title {
-    font-size: 0.5625rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    color: var(--muted);
-  }
+.section-title {
+  font-size: 0.5625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--muted);
+}
 
-  .detail-grid {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 0.125rem 0.75rem;
-    font-size: 0.6875rem;
-  }
+.detail-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.125rem 0.75rem;
+  font-size: 0.6875rem;
+}
 
-  .field {
-    display: contents;
-  }
+.field {
+  display: contents;
+}
 
-  .field-label {
-    color: var(--muted);
-  }
+.field-label {
+  color: var(--muted);
+}
 
-  .field-val {
-    color: var(--text);
-  }
+.field-val {
+  color: var(--text);
+}
 
-  .field-val.mono {
-    font-family: monospace;
-    font-size: 0.5625rem;
-  }
+.field-val.mono {
+  font-family: monospace;
+  font-size: 0.5625rem;
+}
 
-  .prompt-text {
-    color: var(--text);
-    font-size: 0.6875rem;
-    white-space: pre-wrap;
-    word-break: break-word;
-  }
+.prompt-text {
+  color: var(--text);
+  font-size: 0.6875rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 
-  .selection-header {
-    color: var(--muted);
-    font-size: 0.5625rem;
-    text-transform: uppercase;
-  }
+.selection-header {
+  color: var(--muted);
+  font-size: 0.5625rem;
+  text-transform: uppercase;
+}
 
-  .candidate-row {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.125rem 0;
-    font-size: 0.625rem;
-  }
+.candidate-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.125rem 0;
+  font-size: 0.625rem;
+}
 
-  .candidate-selected {
-    color: var(--success);
-  }
+.candidate-selected {
+  color: var(--success);
+}
 
-  .cand-prov {
-    text-transform: capitalize;
-    min-width: 70px;
-  }
+.cand-prov {
+  text-transform: capitalize;
+  min-width: 70px;
+}
 
-  .cand-model {
-    font-family: monospace;
-    color: var(--accent);
-    font-size: 0.5625rem;
-  }
+.cand-model {
+  font-family: monospace;
+  color: var(--accent);
+  font-size: 0.5625rem;
+}
 
-  .badge {
-    display: inline-block;
-    font-size: 0.5rem;
-    font-weight: 700;
-    padding: 0.0625rem 0.25rem;
-    text-transform: uppercase;
-  }
+.badge {
+  display: inline-block;
+  font-size: 0.5rem;
+  font-weight: 700;
+  padding: 0.0625rem 0.25rem;
+  text-transform: uppercase;
+}
 
-  .badge.ineligible {
-    color: var(--error);
-    background: rgba(var(--error-rgb), 0.1);
-    border: 1px solid rgba(var(--error-rgb), 0.2);
-  }
+.badge.ineligible {
+  color: var(--error);
+  background: rgba(var(--error-rgb), 0.1);
+  border: 1px solid rgba(var(--error-rgb), 0.2);
+}
 
-  .badge.failover {
-    color: #e2a93b;
-    background: rgba(226, 169, 59, 0.1);
-    border: 1px solid rgba(226, 169, 59, 0.2);
-  }
+.badge.failover {
+  color: #e2a93b;
+  background: rgba(226, 169, 59, 0.1);
+  border: 1px solid rgba(226, 169, 59, 0.2);
+}
 
-  .failovers {
-    font-size: 0.625rem;
-    display: flex;
-    gap: 0.25rem;
-    flex-wrap: wrap;
-  }
+.failovers {
+  font-size: 0.625rem;
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
 
-  .override-detail {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
+.override-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
 
-  .od-prov {
-    font-family: monospace;
-    font-size: 0.625rem;
-    color: var(--accent);
-  }
+.od-prov {
+  font-family: monospace;
+  font-size: 0.625rem;
+  color: var(--accent);
+}
 
-  .od-status {
-    font-size: 0.5625rem;
-    color: var(--error);
-    font-weight: 700;
-  }
+.od-status {
+  font-size: 0.5625rem;
+  color: var(--error);
+  font-weight: 700;
+}
 
-  .od-type {
-    font-size: 0.5rem;
-    color: var(--muted);
-    text-transform: uppercase;
-  }
+.od-type {
+  font-size: 0.5rem;
+  color: var(--muted);
+  text-transform: uppercase;
+}
 
-  .od-body {
-    font-size: 0.5625rem;
-    color: var(--muted);
-    font-family: monospace;
-    white-space: pre-wrap;
-    word-break: break-word;
-    max-height: 100px;
-    overflow-y: auto;
-    padding: 0.25rem;
-    background: rgba(var(--border-rgb), 0.08);
-    border: 1px solid var(--border);
-  }
+.od-body {
+  font-size: 0.5625rem;
+  color: var(--muted);
+  font-family: monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 100px;
+  overflow-y: auto;
+  padding: 0.25rem;
+  background: rgba(var(--border-rgb), 0.08);
+  border: 1px solid var(--border);
+}
 
-  .token-stats {
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
-    font-size: 0.625rem;
-    color: var(--muted);
-    font-family: monospace;
-  }
+.token-stats {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.625rem;
+  color: var(--muted);
+  font-family: monospace;
+}
 
-  .dot-sep {
-    color: var(--border);
-  }
+.dot-sep {
+  color: var(--border);
+}
 </style>

@@ -26,40 +26,44 @@ const displayText = $derived(
 <div class="truncatable">
   <pre class="text">{displayText}</pre>
   {#if text.length > effectiveLimit}
-    <button class="toggle-btn" onclick={() => (expanded = !expanded)}>
+    <button
+      type="button"
+      class="toggle-btn"
+      onclick={() => (expanded = !expanded)}
+    >
       {expanded ? "show less" : "show more"}
     </button>
   {/if}
 </div>
 
 <style>
-  .truncatable {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-  .text {
-    margin: 0;
-    font-family: monospace;
-    font-size: 0.625rem;
-    color: var(--text);
-    white-space: pre-wrap;
-    word-break: break-word;
-    line-height: 1.4;
-  }
-  .toggle-btn {
-    background: none;
-    border: 1px solid var(--border);
-    color: var(--muted);
-    font-family: monospace;
-    font-size: 0.5625rem;
-    cursor: pointer;
-    padding: 0.0625rem 0.375rem;
-    text-transform: uppercase;
-    align-self: flex-start;
-  }
-  .toggle-btn:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
+.truncatable {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.text {
+  margin: 0;
+  font-family: monospace;
+  font-size: 0.625rem;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.4;
+}
+.toggle-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-family: monospace;
+  font-size: 0.5625rem;
+  cursor: pointer;
+  padding: 0.0625rem 0.375rem;
+  text-transform: uppercase;
+  align-self: flex-start;
+}
+.toggle-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 </style>

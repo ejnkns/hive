@@ -3,8 +3,8 @@ import type {
   Card,
   CardActivityEvent,
   PlanningProposal,
-  ReviewReadiness,
   RequirementsFeedback,
+  ReviewReadiness,
 } from "shared/board-types";
 import { COLUMN_LABELS } from "shared/board-types";
 import CardRefinement from "./card-refinement.svelte";
@@ -162,15 +162,22 @@ $effect(() => {
 });
 </script>
 
-<!-- svelte-ignore a11y_click_events_have_key_events -->
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="overlay" onclick={onClose}>
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="panel" onclick={(e) => e.stopPropagation()}>
+<div
+  class="overlay"
+  role="button"
+  tabindex="0"
+  onclick={onClose}
+  onkeydown={(e) => e.key === "Escape" && onClose()}
+>
+  <div
+    class="panel"
+    onclick={(e) => e.stopPropagation()}
+    onkeydown={() => undefined}
+    role="presentation"
+  >
     <div class="panel-header">
       <h3>{card.title}</h3>
-      <button class="btn-close" onclick={onClose}>&times;</button>
+      <button type="button" class="btn-close" onclick={onClose}>&times;</button>
     </div>
 
     <div class="panel-body">
@@ -221,8 +228,10 @@ $effect(() => {
         <div class="section">
           <div class="section-label">Last Run</div>
           <div class="log-summary">
-            {card.workerLog.iterations} iteration{card.workerLog.iterations !== 1 ? "s" : ""},
-            {card.workerLog.toolCalls.length} tool call{card.workerLog.toolCalls.length !== 1 ? "s" : ""}
+            {card.workerLog.iterations}
+            iteration{card.workerLog.iterations !== 1 ? "s" : ""},
+            {card.workerLog.toolCalls.length}
+            tool call{card.workerLog.toolCalls.length !== 1 ? "s" : ""}
             {#if card.workerLog.error}
               <span class="log-error">— Failed: {card.workerLog.error}</span>
             {/if}
@@ -309,7 +318,10 @@ $effect(() => {
           {/if}
           <div class="activity-list">
             {#each activity as event}
-              <div class="activity-event" class:activity-error={event.type === "error"}>
+              <div
+                class="activity-event"
+                class:activity-error={event.type === "error"}
+              >
                 <div class="activity-summary">
                   <span class="activity-actor">{event.actor}</span>
                   <span>{event.summary}</span>
@@ -355,15 +367,20 @@ $effect(() => {
           {#if card.coordinatorLog.status === "pending"}
             <div class="section-value">Analyzing the handover…</div>
           {:else if card.coordinatorLog.status === "error"}
-            <div class="log-error">{card.coordinatorLog.error ?? "Analysis failed"}</div>
+            <div class="log-error">
+              {card.coordinatorLog.error ?? "Analysis failed"}
+            </div>
           {:else}
             <div class="section-value">{card.coordinatorLog.summary}</div>
-            {#if remediationError}<div class="log-error">{remediationError}</div>{/if}
+            {#if remediationError}
+              <div class="log-error">{remediationError}</div>
+            {/if}
             {#each card.coordinatorLog.suggestions ?? [] as suggestion}
               <div class="suggestion">
                 <div>{suggestion.rationale}</div>
                 {#if onRemediate}
                   <button
+                    type="button"
                     class="btn btn-sm"
                     onclick={() => void remediate(suggestion.action, suggestion.id)}
                     disabled={remediating}
@@ -406,6 +423,7 @@ $effect(() => {
           ></textarea>
           <div class="decision-input-actions">
             <button
+              type="button"
               class="btn btn-run"
               onclick={requestChanges}
               disabled={deciding || !decisionGuidance.trim()}
@@ -413,10 +431,13 @@ $effect(() => {
               Request changes
             </button>
             <button
+              type="button"
               class="btn"
               onclick={() => (requestingChanges = false)}
               disabled={deciding}
-            >Cancel</button>
+            >
+              Cancel
+            </button>
           </div>
         </div>
       {/if}
@@ -428,32 +449,50 @@ $effect(() => {
 
     <div class="panel-actions">
       {#if card.column === "ready" && onRun}
-        <button class="btn btn-run" onclick={onRun}>
+        <button type="button" class="btn btn-run" onclick={onRun}>
           Run Worker Agent
         </button>
       {/if}
       {#if card.column === "reviewing"}
         {#if card.reviewerLog?.status === "complete"}
           {#if reviewReadiness?.canAccept && onAccept}
-            <button class="btn btn-run" onclick={acceptWork} disabled={deciding}>
+            <button
+              type="button"
+              class="btn btn-run"
+              onclick={acceptWork}
+              disabled={deciding}
+            >
               {deciding ? "Applying decision..." : "Accept work"}
             </button>
           {:else if reviewReadiness?.canRefreshReview && onRestartReview}
-            <button class="btn btn-run" onclick={restartReview} disabled={deciding}>
+            <button
+              type="button"
+              class="btn btn-run"
+              onclick={restartReview}
+              disabled={deciding}
+            >
               {deciding ? "Refreshing..." : "Refresh review"}
             </button>
           {/if}
         {:else if card.reviewerLog?.status === "error" && onRestartReview}
-          <button class="btn btn-run" onclick={restartReview} disabled={deciding}>
+          <button
+            type="button"
+            class="btn btn-run"
+            onclick={restartReview}
+            disabled={deciding}
+          >
             {deciding ? "Restarting..." : "Retry review"}
           </button>
         {/if}
         {#if onRequestChanges && !requestingChanges}
           <button
+            type="button"
             class="btn"
             onclick={() => (requestingChanges = true)}
             disabled={deciding}
-          >Request changes</button>
+          >
+            Request changes
+          </button>
         {/if}
       {/if}
     </div>
@@ -461,329 +500,328 @@ $effect(() => {
 </div>
 
 <style>
-  .overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-  }
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
 
-  .panel {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    width: 520px;
-    max-width: 90vw;
-    max-height: 80vh;
-    overflow-y: auto;
-  }
+.panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  width: 520px;
+  max-width: 90vw;
+  max-height: 80vh;
+  overflow-y: auto;
+}
 
-  .panel-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    padding: 1.25rem 1.25rem 0.75rem;
-    border-bottom: 1px solid var(--border);
-  }
+.panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 1.25rem 1.25rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
 
-  .panel-header h3 {
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--text);
-    margin: 0;
-  }
+.panel-header h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
 
-  .btn-close {
-    background: none;
-    border: none;
-    color: var(--muted);
-    font-size: 1.25rem;
-    cursor: pointer;
-    padding: 0;
-    line-height: 1;
-  }
+.btn-close {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
 
-  .btn-close:hover {
-    color: var(--text);
-  }
+.btn-close:hover {
+  color: var(--text);
+}
 
-  .panel-body {
-    padding: 1rem 1.25rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
+.panel-body {
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
 
-  .section-label {
-    font-size: 0.625rem;
-    font-weight: 600;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: 0.25rem;
-  }
+.section-label {
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.25rem;
+}
 
-  .section-value {
-    font-size: 0.8125rem;
-    color: var(--text);
-    line-height: 1.5;
-  }
+.section-value {
+  font-size: 0.8125rem;
+  color: var(--text);
+  line-height: 1.5;
+}
 
-  .criteria-list {
-    margin: 0;
-    padding-left: 1.25rem;
-    font-size: 0.8125rem;
-    color: var(--text);
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
+.criteria-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.8125rem;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
 
-  .file-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.25rem;
-  }
+.file-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
 
-  .file {
-    font-size: 0.6875rem;
-    background: var(--bg);
-    padding: 0.125rem 0.375rem;
-    border-radius: 4px;
-    color: var(--accent);
-    font-family: var(--font-mono, monospace);
-  }
+.file {
+  font-size: 0.6875rem;
+  background: var(--bg);
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  color: var(--accent);
+  font-family: var(--font-mono, monospace);
+}
 
-  .deps-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.25rem;
-  }
+.deps-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
 
-  .dep {
-    font-size: 0.6875rem;
-    background: var(--bg);
-    color: var(--muted);
-    padding: 0.125rem 0.375rem;
-    border-radius: 4px;
-  }
+.dep {
+  font-size: 0.6875rem;
+  background: var(--bg);
+  color: var(--muted);
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+}
 
-  .panel-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.375rem;
-    padding: 0.75rem 1.25rem 1rem;
-    border-top: 1px solid var(--border);
-  }
+.panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  padding: 0.75rem 1.25rem 1rem;
+  border-top: 1px solid var(--border);
+}
 
-  .btn {
-    padding: 0.25rem 0.5rem;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    font-size: 0.6875rem;
-    cursor: pointer;
-    background: var(--surface);
-    color: var(--text);
-  }
+.btn {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  cursor: pointer;
+  background: var(--surface);
+  color: var(--text);
+}
 
-  .btn:hover {
-    background: var(--border);
-  }
+.btn:hover {
+  background: var(--border);
+}
 
-  .btn-run {
-    background: var(--accent);
-    color: #1b1601;
-    border-color: var(--accent);
-    font-weight: 600;
-    padding: 0.5rem 1.25rem;
-  }
+.btn-run {
+  background: var(--accent);
+  color: #1b1601;
+  border-color: var(--accent);
+  font-weight: 600;
+  padding: 0.5rem 1.25rem;
+}
 
-  .log-summary {
-    font-size: 0.75rem;
-    color: var(--text);
-  }
+.log-summary {
+  font-size: 0.75rem;
+  color: var(--text);
+}
 
-  .log-error {
-    color: #dc3c3c;
-  }
+.log-error {
+  color: #dc3c3c;
+}
 
-  .log-tools {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.25rem;
-    margin-top: 0.375rem;
-  }
+.log-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.375rem;
+}
 
-  .log-tool {
-    font-size: 0.625rem;
-    background: var(--bg);
-    color: var(--accent);
-    padding: 0.125rem 0.375rem;
-    border-radius: 3px;
-    font-family: var(--font-mono, monospace);
-  }
+.log-tool {
+  font-size: 0.625rem;
+  background: var(--bg);
+  color: var(--accent);
+  padding: 0.125rem 0.375rem;
+  border-radius: 3px;
+  font-family: var(--font-mono, monospace);
+}
 
-  .log-content {
-    font-size: 0.6875rem;
-    font-family: var(--font-mono, monospace);
-    color: var(--muted);
-    white-space: pre-wrap;
-    margin: 0.5rem 0 0 0;
-    max-height: 200px;
-    overflow-y: auto;
-    line-height: 1.45;
-  }
+.log-content {
+  font-size: 0.6875rem;
+  font-family: var(--font-mono, monospace);
+  color: var(--muted);
+  white-space: pre-wrap;
+  margin: 0.5rem 0 0 0;
+  max-height: 200px;
+  overflow-y: auto;
+  line-height: 1.45;
+}
 
-  .review-verdict {
-    font-size: 0.75rem;
-    font-weight: 600;
-    margin-bottom: 0.25rem;
-  }
+.review-verdict {
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
 
-  .verdict-approved {
-    color: #7cb342;
-  }
+.verdict-approved {
+  color: #7cb342;
+}
 
-  .verdict-changes,
-  .verdict-error {
-    color: #dc3c3c;
-  }
+.verdict-changes,
+.verdict-error {
+  color: #dc3c3c;
+}
 
-  .review-feedback {
-    font-size: 0.75rem;
-    color: var(--text);
-    line-height: 1.45;
-    white-space: pre-wrap;
-  }
+.review-feedback {
+  font-size: 0.75rem;
+  color: var(--text);
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
 
-  .review-finding {
-    border-left: 2px solid var(--border);
-    color: var(--text);
-    font-size: 0.75rem;
-    line-height: 1.45;
-    margin-top: 0.5rem;
-    padding-left: 0.5rem;
-  }
+.review-finding {
+  border-left: 2px solid var(--border);
+  color: var(--text);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  margin-top: 0.5rem;
+  padding-left: 0.5rem;
+}
 
-  .review-finding-header {
-    font-weight: 600;
-    text-transform: capitalize;
-  }
+.review-finding-header {
+  font-weight: 600;
+  text-transform: capitalize;
+}
 
-  .review-recommendation,
-  .review-assessment {
-    color: var(--muted);
-    font-size: 0.6875rem;
-    margin-top: 0.25rem;
-  }
+.review-recommendation,
+.review-assessment {
+  color: var(--muted);
+  font-size: 0.6875rem;
+  margin-top: 0.25rem;
+}
 
-  .readiness-message {
-    border-left: 2px solid var(--border);
-    color: var(--muted);
-    font-size: 0.75rem;
-    line-height: 1.45;
-    padding-left: 0.5rem;
-  }
+.readiness-message {
+  border-left: 2px solid var(--border);
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  padding-left: 0.5rem;
+}
 
-  .readiness-current {
-    border-left-color: #7cb342;
-    color: #7cb342;
-  }
+.readiness-current {
+  border-left-color: #7cb342;
+  color: #7cb342;
+}
 
-  .readiness-warning {
-    border-left-color: #c89522;
-    color: #c89522;
-  }
+.readiness-warning {
+  border-left-color: #c89522;
+  color: #c89522;
+}
 
-  .readiness-conflict {
-    border-left-color: #dc3c3c;
-    color: #dc3c3c;
-  }
+.readiness-conflict {
+  border-left-color: #dc3c3c;
+  color: #dc3c3c;
+}
 
-  .decision-input textarea {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 5px;
-    box-sizing: border-box;
-    color: var(--text);
-    font-family: inherit;
-    font-size: 0.75rem;
-    padding: 0.5rem;
-    resize: vertical;
-    width: 100%;
-  }
+.decision-input textarea {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  box-sizing: border-box;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.75rem;
+  padding: 0.5rem;
+  resize: vertical;
+  width: 100%;
+}
 
-  .decision-input-actions {
-    display: flex;
-    gap: 0.375rem;
-    margin-top: 0.5rem;
-  }
+.decision-input-actions {
+  display: flex;
+  gap: 0.375rem;
+  margin-top: 0.5rem;
+}
 
-  .activity-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.375rem;
-  }
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
 
-  .activity-event {
-    border-left: 2px solid var(--border);
-    color: var(--text);
-    font-size: 0.6875rem;
-    padding-left: 0.5rem;
-  }
+.activity-event {
+  border-left: 2px solid var(--border);
+  color: var(--text);
+  font-size: 0.6875rem;
+  padding-left: 0.5rem;
+}
 
-  .activity-error {
-    border-left-color: #dc3c3c;
-  }
+.activity-error {
+  border-left-color: #dc3c3c;
+}
 
-  .activity-summary {
-    display: flex;
-    gap: 0.375rem;
-  }
+.activity-summary {
+  display: flex;
+  gap: 0.375rem;
+}
 
-  .activity-actor {
-    color: var(--accent);
-    font-weight: 600;
-    text-transform: capitalize;
-  }
+.activity-actor {
+  color: var(--accent);
+  font-weight: 600;
+  text-transform: capitalize;
+}
 
-  .activity-event details {
-    color: var(--muted);
-    margin-top: 0.25rem;
-  }
+.activity-event details {
+  color: var(--muted);
+  margin-top: 0.25rem;
+}
 
-  .activity-event pre {
-    font-family: var(--font-mono, monospace);
-    font-size: 0.625rem;
-    max-height: 160px;
-    overflow: auto;
-    white-space: pre-wrap;
-  }
+.activity-event pre {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.625rem;
+  max-height: 160px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
 
-  .handover-problem {
-    font-size: 0.8125rem;
-    color: var(--text);
-  }
+.handover-problem {
+  font-size: 0.8125rem;
+  color: var(--text);
+}
 
-  .handover-label {
-    color: var(--muted);
-    font-size: 0.6875rem;
-    margin-top: 0.5rem;
-  }
+.handover-label {
+  color: var(--muted);
+  font-size: 0.6875rem;
+  margin-top: 0.5rem;
+}
 
-  .suggestion {
-    align-items: center;
-    border-top: 1px solid var(--border);
-    color: var(--text);
-    display: flex;
-    font-size: 0.75rem;
-    gap: 0.5rem;
-    justify-content: space-between;
-    margin-top: 0.5rem;
-    padding-top: 0.5rem;
-  }
-
+.suggestion {
+  align-items: center;
+  border-top: 1px solid var(--border);
+  color: var(--text);
+  display: flex;
+  font-size: 0.75rem;
+  gap: 0.5rem;
+  justify-content: space-between;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+}
 </style>

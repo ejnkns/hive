@@ -1,12 +1,12 @@
 <script lang="ts">
 import type { ConversationMessage } from "shared/dashboard-types";
+import TruncatableText from "../shared/TruncatableText.svelte";
 import {
   formatToolCallLabel,
   groupToolCalls,
   normalizeContent,
   resolveToolName,
 } from "../shared/utils";
-import TruncatableText from "../shared/TruncatableText.svelte";
 
 let {
   messages = [] as ConversationMessage[],
@@ -34,9 +34,7 @@ let {
         {#if hasToolCalls}
           <div class="tool-call-list">
             {#each groupToolCalls(msg.tool_calls ?? []) as tc}
-              <span class="tool-call-badge"
-                >{formatToolCallLabel(tc)}</span
-              >
+              <span class="tool-call-badge">{formatToolCallLabel(tc)}</span>
             {/each}
           </div>
         {/if}
@@ -57,65 +55,65 @@ let {
 </div>
 
 <style>
-  .conv-messages {
-    display: flex;
-    flex-direction: column;
-    gap: 0.375rem;
-    max-height: 40vh;
-    overflow-y: auto;
-  }
+.conv-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  max-height: 40vh;
+  overflow-y: auto;
+}
 
-  .conv-msg {
-    display: flex;
-    gap: 0.375rem;
-    font-size: 0.75rem;
-  }
+.conv-msg {
+  display: flex;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+}
 
-  .conv-role {
-    font-size: 0.5625rem;
-    font-weight: 700;
-    min-width: 55px;
-    text-transform: uppercase;
-    color: var(--muted);
-    flex-shrink: 0;
-  }
+.conv-role {
+  font-size: 0.5625rem;
+  font-weight: 700;
+  min-width: 55px;
+  text-transform: uppercase;
+  color: var(--muted);
+  flex-shrink: 0;
+}
 
-  .conv-msg.system .conv-role {
-    color: var(--accent);
-  }
+.conv-msg.system .conv-role {
+  color: var(--accent);
+}
 
-  .conv-msg.user .conv-role {
-    color: var(--text);
-  }
+.conv-msg.user .conv-role {
+  color: var(--text);
+}
 
-  .conv-msg.assistant .conv-role {
-    color: var(--success);
-  }
+.conv-msg.assistant .conv-role {
+  color: var(--success);
+}
 
-  .conv-msg.tool .conv-role {
-    color: var(--warning);
-  }
+.conv-msg.tool .conv-role {
+  color: var(--warning);
+}
 
-  .conv-content {
-    flex: 1;
-    min-width: 0;
-  }
+.conv-content {
+  flex: 1;
+  min-width: 0;
+}
 
-  .tool-call-list {
-    display: flex;
-    gap: 0.25rem;
-    flex-wrap: wrap;
-    margin-bottom: 0.25rem;
-  }
+.tool-call-list {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.25rem;
+}
 
-  .tool-call-badge {
-    display: inline-block;
-    font-size: 0.5rem;
-    font-weight: 700;
-    padding: 0.0625rem 0.25rem;
-    text-transform: uppercase;
-    color: var(--accent);
-    background: rgba(var(--border-rgb), 0.15);
-    border: 1px solid rgba(var(--border-rgb), 0.3);
-  }
+.tool-call-badge {
+  display: inline-block;
+  font-size: 0.5rem;
+  font-weight: 700;
+  padding: 0.0625rem 0.25rem;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: rgba(var(--border-rgb), 0.15);
+  border: 1px solid rgba(var(--border-rgb), 0.3);
+}
 </style>

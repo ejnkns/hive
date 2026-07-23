@@ -1,10 +1,10 @@
 <script lang="ts">
+import { isRecord } from "shared/board-types";
 import {
   DEFAULT_MAX_CONCURRENT_WORKERS,
   MAX_MAX_CONCURRENT_WORKERS,
   MIN_MAX_CONCURRENT_WORKERS,
 } from "shared/project-types";
-import { isRecord } from "shared/board-types";
 
 let { projectId }: Props = $props();
 
@@ -150,7 +150,6 @@ function canRunPrimaryAction(): boolean {
 <div
   class="worker-settings"
   title={loadError ?? saveError ?? "Maximum Worker Agents running for this project"}
-  aria-busy={loading || saving}
 >
   <label for="worker-limit">Parallel workers</label>
   <input
@@ -162,57 +161,64 @@ function canRunPrimaryAction(): boolean {
     bind:value={maxConcurrentWorkers}
     oninput={() => (saveError = null)}
     disabled={loading || saving || Boolean(loadError)}
-  />
-  <span class:error-state={Boolean(loadError || saveError)} class="status" aria-live="polite">
+  >
+  <span
+    class:error-state={Boolean(loadError || saveError)}
+    class="status"
+    aria-live="polite"
+  >
     {STATUS_TEXT[viewState()]}
   </span>
   <button
+    type="button"
     onclick={performPrimaryAction}
     disabled={!canRunPrimaryAction()}
-  >{BUTTON_TEXT[viewState()]}</button>
+  >
+    {BUTTON_TEXT[viewState()]}
+  </button>
 </div>
 
 <style>
-  .worker-settings {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    color: var(--muted);
-    font-size: 0.6875rem;
-  }
+.worker-settings {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.6875rem;
+}
 
-  input {
-    width: 3.25rem;
-    padding: 0.3rem;
-    border: 1px solid var(--border);
-    border-radius: 5px;
-    background: var(--surface);
-    color: var(--text);
-  }
+input {
+  width: 3.25rem;
+  padding: 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--text);
+}
 
-  button {
-    width: 4.75rem;
-    padding: 0.3rem 0.5rem;
-    border: 1px solid var(--border);
-    border-radius: 5px;
-    background: var(--surface);
-    color: var(--text);
-    cursor: pointer;
-  }
+button {
+  width: 4.75rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
 
-  .status {
-    display: inline-block;
-    width: 5.25rem;
-    text-align: right;
-    white-space: nowrap;
-  }
+.status {
+  display: inline-block;
+  width: 5.25rem;
+  text-align: right;
+  white-space: nowrap;
+}
 
-  .error-state {
-    color: #dc3c3c;
-  }
+.error-state {
+  color: #dc3c3c;
+}
 
-  button:disabled,
-  input:disabled {
-    opacity: 0.5;
-  }
+button:disabled,
+input:disabled {
+  opacity: 0.5;
+}
 </style>

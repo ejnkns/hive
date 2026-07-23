@@ -1,6 +1,4 @@
 <script lang="ts">
-import { onMount } from "svelte";
-import { projectSocket } from "./project-socket.svelte";
 import type {
   Board,
   Card,
@@ -8,16 +6,18 @@ import type {
   CoordinatorAction,
   Idea,
   PlanningProposal,
-  ReviewReadiness,
   RequirementsFeedback,
+  ReviewReadiness,
   WorkerAdmission,
 } from "shared/board-types";
 import { COLUMN_LABELS } from "shared/board-types";
-import KanbanCard from "./kanban-card.svelte";
+import { onMount } from "svelte";
 import CardDetail from "./card-detail.svelte";
 import IdeasBacklog from "./ideas-backlog.svelte";
 import { parseReviewReadinessResponse } from "./kanban-board/parse-review-readiness-response";
 import { parseWorkerRunResponse } from "./kanban-board/parse-worker-run-response";
+import KanbanCard from "./kanban-card.svelte";
+import { projectSocket } from "./project-socket.svelte";
 import ProjectWorkerSettings from "./project-worker-settings.svelte";
 
 let {
@@ -350,7 +350,12 @@ $effect(() => {
     <h2>Board</h2>
     <div class="board-actions">
       <ProjectWorkerSettings {projectId} />
-      <button class="btn btn-outline" onclick={toggleRevision} disabled={revising}>
+      <button
+        type="button"
+        class="btn btn-outline"
+        onclick={toggleRevision}
+        disabled={revising}
+      >
         {revising ? "Starting revision..." : "Revise"}
       </button>
     </div>
@@ -367,18 +372,29 @@ $effect(() => {
       ></textarea>
       <div class="revision-actions">
         <button
+          type="button"
           class="btn btn-primary"
           onclick={() => submitRevision(false)}
           disabled={revising || !revisionText.trim()}
         >
           {revising ? "Starting..." : "Revise requirements"}
         </button>
-        <button class="btn" onclick={toggleRevision} disabled={revising}>Cancel</button>
+        <button
+          type="button"
+          class="btn"
+          onclick={toggleRevision}
+          disabled={revising}
+        >
+          Cancel
+        </button>
       </div>
       {#if activeWorkWarning}
         <div class="revision-warning">
-          <span>{activeWorkWarning}. Continuing may invalidate active work.</span>
+          <span
+            >{activeWorkWarning}. Continuing may invalidate active work.</span
+          >
           <button
+            type="button"
             class="btn btn-danger"
             onclick={() => submitRevision(true)}
             disabled={revising}
@@ -405,7 +421,8 @@ $effect(() => {
         <ul>
           {#each pendingAdmission.admission.blockers as blocker}
             <li>
-              {blocker.message}{blocker.files?.length
+              {blocker.message}
+              {blocker.files?.length
                 ? `: ${blocker.files.join(", ")}`
                 : ""}
             </li>
@@ -414,13 +431,18 @@ $effect(() => {
       </div>
       <div class="worker-risk-actions">
         <button
+          type="button"
           class="btn btn-danger"
           onclick={confirmPendingAdmission}
           disabled={running === pendingAdmission.cardId}
         >
           {running === pendingAdmission.cardId ? "Starting..." : "Run anyway"}
         </button>
-        <button class="btn" onclick={() => (pendingAdmission = null)}>
+        <button
+          type="button"
+          class="btn"
+          onclick={() => (pendingAdmission = null)}
+        >
           Cancel
         </button>
       </div>
@@ -486,208 +508,208 @@ $effect(() => {
 </div>
 
 <style>
-  .kanban-board {
-    max-width: 100%;
-  }
+.kanban-board {
+  max-width: 100%;
+}
 
-  .board-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 0.75rem;
-  }
+.board-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
 
-  .board-header h2 {
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--text);
-    margin: 0;
-  }
+.board-header h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
 
-  .board-actions {
-    display: flex;
-    gap: 0.375rem;
-  }
+.board-actions {
+  display: flex;
+  gap: 0.375rem;
+}
 
-  .worker-risk {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 1rem;
-    margin-bottom: 0.75rem;
-    padding: 0.75rem;
-    border: 1px solid #8a6d1d;
-    border-radius: 6px;
-    background: rgba(138, 109, 29, 0.12);
-    color: var(--text);
-    font-size: 0.75rem;
-  }
+.worker-risk {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid #8a6d1d;
+  border-radius: 6px;
+  background: rgba(138, 109, 29, 0.12);
+  color: var(--text);
+  font-size: 0.75rem;
+}
 
-  .worker-risk ul {
-    margin: 0.375rem 0 0;
-    padding-left: 1.25rem;
-    color: var(--muted);
-  }
+.worker-risk ul {
+  margin: 0.375rem 0 0;
+  padding-left: 1.25rem;
+  color: var(--muted);
+}
 
-  .worker-risk-actions {
-    display: flex;
-    flex-shrink: 0;
-    gap: 0.375rem;
-  }
+.worker-risk-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.375rem;
+}
 
-  .btn {
-    padding: 0.375rem 0.625rem;
-    border: 1px solid var(--border);
-    border-radius: 5px;
-    font-size: 0.6875rem;
-    font-weight: 500;
-    cursor: pointer;
-    background: var(--surface);
-    color: var(--text);
-    white-space: nowrap;
-  }
+.btn {
+  padding: 0.375rem 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  cursor: pointer;
+  background: var(--surface);
+  color: var(--text);
+  white-space: nowrap;
+}
 
-  .btn:hover:not(:disabled) {
-    background: var(--border);
-  }
+.btn:hover:not(:disabled) {
+  background: var(--border);
+}
 
-  .btn:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
 
-  .btn-outline {
-    background: transparent;
-  }
+.btn-outline {
+  background: transparent;
+}
 
-  .error {
-    background: rgba(220, 60, 60, 0.1);
-    border: 1px solid rgba(220, 60, 60, 0.3);
-    color: #dc3c3c;
-    padding: 0.5rem 0.75rem;
-    border-radius: 6px;
-    font-size: 0.75rem;
-    margin-bottom: 0.75rem;
-  }
+.error {
+  background: rgba(220, 60, 60, 0.1);
+  border: 1px solid rgba(220, 60, 60, 0.3);
+  color: #dc3c3c;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  margin-bottom: 0.75rem;
+}
 
-  .revision-area {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    margin-bottom: 0.75rem;
-  }
+.revision-area {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
 
-  .revision-input {
-    flex: 1;
-    padding: 0.5rem 0.625rem;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 5px;
-    color: var(--text);
-    font-size: 0.75rem;
-    font-family: inherit;
-    resize: vertical;
-  }
+.revision-input {
+  flex: 1;
+  padding: 0.5rem 0.625rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 0.75rem;
+  font-family: inherit;
+  resize: vertical;
+}
 
-  .revision-input:focus {
-    outline: none;
-    border-color: var(--accent);
-  }
+.revision-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
 
-  .revision-input:disabled {
-    opacity: 0.5;
-  }
+.revision-input:disabled {
+  opacity: 0.5;
+}
 
-  .revision-actions {
-    display: flex;
-    gap: 0.375rem;
-  }
+.revision-actions {
+  display: flex;
+  gap: 0.375rem;
+}
 
-  .revision-warning {
-    align-items: center;
-    background: rgba(220, 120, 40, 0.1);
-    border: 1px solid rgba(220, 120, 40, 0.35);
-    border-radius: 6px;
-    color: var(--text);
-    display: flex;
-    font-size: 0.75rem;
-    gap: 0.75rem;
-    justify-content: space-between;
-    padding: 0.5rem 0.75rem;
-  }
+.revision-warning {
+  align-items: center;
+  background: rgba(220, 120, 40, 0.1);
+  border: 1px solid rgba(220, 120, 40, 0.35);
+  border-radius: 6px;
+  color: var(--text);
+  display: flex;
+  font-size: 0.75rem;
+  gap: 0.75rem;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+}
 
-  .btn-danger {
-    border-color: #dc783c;
-    color: #dc783c;
-  }
+.btn-danger {
+  border-color: #dc783c;
+  color: #dc783c;
+}
 
-  .btn-primary {
-    background: var(--accent);
-    color: #1b1601;
-    border-color: var(--accent);
-    align-self: flex-start;
-  }
+.btn-primary {
+  background: var(--accent);
+  color: #1b1601;
+  border-color: var(--accent);
+  align-self: flex-start;
+}
 
-  .loading {
-    font-size: 0.8125rem;
-    color: var(--muted);
-    padding: 2rem 0;
-    text-align: center;
-  }
+.loading {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  padding: 2rem 0;
+  text-align: center;
+}
 
-  .empty {
-    text-align: center;
-    padding: 2rem 1rem;
-    color: var(--muted);
-    font-size: 0.8125rem;
-  }
+.empty {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
 
-  .columns {
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 0.75rem;
-  }
+.columns {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.75rem;
+}
 
-  .column {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 0.75rem;
-    min-height: 200px;
-  }
+.column {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem;
+  min-height: 200px;
+}
 
-  .column.empty {
-    opacity: 0.6;
-  }
+.column.empty {
+  opacity: 0.6;
+}
 
-  .column-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 0.5rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid var(--border);
-  }
+.column-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
 
-  .column-name {
-    font-size: 0.6875rem;
-    font-weight: 600;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
+.column-name {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
 
-  .column-count {
-    font-size: 0.6875rem;
-    color: var(--muted);
-    background: var(--bg);
-    padding: 0.125rem 0.375rem;
-    border-radius: 4px;
-  }
+.column-count {
+  font-size: 0.6875rem;
+  color: var(--muted);
+  background: var(--bg);
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+}
 
-  .column-cards {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
+.column-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
 </style>

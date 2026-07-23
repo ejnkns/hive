@@ -1,8 +1,8 @@
 <script lang="ts">
 import type { RequestState } from "shared/dashboard-types";
 import { formatNumber, formatTime } from "../../shared/utils";
-import { isTerminal } from "../stage-utils";
 import StagePathDots from "../StagePathDots.svelte";
+import { isTerminal } from "../stage-utils";
 
 let {
   requests = [] as RequestState[],
@@ -37,9 +37,9 @@ function nodeLabel(req: RequestState, i: number): string {
         {/if}
       </div>
       <button
+        type="button"
         class="node-body"
         onclick={() => onRequestClick?.(req)}
-        type="button"
       >
         <div class="node-header">
           <span class="node-label">{nodeLabel(req, i)}</span>
@@ -73,93 +73,93 @@ function nodeLabel(req: RequestState, i: number): string {
 </div>
 
 <style>
-  .timeline {
-    display: flex;
-    flex-direction: column;
-  }
+.timeline {
+  display: flex;
+  flex-direction: column;
+}
 
-  .node-row {
-    display: flex;
-    gap: 0.5rem;
-  }
+.node-row {
+  display: flex;
+  gap: 0.5rem;
+}
 
-  .node-gutter {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    min-width: 10px;
-  }
+.node-gutter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 10px;
+}
 
-  .node-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    margin-top: 0.25rem;
-  }
+.node-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 0.25rem;
+}
 
-  .node-line {
-    width: 1px;
-    flex: 1;
-    min-height: 8px;
-    background: var(--border);
-  }
+.node-line {
+  width: 1px;
+  flex: 1;
+  min-height: 8px;
+  background: var(--border);
+}
 
-  .node-body {
-    display: flex;
-    flex-direction: column;
-    gap: 0.125rem;
-    padding-bottom: 0.5rem;
-    flex: 1;
-    background: none;
-    border: none;
-    cursor: default;
-    text-align: left;
-    font-family: inherit;
-    color: var(--text);
-  }
+.node-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding-bottom: 0.5rem;
+  flex: 1;
+  background: none;
+  border: none;
+  cursor: default;
+  text-align: left;
+  font-family: inherit;
+  color: var(--text);
+}
 
-  .node-row.clickable .node-body {
-    cursor: pointer;
-  }
+.node-row.clickable .node-body {
+  cursor: pointer;
+}
 
-  .node-row.clickable .node-body:hover {
-    opacity: 0.8;
-  }
+.node-row.clickable .node-body:hover {
+  opacity: 0.8;
+}
 
-  .node-header {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-family: monospace;
-    font-size: 0.625rem;
-  }
+.node-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: monospace;
+  font-size: 0.625rem;
+}
 
-  .node-label {
-    color: var(--accent);
-    font-weight: 700;
-    text-transform: uppercase;
-  }
+.node-label {
+  color: var(--accent);
+  font-weight: 700;
+  text-transform: uppercase;
+}
 
-  .node-time {
-    color: var(--muted);
-    font-size: 0.5625rem;
-  }
+.node-time {
+  color: var(--muted);
+  font-size: 0.5625rem;
+}
 
-  .node-meta {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-family: monospace;
-    font-size: 0.5625rem;
-  }
+.node-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: monospace;
+  font-size: 0.5625rem;
+}
 
-  .node-prov {
-    color: var(--accent);
-    font-size: 0.5rem;
-  }
+.node-prov {
+  color: var(--accent);
+  font-size: 0.5rem;
+}
 
-  .node-latency {
-    color: var(--muted);
-  }
+.node-latency {
+  color: var(--muted);
+}
 </style>

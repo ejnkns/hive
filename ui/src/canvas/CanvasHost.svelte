@@ -241,16 +241,20 @@ async function performStreamingRequest(
         {/if}
       {/each}
     </div>
-    
+
     <div class="input-area">
-      <input 
-        type="text" 
+      <input
+        type="text"
         bind:value={promptInput}
         onkeydown={(e) => e.key === 'Enter' && submitPrompt()}
         placeholder="Describe the app you want to build or patch..."
         disabled={isStreaming}
-      />
-      <button onclick={submitPrompt} disabled={isStreaming || !promptInput.trim()}>
+      >
+      <button
+        type="button"
+        onclick={submitPrompt}
+        disabled={isStreaming || !promptInput.trim()}
+      >
         {isStreaming ? '...' : 'Send'}
       </button>
     </div>
@@ -258,92 +262,92 @@ async function performStreamingRequest(
 </div>
 
 <style>
-  .canvas-container {
-    position: relative;
-    width: 100%;
-    height: calc(100vh - 164px);
-    overflow: hidden;
-  }
-  
-  .canvas-iframe {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    border: none;
-    background: #fff;
-  }
+.canvas-container {
+  position: relative;
+  width: 100%;
+  height: calc(100vh - 164px);
+  overflow: hidden;
+}
 
-  .floating-panel {
-    position: absolute;
-    bottom: 2rem;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 90%;
-    max-width: 600px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1rem;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    z-index: 9999;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
+.canvas-iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: #fff;
+}
 
-  .chat-history {
-    max-height: 150px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
+.floating-panel {
+  position: absolute;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 600px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
 
-  .msg {
-    font-size: 0.8rem;
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    background: rgba(0,0,0,0.05);
-  }
-  
-  .user-msg {
-    font-weight: 500;
-    color: var(--accent);
-  }
+.chat-history {
+  max-height: 150px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
 
-  .assistant-msg {
-    font-weight: 400;
-    color: var(--text);
-  }
+.msg {
+  font-size: 0.8rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.05);
+}
 
-  .input-area {
-    display: flex;
-    gap: 0.5rem;
-  }
+.user-msg {
+  font-weight: 500;
+  color: var(--accent);
+}
 
-  input {
-    flex: 1;
-    padding: 0.5rem;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    color: var(--text);
-    border-radius: 4px;
-  }
+.assistant-msg {
+  font-weight: 400;
+  color: var(--text);
+}
 
-  button {
-    padding: 0.5rem 1rem;
-    background: var(--accent);
-    color: #000;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: bold;
-  }
+.input-area {
+  display: flex;
+  gap: 0.5rem;
+}
 
-  button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
+input {
+  flex: 1;
+  padding: 0.5rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+}
+
+button {
+  padding: 0.5rem 1rem;
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 </style>
