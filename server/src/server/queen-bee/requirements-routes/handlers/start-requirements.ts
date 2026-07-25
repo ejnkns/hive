@@ -25,6 +25,7 @@ export function startRequirementsHandler(deps: RouteDeps) {
         project.repoPath
       );
       return reply.send({
+        sessionId: result.sessionId,
         question: result.question,
         draftRequirements: result.draftRequirements,
         projectId,

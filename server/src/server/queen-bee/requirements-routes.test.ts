@@ -34,7 +34,7 @@ describe("requirements routes", () => {
     const { server, boardStore, project } = createRouteFixture({
       async startRevision() {
         starts += 1;
-        return { question: "What should change?" };
+        return { sessionId: "session-1", question: "What should change?" };
       },
     });
     boardStore.addCard(project.id, project.repoPath, {
@@ -88,7 +88,7 @@ describe("requirements routes", () => {
           replacesProposalId
         ) {
           allowedProposalId = replacesProposalId;
-          return { question: "What should change?" };
+          return { sessionId: "sid", question: "What should change?" };
         },
       },
       {
@@ -116,7 +116,7 @@ describe("requirements routes", () => {
     const { server, boardStore, project } = createRouteFixture({
       async startIdea(_projectId, idea) {
         startedIdeaId = idea.id;
-        return { question: "What outcome should this add?" };
+        return { sessionId: "sid", question: "What outcome should this add?" };
       },
     });
     const idea = boardStore.addIdea(project.id, project.repoPath, {
@@ -162,7 +162,10 @@ describe("requirements routes", () => {
       {
         async startRepair(_projectId, received) {
           repairedFeedbackId = received.id;
-          return { question: "Which behavior should be canonical?" };
+          return {
+            sessionId: "sid",
+            question: "Which behavior should be canonical?",
+          };
         },
       },
       {
@@ -210,7 +213,7 @@ describe("requirements routes", () => {
       {
         async startRepair() {
           starts += 1;
-          return { question: "Should not start" };
+          return { sessionId: "sid", question: "Should not start" };
         },
       },
       { getRequirementsFeedback: () => feedback }
@@ -695,10 +698,19 @@ describe("requirements routes", () => {
       unlink: () => {},
     };
     const engine: RequirementsSessionManager = {
-      start: async () => ({ question: "Question" }),
-      startRevision: async () => ({ question: "Question" }),
-      startIdea: async () => ({ question: "Idea question" }),
-      startRepair: async () => ({ question: "Repair question" }),
+      start: async () => ({ sessionId: "session-1", question: "Question" }),
+      startRevision: async () => ({
+        sessionId: "session-1",
+        question: "Question",
+      }),
+      startIdea: async () => ({
+        sessionId: "session-1",
+        question: "Idea question",
+      }),
+      startRepair: async () => ({
+        sessionId: "session-1",
+        question: "Repair question",
+      }),
       respond: async () => ({ type: "question", question: "Question" }),
       respondIdea: async () => ({
         type: "question",
@@ -707,7 +719,10 @@ describe("requirements routes", () => {
       getSession: () => undefined,
       submitForPlanning: () => {},
       getIdeaSession: () => undefined,
-      startCard: async () => ({ question: "Card question" }),
+      startCard: async () => ({
+        sessionId: "session-1",
+        question: "Card question",
+      }),
       respondCard: async () => ({
         type: "question",
         question: "Card question",

@@ -82,6 +82,7 @@ export type RequirementsSessionManager = {
 };
 
 export type RequirementsStartResult = {
+  sessionId: string;
   question: string;
   draftRequirements?: string;
 };

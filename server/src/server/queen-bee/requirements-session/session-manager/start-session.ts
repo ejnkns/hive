@@ -151,6 +151,7 @@ export async function startSession(
   }
 
   return {
+    sessionId,
     question: result.content,
     draftRequirements: result.draftRequirements,
   };
