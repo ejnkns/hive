@@ -2,7 +2,7 @@
 
 import { execFileSync } from "node:child_process";
 import { isRecord } from "shared/board-types";
-import type { ToolCall } from "../devise-engine/devise-tools";
+import type { ToolCall } from "../requirements-session/agent-tools";
 import {
   buildVerificationEvidence,
   type WorkerCompletion,

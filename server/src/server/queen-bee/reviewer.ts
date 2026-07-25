@@ -2,11 +2,11 @@
 
 import { isRecord } from "shared/board-types";
 import type { Message } from "shared/message";
+import type { ToolCall } from "./requirements-session/agent-tools";
 import {
   type AgentModelCaller,
   createAgentModelCaller,
-} from "./devise-engine/create-devise-model-caller";
-import type { ToolCall } from "./devise-engine/devise-tools";
+} from "./requirements-session/create-model-caller";
 import { REVIEWER_SYSTEM_PROMPT } from "./reviewer/reviewer-system-prompt";
 import { executeReviewerTool, REVIEWER_TOOLS } from "./reviewer/reviewer-tools";
 import { appendAgentToolExchanges } from "./shared/append-agent-tool-exchanges";

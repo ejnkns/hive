@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { AGENT_TOOLS, executeAgentTool } from "./devise-tools";
+import { AGENT_TOOLS, executeAgentTool } from "./agent-tools";
 
 function createTempWorkspace(): string {
   const dir = mkdtempSync(join(tmpdir(), "hive-tool-test-"));

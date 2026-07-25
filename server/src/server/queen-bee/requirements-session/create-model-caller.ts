@@ -5,11 +5,7 @@ import type { PassThrough, Readable } from "node:stream";
 import type { Message } from "shared/message";
 
 import { handleChatCompletion } from "../../proxy";
-import {
-  AGENT_TOOLS,
-  type ToolCall,
-  type ToolDefinition,
-} from "./devise-tools";
+import { AGENT_TOOLS, type ToolCall, type ToolDefinition } from "./agent-tools";
 
 export type AgentModelCaller = {
   call(

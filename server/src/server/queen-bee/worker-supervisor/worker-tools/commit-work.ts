@@ -3,7 +3,10 @@
 import { execFileSync } from "node:child_process";
 import { isAbsolute, relative, resolve } from "node:path";
 import { isRecord } from "shared/board-types";
-import type { ToolCall, ToolResult } from "../../devise-engine/devise-tools";
+import type {
+  ToolCall,
+  ToolResult,
+} from "../../requirements-session/agent-tools";
 
 const PROTECTED_PATHS = new Set([".hive/requirements.md"]);
 

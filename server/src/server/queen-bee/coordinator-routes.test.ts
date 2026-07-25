@@ -8,9 +8,9 @@ import type { ProjectListItem } from "shared/project-types";
 import { createBoardStore } from "./board-store";
 import { registerCoordinatorRoutes } from "./coordinator-routes";
 import type { ProjectStore } from "./create-project-store";
-import type { RequirementsSessionManager } from "./devise-engine";
 import type { PlanningManager } from "./planner";
 import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
+import type { RequirementsSessionManager } from "./requirements-session";
 
 describe("coordinator routes", () => {
   const directories: string[] = [];

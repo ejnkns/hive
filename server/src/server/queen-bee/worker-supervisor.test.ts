@@ -13,11 +13,11 @@ import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import { createBoardStore } from "./board-store";
 import type { Coordinator } from "./coordinator";
+import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
 import type {
   AgentModelCaller,
   AgentModelResponse,
-} from "./devise-engine/create-devise-model-caller";
-import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
+} from "./requirements-session/create-model-caller";
 import type { Reviewer } from "./reviewer";
 import { createWorkerSupervisor } from "./worker-supervisor";
 

@@ -5,15 +5,15 @@ import type { WorkAttempt, WorkerHandover } from "shared/board-types";
 import type { Message } from "shared/message";
 import type { BoardStore, Card } from "./board-store";
 import type { Coordinator } from "./coordinator";
-import {
-  type AgentModelCaller,
-  createAgentModelCaller,
-} from "./devise-engine/create-devise-model-caller";
-import type { ToolCall } from "./devise-engine/devise-tools";
 import type {
   NewCardActivityEvent,
   QueenBeeRuntimeStore,
 } from "./queen-bee-runtime-store";
+import type { ToolCall } from "./requirements-session/agent-tools";
+import {
+  type AgentModelCaller,
+  createAgentModelCaller,
+} from "./requirements-session/create-model-caller";
 import { readRequirements, requirementsRevision } from "./requirements-store";
 import { buildReviewPackage } from "./review-package";
 import type { Reviewer } from "./reviewer";

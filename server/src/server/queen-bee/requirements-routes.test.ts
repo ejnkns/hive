@@ -8,10 +8,10 @@ import type { RequirementsFeedback } from "shared/board-types";
 import type { ProjectListItem } from "shared/project-types";
 import { createBoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
-import type { RequirementsSessionManager } from "./devise-engine";
-import { registerRequirementsRoutes } from "./devise-routes";
 import type { PlanningManager } from "./planner";
 import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
+import { registerRequirementsRoutes } from "./requirements-routes";
+import type { RequirementsSessionManager } from "./requirements-session";
 import {
   readRequirements,
   requirementsRevision,
@@ -674,7 +674,7 @@ describe("requirements routes", () => {
     overrides: Partial<RequirementsSessionManager> = {},
     plannerOverrides: Partial<PlanningManager> = {}
   ) {
-    const repoPath = mkdtempSync(join(tmpdir(), "hive-devise-routes-"));
+    const repoPath = mkdtempSync(join(tmpdir(), "hive-requirements-routes-"));
     directories.push(repoPath);
     const project: ProjectListItem = {
       id: "project-1",

@@ -6,7 +6,7 @@ import { afterEach, describe, it } from "node:test";
 import type {
   AgentModelCaller,
   AgentModelResponse,
-} from "./devise-engine/create-devise-model-caller";
+} from "./requirements-session/create-model-caller";
 import { createReviewer, REVIEWER_TOOLS, type ReviewPackage } from "./reviewer";
 
 describe("Reviewer Agent", () => {
