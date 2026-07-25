@@ -12,7 +12,8 @@ import type {
 } from "shared/board-types";
 import { COLUMN_LABELS } from "shared/board-types";
 import { onMount } from "svelte";
-import { jellyDisabled } from "../shared/jelly-disabled.svelte";
+import Button from "../shared/ui/Button.svelte";
+import Textarea from "../shared/ui/Textarea.svelte";
 import CardDetail from "./card-detail.svelte";
 import IdeasBacklog from "./ideas-backlog.svelte";
 import { parseReviewReadinessResponse } from "./kanban-board/parse-review-readiness-response";
@@ -351,66 +352,52 @@ $effect(() => {
     <h2>Board</h2>
     <div class="board-actions">
       <ProjectWorkerSettings {projectId} />
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <jelly-button
-        size="small"
+      <Button
         variant="platinum"
         onclick={toggleRevision}
-        use:jellyDisabled={revising}
+        disabled={revising}
       >
         {revising ? "Starting revision..." : "Revise"}
-      </jelly-button>
+      </Button>
     </div>
   </div>
 
   {#if revisionShown}
     <div class="revision-area">
-      <jelly-textarea
-        size="small"
-        value={revisionText}
-        oninput={(e: Event) => revisionText = (e.target as HTMLInputElement).value}
+      <Textarea
+        bind:value={revisionText}
         placeholder="What context should change the project requirements and regenerated cards?"
-        rows="2"
-        use:jellyDisabled={revising}
-      ></jelly-textarea>
+        disabled={revising}
+        restProps={{ rows: "2" }}
+      />
       <div class="revision-actions">
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <jelly-button
-          size="small"
+        <Button
           variant="mint"
           onclick={() => submitRevision(false)}
-          use:jellyDisabled={revising || !revisionText.trim()}
+          disabled={revising || !revisionText.trim()}
         >
           {revising ? "Starting..." : "Revise requirements"}
-        </jelly-button>
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <jelly-button
-          size="small"
+        </Button>
+        <Button
           variant="platinum"
           onclick={toggleRevision}
-          use:jellyDisabled={revising}
+          disabled={revising}
         >
           Cancel
-        </jelly-button>
+        </Button>
       </div>
       {#if activeWorkWarning}
         <div class="revision-warning">
           <span
             >{activeWorkWarning}. Continuing may invalidate active work.</span
           >
-          <!-- svelte-ignore a11y_click_events_have_key_events -->
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <jelly-button
-            size="small"
+          <Button
             variant="rose"
             onclick={() => submitRevision(true)}
-            use:jellyDisabled={revising}
+            disabled={revising}
           >
             Continue and regenerate
-          </jelly-button>
+          </Button>
         </div>
       {/if}
     </div>
@@ -440,25 +427,19 @@ $effect(() => {
         </ul>
       </div>
       <div class="worker-risk-actions">
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <jelly-button
-          size="small"
+        <Button
           variant="rose"
           onclick={confirmPendingAdmission}
-          use:jellyDisabled={running === pendingAdmission.cardId}
+          disabled={running === pendingAdmission.cardId}
         >
           {running === pendingAdmission.cardId ? "Starting..." : "Run anyway"}
-        </jelly-button>
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <jelly-button
-          size="small"
+        </Button>
+        <Button
           variant="platinum"
           onclick={() => (pendingAdmission = null)}
         >
           Cancel
-        </jelly-button>
+        </Button>
       </div>
     </div>
   {/if}

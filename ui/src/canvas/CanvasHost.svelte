@@ -1,6 +1,7 @@
 <script lang="ts">
 import { onMount } from "svelte";
-import { jellyDisabled } from "../shared/jelly-disabled.svelte";
+import Button from "../shared/ui/Button.svelte";
+import TextInput from "../shared/ui/TextInput.svelte";
 import { SYSTEM_PROMPT_INITIAL, SYSTEM_PROMPT_PATCH } from "./canvas-prompts";
 import { setupCanvasRuntime } from "./canvas-runtime";
 
@@ -244,25 +245,21 @@ async function performStreamingRequest(
     </div>
 
     <div class="input-area">
-      <jelly-input
-        size="small"
-        value={promptInput}
-        oninput={(e: Event) => promptInput = (e.target as HTMLInputElement).value}
-        onkeydown={(e: KeyboardEvent) => e.key === 'Enter' && submitPrompt()}
+      <TextInput
+        bind:value={promptInput}
+        disabled={isStreaming}
         placeholder="Describe the app you want to build or patch..."
-        use:jellyDisabled={isStreaming}
+        restProps={{
+          onkeydown: (e: KeyboardEvent) => e.key === 'Enter' && submitPrompt(),
+        }}
+      />
+      <Button
+        variant="mint"
+        onclick={submitPrompt}
+        disabled={isStreaming || !promptInput.trim()}
       >
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <jelly-button
-          size="small"
-          variant="mint"
-          onclick={submitPrompt}
-          use:jellyDisabled={isStreaming || !promptInput.trim()}
-        >
-          {isStreaming ? '...' : 'Send'}
-        </jelly-button>
-      </jelly-input>
+        {isStreaming ? '...' : 'Send'}
+      </Button>
     </div>
   </div>
 </div>

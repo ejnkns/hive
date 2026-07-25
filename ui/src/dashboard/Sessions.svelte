@@ -1,6 +1,8 @@
 <script lang="ts">
 import type { SessionState } from "shared/dashboard-types";
 import SessionCard from "./SessionCard.svelte";
+import Button from "../shared/ui/Button.svelte";
+import Skeleton from "../shared/ui/Skeleton.svelte";
 
 let { sessions = [] as SessionState[] } = $props();
 
@@ -34,18 +36,18 @@ function toggleArchive() {
 
 {#if visible.length === 0 && archived.length === 0}
   <div class="no-data">
-    <jelly-skeleton
+    <Skeleton
       shape="line"
       style="width: 200px; height: 16px; margin: 0 auto 0.5rem;"
-    ></jelly-skeleton>
-    <jelly-skeleton
+    />
+    <Skeleton
       shape="line"
       style="width: 280px; height: 14px; margin: 0 auto 0.25rem;"
-    ></jelly-skeleton>
-    <jelly-skeleton
+    />
+    <Skeleton
       shape="line"
       style="width: 160px; height: 14px; margin: 0 auto;"
-    ></jelly-skeleton>
+    />
   </div>
 {:else}
   {#if visible.length > 0}
@@ -55,12 +57,10 @@ function toggleArchive() {
   {/if}
 
   {#if archived.length > 0}
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <jelly-button size="small" variant="platinum" onclick={toggleArchive}>
+    <Button variant="platinum" onclick={toggleArchive}>
       <span class="archive-arrow">{archiveOpen ? "▾" : "▸"}</span>
       Previous Sessions ({archived.length})
-    </jelly-button>
+    </Button>
     {#if archiveOpen}
       {#each archived as session (session.sessionId)}
         <SessionCard {session} />

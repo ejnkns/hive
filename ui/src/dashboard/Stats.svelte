@@ -1,18 +1,19 @@
 <script lang="ts">
 import type { StatsData } from "shared/dashboard-types";
 import { formatNumber, sc } from "../shared/utils";
+import Card from "../shared/ui/Card.svelte";
 
 let { data }: { data: StatsData | null } = $props();
 </script>
 
 <div class="stats-grid">
-  <jelly-card size="small">
+  <Card>
     <div class="stat">
       <span class="stat-label">Traffic</span>
       <span class="stat-value">{data?.traffic ?? "—"}</span>
     </div>
-  </jelly-card>
-  <jelly-card size="small">
+  </Card>
+  <Card>
     <div class="stat">
       <span class="stat-label">Success</span>
       <span
@@ -21,21 +22,21 @@ let { data }: { data: StatsData | null } = $props();
         >{data?.successRate != null ? `${data.successRate}%` : "—"}</span
       >
     </div>
-  </jelly-card>
-  <jelly-card size="small">
+  </Card>
+  <Card>
     <div class="stat">
       <span class="stat-label">Providers</span>
       <span class="stat-value">{data?.activeProviders ?? "—"}</span>
     </div>
-  </jelly-card>
-  <jelly-card size="small">
+  </Card>
+  <Card>
     <div class="stat">
       <span class="stat-label">Latency</span>
       <span class="stat-value"
         >{data ? formatNumber(data.avgLatency, "ms") : "—"}</span
       >
     </div>
-  </jelly-card>
+  </Card>
 </div>
 
 <style>

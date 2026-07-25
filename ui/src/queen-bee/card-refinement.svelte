@@ -4,7 +4,8 @@ import type {
   PlanningProposal,
   RequirementsFeedback,
 } from "shared/board-types";
-import { jellyDisabled } from "../shared/jelly-disabled.svelte";
+import Button from "../shared/ui/Button.svelte";
+import Textarea from "../shared/ui/Textarea.svelte";
 import { parsePlanningProposalResponse } from "./parse-planning-proposal-response";
 import { projectSocket } from "./project-socket.svelte";
 
@@ -201,61 +202,47 @@ $effect(() => {
   {/if}
 
   {#if stage !== "confirmation"}
-    <jelly-textarea
-      size="small"
-      value={input}
-      oninput={(e: Event) => input = (e.target as HTMLInputElement).value}
-      rows="3"
+    <Textarea
+      bind:value={input}
       placeholder={stage === "context" ? "Add context..." : "Your answer..."}
-      use:jellyDisabled={busy}
-    ></jelly-textarea>
+      disabled={busy}
+      restProps={{ rows: "3" }}
+    />
   {/if}
 
   <div class="actions">
     {#if stage === "context"}
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <jelly-button
-        size="small"
+      <Button
         variant="mint"
         onclick={startRefinement}
-        use:jellyDisabled={busy || !input.trim()}
+        disabled={busy || !input.trim()}
       >
         {busy ? "Starting..." : "Start refinement"}
-      </jelly-button>
+      </Button>
     {:else if stage === "question"}
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <jelly-button
-        size="small"
+      <Button
         variant="mint"
         onclick={respond}
-        use:jellyDisabled={busy || !input.trim()}
+        disabled={busy || !input.trim()}
       >
         {busy ? "Sending..." : "Send"}
-      </jelly-button>
+      </Button>
     {:else}
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <jelly-button
-        size="small"
+      <Button
         variant="mint"
         onclick={confirmReady}
-        use:jellyDisabled={busy}
+        disabled={busy}
       >
         {busy ? "Reconciling..." : "Confirm and review changes"}
-      </jelly-button>
+      </Button>
     {/if}
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <jelly-button
-      size="small"
+    <Button
       variant="platinum"
       onclick={onCancel}
-      use:jellyDisabled={busy}
+      disabled={busy}
     >
       {stage === "confirmation" ? "Keep as Idea" : "Cancel"}
-    </jelly-button>
+    </Button>
   </div>
 </div>
 

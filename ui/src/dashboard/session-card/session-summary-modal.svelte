@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { RequestState, SessionState } from "shared/dashboard-types";
 import TruncatableText from "../../shared/TruncatableText.svelte";
+import Dialog from "../../shared/ui/Dialog.svelte";
 import ConversationView from "../ConversationView.svelte";
 import RequestDetailModal from "./request-detail-modal.svelte";
 import Timeline from "./timeline.svelte";
@@ -30,7 +31,7 @@ function handleTimelineClick(req: RequestState) {
 }
 </script>
 
-<jelly-dialog {open} onclose={() => open = false} label="Session Summary">
+<Dialog bind:open label="Session Summary">
   <h2 class="dialog-title">Session Summary</h2>
   <div class="modal-body">
     <div class="session-info">
@@ -69,7 +70,7 @@ function handleTimelineClick(req: RequestState) {
       />
     </div>
   </div>
-</jelly-dialog>
+</Dialog>
 
 <style>
 .dialog-title {
