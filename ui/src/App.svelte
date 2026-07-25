@@ -21,31 +21,8 @@ import ProjectIntegration from "./queen-bee/project-integration.svelte";
 import ProjectOverview from "./queen-bee/project-overview.svelte";
 import ProjectPage from "./queen-bee/project-page.svelte";
 import Header from "./shared/Header.svelte";
-import { getThemeMode } from "./shared/theme-state.svelte";
-
-const jellyThemeMode = $derived(getThemeMode());
-
-const jellyTokens = $derived.by(() => {
-  const isLight = jellyThemeMode === "light";
-  return {
-    "--jelly-color-background-page": isLight ? "#f5f0e3" : "#1b1601",
-    "--jelly-color-background-surface": isLight ? "#fdfaef" : "#0d0c06",
-    "--jelly-color-background-muted": isLight ? "#f5f0e3" : "#231c06",
-    "--jelly-color-background-neutral": isLight ? "#ebe0c4" : "#2e2508",
-    "--jelly-color-background-accent": "#f5b342",
-    "--jelly-color-foreground-on-accent": "#1b1601",
-    "--jelly-color-foreground-default": isLight ? "#2c2410" : "#f5e6c8",
-    "--jelly-color-foreground-muted": isLight ? "#8a7a5c" : "#8a7a5c",
-    "--jelly-color-border-default": isLight ? "#ebe0c4" : "#2e2508",
-    "--jelly-color-border-focus": "#f5b342",
-  };
-});
-
-const jellyStyle = $derived(
-  Object.entries(jellyTokens)
-    .map(([k, v]) => `${k}: ${v}`)
-    .join("; ")
-);
+import Button from "./shared/ui/Button.svelte";
+import Dialog from "./shared/ui/Dialog.svelte";
 
 let detailMetric: MetricData | null = $state(null);
 let detailAllMetrics: MetricData[] = $state([]);
@@ -191,8 +168,7 @@ const detailChain = $derived(
 );
 </script>
 
-<jelly-theme mode={jellyThemeMode} accent="#f5b342" style={jellyStyle}>
-  <div class="app">
+<div class="app">
     <div class="top-bar">
       <Header
         data={headerData ?? undefined}
@@ -209,16 +185,13 @@ const detailChain = $derived(
                 <ProjectIntegration projectId={projectHeader.projectId} />
               {/key}
               {#if projectHeader.requirementsContent}
-                <!-- svelte-ignore a11y_click_events_have_key_events -->
-                <!-- svelte-ignore a11y_no_static_element_interactions -->
-                <jelly-button
-                  size="small"
+                <Button
                   variant="platinum"
                   onclick={togglePanel}
                 >
                   {projectHeader.panelOpen ? "Hide" : "View"}
                   Requirements
-                </jelly-button>
+                </Button>
               {/if}
               <span class="project-id">{projectHeader.projectId}</span>
             </div>
@@ -268,31 +241,24 @@ const detailChain = $derived(
         <Logs entries={dashboardSocket.logEntries} />
       </div>
       <div class="drawer-trigger">
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <jelly-button
-          size="small"
-          shape="square"
+        <Button
           variant="azure"
-          style="--jelly-fill: var(--accent); --jelly-label: var(--bg);"
           onclick={() => drawerOpen = true}
         >
           Playground
-        </jelly-button>
+        </Button>
       </div>
-      <jelly-drawer
-        side="bottom"
-        open={drawerOpen}
-        onclose={() => drawerOpen = false}
-        onopen={() => drawerOpen = true}
+      <Dialog
+        bind:open={drawerOpen}
         label="Provider playground"
+        contentMaxWidth="700px"
       >
         <h3 class="drawer-title">Provider playground</h3>
         <ProviderPlayground providers={dashboardSocket.availableProviders} />
-      </jelly-drawer>
-      <jelly-dialog
+      </Dialog>
+      <Dialog
         open={detailOpen}
-        onclose={() => detailMetric = null}
+        onOpenChange={(v) => { if (!v) detailMetric = null }}
         label="Request Detail"
       >
         <h2 class="dialog-title">Request Detail</h2>
@@ -386,15 +352,14 @@ const detailChain = $derived(
             {/each}
           {/if}
         {/if}
-      </jelly-dialog>
+      </Dialog>
       <ModelPriorityModal bind:open={modelPriorityModalOpen} />
     {:else if currentHash.startsWith('#/project/')}
       <ProjectPage projectId={currentHash.slice('#/project/'.length)} />
     {:else}
       <ProjectOverview />
     {/if}
-  </div>
-</jelly-theme>
+</div>
 
 <style>
 .app {
