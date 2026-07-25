@@ -602,6 +602,74 @@ describe("requirements routes", () => {
     );
   });
 
+  it("resets a session via DELETE endpoint", async () => {
+    let resetCalled = false;
+    let resetProjectId = "";
+    let resetSessionId = "";
+    const { server, project } = createRouteFixture({
+      resetSession: async (projectId, sessionId) => {
+        resetCalled = true;
+        resetProjectId = projectId;
+        resetSessionId = sessionId;
+      },
+    });
+
+    const response = await server.inject({
+      method: "DELETE",
+      url: `/api/queen-bee/${project.id}/requirements/session/session-1`,
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.json(), { success: true });
+    assert.equal(resetCalled, true);
+    assert.equal(resetProjectId, project.id);
+    assert.equal(resetSessionId, "session-1");
+  });
+
+  it("DELETE returns 404 when session is not found", async () => {
+    const { server, project } = createRouteFixture({
+      resetSession: async () => {
+        throw new Error("Requirements Session not found");
+      },
+    });
+
+    const response = await server.inject({
+      method: "DELETE",
+      url: `/api/queen-bee/${project.id}/requirements/session/nonexistent`,
+    });
+
+    assert.equal(response.statusCode, 404);
+    assert.equal(response.json().error, "Session not found");
+  });
+
+  it("DELETE returns 409 when session is submitted", async () => {
+    const { server, project } = createRouteFixture({
+      resetSession: async () => {
+        throw new Error("Cannot reset a submitted Requirements Session");
+      },
+    });
+
+    const response = await server.inject({
+      method: "DELETE",
+      url: `/api/queen-bee/${project.id}/requirements/session/session-1`,
+    });
+
+    assert.equal(response.statusCode, 409);
+    assert.ok(response.json().error.includes("submitted"));
+  });
+
+  it("DELETE returns 404 for unknown project", async () => {
+    const { server } = createRouteFixture();
+
+    const response = await server.inject({
+      method: "DELETE",
+      url: "/api/queen-bee/unknown-project/requirements/session/session-1",
+    });
+
+    assert.equal(response.statusCode, 404);
+    assert.equal(response.json().error, "Project not found");
+  });
+
   function createRouteFixture(
     overrides: Partial<RequirementsSessionManager> = {},
     plannerOverrides: Partial<PlanningManager> = {}
@@ -645,6 +713,7 @@ describe("requirements routes", () => {
         question: "Card question",
       }),
       getCardSession: () => undefined,
+      resetSession: async () => {},
       ...overrides,
     };
     const boardStore = createBoardStore(

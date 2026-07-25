@@ -99,6 +99,7 @@ describe("coordinator routes", () => {
         question: "Card question",
       }),
       getCardSession: () => undefined,
+      resetSession: async () => {},
     };
     const server = Fastify();
     servers.push(server);
@@ -327,6 +328,7 @@ function unusedSessionManager(): RequirementsSessionManager {
     startCard: async () => ({ question: "Question" }),
     respondCard: async () => ({ type: "question", question: "Question" }),
     getCardSession: () => undefined,
+    resetSession: async () => {},
   };
 }
 

@@ -604,4 +604,209 @@ describe("RequirementsSessionManager", () => {
     }
     assert.strictEqual(respondCallCount, 10);
   });
+
+  it("resetSession removes an active session", async () => {
+    const caller = createMockCaller([emptyResponse("First question")]);
+    const runtimeStore = createQueenBeeRuntimeStore(
+      join(mkdtempSync(join(tmpdir(), "hive-reset-")), ".runtime")
+    );
+    const engine = createRequirementsSessionManager(caller, runtimeStore);
+
+    await engine.start("p1", "Build it", "/tmp");
+    const session = engine.getSession("p1");
+    if (!session) assert.fail("Expected active session");
+    assert.strictEqual(session.status, "active");
+
+    await engine.resetSession("p1", session.sessionId);
+    assert.strictEqual(engine.getSession("p1"), undefined);
+
+    const persisted = runtimeStore.getRequirementsSessions("p1");
+    assert.strictEqual(persisted.length, 0);
+  });
+
+  it("resetSession allows a new session to start after reset", async () => {
+    const caller = createMockCaller([
+      emptyResponse("First question"),
+      emptyResponse("New question"),
+    ]);
+    const engine = createRequirementsSessionManager(caller);
+
+    await engine.start("p1", "Build it", "/tmp");
+    const session = engine.getSession("p1");
+    if (!session) assert.fail("Expected session");
+    await engine.resetSession("p1", session.sessionId);
+
+    const result = await engine.start("p1", "New attempt", "/tmp");
+    assert.strictEqual(result.question, "New question");
+  });
+
+  it("resetSession removes a complete session", async () => {
+    const caller = createMockCaller([
+      emptyResponse("Q1"),
+      draftResponse(),
+      completionResponse(),
+    ]);
+    const engine = createRequirementsSessionManager(caller);
+
+    await engine.start("p1", "Build it", "/tmp");
+    await engine.respond("p1", "Done", "/tmp");
+    assert.strictEqual(engine.getSession("p1")?.status, "complete");
+
+    const session = engine.getSession("p1");
+    if (!session) assert.fail("Expected complete session");
+    await engine.resetSession("p1", session.sessionId);
+    assert.strictEqual(engine.getSession("p1"), undefined);
+  });
+
+  it("resetSession throws for a submitted session", async () => {
+    const workspace = createTempWorkspace();
+    const runtimeStore = createQueenBeeRuntimeStore(
+      join(workspace, ".runtime")
+    );
+    const caller = createMockCaller([
+      emptyResponse("Q1"),
+      draftResponse(),
+      completionResponse(),
+    ]);
+    const engine = createRequirementsSessionManager(caller, runtimeStore);
+
+    await engine.start("p1", "Build it", workspace);
+    await engine.respond("p1", "Done", workspace);
+    const session = engine.getSession("p1");
+    if (!session) assert.fail("Expected completed session");
+    assert.strictEqual(session.status, "complete");
+    const submittedSessionId = session.sessionId;
+    engine.submitForPlanning("p1", submittedSessionId, "proposal-1");
+
+    await assert.rejects(
+      () => engine.resetSession("p1", submittedSessionId),
+      /Cannot reset a submitted/
+    );
+    assert.strictEqual(engine.getSession("p1")?.status, "submitted");
+  });
+
+  it("resetSession throws for an unknown session", async () => {
+    const engine = createRequirementsSessionManager();
+    await assert.rejects(
+      () => engine.resetSession("p1", "nonexistent"),
+      /not found/
+    );
+  });
+
+  it("resetSession rolls back feedback from repairing to pending", async () => {
+    const workspace = createTempWorkspace();
+    mkdirSync(join(workspace, ".hive"), { recursive: true });
+    writeFileSync(join(workspace, ".hive", "requirements.md"), "# Canonical");
+    const runtimeStore = createQueenBeeRuntimeStore(
+      join(workspace, ".runtime")
+    );
+    const feedback: RequirementsFeedback = {
+      kind: "requirements_feedback",
+      id: "fb-1",
+      projectId: "p1",
+      status: "pending",
+      projectRevision: null,
+      baseRequirementsRevision: "requirements-1",
+      baseBoardRevision: "board-1",
+      proposedRequirements: "# Draft",
+      createdAt: "2026-07-20T00:01:00.000Z",
+      issues: [],
+    };
+    runtimeStore.saveRequirementsFeedback(feedback);
+    const engine = createRequirementsSessionManager(
+      createMockCaller([emptyResponse("Fix what?")]),
+      runtimeStore
+    );
+
+    await engine.startRepair("p1", feedback, workspace);
+    assert.strictEqual(
+      runtimeStore.getRequirementsFeedback("p1", "fb-1")?.status,
+      "repairing"
+    );
+
+    const session = engine.getSession("p1");
+    if (!session) assert.fail("Expected session");
+    await engine.resetSession("p1", session.sessionId);
+    assert.strictEqual(
+      runtimeStore.getRequirementsFeedback("p1", "fb-1")?.status,
+      "pending"
+    );
+  });
+
+  it("resetSession does not affect feedback that is already resolved", async () => {
+    const workspace = createTempWorkspace();
+    mkdirSync(join(workspace, ".hive"), { recursive: true });
+    writeFileSync(join(workspace, ".hive", "requirements.md"), "# Canonical");
+    const runtimeStore = createQueenBeeRuntimeStore(
+      join(workspace, ".runtime")
+    );
+    const feedback: RequirementsFeedback = {
+      kind: "requirements_feedback",
+      id: "fb-2",
+      projectId: "p1",
+      status: "resolved",
+      projectRevision: null,
+      baseRequirementsRevision: "requirements-1",
+      baseBoardRevision: "board-1",
+      proposedRequirements: "# Draft",
+      createdAt: "2026-07-20T00:01:00.000Z",
+      resolvedAt: "2026-07-20T01:00:00.000Z",
+      issues: [],
+    };
+    runtimeStore.saveRequirementsFeedback(feedback);
+    const engine = createRequirementsSessionManager(
+      createMockCaller([emptyResponse("Question")]),
+      runtimeStore
+    );
+
+    await engine.start("p1", "Build it", workspace);
+    const session = engine.getSession("p1");
+    if (!session) assert.fail("Expected session");
+    assert.strictEqual(session.sourceFeedbackId, undefined);
+
+    await engine.resetSession("p1", session.sessionId);
+    assert.strictEqual(
+      runtimeStore.getRequirementsFeedback("p1", "fb-2")?.status,
+      "resolved"
+    );
+  });
+
+  it("resetSession aborts an in-flight respond call", async () => {
+    const runtimeStore = createQueenBeeRuntimeStore(
+      join(mkdtempSync(join(tmpdir(), "hive-reset-respond-")), ".runtime")
+    );
+    let respondCallSignal: AbortSignal | undefined;
+    let callIndex = 0;
+    const engine = createRequirementsSessionManager(
+      {
+        async call(
+          _messages: Message[],
+          _ws: string,
+          _includeTools: boolean,
+          signal?: AbortSignal
+        ): Promise<AgentModelResponse> {
+          callIndex++;
+          if (callIndex === 1) {
+            return emptyResponse("First question");
+          }
+          respondCallSignal = signal;
+          return new Promise(() => {});
+        },
+      },
+      runtimeStore
+    );
+
+    await engine.start("p1", "Build it", "/tmp");
+    assert.ok(engine.getSession("p1"));
+
+    const _respondPromise = engine.respond("p1", "Continue", "/tmp");
+    const session = engine.getSession("p1");
+    if (!session) assert.fail("Expected session");
+    assert.strictEqual(session.status, "active");
+
+    await engine.resetSession("p1", session.sessionId);
+    assert.strictEqual(engine.getSession("p1"), undefined);
+    assert.ok(respondCallSignal?.aborted);
+    assert.strictEqual(runtimeStore.getRequirementsSessions("p1").length, 0);
+  });
 });

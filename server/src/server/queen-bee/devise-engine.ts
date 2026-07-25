@@ -93,6 +93,7 @@ export type RequirementsSessionManager = {
     projectId: string,
     cardId: string
   ): RequirementsSession | undefined;
+  resetSession(projectId: string, sessionId: string): Promise<void>;
 };
 
 export type RequirementsStartResult = {
@@ -125,6 +126,7 @@ export function createRequirementsSessionManager(
 ): RequirementsSessionManager {
   const caller = modelCaller ?? createAgentModelCaller();
   const sessions = new Map<string, RequirementsSession>();
+  const activeCalls = new Map<string, AbortController>();
 
   return {
     async start(projectId, prompt, workspacePath) {
@@ -242,6 +244,49 @@ export function createRequirementsSessionManager(
       restoreProject(projectId);
       return sessions.get(cardSessionKey(projectId, cardId));
     },
+
+    async resetSession(projectId, sessionId) {
+      restoreProject(projectId);
+      const session = [...sessions.values()].find(
+        (candidate) =>
+          candidate.projectId === projectId && candidate.sessionId === sessionId
+      );
+      if (!session) {
+        throw new Error("Requirements Session not found");
+      }
+      if (session.status === "submitted") {
+        throw new Error("Cannot reset a submitted Requirements Session");
+      }
+      if (session.cardId || session.ideaId) {
+        throw new Error("Can only reset project-level sessions");
+      }
+
+      const sessionKey = session.ideaId
+        ? ideaSessionKey(projectId, session.ideaId)
+        : session.cardId
+          ? cardSessionKey(projectId, session.cardId)
+          : projectId;
+
+      const controller = activeCalls.get(sessionKey);
+      if (controller) {
+        controller.abort();
+        activeCalls.delete(sessionKey);
+      }
+
+      sessions.delete(sessionKey);
+      runtimeStore?.deleteRequirementsSession(projectId, sessionId);
+
+      if (session.sourceFeedbackId && runtimeStore) {
+        const feedback = runtimeStore.getRequirementsFeedback(
+          projectId,
+          session.sourceFeedbackId
+        );
+        if (feedback && feedback.status === "repairing") {
+          feedback.status = "pending";
+          runtimeStore.saveRequirementsFeedback(feedback);
+        }
+      }
+    },
   };
 
   async function startSession(
@@ -315,20 +360,30 @@ export function createRequirementsSessionManager(
     ];
 
     const sessionId = randomUUID();
-    const result = await callWithToolLoop(
-      caller,
-      messages,
-      workspacePath,
-      (content) =>
-        onDraftUpdate({
-          projectId,
-          sessionId,
-          cardId,
-          ideaId: kind === "idea_elaboration" ? sourceIdea?.id : undefined,
-          content,
-        }),
-      context?.revision
-    );
+    const controller = new AbortController();
+    activeCalls.set(sessionKey, controller);
+    let result: Awaited<ReturnType<typeof callWithToolLoop>>;
+    try {
+      result = await callWithToolLoop(
+        caller,
+        messages,
+        workspacePath,
+        (content) =>
+          onDraftUpdate({
+            projectId,
+            sessionId,
+            cardId,
+            ideaId: kind === "idea_elaboration" ? sourceIdea?.id : undefined,
+            content,
+          }),
+        context?.revision,
+        controller.signal
+      );
+    } finally {
+      if (activeCalls.get(sessionKey) === controller) {
+        activeCalls.delete(sessionKey);
+      }
+    }
 
     messages.push({ role: "assistant", content: result.content });
 
@@ -378,24 +433,34 @@ export function createRequirementsSessionManager(
 
     session.messages.push({ role: "user", content: answer });
 
-    const result = await callWithToolLoop(
-      caller,
-      session.messages,
-      workspacePath,
-      (content) => {
-        session.draftRequirements = content;
-        session.updatedAt = new Date().toISOString();
-        runtimeStore?.saveRequirementsSession(session);
-        onDraftUpdate({
-          projectId: session.projectId,
-          sessionId: session.sessionId,
-          cardId: session.cardId,
-          ideaId: session.ideaId,
-          content,
-        });
-      },
-      session.projectRevision === null ? undefined : session.projectRevision
-    );
+    const controller = new AbortController();
+    activeCalls.set(sessionKey, controller);
+    let result: Awaited<ReturnType<typeof callWithToolLoop>>;
+    try {
+      result = await callWithToolLoop(
+        caller,
+        session.messages,
+        workspacePath,
+        (content) => {
+          session.draftRequirements = content;
+          session.updatedAt = new Date().toISOString();
+          runtimeStore?.saveRequirementsSession(session);
+          onDraftUpdate({
+            projectId: session.projectId,
+            sessionId: session.sessionId,
+            cardId: session.cardId,
+            ideaId: session.ideaId,
+            content,
+          });
+        },
+        session.projectRevision === null ? undefined : session.projectRevision,
+        controller.signal
+      );
+    } finally {
+      if (activeCalls.get(sessionKey) === controller) {
+        activeCalls.delete(sessionKey);
+      }
+    }
 
     if (result.draftRequirements) {
       session.draftRequirements = result.draftRequirements;
@@ -495,11 +560,12 @@ async function callWithToolLoop(
   workspacePath: string,
   onDraftUpdate: (content: string) => void = () => {},
   projectRevision?: string,
+  signal?: AbortSignal,
   maxToolRounds = 10
 ): Promise<{ content: string; draftRequirements?: string }> {
   let draftRequirements: string | undefined;
   for (let round = 0; round < maxToolRounds; round++) {
-    const response = await caller.call(messages, workspacePath, true);
+    const response = await caller.call(messages, workspacePath, true, signal);
 
     if (response.toolCalls.length === 0) {
       return {
