@@ -14,16 +14,12 @@
           : "dark";
       if (t === "light") {
         document.documentElement.classList.add("light");
-        document.documentElement.setAttribute("data-jelly-mode", "light");
-      } else {
-        document.documentElement.setAttribute("data-jelly-mode", "dark");
       }
     })();
     </script>
   </head>
   <body>
     <div id="app"></div>
-    <script type="module" src="https://jelly-ui.com/package.js"></script>
     <script type="module" src="./ui.ts"></script>
   </body>
 </html>
