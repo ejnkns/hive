@@ -11,6 +11,7 @@ let {
   initialStatus,
   initialKind = "initial_requirements",
   initialDraftRequirements,
+  initialSessionId,
 }: Props = $props();
 
 type Props = {
@@ -21,6 +22,7 @@ type Props = {
   initialStatus?: string;
   initialKind?: RequirementsSessionKind;
   initialDraftRequirements?: string;
+  initialSessionId?: string;
 };
 
 type Message = {
@@ -52,6 +54,9 @@ $effect(() => {
   }
   if (initialDraftRequirements) {
     draftRequirements = initialDraftRequirements;
+  }
+  if (initialSessionId) {
+    sessionId = initialSessionId;
   }
 });
 

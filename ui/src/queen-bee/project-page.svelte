@@ -33,6 +33,7 @@ let initialMessages = $state<{ role: string; content: string }[] | undefined>(
 let initialStatus = $state<string | undefined>(undefined);
 let initialKind = $state<RequirementsSessionKind>("initial_requirements");
 let initialDraftRequirements = $state<string | undefined>(undefined);
+let initialSessionId = $state<string | undefined>(undefined);
 let planningProposal = $state<PlanningProposal | null>(null);
 let requirementsFeedback = $state<RequirementsFeedback | null>(null);
 
@@ -86,6 +87,8 @@ async function checkStatus() {
           typeof session.draftRequirements === "string"
             ? session.draftRequirements
             : undefined;
+        initialSessionId =
+          typeof session.sessionId === "string" ? session.sessionId : undefined;
       }
       hasBoard = false;
       return;
@@ -247,6 +250,7 @@ function isRequirementsSessionKind(
         {initialStatus}
         {initialKind}
         {initialDraftRequirements}
+        {initialSessionId}
         onApprove={handleApprove}
         onComplete={() => {
           void fetchRequirements();

@@ -34,6 +34,7 @@ export function getPhaseHandler(deps: RouteDeps) {
         phase: "requirements",
         requirementsContent: hasRequirements ? requirementsContent : null,
         session: {
+          sessionId: session.sessionId,
           status: session.status,
           kind: session.kind,
           draftRequirements: session.draftRequirements,
