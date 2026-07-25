@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { AvailableProvider } from "shared/dashboard-types";
+import { jellyDisabled } from "../shared/jelly-disabled.svelte";
 import { runProviderTest } from "./provider-playground/run-provider-test";
 
 let { providers }: { providers: AvailableProvider[] } = $props();
@@ -16,6 +17,25 @@ let actualProvider = $state<string | null>(null);
 let actualModel = $state<string | null>(null);
 let elapsedMs = $state<number | null>(null);
 let controller: AbortController | null = null;
+
+let providerSelectEl = $state<HTMLElement & { value: string }>();
+let modelSelectEl = $state<HTMLElement & { value: string }>();
+
+$effect(() => {
+  if (providerSelectEl) providerSelectEl.value = providerName;
+});
+
+$effect(() => {
+  if (modelSelectEl) modelSelectEl.value = modelName;
+});
+
+function handleProviderChange(e: Event) {
+  providerName = (e.target as HTMLElement & { value: string }).value;
+}
+
+function handleModelChange(e: Event) {
+  modelName = (e.target as HTMLElement & { value: string }).value;
+}
 
 let selectableProviders = $derived(
   providers.filter(
@@ -101,56 +121,71 @@ function routeLabel(): string {
       <p>Send one prompt through Hive and record the response in telemetry.</p>
     </div>
     <div class="route-controls">
-      <label>
-        Route
-        <select bind:value={providerName} disabled={status === "running"}>
-          <option value="">Auto</option>
-          {#each selectableProviders as provider (provider.name)}
-            <option value={provider.name}>{provider.displayName}</option>
-          {/each}
-        </select>
-      </label>
-      <label>
-        Model
-        <select
-          bind:value={modelName}
-          disabled={status === "running" || !selectedProvider}
+      <div class="route-field">
+        <span class="route-label">Route</span>
+        <jelly-select
+          size="small"
+          placeholder="Auto"
+          bind:this={providerSelectEl}
+          onchange={handleProviderChange}
+          use:jellyDisabled={status === "running"}
         >
-          {#if !selectedProvider}
-            <option value="">Selected automatically</option>
-          {/if}
-          {#each selectedProvider?.models ?? [] as model (model)}
-            <option value={model}>{model}</option>
+          <jelly-option value="">Auto</jelly-option>
+          {#each selectableProviders as provider (provider.name)}
+            <jelly-option value={provider.name}
+              >{provider.displayName}</jelly-option
+            >
           {/each}
-        </select>
-      </label>
+        </jelly-select>
+      </div>
+      <div class="route-field">
+        <span class="route-label">Model</span>
+        <jelly-select
+          size="small"
+          placeholder={selectedProvider ? undefined : "Selected automatically"}
+          bind:this={modelSelectEl}
+          onchange={handleModelChange}
+          use:jellyDisabled={status === "running" || !selectedProvider}
+        >
+          {#each selectedProvider?.models ?? [] as model (model)}
+            <jelly-option value={model}>{model}</jelly-option>
+          {/each}
+        </jelly-select>
+      </div>
     </div>
   </div>
 
   <div class="input-row">
-    <textarea
-      bind:value={prompt}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <jelly-textarea
+      size="small"
+      value={prompt}
+      oninput={(e: Event) => prompt = (e.target as HTMLInputElement).value}
       placeholder="Enter a diagnostic prompt…"
-      rows="3"
-      disabled={status === "running"}
-      onkeydown={(event) => {
+      use:jellyDisabled={status === "running"}
+      onkeydown={(event: KeyboardEvent) => {
         if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
           void runPrompt();
         }
       }}
-    ></textarea>
+    ></jelly-textarea>
     {#if status === "running"}
-      <button type="button" class="secondary" onclick={cancelRun}>
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <jelly-button size="small" variant="rose" onclick={cancelRun}>
         Cancel
-      </button>
+      </jelly-button>
     {:else}
-      <button
-        type="button"
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <jelly-button
+        size="small"
+        variant="mint"
         onclick={() => void runPrompt()}
-        disabled={!prompt.trim()}
+        use:jellyDisabled={!prompt.trim()}
       >
         Send
-      </button>
+      </jelly-button>
     {/if}
   </div>
 
@@ -203,57 +238,20 @@ p {
   display: flex;
   gap: 0.5rem;
 }
-label {
-  color: var(--muted);
+.route-field {
   display: flex;
   flex-direction: column;
-  font-size: 0.625rem;
   gap: 0.25rem;
 }
-select,
-textarea {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text);
-  font: inherit;
-}
-select {
-  max-width: 15rem;
-  min-width: 10rem;
-  padding: 0.375rem;
+.route-label {
+  color: var(--muted);
+  font-size: 0.625rem;
 }
 .input-row {
   align-items: flex-start;
   display: flex;
   gap: 0.5rem;
   margin-top: 0.75rem;
-}
-textarea {
-  flex: 1;
-  font-family: monospace;
-  font-size: 0.8rem;
-  padding: 0.5rem;
-  resize: vertical;
-}
-button {
-  background: var(--accent);
-  border: 1px solid var(--accent);
-  border-radius: 4px;
-  color: var(--bg);
-  cursor: pointer;
-  font-size: 0.8rem;
-  padding: 0.5rem 1rem;
-  white-space: nowrap;
-}
-button.secondary {
-  background: var(--surface);
-  border-color: var(--border);
-  color: var(--text);
-}
-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
 }
 .status-bar {
   align-items: center;
@@ -321,13 +319,8 @@ button:disabled {
   .route-controls {
     flex-direction: column;
   }
-  .route-controls,
-  label,
-  select {
+  .route-controls {
     width: 100%;
-  }
-  select {
-    max-width: none;
   }
 }
 </style>

@@ -1,6 +1,5 @@
 <script lang="ts">
 import type { RequestState, SessionState } from "shared/dashboard-types";
-import Modal from "../../shared/Modal.svelte";
 import TruncatableText from "../../shared/TruncatableText.svelte";
 import ConversationView from "../ConversationView.svelte";
 import RequestDetailModal from "./request-detail-modal.svelte";
@@ -31,7 +30,8 @@ function handleTimelineClick(req: RequestState) {
 }
 </script>
 
-<Modal bind:open title="Session Summary">
+<jelly-dialog {open} onclose={() => open = false} label="Session Summary">
+  <h2 class="dialog-title">Session Summary</h2>
   <div class="modal-body">
     <div class="session-info">
       <span class="info-label">Provider</span>
@@ -69,9 +69,15 @@ function handleTimelineClick(req: RequestState) {
       />
     </div>
   </div>
-</Modal>
+</jelly-dialog>
 
 <style>
+.dialog-title {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
 .modal-body {
   display: flex;
   flex-direction: column;

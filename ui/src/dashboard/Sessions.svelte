@@ -33,7 +33,20 @@ function toggleArchive() {
 </script>
 
 {#if visible.length === 0 && archived.length === 0}
-  <div class="no-data">Awaiting requests...</div>
+  <div class="no-data">
+    <jelly-skeleton
+      shape="line"
+      style="width: 200px; height: 16px; margin: 0 auto 0.5rem;"
+    ></jelly-skeleton>
+    <jelly-skeleton
+      shape="line"
+      style="width: 280px; height: 14px; margin: 0 auto 0.25rem;"
+    ></jelly-skeleton>
+    <jelly-skeleton
+      shape="line"
+      style="width: 160px; height: 14px; margin: 0 auto;"
+    ></jelly-skeleton>
+  </div>
 {:else}
   {#if visible.length > 0}
     {#each visible as session (session.sessionId)}
@@ -42,10 +55,12 @@ function toggleArchive() {
   {/if}
 
   {#if archived.length > 0}
-    <button type="button" class="archive-toggle" onclick={toggleArchive}>
-      <span class="archive-arrow">{archiveOpen ? "\u25BE" : "\u25B8"}</span>
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <jelly-button size="small" variant="platinum" onclick={toggleArchive}>
+      <span class="archive-arrow">{archiveOpen ? "▾" : "▸"}</span>
       Previous Sessions ({archived.length})
-    </button>
+    </jelly-button>
     {#if archiveOpen}
       {#each archived as session (session.sessionId)}
         <SessionCard {session} />
@@ -60,24 +75,6 @@ function toggleArchive() {
   text-align: center;
   color: var(--muted);
   font-size: 0.8125rem;
-}
-.archive-toggle {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.25rem 0.5rem;
-  background: none;
-  border: 1px solid var(--border);
-  color: var(--muted);
-  font-family: monospace;
-  font-size: 0.625rem;
-  cursor: pointer;
-  width: 100%;
-  text-align: left;
-  margin-bottom: 0.25rem;
-}
-.archive-toggle:hover {
-  background: rgba(var(--border-rgb), 0.08);
 }
 .archive-arrow {
   font-size: 0.625rem;

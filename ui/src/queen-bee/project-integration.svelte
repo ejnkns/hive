@@ -2,6 +2,7 @@
 import { isRecord } from "shared/board-types";
 import type { ProjectIntegrationStatus } from "shared/project-types";
 import { onMount } from "svelte";
+import { jellyDisabled } from "../shared/jelly-disabled.svelte";
 import { projectSocket } from "./project-socket.svelte";
 
 let { projectId }: { projectId: string } = $props();
@@ -107,21 +108,25 @@ function readError(value: unknown): string | null {
     <span class="status muted">Checking integration...</span>
   {:else if error}
     <span class="status error" title={error}>Integration needs attention</span>
-    <button type="button" class="btn btn-outline" onclick={loadStatus}>
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <jelly-button size="small" variant="platinum" onclick={loadStatus}>
       Retry
-    </button>
+    </jelly-button>
   {:else if status?.state === "ready"}
     <span class="status ready">
       {status.ahead} {status.ahead === 1 ? "commit" : "commits"} ready
     </span>
-    <button
-      type="button"
-      class="btn btn-primary"
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <jelly-button
+      size="small"
+      variant="mint"
       onclick={integrate}
-      disabled={integrating}
+      use:jellyDisabled={integrating}
     >
       {integrating ? "Integrating..." : `Integrate into ${status.targetBranch}`}
-    </button>
+    </jelly-button>
   {:else if status?.state === "diverged"}
     <span
       class="status error"
@@ -159,30 +164,5 @@ function readError(value: unknown): string | null {
 
 .error {
   color: #dc3c3c;
-}
-
-.btn {
-  padding: 0.3rem 0.5rem;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  font: inherit;
-  font-size: 0.6875rem;
-  cursor: pointer;
-}
-
-.btn:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
-
-.btn-outline {
-  background: transparent;
-  color: var(--text);
-}
-
-.btn-primary {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--bg);
 }
 </style>

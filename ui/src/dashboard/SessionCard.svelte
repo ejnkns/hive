@@ -56,7 +56,7 @@ function handleSelectRequest(requestId: string) {
 }
 </script>
 
-<div class="session-card">
+<jelly-card>
   <button
     type="button"
     class="summary-card"
@@ -141,7 +141,7 @@ function handleSelectRequest(requestId: string) {
       {/each}
     </div>
   {/if}
-</div>
+</jelly-card>
 
 <SessionSummaryModal
   bind:open={summaryModalOpen}
@@ -159,16 +159,6 @@ function handleSelectRequest(requestId: string) {
 {/if}
 
 <style>
-.session-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  padding: 0.5rem 0.75rem;
-  margin-bottom: 0.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-}
-
 .summary-card {
   display: flex;
   flex-direction: column;

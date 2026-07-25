@@ -3,6 +3,7 @@ import type { MetricData, ProviderPayload } from "shared/dashboard-types";
 import { onMount } from "svelte";
 import { dashboardSocket } from "./dashboard/dashboard-socket.svelte";
 import type { HeaderData } from "./shared/utils";
+import { formatNumber, formatTime } from "./shared/utils";
 import "./app.css";
 import CanvasHost from "./canvas/CanvasHost.svelte";
 import LivePipeline from "./dashboard/LivePipeline.svelte";
@@ -19,9 +20,32 @@ import {
 import ProjectIntegration from "./queen-bee/project-integration.svelte";
 import ProjectOverview from "./queen-bee/project-overview.svelte";
 import ProjectPage from "./queen-bee/project-page.svelte";
-import BottomDrawer from "./shared/BottomDrawer.svelte";
-import DetailOverlay from "./shared/DetailOverlay.svelte";
 import Header from "./shared/Header.svelte";
+import { getThemeMode } from "./shared/theme-state.svelte";
+
+const jellyThemeMode = $derived(getThemeMode());
+
+const jellyTokens = $derived.by(() => {
+  const isLight = jellyThemeMode === "light";
+  return {
+    "--jelly-color-background-page": isLight ? "#f5f0e3" : "#1b1601",
+    "--jelly-color-background-surface": isLight ? "#fdfaef" : "#0d0c06",
+    "--jelly-color-background-muted": isLight ? "#f5f0e3" : "#231c06",
+    "--jelly-color-background-neutral": isLight ? "#ebe0c4" : "#2e2508",
+    "--jelly-color-background-accent": "#f5b342",
+    "--jelly-color-foreground-on-accent": "#1b1601",
+    "--jelly-color-foreground-default": isLight ? "#2c2410" : "#f5e6c8",
+    "--jelly-color-foreground-muted": isLight ? "#8a7a5c" : "#8a7a5c",
+    "--jelly-color-border-default": isLight ? "#ebe0c4" : "#2e2508",
+    "--jelly-color-border-focus": "#f5b342",
+  };
+});
+
+const jellyStyle = $derived(
+  Object.entries(jellyTokens)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join("; ")
+);
 
 let detailMetric: MetricData | null = $state(null);
 let detailAllMetrics: MetricData[] = $state([]);
@@ -156,88 +180,221 @@ function handleOverrideClear() {
 function handleToggleProvider(provider: string, disabled: boolean) {
   dashboardSocket.toggleProvider(provider, disabled);
 }
+
+const detailOpen = $derived(detailMetric !== null);
+const detailChain = $derived(
+  detailMetric && detailAllMetrics.length > 0
+    ? detailAllMetrics
+        .filter((m) => m.requestId === detailMetric?.requestId)
+        .sort((a, b) => a.timestamp - b.timestamp)
+    : []
+);
 </script>
 
-<div class="app">
-  <div class="top-bar">
-    <Header
-      data={headerData ?? undefined}
-      onOverrideSet={handleOverrideSet}
-      onOverrideClear={handleOverrideClear}
-      onOpenModelPriority={() => (modelPriorityModalOpen = true)}
-    />
-    {#if currentHash.startsWith('#/project/') && projectHeader.projectId}
-      <div class="project-header">
-        <div class="project-header-row">
-          <a href="#/" class="back-link">&larr; Projects</a>
-          <div class="header-right">
-            {#key projectHeader.projectId}
-              <ProjectIntegration projectId={projectHeader.projectId} />
-            {/key}
-            {#if projectHeader.requirementsContent}
-              <button
-                type="button"
-                class="btn btn-outline"
-                onclick={togglePanel}
-              >
-                {projectHeader.panelOpen ? "Hide" : "View"}
-                Requirements
-              </button>
-            {/if}
-            <span class="project-id">{projectHeader.projectId}</span>
+<jelly-theme mode={jellyThemeMode} accent="#f5b342" style={jellyStyle}>
+  <div class="app">
+    <div class="top-bar">
+      <Header
+        data={headerData ?? undefined}
+        onOverrideSet={handleOverrideSet}
+        onOverrideClear={handleOverrideClear}
+        onOpenModelPriority={() => (modelPriorityModalOpen = true)}
+      />
+      {#if currentHash.startsWith('#/project/') && projectHeader.projectId}
+        <div class="project-header">
+          <div class="project-header-row">
+            <a href="#/" class="back-link">&larr; Projects</a>
+            <div class="header-right">
+              {#key projectHeader.projectId}
+                <ProjectIntegration projectId={projectHeader.projectId} />
+              {/key}
+              {#if projectHeader.requirementsContent}
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <jelly-button
+                  size="small"
+                  variant="platinum"
+                  onclick={togglePanel}
+                >
+                  {projectHeader.panelOpen ? "Hide" : "View"}
+                  Requirements
+                </jelly-button>
+              {/if}
+              <span class="project-id">{projectHeader.projectId}</span>
+            </div>
           </div>
+          {#if projectHeader.requirementsContent && projectHeader.panelOpen}
+            <div class="requirements-panel">
+              <div class="panel-header">
+                <h2>Requirements</h2>
+              </div>
+              <div class="panel-body">
+                <pre
+                  class="req-content"
+                >{projectHeader.requirementsContent}</pre>
+              </div>
+            </div>
+          {/if}
         </div>
-        {#if projectHeader.requirementsContent && projectHeader.panelOpen}
-          <div class="requirements-panel">
-            <div class="panel-header">
-              <h2>Requirements</h2>
-            </div>
-            <div class="panel-body">
-              <pre class="req-content">{projectHeader.requirementsContent}</pre>
-            </div>
+      {/if}
+    </div>
+
+    {#if currentHash === '#/canvas'}
+      <CanvasHost />
+    {:else if currentHash === '#/dashboard'}
+      <div class="content">
+        <Stats data={statsData} />
+        <div>
+          <div class="section-head" style="margin-top:1.5rem">
+            Live Sessions
           </div>
-        {/if}
+          <Sessions sessions={dashboardSocket.sessions} />
+          <ProviderPanel
+            data={providersData}
+            metrics={dashboardSocket.metrics}
+            conversations={[]}
+            {overrideKey}
+            onRowClick={handleMetricClick}
+            onToggleProvider={handleToggleProvider}
+            lastProvider={headerData?.lastProvider ?? null}
+            lastModel={headerData?.lastModel ?? null}
+          />
+        </div>
+        <div class="section-head" style="margin-top:1.5rem">Pipeline</div>
+        <LivePipeline
+          events={dashboardSocket.flowEvents}
+          providers={providersData}
+        />
+        <Logs entries={dashboardSocket.logEntries} />
       </div>
+      <div class="drawer-trigger">
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <jelly-button
+          size="small"
+          shape="square"
+          variant="azure"
+          style="--jelly-fill: var(--accent); --jelly-label: var(--bg);"
+          onclick={() => drawerOpen = true}
+        >
+          Playground
+        </jelly-button>
+      </div>
+      <jelly-drawer
+        side="bottom"
+        open={drawerOpen}
+        onclose={() => drawerOpen = false}
+        onopen={() => drawerOpen = true}
+        label="Provider playground"
+      >
+        <h3 class="drawer-title">Provider playground</h3>
+        <ProviderPlayground providers={dashboardSocket.availableProviders} />
+      </jelly-drawer>
+      <jelly-dialog
+        open={detailOpen}
+        onclose={() => detailMetric = null}
+        label="Request Detail"
+      >
+        <h2 class="dialog-title">Request Detail</h2>
+        {#if detailMetric}
+          <div class="detail-grid">
+            <div class="field">
+              <span class="label">Request ID</span
+              ><span class="val mono">{detailMetric.requestId}</span>
+            </div>
+            <div class="field">
+              <span class="label">Provider</span
+              ><span class="val">{detailMetric.provider}</span>
+            </div>
+            <div class="field">
+              <span class="label">Model</span
+              ><span class="val mono">{detailMetric.model}</span>
+            </div>
+            <div class="field">
+              <span class="label">Time</span
+              ><span class="val">{formatTime(detailMetric.timestamp)}</span>
+            </div>
+            <div class="field">
+              <span class="label">TTFT</span
+              ><span class="val">{formatNumber(detailMetric.ttft, "ms")}</span>
+            </div>
+            <div class="field">
+              <span class="label">Total</span
+              ><span class="val"
+                >{formatNumber(detailMetric.totalLatency, "ms")}</span
+              >
+            </div>
+            <div class="field">
+              <span class="label">Tokens I/O</span
+              ><span class="val"
+                >{detailMetric.inputTokens ?? "—"}
+                / {detailMetric.outputTokens ?? "—"}</span
+              >
+            </div>
+            <div class="field">
+              <span class="label">Thinking</span
+              ><span class="val"
+                >{detailMetric.thinkingTime != null ? `${detailMetric.thinkingTime}ms` : "—"}</span
+              >
+            </div>
+            <div class="field">
+              <span class="label">Status</span
+              ><span class="val {detailMetric.success ? 'ok' : 'err'}"
+                >{String(detailMetric.statusCode)}</span
+              >
+            </div>
+            <div class="field">
+              <span class="label">Finish</span
+              ><span class="val">{detailMetric.finishReason ?? "—"}</span>
+            </div>
+            <div class="field">
+              <span class="label">Refused</span
+              ><span class="val">{detailMetric.refused ? "Yes" : "No"}</span>
+            </div>
+            <div class="field">
+              <span class="label">Tool Err</span
+              ><span class="val"
+                >{detailMetric.toolCallFailed ? "Yes" : "No"}</span
+              >
+            </div>
+            <div class="field">
+              <span class="label">Source</span
+              ><span class="val">{detailMetric.source}</span>
+            </div>
+            {#if detailMetric.errorBody}
+              <div class="field full">
+                <span class="label">Error</span
+                ><span class="val mono">{detailMetric.errorBody}</span>
+              </div>
+            {/if}
+          </div>
+          {#if detailChain.length > 0}
+            <div class="chain-title">
+              Request Chain ({detailChain.length}
+              attempts)
+            </div>
+            {#each detailChain as m, idx}
+              <div class="chain-item">
+                <span class="chain-num">Attempt #{idx + 1}</span>
+                <span class="chain-prov">{m.provider} ({m.model})</span>
+                <span class="chain-status {m.success ? 'ok' : 'err'}"
+                  >{m.statusCode ? String(m.statusCode) : "ERR"}
+                  {m.errorType ? ` ${m.errorType}` : ""}</span
+                >
+                <span class="chain-ttft">{formatNumber(m.ttft, "ms")}</span>
+              </div>
+            {/each}
+          {/if}
+        {/if}
+      </jelly-dialog>
+      <ModelPriorityModal bind:open={modelPriorityModalOpen} />
+    {:else if currentHash.startsWith('#/project/')}
+      <ProjectPage projectId={currentHash.slice('#/project/'.length)} />
+    {:else}
+      <ProjectOverview />
     {/if}
   </div>
-
-  {#if currentHash === '#/canvas'}
-    <CanvasHost />
-  {:else if currentHash === '#/dashboard'}
-    <div class="content">
-      <Stats data={statsData} />
-      <div>
-        <div class="section-head" style="margin-top:1.5rem">Live Sessions</div>
-        <Sessions sessions={dashboardSocket.sessions} />
-        <ProviderPanel
-          data={providersData}
-          metrics={dashboardSocket.metrics}
-          conversations={[]}
-          {overrideKey}
-          onRowClick={handleMetricClick}
-          onToggleProvider={handleToggleProvider}
-          lastProvider={headerData?.lastProvider ?? null}
-          lastModel={headerData?.lastModel ?? null}
-        />
-      </div>
-      <div class="section-head" style="margin-top:1.5rem">Pipeline</div>
-      <LivePipeline
-        events={dashboardSocket.flowEvents}
-        providers={providersData}
-      />
-      <Logs entries={dashboardSocket.logEntries} />
-    </div>
-    <BottomDrawer bind:open={drawerOpen} title="Provider playground">
-      <ProviderPlayground providers={dashboardSocket.availableProviders} />
-    </BottomDrawer>
-    <DetailOverlay {detailMetric} {detailAllMetrics} />
-    <ModelPriorityModal bind:open={modelPriorityModalOpen} />
-  {:else if currentHash.startsWith('#/project/')}
-    <ProjectPage projectId={currentHash.slice('#/project/'.length)} />
-  {:else}
-    <ProjectOverview />
-  {/if}
-</div>
+</jelly-theme>
 
 <style>
 .app {
@@ -278,23 +435,6 @@ function handleToggleProvider(provider: string, disabled: boolean) {
   font-size: 0.75rem;
   color: var(--muted);
   font-family: var(--font-mono, monospace);
-}
-.btn {
-  padding: 0.375rem 0.625rem;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  font-size: 0.6875rem;
-  font-weight: 500;
-  cursor: pointer;
-  background: var(--surface);
-  color: var(--text);
-  white-space: nowrap;
-}
-.btn:hover:not(:disabled) {
-  background: var(--border);
-}
-.btn-outline {
-  background: transparent;
 }
 .requirements-panel {
   background: var(--card);
@@ -344,5 +484,87 @@ function handleToggleProvider(provider: string, disabled: boolean) {
   letter-spacing: 0.08em;
   font-weight: 700;
   margin-bottom: 0.5rem;
+  margin-top: 1.5rem;
+}
+.drawer-trigger {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  z-index: 40;
+}
+.dialog-title {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.drawer-title {
+  margin: 0 0 1rem 0;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+.detail-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+}
+.field {
+  display: contents;
+}
+.field.full {
+  grid-column: 1 / -1;
+}
+.label {
+  color: var(--muted);
+}
+.val {
+  color: var(--text);
+}
+.val.mono {
+  font-family: monospace;
+  font-size: 0.625rem;
+}
+.val.ok {
+  color: var(--success);
+}
+.val.err {
+  color: var(--error);
+}
+.chain-title {
+  margin-top: 1rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+.chain-item {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 0.6875rem;
+  padding: 0.25rem 0;
+}
+.chain-num {
+  color: var(--accent);
+  font-weight: 700;
+}
+.chain-prov {
+  font-family: monospace;
+  font-size: 0.625rem;
+}
+.chain-status {
+  font-weight: 700;
+}
+.chain-status.ok {
+  color: var(--success);
+}
+.chain-status.err {
+  color: var(--error);
+}
+.chain-ttft {
+  color: var(--muted);
 }
 </style>

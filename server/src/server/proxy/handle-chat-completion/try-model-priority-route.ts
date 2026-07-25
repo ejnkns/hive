@@ -1,4 +1,5 @@
 import { logger } from "shared/logger";
+import { normalizeModelId } from "shared/model-normalization";
 import type { Node, RequestMetric } from "telemetry";
 import type { ChatCompletionResult } from "../handle-chat-completion";
 import { isProviderRequestCancelledError } from "../provider-request-cancelled-error";
@@ -36,7 +37,9 @@ export async function tryModelPriorityRoute(params: {
   } = params;
 
   for (const modelName of modelPriority) {
-    const modelNodes = nodes.filter((n) => n.modelName === modelName);
+    const modelNodes = nodes.filter(
+      (n) => normalizeModelId(n.modelName) === normalizeModelId(modelName)
+    );
     if (modelNodes.length === 0) {
       logger.debug(
         `request ${requestId} — model priority "${modelName}" not found on any qualified provider, skipping`

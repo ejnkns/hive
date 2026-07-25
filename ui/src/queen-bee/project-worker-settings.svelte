@@ -5,6 +5,7 @@ import {
   MAX_MAX_CONCURRENT_WORKERS,
   MIN_MAX_CONCURRENT_WORKERS,
 } from "shared/project-types";
+import { jellyDisabled } from "../shared/jelly-disabled.svelte";
 
 let { projectId }: Props = $props();
 
@@ -152,16 +153,21 @@ function canRunPrimaryAction(): boolean {
   title={loadError ?? saveError ?? "Maximum Worker Agents running for this project"}
 >
   <label for="worker-limit">Parallel workers</label>
-  <input
+  <jelly-input
     id="worker-limit"
+    size="small"
     type="number"
     min={MIN_MAX_CONCURRENT_WORKERS}
     max={MAX_MAX_CONCURRENT_WORKERS}
     step="1"
-    bind:value={maxConcurrentWorkers}
-    oninput={() => (saveError = null)}
-    disabled={loading || saving || Boolean(loadError)}
-  >
+    value={maxConcurrentWorkers}
+    oninput={(e: Event) => {
+      const v = (e.target as HTMLInputElement).valueAsNumber;
+      maxConcurrentWorkers = Number.isNaN(v) ? maxConcurrentWorkers : v;
+      saveError = null;
+    }}
+    use:jellyDisabled={loading || saving || Boolean(loadError)}
+  ></jelly-input>
   <span
     class:error-state={Boolean(loadError || saveError)}
     class="status"
@@ -169,13 +175,16 @@ function canRunPrimaryAction(): boolean {
   >
     {STATUS_TEXT[viewState()]}
   </span>
-  <button
-    type="button"
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <jelly-button
+    size="small"
+    variant="platinum"
     onclick={performPrimaryAction}
-    disabled={!canRunPrimaryAction()}
+    use:jellyDisabled={!canRunPrimaryAction()}
   >
     {BUTTON_TEXT[viewState()]}
-  </button>
+  </jelly-button>
 </div>
 
 <style>
@@ -187,25 +196,6 @@ function canRunPrimaryAction(): boolean {
   font-size: 0.6875rem;
 }
 
-input {
-  width: 3.25rem;
-  padding: 0.3rem;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  background: var(--surface);
-  color: var(--text);
-}
-
-button {
-  width: 4.75rem;
-  padding: 0.3rem 0.5rem;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  background: var(--surface);
-  color: var(--text);
-  cursor: pointer;
-}
-
 .status {
   display: inline-block;
   width: 5.25rem;
@@ -215,10 +205,5 @@ button {
 
 .error-state {
   color: #dc3c3c;
-}
-
-button:disabled,
-input:disabled {
-  opacity: 0.5;
 }
 </style>

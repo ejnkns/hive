@@ -20,16 +20,20 @@ $effect(() => {
 <div class="log-header">
   <span>Console Stream</span>
   <div class="controls">
-    <button
-      type="button"
-      class="btn btn-scroll {autoScroll ? 'active' : ''}"
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <jelly-button
+      size="small"
+      variant={autoScroll ? "mint" : "platinum"}
       onclick={() => autoScroll = !autoScroll}
     >
       Auto-scroll {autoScroll ? 'ON' : 'OFF'}
-    </button>
-    <button type="button" class="btn btn-clear" onclick={clearLogs}>
+    </jelly-button>
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <jelly-button size="small" variant="platinum" onclick={clearLogs}>
       Clear
-    </button>
+    </jelly-button>
   </div>
 </div>
 <div class="log-lines" bind:this={logContainer}>
@@ -61,24 +65,6 @@ $effect(() => {
 .controls {
   display: flex;
   gap: 0.5rem;
-}
-.btn {
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 0.625rem;
-  padding: 0.125rem 0.375rem;
-  font-family: inherit;
-}
-.btn:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-.btn.active {
-  background: rgba(var(--accent-rgb), 0.1);
-  color: var(--accent);
-  border-color: var(--accent);
 }
 .log-lines {
   padding: 0.5rem;

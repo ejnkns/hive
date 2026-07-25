@@ -1,7 +1,6 @@
 <script lang="ts">
 import type { ModelPriority } from "shared/dashboard-types";
 import { normalizeModelId } from "shared/model-normalization";
-import Modal from "../shared/Modal.svelte";
 import { dashboardSocket } from "./dashboard-socket.svelte";
 
 let {
@@ -59,21 +58,9 @@ let initialized = $state(false);
 
 let modelSearch = $state("");
 let modelDropdownOpen = $state(false);
-let modelInputEl = $state<HTMLInputElement>();
-let modelDropdownRect = $state<{
-  top: number;
-  left: number;
-  width: number;
-} | null>(null);
 
 let providerSearch = $state("");
 let providerDropdownOpen = $state(false);
-let providerInputEl = $state<HTMLInputElement>();
-let providerDropdownRect = $state<{
-  top: number;
-  left: number;
-  width: number;
-} | null>(null);
 
 const filteredModels = $derived(
   modelSearch.trim()
@@ -105,10 +92,8 @@ $effect(() => {
     initialized = false;
     modelSearch = "";
     modelDropdownOpen = false;
-    modelDropdownRect = null;
     providerSearch = "";
     providerDropdownOpen = false;
-    providerDropdownRect = null;
   }
 });
 
@@ -126,19 +111,12 @@ function modelProviderBadges(modelId: string): string[] {
   return modelProviders.get(modelId) ?? [];
 }
 
-function captureDropdownRect(el: HTMLInputElement) {
-  const r = el.getBoundingClientRect();
-  return { top: r.bottom, left: r.left, width: r.width };
-}
-
 function addModel(modelId: string) {
   if (modelId && !modelItems.includes(modelId)) {
     modelItems = [...modelItems, modelId];
   }
   modelSearch = "";
   modelDropdownOpen = false;
-  modelDropdownRect = null;
-  modelInputEl?.focus();
 }
 
 function addProvider(name: string) {
@@ -147,48 +125,6 @@ function addProvider(name: string) {
   }
   providerSearch = "";
   providerDropdownOpen = false;
-  providerDropdownRect = null;
-  providerInputEl?.focus();
-}
-
-function handleModelKeydown(e: KeyboardEvent) {
-  if (e.key === "Escape") {
-    modelDropdownOpen = false;
-    return;
-  }
-  if (e.key === "ArrowDown" && filteredModels.length > 0) {
-    e.preventDefault();
-    modelDropdownOpen = true;
-    return;
-  }
-  if (e.key === "Enter") {
-    e.preventDefault();
-    if (filteredModels.length > 0 && modelDropdownOpen) {
-      addModel(filteredModels[0]);
-    } else if (modelSearch.trim()) {
-      addModel(modelSearch.trim());
-    }
-  }
-}
-
-function handleProviderKeydown(e: KeyboardEvent) {
-  if (e.key === "Escape") {
-    providerDropdownOpen = false;
-    return;
-  }
-  if (e.key === "ArrowDown" && filteredProviders.length > 0) {
-    e.preventDefault();
-    providerDropdownOpen = true;
-    return;
-  }
-  if (e.key === "Enter") {
-    e.preventDefault();
-    if (filteredProviders.length > 0 && providerDropdownOpen) {
-      addProvider(filteredProviders[0]);
-    } else if (providerSearch.trim()) {
-      addProvider(providerSearch.trim());
-    }
-  }
 }
 
 function removeModel(index: number) {
@@ -216,6 +152,7 @@ function moveProvider(index: number, direction: -1 | 1) {
 }
 
 function save() {
+  if (modelItems.length === 0) return;
   const config: ModelPriority = {
     modelPriority: modelItems,
     providerPriority: providerEnabled ? providerItems : undefined,
@@ -228,212 +165,237 @@ function cancel() {
   open = false;
 }
 
-function openModelDropdown() {
-  if (modelInputEl) modelDropdownRect = captureDropdownRect(modelInputEl);
+function handleModelInputFocus() {
   modelDropdownOpen = true;
 }
 
-function closeModelDropdown() {
+function handleModelInputBlur() {
   setTimeout(() => {
     modelDropdownOpen = false;
-  }, 150);
+  }, 200);
 }
 
-function openProviderDropdown() {
-  if (providerInputEl)
-    providerDropdownRect = captureDropdownRect(providerInputEl);
+function handleProviderInputFocus() {
   providerDropdownOpen = true;
 }
 
-function closeProviderDropdown() {
+function handleProviderInputBlur() {
   setTimeout(() => {
     providerDropdownOpen = false;
-  }, 150);
+  }, 200);
 }
 </script>
 
-<Modal bind:open title="Model Priority">
+<jelly-dialog
+  class="priority-dialog"
+  {open}
+  onclose={cancel}
+  label="Model Priority"
+>
+  <h2 class="dialog-title">Model Priority</h2>
   <div class="presets-body">
     {#if !dataLoaded && dashboardSocket.connected}
       <div class="loading">Loading available models...</div>
     {:else}
       <div class="list-section">
-        <div class="section-label">Model Priority</div>
         <div class="list-items">
           {#each modelItems as item, i}
             <div class="list-row" class:invalid={!isValidModel(item)}>
-              <span class="item-text">{item}</span>
-              <div class="item-badges">
-                {#each modelProviderBadges(item) as provider}
-                  <span class="badge">{provider}</span>
-                {/each}
-                {#if modelProviderBadges(item).length === 0 && dataLoaded}
-                  <span class="badge unknown">unknown</span>
-                {/if}
+              <div class="list-row-content">
+                <span class="item-text">{item}</span>
+                <div class="item-badges">
+                  {#each modelProviderBadges(item) as provider}
+                    <span class="badge">{provider}</span>
+                  {/each}
+                  {#if modelProviderBadges(item).length === 0 && dataLoaded}
+                    <span class="badge unknown">unknown</span>
+                  {/if}
+                </div>
               </div>
               <div class="row-actions">
-                <button
-                  type="button"
-                  class="icon-btn"
-                  disabled={i === 0}
-                  onclick={() => moveModel(i, -1)}
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <jelly-icon-button
+                  size="small"
+                  variant="platinum"
+                  label="Move up"
+                  style={i === 0 ? "opacity:0.3;pointer-events:none" : ""}
+                  onclick={() => { if (i > 0) moveModel(i, -1); }}
                 >
-                  &uarr;
-                </button>
-                <button
-                  type="button"
-                  class="icon-btn"
-                  disabled={i === modelItems.length - 1}
-                  onclick={() => moveModel(i, 1)}
+                  ↑
+                </jelly-icon-button>
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <jelly-icon-button
+                  size="small"
+                  variant="platinum"
+                  label="Move down"
+                  style={i === modelItems.length - 1 ? "opacity:0.3;pointer-events:none" : ""}
+                  onclick={() => { if (i < modelItems.length - 1) moveModel(i, 1); }}
                 >
-                  &darr;
-                </button>
-                <button
-                  type="button"
-                  class="icon-btn remove"
+                  ↓
+                </jelly-icon-button>
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <jelly-icon-button
+                  size="small"
+                  variant="rose"
+                  label="Remove"
                   onclick={() => removeModel(i)}
                 >
-                  &times;
-                </button>
+                  ×
+                </jelly-icon-button>
               </div>
             </div>
           {/each}
         </div>
-        <div class="search-row">
-          <div class="search-wrap">
-            <input
-              type="text"
-              class="search-input"
-              placeholder="Search model..."
-              bind:value={modelSearch}
-              bind:this={modelInputEl}
-              onfocus={openModelDropdown}
-              onblur={closeModelDropdown}
-              onkeydown={handleModelKeydown}
-              oninput={openModelDropdown}
-            >
-          </div>
+        <div class="search-wrap">
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <jelly-input
+            size="small"
+            value={modelSearch}
+            placeholder="Search model..."
+            oninput={(e: Event) => { modelSearch = (e.target as HTMLInputElement).value; modelDropdownOpen = true; }}
+            onfocus={handleModelInputFocus}
+            onblur={handleModelInputBlur}
+          ></jelly-input>
+          {#if modelDropdownOpen && filteredModels.length > 0}
+            <div class="dropdown">
+              {#each filteredModels as suggestion}
+                <jelly-button
+                  size="small"
+                  variant="platinum"
+                  block
+                  style="margin-bottom:2px"
+                  onclick={() => addModel(suggestion)}
+                >
+                  <div class="dropdown-btn-content">
+                    <span>{suggestion}</span>
+                    <span class="dropdown-item-providers">
+                      {modelProviders.get(suggestion)?.join(", ") ?? ""}
+                    </span>
+                  </div>
+                </jelly-button>
+              {/each}
+            </div>
+          {/if}
         </div>
       </div>
 
       <div class="list-section">
-        <label class="section-label">
-          <input
-            type="checkbox"
-            bind:checked={providerEnabled}
-            class="provider-checkbox"
+        <div class="section-label">
+          <jelly-switch
+            size="small"
+            checked={providerEnabled}
+            onchange={(e: Event) => { providerEnabled = (e.target as HTMLInputElement).checked; }}
           >
-          Provider Priority
-        </label>
+            Provider Priority
+          </jelly-switch>
+        </div>
         {#if providerEnabled}
           <div class="list-items">
             {#each providerItems as item, i}
               <div class="list-row" class:invalid={!isValidProvider(item)}>
-                <span class="item-text">{item}</span>
-                {#if !isValidProvider(item) && dataLoaded}
-                  <span class="badge unknown">unknown</span>
-                {/if}
+                <div class="list-row-content">
+                  <span class="item-text">{item}</span>
+                  {#if !isValidProvider(item) && dataLoaded}
+                    <span class="badge unknown">unknown</span>
+                  {/if}
+                </div>
                 <div class="row-actions">
-                  <button
-                    type="button"
-                    class="icon-btn"
-                    disabled={i === 0}
-                    onclick={() => moveProvider(i, -1)}
+                  <!-- svelte-ignore a11y_click_events_have_key_events -->
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
+                  <jelly-icon-button
+                    size="small"
+                    variant="platinum"
+                    label="Move up"
+                    style={i === 0 ? "opacity:0.3;pointer-events:none" : ""}
+                    onclick={() => { if (i > 0) moveProvider(i, -1); }}
                   >
-                    &uarr;
-                  </button>
-                  <button
-                    type="button"
-                    class="icon-btn"
-                    disabled={i === providerItems.length - 1}
-                    onclick={() => moveProvider(i, 1)}
+                    ↑
+                  </jelly-icon-button>
+                  <!-- svelte-ignore a11y_click_events_have_key_events -->
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
+                  <jelly-icon-button
+                    size="small"
+                    variant="platinum"
+                    label="Move down"
+                    style={i === providerItems.length - 1 ? "opacity:0.3;pointer-events:none" : ""}
+                    onclick={() => { if (i < providerItems.length - 1) moveProvider(i, 1); }}
                   >
-                    &darr;
-                  </button>
-                  <button
-                    type="button"
-                    class="icon-btn remove"
+                    ↓
+                  </jelly-icon-button>
+                  <!-- svelte-ignore a11y_click_events_have_key_events -->
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
+                  <jelly-icon-button
+                    size="small"
+                    variant="rose"
+                    label="Remove"
                     onclick={() => removeProvider(i)}
                   >
-                    &times;
-                  </button>
+                    ×
+                  </jelly-icon-button>
                 </div>
               </div>
             {/each}
           </div>
-          <div class="search-row">
-            <div class="search-wrap">
-              <input
-                type="text"
-                class="search-input"
-                placeholder="Search provider..."
-                bind:value={providerSearch}
-                bind:this={providerInputEl}
-                onfocus={openProviderDropdown}
-                onblur={closeProviderDropdown}
-                onkeydown={handleProviderKeydown}
-                oninput={openProviderDropdown}
-              >
-            </div>
+          <div class="search-wrap">
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <jelly-input
+              size="small"
+              value={providerSearch}
+              placeholder="Search provider..."
+              oninput={(e: Event) => { providerSearch = (e.target as HTMLInputElement).value; providerDropdownOpen = true; }}
+              onfocus={handleProviderInputFocus}
+              onblur={handleProviderInputBlur}
+            ></jelly-input>
+            {#if providerDropdownOpen && filteredProviders.length > 0}
+              <div class="dropdown">
+                {#each filteredProviders as suggestion}
+                  <jelly-button
+                    size="small"
+                    variant="platinum"
+                    block
+                    style="margin-bottom:2px"
+                    onclick={() => addProvider(suggestion)}
+                  >
+                    {suggestion}
+                  </jelly-button>
+                {/each}
+              </div>
+            {/if}
           </div>
         {/if}
       </div>
     {/if}
 
     <div class="modal-actions">
-      <button type="button" class="cancel-btn" onclick={cancel}>Cancel</button>
-      <button
-        type="button"
-        class="save-btn"
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <jelly-button size="small" variant="platinum" onclick={cancel}
+        >Cancel</jelly-button
+      >
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <jelly-button
+        size="small"
+        variant="mint"
         onclick={save}
-        disabled={modelItems.length === 0}
+        style={modelItems.length === 0 ? "opacity:0.3;pointer-events:none" : ""}
       >
         Save
-      </button>
+      </jelly-button>
     </div>
   </div>
-</Modal>
-
-{#if modelDropdownOpen && modelDropdownRect && filteredModels.length > 0}
-  <div
-    class="dropdown-fixed"
-    style="top:{modelDropdownRect.top}px;left:{modelDropdownRect.left}px;width:{modelDropdownRect.width}px"
-  >
-    {#each filteredModels as suggestion}
-      <button
-        type="button"
-        class="dropdown-item"
-        onmousedown={(e) => e.preventDefault()}
-        onclick={() => addModel(suggestion)}
-      >
-        <span class="dropdown-item-name">{suggestion}</span>
-        <span class="dropdown-item-providers">
-          {modelProviders.get(suggestion)?.join(", ") ?? ""}
-        </span>
-      </button>
-    {/each}
-  </div>
-{/if}
-
-{#if providerDropdownOpen && providerDropdownRect && filteredProviders.length > 0}
-  <div
-    class="dropdown-fixed"
-    style="top:{providerDropdownRect.top}px;left:{providerDropdownRect.left}px;width:{providerDropdownRect.width}px"
-  >
-    {#each filteredProviders as suggestion}
-      <button
-        type="button"
-        class="dropdown-item"
-        onmousedown={(e) => e.preventDefault()}
-        onclick={() => addProvider(suggestion)}
-      >
-        <span class="dropdown-item-name">{suggestion}</span>
-      </button>
-    {/each}
-  </div>
-{/if}
+</jelly-dialog>
 
 <style>
+.dialog-title {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
 .presets-body {
   display: flex;
   flex-direction: column;
@@ -453,16 +415,11 @@ function closeProviderDropdown() {
   align-items: center;
   gap: 0.375rem;
 }
-.provider-checkbox {
-  width: auto;
-  accent-color: var(--accent);
-}
 .list-items {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  max-height: 140px;
-  overflow-y: auto;
+  gap: 4px;
+  overflow: hidden;
 }
 .list-row {
   display: flex;
@@ -473,9 +430,17 @@ function closeProviderDropdown() {
   background: var(--surface);
   font-family: monospace;
   font-size: 0.6875rem;
+  border-radius: 16px;
 }
 .list-row.invalid {
   border-color: var(--error);
+}
+.list-row-content {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex: 1;
+  min-width: 0;
 }
 .item-text {
   color: var(--accent);
@@ -505,88 +470,31 @@ function closeProviderDropdown() {
   margin-left: auto;
   flex-shrink: 0;
 }
-.search-row {
-  display: flex;
-  gap: 0.25rem;
-}
 .search-wrap {
-  flex: 1;
+  position: relative;
 }
-.search-input {
-  width: 100%;
-  box-sizing: border-box;
-  font-family: monospace;
-  font-size: 0.625rem;
-  padding: 0.25rem 0.375rem;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-}
-.search-input:focus {
-  border-color: var(--accent);
-  outline: none;
-}
-.search-input::placeholder {
-  color: var(--muted);
-}
-.dropdown-fixed {
-  position: fixed;
+.dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
   max-height: 160px;
   overflow-y: auto;
   border: 1px solid var(--accent);
   background: var(--card);
-  z-index: 200;
+  z-index: 50;
+  padding: 2px;
 }
-.dropdown-item {
+.dropdown-btn-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  padding: 0.25rem 0.375rem;
-  border: none;
-  border-bottom: 1px solid var(--border);
-  background: transparent;
-  color: var(--text);
-  font-family: monospace;
   font-size: 0.625rem;
-  cursor: pointer;
-  text-align: left;
-}
-.dropdown-item:last-child {
-  border-bottom: none;
-}
-.dropdown-item:hover {
-  background: rgba(var(--accent-rgb), 0.08);
-  color: var(--accent);
-}
-.dropdown-item-name {
-  color: var(--accent);
 }
 .dropdown-item-providers {
   font-size: 0.5rem;
   color: var(--muted);
-}
-.icon-btn {
-  font-family: inherit;
-  font-size: 0.5625rem;
-  padding: 0 0.25rem;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  line-height: 1.2;
-}
-.icon-btn:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-.icon-btn:disabled {
-  opacity: 0.25;
-  cursor: default;
-}
-.icon-btn.remove:hover:not(:disabled) {
-  border-color: var(--error);
-  color: var(--error);
 }
 .modal-actions {
   display: flex;
@@ -594,33 +502,6 @@ function closeProviderDropdown() {
   gap: 0.5rem;
   padding-top: 0.5rem;
   border-top: 1px solid var(--border);
-}
-.cancel-btn,
-.save-btn {
-  font-family: inherit;
-  font-size: 0.625rem;
-  padding: 0.25rem 0.75rem;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  text-transform: uppercase;
-}
-.cancel-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-.save-btn {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-.save-btn:hover:not(:disabled) {
-  background: var(--accent);
-  color: var(--bg);
-}
-.save-btn:disabled {
-  opacity: 0.3;
-  cursor: default;
 }
 .loading {
   font-size: 0.6875rem;
