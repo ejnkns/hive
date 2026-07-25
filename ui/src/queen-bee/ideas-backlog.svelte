@@ -5,6 +5,7 @@ import type {
   RequirementsFeedback,
 } from "shared/board-types";
 import { isRecord } from "shared/board-types";
+import { jellyDisabled } from "../shared/jelly-disabled.svelte";
 import { parsePlanningProposalResponse } from "./parse-planning-proposal-response";
 import { projectSocket } from "./project-socket.svelte";
 
@@ -253,56 +254,79 @@ function errorMessage(value: unknown, fallback: string): string {
 
 <section class="ideas-backlog">
   <div class="backlog-header">
-    <button type="button" class="toggle" onclick={() => (expanded = !expanded)}>
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <jelly-button
+      size="small"
+      variant="platinum"
+      class="toggle"
+      onclick={() => (expanded = !expanded)}
+    >
       <span>{expanded ? "▾" : "▸"}</span>
       <strong>Ideas</strong>
       <span class="count">{ideas.length}</span>
-    </button>
-    <button
-      type="button"
-      class="btn"
+    </jelly-button>
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <jelly-button
+      size="small"
+      variant="platinum"
       onclick={() => (adding = !adding)}
-      disabled={busy}
+      use:jellyDisabled={busy}
     >
       Add Idea
-    </button>
+    </jelly-button>
   </div>
 
   {#if expanded}
     {#if adding}
       <div class="composer">
-        <input bind:value={title} placeholder="Idea title" disabled={busy}>
-        <textarea
-          bind:value={brief}
+        <jelly-input
+          size="small"
+          value={title}
+          oninput={(e: Event) => title = (e.target as HTMLInputElement).value}
+          placeholder="Idea title"
+          use:jellyDisabled={busy}
+        ></jelly-input>
+        <jelly-textarea
+          size="small"
+          value={brief}
+          oninput={(e: Event) => brief = (e.target as HTMLInputElement).value}
           placeholder="What should this add or change?"
           rows="2"
-          disabled={busy}
-        ></textarea>
+          use:jellyDisabled={busy}
+        ></jelly-textarea>
         <div class="actions">
-          <button
-            type="button"
-            class="btn primary"
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <jelly-button
+            size="small"
+            variant="mint"
             onclick={() => createIdea(true)}
-            disabled={busy || !title.trim() || !brief.trim()}
+            use:jellyDisabled={busy || !title.trim() || !brief.trim()}
           >
             Start elaboration
-          </button>
-          <button
-            type="button"
-            class="btn"
+          </jelly-button>
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <jelly-button
+            size="small"
+            variant="platinum"
             onclick={() => createIdea(false)}
-            disabled={busy || !title.trim() || !brief.trim()}
+            use:jellyDisabled={busy || !title.trim() || !brief.trim()}
           >
             Save to backlog
-          </button>
-          <button
-            type="button"
-            class="btn"
+          </jelly-button>
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <jelly-button
+            size="small"
+            variant="platinum"
             onclick={() => (adding = false)}
-            disabled={busy}
+            use:jellyDisabled={busy}
           >
             Cancel
-          </button>
+          </jelly-button>
         </div>
       </div>
     {/if}
@@ -314,8 +338,11 @@ function errorMessage(value: unknown, fallback: string): string {
     <div class="idea-list">
       {#each ideas as idea (idea.id)}
         <article class="idea-item">
-          <button
-            type="button"
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <jelly-button
+            size="small"
+            variant="platinum"
             class="idea-summary"
             onclick={() =>
               (selectedIdeaId = selectedIdeaId === idea.id ? null : idea.id)}
@@ -324,18 +351,20 @@ function errorMessage(value: unknown, fallback: string): string {
               ><strong>{idea.title}</strong><span>{idea.brief}</span></span
             >
             <span class="status">{statusLabel(idea.id)}</span>
-          </button>
+          </jelly-button>
           {#if selectedIdeaId === idea.id}
             <div class="idea-detail">
               {#if !sessions[idea.id]?.active}
-                <button
-                  type="button"
-                  class="btn primary"
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <jelly-button
+                  size="small"
+                  variant="mint"
                   onclick={() => startSession(idea)}
-                  disabled={busy}
+                  use:jellyDisabled={busy}
                 >
                   Start elaboration
-                </button>
+                </jelly-button>
               {:else if sessions[idea.id]?.status === "complete"}
                 <div class="question">
                   Requirements Draft is ready for review.
@@ -346,41 +375,49 @@ function errorMessage(value: unknown, fallback: string): string {
                     <pre>{sessions[idea.id]?.draftRequirements}</pre>
                   </details>
                 {/if}
-                <button
-                  type="button"
-                  class="btn primary"
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <jelly-button
+                  size="small"
+                  variant="mint"
                   onclick={() => approve(idea.id)}
-                  disabled={busy}
+                  use:jellyDisabled={busy}
                 >
                   Approve draft and plan Cards
-                </button>
+                </jelly-button>
               {:else}
                 <div class="question">
                   {sessions[idea.id]?.question ?? "Requirements Agent is working…"}
                 </div>
-                <textarea
-                  bind:value={answer}
+                <jelly-textarea
+                  size="small"
+                  value={answer}
+                  oninput={(e: Event) => answer = (e.target as HTMLInputElement).value}
                   rows="2"
                   placeholder="Your answer"
-                  disabled={busy}
-                ></textarea>
-                <button
-                  type="button"
-                  class="btn primary"
+                  use:jellyDisabled={busy}
+                ></jelly-textarea>
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <jelly-button
+                  size="small"
+                  variant="mint"
                   onclick={() => respond(idea.id)}
-                  disabled={busy || !answer.trim()}
+                  use:jellyDisabled={busy || !answer.trim()}
                 >
                   Continue
-                </button>
+                </jelly-button>
               {/if}
-              <button
-                type="button"
-                class="btn danger"
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <jelly-button
+                size="small"
+                variant="rose"
                 onclick={() => archive(idea.id)}
-                disabled={busy}
+                use:jellyDisabled={busy}
               >
                 Archive Idea
-              </button>
+              </jelly-button>
             </div>
           {/if}
         </article>
@@ -409,13 +446,6 @@ function errorMessage(value: unknown, fallback: string): string {
   justify-content: space-between;
   padding: 0.5rem 0.625rem;
 }
-.toggle,
-.idea-summary {
-  background: none;
-  border: 0;
-  color: var(--text);
-  cursor: pointer;
-}
 .toggle {
   align-items: center;
   display: flex;
@@ -433,16 +463,6 @@ function errorMessage(value: unknown, fallback: string): string {
   gap: 0.5rem;
   padding: 0.625rem;
   border-top: 1px solid var(--border);
-}
-input,
-textarea {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  color: var(--text);
-  font: inherit;
-  padding: 0.5rem;
-  resize: vertical;
 }
 .idea-list {
   display: flex;
@@ -498,27 +518,5 @@ pre {
 .error {
   color: #dc3c3c;
   padding: 0 0.625rem 0.5rem;
-}
-.btn {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  color: var(--text);
-  cursor: pointer;
-  font-size: 0.6875rem;
-  padding: 0.375rem 0.625rem;
-  white-space: nowrap;
-}
-.btn:disabled {
-  cursor: default;
-  opacity: 0.5;
-}
-.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #1b1601;
-}
-.danger {
-  color: #dc3c3c;
 }
 </style>

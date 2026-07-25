@@ -1,6 +1,5 @@
 <script lang="ts">
 import type { RequestState } from "shared/dashboard-types";
-import Modal from "../../shared/Modal.svelte";
 import { formatNumber, formatTime, sc } from "../../shared/utils";
 import ConversationView from "../ConversationView.svelte";
 import StagePathDots from "../StagePathDots.svelte";
@@ -39,7 +38,8 @@ const hasConversation = $derived(
 );
 </script>
 
-<Modal bind:open title="Request {label}">
+<jelly-dialog {open} onclose={() => open = false} label="Request {label}">
+  <h2 class="dialog-title">Request {label}</h2>
   <div class="modal-body">
     {#if requests.length > 1}
       <div class="tabs">
@@ -239,9 +239,15 @@ const hasConversation = $derived(
       {/if}
     {/if}
   </div>
-</Modal>
+</jelly-dialog>
 
 <style>
+.dialog-title {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
 .modal-body {
   display: flex;
   flex-direction: column;

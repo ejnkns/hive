@@ -1,4 +1,6 @@
 <script lang="ts">
+import { jellyDisabled } from "../shared/jelly-disabled.svelte";
+
 let { onCreateProject, onError, onCancel }: Props = $props();
 
 type Props = {
@@ -50,41 +52,47 @@ async function submit() {
 
   <label class="field">
     <span class="label">Repository path</span>
-    <input
-      type="text"
-      bind:value={repoPath}
+    <jelly-input
+      size="small"
+      value={repoPath}
+      oninput={(e: Event) => repoPath = (e.target as HTMLInputElement).value}
       placeholder="/path/to/git/repo"
-      disabled={submitting}
-    >
+      use:jellyDisabled={submitting}
+    ></jelly-input>
   </label>
 
   <label class="field">
     <span class="label">Project name (optional)</span>
-    <input
-      type="text"
-      bind:value={projectName}
+    <jelly-input
+      size="small"
+      value={projectName}
+      oninput={(e: Event) => projectName = (e.target as HTMLInputElement).value}
       placeholder="Defaults to directory name"
-      disabled={submitting}
-    >
+      use:jellyDisabled={submitting}
+    ></jelly-input>
   </label>
 
   <div class="actions">
-    <button
-      type="button"
-      class="btn btn-primary"
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <jelly-button
+      size="small"
+      variant="mint"
       onclick={submit}
-      disabled={submitting || !repoPath.trim()}
+      use:jellyDisabled={submitting || !repoPath.trim()}
     >
       {submitting ? "Creating..." : "Create Project"}
-    </button>
-    <button
-      type="button"
-      class="btn btn-outline"
+    </jelly-button>
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <jelly-button
+      size="small"
+      variant="platinum"
       onclick={onCancel}
-      disabled={submitting}
+      use:jellyDisabled={submitting}
     >
       Cancel
-    </button>
+    </jelly-button>
   </div>
 </div>
 
@@ -119,63 +127,9 @@ h2 {
   letter-spacing: 0.05em;
 }
 
-input {
-  padding: 0.5rem 0.75rem;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text);
-  font-size: 0.875rem;
-  font-family: inherit;
-}
-
-input:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
-input:disabled {
-  opacity: 0.5;
-}
-
 .actions {
   display: flex;
   gap: 0.5rem;
   margin-top: 0.5rem;
-}
-
-.btn {
-  padding: 0.5rem 1rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  cursor: pointer;
-  background: var(--surface);
-  color: var(--text);
-  transition: background 0.15s;
-}
-
-.btn:hover:not(:disabled) {
-  background: var(--border);
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.btn-primary {
-  background: var(--accent);
-  color: #1b1601;
-  border-color: var(--accent);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: rgba(var(--accent-rgb), 0.85);
-}
-
-.btn-outline {
-  background: transparent;
 }
 </style>

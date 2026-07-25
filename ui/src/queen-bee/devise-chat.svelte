@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { RequirementsSessionKind } from "shared/board-types";
+import { jellyDisabled } from "../shared/jelly-disabled.svelte";
 import { projectSocket } from "./project-socket.svelte";
 
 let {
@@ -180,15 +181,13 @@ $effect(() => {
             <pre class="spec">{msg.content}</pre>
             {#if onApprove}
               <div class="approve-inside">
-                <button
-                  type="button"
-                  class="btn btn-approve"
-                  onclick={onApprove}
-                >
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <jelly-button size="small" variant="mint" onclick={onApprove}>
                   {initialKind === "initial_requirements"
                     ? "Generate project plan"
                     : "Generate change proposal"}
-                </button>
+                </jelly-button>
                 <span class="approve-hint"
                   >or continue the conversation to refine</span
                 >
@@ -222,25 +221,28 @@ $effect(() => {
   {/if}
 
   <div class="input-area">
-    <input
-      type="text"
-      bind:value={input}
+    <jelly-input
+      size="small"
+      value={input}
+      oninput={(e: Event) => input = (e.target as HTMLInputElement).value}
       placeholder={messages.length === 0
           ? "Describe your project..."
           : "Your answer..."}
-      disabled={loading}
-      onkeydown={(e) => {
+      use:jellyDisabled={loading}
+      onkeydown={(e: KeyboardEvent) => {
         if (e.key === "Enter") submit();
       }}
-    >
-    <button
-      type="button"
-      class="btn btn-primary"
+    ></jelly-input>
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <jelly-button
+      size="small"
+      variant="mint"
       onclick={submit}
-      disabled={loading || !input.trim()}
+      use:jellyDisabled={loading || !input.trim()}
     >
       {loading ? "..." : "Send"}
-    </button>
+    </jelly-button>
   </div>
 </div>
 
@@ -353,53 +355,6 @@ $effect(() => {
   padding-top: 0.5rem;
 }
 
-input {
-  flex: 1;
-  padding: 0.625rem 0.75rem;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text);
-  font-size: 0.875rem;
-  font-family: inherit;
-}
-
-input:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
-input:disabled {
-  opacity: 0.5;
-}
-
-.btn {
-  padding: 0.625rem 1rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  cursor: pointer;
-  background: var(--surface);
-  color: var(--text);
-  white-space: nowrap;
-}
-
-.btn:hover:not(:disabled) {
-  background: var(--border);
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.btn-primary {
-  background: var(--accent);
-  color: #1b1601;
-  border-color: var(--accent);
-}
-
 .approve-inside {
   margin-top: 0.75rem;
   padding-top: 0.75rem;
@@ -407,17 +362,6 @@ input:disabled {
   display: flex;
   align-items: center;
   gap: 1rem;
-}
-
-.btn-approve {
-  padding: 0.5rem 1.25rem;
-  border: none;
-  border-radius: 6px;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  cursor: pointer;
-  background: var(--accent);
-  color: #1b1601;
 }
 
 .approve-hint {

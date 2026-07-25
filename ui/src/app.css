@@ -77,6 +77,18 @@
 * {
   box-sizing: border-box;
 }
+
+jelly-dialog::part(backdrop),
+jelly-drawer::part(backdrop) {
+  background: rgba(0, 0, 0, 0.12);
+}
+jelly-dialog::part(dialog),
+jelly-drawer::part(sheet) {
+  box-shadow:
+    0 0 80px rgba(var(--accent-rgb), 0.15),
+    0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
 body {
   margin: 0;
   padding: 0;
@@ -123,6 +135,17 @@ html.light {
   --error-rgb: 212, 69, 26;
   --warning: #6a603b;
   --logo-text: var(--accent);
+
+  --jelly-color-background-page: var(--bg);
+  --jelly-color-background-surface: var(--card);
+  --jelly-color-background-muted: var(--surface);
+  --jelly-color-background-neutral: var(--border);
+  --jelly-color-background-accent: var(--accent);
+  --jelly-color-foreground-on-accent: #1b1601;
+  --jelly-color-foreground-default: var(--text);
+  --jelly-color-foreground-muted: var(--muted);
+  --jelly-color-border-default: var(--border);
+  --jelly-color-border-focus: var(--accent);
 }
 
 html.light {
@@ -131,8 +154,8 @@ html.light {
   --surface: #f5f0e3;
   --border: #ebe0c4;
   --border-rgb: 212, 197, 160;
-  --accent: #0068b3;
-  --accent-rgb: 201, 161, 0;
+  --accent: #f5b342;
+  --accent-rgb: 245, 179, 66;
   --text: #2c2410;
   --muted: #8a7a5c;
   --success: #4a7c2e;
@@ -141,4 +164,15 @@ html.light {
   --error-rgb: 183, 28, 28;
   --warning: #bd9223;
   --logo-text: #000000;
+
+  --jelly-color-background-page: var(--bg);
+  --jelly-color-background-surface: var(--card);
+  --jelly-color-background-muted: var(--surface);
+  --jelly-color-background-neutral: var(--border);
+  --jelly-color-background-accent: var(--accent);
+  --jelly-color-foreground-on-accent: #1b1601;
+  --jelly-color-foreground-default: var(--text);
+  --jelly-color-foreground-muted: var(--muted);
+  --jelly-color-border-default: var(--border);
+  --jelly-color-border-focus: var(--accent);
 }

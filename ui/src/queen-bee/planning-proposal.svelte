@@ -4,6 +4,7 @@ import type {
   RequirementsFeedback,
 } from "shared/board-types";
 import { isRecord } from "shared/board-types";
+import { jellyDisabled } from "../shared/jelly-disabled.svelte";
 import { parsePlanningProposalResponse } from "./parse-planning-proposal-response";
 
 let {
@@ -192,14 +193,16 @@ async function cancelProposal() {
           : "Review the proposed requirements and their corresponding Card changes as one consistent update."}
       </p>
     </div>
-    <button
-      type="button"
-      class="btn btn-primary"
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <jelly-button
+      size="small"
+      variant="mint"
       onclick={() => finish("accept-all")}
-      disabled={busy}
+      use:jellyDisabled={busy}
     >
       {isInitialPlan ? "Accept plan" : "Accept and apply all"}
-    </button>
+    </jelly-button>
   </div>
 
   {#if error}
@@ -235,24 +238,26 @@ async function cancelProposal() {
         {/if}
         {#if change.action !== "keep" || change.resolvesSourceIdea}
           <div class="actions">
-            <button
-              type="button"
-              class="btn"
-              class:selected={change.decision === "accepted"}
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <jelly-button
+              size="small"
+              variant={change.decision === "accepted" ? "mint" : "platinum"}
               onclick={() => decide(change.id, "accepted")}
-              disabled={busy}
+              use:jellyDisabled={busy}
             >
               Accept
-            </button>
-            <button
-              type="button"
-              class="btn"
-              class:selected={change.decision === "rejected"}
+            </jelly-button>
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <jelly-button
+              size="small"
+              variant={change.decision === "rejected" ? "mint" : "platinum"}
               onclick={() => decide(change.id, "rejected")}
-              disabled={busy}
+              use:jellyDisabled={busy}
             >
               Reject
-            </button>
+            </jelly-button>
           </div>
         {/if}
       </div>
@@ -267,68 +272,82 @@ async function cancelProposal() {
           prepared. Discard it to return to the current Board.
         </div>
         <div class="actions">
-          <button
-            type="button"
-            class="btn"
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <jelly-button
+            size="small"
+            variant="platinum"
             onclick={cancelProposal}
-            disabled={busy}
+            use:jellyDisabled={busy}
           >
             Discard stale proposal
-          </button>
+          </jelly-button>
         </div>
       </div>
     {:else if hasRejected()}
       <div class="revision-choice">
-        <textarea
-          bind:value={revisionGuidance}
+        <jelly-textarea
+          size="small"
+          value={revisionGuidance}
+          oninput={(e: Event) => revisionGuidance = (e.target as HTMLInputElement).value}
           rows="2"
           placeholder="What should change?"
-          disabled={busy}
-        ></textarea>
+          use:jellyDisabled={busy}
+        ></jelly-textarea>
         <div class="actions">
-          <button
-            type="button"
-            class="btn btn-primary"
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <jelly-button
+            size="small"
+            variant="mint"
             onclick={replanCards}
-            disabled={busy || !revisionGuidance.trim()}
+            use:jellyDisabled={busy || !revisionGuidance.trim()}
           >
             Replan Cards
-          </button>
-          <button
-            type="button"
-            class="btn"
+          </jelly-button>
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <jelly-button
+            size="small"
+            variant="platinum"
             onclick={reviseRequirements}
-            disabled={busy || !revisionGuidance.trim()}
+            use:jellyDisabled={busy || !revisionGuidance.trim()}
           >
             Revise requirements
-          </button>
-          <button
-            type="button"
-            class="btn"
+          </jelly-button>
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <jelly-button
+            size="small"
+            variant="platinum"
             onclick={cancelProposal}
-            disabled={busy}
+            use:jellyDisabled={busy}
           >
             Cancel proposal
-          </button>
+          </jelly-button>
         </div>
       </div>
     {:else}
-      <button
-        type="button"
-        class="btn btn-primary"
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <jelly-button
+        size="small"
+        variant="mint"
         onclick={() => finish("apply")}
-        disabled={busy || !allAccepted()}
+        use:jellyDisabled={busy || !allAccepted()}
       >
         Apply accepted changes
-      </button>
-      <button
-        type="button"
-        class="btn"
+      </jelly-button>
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <jelly-button
+        size="small"
+        variant="platinum"
         onclick={cancelProposal}
-        disabled={busy}
+        use:jellyDisabled={busy}
       >
         Cancel proposal
-      </button>
+      </jelly-button>
       {#if !allAccepted()}
         <span>Accept every changed card before applying.</span>
       {/if}
@@ -429,25 +448,6 @@ p {
 .actions {
   margin-top: 0.5rem;
 }
-.btn {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  color: var(--text);
-  cursor: pointer;
-  font-size: 0.6875rem;
-  padding: 0.375rem 0.625rem;
-}
-.btn:disabled {
-  cursor: default;
-  opacity: 0.5;
-}
-.btn-primary,
-.selected {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #1b1601;
-}
 .proposal-footer {
   color: var(--muted);
   font-size: 0.6875rem;
@@ -457,15 +457,6 @@ p {
   flex: 1;
   flex-direction: column;
   gap: 0.5rem;
-}
-textarea {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  color: var(--text);
-  font: inherit;
-  padding: 0.5rem;
-  resize: vertical;
 }
 .error {
   color: #dc3c3c;

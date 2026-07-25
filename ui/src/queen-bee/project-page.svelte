@@ -188,9 +188,11 @@ function isRequirementsSessionKind(
     {:else if errorMessage}
       <div class="error">{errorMessage}</div>
       <div class="error-actions">
-        <button type="button" class="btn btn-primary" onclick={handleApprove}>
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <jelly-button size="small" variant="mint" onclick={handleApprove}>
           Retry
-        </button>
+        </jelly-button>
       </div>
     {:else if requirementsFeedback}
       <RequirementsFeedbackView
@@ -298,32 +300,5 @@ function isRequirementsSessionKind(
 .error-actions {
   text-align: center;
   margin-bottom: 1.5rem;
-}
-
-.btn {
-  padding: 0.375rem 0.625rem;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  font-size: 0.6875rem;
-  font-weight: 500;
-  cursor: pointer;
-  background: var(--surface);
-  color: var(--text);
-  white-space: nowrap;
-}
-
-.btn:hover:not(:disabled) {
-  background: var(--border);
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.btn-primary {
-  background: var(--accent);
-  color: #1b1601;
-  border-color: var(--accent);
 }
 </style>

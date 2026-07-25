@@ -12,6 +12,7 @@ import type {
 } from "shared/board-types";
 import { COLUMN_LABELS } from "shared/board-types";
 import { onMount } from "svelte";
+import { jellyDisabled } from "../shared/jelly-disabled.svelte";
 import CardDetail from "./card-detail.svelte";
 import IdeasBacklog from "./ideas-backlog.svelte";
 import { parseReviewReadinessResponse } from "./kanban-board/parse-review-readiness-response";
@@ -350,57 +351,66 @@ $effect(() => {
     <h2>Board</h2>
     <div class="board-actions">
       <ProjectWorkerSettings {projectId} />
-      <button
-        type="button"
-        class="btn btn-outline"
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <jelly-button
+        size="small"
+        variant="platinum"
         onclick={toggleRevision}
-        disabled={revising}
+        use:jellyDisabled={revising}
       >
         {revising ? "Starting revision..." : "Revise"}
-      </button>
+      </jelly-button>
     </div>
   </div>
 
   {#if revisionShown}
     <div class="revision-area">
-      <textarea
-        class="revision-input"
-        bind:value={revisionText}
+      <jelly-textarea
+        size="small"
+        value={revisionText}
+        oninput={(e: Event) => revisionText = (e.target as HTMLInputElement).value}
         placeholder="What context should change the project requirements and regenerated cards?"
         rows="2"
-        disabled={revising}
-      ></textarea>
+        use:jellyDisabled={revising}
+      ></jelly-textarea>
       <div class="revision-actions">
-        <button
-          type="button"
-          class="btn btn-primary"
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <jelly-button
+          size="small"
+          variant="mint"
           onclick={() => submitRevision(false)}
-          disabled={revising || !revisionText.trim()}
+          use:jellyDisabled={revising || !revisionText.trim()}
         >
           {revising ? "Starting..." : "Revise requirements"}
-        </button>
-        <button
-          type="button"
-          class="btn"
+        </jelly-button>
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <jelly-button
+          size="small"
+          variant="platinum"
           onclick={toggleRevision}
-          disabled={revising}
+          use:jellyDisabled={revising}
         >
           Cancel
-        </button>
+        </jelly-button>
       </div>
       {#if activeWorkWarning}
         <div class="revision-warning">
           <span
             >{activeWorkWarning}. Continuing may invalidate active work.</span
           >
-          <button
-            type="button"
-            class="btn btn-danger"
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <jelly-button
+            size="small"
+            variant="rose"
             onclick={() => submitRevision(true)}
-            disabled={revising}
+            use:jellyDisabled={revising}
           >
             Continue and regenerate
-          </button>
+          </jelly-button>
         </div>
       {/if}
     </div>
@@ -430,21 +440,25 @@ $effect(() => {
         </ul>
       </div>
       <div class="worker-risk-actions">
-        <button
-          type="button"
-          class="btn btn-danger"
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <jelly-button
+          size="small"
+          variant="rose"
           onclick={confirmPendingAdmission}
-          disabled={running === pendingAdmission.cardId}
+          use:jellyDisabled={running === pendingAdmission.cardId}
         >
           {running === pendingAdmission.cardId ? "Starting..." : "Run anyway"}
-        </button>
-        <button
-          type="button"
-          class="btn"
+        </jelly-button>
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <jelly-button
+          size="small"
+          variant="platinum"
           onclick={() => (pendingAdmission = null)}
         >
           Cancel
-        </button>
+        </jelly-button>
       </div>
     </div>
   {/if}
@@ -557,31 +571,6 @@ $effect(() => {
   gap: 0.375rem;
 }
 
-.btn {
-  padding: 0.375rem 0.625rem;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  font-size: 0.6875rem;
-  font-weight: 500;
-  cursor: pointer;
-  background: var(--surface);
-  color: var(--text);
-  white-space: nowrap;
-}
-
-.btn:hover:not(:disabled) {
-  background: var(--border);
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.btn-outline {
-  background: transparent;
-}
-
 .error {
   background: rgba(220, 60, 60, 0.1);
   border: 1px solid rgba(220, 60, 60, 0.3);
@@ -597,27 +586,6 @@ $effect(() => {
   flex-direction: column;
   gap: 0.5rem;
   margin-bottom: 0.75rem;
-}
-
-.revision-input {
-  flex: 1;
-  padding: 0.5rem 0.625rem;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  color: var(--text);
-  font-size: 0.75rem;
-  font-family: inherit;
-  resize: vertical;
-}
-
-.revision-input:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
-.revision-input:disabled {
-  opacity: 0.5;
 }
 
 .revision-actions {
@@ -636,18 +604,6 @@ $effect(() => {
   gap: 0.75rem;
   justify-content: space-between;
   padding: 0.5rem 0.75rem;
-}
-
-.btn-danger {
-  border-color: #dc783c;
-  color: #dc783c;
-}
-
-.btn-primary {
-  background: var(--accent);
-  color: #1b1601;
-  border-color: var(--accent);
-  align-self: flex-start;
 }
 
 .loading {

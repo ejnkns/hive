@@ -1,5 +1,6 @@
 <script lang="ts">
 import { onMount } from "svelte";
+import { jellyDisabled } from "../shared/jelly-disabled.svelte";
 import { SYSTEM_PROMPT_INITIAL, SYSTEM_PROMPT_PATCH } from "./canvas-prompts";
 import { setupCanvasRuntime } from "./canvas-runtime";
 
@@ -243,20 +244,25 @@ async function performStreamingRequest(
     </div>
 
     <div class="input-area">
-      <input
-        type="text"
-        bind:value={promptInput}
-        onkeydown={(e) => e.key === 'Enter' && submitPrompt()}
+      <jelly-input
+        size="small"
+        value={promptInput}
+        oninput={(e: Event) => promptInput = (e.target as HTMLInputElement).value}
+        onkeydown={(e: KeyboardEvent) => e.key === 'Enter' && submitPrompt()}
         placeholder="Describe the app you want to build or patch..."
-        disabled={isStreaming}
+        use:jellyDisabled={isStreaming}
       >
-      <button
-        type="button"
-        onclick={submitPrompt}
-        disabled={isStreaming || !promptInput.trim()}
-      >
-        {isStreaming ? '...' : 'Send'}
-      </button>
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <jelly-button
+          size="small"
+          variant="mint"
+          onclick={submitPrompt}
+          use:jellyDisabled={isStreaming || !promptInput.trim()}
+        >
+          {isStreaming ? '...' : 'Send'}
+        </jelly-button>
+      </jelly-input>
     </div>
   </div>
 </div>
@@ -325,29 +331,5 @@ async function performStreamingRequest(
 .input-area {
   display: flex;
   gap: 0.5rem;
-}
-
-input {
-  flex: 1;
-  padding: 0.5rem;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: 4px;
-}
-
-button {
-  padding: 0.5rem 1rem;
-  background: var(--accent);
-  color: #000;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: bold;
-}
-
-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 </style>

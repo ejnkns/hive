@@ -1,5 +1,6 @@
 <script lang="ts">
-import type { AvailableProvider, OverrideState } from "shared/dashboard-types";
+import { jellyDisabled } from "./jelly-disabled.svelte";
+import { getThemeMode, setLightMode } from "./theme-state.svelte";
 import type { HeaderData } from "./utils";
 
 let {
@@ -27,6 +28,21 @@ let {
 
 let pendingProvider: string | null = $state(null);
 let pendingModel: string | null = $state(null);
+
+let providerSelectEl = $state<HTMLElement & { value: string }>();
+let modelSelectEl = $state<HTMLElement & { value: string }>();
+
+$effect(() => {
+  if (providerSelectEl) {
+    providerSelectEl.value = selectedProvider ?? "";
+  }
+});
+
+$effect(() => {
+  if (modelSelectEl) {
+    modelSelectEl.value = selectedModel ?? "";
+  }
+});
 
 const logo =
   "   ,-.      .' '.        .`\n   \\_/      .   .       .\n:>(|||} .    ` .       .\n   / \\   '. . '  ' . '\n   `-'  ";
@@ -62,16 +78,11 @@ const successColor = $derived(
         ? "#e2a93b"
         : "#7cb342"
 );
-const strategyLabel = $derived(
-  data.routingStrategy === "latency"
-    ? "LATENCY"
-    : data.routingStrategy === "quality"
-      ? "QUALITY"
-      : "BALANCED"
-);
 
-function onProviderChange(e: Event) {
-  const provider = (e.target as HTMLSelectElement).value;
+function handleProviderChange(e: Event) {
+  const el = e.target as HTMLElement & { value: string };
+  const provider = el.value;
+  if (!provider) return;
   if (data.override.active) {
     overrideSet(provider, models[0] ?? "");
   } else {
@@ -80,8 +91,10 @@ function onProviderChange(e: Event) {
   }
 }
 
-function onModelChange(e: Event) {
-  const model = (e.target as HTMLSelectElement).value;
+function handleModelChange(e: Event) {
+  const el = e.target as HTMLElement & { value: string };
+  const model = el.value;
+  if (!model) return;
   if (data.override.active) {
     const provider = selectedProvider ?? "";
     overrideSet(provider, model);
@@ -96,21 +109,27 @@ function overrideSet(provider: string, model: string) {
   }
 }
 
-function toggleOverride() {
-  if (data.override.active) {
-    onOverrideClear();
-  } else {
+function handlePinToggle(e: Event) {
+  const checked = (e.target as HTMLElement & { checked: boolean }).checked;
+  if (checked) {
     const provider = pendingProvider ?? data.lastProvider ?? "";
     const model = pendingModel ?? data.lastModel ?? "";
     if (provider && model) {
       onOverrideSet(provider, model);
     }
+  } else {
+    onOverrideClear();
   }
 }
 
+let themeMode = $derived(getThemeMode());
+
 function toggleTheme() {
-  const light = document.documentElement.classList.toggle("light");
-  localStorage.setItem("theme", light ? "light" : "dark");
+  const light = !document.documentElement.classList.toggle("light");
+  setLightMode(!light);
+  const mode = !light ? "light" : "dark";
+  localStorage.setItem("theme", mode);
+  document.documentElement.setAttribute("data-jelly-mode", mode);
 }
 </script>
 
@@ -118,95 +137,121 @@ function toggleTheme() {
   <div class="logo-area">
     <a href="#/" class="logo-text">[ <b>h i v e</b> ]</a>
     <pre class="logo-ascii">{logo}</pre>
-    <div style="margin-top:0.5rem">
-      <a href="#/canvas" class="nav-link">Ephemeral Canvas &rarr;</a>
-    </div>
+    <a href="#/canvas" class="nav-link">Ephemeral Canvas &rarr;</a>
   </div>
   <div class="header-meta">
-    <div class="status-row">
-      <span class="badge-status {data.online ? 'on' : 'off'}"
-        >{data.online ? "ONLINE" : "OFFLINE"}</span
+    <div class="header-controls">
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <jelly-icon-button
+        size="small"
+        variant="platinum"
+        label="Toggle theme"
+        onclick={toggleTheme}
       >
-      <span class="server-addr">{data.serverAddr}</span>
-      <span class="badge-secondary">STRATEGY: {strategyLabel}</span>
-      <span class="badge-secondary"
-        >CW: {data.contextWindowWeight.toFixed(1)}</span
-      >
+        {themeMode === "light" ? "☽" : "☼"}
+      </jelly-icon-button>
+
+      <jelly-badge size="small" variant={data.online ? "mint" : "rose"} live>
+        {data.online ? "ONLINE" : "OFFLINE"}
+      </jelly-badge>
     </div>
+
     <div class="stats-bar">
-      <span class="stat"
-        >TRAFFIC: <b>{data.traffic > 0 ? String(data.traffic) : "—"}</b></span
-      >
-      <span class="stat"
-        >SUCCESS:
-        <b style="color:{successColor}"
-          >{data.successRate != null ? `${String(data.successRate)}%` : "—"}</b
-        ></span
-      >
-      <span class="stat">ACTIVE: <b>{String(data.activeProviders)}</b></span>
-      <span class="stat"
-        >LATENCY:
-        <b>{data.avgLatency != null ? `${data.avgLatency}ms` : "—"}</b></span
-      >
+      <span class="stat">
+        <span class="stat-label">TRAFFIC</span>
+        <span class="stat-val"
+          >{data.traffic > 0 ? String(data.traffic) : "—"}</span
+        >
+      </span>
+      <span class="stat">
+        <span class="stat-label">SUCCESS</span>
+        <span class="stat-val" style="color:{successColor}">
+          {data.successRate != null ? `${String(data.successRate)}%` : "—"}
+        </span>
+      </span>
+      <span class="stat">
+        <span class="stat-label">PROVIDERS</span>
+        <span class="stat-val">{String(data.activeProviders)}</span>
+      </span>
+      <span class="stat">
+        <span class="stat-label">LATENCY</span>
+        <span class="stat-val">
+          {data.avgLatency != null ? `${data.avgLatency}ms` : "—"}
+        </span>
+      </span>
     </div>
-    {#if data.lastProvider && data.lastModel}
-      <div class="status-row">
-        <span class="label">Last:</span
-        ><span class="prov">{data.lastProvider}</span><span> / </span
-        ><span class="model">{data.lastModel}</span>
-      </div>
-    {/if}
-    {#if data.bestProvider && data.bestModel}
-      <div class="status-row">
-        <span class="label">Best:</span
-        ><span class="prov">{data.bestProvider}</span><span> / </span
-        ><span class="model">{data.bestModel}</span>
-        {#if data.bestScore != null}
-          <span class="score"> ({Math.round(data.bestScore)}%)</span>
-        {/if}
-      </div>
-    {/if}
-    {#if data.override.active && data.override.provider && data.override.model}
-      <div class="status-row">
-        <span class="label">Pinned:</span
-        ><span class="prov">{data.override.provider}</span><span> / </span
-        ><span class="model">{data.override.model}</span>
-      </div>
-    {/if}
-    <div class="override-area">
-      <select class="provider-select" onchange={onProviderChange}>
-        <option value="">—</option>
+
+    <div class="route-info">
+      {#if data.lastProvider && data.lastModel}
+        <span class="route-label">Last</span>
+        <jelly-badge size="small" variant="platinum" outline>
+          {data.lastProvider}/{data.lastModel}
+        </jelly-badge>
+      {/if}
+      {#if data.override.active && data.override.provider && data.override.model}
+        <span class="route-label">Pinned</span>
+        <jelly-badge size="small" variant="amber">
+          {data.override.provider}/{data.override.model}
+        </jelly-badge>
+      {/if}
+    </div>
+
+    <div class="route-controls">
+      <jelly-select
+        size="small"
+        placeholder="Provider"
+        bind:this={providerSelectEl}
+        onchange={handleProviderChange}
+      >
         {#each configuredProviders as p}
-          <option value={p.name} selected={selectedProvider === p.name}>
-            {p.displayName}
-          </option>
+          <jelly-option value={p.name}>{p.displayName}</jelly-option>
         {/each}
-      </select>
-      <select
-        class="model-select"
-        onchange={onModelChange}
-        disabled={models.length === 0}
+      </jelly-select>
+
+      <jelly-select
+        size="small"
+        placeholder="Model"
+        bind:this={modelSelectEl}
+        onchange={handleModelChange}
+        use:jellyDisabled={models.length === 0}
       >
-        <option value="">—</option>
         {#each models as m}
-          <option value={m} selected={selectedModel === m}>{m}</option>
+          <jelly-option value={m}>{m}</jelly-option>
         {/each}
-      </select>
-      <button type="button" class="auto-btn" onclick={toggleOverride}>
-        {data.override.active ? "auto" : "pin"}
-      </button>
+      </jelly-select>
     </div>
-    <button type="button" class="theme-btn" onclick={toggleTheme}>
-      {document.documentElement.classList.contains("light") ? "dark" : "light"}
-    </button>
-    <button
-      type="button"
-      class="theme-btn"
-      onclick={() => onOpenModelPriority()}
-      title="Model priority"
-    >
-      priority
-    </button>
+
+    <div class="action-row">
+      <jelly-switch
+        size="small"
+        checked={data.override.active}
+        onchange={handlePinToggle}
+      >
+        Pin
+      </jelly-switch>
+
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <jelly-icon-button
+        size="small"
+        variant="platinum"
+        label="Model priority"
+        onclick={onOpenModelPriority}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          width="16"
+          height="16"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <path
+            d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"
+          />
+        </svg>
+      </jelly-icon-button>
+    </div>
   </div>
 </div>
 
@@ -245,6 +290,7 @@ function toggleTheme() {
   color: var(--accent);
   text-decoration: none;
   font-weight: bold;
+  margin-top: 0.5rem;
 }
 .nav-link:hover {
   text-decoration: underline;
@@ -254,36 +300,12 @@ function toggleTheme() {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 0.375rem;
+  gap: 0.5rem;
 }
-.server-addr {
-  font-size: 0.625rem;
-  color: var(--muted);
-}
-.badge-status {
-  font-size: 0.625rem;
-  font-weight: 700;
-  padding: 0.125rem 0.5rem;
-  border-radius: 0;
-  display: inline-block;
-}
-.badge-status.on {
-  background: rgba(var(--success-rgb), 0.12);
-  color: var(--success);
-  border: 1px solid var(--success);
-}
-.badge-status.off {
-  background: rgba(var(--error-rgb), 0.12);
-  color: var(--error);
-  border: 1px solid var(--error);
-}
-.badge-secondary {
-  font-size: 0.5625rem;
-  color: var(--accent);
-  background: rgba(var(--accent-rgb), 0.08);
-  padding: 0.125rem 0.375rem;
-  border: 1px solid rgba(var(--accent-rgb), 0.2);
-  margin-left: 0.5rem;
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 .stats-bar {
   display: flex;
@@ -291,69 +313,36 @@ function toggleTheme() {
   font-size: 0.5625rem;
   color: var(--muted);
 }
-.stat b {
-  color: var(--text);
-}
-.status-row {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.625rem;
+.stat {
   white-space: nowrap;
 }
-.status-row .label {
+.stat-label {
+  color: var(--muted);
+}
+.stat-val {
+  color: var(--text);
+  font-weight: 700;
+  margin-left: 0.125rem;
+}
+.route-info {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.625rem;
+}
+.route-label {
   color: var(--muted);
   min-width: 32px;
   text-align: right;
 }
-.status-row .prov {
-  text-transform: capitalize;
-}
-.status-row .model {
-  font-family: monospace;
-  color: var(--accent);
-}
-.status-row .score {
-  color: var(--muted);
-}
-.override-area {
+.route-controls {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
-  margin-top: auto;
+  gap: 0.375rem;
 }
-.override-area select {
-  font-family: monospace;
-  font-size: 0.625rem;
-  padding: 0.125rem 0.25rem;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  max-width: 130px;
-}
-.override-area select:disabled {
-  opacity: 0.4;
-  pointer-events: none;
-}
-.override-area select:hover:not(:disabled) {
-  border-color: var(--accent);
-}
-.auto-btn,
-.theme-btn {
-  font-family: inherit;
-  font-size: 0.5625rem;
-  padding: 0.125rem 0.375rem;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  line-height: 1.4;
-}
-.auto-btn:hover,
-.theme-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+.action-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 </style>
