@@ -39,13 +39,16 @@ let {
   {items}
   {...restProps}
 >
-  <BitsSelect.Trigger class="select-trigger select-{size}" {disabled}>
+  <BitsSelect.Trigger
+    class="hive-select-trigger hive-select-{size}"
+    {disabled}
+  >
     <BitsSelect.Value {placeholder} />
     <svg
       width="10"
       height="10"
       viewBox="0 0 10 10"
-      class="select-chevron"
+      class="hive-select-chevron"
       aria-hidden="true"
     >
       <path
@@ -57,14 +60,14 @@ let {
     </svg>
   </BitsSelect.Trigger>
   <BitsSelect.Portal>
-    <BitsSelect.Content class="select-content" sideOffset={4}>
+    <BitsSelect.Content class="hive-select-content" sideOffset={4}>
       <BitsSelect.Viewport>
         {#each items as item (item.value)}
           <BitsSelect.Item
             value={item.value}
             label={item.label}
             disabled={item.disabled}
-            class="select-item"
+            class="hive-select-item"
           >
             {#snippet children({ selected })}
               {item.label}
@@ -74,7 +77,7 @@ let {
                   height="12"
                   viewBox="0 0 12 12"
                   aria-hidden="true"
-                  class="select-check"
+                  class="hive-select-check"
                 >
                   <path
                     d="M2 6l3 3 5-6"
@@ -93,7 +96,7 @@ let {
 </BitsSelect.Root>
 
 <style>
-.select-trigger {
+:global(.hive-select-trigger) {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -105,33 +108,33 @@ let {
   font-family: monospace;
   min-width: 100px;
 }
-.select-trigger:hover {
+:global(.hive-select-trigger:hover) {
   border-color: var(--accent);
 }
-.select-trigger[disabled] {
+:global(.hive-select-trigger[disabled]) {
   opacity: 0.3;
   pointer-events: none;
 }
 
-.select-small {
+:global(.hive-select-small) {
   height: 28px;
   padding: 0 8px;
   font-size: 0.6875rem;
 }
 
-.select-default {
+:global(.hive-select-default) {
   height: 36px;
   padding: 0 12px;
   font-size: 0.8125rem;
 }
 
-.select-chevron {
+:global(.hive-select-chevron) {
   flex-shrink: 0;
   opacity: 0.5;
   margin-left: auto;
 }
 
-.select-content {
+:global(.hive-select-content) {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -139,11 +142,11 @@ let {
   max-height: 240px;
   overflow-y: auto;
   padding: 4px;
-  z-index: 200;
+  z-index: 999;
   min-width: var(--bits-select-anchor-width);
 }
 
-.select-item {
+:global(.hive-select-item) {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -156,15 +159,15 @@ let {
   cursor: pointer;
   outline: none;
 }
-.select-item[data-highlighted] {
+:global(.hive-select-item[data-highlighted]) {
   background: var(--surface);
 }
-.select-item[data-disabled] {
+:global(.hive-select-item[data-disabled]) {
   opacity: 0.3;
   pointer-events: none;
 }
 
-.select-check {
+:global(.hive-select-check) {
   flex-shrink: 0;
   color: var(--accent);
 }

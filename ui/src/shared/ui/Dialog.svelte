@@ -18,14 +18,14 @@ let {
 
 <BitsDialog.Root bind:open {...restProps}>
   <BitsDialog.Portal>
-    <BitsDialog.Overlay class="dialog-overlay" />
+    <BitsDialog.Overlay class="hive-dialog-overlay" />
     <BitsDialog.Content
-      class="dialog-content"
+      class="hive-dialog-content"
       style={contentMaxWidth ? `max-width: ${contentMaxWidth}` : undefined}
       aria-label={label}
     >
       {@render children?.()}
-      <BitsDialog.Close class="dialog-close" aria-label="Close">
+      <BitsDialog.Close class="hive-dialog-close" aria-label="Close">
         <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
           <path
             d="M4 4l8 8M12 4l-8 8"
@@ -40,18 +40,18 @@ let {
 </BitsDialog.Root>
 
 <style>
-.dialog-overlay {
+:global(.hive-dialog-overlay) {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: 1000;
   background: rgba(0, 0, 0, 0.12);
 }
 
-.dialog-content {
+:global(.hive-dialog-content) {
   position: fixed;
   left: 50%;
   top: 50%;
-  z-index: 101;
+  z-index: 1001;
   transform: translate(-50%, -50%);
   width: calc(100% - 2rem);
   max-width: 480px;
@@ -66,7 +66,7 @@ let {
     0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
-.dialog-close {
+:global(.hive-dialog-close) {
   position: absolute;
   top: 8px;
   right: 8px;
@@ -81,7 +81,7 @@ let {
   color: var(--muted);
   cursor: pointer;
 }
-.dialog-close:hover {
+:global(.hive-dialog-close:hover) {
   background: var(--surface);
   color: var(--text);
 }

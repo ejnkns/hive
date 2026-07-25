@@ -19,29 +19,29 @@ let {
 }: Props = $props();
 </script>
 
-<div class="switch-wrap">
+<div class="hive-switch-wrap">
   <BitsSwitch.Root
     bind:checked
     {disabled}
     {id}
     {...restProps}
-    class="switch-root"
+    class="hive-switch-root"
   >
-    <BitsSwitch.Thumb class="switch-thumb" />
+    <BitsSwitch.Thumb class="hive-switch-thumb" />
   </BitsSwitch.Root>
   {#if label}
-    <Label.Root for={id} class="switch-label">{label}</Label.Root>
+    <Label.Root for={id} class="hive-switch-label">{label}</Label.Root>
   {/if}
 </div>
 
 <style>
-.switch-wrap {
+:global(.hive-switch-wrap) {
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
 
-.switch-root {
+:global(.hive-switch-root) {
   width: 32px;
   height: 18px;
   border-radius: 999px;
@@ -52,15 +52,15 @@ let {
   transition: background 0.15s;
   padding: 0;
 }
-.switch-root[data-state="checked"] {
+:global(.hive-switch-root[data-state="checked"]) {
   background: var(--accent);
 }
-.switch-root[disabled] {
+:global(.hive-switch-root[disabled]) {
   opacity: 0.3;
   pointer-events: none;
 }
 
-.switch-thumb {
+:global(.hive-switch-thumb) {
   display: block;
   width: 14px;
   height: 14px;
@@ -69,11 +69,11 @@ let {
   transition: transform 0.15s;
   transform: translateX(2px);
 }
-.switch-thumb[data-state="checked"] {
+:global(.hive-switch-thumb[data-state="checked"]) {
   transform: translateX(16px);
 }
 
-.switch-label {
+:global(.hive-switch-label) {
   font-size: 0.6875rem;
   color: var(--text);
   cursor: pointer;

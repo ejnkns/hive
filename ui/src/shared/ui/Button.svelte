@@ -24,13 +24,13 @@ let {
 <BitsButton.Root
   {...rootProps}
   {disabled}
-  class="btn btn-{variant} btn-{size} {block ? 'btn-block' : ''}"
+  class="hive-btn hive-btn-{variant} hive-btn-{size} {block ? 'hive-btn-block' : ''}"
 >
   {@render children?.()}
 </BitsButton.Root>
 
 <style>
-.btn {
+:global(.hive-btn) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -39,76 +39,74 @@ let {
   cursor: pointer;
   font-family: monospace;
   font-weight: 600;
-  transition:
-    opacity 0.15s,
-    background 0.15s;
+  transition: opacity 0.15s, background 0.15s;
   white-space: nowrap;
 }
-.btn:active {
+:global(.hive-btn:active) {
   opacity: 0.8;
 }
-.btn[disabled] {
+:global(.hive-btn[disabled]) {
   opacity: 0.3;
   pointer-events: none;
 }
 
-.btn-small {
+:global(.hive-btn-small) {
   height: 28px;
   padding: 0 8px;
   font-size: 0.6875rem;
   gap: 4px;
 }
 
-.btn-default {
+:global(.hive-btn-default) {
   height: 36px;
   padding: 0 16px;
   font-size: 0.8125rem;
   gap: 6px;
 }
 
-.btn-block {
+:global(.hive-btn-block) {
   width: 100%;
 }
 
-.btn-mint {
+:global(.hive-btn-mint) {
   background: var(--success);
   color: var(--bg);
   border-color: var(--success);
 }
-.btn-mint:hover {
+:global(.hive-btn-mint:hover) {
   background: color-mix(in srgb, var(--success) 85%, white);
 }
 
-.btn-rose {
+:global(.hive-btn-rose) {
   background: var(--error);
   color: white;
   border-color: var(--error);
 }
-.btn-rose:hover {
+:global(.hive-btn-rose:hover) {
   background: color-mix(in srgb, var(--error) 85%, white);
 }
 
-.btn-platinum {
+:global(.hive-btn-platinum) {
   background: var(--surface);
   color: var(--text);
   border-color: var(--border);
 }
-.btn-platinum:hover {
+:global(.hive-btn-platinum:hover) {
   background: var(--border);
 }
 
-.btn-amber {
+:global(.hive-btn-amber) {
   background: var(--warning);
   color: var(--bg);
   border-color: var(--warning);
 }
 
-.btn-azure {
+:global(.hive-btn-azure) {
   background: var(--accent);
   color: var(--bg);
   border-color: var(--accent);
 }
-.btn-azure:hover {
+:global(.hive-btn-azure:hover) {
   background: color-mix(in srgb, var(--accent) 85%, white);
 }
 </style>
