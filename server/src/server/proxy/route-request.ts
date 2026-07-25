@@ -5,6 +5,7 @@ import { URL } from "node:url";
 import { logger } from "shared/logger";
 import type { FinishReason, StreamPhaseEvent, TelemetrySink } from "telemetry";
 import { classifyError, createStreamCounter, detectRefusal } from "telemetry";
+import { logRequest, logResponse } from "./cache-hunter-logger";
 import type { MutatedRequest } from "./mutate-request";
 import { ProviderRequestCancelledError } from "./provider-request-cancelled-error";
 import { ProxyResponse } from "./proxy-response";
@@ -142,6 +143,17 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
       });
     };
 
+    logRequest({
+      id: requestId,
+      timestamp: start,
+      method: requestOptions.method ?? "POST",
+      path: requestOptions.path ?? "/",
+      headers: mutated.headers,
+      body: mutated.body,
+      provider: providerName,
+      model: modelName,
+    });
+
     const requester = url.protocol === "https:" ? https : http;
     const req = requester.request(requestOptions, (res) => {
       upstreamResponse = res;
@@ -160,6 +172,20 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
             `upstream ${providerName}:${modelName} — error body (${String(errorBody.length)} bytes): ${errorBody.slice(0, 1000)}`
           );
           record(timeoutMs, false, statusCode, errorBody);
+          logResponse({
+            id: `${requestId}/resp`,
+            requestId,
+            timestamp: Date.now(),
+            statusCode,
+            headers: res.headers,
+            body: errorBody || null,
+            durationMs: Date.now() - start,
+            ttftMs: null,
+            promptTokens: null,
+            completionTokens: null,
+            totalTokens: null,
+            finishReason: null,
+          });
           resolve({
             proxyResponse: ProxyResponse.error(statusCode, errorBody),
             ttft: timeoutMs,
@@ -255,6 +281,24 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
           stats
         );
 
+        logResponse({
+          id: `${requestId}/resp`,
+          requestId,
+          timestamp: Date.now(),
+          statusCode: 500,
+          headers: res.headers,
+          body: stats.responseText || null,
+          durationMs: Date.now() - start,
+          ttftMs: initialByteReceived ? ttft : null,
+          promptTokens: stats.inputTokens,
+          completionTokens: stats.outputTokensFromUsage,
+          totalTokens:
+            stats.inputTokens !== null && stats.outputTokensFromUsage !== null
+              ? stats.inputTokens + stats.outputTokensFromUsage
+              : null,
+          finishReason: stats.finishReason,
+        });
+
         if (!initialByteReceived) {
           resolve({
             proxyResponse: ProxyResponse.error(500, ""),
@@ -301,6 +345,24 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
           undefined,
           stats
         );
+
+        logResponse({
+          id: `${requestId}/resp`,
+          requestId,
+          timestamp: Date.now(),
+          statusCode,
+          headers: res.headers,
+          body: stats.responseText || null,
+          durationMs: Date.now() - start,
+          ttftMs: effectiveTtft,
+          promptTokens: stats.inputTokens,
+          completionTokens: stats.outputTokensFromUsage,
+          totalTokens:
+            stats.inputTokens !== null && stats.outputTokensFromUsage !== null
+              ? stats.inputTokens + stats.outputTokensFromUsage
+              : null,
+          finishReason: stats.finishReason,
+        });
 
         if (!initialByteReceived) {
           resolve({

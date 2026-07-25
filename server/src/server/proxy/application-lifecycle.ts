@@ -5,6 +5,10 @@ import {
   providers as staticProviders,
 } from "../providers";
 import { validateProvidersOnStartup } from "./application-lifecycle/validate-providers-on-startup";
+import {
+  closeCacheHunterLogger,
+  initCacheHunterLogger,
+} from "./cache-hunter-logger";
 import { setLastUsed } from "./last-used-state";
 import { getProviders } from "./providers-state";
 
@@ -12,6 +16,7 @@ let discoveryTimer: NodeJS.Timeout | null = null;
 
 export function start(): void {
   telemetryRecorder.start();
+  initCacheHunterLogger();
   validateProvidersOnStartup();
   void loadLastUsed();
   void triggerBackgroundDiscovery();
@@ -25,6 +30,7 @@ export function start(): void {
 
 export function shutdown(): void {
   telemetryRecorder.stop();
+  closeCacheHunterLogger();
   if (discoveryTimer) {
     clearInterval(discoveryTimer);
     discoveryTimer = null;
