@@ -1,113 +1,23 @@
 import assert from "node:assert";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import type { RequirementsFeedback } from "shared/board-types";
 import type { Message } from "shared/message";
-import { createRequirementsSessionManager, extractSpec } from "./devise-engine";
+import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
+import { createRequirementsSessionManager } from "./requirements-session";
 import type {
   AgentModelCaller,
   AgentModelResponse,
-} from "./devise-engine/create-devise-model-caller";
-import { REQUIREMENTS_AGENT_SYSTEM_PROMPT } from "./devise-engine/devise-system-prompt";
-import type { ToolCall } from "./devise-engine/devise-tools";
-import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
-
-function createMockCaller(responses: AgentModelResponse[]): AgentModelCaller {
-  let index = 0;
-  return {
-    call: async (
-      _messages: Message[],
-      _workspacePath: string,
-      _includeTools: boolean
-    ): Promise<AgentModelResponse> => {
-      const response = responses[index];
-      if (!response) throw new Error("No more mock responses");
-      index++;
-      return response;
-    },
-  };
-}
-
-function emptyResponse(content: string): AgentModelResponse {
-  return { content, toolCalls: [], finishReason: "stop" };
-}
-
-function completionResponse(): AgentModelResponse {
-  return {
-    content: "# Requirements\n\n## Overview\nTest app\n\nREQUIREMENTS_COMPLETE",
-    toolCalls: [],
-    finishReason: "stop",
-  };
-}
-
-function draftResponse(): AgentModelResponse {
-  return toolResponse("", [
-    {
-      id: "draft-1",
-      name: "update_requirements_draft",
-      arguments: JSON.stringify({
-        content: "# Requirements\n\n## Overview\nTest app",
-      }),
-    },
-  ]);
-}
-
-function toolResponse(
-  content: string,
-  toolCalls: ToolCall[]
-): AgentModelResponse {
-  return { content, toolCalls, finishReason: "tool_calls" };
-}
-
-function createTempWorkspace(): string {
-  const dir = mkdtempSync(join(tmpdir(), "hive-devise-"));
-  mkdirSync(join(dir, "src"), { recursive: true });
-  writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "test" }));
-  writeFileSync(join(dir, "src", "index.ts"), "export const x = 1;");
-  return dir;
-}
-
-describe("REQUIREMENTS_AGENT_SYSTEM_PROMPT", () => {
-  it("is non-empty", () => {
-    assert.ok(REQUIREMENTS_AGENT_SYSTEM_PROMPT.length > 100);
-  });
-
-  it("contains key instructions", () => {
-    assert.ok(REQUIREMENTS_AGENT_SYSTEM_PROMPT.includes("ONE question"));
-    assert.ok(REQUIREMENTS_AGENT_SYSTEM_PROMPT.includes("RECOMMENDED ANSWER"));
-    assert.ok(REQUIREMENTS_AGENT_SYSTEM_PROMPT.includes("BREADTH-FIRST"));
-    assert.ok(
-      REQUIREMENTS_AGENT_SYSTEM_PROMPT.includes("Codebase exploration")
-    );
-    assert.ok(
-      REQUIREMENTS_AGENT_SYSTEM_PROMPT.includes("REQUIREMENTS_COMPLETE")
-    );
-    assert.ok(
-      REQUIREMENTS_AGENT_SYSTEM_PROMPT.includes(
-        "requirements analyst, not an implementer"
-      )
-    );
-  });
-});
-
-describe("extractSpec", () => {
-  it("strips REQUIREMENTS_COMPLETE signal and trims", () => {
-    const content = "before\nREQUIREMENTS_COMPLETE\n# Spec\n\n## Hello";
-    const result = extractSpec(content);
-    assert.strictEqual(result, "before\n\n# Spec\n\n## Hello");
-  });
-
-  it("strips multiple occurrences of the signal", () => {
-    const content = "REQUIREMENTS_COMPLETE\n\n# Spec\n\nREQUIREMENTS_COMPLETE";
-    assert.strictEqual(extractSpec(content), "# Spec");
-  });
-
-  it("returns trimmed content when no signal present", () => {
-    assert.strictEqual(extractSpec("  # Just text  "), "# Just text");
-  });
-});
+} from "./requirements-session/create-model-caller";
+import {
+  completionResponse,
+  createMockCaller,
+  createTempWorkspace,
+  draftResponse,
+  emptyResponse,
+  toolResponse,
+} from "./requirements-session/test-helpers";
 
 describe("RequirementsSessionManager", () => {
   it("start creates session and returns model's first question", async () => {

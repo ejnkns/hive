@@ -7,6 +7,7 @@ import {
   readdirSync,
   readFileSync,
   renameSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
@@ -75,6 +76,7 @@ export type QueenBeeRuntimeStore = {
   getIdeas(projectId: string): Idea[] | null;
   saveRequirementsSession(session: PersistedRequirementsSession): void;
   getRequirementsSessions(projectId: string): PersistedRequirementsSession[];
+  deleteRequirementsSession(projectId: string, sessionId: string): void;
   savePlanningProposal(proposal: PlanningProposal): void;
   getPlanningProposal(
     projectId: string,
@@ -191,6 +193,11 @@ export function createQueenBeeRuntimeStore(
       } catch {
         return [];
       }
+    },
+
+    deleteRequirementsSession(projectId, sessionId) {
+      const path = requirementsSessionPath(rootDirectory, projectId, sessionId);
+      rmSync(path, { force: true });
     },
 
     savePlanningProposal(proposal) {

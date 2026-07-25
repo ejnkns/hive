@@ -11,6 +11,7 @@ let {
   initialStatus,
   initialKind = "initial_requirements",
   initialDraftRequirements,
+  initialSessionId,
 }: Props = $props();
 
 type Props = {
@@ -21,6 +22,7 @@ type Props = {
   initialStatus?: string;
   initialKind?: RequirementsSessionKind;
   initialDraftRequirements?: string;
+  initialSessionId?: string;
 };
 
 type Message = {
@@ -36,6 +38,8 @@ let spec = $state("");
 let settled = $state(true);
 let draftRequirements = $state("");
 let error = $state<string | null>(null);
+let sessionId = $state<string | null>(null);
+let resetConfirm = $state(false);
 
 $effect(() => {
   if (initialMessages && initialMessages.length > 0) {
@@ -51,6 +55,9 @@ $effect(() => {
   if (initialDraftRequirements) {
     draftRequirements = initialDraftRequirements;
   }
+  if (initialSessionId) {
+    sessionId = initialSessionId;
+  }
 });
 
 async function startDevise(prompt: string) {
@@ -59,6 +66,7 @@ async function startDevise(prompt: string) {
   messages = [{ role: "user", content: prompt }];
   complete = false;
   spec = "";
+  sessionId = null;
 
   try {
     const res = await fetch(`/api/queen-bee/${projectId}/requirements/start`, {
@@ -73,9 +81,11 @@ async function startDevise(prompt: string) {
     }
 
     const data = (await res.json()) as {
+      sessionId: string;
       question: string;
       draftRequirements?: string;
     };
+    sessionId = data.sessionId;
     draftRequirements = data.draftRequirements ?? draftRequirements;
     messages.push({ role: "model", content: data.question });
   } catch (err) {
@@ -131,8 +141,46 @@ async function respond(answer: string) {
   }
 }
 
+async function resetSession() {
+  if (!sessionId) return;
+  resetConfirm = false;
+  loading = true;
+  error = null;
+
+  try {
+    const res = await fetch(
+      `/api/queen-bee/${projectId}/requirements/session/${sessionId}`,
+      { method: "DELETE" }
+    );
+
+    if (!res.ok) {
+      const data = (await res.json()) as { error?: string };
+      throw new Error(data.error ?? "Session reset failed");
+    }
+
+    messages = [];
+    draftRequirements = "";
+    complete = false;
+    spec = "";
+    sessionId = null;
+  } catch (err) {
+    error = err instanceof Error ? err.message : "Unknown error";
+  } finally {
+    loading = false;
+  }
+}
+
+function handleResetClick() {
+  if (resetConfirm) {
+    resetSession();
+  } else {
+    resetConfirm = true;
+  }
+}
+
 function submit() {
   settled = false;
+  resetConfirm = false;
   const text = input.trim();
   if (!text) return;
   input = "";
@@ -148,6 +196,16 @@ $effect(() => {
   const update = projectSocket.draftUpdate;
   if (settled || !update || update.cardId) return;
   draftRequirements = update.content;
+});
+
+$effect(() => {
+  function onKeydown(e: KeyboardEvent) {
+    if (e.key === "Escape") resetConfirm = false;
+  }
+  if (resetConfirm) {
+    window.addEventListener("keydown", onKeydown);
+    return () => window.removeEventListener("keydown", onKeydown);
+  }
 });
 </script>
 
@@ -233,6 +291,18 @@ $effect(() => {
         if (e.key === "Enter") submit();
       }}
     ></jelly-input>
+    {#if messages.length > 0 && !complete}
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <jelly-button
+        size="small"
+        variant={resetConfirm ? "rose" : "platinum"}
+        onclick={handleResetClick}
+        use:jellyDisabled={loading}
+      >
+        {resetConfirm ? "Confirm?" : "Reset session"}
+      </jelly-button>
+    {/if}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <jelly-button

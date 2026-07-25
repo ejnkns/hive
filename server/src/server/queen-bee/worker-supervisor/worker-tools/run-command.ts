@@ -3,7 +3,10 @@
 import { execFile } from "node:child_process";
 import { basename } from "node:path";
 import { isRecord } from "shared/board-types";
-import type { ToolCall, ToolResult } from "../../devise-engine/devise-tools";
+import type {
+  ToolCall,
+  ToolResult,
+} from "../../requirements-session/agent-tools";
 
 const GIT_MUTATIONS = new Set([
   "add",

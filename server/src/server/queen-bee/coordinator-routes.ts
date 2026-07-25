@@ -5,9 +5,9 @@ import type { CoordinatorAction } from "shared/board-types";
 import { isRecord } from "shared/board-types";
 import type { BoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
-import type { RequirementsSessionManager } from "./devise-engine";
 import type { PlanningManager } from "./planner";
 import { planningResponse } from "./planning-response";
+import type { RequirementsSessionManager } from "./requirements-session";
 import { readRequirements, requirementsRevision } from "./requirements-store";
 
 export function registerCoordinatorRoutes(

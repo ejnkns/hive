@@ -2,7 +2,7 @@ import assert from "node:assert";
 import { describe, it } from "node:test";
 import type { Card } from "./board-store";
 import { createCoordinator } from "./coordinator";
-import type { AgentModelCaller } from "./devise-engine/create-devise-model-caller";
+import type { AgentModelCaller } from "./requirements-session/create-model-caller";
 
 describe("Coordinator", () => {
   it("returns structured remediation suggestions from a model response", async () => {

@@ -13,8 +13,8 @@ import type {
   ToolCall,
   ToolDefinition,
   ToolResult,
-} from "../devise-engine/devise-tools";
-import { AGENT_TOOLS } from "../devise-engine/devise-tools";
+} from "../requirements-session/agent-tools";
+import { AGENT_TOOLS } from "../requirements-session/agent-tools";
 import { getDiff, getStatus } from "./git-operations";
 import { commitWork } from "./worker-tools/commit-work";
 import { runCommand } from "./worker-tools/run-command";

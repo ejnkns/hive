@@ -14,11 +14,6 @@ import { isRecord } from "shared/board-types";
 import { generateId } from "shared/generate-id";
 import type { Message } from "shared/message";
 import type { Board, BoardStore, Card } from "./board-store";
-import {
-  type AgentModelCaller,
-  createAgentModelCaller,
-} from "./devise-engine/create-devise-model-caller";
-import { AGENT_TOOLS, executeAgentTool } from "./devise-engine/devise-tools";
 import type { IntegrationManager } from "./integration-manager";
 import { PLAN_SYSTEM_PROMPT } from "./planner/plan-system-prompt";
 import { loadProjectContext, type ProjectContext } from "./project-context";
@@ -28,6 +23,14 @@ import type {
 } from "./project-specification-store";
 import { createProjectSpecificationStore } from "./project-specification-store";
 import type { QueenBeeRuntimeStore } from "./queen-bee-runtime-store";
+import {
+  AGENT_TOOLS,
+  executeAgentTool,
+} from "./requirements-session/agent-tools";
+import {
+  type AgentModelCaller,
+  createAgentModelCaller,
+} from "./requirements-session/create-model-caller";
 import { readRequirements, requirementsRevision } from "./requirements-store";
 import { emitPlanningOutcome } from "./worker-event-bus";
 

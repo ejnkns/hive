@@ -5,11 +5,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import { createBoardStore } from "./board-store";
-import type { AgentModelCaller } from "./devise-engine/create-devise-model-caller";
 import type { IntegrationManager } from "./integration-manager";
 import { createPlanningManager } from "./planner";
 import type { ProjectSpecificationStore } from "./project-specification-store";
 import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
+import type { AgentModelCaller } from "./requirements-session/create-model-caller";
 import { readRequirements, writeRequirements } from "./requirements-store";
 
 describe("Planner Agent reconciliation", () => {

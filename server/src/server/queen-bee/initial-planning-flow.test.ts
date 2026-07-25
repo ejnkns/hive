@@ -9,12 +9,12 @@ import type { ProjectListItem } from "shared/project-types";
 import { registerBoardRoutes } from "./board-routes";
 import { createBoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
-import { createRequirementsSessionManager } from "./devise-engine";
-import type { AgentModelCaller } from "./devise-engine/create-devise-model-caller";
-import { registerRequirementsRoutes } from "./devise-routes";
 import type { IntegrationManager } from "./integration-manager";
 import { createPlanningManager } from "./planner";
 import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
+import { registerRequirementsRoutes } from "./requirements-routes";
+import { createRequirementsSessionManager } from "./requirements-session";
+import type { AgentModelCaller } from "./requirements-session/create-model-caller";
 import { readRequirements, writeRequirements } from "./requirements-store";
 
 describe("initial planning flow", () => {

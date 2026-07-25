@@ -6,7 +6,7 @@ import { COORDINATOR_SYSTEM_PROMPT } from "./coordinator/coordinator-system-prom
 import {
   type AgentModelCaller,
   createAgentModelCaller,
-} from "./devise-engine/create-devise-model-caller";
+} from "./requirements-session/create-model-caller";
 
 export type CoordinatorAnalysis = {
   summary: string;

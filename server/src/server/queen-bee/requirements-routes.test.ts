@@ -8,10 +8,10 @@ import type { RequirementsFeedback } from "shared/board-types";
 import type { ProjectListItem } from "shared/project-types";
 import { createBoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
-import type { RequirementsSessionManager } from "./devise-engine";
-import { registerRequirementsRoutes } from "./devise-routes";
 import type { PlanningManager } from "./planner";
 import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
+import { registerRequirementsRoutes } from "./requirements-routes";
+import type { RequirementsSessionManager } from "./requirements-session";
 import {
   readRequirements,
   requirementsRevision,
@@ -34,7 +34,7 @@ describe("requirements routes", () => {
     const { server, boardStore, project } = createRouteFixture({
       async startRevision() {
         starts += 1;
-        return { question: "What should change?" };
+        return { sessionId: "session-1", question: "What should change?" };
       },
     });
     boardStore.addCard(project.id, project.repoPath, {
@@ -88,7 +88,7 @@ describe("requirements routes", () => {
           replacesProposalId
         ) {
           allowedProposalId = replacesProposalId;
-          return { question: "What should change?" };
+          return { sessionId: "sid", question: "What should change?" };
         },
       },
       {
@@ -116,7 +116,7 @@ describe("requirements routes", () => {
     const { server, boardStore, project } = createRouteFixture({
       async startIdea(_projectId, idea) {
         startedIdeaId = idea.id;
-        return { question: "What outcome should this add?" };
+        return { sessionId: "sid", question: "What outcome should this add?" };
       },
     });
     const idea = boardStore.addIdea(project.id, project.repoPath, {
@@ -162,7 +162,10 @@ describe("requirements routes", () => {
       {
         async startRepair(_projectId, received) {
           repairedFeedbackId = received.id;
-          return { question: "Which behavior should be canonical?" };
+          return {
+            sessionId: "sid",
+            question: "Which behavior should be canonical?",
+          };
         },
       },
       {
@@ -210,7 +213,7 @@ describe("requirements routes", () => {
       {
         async startRepair() {
           starts += 1;
-          return { question: "Should not start" };
+          return { sessionId: "sid", question: "Should not start" };
         },
       },
       { getRequirementsFeedback: () => feedback }
@@ -602,11 +605,79 @@ describe("requirements routes", () => {
     );
   });
 
+  it("resets a session via DELETE endpoint", async () => {
+    let resetCalled = false;
+    let resetProjectId = "";
+    let resetSessionId = "";
+    const { server, project } = createRouteFixture({
+      resetSession: async (projectId, sessionId) => {
+        resetCalled = true;
+        resetProjectId = projectId;
+        resetSessionId = sessionId;
+      },
+    });
+
+    const response = await server.inject({
+      method: "DELETE",
+      url: `/api/queen-bee/${project.id}/requirements/session/session-1`,
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.json(), { success: true });
+    assert.equal(resetCalled, true);
+    assert.equal(resetProjectId, project.id);
+    assert.equal(resetSessionId, "session-1");
+  });
+
+  it("DELETE returns 404 when session is not found", async () => {
+    const { server, project } = createRouteFixture({
+      resetSession: async () => {
+        throw new Error("Requirements Session not found");
+      },
+    });
+
+    const response = await server.inject({
+      method: "DELETE",
+      url: `/api/queen-bee/${project.id}/requirements/session/nonexistent`,
+    });
+
+    assert.equal(response.statusCode, 404);
+    assert.equal(response.json().error, "Session not found");
+  });
+
+  it("DELETE returns 409 when session is submitted", async () => {
+    const { server, project } = createRouteFixture({
+      resetSession: async () => {
+        throw new Error("Cannot reset a submitted Requirements Session");
+      },
+    });
+
+    const response = await server.inject({
+      method: "DELETE",
+      url: `/api/queen-bee/${project.id}/requirements/session/session-1`,
+    });
+
+    assert.equal(response.statusCode, 409);
+    assert.ok(response.json().error.includes("submitted"));
+  });
+
+  it("DELETE returns 404 for unknown project", async () => {
+    const { server } = createRouteFixture();
+
+    const response = await server.inject({
+      method: "DELETE",
+      url: "/api/queen-bee/unknown-project/requirements/session/session-1",
+    });
+
+    assert.equal(response.statusCode, 404);
+    assert.equal(response.json().error, "Project not found");
+  });
+
   function createRouteFixture(
     overrides: Partial<RequirementsSessionManager> = {},
     plannerOverrides: Partial<PlanningManager> = {}
   ) {
-    const repoPath = mkdtempSync(join(tmpdir(), "hive-devise-routes-"));
+    const repoPath = mkdtempSync(join(tmpdir(), "hive-requirements-routes-"));
     directories.push(repoPath);
     const project: ProjectListItem = {
       id: "project-1",
@@ -627,10 +698,19 @@ describe("requirements routes", () => {
       unlink: () => {},
     };
     const engine: RequirementsSessionManager = {
-      start: async () => ({ question: "Question" }),
-      startRevision: async () => ({ question: "Question" }),
-      startIdea: async () => ({ question: "Idea question" }),
-      startRepair: async () => ({ question: "Repair question" }),
+      start: async () => ({ sessionId: "session-1", question: "Question" }),
+      startRevision: async () => ({
+        sessionId: "session-1",
+        question: "Question",
+      }),
+      startIdea: async () => ({
+        sessionId: "session-1",
+        question: "Idea question",
+      }),
+      startRepair: async () => ({
+        sessionId: "session-1",
+        question: "Repair question",
+      }),
       respond: async () => ({ type: "question", question: "Question" }),
       respondIdea: async () => ({
         type: "question",
@@ -639,12 +719,16 @@ describe("requirements routes", () => {
       getSession: () => undefined,
       submitForPlanning: () => {},
       getIdeaSession: () => undefined,
-      startCard: async () => ({ question: "Card question" }),
+      startCard: async () => ({
+        sessionId: "session-1",
+        question: "Card question",
+      }),
       respondCard: async () => ({
         type: "question",
         question: "Card question",
       }),
       getCardSession: () => undefined,
+      resetSession: async () => {},
       ...overrides,
     };
     const boardStore = createBoardStore(

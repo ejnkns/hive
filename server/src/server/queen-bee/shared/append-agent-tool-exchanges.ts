@@ -1,7 +1,7 @@
 /** @public — shared by Queen Bee agent-role execution loops. */
 
 import type { Message } from "shared/message";
-import type { AgentModelResponse } from "../devise-engine/create-devise-model-caller";
+import type { AgentModelResponse } from "../requirements-session/create-model-caller";
 
 export function appendAgentToolExchanges(
   messages: Message[],

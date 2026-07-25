@@ -8,9 +8,9 @@ import type { ProjectListItem } from "shared/project-types";
 import { createBoardStore } from "./board-store";
 import { registerCoordinatorRoutes } from "./coordinator-routes";
 import type { ProjectStore } from "./create-project-store";
-import type { RequirementsSessionManager } from "./devise-engine";
 import type { PlanningManager } from "./planner";
 import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
+import type { RequirementsSessionManager } from "./requirements-session";
 
 describe("coordinator routes", () => {
   const directories: string[] = [];
@@ -81,10 +81,16 @@ describe("coordinator routes", () => {
     });
     let startCardArgs: unknown[] | undefined;
     const engine: RequirementsSessionManager = {
-      start: async () => ({ question: "Question" }),
-      startRevision: async () => ({ question: "Question" }),
-      startIdea: async () => ({ question: "Question" }),
-      startRepair: async () => ({ question: "Question" }),
+      start: async () => ({ sessionId: "session-1", question: "Question" }),
+      startRevision: async () => ({
+        sessionId: "session-1",
+        question: "Question",
+      }),
+      startIdea: async () => ({ sessionId: "session-1", question: "Question" }),
+      startRepair: async () => ({
+        sessionId: "session-1",
+        question: "Question",
+      }),
       respond: async () => ({ type: "question", question: "Question" }),
       respondIdea: async () => ({ type: "question", question: "Question" }),
       getSession: () => undefined,
@@ -92,13 +98,17 @@ describe("coordinator routes", () => {
       getIdeaSession: () => undefined,
       async startCard(...args) {
         startCardArgs = args;
-        return { question: "Which behavior should win?" };
+        return {
+          sessionId: "session-1",
+          question: "Which behavior should win?",
+        };
       },
       respondCard: async () => ({
         type: "question",
         question: "Card question",
       }),
       getCardSession: () => undefined,
+      resetSession: async () => {},
     };
     const server = Fastify();
     servers.push(server);
@@ -315,18 +325,22 @@ describe("coordinator routes", () => {
 
 function unusedSessionManager(): RequirementsSessionManager {
   return {
-    start: async () => ({ question: "Question" }),
-    startRevision: async () => ({ question: "Question" }),
-    startIdea: async () => ({ question: "Question" }),
-    startRepair: async () => ({ question: "Question" }),
+    start: async () => ({ sessionId: "session-1", question: "Question" }),
+    startRevision: async () => ({
+      sessionId: "session-1",
+      question: "Question",
+    }),
+    startIdea: async () => ({ sessionId: "session-1", question: "Question" }),
+    startRepair: async () => ({ sessionId: "session-1", question: "Question" }),
     respond: async () => ({ type: "question", question: "Question" }),
     respondIdea: async () => ({ type: "question", question: "Question" }),
     getSession: () => undefined,
     submitForPlanning: () => {},
     getIdeaSession: () => undefined,
-    startCard: async () => ({ question: "Question" }),
+    startCard: async () => ({ sessionId: "session-1", question: "Question" }),
     respondCard: async () => ({ type: "question", question: "Question" }),
     getCardSession: () => undefined,
+    resetSession: async () => {},
   };
 }
 

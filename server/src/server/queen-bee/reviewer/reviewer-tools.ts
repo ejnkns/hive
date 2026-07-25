@@ -6,8 +6,11 @@ import type {
   ToolCall,
   ToolDefinition,
   ToolResult,
-} from "../devise-engine/devise-tools";
-import { AGENT_TOOLS, executeAgentTool } from "../devise-engine/devise-tools";
+} from "../requirements-session/agent-tools";
+import {
+  AGENT_TOOLS,
+  executeAgentTool,
+} from "../requirements-session/agent-tools";
 
 export const REVIEWER_TOOLS: ToolDefinition[] = [
   ...AGENT_TOOLS.filter((tool) =>
