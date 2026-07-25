@@ -1,12 +1,22 @@
 <script lang="ts">
-import { Select as BitsSelect, type WithoutChildrenOrChild } from "bits-ui";
+import { Select as BitsSelect } from "bits-ui";
 
 type Item = { value: string; label: string; disabled?: boolean };
 
-type Props = WithoutChildrenOrChild<BitsSelect.RootProps> & {
+type Props = {
+  value?: string;
+  onValueChange?: (value: string) => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  onOpenChangeComplete?: (open: boolean) => void;
+  disabled?: boolean;
+  name?: string;
+  required?: boolean;
+  allowDeselect?: boolean;
+  loop?: boolean;
+  scrollAlignment?: "nearest" | "center";
   items: Item[];
   placeholder?: string;
-  disabled?: boolean;
   size?: "small" | "default";
 };
 
@@ -29,10 +39,7 @@ let {
   {items}
   {...restProps}
 >
-  <BitsSelect.Trigger
-    class="select-trigger select-{size}"
-    {disabled}
-  >
+  <BitsSelect.Trigger class="select-trigger select-{size}" {disabled}>
     <BitsSelect.Value {placeholder} />
     <svg
       width="10"
@@ -41,14 +48,16 @@ let {
       class="select-chevron"
       aria-hidden="true"
     >
-      <path d="M2 3l3 4 3-4" fill="none" stroke="currentColor" stroke-width="1.5" />
+      <path
+        d="M2 3l3 4 3-4"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+      />
     </svg>
   </BitsSelect.Trigger>
   <BitsSelect.Portal>
-    <BitsSelect.Content
-      class="select-content"
-      sideOffset={4}
-    >
+    <BitsSelect.Content class="select-content" sideOffset={4}>
       <BitsSelect.Viewport>
         {#each items as item (item.value)}
           <BitsSelect.Item
@@ -60,8 +69,19 @@ let {
             {#snippet children({ selected })}
               {item.label}
               {#if selected}
-                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" class="select-check">
-                  <path d="M2 6l3 3 5-6" fill="none" stroke="currentColor" stroke-width="1.5" />
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 12 12"
+                  aria-hidden="true"
+                  class="select-check"
+                >
+                  <path
+                    d="M2 6l3 3 5-6"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                  />
                 </svg>
               {/if}
             {/snippet}

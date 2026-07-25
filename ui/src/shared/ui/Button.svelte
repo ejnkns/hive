@@ -1,13 +1,8 @@
 <script lang="ts">
-import { Button as BitsButton, type WithoutChildrenOrChild } from "bits-ui";
+import { Button as BitsButton } from "bits-ui";
+import type { Snippet } from "svelte";
 
 type Variant = "mint" | "rose" | "platinum" | "amber" | "azure";
-
-type Props = WithoutChildrenOrChild<BitsButton.RootProps> & {
-  variant?: Variant;
-  size?: "small" | "default";
-  block?: boolean;
-};
 
 let {
   variant = "platinum",
@@ -15,12 +10,19 @@ let {
   block = false,
   disabled = false,
   children,
-  ...restProps
-}: Props = $props();
+  ...rootProps
+}: {
+  variant?: Variant;
+  size?: "small" | "default";
+  block?: boolean;
+  disabled?: boolean;
+  children?: Snippet;
+  [key: string]: unknown;
+} = $props();
 </script>
 
 <BitsButton.Root
-  {...restProps}
+  {...rootProps}
   {disabled}
   class="btn btn-{variant} btn-{size} {block ? 'btn-block' : ''}"
 >
@@ -37,7 +39,9 @@ let {
   cursor: pointer;
   font-family: monospace;
   font-weight: 600;
-  transition: opacity 0.15s, background 0.15s;
+  transition:
+    opacity 0.15s,
+    background 0.15s;
   white-space: nowrap;
 }
 .btn:active {

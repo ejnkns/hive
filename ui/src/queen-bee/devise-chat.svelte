@@ -299,11 +299,7 @@ $effect(() => {
         {resetConfirm ? "Confirm?" : "Reset session"}
       </Button>
     {/if}
-    <Button
-      variant="mint"
-      onclick={submit}
-      disabled={loading || !input.trim()}
-    >
+    <Button variant="mint" onclick={submit} disabled={loading || !input.trim()}>
       {loading ? "..." : "Send"}
     </Button>
   </div>

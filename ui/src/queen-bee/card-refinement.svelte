@@ -220,27 +220,15 @@ $effect(() => {
         {busy ? "Starting..." : "Start refinement"}
       </Button>
     {:else if stage === "question"}
-      <Button
-        variant="mint"
-        onclick={respond}
-        disabled={busy || !input.trim()}
-      >
+      <Button variant="mint" onclick={respond} disabled={busy || !input.trim()}>
         {busy ? "Sending..." : "Send"}
       </Button>
     {:else}
-      <Button
-        variant="mint"
-        onclick={confirmReady}
-        disabled={busy}
-      >
+      <Button variant="mint" onclick={confirmReady} disabled={busy}>
         {busy ? "Reconciling..." : "Confirm and review changes"}
       </Button>
     {/if}
-    <Button
-      variant="platinum"
-      onclick={onCancel}
-      disabled={busy}
-    >
+    <Button variant="platinum" onclick={onCancel} disabled={busy}>
       {stage === "confirmation" ? "Keep as Idea" : "Cancel"}
     </Button>
   </div>

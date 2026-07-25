@@ -256,10 +256,7 @@ function errorMessage(value: unknown, fallback: string): string {
 
 <section class="ideas-backlog">
   <div class="backlog-header">
-    <Button
-      variant="platinum"
-      onclick={() => (expanded = !expanded)}
-    >
+    <Button variant="platinum" onclick={() => (expanded = !expanded)}>
       <span>{expanded ? "▾" : "▸"}</span>
       <strong>Ideas</strong>
       <span class="count">{ideas.length}</span>

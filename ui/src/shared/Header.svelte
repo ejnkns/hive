@@ -24,9 +24,12 @@ let {
     activeProviders: 0,
     avgLatency: null,
   } as HeaderData),
-  onOverrideSet = (_provider: string, _model: string) => {},
-  onOverrideClear = () => {},
-  onOpenModelPriority = () => {},
+  onOverrideSet = ((_provider: string, _model: string) => {}) as (
+    provider: string,
+    model: string
+  ) => void,
+  onOverrideClear = (() => {}) as () => void,
+  onOpenModelPriority = (() => {}) as () => void,
 } = $props();
 
 let pendingProvider: string | null = $state(null);
@@ -60,9 +63,7 @@ const selectedModel = $derived(
 const providerItems = $derived(
   configuredProviders.map((p) => ({ value: p.name, label: p.displayName }))
 );
-const modelItems = $derived(
-  models.map((m) => ({ value: m, label: m }))
-);
+const modelItems = $derived(models.map((m) => ({ value: m, label: m })));
 
 const successColor = $derived(
   data.successRate == null
@@ -130,10 +131,7 @@ function toggleTheme() {
   </div>
   <div class="header-meta">
     <div class="header-controls">
-      <Button
-        variant="platinum"
-        onclick={toggleTheme}
-      >
+      <Button variant="platinum" onclick={toggleTheme}>
         {themeMode === "light" ? "☽" : "☼"}
       </Button>
 
@@ -204,10 +202,7 @@ function toggleTheme() {
         label="Pin"
       />
 
-      <Button
-        variant="platinum"
-        onclick={onOpenModelPriority}
-      >
+      <Button variant="platinum" onclick={onOpenModelPriority}>
         <svg
           viewBox="0 0 24 24"
           width="16"

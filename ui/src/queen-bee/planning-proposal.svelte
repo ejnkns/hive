@@ -194,11 +194,7 @@ async function cancelProposal() {
           : "Review the proposed requirements and their corresponding Card changes as one consistent update."}
       </p>
     </div>
-    <Button
-      variant="mint"
-      onclick={() => finish("accept-all")}
-      disabled={busy}
-    >
+    <Button variant="mint" onclick={() => finish("accept-all")} disabled={busy}>
       {isInitialPlan ? "Accept plan" : "Accept and apply all"}
     </Button>
   </div>
@@ -264,11 +260,7 @@ async function cancelProposal() {
           prepared. Discard it to return to the current Board.
         </div>
         <div class="actions">
-          <Button
-            variant="platinum"
-            onclick={cancelProposal}
-            disabled={busy}
-          >
+          <Button variant="platinum" onclick={cancelProposal} disabled={busy}>
             Discard stale proposal
           </Button>
         </div>
@@ -296,11 +288,7 @@ async function cancelProposal() {
           >
             Revise requirements
           </Button>
-          <Button
-            variant="platinum"
-            onclick={cancelProposal}
-            disabled={busy}
-          >
+          <Button variant="platinum" onclick={cancelProposal} disabled={busy}>
             Cancel proposal
           </Button>
         </div>
@@ -313,11 +301,7 @@ async function cancelProposal() {
       >
         Apply accepted changes
       </Button>
-      <Button
-        variant="platinum"
-        onclick={cancelProposal}
-        disabled={busy}
-      >
+      <Button variant="platinum" onclick={cancelProposal} disabled={busy}>
         Cancel proposal
       </Button>
       {#if !allAccepted()}

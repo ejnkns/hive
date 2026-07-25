@@ -21,7 +21,7 @@ let {
   {placeholder}
   {disabled}
   {...restProps}
-/>
+>
 
 <style>
 .text-input {

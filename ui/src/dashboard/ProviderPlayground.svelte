@@ -148,9 +148,7 @@ function routeLabel(): string {
       }}
     />
     {#if status === "running"}
-      <Button variant="rose" onclick={cancelRun}>
-        Cancel
-      </Button>
+      <Button variant="rose" onclick={cancelRun}> Cancel </Button>
     {:else}
       <Button
         variant="mint"

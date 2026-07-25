@@ -108,18 +108,12 @@ function readError(value: unknown): string | null {
     <span class="status muted">Checking integration...</span>
   {:else if error}
     <span class="status error" title={error}>Integration needs attention</span>
-    <Button variant="platinum" onclick={loadStatus}>
-      Retry
-    </Button>
+    <Button variant="platinum" onclick={loadStatus}> Retry </Button>
   {:else if status?.state === "ready"}
     <span class="status ready">
       {status.ahead} {status.ahead === 1 ? "commit" : "commits"} ready
     </span>
-    <Button
-      variant="mint"
-      onclick={integrate}
-      disabled={integrating}
-    >
+    <Button variant="mint" onclick={integrate} disabled={integrating}>
       {integrating ? "Integrating..." : `Integrate into ${status.targetBranch}`}
     </Button>
   {:else if status?.state === "diverged"}

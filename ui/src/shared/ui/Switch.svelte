@@ -1,5 +1,10 @@
 <script lang="ts">
-import { Switch as BitsSwitch, Label, useId, type WithoutChildrenOrChild } from "bits-ui";
+import {
+  Switch as BitsSwitch,
+  Label,
+  useId,
+  type WithoutChildrenOrChild,
+} from "bits-ui";
 
 type Props = WithoutChildrenOrChild<BitsSwitch.RootProps> & {
   label?: string;
@@ -15,7 +20,13 @@ let {
 </script>
 
 <div class="switch-wrap">
-  <BitsSwitch.Root bind:checked {disabled} {id} {...restProps} class="switch-root">
+  <BitsSwitch.Root
+    bind:checked
+    {disabled}
+    {id}
+    {...restProps}
+    class="switch-root"
+  >
     <BitsSwitch.Thumb class="switch-thumb" />
   </BitsSwitch.Root>
   {#if label}

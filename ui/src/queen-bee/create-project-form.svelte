@@ -77,11 +77,7 @@ async function submit() {
     >
       {submitting ? "Creating..." : "Create Project"}
     </Button>
-    <Button
-      variant="platinum"
-      onclick={onCancel}
-      disabled={submitting}
-    >
+    <Button variant="platinum" onclick={onCancel} disabled={submitting}>
       Cancel
     </Button>
   </div>

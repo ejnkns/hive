@@ -192,9 +192,7 @@ function isRequirementsSessionKind(
     {:else if errorMessage}
       <div class="error">{errorMessage}</div>
       <div class="error-actions">
-        <Button variant="mint" onclick={handleApprove}>
-          Retry
-        </Button>
+        <Button variant="mint" onclick={handleApprove}> Retry </Button>
       </div>
     {:else if requirementsFeedback}
       <RequirementsFeedbackView

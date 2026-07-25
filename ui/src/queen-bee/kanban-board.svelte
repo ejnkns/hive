@@ -352,11 +352,7 @@ $effect(() => {
     <h2>Board</h2>
     <div class="board-actions">
       <ProjectWorkerSettings {projectId} />
-      <Button
-        variant="platinum"
-        onclick={toggleRevision}
-        disabled={revising}
-      >
+      <Button variant="platinum" onclick={toggleRevision} disabled={revising}>
         {revising ? "Starting revision..." : "Revise"}
       </Button>
     </div>
@@ -378,11 +374,7 @@ $effect(() => {
         >
           {revising ? "Starting..." : "Revise requirements"}
         </Button>
-        <Button
-          variant="platinum"
-          onclick={toggleRevision}
-          disabled={revising}
-        >
+        <Button variant="platinum" onclick={toggleRevision} disabled={revising}>
           Cancel
         </Button>
       </div>
@@ -434,10 +426,7 @@ $effect(() => {
         >
           {running === pendingAdmission.cardId ? "Starting..." : "Run anyway"}
         </Button>
-        <Button
-          variant="platinum"
-          onclick={() => (pendingAdmission = null)}
-        >
+        <Button variant="platinum" onclick={() => (pendingAdmission = null)}>
           Cancel
         </Button>
       </div>

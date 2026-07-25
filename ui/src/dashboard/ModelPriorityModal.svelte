@@ -226,10 +226,7 @@ function handleProviderInputBlur() {
                 >
                   ↓
                 </Button>
-                <Button
-                  variant="rose"
-                  onclick={() => removeModel(i)}
-                >
+                <Button variant="rose" onclick={() => removeModel(i)}>
                   ×
                 </Button>
               </div>
@@ -299,10 +296,7 @@ function handleProviderInputBlur() {
                   >
                     ↓
                   </Button>
-                  <Button
-                    variant="rose"
-                    onclick={() => removeProvider(i)}
-                  >
+                  <Button variant="rose" onclick={() => removeProvider(i)}>
                     ×
                   </Button>
                 </div>
@@ -338,11 +332,7 @@ function handleProviderInputBlur() {
 
     <div class="modal-actions">
       <Button variant="platinum" onclick={cancel}>Cancel</Button>
-      <Button
-        variant="mint"
-        onclick={save}
-        disabled={modelItems.length === 0}
-      >
+      <Button variant="mint" onclick={save} disabled={modelItems.length === 0}>
         Save
       </Button>
     </div>

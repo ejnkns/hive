@@ -27,9 +27,7 @@ $effect(() => {
     >
       Auto-scroll {autoScroll ? 'ON' : 'OFF'}
     </Button>
-    <Button variant="platinum" onclick={clearLogs}>
-      Clear
-    </Button>
+    <Button variant="platinum" onclick={clearLogs}> Clear </Button>
   </div>
 </div>
 <div class="log-lines" bind:this={logContainer}>

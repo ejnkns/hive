@@ -169,196 +169,186 @@ const detailChain = $derived(
 </script>
 
 <div class="app">
-    <div class="top-bar">
-      <Header
-        data={headerData ?? undefined}
-        onOverrideSet={handleOverrideSet}
-        onOverrideClear={handleOverrideClear}
-        onOpenModelPriority={() => (modelPriorityModalOpen = true)}
-      />
-      {#if currentHash.startsWith('#/project/') && projectHeader.projectId}
-        <div class="project-header">
-          <div class="project-header-row">
-            <a href="#/" class="back-link">&larr; Projects</a>
-            <div class="header-right">
-              {#key projectHeader.projectId}
-                <ProjectIntegration projectId={projectHeader.projectId} />
-              {/key}
-              {#if projectHeader.requirementsContent}
-                <Button
-                  variant="platinum"
-                  onclick={togglePanel}
-                >
-                  {projectHeader.panelOpen ? "Hide" : "View"}
-                  Requirements
-                </Button>
-              {/if}
-              <span class="project-id">{projectHeader.projectId}</span>
-            </div>
-          </div>
-          {#if projectHeader.requirementsContent && projectHeader.panelOpen}
-            <div class="requirements-panel">
-              <div class="panel-header">
-                <h2>Requirements</h2>
-              </div>
-              <div class="panel-body">
-                <pre
-                  class="req-content"
-                >{projectHeader.requirementsContent}</pre>
-              </div>
-            </div>
-          {/if}
-        </div>
-      {/if}
-    </div>
-
-    {#if currentHash === '#/canvas'}
-      <CanvasHost />
-    {:else if currentHash === '#/dashboard'}
-      <div class="content">
-        <Stats data={statsData} />
-        <div>
-          <div class="section-head" style="margin-top:1.5rem">
-            Live Sessions
-          </div>
-          <Sessions sessions={dashboardSocket.sessions} />
-          <ProviderPanel
-            data={providersData}
-            metrics={dashboardSocket.metrics}
-            conversations={[]}
-            {overrideKey}
-            onRowClick={handleMetricClick}
-            onToggleProvider={handleToggleProvider}
-            lastProvider={headerData?.lastProvider ?? null}
-            lastModel={headerData?.lastModel ?? null}
-          />
-        </div>
-        <div class="section-head" style="margin-top:1.5rem">Pipeline</div>
-        <LivePipeline
-          events={dashboardSocket.flowEvents}
-          providers={providersData}
-        />
-        <Logs entries={dashboardSocket.logEntries} />
-      </div>
-      <div class="drawer-trigger">
-        <Button
-          variant="azure"
-          onclick={() => drawerOpen = true}
-        >
-          Playground
-        </Button>
-      </div>
-      <Dialog
-        bind:open={drawerOpen}
-        label="Provider playground"
-        contentMaxWidth="700px"
-      >
-        <h3 class="drawer-title">Provider playground</h3>
-        <ProviderPlayground providers={dashboardSocket.availableProviders} />
-      </Dialog>
-      <Dialog
-        open={detailOpen}
-        onOpenChange={(v) => { if (!v) detailMetric = null }}
-        label="Request Detail"
-      >
-        <h2 class="dialog-title">Request Detail</h2>
-        {#if detailMetric}
-          <div class="detail-grid">
-            <div class="field">
-              <span class="label">Request ID</span
-              ><span class="val mono">{detailMetric.requestId}</span>
-            </div>
-            <div class="field">
-              <span class="label">Provider</span
-              ><span class="val">{detailMetric.provider}</span>
-            </div>
-            <div class="field">
-              <span class="label">Model</span
-              ><span class="val mono">{detailMetric.model}</span>
-            </div>
-            <div class="field">
-              <span class="label">Time</span
-              ><span class="val">{formatTime(detailMetric.timestamp)}</span>
-            </div>
-            <div class="field">
-              <span class="label">TTFT</span
-              ><span class="val">{formatNumber(detailMetric.ttft, "ms")}</span>
-            </div>
-            <div class="field">
-              <span class="label">Total</span
-              ><span class="val"
-                >{formatNumber(detailMetric.totalLatency, "ms")}</span
-              >
-            </div>
-            <div class="field">
-              <span class="label">Tokens I/O</span
-              ><span class="val"
-                >{detailMetric.inputTokens ?? "—"}
-                / {detailMetric.outputTokens ?? "—"}</span
-              >
-            </div>
-            <div class="field">
-              <span class="label">Thinking</span
-              ><span class="val"
-                >{detailMetric.thinkingTime != null ? `${detailMetric.thinkingTime}ms` : "—"}</span
-              >
-            </div>
-            <div class="field">
-              <span class="label">Status</span
-              ><span class="val {detailMetric.success ? 'ok' : 'err'}"
-                >{String(detailMetric.statusCode)}</span
-              >
-            </div>
-            <div class="field">
-              <span class="label">Finish</span
-              ><span class="val">{detailMetric.finishReason ?? "—"}</span>
-            </div>
-            <div class="field">
-              <span class="label">Refused</span
-              ><span class="val">{detailMetric.refused ? "Yes" : "No"}</span>
-            </div>
-            <div class="field">
-              <span class="label">Tool Err</span
-              ><span class="val"
-                >{detailMetric.toolCallFailed ? "Yes" : "No"}</span
-              >
-            </div>
-            <div class="field">
-              <span class="label">Source</span
-              ><span class="val">{detailMetric.source}</span>
-            </div>
-            {#if detailMetric.errorBody}
-              <div class="field full">
-                <span class="label">Error</span
-                ><span class="val mono">{detailMetric.errorBody}</span>
-              </div>
+  <div class="top-bar">
+    <Header
+      data={headerData ?? undefined}
+      onOverrideSet={handleOverrideSet}
+      onOverrideClear={handleOverrideClear}
+      onOpenModelPriority={() => (modelPriorityModalOpen = true)}
+    />
+    {#if currentHash.startsWith('#/project/') && projectHeader.projectId}
+      <div class="project-header">
+        <div class="project-header-row">
+          <a href="#/" class="back-link">&larr; Projects</a>
+          <div class="header-right">
+            {#key projectHeader.projectId}
+              <ProjectIntegration projectId={projectHeader.projectId} />
+            {/key}
+            {#if projectHeader.requirementsContent}
+              <Button variant="platinum" onclick={togglePanel}>
+                {projectHeader.panelOpen ? "Hide" : "View"}
+                Requirements
+              </Button>
             {/if}
+            <span class="project-id">{projectHeader.projectId}</span>
           </div>
-          {#if detailChain.length > 0}
-            <div class="chain-title">
-              Request Chain ({detailChain.length}
-              attempts)
+        </div>
+        {#if projectHeader.requirementsContent && projectHeader.panelOpen}
+          <div class="requirements-panel">
+            <div class="panel-header">
+              <h2>Requirements</h2>
             </div>
-            {#each detailChain as m, idx}
-              <div class="chain-item">
-                <span class="chain-num">Attempt #{idx + 1}</span>
-                <span class="chain-prov">{m.provider} ({m.model})</span>
-                <span class="chain-status {m.success ? 'ok' : 'err'}"
-                  >{m.statusCode ? String(m.statusCode) : "ERR"}
-                  {m.errorType ? ` ${m.errorType}` : ""}</span
-                >
-                <span class="chain-ttft">{formatNumber(m.ttft, "ms")}</span>
-              </div>
-            {/each}
-          {/if}
+            <div class="panel-body">
+              <pre class="req-content">{projectHeader.requirementsContent}</pre>
+            </div>
+          </div>
         {/if}
-      </Dialog>
-      <ModelPriorityModal bind:open={modelPriorityModalOpen} />
-    {:else if currentHash.startsWith('#/project/')}
-      <ProjectPage projectId={currentHash.slice('#/project/'.length)} />
-    {:else}
-      <ProjectOverview />
+      </div>
     {/if}
+  </div>
+
+  {#if currentHash === '#/canvas'}
+    <CanvasHost />
+  {:else if currentHash === '#/dashboard'}
+    <div class="content">
+      <Stats data={statsData} />
+      <div>
+        <div class="section-head" style="margin-top:1.5rem">Live Sessions</div>
+        <Sessions sessions={dashboardSocket.sessions} />
+        <ProviderPanel
+          data={providersData}
+          metrics={dashboardSocket.metrics}
+          conversations={[]}
+          {overrideKey}
+          onRowClick={handleMetricClick}
+          onToggleProvider={handleToggleProvider}
+          lastProvider={headerData?.lastProvider ?? null}
+          lastModel={headerData?.lastModel ?? null}
+        />
+      </div>
+      <div class="section-head" style="margin-top:1.5rem">Pipeline</div>
+      <LivePipeline
+        events={dashboardSocket.flowEvents}
+        providers={providersData}
+      />
+      <Logs entries={dashboardSocket.logEntries} />
+    </div>
+    <div class="drawer-trigger">
+      <Button variant="azure" onclick={() => drawerOpen = true}>
+        Playground
+      </Button>
+    </div>
+    <Dialog
+      bind:open={drawerOpen}
+      label="Provider playground"
+      contentMaxWidth="700px"
+    >
+      <h3 class="drawer-title">Provider playground</h3>
+      <ProviderPlayground providers={dashboardSocket.availableProviders} />
+    </Dialog>
+    <Dialog
+      open={detailOpen}
+      onOpenChange={(v) => { if (!v) detailMetric = null }}
+      label="Request Detail"
+    >
+      <h2 class="dialog-title">Request Detail</h2>
+      {#if detailMetric}
+        <div class="detail-grid">
+          <div class="field">
+            <span class="label">Request ID</span
+            ><span class="val mono">{detailMetric.requestId}</span>
+          </div>
+          <div class="field">
+            <span class="label">Provider</span
+            ><span class="val">{detailMetric.provider}</span>
+          </div>
+          <div class="field">
+            <span class="label">Model</span
+            ><span class="val mono">{detailMetric.model}</span>
+          </div>
+          <div class="field">
+            <span class="label">Time</span
+            ><span class="val">{formatTime(detailMetric.timestamp)}</span>
+          </div>
+          <div class="field">
+            <span class="label">TTFT</span
+            ><span class="val">{formatNumber(detailMetric.ttft, "ms")}</span>
+          </div>
+          <div class="field">
+            <span class="label">Total</span
+            ><span class="val"
+              >{formatNumber(detailMetric.totalLatency, "ms")}</span
+            >
+          </div>
+          <div class="field">
+            <span class="label">Tokens I/O</span
+            ><span class="val"
+              >{detailMetric.inputTokens ?? "—"}
+              / {detailMetric.outputTokens ?? "—"}</span
+            >
+          </div>
+          <div class="field">
+            <span class="label">Thinking</span
+            ><span class="val"
+              >{detailMetric.thinkingTime != null ? `${detailMetric.thinkingTime}ms` : "—"}</span
+            >
+          </div>
+          <div class="field">
+            <span class="label">Status</span
+            ><span class="val {detailMetric.success ? 'ok' : 'err'}"
+              >{String(detailMetric.statusCode)}</span
+            >
+          </div>
+          <div class="field">
+            <span class="label">Finish</span
+            ><span class="val">{detailMetric.finishReason ?? "—"}</span>
+          </div>
+          <div class="field">
+            <span class="label">Refused</span
+            ><span class="val">{detailMetric.refused ? "Yes" : "No"}</span>
+          </div>
+          <div class="field">
+            <span class="label">Tool Err</span
+            ><span class="val"
+              >{detailMetric.toolCallFailed ? "Yes" : "No"}</span
+            >
+          </div>
+          <div class="field">
+            <span class="label">Source</span
+            ><span class="val">{detailMetric.source}</span>
+          </div>
+          {#if detailMetric.errorBody}
+            <div class="field full">
+              <span class="label">Error</span
+              ><span class="val mono">{detailMetric.errorBody}</span>
+            </div>
+          {/if}
+        </div>
+        {#if detailChain.length > 0}
+          <div class="chain-title">
+            Request Chain ({detailChain.length}
+            attempts)
+          </div>
+          {#each detailChain as m, idx}
+            <div class="chain-item">
+              <span class="chain-num">Attempt #{idx + 1}</span>
+              <span class="chain-prov">{m.provider} ({m.model})</span>
+              <span class="chain-status {m.success ? 'ok' : 'err'}"
+                >{m.statusCode ? String(m.statusCode) : "ERR"}
+                {m.errorType ? ` ${m.errorType}` : ""}</span
+              >
+              <span class="chain-ttft">{formatNumber(m.ttft, "ms")}</span>
+            </div>
+          {/each}
+        {/if}
+      {/if}
+    </Dialog>
+    <ModelPriorityModal bind:open={modelPriorityModalOpen} />
+  {:else if currentHash.startsWith('#/project/')}
+    <ProjectPage projectId={currentHash.slice('#/project/'.length)} />
+  {:else}
+    <ProjectOverview />
+  {/if}
 </div>
 
 <style>

@@ -448,35 +448,21 @@ $effect(() => {
 
     <div class="panel-actions">
       {#if card.column === "ready" && onRun}
-        <Button variant="mint" onclick={onRun}>
-          Run Worker Agent
-        </Button>
+        <Button variant="mint" onclick={onRun}> Run Worker Agent </Button>
       {/if}
       {#if card.column === "reviewing"}
         {#if card.reviewerLog?.status === "complete"}
           {#if reviewReadiness?.canAccept && onAccept}
-            <Button
-              variant="mint"
-              onclick={acceptWork}
-              disabled={deciding}
-            >
+            <Button variant="mint" onclick={acceptWork} disabled={deciding}>
               {deciding ? "Applying decision..." : "Accept work"}
             </Button>
           {:else if reviewReadiness?.canRefreshReview && onRestartReview}
-            <Button
-              variant="mint"
-              onclick={restartReview}
-              disabled={deciding}
-            >
+            <Button variant="mint" onclick={restartReview} disabled={deciding}>
               {deciding ? "Refreshing..." : "Refresh review"}
             </Button>
           {/if}
         {:else if card.reviewerLog?.status === "error" && onRestartReview}
-          <Button
-            variant="mint"
-            onclick={restartReview}
-            disabled={deciding}
-          >
+          <Button variant="mint" onclick={restartReview} disabled={deciding}>
             {deciding ? "Restarting..." : "Retry review"}
           </Button>
         {/if}
