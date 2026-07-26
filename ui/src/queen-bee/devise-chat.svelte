@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { RequirementsSessionKind } from "shared/board-types";
-import { jellyDisabled } from "../shared/jelly-disabled.svelte";
+import Button from "../shared/ui/Button.svelte";
+import TextInput from "../shared/ui/TextInput.svelte";
 import { projectSocket } from "./project-socket.svelte";
 
 let {
@@ -239,13 +240,11 @@ $effect(() => {
             <pre class="spec">{msg.content}</pre>
             {#if onApprove}
               <div class="approve-inside">
-                <!-- svelte-ignore a11y_click_events_have_key_events -->
-                <!-- svelte-ignore a11y_no_static_element_interactions -->
-                <jelly-button size="small" variant="mint" onclick={onApprove}>
+                <Button variant="mint" onclick={onApprove}>
                   {initialKind === "initial_requirements"
                     ? "Generate project plan"
                     : "Generate change proposal"}
-                </jelly-button>
+                </Button>
                 <span class="approve-hint"
                   >or continue the conversation to refine</span
                 >
@@ -279,40 +278,30 @@ $effect(() => {
   {/if}
 
   <div class="input-area">
-    <jelly-input
-      size="small"
-      value={input}
-      oninput={(e: Event) => input = (e.target as HTMLInputElement).value}
+    <TextInput
+      bind:value={input}
       placeholder={messages.length === 0
           ? "Describe your project..."
           : "Your answer..."}
-      use:jellyDisabled={loading}
-      onkeydown={(e: KeyboardEvent) => {
-        if (e.key === "Enter") submit();
+      disabled={loading}
+      restProps={{
+        onkeydown: (e: KeyboardEvent) => {
+          if (e.key === "Enter") submit();
+        },
       }}
-    ></jelly-input>
+    />
     {#if messages.length > 0 && !complete}
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <jelly-button
-        size="small"
+      <Button
         variant={resetConfirm ? "rose" : "platinum"}
         onclick={handleResetClick}
-        use:jellyDisabled={loading}
+        disabled={loading}
       >
         {resetConfirm ? "Confirm?" : "Reset session"}
-      </jelly-button>
+      </Button>
     {/if}
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <jelly-button
-      size="small"
-      variant="mint"
-      onclick={submit}
-      use:jellyDisabled={loading || !input.trim()}
-    >
+    <Button variant="mint" onclick={submit} disabled={loading || !input.trim()}>
       {loading ? "..." : "Send"}
-    </jelly-button>
+    </Button>
   </div>
 </div>
 

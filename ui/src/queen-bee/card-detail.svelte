@@ -7,7 +7,8 @@ import type {
   ReviewReadiness,
 } from "shared/board-types";
 import { COLUMN_LABELS } from "shared/board-types";
-import { jellyDisabled } from "../shared/jelly-disabled.svelte";
+import Button from "../shared/ui/Button.svelte";
+import Textarea from "../shared/ui/Textarea.svelte";
 import CardRefinement from "./card-refinement.svelte";
 
 let {
@@ -178,11 +179,7 @@ $effect(() => {
   >
     <div class="panel-header">
       <h3>{card.title}</h3>
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <jelly-button size="small" variant="platinum" onclick={onClose}
-        >&times;</jelly-button
-      >
+      <Button variant="platinum" onclick={onClose}>&times;</Button>
     </div>
 
     <div class="panel-body">
@@ -384,13 +381,10 @@ $effect(() => {
               <div class="suggestion">
                 <div>{suggestion.rationale}</div>
                 {#if onRemediate}
-                  <!-- svelte-ignore a11y_click_events_have_key_events -->
-                  <!-- svelte-ignore a11y_no_static_element_interactions -->
-                  <jelly-button
-                    size="small"
+                  <Button
                     variant="platinum"
                     onclick={() => void remediate(suggestion.action, suggestion.id)}
-                    use:jellyDisabled={remediating}
+                    disabled={remediating}
                   >
                     {remediating
                       ? "Preparing…"
@@ -399,7 +393,7 @@ $effect(() => {
                       : suggestion.action === "redevise"
                         ? "Revise requirements"
                         : "Archive"}
-                  </jelly-button>
+                  </Button>
                 {/if}
               </div>
             {/each}
@@ -422,35 +416,27 @@ $effect(() => {
       {#if requestingChanges}
         <div class="section decision-input">
           <div class="section-label">Guidance for the next attempt</div>
-          <jelly-textarea
-            size="small"
-            value={decisionGuidance}
-            oninput={(e: Event) => decisionGuidance = (e.target as HTMLInputElement).value}
-            rows="3"
+          <Textarea
+            bind:value={decisionGuidance}
             placeholder="What should the Worker Agent change?"
-            use:jellyDisabled={deciding}
-          ></jelly-textarea>
+            disabled={deciding}
+            restProps={{ rows: "3" }}
+          />
           <div class="decision-input-actions">
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <jelly-button
-              size="small"
+            <Button
               variant="mint"
               onclick={requestChanges}
-              use:jellyDisabled={deciding || !decisionGuidance.trim()}
+              disabled={deciding || !decisionGuidance.trim()}
             >
               Request changes
-            </jelly-button>
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <jelly-button
-              size="small"
+            </Button>
+            <Button
               variant="platinum"
               onclick={() => (requestingChanges = false)}
-              use:jellyDisabled={deciding}
+              disabled={deciding}
             >
               Cancel
-            </jelly-button>
+            </Button>
           </div>
         </div>
       {/if}
@@ -462,60 +448,32 @@ $effect(() => {
 
     <div class="panel-actions">
       {#if card.column === "ready" && onRun}
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <jelly-button size="small" variant="mint" onclick={onRun}>
-          Run Worker Agent
-        </jelly-button>
+        <Button variant="mint" onclick={onRun}> Run Worker Agent </Button>
       {/if}
       {#if card.column === "reviewing"}
         {#if card.reviewerLog?.status === "complete"}
           {#if reviewReadiness?.canAccept && onAccept}
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <jelly-button
-              size="small"
-              variant="mint"
-              onclick={acceptWork}
-              use:jellyDisabled={deciding}
-            >
+            <Button variant="mint" onclick={acceptWork} disabled={deciding}>
               {deciding ? "Applying decision..." : "Accept work"}
-            </jelly-button>
+            </Button>
           {:else if reviewReadiness?.canRefreshReview && onRestartReview}
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <jelly-button
-              size="small"
-              variant="mint"
-              onclick={restartReview}
-              use:jellyDisabled={deciding}
-            >
+            <Button variant="mint" onclick={restartReview} disabled={deciding}>
               {deciding ? "Refreshing..." : "Refresh review"}
-            </jelly-button>
+            </Button>
           {/if}
         {:else if card.reviewerLog?.status === "error" && onRestartReview}
-          <!-- svelte-ignore a11y_click_events_have_key_events -->
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <jelly-button
-            size="small"
-            variant="mint"
-            onclick={restartReview}
-            use:jellyDisabled={deciding}
-          >
+          <Button variant="mint" onclick={restartReview} disabled={deciding}>
             {deciding ? "Restarting..." : "Retry review"}
-          </jelly-button>
+          </Button>
         {/if}
         {#if onRequestChanges && !requestingChanges}
-          <!-- svelte-ignore a11y_click_events_have_key_events -->
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <jelly-button
-            size="small"
+          <Button
             variant="platinum"
             onclick={() => (requestingChanges = true)}
-            use:jellyDisabled={deciding}
+            disabled={deciding}
           >
             Request changes
-          </jelly-button>
+          </Button>
         {/if}
       {/if}
     </div>

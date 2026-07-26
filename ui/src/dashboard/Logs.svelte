@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { LogEntry } from "shared/logger";
+import Button from "../shared/ui/Button.svelte";
 
 let { entries = $bindable([] as LogEntry[]) } = $props();
 
@@ -20,20 +21,13 @@ $effect(() => {
 <div class="log-header">
   <span>Console Stream</span>
   <div class="controls">
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <jelly-button
-      size="small"
+    <Button
       variant={autoScroll ? "mint" : "platinum"}
       onclick={() => autoScroll = !autoScroll}
     >
       Auto-scroll {autoScroll ? 'ON' : 'OFF'}
-    </jelly-button>
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <jelly-button size="small" variant="platinum" onclick={clearLogs}>
-      Clear
-    </jelly-button>
+    </Button>
+    <Button variant="platinum" onclick={clearLogs}> Clear </Button>
   </div>
 </div>
 <div class="log-lines" bind:this={logContainer}>

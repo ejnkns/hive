@@ -2,6 +2,10 @@
 import type { ModelPriority } from "shared/dashboard-types";
 import { normalizeModelId } from "shared/model-normalization";
 import { dashboardSocket } from "./dashboard-socket.svelte";
+import Button from "../shared/ui/Button.svelte";
+import Dialog from "../shared/ui/Dialog.svelte";
+import Switch from "../shared/ui/Switch.svelte";
+import TextInput from "../shared/ui/TextInput.svelte";
 
 let {
   open = $bindable(false),
@@ -186,12 +190,7 @@ function handleProviderInputBlur() {
 }
 </script>
 
-<jelly-dialog
-  class="priority-dialog"
-  {open}
-  onclose={cancel}
-  label="Model Priority"
->
+<Dialog bind:open label="Model Priority" contentMaxWidth="600px">
   <h2 class="dialog-title">Model Priority</h2>
   <div class="presets-body">
     {#if !dataLoaded && dashboardSocket.connected}
@@ -213,60 +212,42 @@ function handleProviderInputBlur() {
                 </div>
               </div>
               <div class="row-actions">
-                <!-- svelte-ignore a11y_click_events_have_key_events -->
-                <!-- svelte-ignore a11y_no_static_element_interactions -->
-                <jelly-icon-button
-                  size="small"
+                <Button
                   variant="platinum"
-                  label="Move up"
-                  style={i === 0 ? "opacity:0.3;pointer-events:none" : ""}
+                  disabled={i === 0}
                   onclick={() => { if (i > 0) moveModel(i, -1); }}
                 >
                   ↑
-                </jelly-icon-button>
-                <!-- svelte-ignore a11y_click_events_have_key_events -->
-                <!-- svelte-ignore a11y_no_static_element_interactions -->
-                <jelly-icon-button
-                  size="small"
+                </Button>
+                <Button
                   variant="platinum"
-                  label="Move down"
-                  style={i === modelItems.length - 1 ? "opacity:0.3;pointer-events:none" : ""}
+                  disabled={i === modelItems.length - 1}
                   onclick={() => { if (i < modelItems.length - 1) moveModel(i, 1); }}
                 >
                   ↓
-                </jelly-icon-button>
-                <!-- svelte-ignore a11y_click_events_have_key_events -->
-                <!-- svelte-ignore a11y_no_static_element_interactions -->
-                <jelly-icon-button
-                  size="small"
-                  variant="rose"
-                  label="Remove"
-                  onclick={() => removeModel(i)}
-                >
+                </Button>
+                <Button variant="rose" onclick={() => removeModel(i)}>
                   ×
-                </jelly-icon-button>
+                </Button>
               </div>
             </div>
           {/each}
         </div>
         <div class="search-wrap">
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <jelly-input
-            size="small"
-            value={modelSearch}
+          <TextInput
+            bind:value={modelSearch}
             placeholder="Search model..."
-            oninput={(e: Event) => { modelSearch = (e.target as HTMLInputElement).value; modelDropdownOpen = true; }}
-            onfocus={handleModelInputFocus}
-            onblur={handleModelInputBlur}
-          ></jelly-input>
+            restProps={{
+              onfocus: handleModelInputFocus,
+              onblur: handleModelInputBlur,
+            }}
+          />
           {#if modelDropdownOpen && filteredModels.length > 0}
             <div class="dropdown">
               {#each filteredModels as suggestion}
-                <jelly-button
-                  size="small"
+                <Button
                   variant="platinum"
                   block
-                  style="margin-bottom:2px"
                   onclick={() => addModel(suggestion)}
                 >
                   <div class="dropdown-btn-content">
@@ -275,7 +256,7 @@ function handleProviderInputBlur() {
                       {modelProviders.get(suggestion)?.join(", ") ?? ""}
                     </span>
                   </div>
-                </jelly-button>
+                </Button>
               {/each}
             </div>
           {/if}
@@ -284,13 +265,11 @@ function handleProviderInputBlur() {
 
       <div class="list-section">
         <div class="section-label">
-          <jelly-switch
-            size="small"
+          <Switch
             checked={providerEnabled}
-            onchange={(e: Event) => { providerEnabled = (e.target as HTMLInputElement).checked; }}
-          >
-            Provider Priority
-          </jelly-switch>
+            onCheckedChange={(v) => providerEnabled = v}
+            label="Provider Priority"
+          />
         </div>
         {#if providerEnabled}
           <div class="list-items">
@@ -303,64 +282,46 @@ function handleProviderInputBlur() {
                   {/if}
                 </div>
                 <div class="row-actions">
-                  <!-- svelte-ignore a11y_click_events_have_key_events -->
-                  <!-- svelte-ignore a11y_no_static_element_interactions -->
-                  <jelly-icon-button
-                    size="small"
+                  <Button
                     variant="platinum"
-                    label="Move up"
-                    style={i === 0 ? "opacity:0.3;pointer-events:none" : ""}
+                    disabled={i === 0}
                     onclick={() => { if (i > 0) moveProvider(i, -1); }}
                   >
                     ↑
-                  </jelly-icon-button>
-                  <!-- svelte-ignore a11y_click_events_have_key_events -->
-                  <!-- svelte-ignore a11y_no_static_element_interactions -->
-                  <jelly-icon-button
-                    size="small"
+                  </Button>
+                  <Button
                     variant="platinum"
-                    label="Move down"
-                    style={i === providerItems.length - 1 ? "opacity:0.3;pointer-events:none" : ""}
+                    disabled={i === providerItems.length - 1}
                     onclick={() => { if (i < providerItems.length - 1) moveProvider(i, 1); }}
                   >
                     ↓
-                  </jelly-icon-button>
-                  <!-- svelte-ignore a11y_click_events_have_key_events -->
-                  <!-- svelte-ignore a11y_no_static_element_interactions -->
-                  <jelly-icon-button
-                    size="small"
-                    variant="rose"
-                    label="Remove"
-                    onclick={() => removeProvider(i)}
-                  >
+                  </Button>
+                  <Button variant="rose" onclick={() => removeProvider(i)}>
                     ×
-                  </jelly-icon-button>
+                  </Button>
                 </div>
               </div>
             {/each}
           </div>
           <div class="search-wrap">
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <jelly-input
-              size="small"
-              value={providerSearch}
+            <TextInput
+              bind:value={providerSearch}
               placeholder="Search provider..."
-              oninput={(e: Event) => { providerSearch = (e.target as HTMLInputElement).value; providerDropdownOpen = true; }}
-              onfocus={handleProviderInputFocus}
-              onblur={handleProviderInputBlur}
-            ></jelly-input>
+              restProps={{
+                onfocus: handleProviderInputFocus,
+                onblur: handleProviderInputBlur,
+              }}
+            />
             {#if providerDropdownOpen && filteredProviders.length > 0}
               <div class="dropdown">
                 {#each filteredProviders as suggestion}
-                  <jelly-button
-                    size="small"
+                  <Button
                     variant="platinum"
                     block
-                    style="margin-bottom:2px"
                     onclick={() => addProvider(suggestion)}
                   >
                     {suggestion}
-                  </jelly-button>
+                  </Button>
                 {/each}
               </div>
             {/if}
@@ -370,24 +331,13 @@ function handleProviderInputBlur() {
     {/if}
 
     <div class="modal-actions">
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <jelly-button size="small" variant="platinum" onclick={cancel}
-        >Cancel</jelly-button
-      >
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <jelly-button
-        size="small"
-        variant="mint"
-        onclick={save}
-        style={modelItems.length === 0 ? "opacity:0.3;pointer-events:none" : ""}
-      >
+      <Button variant="platinum" onclick={cancel}>Cancel</Button>
+      <Button variant="mint" onclick={save} disabled={modelItems.length === 0}>
         Save
-      </jelly-button>
+      </Button>
     </div>
   </div>
-</jelly-dialog>
+</Dialog>
 
 <style>
 .dialog-title {

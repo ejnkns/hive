@@ -1,7 +1,10 @@
 <script lang="ts">
-import { jellyDisabled } from "./jelly-disabled.svelte";
 import { getThemeMode, setLightMode } from "./theme-state.svelte";
 import type { HeaderData } from "./utils";
+import Badge from "./ui/Badge.svelte";
+import Button from "./ui/Button.svelte";
+import Select from "./ui/Select.svelte";
+import Switch from "./ui/Switch.svelte";
 
 let {
   data = $bindable({
@@ -21,28 +24,16 @@ let {
     activeProviders: 0,
     avgLatency: null,
   } as HeaderData),
-  onOverrideSet = (_provider: string, _model: string) => {},
-  onOverrideClear = () => {},
-  onOpenModelPriority = () => {},
+  onOverrideSet = ((_provider: string, _model: string) => {}) as (
+    provider: string,
+    model: string
+  ) => void,
+  onOverrideClear = (() => {}) as () => void,
+  onOpenModelPriority = (() => {}) as () => void,
 } = $props();
 
 let pendingProvider: string | null = $state(null);
 let pendingModel: string | null = $state(null);
-
-let providerSelectEl = $state<HTMLElement & { value: string }>();
-let modelSelectEl = $state<HTMLElement & { value: string }>();
-
-$effect(() => {
-  if (providerSelectEl) {
-    providerSelectEl.value = selectedProvider ?? "";
-  }
-});
-
-$effect(() => {
-  if (modelSelectEl) {
-    modelSelectEl.value = selectedModel ?? "";
-  }
-});
 
 const logo =
   "   ,-.      .' '.        .`\n   \\_/      .   .       .\n:>(|||} .    ` .       .\n   / \\   '. . '  ' . '\n   `-'  ";
@@ -69,6 +60,11 @@ const selectedModel = $derived(
         : null
 );
 
+const providerItems = $derived(
+  configuredProviders.map((p) => ({ value: p.name, label: p.displayName }))
+);
+const modelItems = $derived(models.map((m) => ({ value: m, label: m })));
+
 const successColor = $derived(
   data.successRate == null
     ? "var(--muted)"
@@ -79,9 +75,7 @@ const successColor = $derived(
         : "#7cb342"
 );
 
-function handleProviderChange(e: Event) {
-  const el = e.target as HTMLElement & { value: string };
-  const provider = el.value;
+function handleProviderChange(provider: string) {
   if (!provider) return;
   if (data.override.active) {
     overrideSet(provider, models[0] ?? "");
@@ -91,9 +85,7 @@ function handleProviderChange(e: Event) {
   }
 }
 
-function handleModelChange(e: Event) {
-  const el = e.target as HTMLElement & { value: string };
-  const model = el.value;
+function handleModelChange(model: string) {
   if (!model) return;
   if (data.override.active) {
     const provider = selectedProvider ?? "";
@@ -109,8 +101,7 @@ function overrideSet(provider: string, model: string) {
   }
 }
 
-function handlePinToggle(e: Event) {
-  const checked = (e.target as HTMLElement & { checked: boolean }).checked;
+function handlePinToggle(checked: boolean) {
   if (checked) {
     const provider = pendingProvider ?? data.lastProvider ?? "";
     const model = pendingModel ?? data.lastModel ?? "";
@@ -129,7 +120,6 @@ function toggleTheme() {
   setLightMode(!light);
   const mode = !light ? "light" : "dark";
   localStorage.setItem("theme", mode);
-  document.documentElement.setAttribute("data-jelly-mode", mode);
 }
 </script>
 
@@ -141,20 +131,13 @@ function toggleTheme() {
   </div>
   <div class="header-meta">
     <div class="header-controls">
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <jelly-icon-button
-        size="small"
-        variant="platinum"
-        label="Toggle theme"
-        onclick={toggleTheme}
-      >
+      <Button variant="platinum" onclick={toggleTheme}>
         {themeMode === "light" ? "☽" : "☼"}
-      </jelly-icon-button>
+      </Button>
 
-      <jelly-badge size="small" variant={data.online ? "mint" : "rose"} live>
+      <Badge variant={data.online ? "mint" : "rose"} live>
         {data.online ? "ONLINE" : "OFFLINE"}
-      </jelly-badge>
+      </Badge>
     </div>
 
     <div class="stats-bar">
@@ -185,60 +168,41 @@ function toggleTheme() {
     <div class="route-info">
       {#if data.lastProvider && data.lastModel}
         <span class="route-label">Last</span>
-        <jelly-badge size="small" variant="platinum" outline>
+        <Badge variant="platinum" outline>
           {data.lastProvider}/{data.lastModel}
-        </jelly-badge>
+        </Badge>
       {/if}
       {#if data.override.active && data.override.provider && data.override.model}
         <span class="route-label">Pinned</span>
-        <jelly-badge size="small" variant="amber">
+        <Badge variant="amber">
           {data.override.provider}/{data.override.model}
-        </jelly-badge>
+        </Badge>
       {/if}
     </div>
 
     <div class="route-controls">
-      <jelly-select
-        size="small"
+      <Select
+        items={providerItems}
+        bind:value={() => selectedProvider ?? "", handleProviderChange}
         placeholder="Provider"
-        bind:this={providerSelectEl}
-        onchange={handleProviderChange}
-      >
-        {#each configuredProviders as p}
-          <jelly-option value={p.name}>{p.displayName}</jelly-option>
-        {/each}
-      </jelly-select>
+      />
 
-      <jelly-select
-        size="small"
+      <Select
+        items={modelItems}
+        bind:value={() => selectedModel ?? "", handleModelChange}
         placeholder="Model"
-        bind:this={modelSelectEl}
-        onchange={handleModelChange}
-        use:jellyDisabled={models.length === 0}
-      >
-        {#each models as m}
-          <jelly-option value={m}>{m}</jelly-option>
-        {/each}
-      </jelly-select>
+        disabled={models.length === 0}
+      />
     </div>
 
     <div class="action-row">
-      <jelly-switch
-        size="small"
+      <Switch
         checked={data.override.active}
-        onchange={handlePinToggle}
-      >
-        Pin
-      </jelly-switch>
+        onCheckedChange={handlePinToggle}
+        label="Pin"
+      />
 
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <jelly-icon-button
-        size="small"
-        variant="platinum"
-        label="Model priority"
-        onclick={onOpenModelPriority}
-      >
+      <Button variant="platinum" onclick={onOpenModelPriority}>
         <svg
           viewBox="0 0 24 24"
           width="16"
@@ -250,7 +214,7 @@ function toggleTheme() {
             d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"
           />
         </svg>
-      </jelly-icon-button>
+      </Button>
     </div>
   </div>
 </div>

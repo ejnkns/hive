@@ -5,7 +5,8 @@ import {
   MAX_MAX_CONCURRENT_WORKERS,
   MIN_MAX_CONCURRENT_WORKERS,
 } from "shared/project-types";
-import { jellyDisabled } from "../shared/jelly-disabled.svelte";
+import Button from "../shared/ui/Button.svelte";
+import TextInput from "../shared/ui/TextInput.svelte";
 
 let { projectId }: Props = $props();
 
@@ -153,21 +154,20 @@ function canRunPrimaryAction(): boolean {
   title={loadError ?? saveError ?? "Maximum Worker Agents running for this project"}
 >
   <label for="worker-limit">Parallel workers</label>
-  <jelly-input
-    id="worker-limit"
-    size="small"
-    type="number"
-    min={MIN_MAX_CONCURRENT_WORKERS}
-    max={MAX_MAX_CONCURRENT_WORKERS}
-    step="1"
-    value={maxConcurrentWorkers}
-    oninput={(e: Event) => {
-      const v = (e.target as HTMLInputElement).valueAsNumber;
-      maxConcurrentWorkers = Number.isNaN(v) ? maxConcurrentWorkers : v;
-      saveError = null;
+  <TextInput
+    bind:value={maxConcurrentWorkers as unknown as string}
+    disabled={loading || saving || Boolean(loadError)}
+    restProps={{
+      id: "worker-limit",
+      type: "number",
+      min: MIN_MAX_CONCURRENT_WORKERS,
+      max: MAX_MAX_CONCURRENT_WORKERS,
+      step: "1",
+      oninput: () => {
+        saveError = null;
+      },
     }}
-    use:jellyDisabled={loading || saving || Boolean(loadError)}
-  ></jelly-input>
+  />
   <span
     class:error-state={Boolean(loadError || saveError)}
     class="status"
@@ -175,16 +175,13 @@ function canRunPrimaryAction(): boolean {
   >
     {STATUS_TEXT[viewState()]}
   </span>
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <jelly-button
-    size="small"
+  <Button
     variant="platinum"
     onclick={performPrimaryAction}
-    use:jellyDisabled={!canRunPrimaryAction()}
+    disabled={!canRunPrimaryAction()}
   >
     {BUTTON_TEXT[viewState()]}
-  </jelly-button>
+  </Button>
 </div>
 
 <style>

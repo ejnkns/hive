@@ -6,6 +6,7 @@ import type {
 } from "shared/board-types";
 import { isRecord } from "shared/board-types";
 import { onMount } from "svelte";
+import Button from "../shared/ui/Button.svelte";
 import DeviseChat from "./devise-chat.svelte";
 import KanbanBoard from "./kanban-board.svelte";
 import { parsePlanningProposalResponse } from "./parse-planning-proposal-response";
@@ -191,11 +192,7 @@ function isRequirementsSessionKind(
     {:else if errorMessage}
       <div class="error">{errorMessage}</div>
       <div class="error-actions">
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <jelly-button size="small" variant="mint" onclick={handleApprove}>
-          Retry
-        </jelly-button>
+        <Button variant="mint" onclick={handleApprove}> Retry </Button>
       </div>
     {:else if requirementsFeedback}
       <RequirementsFeedbackView

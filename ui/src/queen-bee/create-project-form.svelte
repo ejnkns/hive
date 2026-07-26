@@ -1,5 +1,6 @@
 <script lang="ts">
-import { jellyDisabled } from "../shared/jelly-disabled.svelte";
+import Button from "../shared/ui/Button.svelte";
+import TextInput from "../shared/ui/TextInput.svelte";
 
 let { onCreateProject, onError, onCancel }: Props = $props();
 
@@ -52,47 +53,33 @@ async function submit() {
 
   <label class="field">
     <span class="label">Repository path</span>
-    <jelly-input
-      size="small"
-      value={repoPath}
-      oninput={(e: Event) => repoPath = (e.target as HTMLInputElement).value}
+    <TextInput
+      bind:value={repoPath}
       placeholder="/path/to/git/repo"
-      use:jellyDisabled={submitting}
-    ></jelly-input>
+      disabled={submitting}
+    />
   </label>
 
   <label class="field">
     <span class="label">Project name (optional)</span>
-    <jelly-input
-      size="small"
-      value={projectName}
-      oninput={(e: Event) => projectName = (e.target as HTMLInputElement).value}
+    <TextInput
+      bind:value={projectName}
       placeholder="Defaults to directory name"
-      use:jellyDisabled={submitting}
-    ></jelly-input>
+      disabled={submitting}
+    />
   </label>
 
   <div class="actions">
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <jelly-button
-      size="small"
+    <Button
       variant="mint"
       onclick={submit}
-      use:jellyDisabled={submitting || !repoPath.trim()}
+      disabled={submitting || !repoPath.trim()}
     >
       {submitting ? "Creating..." : "Create Project"}
-    </jelly-button>
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <jelly-button
-      size="small"
-      variant="platinum"
-      onclick={onCancel}
-      use:jellyDisabled={submitting}
-    >
+    </Button>
+    <Button variant="platinum" onclick={onCancel} disabled={submitting}>
       Cancel
-    </jelly-button>
+    </Button>
   </div>
 </div>
 

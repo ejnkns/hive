@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { RequestState } from "shared/dashboard-types";
 import { formatNumber, formatTime, sc } from "../../shared/utils";
+import Dialog from "../../shared/ui/Dialog.svelte";
 import ConversationView from "../ConversationView.svelte";
 import StagePathDots from "../StagePathDots.svelte";
 import { isTerminal } from "../stage-utils";
@@ -38,7 +39,7 @@ const hasConversation = $derived(
 );
 </script>
 
-<jelly-dialog {open} onclose={() => open = false} label="Request {label}">
+<Dialog bind:open label="Request {label}">
   <h2 class="dialog-title">Request {label}</h2>
   <div class="modal-body">
     {#if requests.length > 1}
@@ -239,7 +240,7 @@ const hasConversation = $derived(
       {/if}
     {/if}
   </div>
-</jelly-dialog>
+</Dialog>
 
 <style>
 .dialog-title {

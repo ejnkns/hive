@@ -10,9 +10,10 @@
     "test": "echo ok"
   },
   "dependencies": {
+    "bits-ui": "^2.18.1",
     "shared": "workspace:*",
-    "telemetry": "workspace:*",
-    "svelte": "^5.56.4"
+    "svelte": "^5.56.4",
+    "telemetry": "workspace:*"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.1.2",

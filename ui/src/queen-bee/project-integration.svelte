@@ -2,7 +2,7 @@
 import { isRecord } from "shared/board-types";
 import type { ProjectIntegrationStatus } from "shared/project-types";
 import { onMount } from "svelte";
-import { jellyDisabled } from "../shared/jelly-disabled.svelte";
+import Button from "../shared/ui/Button.svelte";
 import { projectSocket } from "./project-socket.svelte";
 
 let { projectId }: { projectId: string } = $props();
@@ -108,25 +108,14 @@ function readError(value: unknown): string | null {
     <span class="status muted">Checking integration...</span>
   {:else if error}
     <span class="status error" title={error}>Integration needs attention</span>
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <jelly-button size="small" variant="platinum" onclick={loadStatus}>
-      Retry
-    </jelly-button>
+    <Button variant="platinum" onclick={loadStatus}> Retry </Button>
   {:else if status?.state === "ready"}
     <span class="status ready">
       {status.ahead} {status.ahead === 1 ? "commit" : "commits"} ready
     </span>
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <jelly-button
-      size="small"
-      variant="mint"
-      onclick={integrate}
-      use:jellyDisabled={integrating}
-    >
+    <Button variant="mint" onclick={integrate} disabled={integrating}>
       {integrating ? "Integrating..." : `Integrate into ${status.targetBranch}`}
-    </jelly-button>
+    </Button>
   {:else if status?.state === "diverged"}
     <span
       class="status error"

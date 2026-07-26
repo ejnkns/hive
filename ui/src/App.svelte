@@ -21,31 +21,8 @@ import ProjectIntegration from "./queen-bee/project-integration.svelte";
 import ProjectOverview from "./queen-bee/project-overview.svelte";
 import ProjectPage from "./queen-bee/project-page.svelte";
 import Header from "./shared/Header.svelte";
-import { getThemeMode } from "./shared/theme-state.svelte";
-
-const jellyThemeMode = $derived(getThemeMode());
-
-const jellyTokens = $derived.by(() => {
-  const isLight = jellyThemeMode === "light";
-  return {
-    "--jelly-color-background-page": isLight ? "#f5f0e3" : "#1b1601",
-    "--jelly-color-background-surface": isLight ? "#fdfaef" : "#0d0c06",
-    "--jelly-color-background-muted": isLight ? "#f5f0e3" : "#231c06",
-    "--jelly-color-background-neutral": isLight ? "#ebe0c4" : "#2e2508",
-    "--jelly-color-background-accent": "#f5b342",
-    "--jelly-color-foreground-on-accent": "#1b1601",
-    "--jelly-color-foreground-default": isLight ? "#2c2410" : "#f5e6c8",
-    "--jelly-color-foreground-muted": isLight ? "#8a7a5c" : "#8a7a5c",
-    "--jelly-color-border-default": isLight ? "#ebe0c4" : "#2e2508",
-    "--jelly-color-border-focus": "#f5b342",
-  };
-});
-
-const jellyStyle = $derived(
-  Object.entries(jellyTokens)
-    .map(([k, v]) => `${k}: ${v}`)
-    .join("; ")
-);
+import Button from "./shared/ui/Button.svelte";
+import Dialog from "./shared/ui/Dialog.svelte";
 
 let detailMetric: MetricData | null = $state(null);
 let detailAllMetrics: MetricData[] = $state([]);
@@ -191,210 +168,188 @@ const detailChain = $derived(
 );
 </script>
 
-<jelly-theme mode={jellyThemeMode} accent="#f5b342" style={jellyStyle}>
-  <div class="app">
-    <div class="top-bar">
-      <Header
-        data={headerData ?? undefined}
-        onOverrideSet={handleOverrideSet}
-        onOverrideClear={handleOverrideClear}
-        onOpenModelPriority={() => (modelPriorityModalOpen = true)}
-      />
-      {#if currentHash.startsWith('#/project/') && projectHeader.projectId}
-        <div class="project-header">
-          <div class="project-header-row">
-            <a href="#/" class="back-link">&larr; Projects</a>
-            <div class="header-right">
-              {#key projectHeader.projectId}
-                <ProjectIntegration projectId={projectHeader.projectId} />
-              {/key}
-              {#if projectHeader.requirementsContent}
-                <!-- svelte-ignore a11y_click_events_have_key_events -->
-                <!-- svelte-ignore a11y_no_static_element_interactions -->
-                <jelly-button
-                  size="small"
-                  variant="platinum"
-                  onclick={togglePanel}
-                >
-                  {projectHeader.panelOpen ? "Hide" : "View"}
-                  Requirements
-                </jelly-button>
-              {/if}
-              <span class="project-id">{projectHeader.projectId}</span>
-            </div>
-          </div>
-          {#if projectHeader.requirementsContent && projectHeader.panelOpen}
-            <div class="requirements-panel">
-              <div class="panel-header">
-                <h2>Requirements</h2>
-              </div>
-              <div class="panel-body">
-                <pre
-                  class="req-content"
-                >{projectHeader.requirementsContent}</pre>
-              </div>
-            </div>
-          {/if}
-        </div>
-      {/if}
-    </div>
-
-    {#if currentHash === '#/canvas'}
-      <CanvasHost />
-    {:else if currentHash === '#/dashboard'}
-      <div class="content">
-        <Stats data={statsData} />
-        <div>
-          <div class="section-head" style="margin-top:1.5rem">
-            Live Sessions
-          </div>
-          <Sessions sessions={dashboardSocket.sessions} />
-          <ProviderPanel
-            data={providersData}
-            metrics={dashboardSocket.metrics}
-            conversations={[]}
-            {overrideKey}
-            onRowClick={handleMetricClick}
-            onToggleProvider={handleToggleProvider}
-            lastProvider={headerData?.lastProvider ?? null}
-            lastModel={headerData?.lastModel ?? null}
-          />
-        </div>
-        <div class="section-head" style="margin-top:1.5rem">Pipeline</div>
-        <LivePipeline
-          events={dashboardSocket.flowEvents}
-          providers={providersData}
-        />
-        <Logs entries={dashboardSocket.logEntries} />
-      </div>
-      <div class="drawer-trigger">
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <jelly-button
-          size="small"
-          shape="square"
-          variant="azure"
-          style="--jelly-fill: var(--accent); --jelly-label: var(--bg);"
-          onclick={() => drawerOpen = true}
-        >
-          Playground
-        </jelly-button>
-      </div>
-      <jelly-drawer
-        side="bottom"
-        open={drawerOpen}
-        onclose={() => drawerOpen = false}
-        onopen={() => drawerOpen = true}
-        label="Provider playground"
-      >
-        <h3 class="drawer-title">Provider playground</h3>
-        <ProviderPlayground providers={dashboardSocket.availableProviders} />
-      </jelly-drawer>
-      <jelly-dialog
-        open={detailOpen}
-        onclose={() => detailMetric = null}
-        label="Request Detail"
-      >
-        <h2 class="dialog-title">Request Detail</h2>
-        {#if detailMetric}
-          <div class="detail-grid">
-            <div class="field">
-              <span class="label">Request ID</span
-              ><span class="val mono">{detailMetric.requestId}</span>
-            </div>
-            <div class="field">
-              <span class="label">Provider</span
-              ><span class="val">{detailMetric.provider}</span>
-            </div>
-            <div class="field">
-              <span class="label">Model</span
-              ><span class="val mono">{detailMetric.model}</span>
-            </div>
-            <div class="field">
-              <span class="label">Time</span
-              ><span class="val">{formatTime(detailMetric.timestamp)}</span>
-            </div>
-            <div class="field">
-              <span class="label">TTFT</span
-              ><span class="val">{formatNumber(detailMetric.ttft, "ms")}</span>
-            </div>
-            <div class="field">
-              <span class="label">Total</span
-              ><span class="val"
-                >{formatNumber(detailMetric.totalLatency, "ms")}</span
-              >
-            </div>
-            <div class="field">
-              <span class="label">Tokens I/O</span
-              ><span class="val"
-                >{detailMetric.inputTokens ?? "—"}
-                / {detailMetric.outputTokens ?? "—"}</span
-              >
-            </div>
-            <div class="field">
-              <span class="label">Thinking</span
-              ><span class="val"
-                >{detailMetric.thinkingTime != null ? `${detailMetric.thinkingTime}ms` : "—"}</span
-              >
-            </div>
-            <div class="field">
-              <span class="label">Status</span
-              ><span class="val {detailMetric.success ? 'ok' : 'err'}"
-                >{String(detailMetric.statusCode)}</span
-              >
-            </div>
-            <div class="field">
-              <span class="label">Finish</span
-              ><span class="val">{detailMetric.finishReason ?? "—"}</span>
-            </div>
-            <div class="field">
-              <span class="label">Refused</span
-              ><span class="val">{detailMetric.refused ? "Yes" : "No"}</span>
-            </div>
-            <div class="field">
-              <span class="label">Tool Err</span
-              ><span class="val"
-                >{detailMetric.toolCallFailed ? "Yes" : "No"}</span
-              >
-            </div>
-            <div class="field">
-              <span class="label">Source</span
-              ><span class="val">{detailMetric.source}</span>
-            </div>
-            {#if detailMetric.errorBody}
-              <div class="field full">
-                <span class="label">Error</span
-                ><span class="val mono">{detailMetric.errorBody}</span>
-              </div>
+<div class="app">
+  <div class="top-bar">
+    <Header
+      data={headerData ?? undefined}
+      onOverrideSet={handleOverrideSet}
+      onOverrideClear={handleOverrideClear}
+      onOpenModelPriority={() => (modelPriorityModalOpen = true)}
+    />
+    {#if currentHash.startsWith('#/project/') && projectHeader.projectId}
+      <div class="project-header">
+        <div class="project-header-row">
+          <a href="#/" class="back-link">&larr; Projects</a>
+          <div class="header-right">
+            {#key projectHeader.projectId}
+              <ProjectIntegration projectId={projectHeader.projectId} />
+            {/key}
+            {#if projectHeader.requirementsContent}
+              <Button variant="platinum" onclick={togglePanel}>
+                {projectHeader.panelOpen ? "Hide" : "View"}
+                Requirements
+              </Button>
             {/if}
+            <span class="project-id">{projectHeader.projectId}</span>
           </div>
-          {#if detailChain.length > 0}
-            <div class="chain-title">
-              Request Chain ({detailChain.length}
-              attempts)
+        </div>
+        {#if projectHeader.requirementsContent && projectHeader.panelOpen}
+          <div class="requirements-panel">
+            <div class="panel-header">
+              <h2>Requirements</h2>
             </div>
-            {#each detailChain as m, idx}
-              <div class="chain-item">
-                <span class="chain-num">Attempt #{idx + 1}</span>
-                <span class="chain-prov">{m.provider} ({m.model})</span>
-                <span class="chain-status {m.success ? 'ok' : 'err'}"
-                  >{m.statusCode ? String(m.statusCode) : "ERR"}
-                  {m.errorType ? ` ${m.errorType}` : ""}</span
-                >
-                <span class="chain-ttft">{formatNumber(m.ttft, "ms")}</span>
-              </div>
-            {/each}
-          {/if}
+            <div class="panel-body">
+              <pre class="req-content">{projectHeader.requirementsContent}</pre>
+            </div>
+          </div>
         {/if}
-      </jelly-dialog>
-      <ModelPriorityModal bind:open={modelPriorityModalOpen} />
-    {:else if currentHash.startsWith('#/project/')}
-      <ProjectPage projectId={currentHash.slice('#/project/'.length)} />
-    {:else}
-      <ProjectOverview />
+      </div>
     {/if}
   </div>
-</jelly-theme>
+
+  {#if currentHash === '#/canvas'}
+    <CanvasHost />
+  {:else if currentHash === '#/dashboard'}
+    <div class="content">
+      <Stats data={statsData} />
+      <div>
+        <div class="section-head" style="margin-top:1.5rem">Live Sessions</div>
+        <Sessions sessions={dashboardSocket.sessions} />
+        <ProviderPanel
+          data={providersData}
+          metrics={dashboardSocket.metrics}
+          conversations={[]}
+          {overrideKey}
+          onRowClick={handleMetricClick}
+          onToggleProvider={handleToggleProvider}
+          lastProvider={headerData?.lastProvider ?? null}
+          lastModel={headerData?.lastModel ?? null}
+        />
+      </div>
+      <div class="section-head" style="margin-top:1.5rem">Pipeline</div>
+      <LivePipeline
+        events={dashboardSocket.flowEvents}
+        providers={providersData}
+      />
+      <Logs entries={dashboardSocket.logEntries} />
+    </div>
+    <div class="drawer-trigger">
+      <Button variant="azure" onclick={() => drawerOpen = true}>
+        Playground
+      </Button>
+    </div>
+    <Dialog
+      bind:open={drawerOpen}
+      label="Provider playground"
+      contentMaxWidth="700px"
+    >
+      <h3 class="drawer-title">Provider playground</h3>
+      <ProviderPlayground providers={dashboardSocket.availableProviders} />
+    </Dialog>
+    <Dialog
+      open={detailOpen}
+      onOpenChange={(v) => { if (!v) detailMetric = null }}
+      label="Request Detail"
+    >
+      <h2 class="dialog-title">Request Detail</h2>
+      {#if detailMetric}
+        <div class="detail-grid">
+          <div class="field">
+            <span class="label">Request ID</span
+            ><span class="val mono">{detailMetric.requestId}</span>
+          </div>
+          <div class="field">
+            <span class="label">Provider</span
+            ><span class="val">{detailMetric.provider}</span>
+          </div>
+          <div class="field">
+            <span class="label">Model</span
+            ><span class="val mono">{detailMetric.model}</span>
+          </div>
+          <div class="field">
+            <span class="label">Time</span
+            ><span class="val">{formatTime(detailMetric.timestamp)}</span>
+          </div>
+          <div class="field">
+            <span class="label">TTFT</span
+            ><span class="val">{formatNumber(detailMetric.ttft, "ms")}</span>
+          </div>
+          <div class="field">
+            <span class="label">Total</span
+            ><span class="val"
+              >{formatNumber(detailMetric.totalLatency, "ms")}</span
+            >
+          </div>
+          <div class="field">
+            <span class="label">Tokens I/O</span
+            ><span class="val"
+              >{detailMetric.inputTokens ?? "—"}
+              / {detailMetric.outputTokens ?? "—"}</span
+            >
+          </div>
+          <div class="field">
+            <span class="label">Thinking</span
+            ><span class="val"
+              >{detailMetric.thinkingTime != null ? `${detailMetric.thinkingTime}ms` : "—"}</span
+            >
+          </div>
+          <div class="field">
+            <span class="label">Status</span
+            ><span class="val {detailMetric.success ? 'ok' : 'err'}"
+              >{String(detailMetric.statusCode)}</span
+            >
+          </div>
+          <div class="field">
+            <span class="label">Finish</span
+            ><span class="val">{detailMetric.finishReason ?? "—"}</span>
+          </div>
+          <div class="field">
+            <span class="label">Refused</span
+            ><span class="val">{detailMetric.refused ? "Yes" : "No"}</span>
+          </div>
+          <div class="field">
+            <span class="label">Tool Err</span
+            ><span class="val"
+              >{detailMetric.toolCallFailed ? "Yes" : "No"}</span
+            >
+          </div>
+          <div class="field">
+            <span class="label">Source</span
+            ><span class="val">{detailMetric.source}</span>
+          </div>
+          {#if detailMetric.errorBody}
+            <div class="field full">
+              <span class="label">Error</span
+              ><span class="val mono">{detailMetric.errorBody}</span>
+            </div>
+          {/if}
+        </div>
+        {#if detailChain.length > 0}
+          <div class="chain-title">
+            Request Chain ({detailChain.length}
+            attempts)
+          </div>
+          {#each detailChain as m, idx}
+            <div class="chain-item">
+              <span class="chain-num">Attempt #{idx + 1}</span>
+              <span class="chain-prov">{m.provider} ({m.model})</span>
+              <span class="chain-status {m.success ? 'ok' : 'err'}"
+                >{m.statusCode ? String(m.statusCode) : "ERR"}
+                {m.errorType ? ` ${m.errorType}` : ""}</span
+              >
+              <span class="chain-ttft">{formatNumber(m.ttft, "ms")}</span>
+            </div>
+          {/each}
+        {/if}
+      {/if}
+    </Dialog>
+    <ModelPriorityModal bind:open={modelPriorityModalOpen} />
+  {:else if currentHash.startsWith('#/project/')}
+    <ProjectPage projectId={currentHash.slice('#/project/'.length)} />
+  {:else}
+    <ProjectOverview />
+  {/if}
+</div>
 
 <style>
 .app {
