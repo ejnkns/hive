@@ -740,6 +740,221 @@ describe("WorkerSupervisor", () => {
     }
   });
 
+  it("exhausts the iteration budget when no commits are made", async () => {
+    const repoPath = createGitRepository();
+    const boardStore = createBoardStore(
+      () => {},
+      createQueenBeeRuntimeStore(join(repoPath, ".runtime"))
+    );
+    const card = boardStore.addCard("project-1", repoPath, {
+      title: "Budget exhaustion",
+      description: "Worker runs out of iterations without committing.",
+      acceptanceCriteria: ["The budget exhausts cleanly."],
+      relevantFiles: ["source.txt"],
+      dependencies: [],
+      column: "ready",
+    });
+    let callCount = 0;
+    const modelCaller: AgentModelCaller = {
+      async call() {
+        callCount += 1;
+        return toolResponse(`read-${callCount}`, "read_file", {
+          path: "nonexistent",
+        });
+      },
+    };
+    const supervisor = createWorkerSupervisor(
+      boardStore,
+      failingReviewer(),
+      unusedCoordinator(),
+      createQueenBeeRuntimeStore(join(repoPath, ".runtime")),
+      repoPath,
+      modelCaller
+    );
+
+    await supervisor.run("project-1", card, repoPath, "", "", () => {}, 3, 0);
+
+    const updated = boardStore
+      .getBoard("project-1", repoPath)
+      .cards.find((candidate) => candidate.id === card.id);
+    assert.equal(callCount, 3);
+    assert.equal(updated?.column, "ready");
+    assert.match(
+      updated?.workerLog?.error ?? "",
+      /budget exhausted.*0 commits/i
+    );
+  });
+
+  it("resets the iteration budget on each commit up to the limit", async () => {
+    const repoPath = createGitRepository();
+    const boardStore = createBoardStore(
+      () => {},
+      createQueenBeeRuntimeStore(join(repoPath, ".runtime"))
+    );
+    const card = boardStore.addCard("project-1", repoPath, {
+      title: "Commit budget reset",
+      description: "Worker commits work and gets a fresh iteration budget.",
+      acceptanceCriteria: ["The budget resets on commit."],
+      relevantFiles: ["source.txt"],
+      dependencies: [],
+      column: "ready",
+    });
+    let callCount = 0;
+    const modelCaller: AgentModelCaller = {
+      async call() {
+        callCount += 1;
+        if (callCount === 1) {
+          return toolResponse("write-1", "write_file", {
+            path: "feature.txt",
+            content: "implemented\n",
+          });
+        }
+        if (callCount === 2) {
+          return toolResponse("commit-1", "commit_work", {
+            message: "worker: implement feature",
+            paths: ["feature.txt"],
+          });
+        }
+        if (callCount === 3) {
+          return toolResponse("verify-1", "run_command", {
+            command: "echo",
+            args: ["verified"],
+          });
+        }
+        return toolResponse("submit-1", "submit_work", {
+          outcome: "implemented",
+          verificationCallIds: ["verify-1"],
+        });
+      },
+    };
+    const supervisor = createWorkerSupervisor(
+      boardStore,
+      failingReviewer(),
+      unusedCoordinator(),
+      createQueenBeeRuntimeStore(join(repoPath, ".runtime")),
+      repoPath,
+      modelCaller
+    );
+
+    await supervisor.run("project-1", card, repoPath, "", "", () => {}, 2, 10);
+
+    const updated = boardStore
+      .getBoard("project-1", repoPath)
+      .cards.find((candidate) => candidate.id === card.id);
+    assert.equal(callCount, 4);
+    assert.equal(updated?.column, "reviewing");
+    assert.equal(
+      git(repoPath, ["log", "-1", "--format=%s", `hive/${card.id}/attempt-1`]),
+      "worker: implement feature"
+    );
+  });
+
+  it("refuses to reset the budget once the commit limit is reached", async () => {
+    const repoPath = createGitRepository();
+    const boardStore = createBoardStore(
+      () => {},
+      createQueenBeeRuntimeStore(join(repoPath, ".runtime"))
+    );
+    const card = boardStore.addCard("project-1", repoPath, {
+      title: "Max commits reached",
+      description: "Worker exceeds the commit limit and exhausts the budget.",
+      acceptanceCriteria: ["The budget stops resetting after max commits."],
+      relevantFiles: ["source.txt"],
+      dependencies: [],
+      column: "ready",
+    });
+    let callCount = 0;
+    const modelCaller: AgentModelCaller = {
+      async call() {
+        callCount += 1;
+        if (callCount === 1) {
+          return toolResponse("write-1", "write_file", {
+            path: "first.txt",
+            content: "first\n",
+          });
+        }
+        if (callCount === 2) {
+          return toolResponse("commit-1", "commit_work", {
+            message: "worker: first commit",
+            paths: ["first.txt"],
+          });
+        }
+        if (callCount === 3) {
+          return toolResponse("write-2", "write_file", {
+            path: "second.txt",
+            content: "second\n",
+          });
+        }
+        throw new Error("Unexpected model call after budget exhausted");
+      },
+    };
+    const supervisor = createWorkerSupervisor(
+      boardStore,
+      failingReviewer(),
+      unusedCoordinator(),
+      createQueenBeeRuntimeStore(join(repoPath, ".runtime")),
+      repoPath,
+      modelCaller
+    );
+
+    await supervisor.run("project-1", card, repoPath, "", "", () => {}, 3, 1);
+
+    const updated = boardStore
+      .getBoard("project-1", repoPath)
+      .cards.find((candidate) => candidate.id === card.id);
+    assert.equal(callCount, 3);
+    assert.equal(updated?.column, "ready");
+    assert.match(
+      updated?.workerLog?.error ?? "",
+      /budget exhausted.*1 commit/i
+    );
+  });
+
+  it("still hands over on repeated failed commands regardless of budget", async () => {
+    const repoPath = createGitRepository();
+    const boardStore = createBoardStore(
+      () => {},
+      createQueenBeeRuntimeStore(join(repoPath, ".runtime"))
+    );
+    const card = boardStore.addCard("project-1", repoPath, {
+      title: "Repeated command with large budget",
+      description: "Safety nets must fire even with generous budgets.",
+      acceptanceCriteria: [
+        "Repeated failed command triggers handover immediately.",
+      ],
+      relevantFiles: ["source.txt"],
+      dependencies: [],
+      column: "ready",
+    });
+    let callCount = 0;
+    const modelCaller: AgentModelCaller = {
+      async call() {
+        callCount += 1;
+        return toolResponse(`failed-${callCount}`, "run_command", {
+          command: process.execPath,
+          args: ["-e", "process.exit(1)"],
+        });
+      },
+    };
+    const supervisor = createWorkerSupervisor(
+      boardStore,
+      failingReviewer(),
+      unusedCoordinator(),
+      createQueenBeeRuntimeStore(join(repoPath, ".runtime")),
+      repoPath,
+      modelCaller
+    );
+
+    await supervisor.run("project-1", card, repoPath, "", "", () => {}, 30, 20);
+
+    const updated = boardStore
+      .getBoard("project-1", repoPath)
+      .cards.find((candidate) => candidate.id === card.id);
+    assert.equal(callCount, 2);
+    assert.equal(updated?.column, "unfulfillable");
+    assert.match(updated?.handover?.problem ?? "", /repeated.*failed command/i);
+  });
+
   function createGitRepository(): string {
     const repoPath = mkdtempSync(join(tmpdir(), "hive-worker-supervisor-"));
     repositories.push(repoPath);

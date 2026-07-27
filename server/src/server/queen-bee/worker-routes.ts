@@ -72,6 +72,8 @@ export function registerWorkerRoutes(
       const projectJsonPath = join(project.repoPath, ".hive", "project.json");
       let systemPrompt = "";
       let codingGuidelines = "";
+      let maxIterationsPerCommit: number | undefined;
+      let maxCommits: number | undefined;
 
       try {
         const raw = readFileSync(projectJsonPath, "utf-8");
@@ -82,6 +84,12 @@ export function registerWorkerRoutes(
           typeof parsed.codingGuidelines === "string"
             ? parsed.codingGuidelines
             : "";
+        maxIterationsPerCommit =
+          typeof parsed.maxIterationsPerCommit === "number"
+            ? parsed.maxIterationsPerCommit
+            : undefined;
+        maxCommits =
+          typeof parsed.maxCommits === "number" ? parsed.maxCommits : undefined;
       } catch {
         // use empty defaults
       }
@@ -94,7 +102,9 @@ export function registerWorkerRoutes(
         project.repoPath,
         systemPrompt,
         codingGuidelines,
-        (event) => deps.onWorkerEvent?.(projectId, event)
+        (event) => deps.onWorkerEvent?.(projectId, event),
+        maxIterationsPerCommit,
+        maxCommits
       );
     }
   );

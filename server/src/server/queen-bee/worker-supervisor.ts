@@ -55,7 +55,9 @@ export type WorkerSupervisor = {
     repoPath: string,
     systemPrompt: string,
     codingGuidelines: string,
-    onEvent: (event: WorkerEvent) => void
+    onEvent: (event: WorkerEvent) => void,
+    maxIterationsPerCommit?: number,
+    maxCommits?: number
   ): Promise<void>;
   isRunning(projectId: string, cardId: string): boolean;
   runningCardIds(projectId: string): string[];
@@ -87,7 +89,9 @@ export function createWorkerSupervisor(
       repoPath,
       systemPrompt,
       codingGuidelines,
-      onEvent
+      onEvent,
+      maxIterationsPerCommit,
+      maxCommits
     ) {
       const attemptKey = runningAttemptKey(projectId, card.id);
       if (abortControllers.has(attemptKey)) {
@@ -111,7 +115,9 @@ export function createWorkerSupervisor(
           systemPrompt,
           codingGuidelines,
           onEvent,
-          controller
+          controller,
+          maxIterationsPerCommit,
+          maxCommits
         );
       } finally {
         abortControllers.delete(attemptKey);
@@ -153,7 +159,9 @@ export function createWorkerSupervisor(
     systemPrompt: string,
     codingGuidelines: string,
     onEvent: (event: WorkerEvent) => void,
-    controller: AbortController
+    controller: AbortController,
+    maxIterationsPerCommit?: number,
+    maxCommits?: number
   ) {
     const startedAt = new Date().toISOString();
     const log: NonNullable<Card["workerLog"]> = {
@@ -251,7 +259,9 @@ export function createWorkerSupervisor(
         log,
         persistLog,
         recordActivity,
-        controller.signal
+        controller.signal,
+        maxIterationsPerCommit,
+        maxCommits
       );
 
       if (result.type === "handover") {
@@ -347,15 +357,21 @@ async function runLoop(
   persistLog: () => void,
   recordActivity: (event: NewCardActivityEvent) => void,
   signal: AbortSignal,
-  maxIterations = 20
+  maxIterationsPerCommit = 30,
+  maxCommits = 20
 ): Promise<WorkerLoopResult> {
+  const MAX_ITERATIONS_PER_COMMIT = Math.max(1, maxIterationsPerCommit);
+  const MAX_COMMITS = Math.max(0, maxCommits);
+  let iterationsRemaining = MAX_ITERATIONS_PER_COMMIT;
+  let commitsMade = 0;
   const evidence = new Map<string, WorkerToolEvidence>();
   const failedCommands = new Map<string, number>();
   let rejectedCompletions = 0;
+  let totalIteration = 0;
 
-  for (let iteration = 0; iteration < maxIterations; iteration++) {
+  for (; iterationsRemaining > 0; iterationsRemaining--, totalIteration++) {
     signal.throwIfAborted();
-    log.iterations = iteration + 1;
+    log.iterations = totalIteration + 1;
     persistLog();
 
     const response = await modelCaller.call(
@@ -489,6 +505,17 @@ async function runLoop(
       });
     }
     appendAgentToolExchanges(messages, response, exchanges);
+
+    const madeCommit = response.toolCalls.some(
+      (tc) => tc.name === "commit_work" && !evidence.get(tc.id)?.isError
+    );
+    if (madeCommit) {
+      commitsMade += 1;
+      if (commitsMade < MAX_COMMITS) {
+        iterationsRemaining = MAX_ITERATIONS_PER_COMMIT + 1;
+      }
+    }
+
     if (repeatedCommand) {
       return repeatedCommandHandover(repeatedCommand);
     }
@@ -507,7 +534,9 @@ async function runLoop(
     }
   }
 
-  throw new Error("Reached maximum iterations");
+  throw new Error(
+    `Iteration budget exhausted after ${String(totalIteration)} turns and ${String(commitsMade)} commits`
+  );
 }
 
 function repeatedCommandHandover(toolCall: ToolCall): WorkerLoopResult {
