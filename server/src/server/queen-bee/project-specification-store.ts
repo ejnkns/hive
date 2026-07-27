@@ -9,6 +9,7 @@ import {
   ensureIntegrationBranch,
   type IntegrationRevision,
 } from "./integration-manager";
+import { removeWorktree as removeWorktreeSafe } from "./worktree";
 
 export type ApprovedProjectSpecification = {
   projectId: string;
@@ -20,21 +21,39 @@ export type ProjectSpecificationStore = {
   apply(
     repoPath: string,
     proposalId: string,
-    specification: ApprovedProjectSpecification
+    specification: ApprovedProjectSpecification,
+    projectId: string
   ): IntegrationRevision;
 };
 
-export function createProjectSpecificationStore(): ProjectSpecificationStore {
-  return { apply: applySpecification };
+export function createProjectSpecificationStore(
+  workspacesBasePath: string
+): ProjectSpecificationStore {
+  return {
+    apply: (repoPath, proposalId, specification, projectId) =>
+      applySpecification(
+        repoPath,
+        proposalId,
+        specification,
+        projectId,
+        workspacesBasePath
+      ),
+  };
 }
 
 function applySpecification(
   repoPath: string,
   proposalId: string,
-  specification: ApprovedProjectSpecification
+  specification: ApprovedProjectSpecification,
+  projectId: string,
+  workspacesBasePath: string
 ): IntegrationRevision {
   ensureIntegrationBranch(repoPath);
-  const worktree = acquireIntegrationWorktree(repoPath);
+  const worktree = acquireIntegrationWorktree(
+    repoPath,
+    projectId,
+    workspacesBasePath
+  );
   try {
     writeSpecification(worktree.path, specification);
     git(worktree.path, ["add", "-A", "--", ".hive"]);
@@ -48,7 +67,8 @@ function applySpecification(
     }
     return ensureIntegrationBranch(repoPath);
   } finally {
-    if (worktree.temporary) removeWorktree(repoPath, worktree.path);
+    if (worktree.temporary)
+      removeWorktree(repoPath, worktree.path, projectId, workspacesBasePath);
   }
 }
 
@@ -100,7 +120,11 @@ function persistedCard(card: Card) {
   };
 }
 
-function acquireIntegrationWorktree(repoPath: string): {
+function acquireIntegrationWorktree(
+  repoPath: string,
+  projectId: string,
+  workspacesBasePath: string
+): {
   path: string;
   temporary: boolean;
 } {
@@ -110,15 +134,26 @@ function acquireIntegrationWorktree(repoPath: string): {
     }
     return { path: repoPath, temporary: false };
   }
-  const worktreesDirectory = join(repoPath, ".worktrees");
+  const worktreesDirectory = join(workspacesBasePath, "workspaces", projectId);
   mkdirSync(worktreesDirectory, { recursive: true });
   const path = join(worktreesDirectory, `.hive-specification-${randomUUID()}`);
   git(repoPath, ["worktree", "add", path, "hive-main"]);
   return { path, temporary: true };
 }
 
-function removeWorktree(repoPath: string, worktreePath: string): void {
-  git(repoPath, ["worktree", "remove", "--force", worktreePath]);
+function removeWorktree(
+  repoPath: string,
+  worktreePath: string,
+  projectId: string,
+  workspacesBasePath: string
+): void {
+  const result = removeWorktreeSafe(
+    repoPath,
+    worktreePath,
+    workspacesBasePath,
+    projectId
+  );
+  if (!result.ok) throw new Error(result.message);
 }
 
 function git(repoPath: string, args: string[]): string {

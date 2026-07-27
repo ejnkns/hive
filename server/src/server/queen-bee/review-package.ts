@@ -97,7 +97,9 @@ export function buildRefreshedReviewPackage(
   repoPath: string,
   workerWorktreePath: string,
   integrationCommit: string,
-  previousPackage: ReviewPackage
+  previousPackage: ReviewPackage,
+  workspacesBasePath: string,
+  projectId: string
 ): { reviewPackage: ReviewPackage; workspace: ReviewWorkspace } {
   const workerHeadCommit = git(workerWorktreePath, ["rev-parse", "HEAD"]);
   const mergedTree = git(repoPath, [
@@ -116,7 +118,9 @@ export function buildRefreshedReviewPackage(
   );
   const workspace = acquireDetachedReviewWorkspace(
     repoPath,
-    reviewAnchor.commit
+    reviewAnchor.commit,
+    workspacesBasePath,
+    projectId
   );
   try {
     return {
@@ -144,7 +148,9 @@ export function buildRefreshedReviewPackage(
 export function acquireReviewWorkspace(
   repoPath: string,
   workerWorktreePath: string,
-  reviewPackage: ReviewPackage
+  reviewPackage: ReviewPackage,
+  workspacesBasePath: string,
+  projectId: string
 ): ReviewWorkspace {
   if (
     reviewPackage.revisions.reviewCommit === reviewPackage.revisions.headCommit
@@ -153,7 +159,9 @@ export function acquireReviewWorkspace(
   }
   return acquireDetachedReviewWorkspace(
     repoPath,
-    reviewPackage.revisions.reviewCommit
+    reviewPackage.revisions.reviewCommit,
+    workspacesBasePath,
+    projectId
   );
 }
 
@@ -245,16 +253,23 @@ function createReviewCommit(
 
 function acquireDetachedReviewWorkspace(
   repoPath: string,
-  reviewCommit: string
+  reviewCommit: string,
+  workspacesBasePath: string,
+  projectId: string
 ): ReviewWorkspace {
-  const worktreesDirectory = join(repoPath, ".worktrees");
+  const worktreesDirectory = join(workspacesBasePath, "workspaces", projectId);
   mkdirSync(worktreesDirectory, { recursive: true });
   const path = join(worktreesDirectory, `.hive-review-${randomUUID()}`);
   git(repoPath, ["worktree", "add", "--detach", path, reviewCommit]);
   return {
     path,
     release() {
-      const result = removeWorktree(repoPath, path);
+      const result = removeWorktree(
+        repoPath,
+        path,
+        workspacesBasePath,
+        projectId
+      );
       if (!result.ok) throw new Error(result.message);
     },
   };

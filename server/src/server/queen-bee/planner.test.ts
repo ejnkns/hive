@@ -60,7 +60,8 @@ describe("Planner Agent reconciliation", () => {
             proposedCard: cardSpec("Optional card"),
           },
         ],
-      })
+      }),
+      specStore()
     );
 
     const proposal = await planner.propose(
@@ -107,7 +108,8 @@ describe("Planner Agent reconciliation", () => {
             rationale: "Try to erase history",
           },
         ],
-      })
+      }),
+      specStore()
     );
 
     await assert.rejects(
@@ -142,11 +144,7 @@ describe("Planner Agent reconciliation", () => {
           },
         ],
       }),
-      {
-        apply() {
-          throw new Error("Commit hook rejected");
-        },
-      } satisfies ProjectSpecificationStore
+      specStore()
     );
     const proposal = await planner.propose(
       "project-1",
@@ -191,7 +189,8 @@ describe("Planner Agent reconciliation", () => {
             proposedCard: cardSpec("Changed card"),
           },
         ],
-      })
+      }),
+      specStore()
     );
     const proposal = await planner.propose(
       "project-1",
@@ -240,7 +239,8 @@ describe("Planner Agent reconciliation", () => {
             proposedCard: cardSpec("Approved refinement"),
           },
         ],
-      })
+      }),
+      specStore()
     );
 
     const proposal = await planner.propose(
@@ -285,7 +285,8 @@ describe("Planner Agent reconciliation", () => {
             proposedCard: cardSpec("Changed card"),
           },
         ],
-      })
+      }),
+      specStore()
     );
     const proposal = await planner.propose(
       "project-1",
@@ -325,7 +326,8 @@ describe("Planner Agent reconciliation", () => {
             rationale: "Scope moved to For later",
           },
         ],
-      })
+      }),
+      specStore()
     );
 
     const proposal = await planner.propose(
@@ -359,7 +361,8 @@ describe("Planner Agent reconciliation", () => {
             proposedCard: cardSpec("Initial Card"),
           },
         ],
-      })
+      }),
+      specStore()
     );
 
     const proposal = await planner.propose(
@@ -381,7 +384,8 @@ describe("Planner Agent reconciliation", () => {
       createBoardStore(() => {}, runtimeStore),
       runtimeStore,
       integrationManager(),
-      responseCaller({ changes: [] })
+      responseCaller({ changes: [] }),
+      specStore()
     );
 
     await assert.rejects(
@@ -413,7 +417,8 @@ describe("Planner Agent reconciliation", () => {
             },
           },
         ],
-      })
+      }),
+      specStore()
     );
 
     const outcome = await planner.propose(
@@ -448,7 +453,8 @@ describe("Planner Agent reconciliation", () => {
           { action: "keep", cardId: card.id, rationale: "Keep it" },
           { action: "keep", cardId: card.id, rationale: "Keep it again" },
         ],
-      })
+      }),
+      specStore()
     );
     await assert.rejects(
       () => duplicatePlanner.propose("project-1", repoPath, "# Proposed"),
@@ -482,7 +488,8 @@ describe("Planner Agent reconciliation", () => {
             },
           },
         ],
-      })
+      }),
+      specStore()
     );
     await assert.rejects(
       () => cyclePlanner.propose("project-1", cycleWorkspace, "# Initial"),
@@ -511,7 +518,8 @@ describe("Planner Agent reconciliation", () => {
             proposedCard: cardSpec("Dark mode"),
           },
         ],
-      })
+      }),
+      specStore()
     );
 
     const proposal = await planner.propose(
@@ -556,7 +564,8 @@ describe("Planner Agent reconciliation", () => {
             resolvesSourceIdea: true,
           },
         ],
-      })
+      }),
+      specStore()
     );
 
     const outcome = await planner.propose(
@@ -594,7 +603,8 @@ describe("Planner Agent reconciliation", () => {
             recommendation: "Prefer passkeys with a password fallback.",
           },
         ],
-      })
+      }),
+      specStore()
     );
 
     const outcome = await planner.propose(
@@ -680,7 +690,8 @@ describe("Planner Agent reconciliation", () => {
             finishReason: "stop",
           };
         },
-      }
+      },
+      specStore()
     );
 
     await planner.propose("project-1", repoPath, "# Proposed requirements");
@@ -706,7 +717,8 @@ describe("Planner Agent reconciliation", () => {
           },
         ],
         changes: [],
-      })
+      }),
+      specStore()
     );
 
     await assert.rejects(
@@ -744,7 +756,8 @@ describe("Planner Agent reconciliation", () => {
             resolvesSourceIdea: true,
           },
         ],
-      })
+      }),
+      specStore()
     );
 
     await assert.rejects(
@@ -786,7 +799,8 @@ describe("Planner Agent reconciliation", () => {
             resolvesSourceIdea: true,
           },
         ],
-      })
+      }),
+      specStore()
     );
 
     await assert.rejects(
@@ -877,6 +891,19 @@ describe("Planner Agent reconciliation", () => {
       relevantFiles: ["source.ts"],
       dependencies: [],
       requirementRefs: ["FR-1"],
+    };
+  }
+
+  function specStore(): ProjectSpecificationStore {
+    return {
+      apply(
+        _repoPath: string,
+        _proposalId: string,
+        _specification: unknown,
+        _projectId: string
+      ) {
+        return { branchName: "hive-main", revision: "integration-2" };
+      },
     };
   }
 });

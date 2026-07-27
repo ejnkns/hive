@@ -11,11 +11,17 @@ export type GitResult = {
 
 export function removeWorktree(
   repoPath: string,
-  worktreePath: string
+  worktreePath: string,
+  workspacesBasePath: string,
+  projectId: string
 ): GitResult {
-  const worktreesDirectory = resolve(repoPath, ".worktrees");
+  const workspaceProjectDir = resolve(
+    workspacesBasePath,
+    "workspaces",
+    projectId
+  );
   const resolvedWorktree = resolve(worktreePath);
-  const relativePath = relative(worktreesDirectory, resolvedWorktree);
+  const relativePath = relative(workspaceProjectDir, resolvedWorktree);
   if (
     !relativePath ||
     relativePath.startsWith("..") ||

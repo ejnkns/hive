@@ -22,6 +22,7 @@ export function registerWorkDecisionRoutes(
     integrationManager: IntegrationManager;
     runtimeStore: QueenBeeRuntimeStore;
     reviewer: Reviewer;
+    workspacesBasePath: string;
     refreshedReviewBuilder?: typeof buildRefreshedReviewPackage;
   }
 ): void {
@@ -136,7 +137,8 @@ export function registerWorkDecisionRoutes(
           : null;
         deps.integrationManager.discardWorktree(
           project.repoPath,
-          attempt.worktreePath
+          attempt.worktreePath,
+          projectId
         );
         if (reviewPackage) {
           tryReleaseReviewReference(project.repoPath, reviewPackage);
@@ -213,7 +215,9 @@ export function registerWorkDecisionRoutes(
             project.repoPath,
             attempt.worktreePath,
             readiness.integrationRevision,
-            previousPackage
+            previousPackage,
+            deps.workspacesBasePath,
+            projectId
           );
           reviewPackage = refreshed.reviewPackage;
           reviewWorkspace = refreshed.workspace;
@@ -234,7 +238,9 @@ export function registerWorkDecisionRoutes(
         reviewWorkspace ??= acquireReviewWorkspace(
           project.repoPath,
           attempt.worktreePath,
-          reviewPackage
+          reviewPackage,
+          deps.workspacesBasePath,
+          projectId
         );
         const verdict = await deps.reviewer.review(
           reviewPackage,
@@ -401,6 +407,7 @@ function reviewedWorkInput(
   }
   return {
     repoPath: project.repoPath,
+    projectId: context.projectId,
     cardId: card.id,
     branchName: attempt.branchName,
     worktreePath: attempt.worktreePath,

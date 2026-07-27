@@ -1,4 +1,5 @@
 import { printBanner } from "shared/ascii-banner";
+import { HIVE_DIR } from "shared/hive-dir";
 import { getServerConfig, type ServerConfig } from "shared/server-config";
 import {
   createServer,
@@ -71,8 +72,8 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     }
   );
   const boardStore = createBoardStore(() => {}, runtimeStore);
-  const integrationManager = createIntegrationManager();
-  const specificationStore = createProjectSpecificationStore();
+  const integrationManager = createIntegrationManager(HIVE_DIR);
+  const specificationStore = createProjectSpecificationStore(HIVE_DIR);
   const planningManager = createPlanningManager(
     boardStore,
     runtimeStore,
@@ -86,7 +87,8 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     boardStore,
     reviewer,
     coordinator,
-    runtimeStore
+    runtimeStore,
+    HIVE_DIR
   );
 
   const server = await createServer({
@@ -127,6 +129,7 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     integrationManager,
     runtimeStore,
     reviewer,
+    workspacesBasePath: HIVE_DIR,
   });
 
   listen(server, config);

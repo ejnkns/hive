@@ -58,7 +58,9 @@ describe("refreshed Review Packages", () => {
       repoPath,
       workerPath,
       integrationHead,
-      previousPackage(workerHead)
+      previousPackage(workerHead),
+      repoPath,
+      "test-project"
     );
 
     assert.equal(
@@ -85,7 +87,9 @@ describe("refreshed Review Packages", () => {
     const retryWorkspace = acquireReviewWorkspace(
       repoPath,
       workerPath,
-      refreshed.reviewPackage
+      refreshed.reviewPackage,
+      repoPath,
+      "test-project"
     );
     assert.equal(
       readFileSync(join(retryWorkspace.path, "accepted.txt"), "utf-8"),

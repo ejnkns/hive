@@ -17,10 +17,12 @@ export type PreparedWorktree =
 
 export function prepareWorktree(
   repoPath: string,
+  workspacesBasePath: string,
+  projectId: string,
   cardId: string,
   attempt = 1
 ): PreparedWorktree {
-  const worktreesDir = join(repoPath, ".worktrees");
+  const worktreesDir = join(workspacesBasePath, "workspaces", projectId);
   const worktreeDir = join(
     worktreesDir,
     attempt === 1 ? cardId : `${cardId}-attempt-${String(attempt)}`

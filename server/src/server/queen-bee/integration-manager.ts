@@ -24,6 +24,7 @@ export type IntegrationStatus = IntegrationRevision & {
 
 export type AcceptWorkInput = {
   repoPath: string;
+  projectId: string;
   cardId: string;
   branchName: string;
   worktreePath: string;
@@ -38,23 +39,36 @@ export type IntegrationManager = {
   reviewReadiness(input: AcceptWorkInput): ReviewReadiness;
   assertCurrent(input: AcceptWorkInput): void;
   accept(input: AcceptWorkInput): IntegrationRevision;
-  discardWorktree(repoPath: string, worktreePath: string): void;
+  discardWorktree(
+    repoPath: string,
+    worktreePath: string,
+    projectId: string
+  ): void;
   commitPlanningSnapshot(
     repoPath: string,
-    proposalId: string
+    proposalId: string,
+    projectId: string
   ): IntegrationRevision;
 };
 
-export function createIntegrationManager(): IntegrationManager {
+export function createIntegrationManager(
+  workspacesBasePath: string
+): IntegrationManager {
   return {
     ensure: ensureIntegrationBranch,
     status: integrationStatus,
     integrate: integrateTargetBranch,
     reviewReadiness,
     assertCurrent: assertReviewedWorkCurrent,
-    accept: acceptWork,
-    commitPlanningSnapshot,
-    discardWorktree(repoPath, worktreePath) {
+    accept: (input) => acceptWork(input, workspacesBasePath),
+    commitPlanningSnapshot: (repoPath, proposalId, projectId) =>
+      commitPlanningSnapshot(
+        repoPath,
+        proposalId,
+        projectId,
+        workspacesBasePath
+      ),
+    discardWorktree(repoPath, worktreePath, projectId) {
       if (
         existsSync(worktreePath) &&
         git(worktreePath, ["status", "--porcelain"])
@@ -63,7 +77,12 @@ export function createIntegrationManager(): IntegrationManager {
           "Worker worktree has uncommitted changes and cannot be discarded"
         );
       }
-      const result = removeWorktree(repoPath, worktreePath);
+      const result = removeWorktree(
+        repoPath,
+        worktreePath,
+        workspacesBasePath,
+        projectId
+      );
       if (!result.ok) throw new Error(result.message);
     },
   };
@@ -178,10 +197,16 @@ function branchWorktreePath(
 
 function commitPlanningSnapshot(
   repoPath: string,
-  proposalId: string
+  proposalId: string,
+  projectId: string,
+  workspacesBasePath: string
 ): IntegrationRevision {
   ensureIntegrationBranch(repoPath);
-  const integrationWorktree = acquireIntegrationWorktree(repoPath);
+  const integrationWorktree = acquireIntegrationWorktree(
+    repoPath,
+    projectId,
+    workspacesBasePath
+  );
   try {
     if (integrationWorktree.temporary) {
       copyPlanningFile(repoPath, integrationWorktree.path, "requirements.md");
@@ -208,7 +233,12 @@ function commitPlanningSnapshot(
     return ensureIntegrationBranch(repoPath);
   } finally {
     if (integrationWorktree.temporary) {
-      removeWorktree(repoPath, integrationWorktree.path);
+      removeWorktree(
+        repoPath,
+        integrationWorktree.path,
+        workspacesBasePath,
+        projectId
+      );
     }
   }
 }
@@ -235,10 +265,17 @@ export function ensureIntegrationBranch(repoPath: string): IntegrationRevision {
   };
 }
 
-function acceptWork(input: AcceptWorkInput): IntegrationRevision {
+function acceptWork(
+  input: AcceptWorkInput,
+  workspacesBasePath: string
+): IntegrationRevision {
   assertReviewedWorkCurrent(input);
 
-  const integrationWorktree = acquireIntegrationWorktree(input.repoPath);
+  const integrationWorktree = acquireIntegrationWorktree(
+    input.repoPath,
+    input.projectId,
+    workspacesBasePath
+  );
   try {
     git(integrationWorktree.path, [
       "merge",
@@ -255,11 +292,21 @@ function acceptWork(input: AcceptWorkInput): IntegrationRevision {
     );
   } finally {
     if (integrationWorktree.temporary) {
-      removeWorktree(input.repoPath, integrationWorktree.path);
+      removeWorktree(
+        input.repoPath,
+        integrationWorktree.path,
+        workspacesBasePath,
+        input.projectId
+      );
     }
   }
 
-  const cleanup = removeWorktree(input.repoPath, input.worktreePath);
+  const cleanup = removeWorktree(
+    input.repoPath,
+    input.worktreePath,
+    workspacesBasePath,
+    input.projectId
+  );
   if (!cleanup.ok) throw new Error(cleanup.message);
   git(input.repoPath, ["branch", "-D", input.branchName]);
   return ensureIntegrationBranch(input.repoPath);
@@ -365,7 +412,11 @@ function analyzeMerge(repoPath: string, branchName: string) {
   });
 }
 
-function acquireIntegrationWorktree(repoPath: string): {
+function acquireIntegrationWorktree(
+  repoPath: string,
+  projectId: string,
+  workspacesBasePath: string
+): {
   path: string;
   temporary: boolean;
 } {
@@ -377,7 +428,7 @@ function acquireIntegrationWorktree(repoPath: string): {
     }
     return { path: repoPath, temporary: false };
   }
-  const worktreesDirectory = join(repoPath, ".worktrees");
+  const worktreesDirectory = join(workspacesBasePath, "workspaces", projectId);
   mkdirSync(worktreesDirectory, { recursive: true });
   const worktreePath = join(
     worktreesDirectory,

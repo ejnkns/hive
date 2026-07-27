@@ -24,7 +24,7 @@ describe("IntegrationManager", () => {
 
   it("creates hive-main without changing the user's checked-out branch", () => {
     const repoPath = createRepository();
-    const manager = createIntegrationManager();
+    const manager = createIntegrationManager(repoPath);
     const originalBranch = git(repoPath, ["branch", "--show-current"]);
     const originalHead = git(repoPath, ["rev-parse", "HEAD"]);
 
@@ -38,10 +38,13 @@ describe("IntegrationManager", () => {
 
   it("merges an explicitly accepted reviewed branch and cleans up its worktree", () => {
     const repoPath = createRepository();
-    const manager = createIntegrationManager();
+    const manager = createIntegrationManager(repoPath);
     const integration = manager.ensure(repoPath);
-    const worktreePath = join(repoPath, ".worktrees", "card-1");
+    const worktreePath = join(repoPath, "workspaces", "test-project", "card-1");
     const branchName = "hive/card-1/attempt-1";
+    mkdirSync(join(repoPath, "workspaces", "test-project"), {
+      recursive: true,
+    });
     git(repoPath, [
       "worktree",
       "add",
@@ -57,6 +60,7 @@ describe("IntegrationManager", () => {
 
     const accepted = manager.accept({
       repoPath,
+      projectId: "test-project",
       cardId: "card-1",
       branchName,
       worktreePath,
@@ -79,10 +83,13 @@ describe("IntegrationManager", () => {
 
   it("rejects acceptance when the reviewed branch has changed", () => {
     const repoPath = createRepository();
-    const manager = createIntegrationManager();
+    const manager = createIntegrationManager(repoPath);
     const integration = manager.ensure(repoPath);
-    const worktreePath = join(repoPath, ".worktrees", "card-1");
+    const worktreePath = join(repoPath, "workspaces", "test-project", "card-1");
     const branchName = "hive/card-1/attempt-1";
+    mkdirSync(join(repoPath, "workspaces", "test-project"), {
+      recursive: true,
+    });
     git(repoPath, [
       "worktree",
       "add",
@@ -100,6 +107,7 @@ describe("IntegrationManager", () => {
       () =>
         manager.accept({
           repoPath,
+          projectId: "test-project",
           cardId: "card-1",
           branchName,
           worktreePath,
@@ -113,13 +121,14 @@ describe("IntegrationManager", () => {
 
   it("reports a parallel reviewed branch as refreshable after unrelated work is accepted", () => {
     const repoPath = createRepository();
-    const manager = createIntegrationManager();
+    const manager = createIntegrationManager(repoPath);
     const integration = manager.ensure(repoPath);
     const first = createAttempt(repoPath, "card-1", "first.txt", "first\n");
     const second = createAttempt(repoPath, "card-2", "second.txt", "second\n");
 
     manager.accept({
       repoPath,
+      projectId: "test-project",
       cardId: "card-1",
       ...first,
       reviewedIntegrationRevision: integration.revision,
@@ -127,6 +136,7 @@ describe("IntegrationManager", () => {
 
     const readiness = manager.reviewReadiness({
       repoPath,
+      projectId: "test-project",
       cardId: "card-2",
       ...second,
       reviewedIntegrationRevision: integration.revision,
@@ -140,13 +150,14 @@ describe("IntegrationManager", () => {
 
   it("reports conflicting files when parallel reviewed work cannot merge", () => {
     const repoPath = createRepository();
-    const manager = createIntegrationManager();
+    const manager = createIntegrationManager(repoPath);
     const integration = manager.ensure(repoPath);
     const first = createAttempt(repoPath, "card-1", "source.txt", "first\n");
     const second = createAttempt(repoPath, "card-2", "source.txt", "second\n");
 
     manager.accept({
       repoPath,
+      projectId: "test-project",
       cardId: "card-1",
       ...first,
       reviewedIntegrationRevision: integration.revision,
@@ -154,6 +165,7 @@ describe("IntegrationManager", () => {
 
     const readiness = manager.reviewReadiness({
       repoPath,
+      projectId: "test-project",
       cardId: "card-2",
       ...second,
       reviewedIntegrationRevision: integration.revision,
@@ -166,9 +178,9 @@ describe("IntegrationManager", () => {
 
   it("refuses to discard an attempt with uncommitted changes", () => {
     const repoPath = createRepository();
-    const manager = createIntegrationManager();
+    const manager = createIntegrationManager(repoPath);
     manager.ensure(repoPath);
-    const worktreePath = join(repoPath, ".worktrees", "card-1");
+    const worktreePath = join(repoPath, "workspaces", "test-project", "card-1");
     git(repoPath, [
       "worktree",
       "add",
@@ -180,7 +192,7 @@ describe("IntegrationManager", () => {
     writeFileSync(join(worktreePath, "uncommitted.txt"), "preserve\n");
 
     assert.throws(
-      () => manager.discardWorktree(repoPath, worktreePath),
+      () => manager.discardWorktree(repoPath, worktreePath, "test-project"),
       /uncommitted changes/
     );
     assert.equal(existsSync(worktreePath), true);
@@ -188,10 +200,13 @@ describe("IntegrationManager", () => {
 
   it("accepts work while the user has hive-main checked out", () => {
     const repoPath = createRepository();
-    const manager = createIntegrationManager();
+    const manager = createIntegrationManager(repoPath);
     const integration = manager.ensure(repoPath);
-    const worktreePath = join(repoPath, ".worktrees", "card-1");
+    const worktreePath = join(repoPath, "workspaces", "test-project", "card-1");
     const branchName = "hive/card-1/attempt-1";
+    mkdirSync(join(repoPath, "workspaces", "test-project"), {
+      recursive: true,
+    });
     git(repoPath, [
       "worktree",
       "add",
@@ -208,6 +223,7 @@ describe("IntegrationManager", () => {
 
     manager.accept({
       repoPath,
+      projectId: "test-project",
       cardId: "card-1",
       branchName,
       worktreePath,
@@ -221,7 +237,7 @@ describe("IntegrationManager", () => {
 
   it("commits approved planning files on hive-main without switching the user branch", () => {
     const repoPath = createRepository();
-    const manager = createIntegrationManager();
+    const manager = createIntegrationManager(repoPath);
     manager.ensure(repoPath);
     mkdirSync(join(repoPath, ".hive"), { recursive: true });
     writeFileSync(join(repoPath, ".hive", "requirements.md"), "# Approved\n");
@@ -230,7 +246,11 @@ describe("IntegrationManager", () => {
       JSON.stringify({ projectId: "project-1", cards: [] })
     );
 
-    const result = manager.commitPlanningSnapshot(repoPath, "proposal-1");
+    const result = manager.commitPlanningSnapshot(
+      repoPath,
+      "proposal-1",
+      "test-project"
+    );
 
     assert.equal(git(repoPath, ["branch", "--show-current"]), "main");
     assert.equal(
@@ -246,13 +266,18 @@ describe("IntegrationManager", () => {
 
   it("applies an approved specification without dirtying the checked-out target branch", () => {
     const repoPath = createRepository();
-    const specifications = createProjectSpecificationStore();
+    const specifications = createProjectSpecificationStore(repoPath);
 
-    specifications.apply(repoPath, "proposal-1", {
-      projectId: "project-1",
-      requirements: "# Approved requirements\n",
-      cards: [],
-    });
+    specifications.apply(
+      repoPath,
+      "proposal-1",
+      {
+        projectId: "test-project",
+        requirements: "# Approved requirements\n",
+        cards: [],
+      },
+      "test-project"
+    );
 
     assert.equal(git(repoPath, ["status", "--porcelain"]), "");
     assert.equal(
@@ -267,7 +292,7 @@ describe("IntegrationManager", () => {
 
   it("reports accepted Hive work waiting to be integrated into the target branch", () => {
     const repoPath = createRepository();
-    const manager = createIntegrationManager();
+    const manager = createIntegrationManager(repoPath);
     manager.ensure(repoPath);
     git(repoPath, ["switch", "hive-main"]);
     writeFileSync(join(repoPath, "accepted.txt"), "accepted\n");
@@ -285,7 +310,7 @@ describe("IntegrationManager", () => {
 
   it("refuses integration when the target checkout has user changes", () => {
     const repoPath = createRepository();
-    const manager = createIntegrationManager();
+    const manager = createIntegrationManager(repoPath);
     manager.ensure(repoPath);
     git(repoPath, ["switch", "hive-main"]);
     writeFileSync(join(repoPath, "accepted.txt"), "accepted\n");
@@ -306,7 +331,7 @@ describe("IntegrationManager", () => {
 
   it("fast-forwards an explicitly selected target branch without switching branches", () => {
     const repoPath = createRepository();
-    const manager = createIntegrationManager();
+    const manager = createIntegrationManager(repoPath);
     manager.ensure(repoPath);
     git(repoPath, ["switch", "hive-main"]);
     writeFileSync(join(repoPath, "accepted.txt"), "accepted\n");
@@ -324,7 +349,7 @@ describe("IntegrationManager", () => {
 
   it("detects manual integration and refuses divergent branches", () => {
     const repoPath = createRepository();
-    const manager = createIntegrationManager();
+    const manager = createIntegrationManager(repoPath);
     manager.ensure(repoPath);
     git(repoPath, ["switch", "hive-main"]);
     writeFileSync(join(repoPath, "accepted.txt"), "accepted\n");
@@ -371,7 +396,10 @@ describe("IntegrationManager", () => {
     reviewedHead: string;
   } {
     const branchName = `hive/${cardId}/attempt-1`;
-    const worktreePath = join(repoPath, ".worktrees", cardId);
+    const worktreePath = join(repoPath, "workspaces", "test-project", cardId);
+    mkdirSync(join(repoPath, "workspaces", "test-project"), {
+      recursive: true,
+    });
     git(repoPath, [
       "worktree",
       "add",

@@ -11,6 +11,7 @@ import { createBoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
 import type { IntegrationManager } from "./integration-manager";
 import { createPlanningManager } from "./planner";
+import type { ProjectSpecificationStore } from "./project-specification-store";
 import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
 import { registerRequirementsRoutes } from "./requirements-routes";
 import { createRequirementsSessionManager } from "./requirements-session";
@@ -77,7 +78,8 @@ describe("initial planning flow", () => {
             finishReason: "stop",
           };
         },
-      }
+      },
+      specStore()
     );
     const firstServer = registerFlowServer({
       boardStore,
@@ -135,7 +137,8 @@ describe("initial planning flow", () => {
       boardStore,
       runtimeStore,
       integrationManager(),
-      unavailableCaller()
+      unavailableCaller(),
+      specStore()
     );
     const restartedServer = registerFlowServer({
       boardStore,
@@ -184,7 +187,8 @@ describe("initial planning flow", () => {
         reloadedBoardStore,
         runtimeStore,
         integrationManager(),
-        unavailableCaller()
+        unavailableCaller(),
+        specStore()
       ),
       projectStore,
       sessionManager: createRequirementsSessionManager(undefined, runtimeStore),
@@ -317,6 +321,19 @@ function integrationManager(): IntegrationManager {
       branchName: "hive-main",
       revision: "integration-2",
     }),
+  };
+}
+
+function specStore(): ProjectSpecificationStore {
+  return {
+    apply(
+      _repoPath: string,
+      _proposalId: string,
+      _specification: unknown,
+      _projectId: string
+    ) {
+      return { branchName: "hive-main", revision: "integration-2" };
+    },
   };
 }
 

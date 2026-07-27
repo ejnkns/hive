@@ -87,6 +87,7 @@ describe("WorkerSupervisor", () => {
       reviewer,
       unusedCoordinator(),
       createQueenBeeRuntimeStore(join(repoPath, ".runtime")),
+      repoPath,
       modelCaller
     );
 
@@ -125,6 +126,7 @@ describe("WorkerSupervisor", () => {
       failingReviewer(),
       unusedCoordinator(),
       runtimeStore,
+      repoPath,
       {
         async call() {
           callCount += 1;
@@ -185,6 +187,7 @@ describe("WorkerSupervisor", () => {
       failingReviewer(),
       unusedCoordinator(),
       runtimeStore,
+      repoPath,
       {
         async call() {
           calls += 1;
@@ -264,6 +267,7 @@ describe("WorkerSupervisor", () => {
       reviewer,
       unusedCoordinator(),
       runtimeStore,
+      repoPath,
       modelCaller
     );
 
@@ -312,6 +316,7 @@ describe("WorkerSupervisor", () => {
       failingReviewer(),
       unusedCoordinator(),
       createQueenBeeRuntimeStore(join(repoPath, ".runtime")),
+      repoPath,
       modelCaller
     );
 
@@ -330,7 +335,7 @@ describe("WorkerSupervisor", () => {
     );
     assert.equal(
       readFileSync(
-        join(repoPath, ".worktrees", card.id, "source.txt"),
+        join(repoPath, "workspaces", "project-1", card.id, "source.txt"),
         "utf-8"
       ),
       "unfinished\n"
@@ -372,6 +377,7 @@ describe("WorkerSupervisor", () => {
       failingReviewer(),
       unusedCoordinator(),
       createQueenBeeRuntimeStore(join(repoPath, ".runtime")),
+      repoPath,
       modelCaller
     );
 
@@ -468,6 +474,7 @@ describe("WorkerSupervisor", () => {
       reviewer,
       coordinator,
       createQueenBeeRuntimeStore(join(repoPath, ".runtime")),
+      repoPath,
       modelCaller
     );
 
@@ -478,7 +485,7 @@ describe("WorkerSupervisor", () => {
     assert.equal(reviewed?.column, "reviewing");
     assert.equal(reviewed?.reviewerLog?.verdict, "approved");
     assert.equal(
-      existsSync(join(repoPath, ".worktrees", card.id)),
+      existsSync(join(repoPath, "workspaces", "project-1", card.id)),
       true,
       "approved work remains isolated until the user accepts it"
     );
@@ -526,6 +533,7 @@ describe("WorkerSupervisor", () => {
       failingReviewer(),
       unusedCoordinator(),
       createQueenBeeRuntimeStore(join(repoPath, ".runtime")),
+      repoPath,
       modelCaller
     );
 
@@ -573,6 +581,7 @@ describe("WorkerSupervisor", () => {
       failingReviewer(),
       unusedCoordinator(),
       createQueenBeeRuntimeStore(join(repoPath, ".runtime")),
+      repoPath,
       modelCaller
     );
 
@@ -625,6 +634,7 @@ describe("WorkerSupervisor", () => {
       failingReviewer(),
       unusedCoordinator(),
       createQueenBeeRuntimeStore(join(repoPath, ".runtime")),
+      repoPath,
       {
         async call(_messages, workspacePath) {
           modelCallCount += 1;
@@ -707,6 +717,7 @@ describe("WorkerSupervisor", () => {
       failingReviewer(),
       unusedCoordinator(),
       runtimeStore,
+      repoPath,
       modelCaller
     );
     const run = supervisor.run("project-1", card, repoPath, "", "", () => {});
@@ -748,8 +759,8 @@ describe("WorkerSupervisor", () => {
   }
 
   function createCardWorktree(repoPath: string, cardId: string): string {
-    const worktreePath = join(repoPath, ".worktrees", cardId);
-    mkdirSync(join(repoPath, ".worktrees"), { recursive: true });
+    const worktreePath = join(repoPath, "workspaces", "project-1", cardId);
+    mkdirSync(join(repoPath, "workspaces", "project-1"), { recursive: true });
     git(repoPath, [
       "worktree",
       "add",
@@ -765,8 +776,8 @@ describe("WorkerSupervisor", () => {
     repoPath: string,
     cardId: string
   ): string {
-    const worktreePath = join(repoPath, ".worktrees", cardId);
-    mkdirSync(join(repoPath, ".worktrees"), { recursive: true });
+    const worktreePath = join(repoPath, "workspaces", "project-1", cardId);
+    mkdirSync(join(repoPath, "workspaces", "project-1"), { recursive: true });
     git(repoPath, ["worktree", "add", "--quiet", "--detach", worktreePath]);
     git(worktreePath, ["checkout", "--quiet", "--orphan", `qb/${cardId}`]);
     if (existsSync(join(worktreePath, "source.txt"))) {

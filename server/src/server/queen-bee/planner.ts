@@ -21,7 +21,6 @@ import type {
   ApprovedProjectSpecification,
   ProjectSpecificationStore,
 } from "./project-specification-store";
-import { createProjectSpecificationStore } from "./project-specification-store";
 import type { QueenBeeRuntimeStore } from "./queen-bee-runtime-store";
 import {
   AGENT_TOOLS,
@@ -82,7 +81,7 @@ export function createPlanningManager(
   runtimeStore: QueenBeeRuntimeStore,
   _integrationManager: IntegrationManager,
   modelCaller: AgentModelCaller = createAgentModelCaller(PLANNER_TOOLS),
-  specificationStore: ProjectSpecificationStore = createProjectSpecificationStore()
+  specificationStore: ProjectSpecificationStore
 ): PlanningManager {
   return {
     async propose(
@@ -699,7 +698,12 @@ function applyProposal(
     requirements: proposal.proposedRequirements,
     cards: result,
   };
-  specificationStore.apply(repoPath, proposal.id, specification);
+  specificationStore.apply(
+    repoPath,
+    proposal.id,
+    specification,
+    proposal.projectId
+  );
   boardStore.saveIdeas(proposal.projectId, repoPath, archivedIdeas);
   proposal.status = "applied";
   proposal.appliedAt = new Date().toISOString();

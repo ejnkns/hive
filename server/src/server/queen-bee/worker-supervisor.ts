@@ -67,6 +67,7 @@ export function createWorkerSupervisor(
   reviewer: Reviewer,
   coordinator: Coordinator,
   runtimeStore: QueenBeeRuntimeStore,
+  workspacesBasePath: string,
   modelCaller: AgentModelCaller = createAgentModelCaller(WORKER_TOOLS)
 ): WorkerSupervisor {
   const abortControllers = new Map<
@@ -165,7 +166,13 @@ export function createWorkerSupervisor(
     };
 
     const attemptNumber = nextAttemptNumber(card);
-    const wtResult = prepareWorktree(repoPath, card.id, attemptNumber);
+    const wtResult = prepareWorktree(
+      repoPath,
+      workspacesBasePath,
+      projectId,
+      card.id,
+      attemptNumber
+    );
     if (!wtResult.ok) {
       log.error = wtResult.message;
       log.finishedAt = new Date().toISOString();

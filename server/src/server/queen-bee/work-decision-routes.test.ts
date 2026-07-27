@@ -299,10 +299,10 @@ describe("work decision routes", () => {
         acceptedBranches.push(input.branchName);
         return { branchName: "hive-main", revision: "integration-2" };
       },
-      discardWorktree: (_path, worktreePath) => {
+      discardWorktree: (_repoPath, worktreePath, _projectId) => {
         discardedWorktrees.push(worktreePath);
       },
-      commitPlanningSnapshot: () => ({
+      commitPlanningSnapshot: (_repoPath, _proposalId, _projectId) => ({
         branchName: "hive-main",
         revision: "integration-2",
       }),
@@ -315,6 +315,7 @@ describe("work decision routes", () => {
       integrationManager,
       runtimeStore,
       reviewer,
+      workspacesBasePath: repoPath,
       refreshedReviewBuilder: options.refreshedReviewBuilder,
     });
 
