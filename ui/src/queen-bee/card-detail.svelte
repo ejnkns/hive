@@ -22,7 +22,8 @@ let {
   onRequirementsFeedback,
   onRun,
   onAccept,
-  onRequestChanges,
+  onUpdateChanges,
+  onNewChanges,
   onRestartReview,
   onRemediate,
 }: Props = $props();
@@ -38,7 +39,8 @@ type Props = {
   onRequirementsFeedback?: (feedback: RequirementsFeedback) => void;
   onRun?: () => void;
   onAccept?: () => Promise<void>;
-  onRequestChanges?: (guidance: string) => Promise<void>;
+  onUpdateChanges?: (guidance?: string) => Promise<void>;
+  onNewChanges?: (guidance?: string) => Promise<void>;
   onRestartReview?: () => Promise<void>;
   onRemediate?: (
     action: "retry_with_patch" | "redevise" | "archive",
@@ -48,7 +50,7 @@ type Props = {
 
 let refining = $state(false);
 let consumedInitialQuestion = $state("");
-let requestingChanges = $state(false);
+let showGuidanceInput = $state(false);
 let decisionGuidance = $state("");
 let decisionError = $state<string | null>(null);
 let deciding = $state(false);
@@ -88,6 +90,26 @@ async function acceptWork() {
   await runDecision(onAccept, "Could not accept work");
 }
 
+async function handleUpdateChanges() {
+  if (!onUpdateChanges) return;
+  await runDecision(
+    () => onUpdateChanges(decisionGuidance.trim() || undefined),
+    "Could not submit update-changes request"
+  );
+  showGuidanceInput = false;
+  decisionGuidance = "";
+}
+
+async function handleNewChanges() {
+  if (!onNewChanges) return;
+  await runDecision(
+    () => onNewChanges(decisionGuidance.trim() || undefined),
+    "Could not submit new-changes request"
+  );
+  showGuidanceInput = false;
+  decisionGuidance = "";
+}
+
 async function runDecision(
   action: () => Promise<void>,
   failureMessage: string
@@ -100,23 +122,6 @@ async function runDecision(
   } catch (error) {
     decisionError = error instanceof Error ? error.message : failureMessage;
     return false;
-  } finally {
-    deciding = false;
-  }
-}
-
-async function requestChanges() {
-  const guidance = decisionGuidance.trim();
-  if (!onRequestChanges || !guidance) return;
-  deciding = true;
-  decisionError = null;
-  try {
-    await onRequestChanges(guidance);
-    requestingChanges = false;
-    decisionGuidance = "";
-  } catch (error) {
-    decisionError =
-      error instanceof Error ? error.message : "Could not request changes";
   } finally {
     deciding = false;
   }
@@ -413,31 +418,17 @@ $effect(() => {
         />
       {/if}
 
-      {#if requestingChanges}
+      {#if showGuidanceInput}
         <div class="section decision-input">
-          <div class="section-label">Guidance for the next attempt</div>
+          <div class="section-label">
+            Additional guidance for the Worker Agent
+          </div>
           <Textarea
             bind:value={decisionGuidance}
-            placeholder="What should the Worker Agent change?"
+            placeholder="Optional: add your own instructions to supplement the reviewer findings"
             disabled={deciding}
             restProps={{ rows: "3" }}
           />
-          <div class="decision-input-actions">
-            <Button
-              variant="mint"
-              onclick={requestChanges}
-              disabled={deciding || !decisionGuidance.trim()}
-            >
-              Request changes
-            </Button>
-            <Button
-              variant="platinum"
-              onclick={() => (requestingChanges = false)}
-              disabled={deciding}
-            >
-              Cancel
-            </Button>
-          </div>
         </div>
       {/if}
 
@@ -452,28 +443,76 @@ $effect(() => {
       {/if}
       {#if card.column === "reviewing"}
         {#if card.reviewerLog?.status === "complete"}
-          {#if reviewReadiness?.canAccept && onAccept}
-            <Button variant="mint" onclick={acceptWork} disabled={deciding}>
-              {deciding ? "Applying decision..." : "Accept work"}
-            </Button>
-          {:else if reviewReadiness?.canRefreshReview && onRestartReview}
-            <Button variant="mint" onclick={restartReview} disabled={deciding}>
-              {deciding ? "Refreshing..." : "Refresh review"}
-            </Button>
+          {#if card.reviewerLog.verdict === "approved"}
+            {#if reviewReadiness?.canAccept && onAccept}
+              <Button variant="mint" onclick={acceptWork} disabled={deciding}>
+                {deciding ? "Applying decision..." : "Accept work"}
+              </Button>
+            {:else if reviewReadiness?.canRefreshReview && onRestartReview}
+              <Button
+                variant="mint"
+                onclick={restartReview}
+                disabled={deciding}
+              >
+                {deciding ? "Refreshing..." : "Refresh review"}
+              </Button>
+            {/if}
+          {:else if card.reviewerLog.verdict === "changes_requested"}
+            {#if card.reviewerLog.recommendedApproach === "new"}
+              <Button
+                variant="mint"
+                onclick={handleNewChanges}
+                disabled={deciding}
+              >
+                {deciding ? "Starting..." : "New attempt"}
+              </Button>
+              <Button
+                variant="platinum"
+                onclick={handleUpdateChanges}
+                disabled={deciding}
+              >
+                {deciding ? "Starting..." : "Update work"}
+              </Button>
+            {:else}
+              <Button
+                variant="mint"
+                onclick={handleUpdateChanges}
+                disabled={deciding}
+              >
+                {deciding ? "Starting..." : "Update work"}
+              </Button>
+              <Button
+                variant="platinum"
+                onclick={handleNewChanges}
+                disabled={deciding}
+              >
+                {deciding ? "Starting..." : "New attempt"}
+              </Button>
+            {/if}
+            {#if reviewReadiness?.canAccept && onAccept}
+              <Button
+                variant="rose"
+                onclick={acceptWork}
+                disabled={deciding}
+                style="font-size: 0.6875rem; padding: 0.375rem 0.5rem;"
+              >
+                {deciding ? "Accepting..." : "Accept anyway"}
+              </Button>
+            {/if}
           {/if}
         {:else if card.reviewerLog?.status === "error" && onRestartReview}
           <Button variant="mint" onclick={restartReview} disabled={deciding}>
             {deciding ? "Restarting..." : "Retry review"}
           </Button>
         {/if}
-        {#if onRequestChanges && !requestingChanges}
-          <Button
-            variant="platinum"
-            onclick={() => (requestingChanges = true)}
-            disabled={deciding}
+        {#if card.reviewerLog?.status === "complete" && card.reviewerLog.verdict === "changes_requested"}
+          <button
+            type="button"
+            class="guidance-toggle"
+            onclick={() => (showGuidanceInput = !showGuidanceInput)}
           >
-            Request changes
-          </Button>
+            {showGuidanceInput ? "– Hide guidance" : "+ Add guidance"}
+          </button>
         {/if}
       {/if}
     </div>
@@ -687,12 +726,6 @@ $effect(() => {
   color: #dc3c3c;
 }
 
-.decision-input-actions {
-  display: flex;
-  gap: 0.375rem;
-  margin-top: 0.5rem;
-}
-
 .activity-list {
   display: flex;
   flex-direction: column;
@@ -755,5 +788,19 @@ $effect(() => {
   justify-content: space-between;
   margin-top: 0.5rem;
   padding-top: 0.5rem;
+}
+
+.guidance-toggle {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.6875rem;
+  padding: 0.25rem 0.375rem;
+  text-decoration: underline;
+}
+
+.guidance-toggle:hover {
+  color: var(--accent);
 }
 </style>

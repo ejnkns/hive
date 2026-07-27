@@ -1,5 +1,7 @@
 /** @public */
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { WorkAttempt } from "shared/board-types";
 import type { BoardStore, Card } from "./board-store";
@@ -12,7 +14,8 @@ import {
   releaseReviewReference,
 } from "./review-package";
 import type { Reviewer } from "./reviewer";
-import { emitCardAccepted, emitCardChangesRequested } from "./worker-event-bus";
+import { emitCardAccepted } from "./worker-event-bus";
+import type { WorkerEvent, WorkerSupervisor } from "./worker-supervisor";
 
 export function registerWorkDecisionRoutes(
   server: FastifyInstance,
@@ -22,7 +25,9 @@ export function registerWorkDecisionRoutes(
     integrationManager: IntegrationManager;
     runtimeStore: QueenBeeRuntimeStore;
     reviewer: Reviewer;
+    workerSupervisor: WorkerSupervisor;
     workspacesBasePath: string;
+    onWorkerEvent?: (projectId: string, event: WorkerEvent) => void;
     refreshedReviewBuilder?: typeof buildRefreshedReviewPackage;
   }
 ): void {
@@ -110,23 +115,57 @@ export function registerWorkDecisionRoutes(
   );
 
   server.post(
-    "/api/queen-bee/:projectId/cards/:cardId/request-changes",
+    "/api/queen-bee/:projectId/cards/:cardId/update-changes",
     async (request, reply) => {
-      const body = request.body as { guidance?: string };
+      const context = findChangesCard(request.params, reply, deps);
+      if (!context) return;
+      const { projectId, project, card } = context;
+      const body = (request.body ?? {}) as { guidance?: string };
       const guidance = body.guidance?.trim();
-      if (!guidance) {
-        return reply.status(400).send({
-          error: "guidance is required when requesting changes",
+      const decidedAt = new Date().toISOString();
+
+      try {
+        const updated = deps.boardStore.updateCard(
+          projectId,
+          project.repoPath,
+          card.id,
+          {
+            column: "in_progress",
+            workAttempts: updateAttempt(card, {
+              status: "working",
+              decision: {
+                type: "update_changes",
+                guidance: guidance || undefined,
+                decidedAt,
+              },
+            }),
+          }
+        );
+        deps.runtimeStore.appendActivity(projectId, card.id, {
+          actor: "user",
+          type: "decision",
+          summary:
+            "User chose to update existing work addressing reviewer findings",
+          detail: guidance || "Rerunning with reviewer findings",
         });
+        reply.send({ card: updated });
+
+        await runWorker(deps, project, updated);
+      } catch (error) {
+        return reply.status(409).send({ error: errorMessage(error) });
       }
-      const context = findDecisionCard(request.params, reply, deps);
+    }
+  );
+
+  server.post(
+    "/api/queen-bee/:projectId/cards/:cardId/new-changes",
+    async (request, reply) => {
+      const context = findChangesCard(request.params, reply, deps);
       if (!context) return;
       const { projectId, project, card, attempt } = context;
-      if (attempt.status !== "reviewed" && attempt.status !== "review_error") {
-        return reply
-          .status(409)
-          .send({ error: "Card has no review to reject" });
-      }
+      const body = (request.body ?? {}) as { guidance?: string };
+      const guidance = body.guidance?.trim();
+      const decidedAt = new Date().toISOString();
 
       try {
         const reviewPackage = attempt.reviewPackageId
@@ -143,18 +182,18 @@ export function registerWorkDecisionRoutes(
         if (reviewPackage) {
           tryReleaseReviewReference(project.repoPath, reviewPackage);
         }
-        const decidedAt = new Date().toISOString();
+
         const updated = deps.boardStore.updateCard(
           projectId,
           project.repoPath,
           card.id,
           {
-            column: "ready",
+            column: "in_progress",
             workAttempts: updateAttempt(card, {
               status: "changes_requested",
               decision: {
-                type: "request_changes",
-                guidance,
+                type: "new_changes",
+                guidance: guidance || undefined,
                 decidedAt,
               },
             }),
@@ -163,11 +202,13 @@ export function registerWorkDecisionRoutes(
         deps.runtimeStore.appendActivity(projectId, card.id, {
           actor: "user",
           type: "decision",
-          summary: "User requested another Worker Agent attempt",
-          detail: guidance,
+          summary: "User chose a fresh Worker Agent attempt",
+          detail:
+            guidance || "Starting fresh with reviewer findings as context",
         });
-        emitCardChangesRequested(card.id);
-        return reply.send({ card: updated });
+        reply.send({ card: updated });
+
+        await runWorker(deps, project, updated);
       } catch (error) {
         return reply.status(409).send({ error: errorMessage(error) });
       }
@@ -416,6 +457,26 @@ function reviewedWorkInput(
   };
 }
 
+function findChangesCard(
+  params: unknown,
+  reply: FastifyReply,
+  deps: { boardStore: BoardStore; projectStore: ProjectStore }
+): DecisionContext | null {
+  const context = findDecisionCard(params, reply, deps);
+  if (!context) return null;
+  if (
+    context.attempt.status !== "reviewed" ||
+    context.card.reviewerLog?.status !== "complete" ||
+    context.card.reviewerLog.verdict !== "changes_requested"
+  ) {
+    reply.status(409).send({
+      error: "Card does not have a review that requested changes",
+    });
+    return null;
+  }
+  return context;
+}
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Work decision failed";
 }
@@ -429,4 +490,50 @@ function tryReleaseReviewReference(
   } catch {
     // The completed decision is authoritative; stale hidden refs are safe to prune later.
   }
+}
+
+async function runWorker(
+  deps: {
+    projectStore: ProjectStore;
+    workerSupervisor: WorkerSupervisor;
+    onWorkerEvent?: (projectId: string, event: WorkerEvent) => void;
+  },
+  project: { id: string; repoPath: string; maxConcurrentWorkers: number },
+  card: Card
+): Promise<void> {
+  const projectJsonPath = join(project.repoPath, ".hive", "project.json");
+  let systemPrompt = "";
+  let codingGuidelines = "";
+  let maxIterationsPerCommit: number | undefined;
+  let maxCommits: number | undefined;
+
+  try {
+    const raw = readFileSync(projectJsonPath, "utf-8");
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    systemPrompt =
+      typeof parsed.systemPrompt === "string" ? parsed.systemPrompt : "";
+    codingGuidelines =
+      typeof parsed.codingGuidelines === "string"
+        ? parsed.codingGuidelines
+        : "";
+    maxIterationsPerCommit =
+      typeof parsed.maxIterationsPerCommit === "number"
+        ? parsed.maxIterationsPerCommit
+        : undefined;
+    maxCommits =
+      typeof parsed.maxCommits === "number" ? parsed.maxCommits : undefined;
+  } catch {
+    // use empty defaults
+  }
+
+  await deps.workerSupervisor.run(
+    project.id,
+    card,
+    project.repoPath,
+    systemPrompt,
+    codingGuidelines,
+    (event) => deps.onWorkerEvent?.(project.id, event),
+    maxIterationsPerCommit ?? 30,
+    maxCommits ?? 20
+  );
 }

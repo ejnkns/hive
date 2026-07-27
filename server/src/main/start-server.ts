@@ -130,7 +130,11 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     integrationManager,
     runtimeStore,
     reviewer,
+    workerSupervisor,
     workspacesBasePath: HIVE_DIR,
+    onWorkerEvent(_projectId, _event) {
+      // Worker events propagate through the socket in worker-routes
+    },
   });
 
   listen(server, config);

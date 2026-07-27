@@ -12,4 +12,8 @@ When finished, call submit_review as the only tool call. Use:
 - approved when the implementation satisfies the requirements. Non-blocking observations may be warnings.
 - changes_requested when any blocking finding exists or verification evidence is insufficient for a required behavior.
 
+When verdict is changes_requested, also set recommendedApproach:
+- "update" when the Worker can fix the issues in place (surface-level changes, missing fields, additional edge cases).
+- "new" when the approach itself is wrong (architectural misunderstanding, wrong abstraction, fundamental rework needed).
+
 Every finding must identify the relevant requirement, concrete evidence, and a specific recommendation. Do not finish with a prose verdict.`;

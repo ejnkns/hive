@@ -56,6 +56,7 @@ export type ReviewerFinding = {
 
 export type ReviewerVerdict = {
   verdict: "approved" | "changes_requested";
+  recommendedApproach?: "update" | "new";
   findings: ReviewerFinding[];
   verificationAssessment: {
     status: "sufficient" | "insufficient";
@@ -155,11 +156,19 @@ function parseReviewSubmission(toolCall: ToolCall): ReviewerVerdict | null {
   const findings = parseFindings(parsed.findings);
   const assessment = parseVerificationAssessment(parsed.verificationAssessment);
   if (!findings || !assessment) return null;
-  return {
+  const verdict: ReviewerVerdict = {
     verdict: parsed.verdict,
     findings,
     verificationAssessment: assessment,
   };
+  if (
+    parsed.verdict === "changes_requested" &&
+    (parsed.recommendedApproach === "update" ||
+      parsed.recommendedApproach === "new")
+  ) {
+    verdict.recommendedApproach = parsed.recommendedApproach;
+  }
+  return verdict;
 }
 
 function parseFindings(value: unknown): ReviewerFinding[] | null {

@@ -53,6 +53,12 @@ export const REVIEWER_TOOLS: ToolDefinition[] = [
             enum: ["approved", "changes_requested"],
             description: "The review recommendation.",
           },
+          recommendedApproach: {
+            type: "string",
+            enum: ["update", "new"],
+            description:
+              "When verdict is changes_requested, whether the Worker should revise in place (update) or start fresh (new). Omit when approved.",
+          },
           findings: {
             type: "array",
             description: "Concrete review findings supported by evidence.",

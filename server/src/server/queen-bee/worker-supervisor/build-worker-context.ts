@@ -78,13 +78,15 @@ function buildTaskPrompt(card: Card): string {
     parts.push("");
   }
 
-  const requestedChanges = card.workAttempts?.at(-1)?.decision;
+  const decision = card.workAttempts?.at(-1)?.decision;
   if (
-    requestedChanges?.type === "request_changes" &&
-    requestedChanges.guidance
+    decision?.guidance &&
+    (decision.type === "update_changes" ||
+      decision.type === "new_changes" ||
+      decision.type === "request_changes")
   ) {
-    parts.push("### User-requested changes");
-    parts.push(requestedChanges.guidance);
+    parts.push("### User guidance");
+    parts.push(decision.guidance);
     parts.push("");
   }
 

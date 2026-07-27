@@ -13,6 +13,7 @@ import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
 import type { buildRefreshedReviewPackage } from "./review-package";
 import type { Reviewer, ReviewPackage } from "./reviewer";
 import { registerWorkDecisionRoutes } from "./work-decision-routes";
+import type { WorkerSupervisor } from "./worker-supervisor";
 
 describe("work decision routes", () => {
   const directories: string[] = [];
@@ -40,45 +41,125 @@ describe("work decision routes", () => {
     assert.equal(fixture.acceptedBranches[0], "hive/card-1/attempt-1");
   });
 
-  it("requires guidance when requesting another Worker Agent attempt", async () => {
+  it("accept works regardless of verdict (accept-anyway path)", async () => {
     const fixture = createFixture();
-    const card = fixture.reviewedCard();
+    const card = fixture.changesRequestedCard();
 
     const response = await fixture.server.inject({
       method: "POST",
-      url: `/api/queen-bee/${fixture.project.id}/cards/${card.id}/request-changes`,
-      payload: { guidance: "" },
-    });
-
-    assert.equal(response.statusCode, 400);
-    assert.equal(
-      fixture.boardStore.getBoard(fixture.project.id, fixture.project.repoPath)
-        .cards[0]?.column,
-      "reviewing"
-    );
-  });
-
-  it("preserves the rejected branch and returns the card to Ready", async () => {
-    const fixture = createFixture();
-    const card = fixture.reviewedCard();
-
-    const response = await fixture.server.inject({
-      method: "POST",
-      url: `/api/queen-bee/${fixture.project.id}/cards/${card.id}/request-changes`,
-      payload: { guidance: "Handle the empty-state case." },
+      url: `/api/queen-bee/${fixture.project.id}/cards/${card.id}/accept`,
     });
 
     assert.equal(response.statusCode, 200);
-    assert.equal(response.json().card.column, "ready");
+    assert.equal(response.json().card.column, "done");
+  });
+
+  it("update-changes keeps same attempt and moves to in_progress", async () => {
+    const fixture = createFixture();
+    const card = fixture.changesRequestedCard();
+
+    const response = await fixture.server.inject({
+      method: "POST",
+      url: `/api/queen-bee/${fixture.project.id}/cards/${card.id}/update-changes`,
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json().card.column, "in_progress");
+    assert.equal(response.json().card.workAttempts.length, 1);
+    assert.equal(response.json().card.workAttempts[0].status, "working");
+    assert.equal(
+      response.json().card.workAttempts[0].decision.type,
+      "update_changes"
+    );
+    assert.equal(
+      fixture.runtimeStore.getActivity(fixture.project.id, card.id)[0]?.actor,
+      "user"
+    );
+  });
+
+  it("update-changes accepts optional guidance", async () => {
+    const fixture = createFixture();
+    const card = fixture.changesRequestedCard();
+
+    const response = await fixture.server.inject({
+      method: "POST",
+      url: `/api/queen-bee/${fixture.project.id}/cards/${card.id}/update-changes`,
+      payload: { guidance: "Also fix the indentation." },
+    });
+
+    assert.equal(response.statusCode, 200);
     assert.equal(
       response.json().card.workAttempts[0].decision.guidance,
-      "Handle the empty-state case."
+      "Also fix the indentation."
+    );
+  });
+
+  it("new-changes discards worktree and starts new attempt", async () => {
+    const fixture = createFixture();
+    const card = fixture.changesRequestedCard();
+
+    const response = await fixture.server.inject({
+      method: "POST",
+      url: `/api/queen-bee/${fixture.project.id}/cards/${card.id}/new-changes`,
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json().card.column, "in_progress");
+    assert.equal(response.json().card.workAttempts.length, 1);
+    assert.equal(
+      response.json().card.workAttempts[0].status,
+      "changes_requested"
+    );
+    assert.equal(
+      response.json().card.workAttempts[0].decision.type,
+      "new_changes"
     );
     assert.deepEqual(fixture.discardedWorktrees, ["/tmp/card-1"]);
     assert.equal(
       fixture.runtimeStore.getActivity(fixture.project.id, card.id)[0]?.actor,
       "user"
     );
+  });
+
+  it("new-changes accepts optional guidance", async () => {
+    const fixture = createFixture();
+    const card = fixture.changesRequestedCard();
+
+    const response = await fixture.server.inject({
+      method: "POST",
+      url: `/api/queen-bee/${fixture.project.id}/cards/${card.id}/new-changes`,
+      payload: { guidance: "Start from scratch with a simpler approach." },
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(
+      response.json().card.workAttempts[0].decision.guidance,
+      "Start from scratch with a simpler approach."
+    );
+  });
+
+  it("rejects update-changes when verdict is approved", async () => {
+    const fixture = createFixture();
+    const card = fixture.reviewedCard();
+
+    const response = await fixture.server.inject({
+      method: "POST",
+      url: `/api/queen-bee/${fixture.project.id}/cards/${card.id}/update-changes`,
+    });
+
+    assert.equal(response.statusCode, 409);
+  });
+
+  it("rejects new-changes when verdict is approved", async () => {
+    const fixture = createFixture();
+    const card = fixture.reviewedCard();
+
+    const response = await fixture.server.inject({
+      method: "POST",
+      url: `/api/queen-bee/${fixture.project.id}/cards/${card.id}/new-changes`,
+    });
+
+    assert.equal(response.statusCode, 409);
   });
 
   it("retries only the immutable Review Package after a Reviewer Agent error", async () => {
@@ -122,10 +203,10 @@ describe("work decision routes", () => {
     const fixture = createFixture({
       readinessState: "stale",
       refreshedReviewBuilder(
-        card,
-        _repoPath,
-        _worktreePath,
-        integrationCommit
+        card: { id: string },
+        _repoPath: string,
+        _worktreePath: string,
+        integrationCommit: string
       ) {
         refreshedBase = integrationCommit;
         const refreshed = reviewPackage(card.id);
@@ -171,10 +252,10 @@ describe("work decision routes", () => {
       readinessState: "stale",
       reviewerError: true,
       refreshedReviewBuilder(
-        card,
-        _repoPath,
-        _worktreePath,
-        integrationCommit
+        card: { id: string },
+        _repoPath: string,
+        _worktreePath: string,
+        integrationCommit: string
       ) {
         const refreshed = reviewPackage(card.id);
         return {
@@ -307,6 +388,12 @@ describe("work decision routes", () => {
         revision: "integration-2",
       }),
     };
+    const workerSupervisor: WorkerSupervisor = {
+      async run() {},
+      isRunning: () => false,
+      runningCardIds: () => [],
+      cancel: () => false,
+    };
     const server = Fastify();
     servers.push(server);
     registerWorkDecisionRoutes(server, {
@@ -315,7 +402,9 @@ describe("work decision routes", () => {
       integrationManager,
       runtimeStore,
       reviewer,
+      workerSupervisor,
       workspacesBasePath: repoPath,
+      onWorkerEvent: () => {},
       refreshedReviewBuilder: options.refreshedReviewBuilder,
     });
 
@@ -359,6 +448,48 @@ describe("work decision routes", () => {
               reviewedHead: "head-1",
               reviewedIntegrationRevision: "integration-1",
               reviewPackageId: "package-1",
+            },
+          ],
+        });
+      },
+      changesRequestedCard() {
+        return boardStore.addCard(project.id, project.repoPath, {
+          title: "Card with changes requested",
+          description: "Reviewer asked for changes",
+          acceptanceCriteria: ["Must be revised"],
+          relevantFiles: ["source.ts"],
+          dependencies: [],
+          column: "reviewing",
+          reviewerLog: {
+            status: "complete",
+            verdict: "changes_requested",
+            recommendedApproach: "update",
+            findings: [
+              {
+                severity: "blocking",
+                requirement: "FR-4 / AC-11",
+                evidence: "Missing runtime tests",
+                recommendation: "Add tests for stream interruption",
+              },
+            ],
+            verificationAssessment: {
+              status: "insufficient",
+              notes: "Typecheck only, no runtime tests",
+            },
+            reviewPackageId: "package-2",
+            reviewedAt: "2026-07-19T00:00:00.000Z",
+          },
+          workAttempts: [
+            {
+              attempt: 1,
+              branchName: "hive/card-1/attempt-1",
+              worktreePath: "/tmp/card-1",
+              baseCommit: "base-1",
+              status: "reviewed",
+              startedAt: "2026-07-19T00:00:00.000Z",
+              reviewedHead: "head-1",
+              reviewedIntegrationRevision: "integration-1",
+              reviewPackageId: "package-2",
             },
           ],
         });

@@ -204,9 +204,9 @@ async function handleAcceptCard(cardId: string) {
   handleCardUpdated(result.card);
 }
 
-async function handleRequestChanges(cardId: string, guidance: string) {
+async function handleUpdateChanges(cardId: string, guidance?: string) {
   const response = await fetch(
-    `/api/queen-bee/${projectId}/cards/${cardId}/request-changes`,
+    `/api/queen-bee/${projectId}/cards/${cardId}/update-changes`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -215,7 +215,23 @@ async function handleRequestChanges(cardId: string, guidance: string) {
   );
   const result = (await response.json()) as { card?: Card; error?: string };
   if (!response.ok || !result.card) {
-    throw new Error(result.error ?? "Could not request changes");
+    throw new Error(result.error ?? "Could not update work");
+  }
+  handleCardUpdated(result.card);
+}
+
+async function handleNewChanges(cardId: string, guidance?: string) {
+  const response = await fetch(
+    `/api/queen-bee/${projectId}/cards/${cardId}/new-changes`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ guidance }),
+    }
+  );
+  const result = (await response.json()) as { card?: Card; error?: string };
+  if (!response.ok || !result.card) {
+    throw new Error(result.error ?? "Could not start new attempt");
   }
   handleCardUpdated(result.card);
 }
@@ -310,9 +326,14 @@ function acceptSelectedCard() {
   return card ? handleAcceptCard(card.id) : Promise.resolve();
 }
 
-function requestChangesForSelectedCard(guidance: string) {
+function updateChangesForSelectedCard(guidance?: string) {
   const card = selectedCard;
-  return card ? handleRequestChanges(card.id, guidance) : Promise.resolve();
+  return card ? handleUpdateChanges(card.id, guidance) : Promise.resolve();
+}
+
+function newChangesForSelectedCard(guidance?: string) {
+  const card = selectedCard;
+  return card ? handleNewChanges(card.id, guidance) : Promise.resolve();
 }
 
 function restartReviewForSelectedCard() {
@@ -484,7 +505,8 @@ $effect(() => {
       {onRequirementsFeedback}
       onRun={runSelectedCard}
       onAccept={acceptSelectedCard}
-      onRequestChanges={requestChangesForSelectedCard}
+      onUpdateChanges={updateChangesForSelectedCard}
+      onNewChanges={newChangesForSelectedCard}
       onRestartReview={restartReviewForSelectedCard}
       onRemediate={remediateSelectedCard}
     />

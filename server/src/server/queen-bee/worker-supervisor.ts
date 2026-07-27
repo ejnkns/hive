@@ -659,9 +659,10 @@ async function runReviewer(
     });
     const verdict = await reviewer.review(reviewPackage, worktreePath);
 
-    const reviewerLog = {
-      status: "complete" as const,
+    const reviewerLog: Card["reviewerLog"] = {
+      status: "complete",
       verdict: verdict.verdict,
+      recommendedApproach: verdict.recommendedApproach,
       findings: verdict.findings,
       verificationAssessment: verdict.verificationAssessment,
       reviewPackageId: reviewPackage.id,

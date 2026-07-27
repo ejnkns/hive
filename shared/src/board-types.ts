@@ -27,6 +27,7 @@ export type WorkerLog = {
 export type ReviewerLog = {
   status: "complete" | "error";
   verdict?: "approved" | "changes_requested";
+  recommendedApproach?: "update" | "new";
   findings?: Array<{
     severity: "blocking" | "warning";
     requirement: string;
@@ -59,7 +60,7 @@ export type WorkAttempt = {
   reviewedIntegrationRevision?: string;
   reviewPackageId?: string;
   decision?: {
-    type: "accept" | "request_changes";
+    type: "accept" | "request_changes" | "update_changes" | "new_changes";
     guidance?: string;
     decidedAt: string;
   };
