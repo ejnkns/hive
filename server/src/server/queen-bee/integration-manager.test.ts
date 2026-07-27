@@ -272,7 +272,7 @@ describe("IntegrationManager", () => {
       repoPath,
       "proposal-1",
       {
-        projectId: "test-project",
+        projectId: "project-1",
         requirements: "# Approved requirements\n",
         cards: [],
       },

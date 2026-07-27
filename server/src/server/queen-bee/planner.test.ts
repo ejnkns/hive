@@ -8,6 +8,7 @@ import { createBoardStore } from "./board-store";
 import type { IntegrationManager } from "./integration-manager";
 import { createPlanningManager } from "./planner";
 import type { ProjectSpecificationStore } from "./project-specification-store";
+import { createProjectSpecificationStore } from "./project-specification-store";
 import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
 import type { AgentModelCaller } from "./requirements-session/create-model-caller";
 import { readRequirements, writeRequirements } from "./requirements-store";
@@ -61,7 +62,7 @@ describe("Planner Agent reconciliation", () => {
           },
         ],
       }),
-      specStore()
+      createProjectSpecificationStore(repoPath)
     );
 
     const proposal = await planner.propose(
@@ -144,7 +145,16 @@ describe("Planner Agent reconciliation", () => {
           },
         ],
       }),
-      specStore()
+      {
+        apply(
+          _repoPath: string,
+          _proposalId: string,
+          _specification: unknown,
+          _projectId: string
+        ) {
+          throw new Error("Commit hook rejected");
+        },
+      } satisfies ProjectSpecificationStore
     );
     const proposal = await planner.propose(
       "project-1",
@@ -190,7 +200,7 @@ describe("Planner Agent reconciliation", () => {
           },
         ],
       }),
-      specStore()
+      createProjectSpecificationStore(repoPath)
     );
     const proposal = await planner.propose(
       "project-1",
@@ -240,7 +250,7 @@ describe("Planner Agent reconciliation", () => {
           },
         ],
       }),
-      specStore()
+      createProjectSpecificationStore(repoPath)
     );
 
     const proposal = await planner.propose(
@@ -286,7 +296,7 @@ describe("Planner Agent reconciliation", () => {
           },
         ],
       }),
-      specStore()
+      createProjectSpecificationStore(repoPath)
     );
     const proposal = await planner.propose(
       "project-1",
@@ -327,7 +337,7 @@ describe("Planner Agent reconciliation", () => {
           },
         ],
       }),
-      specStore()
+      createProjectSpecificationStore(repoPath)
     );
 
     const proposal = await planner.propose(
@@ -362,7 +372,7 @@ describe("Planner Agent reconciliation", () => {
           },
         ],
       }),
-      specStore()
+      createProjectSpecificationStore(repoPath)
     );
 
     const proposal = await planner.propose(
@@ -418,7 +428,7 @@ describe("Planner Agent reconciliation", () => {
           },
         ],
       }),
-      specStore()
+      createProjectSpecificationStore(repoPath)
     );
 
     const outcome = await planner.propose(
@@ -519,7 +529,7 @@ describe("Planner Agent reconciliation", () => {
           },
         ],
       }),
-      specStore()
+      createProjectSpecificationStore(repoPath)
     );
 
     const proposal = await planner.propose(
@@ -565,7 +575,7 @@ describe("Planner Agent reconciliation", () => {
           },
         ],
       }),
-      specStore()
+      createProjectSpecificationStore(repoPath)
     );
 
     const outcome = await planner.propose(
