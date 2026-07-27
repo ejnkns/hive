@@ -56,8 +56,8 @@ export type WorkerSupervisor = {
     systemPrompt: string,
     codingGuidelines: string,
     onEvent: (event: WorkerEvent) => void,
-    maxIterationsPerCommit?: number,
-    maxCommits?: number
+    maxIterationsPerCommit: number,
+    maxCommits: number
   ): Promise<void>;
   isRunning(projectId: string, cardId: string): boolean;
   runningCardIds(projectId: string): string[];
@@ -160,8 +160,8 @@ export function createWorkerSupervisor(
     codingGuidelines: string,
     onEvent: (event: WorkerEvent) => void,
     controller: AbortController,
-    maxIterationsPerCommit?: number,
-    maxCommits?: number
+    maxIterationsPerCommit: number,
+    maxCommits: number
   ) {
     const startedAt = new Date().toISOString();
     const log: NonNullable<Card["workerLog"]> = {
@@ -174,13 +174,13 @@ export function createWorkerSupervisor(
     };
 
     const attemptNumber = nextAttemptNumber(card);
-    const wtResult = prepareWorktree(
+    const wtResult = prepareWorktree({
       repoPath,
       workspacesBasePath,
       projectId,
-      card.id,
-      attemptNumber
-    );
+      cardId: card.id,
+      attempt: attemptNumber,
+    });
     if (!wtResult.ok) {
       log.error = wtResult.message;
       log.finishedAt = new Date().toISOString();
@@ -357,8 +357,8 @@ async function runLoop(
   persistLog: () => void,
   recordActivity: (event: NewCardActivityEvent) => void,
   signal: AbortSignal,
-  maxIterationsPerCommit = 30,
-  maxCommits = 20
+  maxIterationsPerCommit: number,
+  maxCommits: number
 ): Promise<WorkerLoopResult> {
   const MAX_ITERATIONS_PER_COMMIT = Math.max(1, maxIterationsPerCommit);
   const MAX_COMMITS = Math.max(0, maxCommits);

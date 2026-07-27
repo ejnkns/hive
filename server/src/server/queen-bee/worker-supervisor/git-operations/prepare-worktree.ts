@@ -15,36 +15,51 @@ export type PreparedWorktree =
     }
   | { ok: false; message: string };
 
+export type PrepareWorktreeParams = {
+  repoPath: string;
+  workspacesBasePath: string;
+  projectId: string;
+  cardId: string;
+  attempt?: number;
+};
+
 export function prepareWorktree(
-  repoPath: string,
-  workspacesBasePath: string,
-  projectId: string,
-  cardId: string,
-  attempt = 1
+  params: PrepareWorktreeParams
 ): PreparedWorktree {
-  const worktreesDir = join(workspacesBasePath, "workspaces", projectId);
+  const worktreesDir = join(
+    params.workspacesBasePath,
+    "workspaces",
+    params.projectId
+  );
+  const attempt = params.attempt ?? 1;
   const worktreeDir = join(
     worktreesDir,
-    attempt === 1 ? cardId : `${cardId}-attempt-${String(attempt)}`
+    attempt === 1
+      ? params.cardId
+      : `${params.cardId}-attempt-${String(attempt)}`
   );
-  const branchName = `hive/${cardId}/attempt-${String(attempt)}`;
-  const integration = ensureIntegrationBranch(repoPath);
+  const branchName = `hive/${params.cardId}/attempt-${String(attempt)}`;
+  const integration = ensureIntegrationBranch(params.repoPath);
 
   try {
     mkdirSync(worktreesDir, { recursive: true });
     if (existsSync(worktreeDir)) {
       const currentBranch = getCurrentBranch(worktreeDir);
-      const legacyBranch = `qb/${cardId}`;
+      const legacyBranch = `qb/${params.cardId}`;
       const reusableBranch =
         currentBranch === branchName ||
         (attempt === 1 && currentBranch === legacyBranch);
       const baseCommit = reusableBranch
-        ? compatibleBaseCommit(repoPath, currentBranch, integration.revision)
+        ? compatibleBaseCommit(
+            params.repoPath,
+            currentBranch,
+            integration.revision
+          )
         : null;
       if (!baseCommit) {
         return prepareRecoveryWorktree(
-          repoPath,
-          cardId,
+          params.repoPath,
+          params.cardId,
           worktreesDir,
           attempt,
           integration.revision
@@ -58,23 +73,23 @@ export function prepareWorktree(
       );
     }
 
-    if (hasBranch(repoPath, branchName)) {
+    if (hasBranch(params.repoPath, branchName)) {
       const baseCommit = compatibleBaseCommit(
-        repoPath,
+        params.repoPath,
         branchName,
         integration.revision
       );
       if (!baseCommit) {
         return prepareRecoveryWorktree(
-          repoPath,
-          cardId,
+          params.repoPath,
+          params.cardId,
           worktreesDir,
           attempt,
           integration.revision
         );
       }
       execFileSync("git", ["worktree", "add", worktreeDir, branchName], {
-        cwd: repoPath,
+        cwd: params.repoPath,
         encoding: "utf-8",
         timeout: 30_000,
       });
@@ -86,16 +101,16 @@ export function prepareWorktree(
       );
     }
 
-    const legacyBranch = `qb/${cardId}`;
-    if (attempt === 1 && hasBranch(repoPath, legacyBranch)) {
+    const legacyBranch = `qb/${params.cardId}`;
+    if (attempt === 1 && hasBranch(params.repoPath, legacyBranch)) {
       const baseCommit = compatibleBaseCommit(
-        repoPath,
+        params.repoPath,
         legacyBranch,
         integration.revision
       );
       if (baseCommit) {
         execFileSync("git", ["worktree", "add", worktreeDir, legacyBranch], {
-          cwd: repoPath,
+          cwd: params.repoPath,
           encoding: "utf-8",
           timeout: 30_000,
         });
@@ -119,7 +134,7 @@ export function prepareWorktree(
         integration.branchName,
       ],
       {
-        cwd: repoPath,
+        cwd: params.repoPath,
         encoding: "utf-8",
         timeout: 30_000,
       }

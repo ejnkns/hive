@@ -264,12 +264,12 @@ function acquireDetachedReviewWorkspace(
   return {
     path,
     release() {
-      const result = removeWorktree(
+      const result = removeWorktree({
         repoPath,
-        path,
+        worktreePath: path,
         workspacesBasePath,
-        projectId
-      );
+        projectId,
+      });
       if (!result.ok) throw new Error(result.message);
     },
   };

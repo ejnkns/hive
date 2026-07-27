@@ -77,12 +77,12 @@ export function createIntegrationManager(
           "Worker worktree has uncommitted changes and cannot be discarded"
         );
       }
-      const result = removeWorktree(
+      const result = removeWorktree({
         repoPath,
         worktreePath,
         workspacesBasePath,
-        projectId
-      );
+        projectId,
+      });
       if (!result.ok) throw new Error(result.message);
     },
   };
@@ -233,12 +233,12 @@ function commitPlanningSnapshot(
     return ensureIntegrationBranch(repoPath);
   } finally {
     if (integrationWorktree.temporary) {
-      removeWorktree(
+      removeWorktree({
         repoPath,
-        integrationWorktree.path,
+        worktreePath: integrationWorktree.path,
         workspacesBasePath,
-        projectId
-      );
+        projectId,
+      });
     }
   }
 }
@@ -292,21 +292,21 @@ function acceptWork(
     );
   } finally {
     if (integrationWorktree.temporary) {
-      removeWorktree(
-        input.repoPath,
-        integrationWorktree.path,
+      removeWorktree({
+        repoPath: input.repoPath,
+        worktreePath: integrationWorktree.path,
         workspacesBasePath,
-        input.projectId
-      );
+        projectId: input.projectId,
+      });
     }
   }
 
-  const cleanup = removeWorktree(
-    input.repoPath,
-    input.worktreePath,
+  const cleanup = removeWorktree({
+    repoPath: input.repoPath,
+    worktreePath: input.worktreePath,
     workspacesBasePath,
-    input.projectId
-  );
+    projectId: input.projectId,
+  });
   if (!cleanup.ok) throw new Error(cleanup.message);
   git(input.repoPath, ["branch", "-D", input.branchName]);
   return ensureIntegrationBranch(input.repoPath);

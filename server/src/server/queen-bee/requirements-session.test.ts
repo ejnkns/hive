@@ -22,7 +22,10 @@ import {
 describe("RequirementsSessionManager", () => {
   it("start creates session and returns model's first question", async () => {
     const caller = createMockCaller([emptyResponse("What are you building?")]);
-    const engine = createRequirementsSessionManager(caller);
+    const engine = createRequirementsSessionManager({
+      maxToolRounds: 30,
+      modelCaller: caller,
+    });
 
     const result = await engine.start("test", "Make a todo app", "/tmp");
 
@@ -33,49 +36,52 @@ describe("RequirementsSessionManager", () => {
     const workspace = createTempWorkspace();
     let callCount = 0;
     const engine = createRequirementsSessionManager({
-      async call(messages) {
-        callCount += 1;
-        if (callCount === 1) {
-          return {
-            content: "Inspecting the project.",
-            reasoningContent: "provider thinking payload",
-            reasoning: "provider reasoning payload",
-            toolCalls: [
-              {
-                id: "list-project",
-                name: "list_directory",
-                arguments: JSON.stringify({ path: "." }),
-              },
-              {
-                id: "read-entry",
-                name: "read_file",
-                arguments: JSON.stringify({ path: "src/index.ts" }),
-              },
-            ],
-            finishReason: "tool_calls",
-          };
-        }
+      maxToolRounds: 30,
+      modelCaller: {
+        async call(messages) {
+          callCount += 1;
+          if (callCount === 1) {
+            return {
+              content: "Inspecting the project.",
+              reasoningContent: "provider thinking payload",
+              reasoning: "provider reasoning payload",
+              toolCalls: [
+                {
+                  id: "list-project",
+                  name: "list_directory",
+                  arguments: JSON.stringify({ path: "." }),
+                },
+                {
+                  id: "read-entry",
+                  name: "read_file",
+                  arguments: JSON.stringify({ path: "src/index.ts" }),
+                },
+              ],
+              finishReason: "tool_calls",
+            };
+          }
 
-        const assistantTurns = messages.filter(
-          (message) => message.role === "assistant"
-        );
-        assert.strictEqual(assistantTurns.length, 1);
-        assert.strictEqual(
-          assistantTurns[0]?.reasoning_content,
-          "provider thinking payload"
-        );
-        assert.strictEqual(
-          assistantTurns[0]?.reasoning,
-          "provider reasoning payload"
-        );
-        assert.strictEqual(assistantTurns[0]?.tool_calls?.length, 2);
-        assert.deepStrictEqual(
-          messages
-            .filter((message) => message.role === "tool")
-            .map((message) => message.tool_call_id),
-          ["list-project", "read-entry"]
-        );
-        return emptyResponse("What behavior should change?");
+          const assistantTurns = messages.filter(
+            (message) => message.role === "assistant"
+          );
+          assert.strictEqual(assistantTurns.length, 1);
+          assert.strictEqual(
+            assistantTurns[0]?.reasoning_content,
+            "provider thinking payload"
+          );
+          assert.strictEqual(
+            assistantTurns[0]?.reasoning,
+            "provider reasoning payload"
+          );
+          assert.strictEqual(assistantTurns[0]?.tool_calls?.length, 2);
+          assert.deepStrictEqual(
+            messages
+              .filter((message) => message.role === "tool")
+              .map((message) => message.tool_call_id),
+            ["list-project", "read-entry"]
+          );
+          return emptyResponse("What behavior should change?");
+        },
       },
     });
 
@@ -90,7 +96,10 @@ describe("RequirementsSessionManager", () => {
       emptyResponse("First question"),
       emptyResponse("What framework?"),
     ]);
-    const engine = createRequirementsSessionManager(caller);
+    const engine = createRequirementsSessionManager({
+      maxToolRounds: 30,
+      modelCaller: caller,
+    });
 
     await engine.start("test", "Make an app", "/tmp");
     const result = await engine.respond("test", "React", "/tmp");
@@ -107,7 +116,10 @@ describe("RequirementsSessionManager", () => {
       draftResponse(),
       completionResponse(),
     ]);
-    const engine = createRequirementsSessionManager(caller);
+    const engine = createRequirementsSessionManager({
+      maxToolRounds: 30,
+      modelCaller: caller,
+    });
 
     await engine.start("test", "Make an app", "/tmp");
     const result = await engine.respond("test", "done", "/tmp");
@@ -121,7 +133,7 @@ describe("RequirementsSessionManager", () => {
   });
 
   it("respond throws for unknown project", async () => {
-    const engine = createRequirementsSessionManager();
+    const engine = createRequirementsSessionManager({ maxToolRounds: 30 });
     await assert.rejects(
       () => engine.respond("unknown", "answer", "/tmp"),
       /No active Requirements Session/
@@ -134,7 +146,10 @@ describe("RequirementsSessionManager", () => {
       draftResponse(),
       completionResponse(),
     ]);
-    const engine = createRequirementsSessionManager(caller);
+    const engine = createRequirementsSessionManager({
+      maxToolRounds: 30,
+      modelCaller: caller,
+    });
 
     await engine.start("test", "Make an app", "/tmp");
     await engine.respond("test", "done", "/tmp");
@@ -153,7 +168,10 @@ describe("RequirementsSessionManager", () => {
         return emptyResponse("Ok");
       },
     };
-    const engine = createRequirementsSessionManager(caller);
+    const engine = createRequirementsSessionManager({
+      maxToolRounds: 30,
+      modelCaller: caller,
+    });
 
     await engine.start("test", "Build X", "/tmp");
 
@@ -170,7 +188,10 @@ describe("RequirementsSessionManager", () => {
     mkdirSync(join(workspace, ".hive"), { recursive: true });
     writeFileSync(join(workspace, ".hive", "requirements.md"), "# Canonical");
     const caller = createMockCaller([draftResponse(), emptyResponse("Next?")]);
-    const engine = createRequirementsSessionManager(caller);
+    const engine = createRequirementsSessionManager({
+      maxToolRounds: 30,
+      modelCaller: caller,
+    });
 
     const result = await engine.start("test", "Revise", workspace);
 
@@ -207,13 +228,13 @@ describe("RequirementsSessionManager", () => {
         return emptyResponse("Next question");
       },
     };
-    const engine = createRequirementsSessionManager(
-      caller,
-      undefined,
-      (update) => {
+    const engine = createRequirementsSessionManager({
+      maxToolRounds: 30,
+      modelCaller: caller,
+      onDraftUpdate: (update) => {
         receivedDraft?.(update.content);
-      }
-    );
+      },
+    });
 
     const started = engine.start("test", "Build", workspace);
     assert.equal(
@@ -226,7 +247,10 @@ describe("RequirementsSessionManager", () => {
 
   it("allows only one active requirements workflow per project", async () => {
     const caller = createMockCaller([emptyResponse("Question")]);
-    const engine = createRequirementsSessionManager(caller);
+    const engine = createRequirementsSessionManager({
+      maxToolRounds: 30,
+      modelCaller: caller,
+    });
     await engine.start("test", "Project session", "/tmp");
 
     await assert.rejects(
@@ -252,10 +276,11 @@ describe("RequirementsSessionManager", () => {
       changes: [],
       createdAt: "2026-07-20T00:00:00.000Z",
     });
-    const engine = createRequirementsSessionManager(
-      createMockCaller([emptyResponse("What should change?")]),
-      runtimeStore
-    );
+    const engine = createRequirementsSessionManager({
+      maxToolRounds: 30,
+      modelCaller: createMockCaller([emptyResponse("What should change?")]),
+      runtimeStore,
+    });
 
     await assert.rejects(
       () => engine.start("test", "Competing workflow", workspace),
@@ -279,9 +304,12 @@ describe("RequirementsSessionManager", () => {
     );
     let ideaMessages: Message[] = [];
     const ideaEngine = createRequirementsSessionManager({
-      async call(messages) {
-        ideaMessages = structuredClone(messages);
-        return emptyResponse("What outcome should this Idea provide?");
+      maxToolRounds: 30,
+      modelCaller: {
+        async call(messages) {
+          ideaMessages = structuredClone(messages);
+          return emptyResponse("What outcome should this Idea provide?");
+        },
       },
     });
 
@@ -343,15 +371,16 @@ describe("RequirementsSessionManager", () => {
       join(workspace, ".repair-runtime")
     );
     repairRuntimeStore.saveRequirementsFeedback(feedback);
-    const repairEngine = createRequirementsSessionManager(
-      {
+    const repairEngine = createRequirementsSessionManager({
+      maxToolRounds: 30,
+      modelCaller: {
         async call(messages) {
           repairMessages = structuredClone(messages);
           return emptyResponse("Which behavior should be canonical?");
         },
       },
-      repairRuntimeStore
-    );
+      runtimeStore: repairRuntimeStore,
+    });
 
     await repairEngine.startRepair("test", feedback, workspace, {
       id: "idea-1",
@@ -387,16 +416,20 @@ describe("RequirementsSessionManager", () => {
     const runtimeStore = createQueenBeeRuntimeStore(
       join(workspace, ".runtime")
     );
-    const firstEngine = createRequirementsSessionManager(
-      createMockCaller([draftResponse(), emptyResponse("Next question")]),
-      runtimeStore
-    );
+    const firstEngine = createRequirementsSessionManager({
+      maxToolRounds: 30,
+      modelCaller: createMockCaller([
+        draftResponse(),
+        emptyResponse("Next question"),
+      ]),
+      runtimeStore,
+    });
     await firstEngine.start("test", "Build it", workspace);
 
-    const restartedEngine = createRequirementsSessionManager(
-      undefined,
-      runtimeStore
-    );
+    const restartedEngine = createRequirementsSessionManager({
+      maxToolRounds: 30,
+      runtimeStore,
+    });
 
     assert.strictEqual(
       restartedEngine.getSession("test")?.draftRequirements,
@@ -410,16 +443,17 @@ describe("RequirementsSessionManager", () => {
     const runtimeStore = createQueenBeeRuntimeStore(
       join(workspace, ".runtime")
     );
-    const engine = createRequirementsSessionManager(
-      createMockCaller([
+    const engine = createRequirementsSessionManager({
+      maxToolRounds: 30,
+      modelCaller: createMockCaller([
         emptyResponse("What should this project do?"),
         draftResponse(),
         emptyResponse(
           "REQUIREMENTS_COMPLETE\n```markdown\n# Requirements\n```"
         ),
       ]),
-      runtimeStore
-    );
+      runtimeStore,
+    });
 
     await engine.start("test", "Build it", workspace);
     await engine.respond("test", "That is complete", workspace);
@@ -472,7 +506,10 @@ describe("RequirementsSessionManager", () => {
       },
     };
 
-    const engine = createRequirementsSessionManager(caller);
+    const engine = createRequirementsSessionManager({
+      maxToolRounds: 30,
+      modelCaller: caller,
+    });
     await engine.start("test", "Add feature", workspace);
     const result = await engine.respond("test", "Proceed", workspace);
 
@@ -500,7 +537,10 @@ describe("RequirementsSessionManager", () => {
       },
     };
 
-    const engine = createRequirementsSessionManager(caller);
+    const engine = createRequirementsSessionManager({
+      maxToolRounds: 10,
+      modelCaller: caller,
+    });
     // start will loop 10 times, then respond loops 10 times.
     // We reset the counter after start to measure only respond.
     await engine.start("test", "Build", workspace);

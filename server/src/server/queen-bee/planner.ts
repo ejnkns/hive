@@ -81,7 +81,8 @@ export function createPlanningManager(
   runtimeStore: QueenBeeRuntimeStore,
   _integrationManager: IntegrationManager,
   modelCaller: AgentModelCaller = createAgentModelCaller(PLANNER_TOOLS),
-  specificationStore: ProjectSpecificationStore
+  specificationStore: ProjectSpecificationStore,
+  maxToolRounds: number
 ): PlanningManager {
   return {
     async propose(
@@ -126,6 +127,7 @@ export function createPlanningManager(
         modelCaller,
         messages,
         repoPath,
+        maxToolRounds,
         "revision" in sharedContext ? sharedContext.revision : undefined
       );
       const feedbackIssues = parseRequirementsFeedback(result);
@@ -291,8 +293,8 @@ async function callWithToolLoop(
   modelCaller: AgentModelCaller,
   messages: Message[],
   workspacePath: string,
-  projectRevision?: string,
-  maxToolRounds = 10
+  maxToolRounds: number,
+  projectRevision?: string
 ): Promise<string> {
   for (let round = 0; round < maxToolRounds; round++) {
     const response = await modelCaller.call(messages, workspacePath, true);

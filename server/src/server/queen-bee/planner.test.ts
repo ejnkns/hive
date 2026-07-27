@@ -62,7 +62,8 @@ describe("Planner Agent reconciliation", () => {
           },
         ],
       }),
-      createProjectSpecificationStore(repoPath)
+      createProjectSpecificationStore(repoPath),
+      30
     );
 
     const proposal = await planner.propose(
@@ -110,7 +111,8 @@ describe("Planner Agent reconciliation", () => {
           },
         ],
       }),
-      specStore()
+      specStore(),
+      30
     );
 
     await assert.rejects(
@@ -154,7 +156,8 @@ describe("Planner Agent reconciliation", () => {
         ) {
           throw new Error("Commit hook rejected");
         },
-      } satisfies ProjectSpecificationStore
+      } satisfies ProjectSpecificationStore,
+      30
     );
     const proposal = await planner.propose(
       "project-1",
@@ -200,7 +203,8 @@ describe("Planner Agent reconciliation", () => {
           },
         ],
       }),
-      createProjectSpecificationStore(repoPath)
+      createProjectSpecificationStore(repoPath),
+      30
     );
     const proposal = await planner.propose(
       "project-1",
@@ -250,7 +254,8 @@ describe("Planner Agent reconciliation", () => {
           },
         ],
       }),
-      createProjectSpecificationStore(repoPath)
+      createProjectSpecificationStore(repoPath),
+      30
     );
 
     const proposal = await planner.propose(
@@ -296,7 +301,8 @@ describe("Planner Agent reconciliation", () => {
           },
         ],
       }),
-      createProjectSpecificationStore(repoPath)
+      createProjectSpecificationStore(repoPath),
+      30
     );
     const proposal = await planner.propose(
       "project-1",
@@ -337,7 +343,8 @@ describe("Planner Agent reconciliation", () => {
           },
         ],
       }),
-      createProjectSpecificationStore(repoPath)
+      createProjectSpecificationStore(repoPath),
+      30
     );
 
     const proposal = await planner.propose(
@@ -372,7 +379,8 @@ describe("Planner Agent reconciliation", () => {
           },
         ],
       }),
-      createProjectSpecificationStore(repoPath)
+      createProjectSpecificationStore(repoPath),
+      30
     );
 
     const proposal = await planner.propose(
@@ -395,7 +403,8 @@ describe("Planner Agent reconciliation", () => {
       runtimeStore,
       integrationManager(),
       responseCaller({ changes: [] }),
-      specStore()
+      specStore(),
+      30
     );
 
     await assert.rejects(
@@ -428,7 +437,8 @@ describe("Planner Agent reconciliation", () => {
           },
         ],
       }),
-      createProjectSpecificationStore(repoPath)
+      createProjectSpecificationStore(repoPath),
+      30
     );
 
     const outcome = await planner.propose(
@@ -464,7 +474,8 @@ describe("Planner Agent reconciliation", () => {
           { action: "keep", cardId: card.id, rationale: "Keep it again" },
         ],
       }),
-      specStore()
+      specStore(),
+      30
     );
     await assert.rejects(
       () => duplicatePlanner.propose("project-1", repoPath, "# Proposed"),
@@ -499,7 +510,8 @@ describe("Planner Agent reconciliation", () => {
           },
         ],
       }),
-      specStore()
+      specStore(),
+      30
     );
     await assert.rejects(
       () => cyclePlanner.propose("project-1", cycleWorkspace, "# Initial"),
@@ -529,7 +541,8 @@ describe("Planner Agent reconciliation", () => {
           },
         ],
       }),
-      createProjectSpecificationStore(repoPath)
+      createProjectSpecificationStore(repoPath),
+      30
     );
 
     const proposal = await planner.propose(
@@ -575,7 +588,8 @@ describe("Planner Agent reconciliation", () => {
           },
         ],
       }),
-      createProjectSpecificationStore(repoPath)
+      createProjectSpecificationStore(repoPath),
+      30
     );
 
     const outcome = await planner.propose(
@@ -614,7 +628,8 @@ describe("Planner Agent reconciliation", () => {
           },
         ],
       }),
-      specStore()
+      specStore(),
+      30
     );
 
     const outcome = await planner.propose(
@@ -701,7 +716,8 @@ describe("Planner Agent reconciliation", () => {
           };
         },
       },
-      specStore()
+      specStore(),
+      30
     );
 
     await planner.propose("project-1", repoPath, "# Proposed requirements");
@@ -728,7 +744,8 @@ describe("Planner Agent reconciliation", () => {
         ],
         changes: [],
       }),
-      specStore()
+      specStore(),
+      30
     );
 
     await assert.rejects(
@@ -767,7 +784,8 @@ describe("Planner Agent reconciliation", () => {
           },
         ],
       }),
-      specStore()
+      specStore(),
+      30
     );
 
     await assert.rejects(
@@ -810,7 +828,8 @@ describe("Planner Agent reconciliation", () => {
           },
         ],
       }),
-      specStore()
+      specStore(),
+      30
     );
 
     await assert.rejects(
@@ -882,8 +901,8 @@ describe("Planner Agent reconciliation", () => {
       },
       assertCurrent: () => {},
       accept: () => ({ branchName: "hive-main", revision: "integration-2" }),
-      discardWorktree: () => {},
-      commitPlanningSnapshot: () => {
+      discardWorktree: (_a, _b, _c) => {},
+      commitPlanningSnapshot: (_a, _b, _c) => {
         if (commitFails) throw new Error("Commit hook rejected");
         return {
           branchName: "hive-main",

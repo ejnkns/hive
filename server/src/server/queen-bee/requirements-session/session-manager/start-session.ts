@@ -29,6 +29,7 @@ export type SessionDeps = {
   activeCalls: Map<string, AbortController>;
   runtimeStore?: QueenBeeRuntimeStore;
   onDraftUpdate: (update: RequirementsDraftUpdate) => void;
+  maxToolRounds: number;
 };
 
 export async function startSession(
@@ -113,6 +114,7 @@ export async function startSession(
           ideaId: kind === "idea_elaboration" ? sourceIdea?.id : undefined,
           content,
         }),
+      deps.maxToolRounds,
       context?.revision,
       controller.signal
     );

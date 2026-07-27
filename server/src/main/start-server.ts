@@ -62,15 +62,15 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
   });
 
   const runtimeStore = createQueenBeeRuntimeStore();
-  const requirementsSessionManager = createRequirementsSessionManager(
-    undefined,
+  const requirementsSessionManager = createRequirementsSessionManager({
+    maxToolRounds: 30,
     runtimeStore,
-    (update) => {
+    onDraftUpdate: (update) => {
       const scope = update.cardId ? "card" : update.ideaId ? "idea" : "project";
       const scopeId = update.cardId ?? update.ideaId;
       emitDraftUpdated(scope, scopeId, update.content);
-    }
-  );
+    },
+  });
   const boardStore = createBoardStore(() => {}, runtimeStore);
   const integrationManager = createIntegrationManager(HIVE_DIR);
   const specificationStore = createProjectSpecificationStore(HIVE_DIR);
@@ -79,7 +79,8 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     runtimeStore,
     integrationManager,
     undefined,
-    specificationStore
+    specificationStore,
+    30
   );
   const reviewer = createReviewer();
   const coordinator = createCoordinator();

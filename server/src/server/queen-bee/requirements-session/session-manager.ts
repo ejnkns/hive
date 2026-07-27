@@ -17,12 +17,18 @@ import type {
   RequirementsSessionManager,
 } from "./types";
 
+export type CreateSessionManagerParams = {
+  maxToolRounds: number;
+  modelCaller?: AgentModelCaller;
+  runtimeStore?: QueenBeeRuntimeStore;
+  onDraftUpdate?: (update: RequirementsDraftUpdate) => void;
+};
+
 export function createRequirementsSessionManager(
-  modelCaller?: AgentModelCaller,
-  runtimeStore?: QueenBeeRuntimeStore,
-  onDraftUpdate: (update: RequirementsDraftUpdate) => void = () => {}
+  params: CreateSessionManagerParams
 ): RequirementsSessionManager {
-  const caller = modelCaller ?? createAgentModelCaller();
+  const { runtimeStore } = params;
+  const caller = params.modelCaller ?? createAgentModelCaller();
   const sessions = new Map<string, RequirementsSession>();
   const activeCalls = new Map<string, AbortController>();
 
@@ -31,7 +37,8 @@ export function createRequirementsSessionManager(
     sessions,
     activeCalls,
     runtimeStore,
-    onDraftUpdate,
+    onDraftUpdate: params.onDraftUpdate ?? (() => {}),
+    maxToolRounds: params.maxToolRounds,
   };
 
   return {

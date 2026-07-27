@@ -91,7 +91,7 @@ describe("WorkerSupervisor", () => {
       modelCaller
     );
 
-    await supervisor.run("project-1", card, repoPath, "", "", () => {});
+    await supervisor.run("project-1", card, repoPath, "", "", () => {}, 30, 20);
 
     const branchName = `hive/${card.id}/attempt-1`;
     const branch = git(repoPath, ["branch", "--list", branchName]);
@@ -156,7 +156,7 @@ describe("WorkerSupervisor", () => {
       }
     );
 
-    await supervisor.run("project-1", card, repoPath, "", "", () => {});
+    await supervisor.run("project-1", card, repoPath, "", "", () => {}, 30, 20);
 
     const updated = boardStore
       .getBoard("project-1", repoPath)
@@ -199,7 +199,7 @@ describe("WorkerSupervisor", () => {
       }
     );
 
-    await supervisor.run("project-1", card, repoPath, "", "", () => {});
+    await supervisor.run("project-1", card, repoPath, "", "", () => {}, 30, 20);
 
     const updated = boardStore
       .getBoard("project-1", repoPath)
@@ -271,7 +271,16 @@ describe("WorkerSupervisor", () => {
       modelCaller
     );
 
-    const run = supervisor.run("project-1", card, repoPath, "", "", () => {});
+    const run = supervisor.run(
+      "project-1",
+      card,
+      repoPath,
+      "",
+      "",
+      () => {},
+      30,
+      20
+    );
     await reviewStarted;
 
     assert.deepEqual(supervisor.runningCardIds("project-1"), []);
@@ -320,7 +329,7 @@ describe("WorkerSupervisor", () => {
       modelCaller
     );
 
-    await supervisor.run("project-1", card, repoPath, "", "", () => {});
+    await supervisor.run("project-1", card, repoPath, "", "", () => {}, 30, 20);
 
     const saved = boardStore.getBoard("project-1", repoPath).cards[0];
     assert.equal(saved?.column, "unfulfillable");
@@ -381,7 +390,16 @@ describe("WorkerSupervisor", () => {
       modelCaller
     );
 
-    const run = supervisor.run("project-1", card, repoPath, "", "", () => {});
+    const run = supervisor.run(
+      "project-1",
+      card,
+      repoPath,
+      "",
+      "",
+      () => {},
+      30,
+      20
+    );
     await modelCallStarted;
     assert.equal(supervisor.isRunning("project-1", card.id), true);
     assert.equal(supervisor.cancel("project-1", card.id), true);
@@ -478,7 +496,7 @@ describe("WorkerSupervisor", () => {
       modelCaller
     );
 
-    await supervisor.run("project-1", card, repoPath, "", "", () => {});
+    await supervisor.run("project-1", card, repoPath, "", "", () => {}, 30, 20);
 
     assert.match(receivedToolContent ?? "", /command complete/);
     const reviewed = boardStore.getBoard("project-1", repoPath).cards[0];
@@ -537,7 +555,7 @@ describe("WorkerSupervisor", () => {
       modelCaller
     );
 
-    await supervisor.run("project-1", card, repoPath, "", "", () => {});
+    await supervisor.run("project-1", card, repoPath, "", "", () => {}, 30, 20);
 
     assert.equal(observedSource, "interrupted change\n");
   });
@@ -585,7 +603,7 @@ describe("WorkerSupervisor", () => {
       modelCaller
     );
 
-    await supervisor.run("project-1", card, repoPath, "", "", () => {});
+    await supervisor.run("project-1", card, repoPath, "", "", () => {}, 30, 20);
 
     assert.ok(modelCallCount > 0);
     assert.notEqual(observedWorkspace, worktreePath);
@@ -648,7 +666,7 @@ describe("WorkerSupervisor", () => {
       }
     );
 
-    await supervisor.run("project-1", card, repoPath, "", "", () => {});
+    await supervisor.run("project-1", card, repoPath, "", "", () => {}, 30, 20);
 
     assert.ok(modelCallCount > 0);
     assert.notEqual(observedWorkspace, worktreePath);
@@ -720,7 +738,16 @@ describe("WorkerSupervisor", () => {
       repoPath,
       modelCaller
     );
-    const run = supervisor.run("project-1", card, repoPath, "", "", () => {});
+    const run = supervisor.run(
+      "project-1",
+      card,
+      repoPath,
+      "",
+      "",
+      () => {},
+      30,
+      20
+    );
 
     await secondCallStarted;
     try {

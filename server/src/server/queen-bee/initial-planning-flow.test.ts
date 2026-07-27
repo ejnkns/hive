@@ -42,10 +42,11 @@ describe("initial planning flow", () => {
     const projectStore = projectStoreFor(project);
     const runtimeStore = createQueenBeeRuntimeStore(join(repoPath, ".runtime"));
     const boardStore = createBoardStore(() => {}, runtimeStore);
-    const sessionManager = createRequirementsSessionManager(
-      requirementsCaller(),
-      runtimeStore
-    );
+    const sessionManager = createRequirementsSessionManager({
+      maxToolRounds: 30,
+      modelCaller: requirementsCaller(),
+      runtimeStore,
+    });
     let planningAttempts = 0;
     const planningManager = createPlanningManager(
       boardStore,
@@ -79,7 +80,8 @@ describe("initial planning flow", () => {
           };
         },
       },
-      createProjectSpecificationStore(repoPath)
+      createProjectSpecificationStore(repoPath),
+      30
     );
     const firstServer = registerFlowServer({
       boardStore,
@@ -129,16 +131,17 @@ describe("initial planning flow", () => {
 
     await firstServer.close();
     servers.splice(servers.indexOf(firstServer), 1);
-    const restartedSessionManager = createRequirementsSessionManager(
-      undefined,
-      runtimeStore
-    );
+    const restartedSessionManager = createRequirementsSessionManager({
+      maxToolRounds: 30,
+      runtimeStore,
+    });
     const restartedPlanningManager = createPlanningManager(
       boardStore,
       runtimeStore,
       integrationManager(),
       unavailableCaller(),
-      createProjectSpecificationStore(repoPath)
+      createProjectSpecificationStore(repoPath),
+      30
     );
     const restartedServer = registerFlowServer({
       boardStore,
@@ -188,10 +191,14 @@ describe("initial planning flow", () => {
         runtimeStore,
         integrationManager(),
         unavailableCaller(),
-        createProjectSpecificationStore(repoPath)
+        createProjectSpecificationStore(repoPath),
+        30
       ),
       projectStore,
-      sessionManager: createRequirementsSessionManager(undefined, runtimeStore),
+      sessionManager: createRequirementsSessionManager({
+        maxToolRounds: 30,
+        runtimeStore,
+      }),
     });
 
     const reloadedBoard = await reloadedServer.inject({
@@ -316,8 +323,8 @@ function integrationManager(): IntegrationManager {
     accept: () => {
       throw new Error("Not used");
     },
-    discardWorktree: () => {},
-    commitPlanningSnapshot: () => ({
+    discardWorktree: (_a, _b, _c) => {},
+    commitPlanningSnapshot: (_a, _b, _c) => ({
       branchName: "hive-main",
       revision: "integration-2",
     }),

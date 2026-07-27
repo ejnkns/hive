@@ -9,18 +9,20 @@ export type GitResult = {
   message: string;
 };
 
-export function removeWorktree(
-  repoPath: string,
-  worktreePath: string,
-  workspacesBasePath: string,
-  projectId: string
-): GitResult {
+export type RemoveWorktreeParams = {
+  repoPath: string;
+  worktreePath: string;
+  workspacesBasePath: string;
+  projectId: string;
+};
+
+export function removeWorktree(params: RemoveWorktreeParams): GitResult {
   const workspaceProjectDir = resolve(
-    workspacesBasePath,
+    params.workspacesBasePath,
     "workspaces",
-    projectId
+    params.projectId
   );
-  const resolvedWorktree = resolve(worktreePath);
+  const resolvedWorktree = resolve(params.worktreePath);
   const relativePath = relative(workspaceProjectDir, resolvedWorktree);
   if (
     !relativePath ||
@@ -36,7 +38,7 @@ export function removeWorktree(
 
   try {
     execFileSync("git", ["worktree", "remove", resolvedWorktree, "--force"], {
-      cwd: repoPath,
+      cwd: params.repoPath,
       encoding: "utf-8",
       timeout: 10_000,
     });

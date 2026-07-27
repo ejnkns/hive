@@ -113,7 +113,7 @@ function card(
 
 function supervisor(running: string[], runs: string[]): WorkerSupervisor {
   return {
-    async run(projectId, card) {
+    async run(projectId, card, _a, _b, _c, _d, _e, _f) {
       runs.push(`${projectId}:${card.id}`);
     },
     isRunning: () => false,

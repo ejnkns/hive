@@ -43,6 +43,7 @@ export async function respondSession(
           content,
         });
       },
+      deps.maxToolRounds,
       session.projectRevision === null ? undefined : session.projectRevision,
       controller.signal
     );

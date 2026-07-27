@@ -20,7 +20,11 @@ describe("resetSession", () => {
     const runtimeStore = createQueenBeeRuntimeStore(
       join(mkdtempSync(join(tmpdir(), "hive-reset-")), ".runtime")
     );
-    const engine = createRequirementsSessionManager(caller, runtimeStore);
+    const engine = createRequirementsSessionManager({
+      maxToolRounds: 30,
+      modelCaller: caller,
+      runtimeStore,
+    });
 
     await engine.start("p1", "Build it", "/tmp");
     const session = engine.getSession("p1");
@@ -39,7 +43,10 @@ describe("resetSession", () => {
       emptyResponse("First question"),
       emptyResponse("New question"),
     ]);
-    const engine = createRequirementsSessionManager(caller);
+    const engine = createRequirementsSessionManager({
+      maxToolRounds: 30,
+      modelCaller: caller,
+    });
 
     await engine.start("p1", "Build it", "/tmp");
     const session = engine.getSession("p1");
@@ -56,7 +63,10 @@ describe("resetSession", () => {
       draftResponse(),
       completionResponse(),
     ]);
-    const engine = createRequirementsSessionManager(caller);
+    const engine = createRequirementsSessionManager({
+      maxToolRounds: 30,
+      modelCaller: caller,
+    });
 
     await engine.start("p1", "Build it", "/tmp");
     await engine.respond("p1", "Done", "/tmp");
@@ -78,7 +88,11 @@ describe("resetSession", () => {
       draftResponse(),
       completionResponse(),
     ]);
-    const engine = createRequirementsSessionManager(caller, runtimeStore);
+    const engine = createRequirementsSessionManager({
+      maxToolRounds: 30,
+      modelCaller: caller,
+      runtimeStore,
+    });
 
     await engine.start("p1", "Build it", workspace);
     await engine.respond("p1", "Done", workspace);
@@ -96,7 +110,7 @@ describe("resetSession", () => {
   });
 
   it("throws for an unknown session", async () => {
-    const engine = createRequirementsSessionManager();
+    const engine = createRequirementsSessionManager({ maxToolRounds: 30 });
     await assert.rejects(
       () => engine.resetSession("p1", "nonexistent"),
       /not found/
@@ -123,10 +137,11 @@ describe("resetSession", () => {
       issues: [],
     };
     runtimeStore.saveRequirementsFeedback(feedback);
-    const engine = createRequirementsSessionManager(
-      createMockCaller([emptyResponse("Fix what?")]),
-      runtimeStore
-    );
+    const engine = createRequirementsSessionManager({
+      maxToolRounds: 30,
+      modelCaller: createMockCaller([emptyResponse("Fix what?")]),
+      runtimeStore,
+    });
 
     await engine.startRepair("p1", feedback, workspace);
     assert.strictEqual(
@@ -164,10 +179,11 @@ describe("resetSession", () => {
       issues: [],
     };
     runtimeStore.saveRequirementsFeedback(feedback);
-    const engine = createRequirementsSessionManager(
-      createMockCaller([emptyResponse("Question")]),
-      runtimeStore
-    );
+    const engine = createRequirementsSessionManager({
+      maxToolRounds: 30,
+      modelCaller: createMockCaller([emptyResponse("Question")]),
+      runtimeStore,
+    });
 
     await engine.start("p1", "Build it", workspace);
     const session = engine.getSession("p1");
@@ -187,13 +203,15 @@ describe("resetSession", () => {
     );
     let respondCallSignal: AbortSignal | undefined;
     let callIndex = 0;
-    const engine = createRequirementsSessionManager(
-      {
+    const engine = createRequirementsSessionManager({
+      maxToolRounds: 30,
+      modelCaller: {
         async call(
           _messages: Message[],
           _ws: string,
           _includeTools: boolean,
           signal?: AbortSignal
+          // biome-ignore lint/suspicious/noExplicitAny: mock return type
         ): Promise<any> {
           callIndex++;
           if (callIndex === 1) {
@@ -203,8 +221,8 @@ describe("resetSession", () => {
           return new Promise(() => {});
         },
       },
-      runtimeStore
-    );
+      runtimeStore,
+    });
 
     await engine.start("p1", "Build it", "/tmp");
     assert.ok(engine.getSession("p1"));

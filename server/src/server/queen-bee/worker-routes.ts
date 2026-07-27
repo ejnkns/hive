@@ -103,8 +103,8 @@ export function registerWorkerRoutes(
         systemPrompt,
         codingGuidelines,
         (event) => deps.onWorkerEvent?.(projectId, event),
-        maxIterationsPerCommit,
-        maxCommits
+        maxIterationsPerCommit ?? 30,
+        maxCommits ?? 20
       );
     }
   );

@@ -78,7 +78,7 @@ describe("integration routes", () => {
       },
       assertCurrent: () => {},
       accept: () => ({ branchName: "hive-main", revision: "hive-1" }),
-      discardWorktree: () => {},
+      discardWorktree: (_a, _b, _c) => {},
       commitPlanningSnapshot: (_repoPath, _proposalId, _projectId) => ({
         branchName: "hive-main",
         revision: "hive-1",

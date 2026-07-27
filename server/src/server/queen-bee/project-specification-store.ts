@@ -68,7 +68,12 @@ function applySpecification(
     return ensureIntegrationBranch(repoPath);
   } finally {
     if (worktree.temporary)
-      removeWorktree(repoPath, worktree.path, projectId, workspacesBasePath);
+      removeWorktree({
+        repoPath,
+        worktreePath: worktree.path,
+        workspacesBasePath,
+        projectId,
+      });
   }
 }
 
@@ -141,18 +146,13 @@ function acquireIntegrationWorktree(
   return { path, temporary: true };
 }
 
-function removeWorktree(
-  repoPath: string,
-  worktreePath: string,
-  projectId: string,
-  workspacesBasePath: string
-): void {
-  const result = removeWorktreeSafe(
-    repoPath,
-    worktreePath,
-    workspacesBasePath,
-    projectId
-  );
+function removeWorktree(params: {
+  repoPath: string;
+  worktreePath: string;
+  projectId: string;
+  workspacesBasePath: string;
+}): void {
+  const result = removeWorktreeSafe(params);
   if (!result.ok) throw new Error(result.message);
 }
 

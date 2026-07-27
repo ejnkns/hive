@@ -9,9 +9,9 @@ export async function callWithToolLoop(
   messages: Message[],
   workspacePath: string,
   onDraftUpdate: (content: string) => void = () => {},
+  maxToolRounds: number,
   projectRevision?: string,
-  signal?: AbortSignal,
-  maxToolRounds = 10
+  signal?: AbortSignal
 ): Promise<{ content: string; draftRequirements?: string }> {
   let draftRequirements: string | undefined;
   for (let round = 0; round < maxToolRounds; round++) {
