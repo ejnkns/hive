@@ -3,3 +3,6 @@ packages:
   - "telemetry"
   - "server"
   - "ui"
+allowBuilds:
+  esbuild: true 
+  lefthook: true 
