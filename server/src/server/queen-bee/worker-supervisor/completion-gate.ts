@@ -121,8 +121,11 @@ function validateVerification(
 
   for (const callId of completion.verificationCallIds) {
     const result = evidence.get(callId);
-    if (result?.name !== "run_command") {
-      return `verificationCallIds contains '${callId}', which is not a recorded run_command result.`;
+    if (!result) {
+      return `verificationCallIds contains '${callId}', which was never executed. Use the exact call_id from a run_command tool response.`;
+    }
+    if (result.name !== "run_command") {
+      return `verificationCallIds contains '${callId}', which was a ${result.name} call, not run_command. Only run_command output can be used as verification evidence.`;
     }
     if (result.isError) {
       return `verification command '${callId}' failed. Correct the failure and run verification again.`;

@@ -384,6 +384,9 @@ async function runLoop(
 
     if (response.content) {
       log.content += `${response.content}\n`;
+      if (log.content.length > 5000) {
+        log.content = `...(earlier content truncated)\n${log.content.slice(-5000)}`;
+      }
       persistLog();
       onEvent({
         type: "worker_content",
@@ -468,6 +471,9 @@ async function runLoop(
         name: toolCall.name,
         args: toolCall.arguments.slice(0, 200),
       });
+      if (log.toolCalls.length > 100) {
+        log.toolCalls = log.toolCalls.slice(-100);
+      }
       persistLog();
 
       const result = await executeWorkerTool(toolCall, worktreePath, signal);
