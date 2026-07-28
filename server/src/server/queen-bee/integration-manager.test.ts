@@ -66,6 +66,7 @@ describe("IntegrationManager", () => {
       worktreePath,
       reviewedHead,
       reviewedIntegrationRevision: integration.revision,
+      requirementRefs: [],
     });
 
     assert.equal(accepted.branchName, "hive-main");
@@ -113,6 +114,7 @@ describe("IntegrationManager", () => {
           worktreePath,
           reviewedHead,
           reviewedIntegrationRevision: integration.revision,
+          requirementRefs: [],
         }),
       /changed since review/
     );
@@ -132,6 +134,7 @@ describe("IntegrationManager", () => {
       cardId: "card-1",
       ...first,
       reviewedIntegrationRevision: integration.revision,
+      requirementRefs: [],
     });
 
     const readiness = manager.reviewReadiness({
@@ -161,6 +164,7 @@ describe("IntegrationManager", () => {
       cardId: "card-1",
       ...first,
       reviewedIntegrationRevision: integration.revision,
+      requirementRefs: [],
     });
 
     const readiness = manager.reviewReadiness({
@@ -198,6 +202,74 @@ describe("IntegrationManager", () => {
     assert.equal(existsSync(worktreePath), true);
   });
 
+  it("marks accepted requirementRefs as (done) in requirements.md", () => {
+    const repoPath = createRepository();
+    const manager = createIntegrationManager(repoPath);
+    const integration = manager.ensure(repoPath);
+    const worktreePath = join(repoPath, "workspaces", "test-project", "card-1");
+    const branchName = "hive/card-1/attempt-1";
+    mkdirSync(join(repoPath, "workspaces", "test-project"), {
+      recursive: true,
+    });
+    git(repoPath, [
+      "worktree",
+      "add",
+      "-b",
+      branchName,
+      worktreePath,
+      "hive-main",
+    ]);
+    writeFileSync(join(worktreePath, "feature.txt"), "accepted\n");
+    git(worktreePath, ["add", "feature.txt"]);
+    git(worktreePath, ["commit", "-m", "feature: add accepted work"]);
+    const reviewedHead = git(worktreePath, ["rev-parse", "HEAD"]);
+
+    git(repoPath, ["switch", "hive-main"]);
+    mkdirSync(join(repoPath, ".hive"), { recursive: true });
+    writeFileSync(
+      join(repoPath, ".hive", "requirements.md"),
+      [
+        "# Requirements",
+        "",
+        "## Functional requirements",
+        "- [FR-1] User can log in",
+        "- [FR-2] User can log out",
+        "",
+        "## Acceptance criteria",
+        "- [AC-1] Invalid credentials show an error",
+      ].join("\n")
+    );
+    git(repoPath, ["add", ".hive/requirements.md"]);
+    git(repoPath, ["commit", "-m", "chore: add requirements"]);
+    const updatedIntegration = git(repoPath, ["rev-parse", "hive-main"]);
+    git(repoPath, ["switch", "-"]);
+
+    manager.accept({
+      repoPath,
+      projectId: "test-project",
+      cardId: "card-1",
+      branchName,
+      worktreePath,
+      reviewedHead,
+      reviewedIntegrationRevision: updatedIntegration,
+      requirementRefs: ["FR-1"],
+    });
+
+    const updated = git(repoPath, ["show", "hive-main:.hive/requirements.md"]);
+    assert.ok(
+      updated.includes("- [FR-1] (done) User can log in"),
+      `FR-1 not marked done\n${updated}`
+    );
+    assert.ok(
+      !updated.includes("- [FR-2] (done)"),
+      "FR-2 should not be marked done"
+    );
+    assert.ok(
+      !updated.includes("- [AC-1] (done)"),
+      "AC-1 should not be marked done"
+    );
+  });
+
   it("accepts work while the user has hive-main checked out", () => {
     const repoPath = createRepository();
     const manager = createIntegrationManager(repoPath);
@@ -229,6 +301,7 @@ describe("IntegrationManager", () => {
       worktreePath,
       reviewedHead,
       reviewedIntegrationRevision: integration.revision,
+      requirementRefs: [],
     });
 
     assert.equal(git(repoPath, ["branch", "--show-current"]), "hive-main");
