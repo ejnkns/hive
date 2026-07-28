@@ -3,6 +3,7 @@ packages:
   - "telemetry"
   - "server"
   - "ui"
+  - "workflow-engine"
 allowBuilds:
   esbuild: true 
   lefthook: true 
