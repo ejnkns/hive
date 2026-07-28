@@ -6,6 +6,7 @@ import type { FastifyInstance } from "fastify";
 import { isRecord } from "shared/board-types";
 import type { QueenBeeEvent } from "shared/queen-bee-events";
 import type { BoardStore } from "./board-store";
+import { onCancelled } from "./card-engine-integration";
 import type { ProjectStore } from "./create-project-store";
 import { evaluateWorkerAdmission } from "./worker-admission";
 import { offQueenBeeEvent, onQueenBeeEvent } from "./worker-event-bus";
@@ -157,6 +158,12 @@ export function registerWorkerRoutes(
 
       if (!deps.workerSupervisor.cancel(projectId, cardId)) {
         return reply.status(409).send({ error: "Worker Agent is not running" });
+      }
+
+      if (project) {
+        const board = deps.boardStore.getBoard(projectId, project.repoPath);
+        const card = board.cards.find((c) => c.id === cardId);
+        if (card) onCancelled(card);
       }
 
       return reply.send({ cancelled: true, cardId });

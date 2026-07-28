@@ -5,6 +5,11 @@ import { join } from "node:path";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { WorkAttempt } from "shared/board-types";
 import type { BoardStore, Card } from "./board-store";
+import {
+  onAccepted,
+  onNewChanges,
+  onUpdateChanges,
+} from "./card-engine-integration";
 import type { ProjectStore } from "./create-project-store";
 import type { IntegrationManager } from "./integration-manager";
 import type { QueenBeeRuntimeStore } from "./queen-bee-runtime-store";
@@ -100,6 +105,7 @@ export function registerWorkDecisionRoutes(
             }),
           }
         );
+        onAccepted(updated);
         deps.runtimeStore.appendActivity(projectId, card.id, {
           actor: "user",
           type: "decision",
@@ -141,6 +147,7 @@ export function registerWorkDecisionRoutes(
             }),
           }
         );
+        onUpdateChanges(updated);
         deps.runtimeStore.appendActivity(projectId, card.id, {
           actor: "user",
           type: "decision",
@@ -199,6 +206,7 @@ export function registerWorkDecisionRoutes(
             }),
           }
         );
+        onNewChanges(updated);
         deps.runtimeStore.appendActivity(projectId, card.id, {
           actor: "user",
           type: "decision",

@@ -4,6 +4,13 @@ import { execFileSync } from "node:child_process";
 import type { WorkAttempt, WorkerHandover } from "shared/board-types";
 import type { Message } from "shared/message";
 import type { BoardStore, Card } from "./board-store";
+import {
+  onReviewCompleted,
+  onReviewErrored,
+  onWorkerCompleted,
+  onWorkerErrored,
+  onWorkerStarted,
+} from "./card-engine-integration";
 import type { Coordinator } from "./coordinator";
 import type {
   NewCardActivityEvent,
@@ -217,6 +224,7 @@ export function createWorkerSupervisor(
       column: "in_progress",
       workAttempts,
     });
+    onWorkerStarted(card);
     function persistLog(): void {
       writeWorkerLog(boardStore, projectId, repoPath, card.id, log);
     }
@@ -294,6 +302,7 @@ export function createWorkerSupervisor(
         detail: completionDescription(result.completion),
       });
       boardStore.moveCard(projectId, repoPath, card.id, "reviewing");
+      onWorkerCompleted(card);
       const activeAttempt = abortControllers.get(
         runningAttemptKey(projectId, card.id)
       );
@@ -323,6 +332,7 @@ export function createWorkerSupervisor(
         workAttempts,
         column: "ready",
       });
+      onWorkerErrored(card, log.error);
       onEvent({
         type: "worker_error",
         cardId: card.id,
@@ -680,6 +690,7 @@ async function runReviewer(
       workAttempts: reviewedAttempts,
       column: "reviewing",
     });
+    onReviewCompleted(card, verdict.verdict);
     onEvent({
       type: "worker_content",
       cardId: card.id,
@@ -719,6 +730,7 @@ async function runReviewer(
       }),
       column: "reviewing",
     });
+    onReviewErrored(card, error);
     onEvent({
       type: "worker_error",
       cardId: card.id,
