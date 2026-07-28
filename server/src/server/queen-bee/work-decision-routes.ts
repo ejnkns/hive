@@ -454,6 +454,7 @@ function reviewedWorkInput(
     worktreePath: attempt.worktreePath,
     reviewedHead: attempt.reviewedHead,
     reviewedIntegrationRevision: attempt.reviewedIntegrationRevision,
+    requirementRefs: card.requirementRefs ?? [],
   };
 }
 

@@ -2,7 +2,13 @@
 
 import { execFileSync, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { cpSync, existsSync, mkdirSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import type { ReviewReadiness } from "shared/board-types";
 import { parseMergeTreeResult } from "./integration-manager/parse-merge-tree";
@@ -30,6 +36,7 @@ export type AcceptWorkInput = {
   worktreePath: string;
   reviewedHead: string;
   reviewedIntegrationRevision: string;
+  requirementRefs?: string[];
 };
 
 export type IntegrationManager = {
@@ -265,6 +272,38 @@ export function ensureIntegrationBranch(repoPath: string): IntegrationRevision {
   };
 }
 
+function markRequirementsDone(
+  worktreePath: string,
+  requirementRefs: string[],
+  cardId: string
+): void {
+  const path = join(worktreePath, ".hive", "requirements.md");
+  if (!existsSync(path)) return;
+
+  const content = readFileSync(path, "utf-8");
+  const refs = new Set(requirementRefs);
+  const lines = content.split("\n");
+  let modified = false;
+
+  const updated = lines.map((line) => {
+    const match = line.match(/^(-\s*\[([^\]]+)\])(.*)/);
+    if (match && refs.has(match[2])) {
+      const rest = match[3];
+      if (!rest.trimStart().startsWith("(done)")) {
+        modified = true;
+        return `${match[1]} (done)${rest}`;
+      }
+    }
+    return line;
+  });
+
+  if (!modified) return;
+
+  writeFileSync(path, updated.join("\n"), "utf-8");
+  git(worktreePath, ["add", ".hive/requirements.md"]);
+  git(worktreePath, ["commit", "-m", `hive: mark done ${cardId}`]);
+}
+
 function acceptWork(
   input: AcceptWorkInput,
   workspacesBasePath: string
@@ -285,6 +324,13 @@ function acceptWork(
       `hive: accept ${input.cardId}`,
       input.branchName,
     ]);
+    if (input.requirementRefs && input.requirementRefs.length > 0) {
+      markRequirementsDone(
+        integrationWorktree.path,
+        input.requirementRefs,
+        input.cardId
+      );
+    }
   } catch (error) {
     abortMerge(integrationWorktree.path);
     throw new Error(
