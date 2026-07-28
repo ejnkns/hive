@@ -131,6 +131,11 @@ export function createStreamCounter(
             }
             thinkingChars += delta.reasoning_content.length;
             responseText += delta.reasoning_content;
+            if (thinkingChars % 1000 === 0) {
+              logger.debug(
+                `parse-stream: thinking_chars +${String(delta.reasoning_content.length)} (total: ${String(thinkingChars)})`
+              );
+            }
           }
 
           if (delta?.content) {
@@ -144,9 +149,15 @@ export function createStreamCounter(
             }
             outputChars += delta.content.length;
             responseText += delta.content;
-            logger.debug(
-              `parse-stream: content_chars +${String(delta.content.length)} (total: ${String(outputChars)})`
-            );
+            if (
+              outputChars < 100 || outputChars < 1000
+                ? outputChars % 100 === 0
+                : outputChars % 1000 === 0
+            ) {
+              logger.debug(
+                `parse-stream: content_chars +${String(delta.content.length)} (total: ${String(outputChars)})`
+              );
+            }
           }
 
           if (delta?.tool_calls) {

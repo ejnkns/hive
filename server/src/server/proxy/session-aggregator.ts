@@ -57,9 +57,16 @@ function buildSessionSnapshot(): SessionSnapshot {
   return { active, completed };
 }
 
+let snapshotEmissionTimeout: ReturnType<typeof setTimeout> | null = null;
+
 function emitSnapshot() {
-  if (!callbacks) return;
-  callbacks.onSnapshot(buildSessionSnapshot());
+  const cb = callbacks;
+  if (!cb) return;
+  if (snapshotEmissionTimeout) return;
+  snapshotEmissionTimeout = setTimeout(() => {
+    snapshotEmissionTimeout = null;
+    cb.onSnapshot(buildSessionSnapshot());
+  }, 50);
 }
 
 function emitPipelineState(event: PipelineStateMessage) {
@@ -499,13 +506,6 @@ export function recordResponseComplete(event: {
       model: event.model,
       timestamp: session.lastActivity,
     });
-  }
-
-  const conversations = conversationStore.getConversations();
-  const conv = conversations.find((c) => c.requestId === event.requestId);
-  if (conv) {
-    request.conversationPrompt = conv.prompt;
-    request.responseText = conv.responseText;
   }
 
   emitSnapshot();
