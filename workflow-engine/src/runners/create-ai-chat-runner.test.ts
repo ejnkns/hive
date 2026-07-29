@@ -95,10 +95,6 @@ describe("createAiChatRunner", () => {
   });
 
   it("accepts messages via sendMessage", async () => {
-    let resolve: () => void;
-    const paused = new Promise<void>((r) => {
-      resolve = r;
-    });
     let calls = 0;
 
     const modelCaller: AiChatModelCaller = async (
@@ -127,10 +123,8 @@ describe("createAiChatRunner", () => {
 
     const runPromise = runner.run(dummyTask);
 
-    // After first model call (no tools), runner pauses waiting for input.
-    // Send a user message to wake it.
     await new Promise((r) => setTimeout(r, 0));
-    await runner.sendMessage!("Hello!", "user");
+    await runner.sendMessage?.("Hello!", "user");
 
     const result = await runPromise;
     assert.ok(

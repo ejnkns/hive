@@ -136,7 +136,7 @@ const updateDraftExec: ToolExecutor = async (call, _ctx) => {
 type OperationResult = Record<string, unknown>;
 
 function wrapPrepareWorktree(
-  task: TaskDefinition,
+  _task: TaskDefinition,
   params: Record<string, unknown>
 ): OperationResult {
   const result = prepareWorktree({
@@ -251,7 +251,7 @@ function consumeStream(
   });
 }
 
-function createModelCaller(engineTools: ToolDefinition[]) {
+function createModelCaller(_engineTools: ToolDefinition[]) {
   return async (
     systemPrompt: string,
     messages: { role: string; content: string }[],

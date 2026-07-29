@@ -3,6 +3,9 @@ pre-commit:
     - name: biome
       glob: "*.{ts,js,tsx,jsx,json,jsonc,svelte}"
       run: pnpm run check:biome {staged_files} && git add {staged_files}
+    - name: lint
+      glob: "*.{ts,js}"
+      run: biome lint {staged_files}
     - name: typecheck
       glob: "*.{ts,js}"
       run: pnpm run typecheck

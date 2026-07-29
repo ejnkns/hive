@@ -1,4 +1,4 @@
-import { defineWorkflow, type NoOutput } from "workflow-engine/workflow-types";
+import { defineWorkflow } from "workflow-engine/workflow-types";
 
 export type CardsTaskOutputs = {
   prepareWorktree: {
@@ -11,6 +11,13 @@ export type CardsTaskOutputs = {
   buildPackage: { packageId: string };
   review: { verdict: "approved" | "changes_requested"; findings: unknown[] };
   coordinate: { summary: string };
+};
+
+export type CardsItemState = {
+  projectId: string;
+  repoPath: string;
+  attempt: number;
+  validationFailures: number;
 };
 
 export type CardsStateId =
@@ -44,12 +51,7 @@ export const cardsWorkflow = defineWorkflow({
     },
     coordinate: {} as { summary: string },
   },
-  itemState: {} as {
-    projectId: string;
-    repoPath: string;
-    attempt: number;
-    validationFailures: number;
-  },
+  itemState: {} as CardsItemState,
   states: [
     {
       id: "ready",

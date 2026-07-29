@@ -44,7 +44,7 @@ describe("createOperationRunner", () => {
 
   it("respects cancel between operations", async () => {
     const calls: string[] = [];
-    let release: () => void;
+    let release: (() => void) | undefined;
     const firstPromise = new Promise<void>((r) => {
       release = r;
     });
@@ -69,7 +69,7 @@ describe("createOperationRunner", () => {
     });
 
     runner.cancel();
-    release!();
+    release?.();
     await promise;
 
     assert.deepEqual(calls, ["slow"]);
