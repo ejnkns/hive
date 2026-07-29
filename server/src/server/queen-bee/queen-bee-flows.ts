@@ -356,28 +356,28 @@ export const queenBeeFlow = {
               id: "accept",
               label: "Accept work",
               gate: (ctx) =>
-                ctx.taskOutputs.review?.output.verdict === "approved",
+                ctx.taskOutputs.review?.output?.verdict === "approved",
               effect: () => ({ transitionTo: "done" }),
             },
             {
               id: "accept_anyway",
               label: "Accept anyway",
               gate: (ctx) =>
-                ctx.taskOutputs.review?.output.verdict === "changes_requested",
+                ctx.taskOutputs.review?.output?.verdict === "changes_requested",
               effect: () => ({ transitionTo: "done" }),
             },
             {
               id: "update_changes",
               label: "Update work",
               gate: (ctx) =>
-                ctx.taskOutputs.review?.output.verdict === "changes_requested",
+                ctx.taskOutputs.review?.output?.verdict === "changes_requested",
               effect: () => ({ transitionTo: "in_progress" }),
             },
             {
               id: "new_changes",
               label: "New attempt",
               gate: (ctx) =>
-                ctx.taskOutputs.review?.output.verdict === "changes_requested",
+                ctx.taskOutputs.review?.output?.verdict === "changes_requested",
               effect: () => ({ transitionTo: "ready" }),
             },
             {
@@ -488,7 +488,7 @@ function _gateRequiresOptionalChain(
 function _gateCompilesWithOptionalChain(
   ctx: GateContext<{ review: { verdict: string } }>
 ): boolean {
-  return ctx.taskOutputs.review?.output.verdict === "approved";
+  return ctx.taskOutputs.review?.output?.verdict === "approved";
 }
 
 // ——— FlowEdge with explicit generic gives typed source output ———

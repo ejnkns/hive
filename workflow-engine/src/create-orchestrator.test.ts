@@ -1,11 +1,10 @@
 import assert from "node:assert/strict";
-import { after, before, describe, it } from "node:test";
+import { describe, it } from "node:test";
 import {
-  type TaskDefinition,
-  type TaskRunner,
-  WorkflowOrchestrator,
-} from "./orchestrator";
-import type { WorkflowItemState } from "./reducer";
+  createOrchestrator,
+  type OrchestratorAPI,
+} from "./create-orchestrator";
+import type { TaskDefinition, TaskRunner } from "./task-runner";
 import { createWorkflow } from "./workflow-types";
 
 // --- Fixture: simple two-state workflow ---
@@ -82,7 +81,10 @@ class MockRunner implements TaskRunner {
     this.cancelled = false;
   }
 
-  run(_task: TaskDefinition, _context: {}): Promise<{ output: unknown }> {
+  run(
+    _task: TaskDefinition,
+    _context: Record<string, never>
+  ): Promise<{ output: unknown }> {
     return new Promise((resolve, reject) => {
       if (this.shouldFail) {
         reject(new Error("Task failed"));
@@ -106,14 +108,14 @@ class MockRunner implements TaskRunner {
 
 // --- Tests ---
 
-describe("WorkflowOrchestrator", () => {
+describe("createOrchestrator", () => {
   it("starts in initial state", () => {
-    const orchestrator = new WorkflowOrchestrator(testWorkflow, {});
+    const orchestrator = createOrchestrator(testWorkflow, {});
     assert.equal(orchestrator.getState().currentState, "idle");
   });
 
   it("getAvailableActions returns initial actions", () => {
-    const orchestrator = new WorkflowOrchestrator(testWorkflow, {});
+    const orchestrator = createOrchestrator(testWorkflow, {});
     const actions = orchestrator.getAvailableActions();
     assert.equal(actions.length, 1);
     assert.equal(actions[0]!.id, "start");
@@ -121,7 +123,7 @@ describe("WorkflowOrchestrator", () => {
 
   it("dispatchAction transitions state and starts auto tasks", async () => {
     const runner = new MockRunner();
-    const orchestrator = new WorkflowOrchestrator(testWorkflow, {
+    const orchestrator = createOrchestrator(testWorkflow, {
       "ai-task": runner,
     });
 
@@ -147,7 +149,7 @@ describe("WorkflowOrchestrator", () => {
 
   it("cancel transitions back to idle", async () => {
     const runner = new MockRunner();
-    const orchestrator = new WorkflowOrchestrator(testWorkflow, {
+    const orchestrator = createOrchestrator(testWorkflow, {
       "ai-task": runner,
     });
 
@@ -162,7 +164,7 @@ describe("WorkflowOrchestrator", () => {
   });
 
   it("emits state_changed event", () => {
-    const orchestrator = new WorkflowOrchestrator(testWorkflow, {});
+    const orchestrator = createOrchestrator(testWorkflow, {});
     const events: string[] = [];
     orchestrator.on((event) => {
       events.push(event.type);
@@ -175,7 +177,7 @@ describe("WorkflowOrchestrator", () => {
 
   it("task error returns to idle", async () => {
     const runner = new MockRunner(true);
-    const orchestrator = new WorkflowOrchestrator(testWorkflow, {
+    const orchestrator = createOrchestrator(testWorkflow, {
       "ai-task": runner,
     });
 
@@ -190,7 +192,7 @@ describe("WorkflowOrchestrator", () => {
 
   it("cancel action is visible while task is running", () => {
     const runner = new MockRunner();
-    const orchestrator = new WorkflowOrchestrator(testWorkflow, {
+    const orchestrator = createOrchestrator(testWorkflow, {
       "ai-task": runner,
     });
 

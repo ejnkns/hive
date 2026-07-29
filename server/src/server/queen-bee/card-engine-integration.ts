@@ -1,6 +1,7 @@
 import type { Card } from "shared/board-types";
-import type { WorkflowItemState } from "workflow-engine/reducer";
-import { getAvailableActions, reduce } from "workflow-engine/reducer";
+import { getAvailableActions } from "workflow-engine/get-available-actions";
+import { reduce } from "workflow-engine/reduce";
+import type { WorkflowItemState } from "workflow-engine/workflow-state";
 import type { CardsStateId, CardsTaskOutputs } from "./cards-workflow";
 import { cardsWorkflow } from "./cards-workflow";
 
