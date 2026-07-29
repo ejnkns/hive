@@ -4,25 +4,21 @@ import type { WorkflowItemState } from "workflow-engine/shared/workflow-item-sta
 import type { CardsStateId, CardsTaskOutputs } from "./cards-workflow";
 import { cardsWorkflow } from "./cards-workflow";
 
-// === Parallel Engine Integration ===
-//
-// Drives the workflow reducer alongside the existing imperative card
-// lifecycle code. After each mutation to the real card, the equivalent
-// event is dispatched to the reducer so its state stays in sync.
-// Disagreements between the two are logged.
+// === Parallel Engine Integration (legacy — to be removed) ===
 
-const instances = new Map<
-  string,
-  WorkflowItemState<CardsTaskOutputs, CardsStateId>
->();
+type ErasedState = WorkflowItemState<
+  CardsTaskOutputs,
+  CardsStateId,
+  Record<string, unknown>
+>;
+
+const instances = new Map<string, ErasedState>();
 
 function log(event: string, args: Record<string, unknown>): void {
   console.log(`[card-engine] ${event}`, args);
 }
 
-function getOrCreate(
-  card: Card
-): WorkflowItemState<CardsTaskOutputs, CardsStateId> {
+function getOrCreate(card: Card): ErasedState {
   let state = instances.get(card.id);
   if (!state) {
     state = {
@@ -36,13 +32,10 @@ function getOrCreate(
     };
     instances.set(card.id, state);
   }
-  return state!;
+  return state;
 }
 
-function compare(
-  card: Card,
-  state: WorkflowItemState<CardsTaskOutputs, CardsStateId>
-): void {
+function compare(card: Card, state: ErasedState): void {
   if (card.column !== state.currentState) {
     log("state_mismatch", {
       cardId: card.id,
@@ -60,17 +53,15 @@ function sync(
   label: string
 ): void {
   const state = getOrCreate(card);
-  const { state: newState } = reduce(state, event, cardsWorkflow.states);
-  instances.set(card.id, newState);
-  compare(card, newState);
+  const { state: newState } = reduce(state, event, cardsWorkflow.states as any);
+  instances.set(card.id, newState as ErasedState);
+  compare(card, newState as ErasedState);
   log("engine_synced", {
     cardId: card.id,
     event: label,
     engineState: newState.currentState,
   });
 }
-
-// === Lifecycle event handlers ===
 
 export function onCardCreated(card: Card): void {
   getOrCreate(card);
@@ -80,11 +71,7 @@ export function onCardCreated(card: Card): void {
 export function onWorkerStarted(card: Card): void {
   sync(
     card,
-    {
-      type: "action_triggered",
-      actionId: "run",
-      transitionTo: "in_progress",
-    },
+    { type: "action_triggered", actionId: "run", transitionTo: "in_progress" },
     "worker_started"
   );
 }
@@ -92,11 +79,7 @@ export function onWorkerStarted(card: Card): void {
 export function onWorkerCompleted(card: Card): void {
   sync(
     card,
-    {
-      type: "task_completed",
-      taskId: "implement",
-      output: {},
-    },
+    { type: "task_completed", taskId: "runAgent" as any, output: {} },
     "worker_completed"
   );
 }
@@ -104,11 +87,7 @@ export function onWorkerCompleted(card: Card): void {
 export function onWorkerErrored(card: Card, error: string): void {
   sync(
     card,
-    {
-      type: "task_errored",
-      taskId: "implement",
-      error,
-    },
+    { type: "task_errored", taskId: "runAgent" as any, error },
     "worker_errored"
   );
 }
@@ -116,12 +95,12 @@ export function onWorkerErrored(card: Card, error: string): void {
 export function onCancelled(card: Card): void {
   const state = getOrCreate(card);
   const { state: newState } = reduce(
-    { ...state, hasRunningTask: true, runningTaskId: "implement" },
-    { type: "task_cancelled", taskId: "implement" },
-    cardsWorkflow.states
+    { ...state, hasRunningTask: true, runningTaskId: "runAgent" },
+    { type: "task_cancelled", taskId: "runAgent" as any },
+    cardsWorkflow.states as any
   );
-  instances.set(card.id, newState);
-  compare(card, newState);
+  instances.set(card.id, newState as ErasedState);
+  compare(card, newState as ErasedState);
   log("engine_synced", {
     cardId: card.id,
     event: "cancelled",
@@ -132,11 +111,7 @@ export function onCancelled(card: Card): void {
 export function onReviewCompleted(card: Card, verdict: string): void {
   sync(
     card,
-    {
-      type: "task_completed",
-      taskId: "review",
-      output: { verdict },
-    },
+    { type: "task_completed", taskId: "review", output: { verdict } },
     "review_completed"
   );
 }
@@ -144,11 +119,7 @@ export function onReviewCompleted(card: Card, verdict: string): void {
 export function onReviewErrored(card: Card, error: string): void {
   sync(
     card,
-    {
-      type: "task_errored",
-      taskId: "review",
-      error,
-    },
+    { type: "task_errored", taskId: "review", error },
     "review_errored"
   );
 }
@@ -156,11 +127,7 @@ export function onReviewErrored(card: Card, error: string): void {
 export function onAccepted(card: Card): void {
   sync(
     card,
-    {
-      type: "action_triggered",
-      actionId: "accept",
-      transitionTo: "done",
-    },
+    { type: "action_triggered", actionId: "accept", transitionTo: "done" },
     "accepted"
   );
 }
@@ -189,8 +156,6 @@ export function onNewChanges(card: Card): void {
   );
 }
 
-export function getEngineState(
-  cardId: string
-): WorkflowItemState<CardsTaskOutputs, CardsStateId> | undefined {
+export function getEngineState(cardId: string): ErasedState | undefined {
   return instances.get(cardId);
 }
