@@ -106,7 +106,7 @@ export type AutoTransition<
 };
 
 // ManualAction: a button the user can click to trigger a state change.
-// gate controls visibility; effect returns the target state.
+// gate controls visibility; transitionTo is the target state.
 // variant provides a visual hint for UI rendering.
 export type ManualAction<
   TTaskOutputs extends Record<string, unknown>,
@@ -117,10 +117,7 @@ export type ManualAction<
   label: string;
   variant?: ActionVariant;
   gate?: (ctx: GateContext<TTaskOutputs, TItemState>) => boolean;
-  effect: () => {
-    transitionTo: TStateId;
-    preEffect?: () => void | Promise<void>;
-  };
+  transitionTo: TStateId;
 };
 
 // --- State definition ---
@@ -162,12 +159,14 @@ export type StateDef<
 export function defineWorkflow<
   TTaskOutputs extends Record<string, unknown>,
   TStateId extends string,
+  TItemState extends Record<string, unknown> = Record<string, never>,
 >(config: {
   id: string;
   label: string;
   description?: string;
   taskOutputs: TTaskOutputs;
-  states: readonly StateDef<TTaskOutputs, TStateId>[];
+  itemState?: TItemState;
+  states: readonly StateDef<TTaskOutputs, TStateId, TItemState>[];
   initial: TStateId;
   terminalStates: readonly TStateId[];
 }) {
@@ -207,3 +206,33 @@ export type FlowDefinition = {
   workflows: WorkflowDef[];
   edges: FlowEdge[];
 };
+
+// --- History entries ---
+
+export type TaskExecutionEntry<
+  TTaskOutputs extends Record<string, unknown> = Record<string, unknown>,
+> = {
+  type: "task_execution";
+  taskId: keyof TTaskOutputs & string;
+  attempt: number;
+  status: "running" | "success" | "error" | "cancelled";
+  output?: unknown;
+  error?: string;
+  startedAt: string;
+  finishedAt?: string;
+  context?: RunningTaskContext | null;
+  metadata?: Record<string, unknown>;
+};
+
+export type StateTransitionEntry<TStateId extends string = string> = {
+  type: "state_transition";
+  fromState: TStateId;
+  toState: TStateId;
+  timestamp: string;
+  actionId?: string;
+};
+
+export type WorkflowHistoryEntry<
+  TTaskOutputs extends Record<string, unknown> = Record<string, unknown>,
+  TStateId extends string = string,
+> = TaskExecutionEntry<TTaskOutputs> | StateTransitionEntry<TStateId>;

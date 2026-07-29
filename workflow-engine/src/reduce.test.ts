@@ -21,7 +21,7 @@ const cardsWorkflow = defineWorkflow({
         {
           id: "run",
           label: "Run Worker Agent",
-          effect: () => ({ transitionTo: "in_progress" }),
+          transitionTo: "in_progress",
         },
       ],
     },
@@ -53,7 +53,7 @@ const cardsWorkflow = defineWorkflow({
           id: "cancel",
           label: "Cancel",
           gate: (ctx) => ctx.hasRunningTask,
-          effect: () => ({ transitionTo: "ready" }),
+          transitionTo: "ready",
         },
       ],
     },
@@ -75,34 +75,34 @@ const cardsWorkflow = defineWorkflow({
           id: "accept",
           label: "Accept work",
           gate: (ctx) => ctx.taskOutputs.review?.output?.verdict === "approved",
-          effect: () => ({ transitionTo: "done" }),
+          transitionTo: "done",
         },
         {
           id: "accept_anyway",
           label: "Accept anyway",
           gate: (ctx) =>
             ctx.taskOutputs.review?.output?.verdict === "changes_requested",
-          effect: () => ({ transitionTo: "done" }),
+          transitionTo: "done",
         },
         {
           id: "update_changes",
           label: "Update work",
           gate: (ctx) =>
             ctx.taskOutputs.review?.output?.verdict === "changes_requested",
-          effect: () => ({ transitionTo: "in_progress" }),
+          transitionTo: "in_progress",
         },
         {
           id: "new_changes",
           label: "New attempt",
           gate: (ctx) =>
             ctx.taskOutputs.review?.output?.verdict === "changes_requested",
-          effect: () => ({ transitionTo: "ready" }),
+          transitionTo: "ready",
         },
         {
           id: "restart_review",
           label: "Retry review",
           gate: (ctx) => ctx.taskOutputs.review?.status === "error",
-          effect: () => ({ transitionTo: "reviewing" }),
+          transitionTo: "reviewing",
         },
       ],
     },
@@ -125,12 +125,12 @@ const cardsWorkflow = defineWorkflow({
           id: "remediate",
           label: "Apply remediation",
           gate: (ctx) => ctx.taskOutputs.coordinate?.status === "success",
-          effect: () => ({ transitionTo: "ready" }),
+          transitionTo: "ready",
         },
         {
           id: "archive_card",
           label: "Archive",
-          effect: () => ({ transitionTo: "done" }),
+          transitionTo: "done",
         },
       ],
     },
@@ -150,6 +150,7 @@ const initial: WorkflowItemState<
   runningTaskId: null,
   runningTaskContext: null,
   itemState: {},
+  history: [],
 };
 
 function apply(state: any, event: any): { state: any; commands: any[] } {
@@ -212,6 +213,8 @@ describe("cards workflow", () => {
       hasRunningTask: true,
       runningTaskId: "implement",
       runningTaskContext: { role: "ai-task" as const, messages: [] },
+      itemState: {},
+      history: [],
     };
 
     const result = apply(state, {
@@ -236,6 +239,8 @@ describe("cards workflow", () => {
       hasRunningTask: true,
       runningTaskId: "implement",
       runningTaskContext: { role: "ai-task" as const, messages: [] },
+      itemState: {},
+      history: [],
     };
 
     const result = apply(state, {
@@ -257,6 +262,7 @@ describe("cards workflow", () => {
       hasRunningTask: true,
       runningTaskId: "implement",
       runningTaskContext: { role: "ai-task" as const, messages: [] },
+      itemState: {},
     };
 
     const actions = visible(state, "in_progress");
@@ -272,6 +278,8 @@ describe("cards workflow", () => {
       hasRunningTask: true,
       runningTaskId: "implement",
       runningTaskContext: { role: "ai-task" as const, messages: [] },
+      itemState: {},
+      history: [],
     };
 
     const result = apply(state, {
@@ -411,6 +419,8 @@ describe("cards workflow", () => {
       hasRunningTask: true,
       runningTaskId: "implement",
       runningTaskContext: { role: "ai-task" as const, messages: [] },
+      itemState: {},
+      history: [],
     };
 
     const result = apply(state, {

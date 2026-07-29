@@ -32,6 +32,7 @@ function getOrCreate(
       runningTaskId: null,
       runningTaskContext: null,
       itemState: {},
+      history: [],
     };
     instances.set(card.id, state);
   }

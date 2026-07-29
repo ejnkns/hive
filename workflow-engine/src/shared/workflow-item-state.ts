@@ -1,4 +1,8 @@
-import type { RunningTaskContext, TaskOutputMap } from "../workflow-types";
+import type {
+  RunningTaskContext,
+  TaskOutputMap,
+  WorkflowHistoryEntry,
+} from "../workflow-types";
 
 export type WorkflowItemState<
   TTaskOutputs extends Record<string, unknown>,
@@ -11,4 +15,5 @@ export type WorkflowItemState<
   runningTaskId: (keyof TTaskOutputs & string) | null;
   runningTaskContext: RunningTaskContext | null;
   itemState: TItemState;
+  history: WorkflowHistoryEntry<TTaskOutputs, TStateId>[];
 };

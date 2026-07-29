@@ -3,6 +3,7 @@ import type {
   RunningTaskContext,
   StateDef,
   TaskOutputMap,
+  WorkflowHistoryEntry,
 } from "./workflow-types";
 
 // === Events ===
@@ -20,6 +21,12 @@ export type WorkflowEvent<
       type: "task_started";
       taskId: keyof TTaskOutputs & string;
       context: RunningTaskContext | null;
+      metadata?: Record<string, unknown>;
+    }
+  | {
+      type: "task_metadata_patched";
+      taskId: keyof TTaskOutputs & string;
+      metadata: Record<string, unknown>;
     }
   | {
       type: "task_completed";
@@ -64,12 +71,20 @@ export function reduce<
 ): ReduceResult<TTaskOutputs, TStateId, TItemState> {
   switch (event.type) {
     case "action_triggered": {
+      const transitionEntry: WorkflowHistoryEntry<TTaskOutputs, TStateId> = {
+        type: "state_transition",
+        fromState: state.currentState,
+        toState: event.transitionTo,
+        timestamp: new Date().toISOString(),
+        actionId: event.actionId,
+      };
       const nextState: WorkflowItemState<TTaskOutputs, TStateId, TItemState> = {
         ...state,
         currentState: event.transitionTo,
         hasRunningTask: false,
         runningTaskId: null,
         runningTaskContext: null,
+        history: [...state.history, transitionEntry],
       };
       return {
         state: nextState,
@@ -78,13 +93,46 @@ export function reduce<
     }
 
     case "task_started": {
+      const previousAttempts = state.history.filter(
+        (h) => h.type === "task_execution" && h.taskId === event.taskId
+      ).length;
+      const taskEntry: WorkflowHistoryEntry<TTaskOutputs, TStateId> = {
+        type: "task_execution",
+        taskId: event.taskId,
+        attempt: previousAttempts + 1,
+        status: "running",
+        startedAt: new Date().toISOString(),
+        context: event.context,
+        metadata: event.metadata,
+      };
       return {
         state: {
           ...state,
           hasRunningTask: true,
           runningTaskId: event.taskId,
           runningTaskContext: event.context,
+          history: [...state.history, taskEntry],
         },
+        commands: [],
+      };
+    }
+
+    case "task_metadata_patched": {
+      const history = state.history.map((h) => {
+        if (
+          h.type === "task_execution" &&
+          h.taskId === event.taskId &&
+          h.status === "running"
+        ) {
+          return {
+            ...h,
+            metadata: { ...h.metadata, ...event.metadata },
+          } as WorkflowHistoryEntry<TTaskOutputs, TStateId>;
+        }
+        return h;
+      });
+      return {
+        state: { ...state, history },
         commands: [],
       };
     }
@@ -98,12 +146,29 @@ export function reduce<
         },
       } as Partial<TaskOutputMap<TTaskOutputs>>;
 
+      const history = state.history.map((h) => {
+        if (
+          h.type === "task_execution" &&
+          h.taskId === event.taskId &&
+          h.status === "running"
+        ) {
+          return {
+            ...h,
+            status: "success" as const,
+            output: event.output,
+            finishedAt: new Date().toISOString(),
+          } as WorkflowHistoryEntry<TTaskOutputs, TStateId>;
+        }
+        return h;
+      });
+
       const newState: WorkflowItemState<TTaskOutputs, TStateId, TItemState> = {
         ...state,
         taskOutputs: newOutputs,
         hasRunningTask: false,
         runningTaskId: null,
         runningTaskContext: null,
+        history,
       };
 
       const transition = evaluateAutoTransitions(
@@ -112,8 +177,19 @@ export function reduce<
         newState
       );
       if (transition) {
+        const transitionEntry: WorkflowHistoryEntry<TTaskOutputs, TStateId> = {
+          type: "state_transition",
+          fromState: newState.currentState,
+          toState: transition,
+          timestamp: new Date().toISOString(),
+        };
+        const nextState = {
+          ...newState,
+          currentState: transition,
+          history: [...newState.history, transitionEntry],
+        };
         return {
-          state: { ...newState, currentState: transition },
+          state: nextState,
           commands: [{ type: "start_auto_tasks" }],
         };
       }
@@ -131,12 +207,29 @@ export function reduce<
         },
       } as Partial<TaskOutputMap<TTaskOutputs>>;
 
+      const history = state.history.map((h) => {
+        if (
+          h.type === "task_execution" &&
+          h.taskId === event.taskId &&
+          h.status === "running"
+        ) {
+          return {
+            ...h,
+            status: "error" as const,
+            error: event.error,
+            finishedAt: new Date().toISOString(),
+          } as WorkflowHistoryEntry<TTaskOutputs, TStateId>;
+        }
+        return h;
+      });
+
       const newState: WorkflowItemState<TTaskOutputs, TStateId, TItemState> = {
         ...state,
         taskOutputs: newOutputs,
         hasRunningTask: false,
         runningTaskId: null,
         runningTaskContext: null,
+        history,
       };
 
       const transition = evaluateAutoTransitions(
@@ -145,8 +238,19 @@ export function reduce<
         newState
       );
       if (transition) {
+        const transitionEntry: WorkflowHistoryEntry<TTaskOutputs, TStateId> = {
+          type: "state_transition",
+          fromState: newState.currentState,
+          toState: transition,
+          timestamp: new Date().toISOString(),
+        };
+        const nextState = {
+          ...newState,
+          currentState: transition,
+          history: [...newState.history, transitionEntry],
+        };
         return {
-          state: { ...newState, currentState: transition },
+          state: nextState,
           commands: [{ type: "start_auto_tasks" }],
         };
       }
@@ -155,12 +259,28 @@ export function reduce<
     }
 
     case "task_cancelled": {
+      const history = state.history.map((h) => {
+        if (
+          h.type === "task_execution" &&
+          h.taskId === event.taskId &&
+          h.status === "running"
+        ) {
+          return {
+            ...h,
+            status: "cancelled" as const,
+            finishedAt: new Date().toISOString(),
+          } as WorkflowHistoryEntry<TTaskOutputs, TStateId>;
+        }
+        return h;
+      });
+
       return {
         state: {
           ...state,
           hasRunningTask: false,
           runningTaskId: null,
           runningTaskContext: null,
+          history,
         },
         commands: [],
       };

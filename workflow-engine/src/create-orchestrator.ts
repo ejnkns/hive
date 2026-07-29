@@ -69,7 +69,9 @@ export type OrchestratorAPI<
   getAvailableActions(): VisibleAction[];
   on(handler: EventHandler): () => void;
   dispatchAction(actionId: string): void;
-  startTask(taskId: string): void;
+  startTask(taskId: string, metadata?: Record<string, unknown>): Promise<void>;
+  sendTaskInput(taskId: string, content: string, role: string): void;
+  patchRunningTaskMetadata(metadata: Record<string, unknown>): void;
   patchItemState(patch: Partial<TItemState>): void;
   onTaskCompleted(taskId: string, output: unknown): Promise<void>;
   onTaskErrored(taskId: string, error: string): Promise<void>;
@@ -97,6 +99,7 @@ export function createOrchestrator<
       runningTaskId: null,
       runningTaskContext: null,
       itemState: {} as TItemState,
+      history: [],
     } as WorkflowItemState<TTaskOutputs, TStateId, TItemState>);
 
   let runningRunner: TaskRunner | null = null;
@@ -136,7 +139,10 @@ export function createOrchestrator<
     );
   }
 
-  async function executeTask(task: TaskDefinition): Promise<void> {
+  async function executeTask(
+    task: TaskDefinition,
+    metadata?: Record<string, unknown>
+  ): Promise<void> {
     const runner = runners[task.role];
     if (!runner) {
       emit({
@@ -153,6 +159,7 @@ export function createOrchestrator<
       type: "task_started",
       taskId: task.id as keyof TTaskOutputs & string,
       context: buildRunningContext(task.role),
+      metadata,
     });
 
     try {
@@ -202,17 +209,30 @@ export function createOrchestrator<
     }
   }
 
-  function startTask(taskId: string): void {
+  async function startTask(
+    taskId: string,
+    metadata?: Record<string, unknown>
+  ): Promise<void> {
     if (state.hasRunningTask) return;
     const stateDef = workflow.states.find((s) => s.id === state.currentState);
     const taskDef = stateDef?.tasks?.find((t) => t.id === taskId);
     if (!taskDef) return;
 
+    await executeTask(taskDef, metadata);
+  }
+
+  function patchRunningTaskMetadata(metadata: Record<string, unknown>): void {
+    if (!state.hasRunningTask || !state.runningTaskId) return;
     dispatcher({
-      type: "task_started",
-      taskId: taskId as keyof TTaskOutputs & string,
-      context: buildRunningContext(taskDef.role),
+      type: "task_metadata_patched",
+      taskId: state.runningTaskId,
+      metadata,
     });
+  }
+
+  function sendTaskInput(taskId: string, content: string, role: string): void {
+    if (!state.hasRunningTask || state.runningTaskId !== taskId) return;
+    runningRunner?.sendMessage?.(content, role);
   }
 
   function patchItemState(patch: Partial<TItemState>): void {
@@ -250,14 +270,15 @@ export function createOrchestrator<
         runningRunner = null;
       }
 
-      const { transitionTo } = action.effect();
       dispatcher({
         type: "action_triggered",
         actionId,
-        transitionTo: transitionTo as TStateId,
+        transitionTo: action.transitionTo as TStateId,
       });
     },
     startTask,
+    sendTaskInput,
+    patchRunningTaskMetadata,
     patchItemState,
     onTaskCompleted,
     onTaskErrored,

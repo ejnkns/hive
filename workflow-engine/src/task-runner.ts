@@ -10,4 +10,5 @@ export type TaskDefinition = {
 export type TaskRunner = {
   run(task: TaskDefinition): Promise<{ output: unknown }>;
   cancel(): void;
+  sendMessage?(content: string, role: string): Promise<void>;
 };

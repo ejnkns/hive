@@ -33,7 +33,7 @@ export const cardsWorkflow = defineWorkflow({
           label: "Run Worker Agent",
           variant: "primary",
           gate: (ctx) => !ctx.hasRunningTask,
-          effect: () => ({ transitionTo: "in_progress" }),
+          transitionTo: "in_progress",
         },
       ],
     },
@@ -67,7 +67,7 @@ export const cardsWorkflow = defineWorkflow({
           label: "Cancel",
           variant: "secondary",
           gate: (ctx) => ctx.hasRunningTask,
-          effect: () => ({ transitionTo: "ready" }),
+          transitionTo: "ready",
         },
       ],
     },
@@ -91,7 +91,7 @@ export const cardsWorkflow = defineWorkflow({
           label: "Accept work",
           variant: "primary",
           gate: (ctx) => ctx.taskOutputs.review?.output?.verdict === "approved",
-          effect: () => ({ transitionTo: "done" }),
+          transitionTo: "done",
         },
         {
           id: "accept_anyway",
@@ -99,7 +99,7 @@ export const cardsWorkflow = defineWorkflow({
           variant: "destructive",
           gate: (ctx) =>
             ctx.taskOutputs.review?.output?.verdict === "changes_requested",
-          effect: () => ({ transitionTo: "done" }),
+          transitionTo: "done",
         },
         {
           id: "update_changes",
@@ -107,7 +107,7 @@ export const cardsWorkflow = defineWorkflow({
           variant: "secondary",
           gate: (ctx) =>
             ctx.taskOutputs.review?.output?.verdict === "changes_requested",
-          effect: () => ({ transitionTo: "in_progress" }),
+          transitionTo: "in_progress",
         },
         {
           id: "new_changes",
@@ -115,14 +115,14 @@ export const cardsWorkflow = defineWorkflow({
           variant: "secondary",
           gate: (ctx) =>
             ctx.taskOutputs.review?.output?.verdict === "changes_requested",
-          effect: () => ({ transitionTo: "ready" }),
+          transitionTo: "ready",
         },
         {
           id: "restart_review",
           label: "Retry review",
           variant: "secondary",
           gate: (ctx) => ctx.taskOutputs.review?.status === "error",
-          effect: () => ({ transitionTo: "reviewing" }),
+          transitionTo: "reviewing",
         },
       ],
     },
@@ -147,13 +147,13 @@ export const cardsWorkflow = defineWorkflow({
           label: "Apply remediation",
           variant: "primary",
           gate: (ctx) => ctx.taskOutputs.coordinate?.status === "success",
-          effect: () => ({ transitionTo: "ready" }),
+          transitionTo: "ready",
         },
         {
           id: "archive_card",
           label: "Archive",
           variant: "secondary",
-          effect: () => ({ transitionTo: "done" }),
+          transitionTo: "done",
         },
       ],
     },
