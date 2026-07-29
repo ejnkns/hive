@@ -98,9 +98,10 @@ export type StateCategory = "initial" | "active" | "terminal" | "error";
 export type AutoTransition<
   TTaskOutputs extends Record<string, unknown>,
   TToStateId extends string,
+  TItemState extends Record<string, unknown> = Record<string, never>,
 > = {
   to: TToStateId;
-  gate: (ctx: GateContext<TTaskOutputs>) => boolean;
+  gate: (ctx: GateContext<TTaskOutputs, TItemState>) => boolean;
   effect?: () => void | Promise<void>;
 };
 
@@ -151,7 +152,7 @@ export type StateDef<
     systemPrompt?: string;
   }[];
 
-  autoTransitions?: AutoTransition<TTaskOutputs, TStateId>[];
+  autoTransitions?: AutoTransition<TTaskOutputs, TStateId, TItemState>[];
 
   actions?: ManualAction<TTaskOutputs, TStateId, TItemState>[];
 };

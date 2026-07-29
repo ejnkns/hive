@@ -31,10 +31,11 @@ function getOrCreate(
       hasRunningTask: false,
       runningTaskId: null,
       runningTaskContext: null,
+      itemState: {},
     };
     instances.set(card.id, state);
   }
-  return state;
+  return state!;
 }
 
 function compare(

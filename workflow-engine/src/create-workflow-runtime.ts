@@ -3,19 +3,15 @@ import { reduce, type WorkflowEvent } from "./reduce";
 import type { WorkflowItemState } from "./shared/workflow-item-state";
 import type { FlowEdge, StateDef } from "./workflow-types";
 
-// A runtime item identified by workflow + item ID.
 export type RuntimeItem = {
   workflowId: string;
   itemId: string;
   state: WorkflowItemState<Record<string, unknown>, string>;
 };
 
-// === Factory ===
-
 export function createWorkflowRuntime() {
   const items = new Map<string, RuntimeItem>();
 
-  // Index helper: compound key for the flat item map
   function key(workflowId: string, itemId: string): string {
     return `${workflowId}\0${itemId}`;
   }
@@ -63,7 +59,6 @@ export function createWorkflowRuntime() {
       entry.state.taskOutputs
     );
 
-    // Process start_auto_tasks commands by running auto tasks
     if (result.commands.some((c) => c.type === "start_auto_tasks")) {
       const stateDef = states.find((s) => s.id === entry.state.currentState);
       if (stateDef) {

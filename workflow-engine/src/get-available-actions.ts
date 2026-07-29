@@ -4,10 +4,11 @@ import type { StateDef, VisibleAction } from "./workflow-types";
 export function getAvailableActions<
   TTaskOutputs extends Record<string, unknown>,
   TStateId extends string,
+  TItemState extends Record<string, unknown> = Record<string, never>,
 >(
-  states: readonly StateDef<TTaskOutputs, TStateId>[],
+  states: readonly StateDef<TTaskOutputs, TStateId, TItemState>[],
   currentState: TStateId,
-  state: WorkflowItemState<TTaskOutputs, TStateId>
+  state: WorkflowItemState<TTaskOutputs, TStateId, TItemState>
 ): VisibleAction[] {
   const stateDef = states.find((s) => s.id === currentState);
   if (!stateDef?.actions) return [];
@@ -16,7 +17,7 @@ export function getAvailableActions<
     taskOutputs: state.taskOutputs,
     hasRunningTask: state.hasRunningTask,
     runningTaskContext: state.runningTaskContext,
-    itemState: {},
+    itemState: state.itemState,
   };
 
   return stateDef.actions

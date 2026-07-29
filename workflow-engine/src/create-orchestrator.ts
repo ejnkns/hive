@@ -8,29 +8,32 @@ import type {
   VisibleAction,
 } from "./workflow-types";
 
-// Erased versions used internally at the generic runtime boundary.
-// Gate functions receive the full context at runtime regardless of
-// compile-time generic parameters, so casting between specific and
-// erased types is safe inside the engine.
-type ErasedState = StateDef<Record<string, unknown>, string>;
-type ErasedItemState = WorkflowItemState<Record<string, unknown>, string>;
+type ErasedState = StateDef<
+  Record<string, unknown>,
+  string,
+  Record<string, unknown>
+>;
+type ErasedItemState = WorkflowItemState<
+  Record<string, unknown>,
+  string,
+  Record<string, unknown>
+>;
 
 // === Workflow configuration ===
 
 export type WorkflowConfig<
   TTaskOutputs extends Record<string, unknown>,
   TStateId extends string,
+  TItemState extends Record<string, unknown> = Record<string, never>,
 > = {
   id: string;
   label: string;
   description?: string;
   taskOutputs: TTaskOutputs;
-  states: readonly StateDef<TTaskOutputs, TStateId>[];
+  states: readonly StateDef<TTaskOutputs, TStateId, TItemState>[];
   initial: TStateId;
   terminalStates: readonly TStateId[];
 };
-
-// === Error ===
 
 export class UnknownRoleError extends Error {
   constructor(role: string) {
@@ -39,49 +42,36 @@ export class UnknownRoleError extends Error {
   }
 }
 
-// === Events ===
-
 export type OrchestratorEvent<
   TTaskOutputs extends Record<string, unknown>,
   TStateId extends string,
+  TItemState extends Record<string, unknown> = Record<string, never>,
 > =
   | {
       type: "state_changed";
-      state: WorkflowItemState<TTaskOutputs, TStateId>;
+      state: WorkflowItemState<TTaskOutputs, TStateId, TItemState>;
     }
-  | {
-      type: "available_actions_changed";
-      actions: VisibleAction[];
-    }
-  | {
-      type: "task_started";
-      taskId: string;
-    }
-  | {
-      type: "task_completed";
-      taskId: string;
-      output: unknown;
-    }
-  | {
-      type: "task_errored";
-      taskId: string;
-      error: string;
-    };
+  | { type: "available_actions_changed"; actions: VisibleAction[] }
+  | { type: "task_started"; taskId: string }
+  | { type: "task_completed"; taskId: string; output: unknown }
+  | { type: "task_errored"; taskId: string; error: string };
 
 type EventHandler = (
   event: OrchestratorEvent<Record<string, unknown>, string>
 ) => void;
 
-// === Public API ===
-
 export type OrchestratorAPI<
   TTaskOutputs extends Record<string, unknown>,
   TStateId extends string,
+  TItemState extends Record<string, unknown> = Record<string, never>,
 > = {
-  getState(): WorkflowItemState<TTaskOutputs, TStateId>;
+  getState(): WorkflowItemState<TTaskOutputs, TStateId, TItemState>;
   getAvailableActions(): VisibleAction[];
   on(handler: EventHandler): () => void;
   dispatchAction(actionId: string): void;
+  startTask(taskId: string): void;
+  sendMessage(message: string): void;
+  patchItemState(patch: Partial<TItemState>): void;
   onTaskCompleted(taskId: string, output: unknown): Promise<void>;
   onTaskErrored(taskId: string, error: string): Promise<void>;
   cancel(): void;
@@ -93,12 +83,13 @@ export type OrchestratorAPI<
 export function createOrchestrator<
   TTaskOutputs extends Record<string, unknown>,
   TStateId extends string,
+  TItemState extends Record<string, unknown> = Record<string, never>,
 >(
-  workflow: WorkflowConfig<TTaskOutputs, TStateId>,
+  workflow: WorkflowConfig<TTaskOutputs, TStateId, TItemState>,
   runners: Record<string, TaskRunner>,
-  initialState?: WorkflowItemState<TTaskOutputs, TStateId>
-): OrchestratorAPI<TTaskOutputs, TStateId> {
-  let state =
+  initialState?: WorkflowItemState<TTaskOutputs, TStateId, TItemState>
+): OrchestratorAPI<TTaskOutputs, TStateId, TItemState> {
+  let state: WorkflowItemState<TTaskOutputs, TStateId, TItemState> =
     initialState ??
     ({
       currentState: workflow.initial,
@@ -106,12 +97,15 @@ export function createOrchestrator<
       hasRunningTask: false,
       runningTaskId: null,
       runningTaskContext: null,
-    } as WorkflowItemState<TTaskOutputs, TStateId>);
+      itemState: {} as TItemState,
+    } as WorkflowItemState<TTaskOutputs, TStateId, TItemState>);
 
   let runningRunner: TaskRunner | null = null;
   const handlers: EventHandler[] = [];
 
-  function emit(event: OrchestratorEvent<TTaskOutputs, TStateId>): void {
+  function emit(
+    event: OrchestratorEvent<TTaskOutputs, TStateId, TItemState>
+  ): void {
     for (const handler of handlers) {
       handler(event as OrchestratorEvent<Record<string, unknown>, string>);
     }
@@ -127,10 +121,7 @@ export function createOrchestrator<
     });
 
     if (event.type === "task_started") {
-      emit({
-        type: "task_started",
-        taskId: event.taskId,
-      });
+      emit({ type: "task_started", taskId: event.taskId });
     }
 
     if (result.commands.some((c) => c.type === "start_auto_tasks")) {
@@ -171,6 +162,7 @@ export function createOrchestrator<
       await onTaskCompleted(task.id, output);
     } catch (err: unknown) {
       runningRunner = null;
+      if (!state.hasRunningTask) return;
       const msg = err instanceof Error ? err.message : String(err);
       await onTaskErrored(task.id, msg);
     }
@@ -197,12 +189,8 @@ export function createOrchestrator<
 
   function cancel(): void {
     if (!state.hasRunningTask || !state.runningTaskId) return;
-
     runningRunner?.cancel();
-    dispatcher({
-      type: "task_cancelled",
-      taskId: state.runningTaskId,
-    });
+    dispatcher({ type: "task_cancelled", taskId: state.runningTaskId });
   }
 
   async function startAutoTasks(): Promise<void> {
@@ -215,14 +203,27 @@ export function createOrchestrator<
     }
   }
 
+  function startTask(taskId: string): void {
+    if (state.hasRunningTask) return;
+    const stateDef = workflow.states.find((s) => s.id === state.currentState);
+    const taskDef = stateDef?.tasks?.find((t) => t.id === taskId);
+    if (!taskDef) return;
+    runTask(taskDef);
+  }
+
+  function sendMessage(message: string): void {
+    runningRunner?.sendMessage?.(message);
+  }
+
+  function patchItemState(patch: Partial<TItemState>): void {
+    state = { ...state, itemState: { ...state.itemState, ...patch } };
+    emit({ type: "state_changed", state });
+  }
+
   function buildRunningContext(role: string): RunningTaskContext | null {
     if (role === "ai-task") return { role: "ai-task", messages: [] };
     if (role === "ai-chat")
-      return {
-        role: "ai-chat",
-        messages: [],
-        sessionId: crypto.randomUUID(),
-      };
+      return { role: "ai-chat", messages: [], sessionId: crypto.randomUUID() };
     if (role === "operation") return { role: "operation" };
     return null;
   }
@@ -244,6 +245,11 @@ export function createOrchestrator<
       const action = stateDef.actions?.find((a) => a.id === actionId);
       if (!action) return;
 
+      if (state.hasRunningTask) {
+        runningRunner?.cancel();
+        runningRunner = null;
+      }
+
       const { transitionTo } = action.effect();
       dispatcher({
         type: "action_triggered",
@@ -251,6 +257,9 @@ export function createOrchestrator<
         transitionTo: transitionTo as TStateId,
       });
     },
+    startTask,
+    sendMessage,
+    patchItemState,
     onTaskCompleted,
     onTaskErrored,
     cancel,

@@ -149,6 +149,7 @@ const initial: WorkflowItemState<
   hasRunningTask: false,
   runningTaskId: null,
   runningTaskContext: null,
+  itemState: {},
 };
 
 function apply(state: any, event: any): { state: any; commands: any[] } {
