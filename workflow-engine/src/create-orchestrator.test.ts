@@ -1,9 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import {
-  createOrchestrator,
-  type OrchestratorAPI,
-} from "./create-orchestrator";
+import { createOrchestrator } from "./create-orchestrator";
 import type { TaskDefinition, TaskRunner } from "./task-runner";
 import { createWorkflow } from "./workflow-types";
 

@@ -1,5 +1,5 @@
-import type { WorkflowItemState } from "./workflow-state";
-import type { GateContext, StateDef } from "./workflow-types";
+import type { WorkflowItemState } from "./shared/workflow-item-state";
+import type { StateDef } from "./workflow-types";
 
 export function getAvailableActions<
   TTaskOutputs extends Record<string, unknown>,

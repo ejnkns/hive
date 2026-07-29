@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { getAvailableActions } from "./get-available-actions";
 import { reduce } from "./reduce";
-import type { WorkflowItemState } from "./workflow-state";
+import type { WorkflowItemState } from "./shared/workflow-item-state";
 import { createWorkflow } from "./workflow-types";
 
 // --- Fixture: cards workflow ---

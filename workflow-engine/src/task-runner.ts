@@ -9,7 +9,7 @@ export type TaskDefinition = {
 
 export type TaskContext = Record<string, never>;
 
-export interface TaskRunner {
+export type TaskRunner = {
   run(task: TaskDefinition, context: TaskContext): Promise<{ output: unknown }>;
   cancel(): void;
-}
+};

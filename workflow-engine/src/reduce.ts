@@ -1,4 +1,4 @@
-import type { WorkflowItemState } from "./workflow-state";
+import type { WorkflowItemState } from "./shared/workflow-item-state";
 import type {
   RunningTaskContext,
   StateDef,

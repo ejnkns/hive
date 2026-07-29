@@ -1,8 +1,23 @@
 import { getAvailableActions } from "./get-available-actions";
 import { reduce, type WorkflowEvent } from "./reduce";
+import type { WorkflowItemState } from "./shared/workflow-item-state";
 import type { TaskDefinition, TaskRunner } from "./task-runner";
-import type { WorkflowConfig, WorkflowItemState } from "./workflow-state";
-import type { RunningTaskContext } from "./workflow-types";
+import type { RunningTaskContext, StateDef } from "./workflow-types";
+
+// === Workflow configuration ===
+
+export type WorkflowConfig<
+  TTaskOutputs extends Record<string, unknown>,
+  TStateId extends string,
+> = {
+  id: string;
+  label: string;
+  description?: string;
+  taskOutputs: TTaskOutputs;
+  states: readonly StateDef<TTaskOutputs, TStateId>[];
+  initial: TStateId;
+  terminalStates: readonly TStateId[];
+};
 
 // === Error ===
 
