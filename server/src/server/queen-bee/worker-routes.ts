@@ -5,20 +5,20 @@ import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
 import { isRecord } from "shared/board-types";
 import type { QueenBeeEvent } from "shared/queen-bee-events";
+import {
+  getOrCreateOrchestrator,
+  runningCardIds,
+} from "../orchestrator-registry";
 import type { BoardStore } from "./board-store";
-import { onCancelled } from "./card-engine-integration";
 import type { ProjectStore } from "./create-project-store";
 import { evaluateWorkerAdmission } from "./worker-admission";
 import { offQueenBeeEvent, onQueenBeeEvent } from "./worker-event-bus";
-import type { WorkerEvent, WorkerSupervisor } from "./worker-supervisor";
 
 export function registerWorkerRoutes(
   server: FastifyInstance,
   deps: {
-    workerSupervisor: WorkerSupervisor;
     boardStore: BoardStore;
     projectStore: ProjectStore;
-    onWorkerEvent?: (projectId: string, event: WorkerEvent) => void;
   }
 ): void {
   server.post(
@@ -42,12 +42,18 @@ export function registerWorkerRoutes(
         return reply.status(404).send({ error: "Card not found" });
       }
 
-      if (card.column !== "ready") {
+      const orchestrator = getOrCreateOrchestrator(
+        projectId,
+        cardId,
+        project.repoPath
+      );
+
+      if (orchestrator.getState().currentState !== "ready") {
         return reply.status(400).send({
           error: "Card must be in the 'ready' column to run",
         });
       }
-      if (deps.workerSupervisor.isRunning(projectId, cardId)) {
+      if (orchestrator.getState().hasRunningTask) {
         return reply
           .status(409)
           .send({ error: "Worker Agent is already running" });
@@ -57,7 +63,7 @@ export function registerWorkerRoutes(
       const admission = evaluateWorkerAdmission({
         card,
         cards: board.cards,
-        runningCardIds: deps.workerSupervisor.runningCardIds(projectId),
+        runningCardIds: runningCardIds(projectId),
         maxConcurrentWorkers: project.maxConcurrentWorkers,
         confirmRisks: body.confirmRisks === true,
       });
@@ -70,43 +76,8 @@ export function registerWorkerRoutes(
         });
       }
 
-      const projectJsonPath = join(project.repoPath, ".hive", "project.json");
-      let systemPrompt = "";
-      let codingGuidelines = "";
-      let maxIterationsPerCommit: number | undefined;
-      let maxCommits: number | undefined;
-
-      try {
-        const raw = readFileSync(projectJsonPath, "utf-8");
-        const parsed = JSON.parse(raw) as Record<string, unknown>;
-        systemPrompt =
-          typeof parsed.systemPrompt === "string" ? parsed.systemPrompt : "";
-        codingGuidelines =
-          typeof parsed.codingGuidelines === "string"
-            ? parsed.codingGuidelines
-            : "";
-        maxIterationsPerCommit =
-          typeof parsed.maxIterationsPerCommit === "number"
-            ? parsed.maxIterationsPerCommit
-            : undefined;
-        maxCommits =
-          typeof parsed.maxCommits === "number" ? parsed.maxCommits : undefined;
-      } catch {
-        // use empty defaults
-      }
-
+      orchestrator.dispatchAction("run");
       reply.send({ started: true, cardId, admission });
-
-      await deps.workerSupervisor.run(
-        projectId,
-        card,
-        project.repoPath,
-        systemPrompt,
-        codingGuidelines,
-        (event) => deps.onWorkerEvent?.(projectId, event),
-        maxIterationsPerCommit ?? 30,
-        maxCommits ?? 20
-      );
     }
   );
 
@@ -120,7 +91,6 @@ export function registerWorkerRoutes(
     };
     onQueenBeeEvent(queenBeeHandler);
 
-    // Send initial board snapshot for each project
     for (const project of deps.projectStore.getAll()) {
       try {
         const board = deps.boardStore.getBoard(project.id, project.repoPath);
@@ -149,23 +119,12 @@ export function registerWorkerRoutes(
         cardId: string;
       };
 
-      const project = deps.projectStore
-        .getAll()
-        .find((p) => p.id === projectId);
-      if (!project) {
-        return reply.status(404).send({ error: "Project not found" });
-      }
-
-      if (!deps.workerSupervisor.cancel(projectId, cardId)) {
+      const orchestrator = getOrCreateOrchestrator(projectId, cardId, "");
+      if (!orchestrator.getState().hasRunningTask) {
         return reply.status(409).send({ error: "Worker Agent is not running" });
       }
 
-      if (project) {
-        const board = deps.boardStore.getBoard(projectId, project.repoPath);
-        const card = board.cards.find((c) => c.id === cardId);
-        if (card) onCancelled(card);
-      }
-
+      orchestrator.cancel();
       return reply.send({ cancelled: true, cardId });
     }
   );

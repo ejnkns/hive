@@ -20,7 +20,6 @@ import {
 import { loadModelPriority } from "../server/proxy/model-priority-config";
 import {
   createBoardStore,
-  createCoordinator,
   createIntegrationManager,
   createPlanningManager,
   createProjectSpecificationStore,
@@ -28,7 +27,6 @@ import {
   createQueenBeeRuntimeStore,
   createRequirementsSessionManager,
   createReviewer,
-  createWorkerSupervisor,
   registerBoardRoutes,
   registerCoordinatorRoutes,
   registerIntegrationRoutes,
@@ -83,14 +81,6 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     30
   );
   const reviewer = createReviewer();
-  const coordinator = createCoordinator();
-  const workerSupervisor = createWorkerSupervisor(
-    boardStore,
-    reviewer,
-    coordinator,
-    runtimeStore,
-    HIVE_DIR
-  );
 
   const server = await createServer({
     getProviders: () => getProviders(),
@@ -120,7 +110,6 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     planningManager,
   });
   registerWorkerRoutes(server, {
-    workerSupervisor,
     boardStore,
     projectStore,
   });
@@ -130,11 +119,7 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     integrationManager,
     runtimeStore,
     reviewer,
-    workerSupervisor,
     workspacesBasePath: HIVE_DIR,
-    onWorkerEvent(_projectId, _event) {
-      // Worker events propagate through the socket in worker-routes
-    },
   });
 
   listen(server, config);

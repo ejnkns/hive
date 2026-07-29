@@ -32,8 +32,3 @@ export type { Reviewer, ReviewerVerdict } from "./queen-bee/reviewer";
 export { createReviewer } from "./queen-bee/reviewer";
 export { registerWorkDecisionRoutes } from "./queen-bee/work-decision-routes";
 export { registerWorkerRoutes } from "./queen-bee/worker-routes";
-export type {
-  WorkerEvent,
-  WorkerSupervisor,
-} from "./queen-bee/worker-supervisor";
-export { createWorkerSupervisor } from "./queen-bee/worker-supervisor";

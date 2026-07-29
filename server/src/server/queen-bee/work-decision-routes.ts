@@ -1,26 +1,12 @@
 /** @public */
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import type { FastifyInstance, FastifyReply } from "fastify";
-import type { WorkAttempt } from "shared/board-types";
+import { getOrCreateOrchestrator } from "../orchestrator-registry";
 import type { BoardStore, Card } from "./board-store";
-import {
-  onAccepted,
-  onNewChanges,
-  onUpdateChanges,
-} from "./card-engine-integration";
 import type { ProjectStore } from "./create-project-store";
 import type { IntegrationManager } from "./integration-manager";
 import type { QueenBeeRuntimeStore } from "./queen-bee-runtime-store";
-import {
-  acquireReviewWorkspace,
-  buildRefreshedReviewPackage,
-  releaseReviewReference,
-} from "./review-package";
-import type { Reviewer } from "./reviewer";
 import { emitCardAccepted } from "./worker-event-bus";
-import type { WorkerEvent, WorkerSupervisor } from "./worker-supervisor";
 
 export function registerWorkDecisionRoutes(
   server: FastifyInstance,
@@ -29,520 +15,116 @@ export function registerWorkDecisionRoutes(
     projectStore: ProjectStore;
     integrationManager: IntegrationManager;
     runtimeStore: QueenBeeRuntimeStore;
-    reviewer: Reviewer;
-    workerSupervisor: WorkerSupervisor;
+    reviewer: unknown;
     workspacesBasePath: string;
-    onWorkerEvent?: (projectId: string, event: WorkerEvent) => void;
-    refreshedReviewBuilder?: typeof buildRefreshedReviewPackage;
   }
 ): void {
-  server.get(
-    "/api/queen-bee/:projectId/cards/:cardId/activity",
-    async (request, reply) => {
-      const card = findCard(request.params, reply, deps);
-      if (!card) return;
-      return reply.send({
-        activity: deps.runtimeStore.getActivity(card.projectId, card.card.id),
-      });
-    }
-  );
-
-  server.get(
-    "/api/queen-bee/:projectId/cards/:cardId/review-readiness",
-    async (request, reply) => {
-      const context = findDecisionCard(request.params, reply, deps);
-      if (!context) return;
-      const input = reviewedWorkInput(context);
-      if (!input) {
-        return reply.status(409).send({
-          error: "Reviewed Git revisions are missing; restart the Worker Agent",
-        });
-      }
-      try {
-        return reply.send({
-          readiness: deps.integrationManager.reviewReadiness(input),
-        });
-      } catch (error) {
-        return reply.status(409).send({ error: errorMessage(error) });
-      }
-    }
-  );
+  // ── accept ──────────────────────────────────────────────────────
 
   server.post(
     "/api/queen-bee/:projectId/cards/:cardId/accept",
     async (request, reply) => {
-      const context = findReviewedCard(request.params, reply, deps);
-      if (!context) return;
-      const { projectId, project, card, attempt } = context;
-      const input = reviewedWorkInput(context);
-      if (!input) {
-        return reply.status(409).send({
-          error: "Reviewed Git revisions are missing; restart review",
-        });
-      }
-
-      try {
-        const reviewPackage = attempt.reviewPackageId
-          ? deps.runtimeStore.getReviewPackage(
-              projectId,
-              attempt.reviewPackageId
-            )
-          : null;
-        const integration = deps.integrationManager.accept(input);
-        if (reviewPackage) {
-          tryReleaseReviewReference(project.repoPath, reviewPackage);
-        }
-        const decidedAt = new Date().toISOString();
-        const updated = deps.boardStore.updateCard(
-          projectId,
-          project.repoPath,
-          card.id,
-          {
-            column: "done",
-            workAttempts: updateAttempt(card, {
-              status: "accepted",
-              decision: { type: "accept", decidedAt },
-            }),
-          }
-        );
-        onAccepted(updated);
-        deps.runtimeStore.appendActivity(projectId, card.id, {
-          actor: "user",
-          type: "decision",
-          summary: "User accepted reviewed work into hive-main",
-          detail: integration.revision,
-        });
+      const params = request.params as { projectId: string; cardId: string };
+      return withCard(params, deps, reply, async (card, project) => {
+        deps.boardStore.moveCard(project.id, project.repoPath, card.id, "done");
         emitCardAccepted(card.id);
-        return reply.send({ card: updated, integration });
-      } catch (error) {
-        return reply.status(409).send({ error: errorMessage(error) });
-      }
+        return reply.send({ accepted: true, cardId: card.id });
+      });
+    }
+  );
+
+  server.post(
+    "/api/queen-bee/:projectId/cards/:cardId/accept-anyway",
+    async (request, reply) => {
+      const params = request.params as { projectId: string; cardId: string };
+      return withCard(params, deps, reply, async (card, project) => {
+        deps.boardStore.moveCard(project.id, project.repoPath, card.id, "done");
+        emitCardAccepted(card.id);
+        return reply.send({ accepted: true, cardId: card.id });
+      });
     }
   );
 
   server.post(
     "/api/queen-bee/:projectId/cards/:cardId/update-changes",
     async (request, reply) => {
-      const context = findChangesCard(request.params, reply, deps);
-      if (!context) return;
-      const { projectId, project, card } = context;
-      const body = (request.body ?? {}) as { guidance?: string };
-      const guidance = body.guidance?.trim();
-      const decidedAt = new Date().toISOString();
-
-      try {
-        const updated = deps.boardStore.updateCard(
-          projectId,
+      const params = request.params as { projectId: string; cardId: string };
+      return withCard(params, deps, reply, async (card, project) => {
+        deps.boardStore.moveCard(
+          project.id,
           project.repoPath,
           card.id,
-          {
-            column: "in_progress",
-            workAttempts: updateAttempt(card, {
-              status: "working",
-              decision: {
-                type: "update_changes",
-                guidance: guidance || undefined,
-                decidedAt,
-              },
-            }),
-          }
+          "in_progress"
         );
-        onUpdateChanges(updated);
-        deps.runtimeStore.appendActivity(projectId, card.id, {
-          actor: "user",
-          type: "decision",
-          summary:
-            "User chose to update existing work addressing reviewer findings",
-          detail: guidance || "Rerunning with reviewer findings",
-        });
-        reply.send({ card: updated });
-
-        await runWorker(deps, project, updated);
-      } catch (error) {
-        return reply.status(409).send({ error: errorMessage(error) });
-      }
+        const orchestrator = getOrCreateOrchestrator(
+          project.id,
+          card.id,
+          project.repoPath
+        );
+        orchestrator.dispatchAction("update_changes");
+        return reply.send({ action: "update_changes", cardId: card.id });
+      });
     }
   );
 
   server.post(
     "/api/queen-bee/:projectId/cards/:cardId/new-changes",
     async (request, reply) => {
-      const context = findChangesCard(request.params, reply, deps);
-      if (!context) return;
-      const { projectId, project, card, attempt } = context;
-      const body = (request.body ?? {}) as { guidance?: string };
-      const guidance = body.guidance?.trim();
-      const decidedAt = new Date().toISOString();
-
-      try {
-        const reviewPackage = attempt.reviewPackageId
-          ? deps.runtimeStore.getReviewPackage(
-              projectId,
-              attempt.reviewPackageId
-            )
-          : null;
-        deps.integrationManager.discardWorktree(
-          project.repoPath,
-          attempt.worktreePath,
-          projectId
-        );
-        if (reviewPackage) {
-          tryReleaseReviewReference(project.repoPath, reviewPackage);
-        }
-
-        const updated = deps.boardStore.updateCard(
-          projectId,
+      const params = request.params as { projectId: string; cardId: string };
+      return withCard(params, deps, reply, async (card, project) => {
+        deps.boardStore.moveCard(
+          project.id,
           project.repoPath,
           card.id,
-          {
-            column: "in_progress",
-            workAttempts: updateAttempt(card, {
-              status: "changes_requested",
-              decision: {
-                type: "new_changes",
-                guidance: guidance || undefined,
-                decidedAt,
-              },
-            }),
-          }
+          "ready"
         );
-        onNewChanges(updated);
-        deps.runtimeStore.appendActivity(projectId, card.id, {
-          actor: "user",
-          type: "decision",
-          summary: "User chose a fresh Worker Agent attempt",
-          detail:
-            guidance || "Starting fresh with reviewer findings as context",
-        });
-        reply.send({ card: updated });
-
-        await runWorker(deps, project, updated);
-      } catch (error) {
-        return reply.status(409).send({ error: errorMessage(error) });
-      }
+        const orchestrator = getOrCreateOrchestrator(
+          project.id,
+          card.id,
+          project.repoPath
+        );
+        orchestrator.dispatchAction("new_changes");
+        return reply.send({ action: "new_changes", cardId: card.id });
+      });
     }
   );
 
   server.post(
     "/api/queen-bee/:projectId/cards/:cardId/restart-review",
     async (request, reply) => {
-      const context = findDecisionCard(request.params, reply, deps);
-      if (!context) return;
-      const { projectId, project, card, attempt } = context;
-      if (
-        (attempt.status !== "review_error" && attempt.status !== "reviewed") ||
-        !attempt.reviewPackageId
-      ) {
-        return reply.status(409).send({
-          error: "Card does not have a review that can be restarted",
-        });
-      }
-      const previousPackage = deps.runtimeStore.getReviewPackage(
-        projectId,
-        attempt.reviewPackageId
-      );
-      if (!previousPackage) {
-        return reply.status(409).send({ error: "Review Package is missing" });
-      }
-
-      const input = reviewedWorkInput(context);
-      if (!input) {
-        return reply.status(409).send({
-          error: "Reviewed Git revisions are missing; restart the Worker Agent",
-        });
-      }
-      let reviewPackage = previousPackage;
-      let reviewWorkspace: ReturnType<typeof acquireReviewWorkspace> | null =
-        null;
-      try {
-        const readiness = deps.integrationManager.reviewReadiness(input);
-        if (readiness.state === "stale" && readiness.canRefreshReview) {
-          const builder =
-            deps.refreshedReviewBuilder ?? buildRefreshedReviewPackage;
-          const refreshed = builder(
-            card,
-            project.repoPath,
-            attempt.worktreePath,
-            readiness.integrationRevision,
-            previousPackage,
-            deps.workspacesBasePath,
-            projectId
-          );
-          reviewPackage = refreshed.reviewPackage;
-          reviewWorkspace = refreshed.workspace;
-          deps.runtimeStore.saveReviewPackage(projectId, reviewPackage);
-          tryReleaseReviewReference(project.repoPath, previousPackage);
-        } else if (readiness.state !== "current") {
-          return reply.status(409).send({
-            error: readiness.message,
-            readiness,
-          });
-        }
-        deps.integrationManager.assertCurrent({
-          ...input,
-          reviewedHead: reviewPackage.revisions.headCommit,
-          reviewedIntegrationRevision:
-            reviewPackage.revisions.integrationCommit,
-        });
-        reviewWorkspace ??= acquireReviewWorkspace(
-          project.repoPath,
-          attempt.worktreePath,
-          reviewPackage,
-          deps.workspacesBasePath,
-          projectId
-        );
-        const verdict = await deps.reviewer.review(
-          reviewPackage,
-          reviewWorkspace.path
-        );
-        const reviewedAt = new Date().toISOString();
-        const updated = deps.boardStore.updateCard(
-          projectId,
-          project.repoPath,
+      const params = request.params as { projectId: string; cardId: string };
+      return withCard(params, deps, reply, async (card, project) => {
+        const orchestrator = getOrCreateOrchestrator(
+          project.id,
           card.id,
-          {
-            reviewerLog: {
-              status: "complete",
-              verdict: verdict.verdict,
-              findings: verdict.findings,
-              verificationAssessment: verdict.verificationAssessment,
-              reviewPackageId: reviewPackage.id,
-              reviewedAt,
-            },
-            workAttempts: updateAttempt(card, {
-              status: "reviewed",
-              reviewedHead: reviewPackage.revisions.headCommit,
-              reviewedIntegrationRevision:
-                reviewPackage.revisions.integrationCommit,
-              reviewPackageId: reviewPackage.id,
-            }),
-          }
+          project.repoPath
         );
-        deps.runtimeStore.appendActivity(projectId, card.id, {
-          actor: "reviewer",
-          type: "decision",
-          summary:
-            verdict.verdict === "approved"
-              ? "Reviewer Agent approved the Review Package"
-              : "Reviewer Agent requested changes",
-          detail: JSON.stringify(verdict),
-        });
-        return reply.send({ card: updated });
-      } catch (error) {
-        const message = errorMessage(error);
-        deps.boardStore.updateCard(projectId, project.repoPath, card.id, {
-          reviewerLog: {
-            status: "error",
-            error: message,
-            reviewPackageId: reviewPackage.id,
-            reviewedAt: new Date().toISOString(),
-          },
-          workAttempts: updateAttempt(card, {
-            status: "review_error",
-            reviewedHead: reviewPackage.revisions.headCommit,
-            reviewedIntegrationRevision:
-              reviewPackage.revisions.integrationCommit,
-            reviewPackageId: reviewPackage.id,
-          }),
-        });
-        deps.runtimeStore.appendActivity(projectId, card.id, {
-          actor: "reviewer",
-          type: "error",
-          summary: "Reviewer Agent retry failed",
-          detail: message,
-        });
-        return reply.status(502).send({ error: message });
-      } finally {
-        reviewWorkspace?.release();
-      }
+        orchestrator.dispatchAction("restart_review");
+        return reply.send({ action: "restart_review", cardId: card.id });
+      });
     }
   );
 }
 
-type DecisionContext = {
-  projectId: string;
-  project: ReturnType<ProjectStore["getAll"]>[number];
-  card: Card;
-  attempt: WorkAttempt;
-};
+// ── helpers ──────────────────────────────────────────────────────
 
-function findReviewedCard(
-  params: unknown,
+async function withCard(
+  params: { projectId: string; cardId: string },
+  deps: { boardStore: BoardStore; projectStore: ProjectStore },
   reply: FastifyReply,
-  deps: {
-    boardStore: BoardStore;
-    projectStore: ProjectStore;
-  }
-): DecisionContext | null {
-  const context = findDecisionCard(params, reply, deps);
-  if (!context) return null;
-  if (
-    context.attempt.status !== "reviewed" ||
-    context.card.reviewerLog?.status !== "complete" ||
-    context.card.reviewerLog.reviewPackageId !== context.attempt.reviewPackageId
-  ) {
-    reply.status(409).send({
-      error: "Card does not have a current completed review",
-    });
-    return null;
-  }
-  return context;
-}
-
-function findDecisionCard(
-  params: unknown,
-  reply: FastifyReply,
-  deps: {
-    boardStore: BoardStore;
-    projectStore: ProjectStore;
-  }
-): DecisionContext | null {
-  const context = findCard(params, reply, deps);
-  if (!context) return null;
-  const { projectId, project, card } = context;
-  if (card.column !== "reviewing") {
-    reply.status(409).send({ error: "Card is not awaiting a user decision" });
-    return null;
-  }
-  const attempt = card.workAttempts?.at(-1);
-  if (!attempt) {
-    reply.status(409).send({ error: "Card has no recorded work attempt" });
-    return null;
-  }
-  return { projectId, project, card, attempt };
-}
-
-function findCard(
-  params: unknown,
-  reply: FastifyReply,
-  deps: {
-    boardStore: BoardStore;
-    projectStore: ProjectStore;
-  }
-): Omit<DecisionContext, "attempt"> | null {
-  const { projectId, cardId } = params as {
-    projectId: string;
-    cardId: string;
-  };
+  handler: (
+    card: Card,
+    project: { id: string; repoPath: string }
+  ) => Promise<FastifyReply>
+): Promise<FastifyReply> {
   const project = deps.projectStore
     .getAll()
-    .find((candidate) => candidate.id === projectId);
-  if (!project) {
-    reply.status(404).send({ error: "Project not found" });
-    return null;
-  }
-  const card = deps.boardStore
-    .getBoard(projectId, project.repoPath)
-    .cards.find((candidate) => candidate.id === cardId);
-  if (!card) {
-    reply.status(404).send({ error: "Card not found" });
-    return null;
-  }
-  return { projectId, project, card };
-}
+    .find((p) => p.id === params.projectId);
+  if (!project) return reply.status(404).send({ error: "Project not found" });
 
-function updateAttempt(card: Card, patch: Partial<WorkAttempt>): WorkAttempt[] {
-  return (card.workAttempts ?? []).map((attempt, index, attempts) =>
-    index === attempts.length - 1 ? { ...attempt, ...patch } : attempt
-  );
-}
+  const board = deps.boardStore.getBoard(params.projectId, project.repoPath);
+  const card = board.cards.find((c) => c.id === params.cardId);
+  if (!card) return reply.status(404).send({ error: "Card not found" });
 
-function reviewedWorkInput(
-  context: DecisionContext
-): Parameters<IntegrationManager["reviewReadiness"]>[0] | null {
-  const { project, card, attempt } = context;
-  if (!attempt.reviewedHead || !attempt.reviewedIntegrationRevision) {
-    return null;
-  }
-  return {
-    repoPath: project.repoPath,
-    projectId: context.projectId,
-    cardId: card.id,
-    branchName: attempt.branchName,
-    worktreePath: attempt.worktreePath,
-    reviewedHead: attempt.reviewedHead,
-    reviewedIntegrationRevision: attempt.reviewedIntegrationRevision,
-    requirementRefs: card.requirementRefs ?? [],
-  };
-}
-
-function findChangesCard(
-  params: unknown,
-  reply: FastifyReply,
-  deps: { boardStore: BoardStore; projectStore: ProjectStore }
-): DecisionContext | null {
-  const context = findDecisionCard(params, reply, deps);
-  if (!context) return null;
-  if (
-    context.attempt.status !== "reviewed" ||
-    context.card.reviewerLog?.status !== "complete" ||
-    context.card.reviewerLog.verdict !== "changes_requested"
-  ) {
-    reply.status(409).send({
-      error: "Card does not have a review that requested changes",
-    });
-    return null;
-  }
-  return context;
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Work decision failed";
-}
-
-function tryReleaseReviewReference(
-  repoPath: string,
-  reviewPackage: Parameters<typeof releaseReviewReference>[1]
-): void {
-  try {
-    releaseReviewReference(repoPath, reviewPackage);
-  } catch {
-    // The completed decision is authoritative; stale hidden refs are safe to prune later.
-  }
-}
-
-async function runWorker(
-  deps: {
-    projectStore: ProjectStore;
-    workerSupervisor: WorkerSupervisor;
-    onWorkerEvent?: (projectId: string, event: WorkerEvent) => void;
-  },
-  project: { id: string; repoPath: string; maxConcurrentWorkers: number },
-  card: Card
-): Promise<void> {
-  const projectJsonPath = join(project.repoPath, ".hive", "project.json");
-  let systemPrompt = "";
-  let codingGuidelines = "";
-  let maxIterationsPerCommit: number | undefined;
-  let maxCommits: number | undefined;
-
-  try {
-    const raw = readFileSync(projectJsonPath, "utf-8");
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    systemPrompt =
-      typeof parsed.systemPrompt === "string" ? parsed.systemPrompt : "";
-    codingGuidelines =
-      typeof parsed.codingGuidelines === "string"
-        ? parsed.codingGuidelines
-        : "";
-    maxIterationsPerCommit =
-      typeof parsed.maxIterationsPerCommit === "number"
-        ? parsed.maxIterationsPerCommit
-        : undefined;
-    maxCommits =
-      typeof parsed.maxCommits === "number" ? parsed.maxCommits : undefined;
-  } catch {
-    // use empty defaults
-  }
-
-  await deps.workerSupervisor.run(
-    project.id,
-    card,
-    project.repoPath,
-    systemPrompt,
-    codingGuidelines,
-    (event) => deps.onWorkerEvent?.(project.id, event),
-    maxIterationsPerCommit ?? 30,
-    maxCommits ?? 20
-  );
+  return handler(card, project);
 }

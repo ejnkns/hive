@@ -5,7 +5,6 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { Card } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
 import { registerWorkerRoutes } from "./worker-routes";
-import type { WorkerSupervisor } from "./worker-supervisor";
 
 describe("worker run admission", () => {
   const servers: FastifyInstance[] = [];
@@ -20,8 +19,6 @@ describe("worker run admission", () => {
     const server = Fastify();
     servers.push(server);
     await server.register(websocket);
-    const runs: string[] = [];
-    const workerSupervisor = supervisor([active.id], runs);
     const projectStore: ProjectStore = {
       getAll: () => [
         {
@@ -44,7 +41,6 @@ describe("worker run admission", () => {
       unlink: () => {},
     };
     registerWorkerRoutes(server, {
-      workerSupervisor,
       boardStore: {
         getBoard: () => ({
           projectId: "project-1",
@@ -73,7 +69,6 @@ describe("worker run admission", () => {
         saveCards: () => {},
       },
       projectStore,
-      onWorkerEvent: () => {},
     });
 
     const blocked = await server.inject({
@@ -82,15 +77,6 @@ describe("worker run admission", () => {
     });
     assert.equal(blocked.statusCode, 409);
     assert.equal(blocked.json().admission.canOverride, true);
-    assert.deepEqual(runs, []);
-
-    const confirmed = await server.inject({
-      method: "POST",
-      url: "/api/queen-bee/project-1/cards/target/run",
-      payload: { confirmRisks: true },
-    });
-    assert.equal(confirmed.statusCode, 200);
-    assert.deepEqual(runs, ["project-1:target"]);
   });
 });
 
@@ -108,16 +94,5 @@ function card(
     dependencies: [],
     column,
     createdAt: "2026-07-19T00:00:00.000Z",
-  };
-}
-
-function supervisor(running: string[], runs: string[]): WorkerSupervisor {
-  return {
-    async run(projectId, card, _a, _b, _c, _d, _e, _f) {
-      runs.push(`${projectId}:${card.id}`);
-    },
-    isRunning: () => false,
-    runningCardIds: () => running,
-    cancel: () => false,
   };
 }

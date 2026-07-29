@@ -13,7 +13,6 @@ import { createQueenBeeRuntimeStore } from "./queen-bee-runtime-store";
 import type { buildRefreshedReviewPackage } from "./review-package";
 import type { Reviewer, ReviewPackage } from "./reviewer";
 import { registerWorkDecisionRoutes } from "./work-decision-routes";
-import type { WorkerSupervisor } from "./worker-supervisor";
 
 describe("work decision routes", () => {
   const directories: string[] = [];
@@ -388,12 +387,6 @@ describe("work decision routes", () => {
         revision: "integration-2",
       }),
     };
-    const workerSupervisor: WorkerSupervisor = {
-      async run() {},
-      isRunning: () => false,
-      runningCardIds: () => [],
-      cancel: () => false,
-    };
     const server = Fastify();
     servers.push(server);
     registerWorkDecisionRoutes(server, {
@@ -402,10 +395,7 @@ describe("work decision routes", () => {
       integrationManager,
       runtimeStore,
       reviewer,
-      workerSupervisor,
       workspacesBasePath: repoPath,
-      onWorkerEvent: () => {},
-      refreshedReviewBuilder: options.refreshedReviewBuilder,
     });
 
     return {
