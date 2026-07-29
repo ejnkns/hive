@@ -1,13 +1,12 @@
 import type { Card } from "shared/board-types";
-import { getAvailableActions } from "workflow-engine/get-available-actions";
-import { reduce } from "workflow-engine/reduce";
+import { reduce, type WorkflowEvent } from "workflow-engine/reduce";
 import type { WorkflowItemState } from "workflow-engine/shared/workflow-item-state";
 import type { CardsStateId, CardsTaskOutputs } from "./cards-workflow";
 import { cardsWorkflow } from "./cards-workflow";
 
 // === Parallel Engine Integration ===
 //
-// Drives the workflow reduer alongside the existing imperative card
+// Drives the workflow reducer alongside the existing imperative card
 // lifecycle code. After each mutation to the real card, the equivalent
 // event is dispatched to the reducer so its state stays in sync.
 // Disagreements between the two are logged.
@@ -53,8 +52,23 @@ function compare(
   }
 }
 
+function sync(
+  card: Card,
+  event: WorkflowEvent<CardsTaskOutputs, CardsStateId>,
+  label: string
+): void {
+  const state = getOrCreate(card);
+  const { state: newState } = reduce(state, event, cardsWorkflow.states);
+  instances.set(card.id, newState);
+  compare(card, newState);
+  log("engine_synced", {
+    cardId: card.id,
+    event: label,
+    engineState: newState.currentState,
+  });
+}
+
 // === Lifecycle event handlers ===
-// Each is called AFTER the existing code has mutated the card.
 
 export function onCardCreated(card: Card): void {
   getOrCreate(card);
@@ -62,73 +76,46 @@ export function onCardCreated(card: Card): void {
 }
 
 export function onWorkerStarted(card: Card): void {
-  const state = getOrCreate(card);
-  const { state: newState } = reduce(
-    { ...state, currentState: card.column as CardsStateId },
+  sync(
+    card,
     {
       type: "action_triggered",
       actionId: "run",
       transitionTo: "in_progress",
     },
-    cardsWorkflow.states
+    "worker_started"
   );
-  instances.set(card.id, newState);
-  compare(card, newState);
-  log("engine_synced", {
-    cardId: card.id,
-    event: "worker_started",
-    engineState: newState.currentState,
-  });
 }
 
 export function onWorkerCompleted(card: Card): void {
-  const state = getOrCreate(card);
-  const { state: newState } = reduce(
-    state,
+  sync(
+    card,
     {
       type: "task_completed",
       taskId: "implement",
       output: {},
     },
-    cardsWorkflow.states
+    "worker_completed"
   );
-  instances.set(card.id, newState);
-  compare(card, newState);
-  log("engine_synced", {
-    cardId: card.id,
-    event: "worker_completed",
-    engineState: newState.currentState,
-  });
 }
 
 export function onWorkerErrored(card: Card, error: string): void {
-  const state = getOrCreate(card);
-  const { state: newState } = reduce(
-    state,
+  sync(
+    card,
     {
       type: "task_errored",
       taskId: "implement",
       error,
     },
-    cardsWorkflow.states
+    "worker_errored"
   );
-  instances.set(card.id, newState);
-  compare(card, newState);
-  log("engine_synced", {
-    cardId: card.id,
-    event: "worker_errored",
-    engineState: newState.currentState,
-  });
 }
 
 export function onCancelled(card: Card): void {
   const state = getOrCreate(card);
   const { state: newState } = reduce(
     { ...state, hasRunningTask: true, runningTaskId: "implement" },
-    {
-      type: "task_cancelled",
-      taskId: "implement",
-    },
+    { type: "task_cancelled", taskId: "implement" },
     cardsWorkflow.states
   );
   instances.set(card.id, newState);
@@ -141,104 +128,63 @@ export function onCancelled(card: Card): void {
 }
 
 export function onReviewCompleted(card: Card, verdict: string): void {
-  const state = getOrCreate(card);
-  const { state: newState } = reduce(
-    state,
+  sync(
+    card,
     {
       type: "task_completed",
       taskId: "review",
       output: { verdict },
     },
-    cardsWorkflow.states
+    "review_completed"
   );
-  instances.set(card.id, newState);
-  compare(card, newState);
-  log("engine_synced", {
-    cardId: card.id,
-    event: "review_completed",
-    verdict,
-    engineState: newState.currentState,
-  });
 }
 
 export function onReviewErrored(card: Card, error: string): void {
-  const state = getOrCreate(card);
-  const { state: newState } = reduce(
-    state,
+  sync(
+    card,
     {
       type: "task_errored",
       taskId: "review",
       error,
     },
-    cardsWorkflow.states
+    "review_errored"
   );
-  instances.set(card.id, newState);
-  compare(card, newState);
-  log("engine_synced", {
-    cardId: card.id,
-    event: "review_errored",
-    engineState: newState.currentState,
-  });
 }
 
 export function onAccepted(card: Card): void {
-  const state = getOrCreate(card);
-  const { state: newState } = reduce(
-    state,
+  sync(
+    card,
     {
       type: "action_triggered",
       actionId: "accept",
       transitionTo: "done",
     },
-    cardsWorkflow.states
+    "accepted"
   );
-  instances.set(card.id, newState);
-  compare(card, newState);
-  log("engine_synced", {
-    cardId: card.id,
-    event: "accepted",
-    engineState: newState.currentState,
-  });
 }
 
 export function onUpdateChanges(card: Card): void {
-  const state = getOrCreate(card);
-  const { state: newState } = reduce(
-    state,
+  sync(
+    card,
     {
       type: "action_triggered",
       actionId: "update_changes",
       transitionTo: "in_progress",
     },
-    cardsWorkflow.states
+    "update_changes"
   );
-  instances.set(card.id, newState);
-  compare(card, newState);
-  log("engine_synced", {
-    cardId: card.id,
-    event: "update_changes",
-    engineState: newState.currentState,
-  });
 }
 
 export function onNewChanges(card: Card): void {
-  const state = getOrCreate(card);
-  const { state: newState } = reduce(
-    state,
+  sync(
+    card,
     {
       type: "action_triggered",
       actionId: "new_changes",
       transitionTo: "ready",
     },
-    cardsWorkflow.states
+    "new_changes"
   );
-  instances.set(card.id, newState);
-  compare(card, newState);
-  log("engine_synced", {
-    cardId: card.id,
-    event: "new_changes",
-    engineState: newState.currentState,
-  });
 }
 
 export function getEngineState(
