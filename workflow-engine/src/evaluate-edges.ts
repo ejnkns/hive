@@ -1,4 +1,4 @@
-import type { FlowEdge } from "./workflow-types";
+import type { FlowEdge, TaskOutputMap } from "./workflow-types";
 
 export type EdgeEffect = {
   fromWorkflow: string;
@@ -7,14 +7,11 @@ export type EdgeEffect = {
   transformedData: Record<string, unknown>;
 };
 
-// Evaluates which FlowDefinition edges are activated by a state change.
-// Returns a list of effects for each matching edge. The consumer
-// (queen-bee runtime store) handles the side effects.
 export function evaluateEdges(
   edges: FlowEdge[],
   fromWorkflow: string,
   newState: string,
-  taskOutputs: Record<string, unknown>
+  taskOutputs: Partial<TaskOutputMap<Record<string, unknown>>>
 ): EdgeEffect[] {
   const effects: EdgeEffect[] = [];
 
@@ -22,8 +19,8 @@ export function evaluateEdges(
     if (edge.fromWorkflow !== fromWorkflow) continue;
     if (!edge.fromStates.includes(newState)) continue;
 
-    const transformedData = edge.transform
-      ? edge.transform(taskOutputs as any)
+    const transformedData: Record<string, unknown> = edge.transform
+      ? edge.transform(taskOutputs)
       : {};
 
     effects.push({

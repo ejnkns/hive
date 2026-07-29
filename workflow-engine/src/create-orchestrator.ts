@@ -4,6 +4,13 @@ import type { WorkflowItemState } from "./shared/workflow-item-state";
 import type { TaskDefinition, TaskRunner } from "./task-runner";
 import type { RunningTaskContext, StateDef } from "./workflow-types";
 
+// Erased versions used internally at the generic runtime boundary.
+// Gate functions receive the full context at runtime regardless of
+// compile-time generic parameters, so casting between specific and
+// erased types is safe inside the engine.
+type ErasedState = StateDef<Record<string, unknown>, string>;
+type ErasedItemState = WorkflowItemState<Record<string, unknown>, string>;
+
 // === Workflow configuration ===
 
 export type WorkflowConfig<
@@ -57,7 +64,9 @@ export type OrchestratorEvent<
       error: string;
     };
 
-type EventHandler = (event: OrchestratorEvent<any, any>) => void;
+type EventHandler = (
+  event: OrchestratorEvent<Record<string, unknown>, string>
+) => void;
 
 // === Public API ===
 
@@ -85,20 +94,22 @@ export function createOrchestrator<
   runners: Record<string, TaskRunner>,
   initialState?: WorkflowItemState<TTaskOutputs, TStateId>
 ): OrchestratorAPI<TTaskOutputs, TStateId> {
-  let state: WorkflowItemState<TTaskOutputs, TStateId> = initialState ?? {
-    currentState: workflow.initial,
-    taskOutputs: {} as Partial<any>,
-    hasRunningTask: false,
-    runningTaskId: null,
-    runningTaskContext: null,
-  };
+  let state =
+    initialState ??
+    ({
+      currentState: workflow.initial,
+      taskOutputs: {} as Partial<Record<string, unknown>>,
+      hasRunningTask: false,
+      runningTaskId: null,
+      runningTaskContext: null,
+    } as WorkflowItemState<TTaskOutputs, TStateId>);
 
   let runningRunner: TaskRunner | null = null;
   const handlers: EventHandler[] = [];
 
   function emit(event: OrchestratorEvent<TTaskOutputs, TStateId>): void {
     for (const handler of handlers) {
-      handler(event);
+      handler(event as OrchestratorEvent<Record<string, unknown>, string>);
     }
   }
 
@@ -114,7 +125,7 @@ export function createOrchestrator<
     if (event.type === "task_started") {
       emit({
         type: "task_started",
-        taskId: (event as any).taskId,
+        taskId: event.taskId,
       });
     }
 
@@ -125,9 +136,9 @@ export function createOrchestrator<
 
   function getVisibleActions(): { id: string; label: string }[] {
     return getAvailableActions(
-      workflow.states as readonly any[],
-      state.currentState,
-      state as any
+      workflow.states as unknown as readonly ErasedState[],
+      state.currentState as string,
+      state as unknown as ErasedItemState
     );
   }
 
@@ -233,7 +244,7 @@ export function createOrchestrator<
       dispatcher({
         type: "action_triggered",
         actionId,
-        transitionTo,
+        transitionTo: transitionTo as TStateId,
       });
     },
     onTaskCompleted,

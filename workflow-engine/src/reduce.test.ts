@@ -155,7 +155,7 @@ const initial: WorkflowItemState<
   "ready"
 > = {
   currentState: "ready" as const,
-  taskOutputs: {} as any,
+  taskOutputs: {},
   hasRunningTask: false,
   runningTaskId: null,
   runningTaskContext: null,
