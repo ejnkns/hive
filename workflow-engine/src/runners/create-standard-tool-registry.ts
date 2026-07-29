@@ -1,45 +1,46 @@
 /** @private — only imported by runners.ts */
-import type { ToolDefinition, ToolExecutor } from "./tool-types";
+
 import {
   definition as commitWorkDef,
   execute as commitWorkExec,
-} from "./tools/commit-work";
+} from "./create-standard-tool-registry/commit-work";
 import {
   definition as gitDiffDef,
   execute as gitDiffExec,
-} from "./tools/git-diff";
+} from "./create-standard-tool-registry/git-diff";
 import {
   definition as gitLogDef,
   execute as gitLogExec,
-} from "./tools/git-log";
+} from "./create-standard-tool-registry/git-log";
 import {
   definition as gitShowDef,
   execute as gitShowExec,
-} from "./tools/git-show";
+} from "./create-standard-tool-registry/git-show";
 import {
   definition as gitStatusDef,
   execute as gitStatusExec,
-} from "./tools/git-status";
+} from "./create-standard-tool-registry/git-status";
 import {
   definition as listDirDef,
   execute as listDirExec,
-} from "./tools/list-directory";
+} from "./create-standard-tool-registry/list-directory";
 import {
   definition as readFileDef,
   execute as readFileExec,
-} from "./tools/read-file";
+} from "./create-standard-tool-registry/read-file";
 import {
   definition as runCommandDef,
   execute as runCommandExec,
-} from "./tools/run-command";
+} from "./create-standard-tool-registry/run-command";
 import {
   definition as searchCodeDef,
   execute as searchCodeExec,
-} from "./tools/search-code";
+} from "./create-standard-tool-registry/search-code";
 import {
   definition as writeFileDef,
   execute as writeFileExec,
-} from "./tools/write-file";
+} from "./create-standard-tool-registry/write-file";
+import type { ToolDefinition, ToolExecutor } from "./tool-types";
 
 export function createStandardToolDefinitions(): Record<
   string,
