@@ -1,3 +1,4 @@
+/** @public — shared types for the built-in runners subtree. Import within runners/ but not from outside. */
 export type ToolDefinition = {
   type: "function";
   function: {

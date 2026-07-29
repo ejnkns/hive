@@ -1,3 +1,4 @@
+/** @private — only imported by runners.ts */
 import type { TaskDefinition, TaskRunner } from "../task-runner";
 
 export type OperationFn = (

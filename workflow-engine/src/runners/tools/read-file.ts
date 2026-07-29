@@ -1,3 +1,4 @@
+/** @private — only imported by create-standard-tool-registry.ts */
 import { execFileSync } from "node:child_process";
 import { readFileSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";

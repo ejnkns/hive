@@ -1,3 +1,4 @@
+/** @private — only imported by runners.ts */
 import type { TaskDefinition, TaskRunner } from "../task-runner";
 import type { ToolCall, ToolDefinition, ToolExecutor } from "./tool-types";
 

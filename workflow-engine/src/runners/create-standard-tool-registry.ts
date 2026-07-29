@@ -1,3 +1,4 @@
+/** @private — only imported by runners.ts */
 import type { ToolDefinition, ToolExecutor } from "./tool-types";
 import {
   definition as commitWorkDef,

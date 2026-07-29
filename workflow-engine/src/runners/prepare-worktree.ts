@@ -1,3 +1,4 @@
+/** @private — only imported by runners.ts */
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
