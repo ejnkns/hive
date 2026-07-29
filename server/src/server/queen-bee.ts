@@ -1,5 +1,6 @@
 /** @public — Queen Bee module API */
 
+export { queenBeeFlow } from "../../../queen-bee/flow";
 export { registerBoardRoutes } from "./queen-bee/board-routes";
 export type { Board, BoardStore, Card, Column } from "./queen-bee/board-store";
 export { createBoardStore } from "./queen-bee/board-store";

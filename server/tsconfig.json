@@ -8,7 +8,11 @@
     "skipLibCheck": true,
     "declaration": true,
     "sourceMap": true,
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "workflow-engine": ["../workflow-engine/src"],
+      "workflow-engine/*": ["../workflow-engine/src/*"]
+    }
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "../queen-bee/**/*.ts"]
 }

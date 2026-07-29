@@ -5,8 +5,8 @@ import type {
   CardsItemState,
   CardsStateId,
   CardsTaskOutputs,
-} from "./cards-workflow";
-import { cardsWorkflow } from "./cards-workflow";
+} from "../../../../queen-bee/cards-workflow";
+import { cardsWorkflow } from "../../../../queen-bee/cards-workflow";
 
 // === Parallel Engine Integration (legacy — to be removed) ===
 
