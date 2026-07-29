@@ -156,26 +156,7 @@ export type StateDef<
   actions?: ManualAction<TTaskOutputs, TStateId, TItemState>[];
 };
 
-// --- Builder (curried, for cases where explicit type params are needed) ---
-
-export function createWorkflow<
-  TTaskOutputs extends Record<string, unknown>,
-  TStateId extends string = string,
->() {
-  return function define(config: {
-    id: string;
-    label: string;
-    description?: string;
-    taskOutputs: TTaskOutputs;
-    states: readonly StateDef<TTaskOutputs, TStateId>[];
-    initial: TStateId;
-    terminalStates: readonly TStateId[];
-  }) {
-    return config;
-  };
-}
-
-// --- Builder (single call, types inferred from config) ---
+// --- Builder ---
 
 export function defineWorkflow<
   TTaskOutputs extends Record<string, unknown>,

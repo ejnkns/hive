@@ -429,22 +429,18 @@ export const queenBeeFlow = {
 // ——— StateDef rejects task ids not declared in TTaskOutputs ———
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const _invalidTaskId: StateDef<{ implement: Record<string, never> }, "ready"> =
-  {
-    id: "ready",
-    label: "R",
-    tasks: [
-      // @ts-expect-error: "bogus" is not a key of TTaskOutputs
-      { id: "bogus", label: "", trigger: "manual", role: "ai-task" },
-    ],
-  };
+const _invalidTaskId: StateDef<{ implement: NoOutput }, "ready"> = {
+  id: "ready",
+  label: "R",
+  tasks: [
+    // @ts-expect-error: "bogus" is not a key of TTaskOutputs
+    { id: "bogus", label: "", trigger: "manual", role: "ai-task" },
+  ],
+};
 
 // ——— AutoTransition rejects state ids outside TStateId ———
 
-const _invalidTransition: AutoTransition<
-  Record<string, never>,
-  "ready" | "done"
-> = {
+const _invalidTransition: AutoTransition<NoOutput, "ready" | "done"> = {
   // @ts-expect-error: "bogus" is not assignable to "ready" | "done"
   to: "bogus",
   gate: () => true,
