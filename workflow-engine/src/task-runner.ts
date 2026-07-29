@@ -5,6 +5,7 @@ export type TaskDefinition = {
   tools?: string[];
   operations?: string[];
   systemPrompt?: string;
+  workspacePath?: string;
 };
 
 export type TaskRunner = {
