@@ -70,7 +70,6 @@ export type OrchestratorAPI<
   on(handler: EventHandler): () => void;
   dispatchAction(actionId: string): void;
   startTask(taskId: string): void;
-  sendMessage(message: string): void;
   patchItemState(patch: Partial<TItemState>): void;
   onTaskCompleted(taskId: string, output: unknown): Promise<void>;
   onTaskErrored(taskId: string, error: string): Promise<void>;
@@ -137,7 +136,7 @@ export function createOrchestrator<
     );
   }
 
-  async function runTask(task: TaskDefinition): Promise<void> {
+  async function executeTask(task: TaskDefinition): Promise<void> {
     const runner = runners[task.role];
     if (!runner) {
       emit({
@@ -199,7 +198,7 @@ export function createOrchestrator<
     if (!autoTasks?.length) return;
 
     for (const task of autoTasks) {
-      await runTask(task);
+      await executeTask(task);
     }
   }
 
@@ -208,11 +207,12 @@ export function createOrchestrator<
     const stateDef = workflow.states.find((s) => s.id === state.currentState);
     const taskDef = stateDef?.tasks?.find((t) => t.id === taskId);
     if (!taskDef) return;
-    runTask(taskDef);
-  }
 
-  function sendMessage(message: string): void {
-    runningRunner?.sendMessage?.(message);
+    dispatcher({
+      type: "task_started",
+      taskId: taskId as keyof TTaskOutputs & string,
+      context: buildRunningContext(taskDef.role),
+    });
   }
 
   function patchItemState(patch: Partial<TItemState>): void {
@@ -258,7 +258,6 @@ export function createOrchestrator<
       });
     },
     startTask,
-    sendMessage,
     patchItemState,
     onTaskCompleted,
     onTaskErrored,
