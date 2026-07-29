@@ -1,7 +1,7 @@
-import { createWorkflow } from "workflow-engine/workflow-types";
+import { defineWorkflow, type NoOutput } from "workflow-engine/workflow-types";
 
 export type CardsTaskOutputs = {
-  implement: Record<string, never>;
+  implement: NoOutput;
   review: { verdict: "approved" | "changes_requested" };
   coordinate: { summary: string };
 };
@@ -13,11 +13,12 @@ export type CardsStateId =
   | "done"
   | "unfulfillable";
 
-export const cardsWorkflow = createWorkflow<CardsTaskOutputs, CardsStateId>()({
+export const cardsWorkflow = defineWorkflow({
   id: "cards",
   label: "Cards",
+  description: "Per-card workflow: worker agent, reviewer, coordinator.",
   taskOutputs: {
-    implement: {} as Record<string, never>,
+    implement: {} as NoOutput,
     review: {} as { verdict: "approved" | "changes_requested" },
     coordinate: {} as { summary: string },
   },
@@ -25,10 +26,12 @@ export const cardsWorkflow = createWorkflow<CardsTaskOutputs, CardsStateId>()({
     {
       id: "ready",
       label: "Ready",
+      category: "initial",
       actions: [
         {
           id: "run",
           label: "Run Worker Agent",
+          variant: "primary",
           gate: (ctx) => !ctx.hasRunningTask,
           effect: () => ({ transitionTo: "in_progress" }),
         },
@@ -37,6 +40,7 @@ export const cardsWorkflow = createWorkflow<CardsTaskOutputs, CardsStateId>()({
     {
       id: "in_progress",
       label: "In Progress",
+      category: "active",
       tasks: [
         {
           id: "implement",
@@ -61,6 +65,7 @@ export const cardsWorkflow = createWorkflow<CardsTaskOutputs, CardsStateId>()({
         {
           id: "cancel",
           label: "Cancel",
+          variant: "secondary",
           gate: (ctx) => ctx.hasRunningTask,
           effect: () => ({ transitionTo: "ready" }),
         },
@@ -69,6 +74,7 @@ export const cardsWorkflow = createWorkflow<CardsTaskOutputs, CardsStateId>()({
     {
       id: "reviewing",
       label: "Reviewing",
+      category: "active",
       tasks: [
         {
           id: "review",
@@ -83,12 +89,14 @@ export const cardsWorkflow = createWorkflow<CardsTaskOutputs, CardsStateId>()({
         {
           id: "accept",
           label: "Accept work",
+          variant: "primary",
           gate: (ctx) => ctx.taskOutputs.review?.output?.verdict === "approved",
           effect: () => ({ transitionTo: "done" }),
         },
         {
           id: "accept_anyway",
           label: "Accept anyway",
+          variant: "destructive",
           gate: (ctx) =>
             ctx.taskOutputs.review?.output?.verdict === "changes_requested",
           effect: () => ({ transitionTo: "done" }),
@@ -96,6 +104,7 @@ export const cardsWorkflow = createWorkflow<CardsTaskOutputs, CardsStateId>()({
         {
           id: "update_changes",
           label: "Update work",
+          variant: "secondary",
           gate: (ctx) =>
             ctx.taskOutputs.review?.output?.verdict === "changes_requested",
           effect: () => ({ transitionTo: "in_progress" }),
@@ -103,6 +112,7 @@ export const cardsWorkflow = createWorkflow<CardsTaskOutputs, CardsStateId>()({
         {
           id: "new_changes",
           label: "New attempt",
+          variant: "secondary",
           gate: (ctx) =>
             ctx.taskOutputs.review?.output?.verdict === "changes_requested",
           effect: () => ({ transitionTo: "ready" }),
@@ -110,15 +120,17 @@ export const cardsWorkflow = createWorkflow<CardsTaskOutputs, CardsStateId>()({
         {
           id: "restart_review",
           label: "Retry review",
+          variant: "secondary",
           gate: (ctx) => ctx.taskOutputs.review?.status === "error",
           effect: () => ({ transitionTo: "reviewing" }),
         },
       ],
     },
-    { id: "done", label: "Done" },
+    { id: "done", label: "Done", category: "terminal" },
     {
       id: "unfulfillable",
       label: "Unfulfillable",
+      category: "error",
       tasks: [
         {
           id: "coordinate",
@@ -133,12 +145,14 @@ export const cardsWorkflow = createWorkflow<CardsTaskOutputs, CardsStateId>()({
         {
           id: "remediate",
           label: "Apply remediation",
+          variant: "primary",
           gate: (ctx) => ctx.taskOutputs.coordinate?.status === "success",
           effect: () => ({ transitionTo: "ready" }),
         },
         {
           id: "archive_card",
           label: "Archive",
+          variant: "secondary",
           effect: () => ({ transitionTo: "done" }),
         },
       ],

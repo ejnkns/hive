@@ -5,7 +5,7 @@ import type {
   GateContext,
   StateDef,
 } from "workflow-engine/workflow-types";
-import { createWorkflow } from "workflow-engine/workflow-types";
+import { defineWorkflow, type NoOutput } from "workflow-engine/workflow-types";
 
 // === QUEEN BEE FLOW ===
 //
@@ -29,18 +29,7 @@ export const queenBeeFlow = {
   id: "queen-bee",
   label: "Queen Bee",
   workflows: [
-    createWorkflow<
-      {
-        draft: { content: string; revision: string };
-        plan: { kind: "proposal" | "feedback"; cards?: unknown[] };
-      },
-      | "no_session"
-      | "drafting"
-      | "complete"
-      | "planning"
-      | "planned"
-      | "accepted"
-    >()({
+    defineWorkflow({
       id: "requirements",
       label: "Requirements",
       taskOutputs: {
@@ -181,12 +170,7 @@ export const queenBeeFlow = {
       terminalStates: ["accepted"],
     }),
 
-    createWorkflow<
-      {
-        elaborate: { ideaBrief: string; elaboratedSpec: string };
-      },
-      "backlog" | "elaborating" | "refined" | "submitted" | "archived"
-    >()({
+    defineWorkflow({
       id: "ideas",
       label: "Ideas",
       taskOutputs: {
@@ -278,18 +262,11 @@ export const queenBeeFlow = {
       terminalStates: ["submitted", "archived"],
     }),
 
-    createWorkflow<
-      {
-        implement: Record<string, never>;
-        review: { verdict: "approved" | "changes_requested" };
-        coordinate: { summary: string };
-      },
-      "ready" | "in_progress" | "reviewing" | "done" | "unfulfillable"
-    >()({
+    defineWorkflow({
       id: "cards",
       label: "Cards",
       taskOutputs: {
-        implement: {} as Record<string, never>,
+        implement: {} as NoOutput,
         review: {} as { verdict: "approved" | "changes_requested" },
         coordinate: {} as { summary: string },
       },

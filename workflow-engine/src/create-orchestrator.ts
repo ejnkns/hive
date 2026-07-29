@@ -2,7 +2,11 @@ import { getAvailableActions } from "./get-available-actions";
 import { reduce, type WorkflowEvent } from "./reduce";
 import type { WorkflowItemState } from "./shared/workflow-item-state";
 import type { TaskDefinition, TaskRunner } from "./task-runner";
-import type { RunningTaskContext, StateDef } from "./workflow-types";
+import type {
+  RunningTaskContext,
+  StateDef,
+  VisibleAction,
+} from "./workflow-types";
 
 // Erased versions used internally at the generic runtime boundary.
 // Gate functions receive the full context at runtime regardless of
@@ -47,7 +51,7 @@ export type OrchestratorEvent<
     }
   | {
       type: "available_actions_changed";
-      actions: { id: string; label: string }[];
+      actions: VisibleAction[];
     }
   | {
       type: "task_started";
@@ -75,7 +79,7 @@ export type OrchestratorAPI<
   TStateId extends string,
 > = {
   getState(): WorkflowItemState<TTaskOutputs, TStateId>;
-  getAvailableActions(): { id: string; label: string }[];
+  getAvailableActions(): VisibleAction[];
   on(handler: EventHandler): () => void;
   dispatchAction(actionId: string): void;
   onTaskCompleted(taskId: string, output: unknown): Promise<void>;
@@ -134,7 +138,7 @@ export function createOrchestrator<
     }
   }
 
-  function getVisibleActions(): { id: string; label: string }[] {
+  function getVisibleActions(): VisibleAction[] {
     return getAvailableActions(
       workflow.states as unknown as readonly ErasedState[],
       state.currentState as string,
@@ -162,7 +166,7 @@ export function createOrchestrator<
     });
 
     try {
-      const { output } = await runner.run(task, {});
+      const { output } = await runner.run(task);
       runningRunner = null;
       await onTaskCompleted(task.id, output);
     } catch (err: unknown) {

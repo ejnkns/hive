@@ -1,5 +1,5 @@
 import type { WorkflowItemState } from "./shared/workflow-item-state";
-import type { StateDef } from "./workflow-types";
+import type { StateDef, VisibleAction } from "./workflow-types";
 
 export function getAvailableActions<
   TTaskOutputs extends Record<string, unknown>,
@@ -8,7 +8,7 @@ export function getAvailableActions<
   states: readonly StateDef<TTaskOutputs, TStateId>[],
   currentState: TStateId,
   state: WorkflowItemState<TTaskOutputs, TStateId>
-): { id: string; label: string }[] {
+): VisibleAction[] {
   const stateDef = states.find((s) => s.id === currentState);
   if (!stateDef?.actions) return [];
 
@@ -21,5 +21,9 @@ export function getAvailableActions<
 
   return stateDef.actions
     .filter((action) => !action.gate || action.gate(ctx))
-    .map((action) => ({ id: action.id, label: action.label }));
+    .map((action) => ({
+      id: action.id,
+      label: action.label,
+      variant: action.variant ?? "default",
+    }));
 }

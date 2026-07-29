@@ -7,9 +7,7 @@ export type TaskDefinition = {
   systemPrompt?: string;
 };
 
-export type TaskContext = Record<string, never>;
-
 export type TaskRunner = {
-  run(task: TaskDefinition, context: TaskContext): Promise<{ output: unknown }>;
+  run(task: TaskDefinition): Promise<{ output: unknown }>;
   cancel(): void;
 };

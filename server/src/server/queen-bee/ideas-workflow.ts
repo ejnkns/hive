@@ -1,4 +1,4 @@
-import { createWorkflow } from "workflow-engine/workflow-types";
+import { defineWorkflow } from "workflow-engine/workflow-types";
 
 export type IdeasTaskOutputs = {
   elaborate: { ideaBrief: string; elaboratedSpec: string };
@@ -11,7 +11,7 @@ export type IdeasStateId =
   | "submitted"
   | "archived";
 
-export const ideasWorkflow = createWorkflow<IdeasTaskOutputs, IdeasStateId>()({
+export const ideasWorkflow = defineWorkflow({
   id: "ideas",
   label: "Ideas",
   taskOutputs: {
@@ -21,16 +21,19 @@ export const ideasWorkflow = createWorkflow<IdeasTaskOutputs, IdeasStateId>()({
     {
       id: "backlog",
       label: "Backlog",
+      category: "initial",
       actions: [
         {
           id: "elaborate",
           label: "Elaborate idea",
+          variant: "primary",
           gate: (ctx) => !ctx.hasRunningTask,
           effect: () => ({ transitionTo: "elaborating" }),
         },
         {
           id: "archive",
           label: "Archive",
+          variant: "secondary",
           effect: () => ({ transitionTo: "archived" }),
         },
       ],
@@ -38,9 +41,7 @@ export const ideasWorkflow = createWorkflow<IdeasTaskOutputs, IdeasStateId>()({
     {
       id: "elaborating",
       label: "Elaborating",
-      description:
-        "Multi-turn idea elaboration session. " +
-        "Produces a requirements draft for this idea.",
+      category: "active",
       tasks: [
         {
           id: "elaborate",
@@ -63,6 +64,7 @@ export const ideasWorkflow = createWorkflow<IdeasTaskOutputs, IdeasStateId>()({
         {
           id: "cancel",
           label: "Cancel",
+          variant: "secondary",
           gate: (ctx) => ctx.hasRunningTask,
           effect: () => ({ transitionTo: "backlog" }),
         },
@@ -71,18 +73,18 @@ export const ideasWorkflow = createWorkflow<IdeasTaskOutputs, IdeasStateId>()({
     {
       id: "refined",
       label: "Refined",
-      description:
-        "Idea elaborated. User approves to trigger planning " +
-        "with this idea's draft merged into requirements.",
+      category: "active",
       actions: [
         {
           id: "approve",
           label: "Submit for planning",
+          variant: "primary",
           effect: () => ({ transitionTo: "submitted" }),
         },
         {
           id: "reopen",
           label: "Reopen",
+          variant: "secondary",
           effect: () => ({ transitionTo: "backlog" }),
         },
       ],
@@ -90,13 +92,12 @@ export const ideasWorkflow = createWorkflow<IdeasTaskOutputs, IdeasStateId>()({
     {
       id: "submitted",
       label: "Submitted",
-      description:
-        "Waiting for planning outcome. When the requirements " +
-        "workflow reaches accepted, this idea gets archived.",
+      category: "active",
     },
     {
       id: "archived",
       label: "Archived",
+      category: "terminal",
     },
   ],
   initial: "backlog",

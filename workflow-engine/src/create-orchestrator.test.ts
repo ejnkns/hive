@@ -2,14 +2,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { createOrchestrator } from "./create-orchestrator";
 import type { TaskDefinition, TaskRunner } from "./task-runner";
-import { createWorkflow } from "./workflow-types";
+import { defineWorkflow } from "./workflow-types";
 
-// --- Fixture: simple two-state workflow ---
-
-const testWorkflow = createWorkflow<
-  { doWork: { result: string } },
-  "idle" | "working" | "done"
->()({
+const testWorkflow = defineWorkflow({
   id: "test",
   label: "Test Workflow",
   taskOutputs: {
@@ -78,10 +73,7 @@ class MockRunner implements TaskRunner {
     this.cancelled = false;
   }
 
-  run(
-    _task: TaskDefinition,
-    _context: Record<string, never>
-  ): Promise<{ output: unknown }> {
+  run(_task: TaskDefinition): Promise<{ output: unknown }> {
     return new Promise((resolve, reject) => {
       if (this.shouldFail) {
         reject(new Error("Task failed"));

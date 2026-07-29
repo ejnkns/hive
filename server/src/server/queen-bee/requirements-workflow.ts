@@ -1,4 +1,4 @@
-import { createWorkflow } from "workflow-engine/workflow-types";
+import { defineWorkflow } from "workflow-engine/workflow-types";
 
 export type RequirementsTaskOutputs = {
   draft: { content: string; revision: string };
@@ -13,10 +13,7 @@ export type RequirementsStateId =
   | "planned"
   | "accepted";
 
-export const requirementsWorkflow = createWorkflow<
-  RequirementsTaskOutputs,
-  RequirementsStateId
->()({
+export const requirementsWorkflow = defineWorkflow({
   id: "requirements",
   label: "Requirements",
   taskOutputs: {
@@ -27,10 +24,12 @@ export const requirementsWorkflow = createWorkflow<
     {
       id: "no_session",
       label: "No Session",
+      category: "initial",
       actions: [
         {
           id: "start",
           label: "Start requirements session",
+          variant: "primary",
           gate: (ctx) => !ctx.hasRunningTask,
           effect: () => ({ transitionTo: "drafting" }),
         },
@@ -39,9 +38,7 @@ export const requirementsWorkflow = createWorkflow<
     {
       id: "drafting",
       label: "Drafting",
-      description:
-        "Multi-turn requirements session. User and Requirements Agent " +
-        "converse until the agent signals completion.",
+      category: "active",
       tasks: [
         {
           id: "draft",
@@ -65,12 +62,14 @@ export const requirementsWorkflow = createWorkflow<
         {
           id: "cancel",
           label: "Cancel session",
+          variant: "secondary",
           gate: (ctx) => ctx.hasRunningTask,
           effect: () => ({ transitionTo: "no_session" }),
         },
         {
           id: "reset",
           label: "Reset",
+          variant: "secondary",
           effect: () => ({ transitionTo: "no_session" }),
         },
       ],
@@ -78,18 +77,18 @@ export const requirementsWorkflow = createWorkflow<
     {
       id: "complete",
       label: "Complete",
-      description:
-        "Requirements draft ready. User approves to submit " +
-        "for planning, or resets.",
+      category: "active",
       actions: [
         {
           id: "approve",
           label: "Submit for planning",
+          variant: "primary",
           effect: () => ({ transitionTo: "planning" }),
         },
         {
           id: "reset",
           label: "Reset",
+          variant: "secondary",
           effect: () => ({ transitionTo: "no_session" }),
         },
       ],
@@ -97,10 +96,7 @@ export const requirementsWorkflow = createWorkflow<
     {
       id: "planning",
       label: "Planning",
-      description:
-        "Planner Agent processes the requirements draft. " +
-        "Returns either RequirementsFeedback (→ repair) " +
-        "or PlanningProposal (→ review).",
+      category: "active",
       tasks: [
         {
           id: "plan",
@@ -117,12 +113,14 @@ export const requirementsWorkflow = createWorkflow<
         {
           id: "accept_proposal",
           label: "Accept proposal",
+          variant: "primary",
           gate: (ctx) => ctx.taskOutputs.plan?.output.kind === "proposal",
           effect: () => ({ transitionTo: "planned" }),
         },
         {
           id: "repair",
           label: "Start repair session",
+          variant: "secondary",
           gate: (ctx) => ctx.taskOutputs.plan?.output.kind === "feedback",
           effect: () => ({ transitionTo: "drafting" }),
         },
@@ -131,18 +129,18 @@ export const requirementsWorkflow = createWorkflow<
     {
       id: "planned",
       label: "Planned",
-      description:
-        "Proposal ready. User accepts individual changes " +
-        "or accepts all. Applied proposal creates cards.",
+      category: "active",
       actions: [
         {
           id: "accept_all",
           label: "Accept all and create cards",
+          variant: "primary",
           effect: () => ({ transitionTo: "accepted" }),
         },
         {
           id: "replan",
           label: "Request replanning",
+          variant: "secondary",
           effect: () => ({ transitionTo: "complete" }),
         },
       ],
@@ -150,7 +148,7 @@ export const requirementsWorkflow = createWorkflow<
     {
       id: "accepted",
       label: "Accepted",
-      description: "Proposal applied. Cards created in Ready.",
+      category: "terminal",
     },
   ],
   initial: "no_session",

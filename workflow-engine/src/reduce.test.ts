@@ -3,20 +3,13 @@ import { describe, it } from "node:test";
 import { getAvailableActions } from "./get-available-actions";
 import { reduce } from "./reduce";
 import type { WorkflowItemState } from "./shared/workflow-item-state";
-import { createWorkflow } from "./workflow-types";
+import { defineWorkflow, type NoOutput } from "./workflow-types";
 
-const cardsWorkflow = createWorkflow<
-  {
-    implement: Record<string, never>;
-    review: { verdict: "approved" | "changes_requested" };
-    coordinate: { summary: string };
-  },
-  "ready" | "in_progress" | "reviewing" | "done" | "unfulfillable"
->()({
+const cardsWorkflow = defineWorkflow({
   id: "cards",
   label: "Cards",
   taskOutputs: {
-    implement: {} as Record<string, never>,
+    implement: {} as NoOutput,
     review: {} as { verdict: "approved" | "changes_requested" },
     coordinate: {} as { summary: string },
   },

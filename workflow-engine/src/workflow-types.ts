@@ -8,6 +8,10 @@
 // The types are generic — no domain-specific concepts. Any project
 // lifecycle can be expressed.
 
+// --- Convenience aliases ---
+
+export type NoOutput = Record<string, never>;
+
 // --- Task outcomes ---
 
 export type TaskOutcome<TOutput> = {
@@ -63,6 +67,30 @@ export type GateContext<
   itemState: TItemState;
 };
 
+// --- Action variant ---
+
+// Visual hint for UI rendering. An AI agent generating UI can style
+// buttons based on variant: primary = call-to-action, secondary = neutral,
+// destructive = irreversible change, default = fallback.
+export type ActionVariant = "primary" | "secondary" | "destructive" | "default";
+
+// --- Visible action returned to the UI ---
+
+export type VisibleAction = {
+  id: string;
+  label: string;
+  variant: ActionVariant;
+};
+
+// --- State category ---
+
+// Semantic role of a state within the workflow lifecycle.
+// "initial" — the first state the workflow starts in
+// "active" — a state where work happens (tasks may run)
+// "terminal" — a final state (no further transitions)
+// "error" — a state representing failure/unfulfillable
+export type StateCategory = "initial" | "active" | "terminal" | "error";
+
 // --- Transitions ---
 
 // AutoTransition: evaluated automatically when a state's tasks complete.
@@ -78,6 +106,7 @@ export type AutoTransition<
 
 // ManualAction: a button the user can click to trigger a state change.
 // gate controls visibility; effect returns the target state.
+// variant provides a visual hint for UI rendering.
 export type ManualAction<
   TTaskOutputs extends Record<string, unknown>,
   TStateId extends string,
@@ -85,6 +114,7 @@ export type ManualAction<
 > = {
   id: string;
   label: string;
+  variant?: ActionVariant;
   gate?: (ctx: GateContext<TTaskOutputs, TItemState>) => boolean;
   effect: () => {
     transitionTo: TStateId;
@@ -109,6 +139,7 @@ export type StateDef<
   id: TStateId;
   label: string;
   description?: string;
+  category?: StateCategory;
 
   tasks?: {
     id: keyof TTaskOutputs & string;
@@ -125,10 +156,8 @@ export type StateDef<
   actions?: ManualAction<TTaskOutputs, TStateId, TItemState>[];
 };
 
-// --- Builder ---
+// --- Builder (curried, for cases where explicit type params are needed) ---
 
-// Curried to let TypeScript infer TStateId from state ids while the
-// consumer declares TTaskOutputs explicitly.
 export function createWorkflow<
   TTaskOutputs extends Record<string, unknown>,
   TStateId extends string = string,
@@ -144,6 +173,23 @@ export function createWorkflow<
   }) {
     return config;
   };
+}
+
+// --- Builder (single call, types inferred from config) ---
+
+export function defineWorkflow<
+  TTaskOutputs extends Record<string, unknown>,
+  TStateId extends string,
+>(config: {
+  id: string;
+  label: string;
+  description?: string;
+  taskOutputs: TTaskOutputs;
+  states: readonly StateDef<TTaskOutputs, TStateId>[];
+  initial: TStateId;
+  terminalStates: readonly TStateId[];
+}) {
+  return config;
 }
 
 // Structural type for a workflow after definition — used in FlowDefinition.
