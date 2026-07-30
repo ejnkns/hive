@@ -1,5 +1,6 @@
 import type { WorkflowInstanceState } from "./shared/workflow-instance-state";
 import type {
+  GateContext,
   RunningTaskContext,
   StateDef,
   TaskOutputMap,
@@ -73,7 +74,8 @@ export function reduce<
 >(
   state: WorkflowInstanceState<TTaskOutputs, TStateId, TWorkflowInstanceState>,
   event: WorkflowEvent<TTaskOutputs, TStateId>,
-  states: readonly StateDef<TTaskOutputs, TStateId, TWorkflowInstanceState>[]
+  states: readonly StateDef<TTaskOutputs, TStateId, TWorkflowInstanceState>[],
+  flowState?: Record<string, unknown>
 ): ReduceResult<TTaskOutputs, TStateId, TWorkflowInstanceState> {
   switch (event.type) {
     case "action_triggered": {
@@ -188,7 +190,8 @@ export function reduce<
       const transition = evaluateAutoTransitions(
         states,
         newState.currentState,
-        newState
+        newState,
+        flowState
       );
       if (transition) {
         const transitionEntry: WorkflowHistoryEntry<TTaskOutputs, TStateId> = {
@@ -253,7 +256,8 @@ export function reduce<
       const transition = evaluateAutoTransitions(
         states,
         newState.currentState,
-        newState
+        newState,
+        flowState
       );
       if (transition) {
         const transitionEntry: WorkflowHistoryEntry<TTaskOutputs, TStateId> = {
@@ -318,7 +322,8 @@ function evaluateAutoTransitions<
 >(
   states: readonly StateDef<TTaskOutputs, TStateId, TWorkflowInstanceState>[],
   currentState: TStateId,
-  state: WorkflowInstanceState<TTaskOutputs, TStateId, TWorkflowInstanceState>
+  state: WorkflowInstanceState<TTaskOutputs, TStateId, TWorkflowInstanceState>,
+  flowState?: Record<string, unknown>
 ): TStateId | undefined {
   const stateDef = states.find((s) => s.id === currentState);
   if (!stateDef?.autoTransitions) return undefined;
@@ -328,8 +333,8 @@ function evaluateAutoTransitions<
     hasRunningTask: state.hasRunningTask,
     runningTaskContext: state.runningTaskContext,
     workflowInstanceState: state.workflowInstanceState,
-    flowState: {} as Record<string, never>,
-  };
+    flowState: flowState ?? {},
+  } as GateContext<TTaskOutputs, TWorkflowInstanceState>;
 
   for (const at of stateDef.autoTransitions) {
     if (at.gate(ctx)) {

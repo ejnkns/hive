@@ -104,6 +104,7 @@ export function createWorkflowInstanceController<
     string,
     never
   >,
+  TFlowState extends Record<string, unknown> = Record<string, never>,
 >(
   workflow: WorkflowConfig<TTaskOutputs, TStateId, TWorkflowInstanceState>,
   runners: Record<string, TaskRunner>,
@@ -112,7 +113,8 @@ export function createWorkflowInstanceController<
     TStateId,
     TWorkflowInstanceState
   >,
-  workflowInstancesInState?: (stateId?: string) => { currentState: string }[]
+  workflowInstancesInState?: (stateId?: string) => { currentState: string }[],
+  flowState?: TFlowState
 ): WorkflowInstanceControllerAPI<
   TTaskOutputs,
   TStateId,
@@ -146,7 +148,7 @@ export function createWorkflowInstanceController<
   }
 
   function dispatcher(event: WorkflowEvent<TTaskOutputs, TStateId>): void {
-    const result = reduce(state, event, workflow.states);
+    const result = reduce(state, event, workflow.states, flowState);
     state = result.state;
     emit({ type: "state_changed", state });
     emit({
@@ -302,6 +304,27 @@ export function createWorkflowInstanceController<
 
       const action = stateDef.actions?.find((a) => a.id === actionId);
       if (!action) return;
+
+      if (
+        action.maxWorkflowInstancesInTarget !== undefined &&
+        workflowInstancesInState
+      ) {
+        const count = workflowInstancesInState(action.transitionTo).length;
+        if (count >= action.maxWorkflowInstancesInTarget) return;
+      }
+
+      if (action.dependsOnState !== undefined && workflowInstancesInState) {
+        const dependees: string[] =
+          (state.workflowInstanceState as any).dependsOn ?? [];
+        if (dependees.length > 0) {
+          const inState = workflowInstancesInState(action.dependsOnState);
+          const inStateIds = new Set(
+            inState.map((i) => (i as any).id).filter(Boolean)
+          );
+          const allMet = dependees.every((d) => inStateIds.has(d));
+          if (!allMet) return;
+        }
+      }
 
       if (state.hasRunningTask) {
         runningRunner?.cancel();

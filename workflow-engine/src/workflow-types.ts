@@ -123,6 +123,8 @@ export type ManualAction<
   label: string;
   variant?: ActionVariant;
   gate?: (ctx: GateContext<TTaskOutputs, TItemState>) => boolean;
+  maxWorkflowInstancesInTarget?: number;
+  dependsOnState?: TStateId;
   transitionTo: TStateId;
 };
 
