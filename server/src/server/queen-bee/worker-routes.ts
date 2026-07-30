@@ -1,7 +1,3 @@
-/** @private — only imported by queen-bee.ts */
-
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
 import { isRecord } from "shared/board-types";
 import type { QueenBeeEvent } from "shared/queen-bee-events";

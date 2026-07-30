@@ -89,6 +89,34 @@ describe("createAiTaskRunner", () => {
     );
   });
 
+  it("completes on completion tool call and returns parsed arguments", async () => {
+    const runner = createAiTaskRunner({
+      modelCaller: mockCaller([
+        {
+          content: "Submitting review",
+          toolCalls: [
+            {
+              id: "c1",
+              name: "submit_review",
+              arguments: JSON.stringify({
+                verdict: "approved",
+                findings: [],
+                verificationAssessment: { status: "sufficient", notes: "Ok" },
+              }),
+            },
+          ],
+        },
+      ]),
+      toolDefinitions: {},
+      toolExecutors: {},
+      completionTool: "submit_review",
+    });
+
+    const result = await runner.run(dummyTask);
+    const parsed = result.output as { verdict: string };
+    assert.equal(parsed.verdict, "approved");
+  });
+
   it("cancel aborts execution", async () => {
     const runner = createAiTaskRunner({
       modelCaller: mockCaller([{ content: "Hello!" }]),

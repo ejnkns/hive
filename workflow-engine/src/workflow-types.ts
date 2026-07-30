@@ -65,6 +65,7 @@ export type GateContext<
   hasRunningTask: boolean;
   runningTaskContext: RunningTaskContext | null;
   itemState: TItemState;
+  countItems?: (stateId?: string) => number;
 };
 
 // --- Action variant ---

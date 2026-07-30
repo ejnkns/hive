@@ -88,7 +88,8 @@ export function createOrchestrator<
 >(
   workflow: WorkflowConfig<TTaskOutputs, TStateId, TItemState>,
   runners: Record<string, TaskRunner>,
-  initialState?: WorkflowItemState<TTaskOutputs, TStateId, TItemState>
+  initialState?: WorkflowItemState<TTaskOutputs, TStateId, TItemState>,
+  countItems?: (stateId?: string) => number
 ): OrchestratorAPI<TTaskOutputs, TStateId, TItemState> {
   let state: WorkflowItemState<TTaskOutputs, TStateId, TItemState> =
     initialState ??
@@ -135,7 +136,8 @@ export function createOrchestrator<
     return getAvailableActions(
       workflow.states as unknown as readonly ErasedState[],
       state.currentState as string,
-      state as unknown as ErasedItemState
+      state as unknown as ErasedItemState,
+      countItems
     );
   }
 

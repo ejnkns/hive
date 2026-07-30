@@ -13,6 +13,7 @@ export type AiTaskRunnerConfig = {
   modelCaller: AiTaskModelCaller;
   toolDefinitions: Record<string, ToolDefinition>;
   toolExecutors: Record<string, ToolExecutor>;
+  completionTool?: string;
 };
 
 export function createAiTaskRunner(config: AiTaskRunnerConfig): TaskRunner {
@@ -37,6 +38,16 @@ export function createAiTaskRunner(config: AiTaskRunnerConfig): TaskRunner {
         );
 
         messages.push({ role: "assistant", content: response.content });
+
+        if (
+          config.completionTool &&
+          response.toolCalls?.some((c) => c.name === config.completionTool)
+        ) {
+          const completionCall = response.toolCalls.find(
+            (c) => c.name === config.completionTool
+          );
+          return { output: JSON.parse(completionCall!.arguments) };
+        }
 
         if (!response.toolCalls?.length) {
           return { output: { content: response.content, messages } };

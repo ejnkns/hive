@@ -8,7 +8,8 @@ export function getAvailableActions<
 >(
   states: readonly StateDef<TTaskOutputs, TStateId, TItemState>[],
   currentState: TStateId,
-  state: WorkflowItemState<TTaskOutputs, TStateId, TItemState>
+  state: WorkflowItemState<TTaskOutputs, TStateId, TItemState>,
+  countItems?: (stateId?: string) => number
 ): VisibleAction[] {
   const stateDef = states.find((s) => s.id === currentState);
   if (!stateDef?.actions) return [];
@@ -18,6 +19,7 @@ export function getAvailableActions<
     hasRunningTask: state.hasRunningTask,
     runningTaskContext: state.runningTaskContext,
     itemState: state.itemState,
+    countItems,
   };
 
   return stateDef.actions

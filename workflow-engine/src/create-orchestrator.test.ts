@@ -387,3 +387,65 @@ describe("sendTaskInput", () => {
     await taskPromise;
   });
 });
+
+// ── countItems gate test ─────────────────────────────────────────
+
+const concurrentWorkflow = defineWorkflow({
+  id: "concurrent",
+  label: "Concurrent",
+  taskOutputs: {} as Record<string, never>,
+  states: [
+    {
+      id: "idle",
+      label: "Idle",
+      actions: [
+        {
+          id: "go",
+          label: "Go",
+          gate: (ctx) => (ctx.countItems?.("active") ?? 0) < 2,
+          transitionTo: "active",
+        },
+      ],
+    },
+    {
+      id: "active",
+      label: "Active",
+      actions: [
+        {
+          id: "back",
+          label: "Back",
+          transitionTo: "idle",
+        },
+      ],
+    },
+  ],
+  initial: "idle",
+  terminalStates: [],
+});
+
+describe("countItems", () => {
+  it("shows action when under limit", () => {
+    const orchestrator = createOrchestrator(
+      concurrentWorkflow,
+      {},
+      undefined,
+      () => 0
+    );
+    const actions = orchestrator.getAvailableActions();
+    assert.ok(actions.find((a) => a.id === "go"));
+  });
+
+  it("hides action when at limit", () => {
+    const orchestrator = createOrchestrator(
+      concurrentWorkflow,
+      {},
+      undefined,
+      () => 2
+    );
+    const actions = orchestrator.getAvailableActions();
+    assert.equal(
+      actions.find((a) => a.id === "go"),
+      undefined
+    );
+  });
+});
