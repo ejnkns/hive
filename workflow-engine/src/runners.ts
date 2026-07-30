@@ -18,6 +18,8 @@ export {
   createStandardToolDefinitions,
   createStandardToolRegistry,
 } from "./runners/create-standard-tool-registry";
+export { createReviewSnapshot } from "./runners/create-standard-tool-registry/create-review-snapshot";
+export { loadProjectContext } from "./runners/create-standard-tool-registry/load-project-context";
 export { prepareWorktree } from "./runners/prepare-worktree";
 export type {
   ToolCall,
