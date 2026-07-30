@@ -19,10 +19,10 @@ import {
 } from "./queen-bee/project-header-state.svelte";
 import ProjectIntegration from "./queen-bee/project-integration.svelte";
 import ProjectOverview from "./queen-bee/project-overview.svelte";
-import ProjectPage from "./queen-bee/project-page.svelte";
 import Header from "./shared/Header.svelte";
 import Button from "./shared/ui/Button.svelte";
 import Dialog from "./shared/ui/Dialog.svelte";
+import WorkflowProjectPage from "./workflow/WorkflowProjectPage.svelte";
 
 let detailMetric: MetricData | null = $state(null);
 let detailAllMetrics: MetricData[] = $state([]);
@@ -345,7 +345,7 @@ const detailChain = $derived(
     </Dialog>
     <ModelPriorityModal bind:open={modelPriorityModalOpen} />
   {:else if currentHash.startsWith('#/project/')}
-    <ProjectPage projectId={currentHash.slice('#/project/'.length)} />
+    <WorkflowProjectPage projectId={currentHash.slice('#/project/'.length)} />
   {:else}
     <ProjectOverview />
   {/if}

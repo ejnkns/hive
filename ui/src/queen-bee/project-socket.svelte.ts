@@ -34,8 +34,6 @@ function connect(projectId: string) {
   );
   socket.onmessage = (event) => {
     try {
-      // The WS payload is the QueenBeeEvent discriminated union; the switch
-      // narrows message to the correct variant with full type information.
       const message = JSON.parse(String(event.data)) as QueenBeeEvent;
 
       switch (message.type) {

@@ -23,7 +23,6 @@ import { loadModelPriority } from "../server/proxy/model-priority-config";
 import {
   registerIntegrationRoutes,
   registerProjectRoutes,
-  registerRequirementsRoutes,
 } from "../server/queen-bee";
 
 export async function startServer(overrides?: Partial<ServerConfig>) {
@@ -67,7 +66,6 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
   registerFlowApiRoutes(server);
   registerIntegrationRoutes(server);
   registerProjectRoutes(server, persistence);
-  registerRequirementsRoutes(server);
 
   listen(server, config);
 
