@@ -1,12 +1,6 @@
 import { printBanner } from "shared/ascii-banner";
 import { HIVE_DIR } from "shared/hive-dir";
 import { getServerConfig, type ServerConfig } from "shared/server-config";
-import type { FlowPersistence } from "workflow-engine/create-flow-runtime";
-import {
-  createFlowRuntime,
-  type FlowRuntimeAPI,
-} from "workflow-engine/create-flow-runtime";
-import { queenBeeFlow } from "../../../queen-bee/flow";
 import {
   createServer,
   getOverride,
@@ -14,8 +8,8 @@ import {
   listen,
   loadProviders,
 } from "../server";
-import { createEngineRunners } from "../server/engine-bridge";
 import { createFlowPersistence } from "../server/flow-persistence";
+import { rehydrateFlow } from "../server/flow-registry";
 import {
   getLastUsed,
   getProviderStates,
@@ -30,62 +24,9 @@ import {
   createIntegrationManager,
   createProjectStore,
   registerIntegrationRoutes,
+  registerProjectRoutes,
 } from "../server/queen-bee";
 import { emitProjectsChanged } from "../server/queen-bee/worker-event-bus";
-
-const flowRuntimes = new Map<string, FlowRuntimeAPI<any, any>>();
-
-export function getFlowRuntime(
-  flowId: string
-): FlowRuntimeAPI<any, any> | undefined {
-  return flowRuntimes.get(flowId);
-}
-
-function rehydrateFlow(
-  persistence: FlowPersistence,
-  flowId: string,
-  config: unknown,
-  state: unknown,
-  instances: Array<{
-    workflowId: string;
-    state: Record<string, unknown>;
-  }>
-): FlowRuntimeAPI<any, any> | null {
-  if (flowId !== queenBeeFlow.id) return null;
-
-  const runners = createEngineRunners();
-  const runtime = createFlowRuntime(
-    flowId,
-    queenBeeFlow.workflows,
-    queenBeeFlow.edges,
-    {
-      operation: runners.operationRunner,
-      "ai-task": runners.aiTaskRunner,
-      "ai-chat": runners.aiChatRunner,
-    },
-    config as Record<string, unknown>,
-    state as Record<string, unknown>,
-    persistence
-  );
-
-  for (const instance of instances) {
-    const restoredState = {
-      ...instance.state,
-      hasRunningTask: false,
-      runningTaskId: null,
-      runningTaskContext: null,
-    };
-    const controller = runtime.addWorkflowInstance(
-      instance.workflowId,
-      restoredState
-    );
-    if (instance.state.hasRunningTask) {
-      controller.startAutoTasks();
-    }
-  }
-
-  return runtime;
-}
 
 export async function startServer(overrides?: Partial<ServerConfig>) {
   printBanner();
@@ -118,8 +59,6 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
 
   registerIntegrationRoutes(server, { projectStore, integrationManager });
 
-  listen(server, config);
-
   // ── Flow persistence & rehydration ──
 
   const persistence = createFlowPersistence();
@@ -131,17 +70,13 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     state: flowState,
     instances,
   } of flows) {
-    const runtime = rehydrateFlow(
-      persistence,
-      flowId,
-      flowConfig,
-      flowState,
-      instances
-    );
-    if (runtime) {
-      flowRuntimes.set(flowId, runtime);
-    }
+    rehydrateFlow(persistence, flowId, flowConfig, flowState, instances);
   }
+
+  // Register project routes with flow creation capability
+  registerProjectRoutes(server, projectStore, persistence);
+
+  listen(server, config);
 
   process.on("SIGINT", () => {
     shutdown();

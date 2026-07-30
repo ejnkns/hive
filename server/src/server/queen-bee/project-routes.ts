@@ -2,11 +2,14 @@
 
 import type { FastifyInstance } from "fastify";
 import { isRecord } from "shared/board-types";
+import type { FlowPersistence } from "workflow-engine/create-flow-runtime";
+import { createFlowOnLink } from "../flow-registry";
 import type { ProjectStore } from "./create-project-store";
 
 export function registerProjectRoutes(
   server: FastifyInstance,
-  store: ProjectStore
+  store: ProjectStore,
+  persistence?: FlowPersistence
 ): void {
   server.get("/api/queen-bee/projects", async (_request, reply) => {
     return reply.send({ projects: store.getAll() });
@@ -24,6 +27,14 @@ export function registerProjectRoutes(
         body.path,
         typeof body.name === "string" ? body.name : undefined
       );
+
+      if (persistence) {
+        createFlowOnLink(project.id, project.repoPath, persistence, {
+          targetBranch: project.targetBranch,
+          maxConcurrentWorkers: project.maxConcurrentWorkers,
+        });
+      }
+
       return reply.status(201).send({ project });
     } catch (err) {
       return reply.status(400).send({

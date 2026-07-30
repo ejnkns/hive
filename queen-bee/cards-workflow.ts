@@ -62,9 +62,9 @@ export const cardsWorkflow = defineWorkflow({
           id: "run",
           label: "Run Worker Agent",
           variant: "primary",
-          gate: (ctx) =>
-            !ctx.hasRunningTask &&
-            (ctx.workflowInstancesInState?.("in_progress").length ?? 0) < 3,
+          maxWorkflowInstancesInTarget: 3,
+          dependsOnState: "done",
+          gate: (ctx) => !ctx.hasRunningTask,
           transitionTo: "in_progress",
         },
       ],

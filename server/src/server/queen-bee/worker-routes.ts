@@ -7,7 +7,6 @@ import {
   runningCardIds,
 } from "../workflow-instance-registry";
 import type { ProjectStore } from "./create-project-store";
-import { evaluateWorkerAdmission } from "./worker-admission";
 import { offQueenBeeEvent, onQueenBeeEvent } from "./worker-event-bus";
 
 type Board = {
@@ -55,31 +54,35 @@ export function registerWorkerRoutes(
           error: "Card must be in the 'ready' column to run",
         });
       }
-      if (instance.getState().hasRunningTask) {
-        return reply
-          .status(409)
-          .send({ error: "Worker Agent is already running" });
-      }
 
-      const body = isRecord(request.body) ? request.body : {};
-      const admission = evaluateWorkerAdmission({
+      // File overlap check: reject if card shares relevant files with a running card
+      const blockers = fileOverlapBlockers(
         card,
-        cards: board.cards,
-        runningCardIds: runningCardIds(projectId),
-        maxConcurrentWorkers: project.maxConcurrentWorkers,
-        confirmRisks: body.confirmRisks === true,
-      });
-      if (!admission.allowed) {
-        return reply.status(409).send({
-          error: admission.canOverride
-            ? "Worker start requires explicit risk confirmation"
-            : "Project worker capacity has been reached",
-          admission,
-        });
+        board.cards,
+        new Set(runningCardIds(projectId))
+      );
+      if (blockers.length > 0) {
+        const body = isRecord(request.body) ? request.body : {};
+        if (body.confirmRisks !== true) {
+          return reply.status(409).send({
+            error:
+              "File overlap with active cards requires explicit confirmation",
+            blockers,
+          });
+        }
       }
 
       instance.dispatchAction("run");
-      reply.send({ started: true, cardId, admission });
+
+      // Engine rejected the action (capacity, dependency, or gate check failed)
+      if (instance.getState().currentState !== "in_progress") {
+        return reply.status(409).send({
+          error:
+            "Cannot start worker: action unavailable or concurrency limit reached",
+        });
+      }
+
+      reply.send({ started: true, cardId });
     }
   );
 
@@ -126,4 +129,43 @@ export function registerWorkerRoutes(
       return reply.send({ cancelled: true, cardId });
     }
   );
+}
+
+function fileOverlapBlockers(
+  card: Card,
+  cards: Card[],
+  runningCardIds: Set<string>
+): Array<{
+  kind: string;
+  message: string;
+  cardIds: string[];
+  files: string[];
+}> {
+  const targetFiles = new Set(card.relevantFiles.map(normalizeFile));
+  const blockers: Array<{
+    kind: string;
+    message: string;
+    cardIds: string[];
+    files: string[];
+  }> = [];
+  for (const activeCard of cards) {
+    if (!runningCardIds.has(activeCard.id) || activeCard.id === card.id) {
+      continue;
+    }
+    const files = activeCard.relevantFiles
+      .map(normalizeFile)
+      .filter((file) => targetFiles.has(file));
+    if (files.length === 0) continue;
+    blockers.push({
+      kind: "file_overlap",
+      message: `Active card '${activeCard.title}' shares relevant files with this work`,
+      cardIds: [activeCard.id],
+      files: [...new Set(files)].sort(),
+    });
+  }
+  return blockers;
+}
+
+function normalizeFile(file: string): string {
+  return file.replaceAll("\\", "/").replace(/^\.\//, "");
 }
