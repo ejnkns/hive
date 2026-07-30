@@ -51,7 +51,7 @@ export const cardsWorkflow = defineWorkflow({
     },
     coordinate: {} as { summary: string },
   },
-  itemState: {} as CardsItemState,
+  workflowInstanceState: {} as CardsItemState,
   states: [
     {
       id: "ready",
@@ -63,7 +63,8 @@ export const cardsWorkflow = defineWorkflow({
           label: "Run Worker Agent",
           variant: "primary",
           gate: (ctx) =>
-            !ctx.hasRunningTask && (ctx.countItems?.("in_progress") ?? 0) < 3,
+            !ctx.hasRunningTask &&
+            (ctx.workflowInstancesInState?.("in_progress").length ?? 0) < 3,
           transitionTo: "in_progress",
         },
       ],
@@ -158,13 +159,14 @@ export const cardsWorkflow = defineWorkflow({
         },
         {
           to: "unfulfillable",
-          gate: (ctx) => (ctx.itemState.validationFailures ?? 0) >= 3,
+          gate: (ctx) =>
+            (ctx.workflowInstanceState.validationFailures ?? 0) >= 3,
         },
         {
           to: "running_agent",
           gate: (ctx) =>
             ctx.taskOutputs.validateCompletion?.status === "error" &&
-            (ctx.itemState.validationFailures ?? 0) < 3,
+            (ctx.workflowInstanceState.validationFailures ?? 0) < 3,
         },
       ],
     },

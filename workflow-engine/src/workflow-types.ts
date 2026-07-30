@@ -59,13 +59,18 @@ export type ChatMessage = {
 // itemState carries per-item domain data (e.g. card-specific state).
 export type GateContext<
   TTaskOutputs extends Record<string, unknown>,
-  TItemState extends Record<string, unknown> = Record<string, never>,
+  TWorkflowInstanceState extends Record<string, unknown> = Record<
+    string,
+    never
+  >,
+  TFlowState extends Record<string, unknown> = Record<string, never>,
 > = {
   taskOutputs: Partial<TaskOutputMap<TTaskOutputs>>;
   hasRunningTask: boolean;
   runningTaskContext: RunningTaskContext | null;
-  itemState: TItemState;
-  countItems?: (stateId?: string) => number;
+  workflowInstanceState: TWorkflowInstanceState;
+  flowState: TFlowState;
+  workflowInstancesInState?: (stateId?: string) => { currentState: string }[];
 };
 
 // --- Action variant ---
@@ -161,14 +166,17 @@ export type StateDef<
 export function defineWorkflow<
   TTaskOutputs extends Record<string, unknown>,
   TStateId extends string,
-  TItemState extends Record<string, unknown> = Record<string, never>,
+  TWorkflowInstanceState extends Record<string, unknown> = Record<
+    string,
+    never
+  >,
 >(config: {
   id: string;
   label: string;
   description?: string;
   taskOutputs: TTaskOutputs;
-  itemState?: TItemState;
-  states: readonly StateDef<TTaskOutputs, TStateId, TItemState>[];
+  workflowInstanceState?: TWorkflowInstanceState;
+  states: readonly StateDef<TTaskOutputs, TStateId, TWorkflowInstanceState>[];
   initial: TStateId;
   terminalStates: readonly TStateId[];
 }) {

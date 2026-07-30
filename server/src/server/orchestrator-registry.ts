@@ -1,9 +1,9 @@
-/** @public — per-card orchestrator instance registry */
+/** @public — per-card workflow instance registry */
 
 import {
-  createOrchestrator,
-  type OrchestratorAPI,
-} from "workflow-engine/create-orchestrator";
+  createWorkflowInstanceController,
+  type WorkflowInstanceControllerAPI,
+} from "workflow-engine/create-workflow-instance-controller";
 import type {
   CardsItemState,
   CardsStateId,
@@ -15,7 +15,7 @@ import { createEngineRunners } from "./engine-bridge";
 const runners = createEngineRunners();
 const instances = new Map<
   string,
-  OrchestratorAPI<CardsTaskOutputs, CardsStateId, CardsItemState>
+  WorkflowInstanceControllerAPI<CardsTaskOutputs, CardsStateId, CardsItemState>
 >();
 
 function key(projectId: string, cardId: string): string {
@@ -26,12 +26,16 @@ export function getOrCreateOrchestrator(
   projectId: string,
   cardId: string,
   repoPath: string
-): OrchestratorAPI<CardsTaskOutputs, CardsStateId, CardsItemState> {
+): WorkflowInstanceControllerAPI<
+  CardsTaskOutputs,
+  CardsStateId,
+  CardsItemState
+> {
   const k = key(projectId, cardId);
   let orch = instances.get(k);
   if (orch) return orch;
 
-  orch = createOrchestrator(
+  orch = createWorkflowInstanceController(
     cardsWorkflow,
     {
       operation: runners.operationRunner,
@@ -44,7 +48,12 @@ export function getOrCreateOrchestrator(
       hasRunningTask: false,
       runningTaskId: null,
       runningTaskContext: null,
-      itemState: { projectId, repoPath, attempt: 0, validationFailures: 0 },
+      workflowInstanceState: {
+        projectId,
+        repoPath,
+        attempt: 0,
+        validationFailures: 0,
+      },
       history: [],
     }
   );
@@ -56,7 +65,13 @@ export function getOrCreateOrchestrator(
 export function getOrchestrator(
   projectId: string,
   cardId: string
-): OrchestratorAPI<CardsTaskOutputs, CardsStateId, CardsItemState> | undefined {
+):
+  | WorkflowInstanceControllerAPI<
+      CardsTaskOutputs,
+      CardsStateId,
+      CardsItemState
+    >
+  | undefined {
   return instances.get(key(projectId, cardId));
 }
 

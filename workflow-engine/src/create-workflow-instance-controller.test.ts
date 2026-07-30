@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { createOrchestrator } from "./create-orchestrator";
+import { createWorkflowInstanceController } from "./create-workflow-instance-controller";
 import type { TaskDefinition, TaskRunner } from "./task-runner";
 import { defineWorkflow } from "./workflow-types";
 
@@ -97,33 +97,33 @@ class MockRunner implements TaskRunner {
 
 // --- Tests ---
 
-describe("createOrchestrator", () => {
+describe("createWorkflowInstanceController", () => {
   it("starts in initial state", () => {
-    const orchestrator = createOrchestrator(testWorkflow, {});
-    assert.equal(orchestrator.getState().currentState, "idle");
+    const controller = createWorkflowInstanceController(testWorkflow, {});
+    assert.equal(controller.getState().currentState, "idle");
   });
 
   it("getAvailableActions returns initial actions", () => {
-    const orchestrator = createOrchestrator(testWorkflow, {});
-    const actions = orchestrator.getAvailableActions();
+    const controller = createWorkflowInstanceController(testWorkflow, {});
+    const actions = controller.getAvailableActions();
     assert.equal(actions.length, 1);
     assert.equal(actions[0]!.id, "start");
   });
 
   it("dispatchAction transitions state and starts auto tasks", async () => {
     const runner = new MockRunner();
-    const orchestrator = createOrchestrator(testWorkflow, {
+    const controller = createWorkflowInstanceController(testWorkflow, {
       "ai-task": runner,
     });
 
-    orchestrator.dispatchAction("start");
+    controller.dispatchAction("start");
 
     // After dispatch, state should be "working"
-    assert.equal(orchestrator.getState().currentState, "working");
+    assert.equal(controller.getState().currentState, "working");
 
     // Auto task should be starting (hasRunningTask = true)
-    assert.equal(orchestrator.getState().hasRunningTask, true);
-    assert.equal(orchestrator.getState().runningTaskId, "doWork");
+    assert.equal(controller.getState().hasRunningTask, true);
+    assert.equal(controller.getState().runningTaskId, "doWork");
 
     // Complete the task
     runner.complete("success");
@@ -132,63 +132,63 @@ describe("createOrchestrator", () => {
     await new Promise((r) => setTimeout(r, 0));
 
     // Should transition to done
-    assert.equal(orchestrator.getState().currentState, "done");
-    assert.equal(orchestrator.getState().hasRunningTask, false);
+    assert.equal(controller.getState().currentState, "done");
+    assert.equal(controller.getState().hasRunningTask, false);
   });
 
   it("cancel transitions back to idle", async () => {
     const runner = new MockRunner();
-    const orchestrator = createOrchestrator(testWorkflow, {
+    const controller = createWorkflowInstanceController(testWorkflow, {
       "ai-task": runner,
     });
 
-    orchestrator.dispatchAction("start");
-    assert.equal(orchestrator.getState().currentState, "working");
+    controller.dispatchAction("start");
+    assert.equal(controller.getState().currentState, "working");
 
-    orchestrator.dispatchAction("cancel");
+    controller.dispatchAction("cancel");
     await new Promise((r) => setTimeout(r, 0));
 
-    assert.equal(orchestrator.getState().currentState, "idle");
-    assert.equal(orchestrator.getState().hasRunningTask, false);
+    assert.equal(controller.getState().currentState, "idle");
+    assert.equal(controller.getState().hasRunningTask, false);
   });
 
   it("emits state_changed event", () => {
-    const orchestrator = createOrchestrator(testWorkflow, {});
+    const controller = createWorkflowInstanceController(testWorkflow, {});
     const events: string[] = [];
-    orchestrator.on((event) => {
+    controller.on((event) => {
       events.push(event.type);
     });
 
-    orchestrator.dispatchAction("start");
+    controller.dispatchAction("start");
     assert.ok(events.includes("state_changed"));
     assert.ok(events.includes("available_actions_changed"));
   });
 
   it("task error returns to idle", async () => {
     const runner = new MockRunner(true);
-    const orchestrator = createOrchestrator(testWorkflow, {
+    const controller = createWorkflowInstanceController(testWorkflow, {
       "ai-task": runner,
     });
 
-    orchestrator.dispatchAction("start");
-    assert.equal(orchestrator.getState().currentState, "working");
+    controller.dispatchAction("start");
+    assert.equal(controller.getState().currentState, "working");
 
     await new Promise((r) => setTimeout(r, 0));
 
-    assert.equal(orchestrator.getState().currentState, "idle");
-    assert.equal(orchestrator.getState().taskOutputs.doWork?.status, "error");
+    assert.equal(controller.getState().currentState, "idle");
+    assert.equal(controller.getState().taskOutputs.doWork?.status, "error");
   });
 
   it("cancel action is visible while task is running", () => {
     const runner = new MockRunner();
-    const orchestrator = createOrchestrator(testWorkflow, {
+    const controller = createWorkflowInstanceController(testWorkflow, {
       "ai-task": runner,
     });
 
-    orchestrator.dispatchAction("start");
-    assert.equal(orchestrator.getState().hasRunningTask, true);
+    controller.dispatchAction("start");
+    assert.equal(controller.getState().hasRunningTask, true);
 
-    const actions = orchestrator.getAvailableActions();
+    const actions = controller.getAvailableActions();
     assert.ok(actions.find((a) => a.id === "cancel"));
   });
 });
@@ -279,17 +279,17 @@ class ChattyMockRunner implements TaskRunner {
 describe("startTask", () => {
   it("starts a manual task runner", async () => {
     const runner = new ChattyMockRunner();
-    const orchestrator = createOrchestrator(manualTaskWorkflow, {
+    const controller = createWorkflowInstanceController(manualTaskWorkflow, {
       "ai-chat": runner,
     });
 
-    orchestrator.dispatchAction("begin");
-    assert.equal(orchestrator.getState().currentState, "session_active");
+    controller.dispatchAction("begin");
+    assert.equal(controller.getState().currentState, "session_active");
 
-    const taskPromise = orchestrator.startTask("chat");
+    const taskPromise = controller.startTask("chat");
     // Dispatch should be synchronous — hasRunningTask set before await
-    assert.equal(orchestrator.getState().hasRunningTask, true);
-    assert.equal(orchestrator.getState().runningTaskId, "chat");
+    assert.equal(controller.getState().hasRunningTask, true);
+    assert.equal(controller.getState().runningTaskId, "chat");
     assert.equal(runner.runStarted, true);
 
     runner.complete("output");
@@ -299,34 +299,34 @@ describe("startTask", () => {
 
   it("completes task when runner resolves", async () => {
     const runner = new ChattyMockRunner();
-    const orchestrator = createOrchestrator(manualTaskWorkflow, {
+    const controller = createWorkflowInstanceController(manualTaskWorkflow, {
       "ai-chat": runner,
     });
 
-    orchestrator.dispatchAction("begin");
+    controller.dispatchAction("begin");
 
-    const taskPromise = orchestrator.startTask("chat");
+    const taskPromise = controller.startTask("chat");
     await new Promise((r) => setTimeout(r, 0));
     runner.complete("done");
     await taskPromise;
 
-    assert.equal(orchestrator.getState().currentState, "complete");
-    assert.equal(orchestrator.getState().hasRunningTask, false);
+    assert.equal(controller.getState().currentState, "complete");
+    assert.equal(controller.getState().hasRunningTask, false);
   });
 
   it("is no-op when task is already running", async () => {
     const runner = new ChattyMockRunner();
-    const orchestrator = createOrchestrator(manualTaskWorkflow, {
+    const controller = createWorkflowInstanceController(manualTaskWorkflow, {
       "ai-chat": runner,
     });
 
-    orchestrator.dispatchAction("begin");
+    controller.dispatchAction("begin");
 
-    const firstTask = orchestrator.startTask("chat");
+    const firstTask = controller.startTask("chat");
     await new Promise((r) => setTimeout(r, 0));
 
     runner.runStarted = false;
-    await orchestrator.startTask("chat");
+    await controller.startTask("chat");
 
     assert.equal(runner.runStarted, false);
 
@@ -339,16 +339,16 @@ describe("startTask", () => {
 describe("sendTaskInput", () => {
   it("delegates to the running runner", async () => {
     const runner = new ChattyMockRunner();
-    const orchestrator = createOrchestrator(manualTaskWorkflow, {
+    const controller = createWorkflowInstanceController(manualTaskWorkflow, {
       "ai-chat": runner,
     });
 
-    orchestrator.dispatchAction("begin");
+    controller.dispatchAction("begin");
 
-    const taskPromise = orchestrator.startTask("chat");
+    const taskPromise = controller.startTask("chat");
     await new Promise((r) => setTimeout(r, 0));
 
-    orchestrator.sendTaskInput("chat", "Hello", "user");
+    controller.sendTaskInput("chat", "Hello", "user");
     assert.equal(runner.receivedMessages.length, 1);
     assert.equal(runner.receivedMessages[0]!.content, "Hello");
     assert.equal(runner.receivedMessages[0]!.role, "user");
@@ -360,26 +360,26 @@ describe("sendTaskInput", () => {
 
   it("is no-op when no task is running", () => {
     const runner = new ChattyMockRunner();
-    const orchestrator = createOrchestrator(manualTaskWorkflow, {
+    const controller = createWorkflowInstanceController(manualTaskWorkflow, {
       "ai-chat": runner,
     });
 
-    orchestrator.sendTaskInput("nonexistent", "Hello", "user");
+    controller.sendTaskInput("nonexistent", "Hello", "user");
     assert.equal(runner.receivedMessages.length, 0);
   });
 
   it("is no-op when wrong taskId specified", async () => {
     const runner = new ChattyMockRunner();
-    const orchestrator = createOrchestrator(manualTaskWorkflow, {
+    const controller = createWorkflowInstanceController(manualTaskWorkflow, {
       "ai-chat": runner,
     });
 
-    orchestrator.dispatchAction("begin");
+    controller.dispatchAction("begin");
 
-    const taskPromise = orchestrator.startTask("chat");
+    const taskPromise = controller.startTask("chat");
     await new Promise((r) => setTimeout(r, 0));
 
-    orchestrator.sendTaskInput("wrong-task", "Hello", "user");
+    controller.sendTaskInput("wrong-task", "Hello", "user");
     assert.equal(runner.receivedMessages.length, 0);
 
     runner.complete("done");
@@ -402,7 +402,8 @@ const concurrentWorkflow = defineWorkflow({
         {
           id: "go",
           label: "Go",
-          gate: (ctx) => (ctx.countItems?.("active") ?? 0) < 2,
+          gate: (ctx) =>
+            (ctx.workflowInstancesInState?.("active").length ?? 0) < 2,
           transitionTo: "active",
         },
       ],
@@ -423,26 +424,29 @@ const concurrentWorkflow = defineWorkflow({
   terminalStates: [],
 });
 
-describe("countItems", () => {
+describe("workflowInstancesInState", () => {
   it("shows action when under limit", () => {
-    const orchestrator = createOrchestrator(
+    const controller = createWorkflowInstanceController(
       concurrentWorkflow,
       {},
       undefined,
-      () => 0
+      () => []
     );
-    const actions = orchestrator.getAvailableActions();
+    const actions = controller.getAvailableActions();
     assert.ok(actions.find((a) => a.id === "go"));
   });
 
   it("hides action when at limit", () => {
-    const orchestrator = createOrchestrator(
+    const controller = createWorkflowInstanceController(
       concurrentWorkflow,
       {},
       undefined,
-      () => 2
+      () => [
+        { currentState: "active" } as any,
+        { currentState: "active" } as any,
+      ]
     );
-    const actions = orchestrator.getAvailableActions();
+    const actions = controller.getAvailableActions();
     assert.equal(
       actions.find((a) => a.id === "go"),
       undefined

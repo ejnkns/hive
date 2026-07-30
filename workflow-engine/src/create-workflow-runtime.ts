@@ -1,12 +1,12 @@
 import { type EdgeEffect, evaluateEdges } from "./evaluate-edges";
 import { reduce, type WorkflowEvent } from "./reduce";
-import type { WorkflowItemState } from "./shared/workflow-item-state";
+import type { WorkflowInstanceState } from "./shared/workflow-instance-state";
 import type { FlowEdge, StateDef } from "./workflow-types";
 
 export type RuntimeItem = {
   workflowId: string;
   itemId: string;
-  state: WorkflowItemState<Record<string, unknown>, string>;
+  state: WorkflowInstanceState<Record<string, unknown>, string>;
 };
 
 export function createWorkflowRuntime() {
@@ -19,7 +19,7 @@ export function createWorkflowRuntime() {
   function addItem(
     workflowId: string,
     itemId: string,
-    initialState: WorkflowItemState<Record<string, unknown>, string>
+    initialState: WorkflowInstanceState<Record<string, unknown>, string>
   ): void {
     items.set(key(workflowId, itemId), {
       workflowId,

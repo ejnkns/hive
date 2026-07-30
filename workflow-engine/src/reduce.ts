@@ -1,4 +1,4 @@
-import type { WorkflowItemState } from "./shared/workflow-item-state";
+import type { WorkflowInstanceState } from "./shared/workflow-instance-state";
 import type {
   RunningTaskContext,
   StateDef,
@@ -52,9 +52,12 @@ export type WorkflowCommand = { type: "noop" } | { type: "start_auto_tasks" };
 export type ReduceResult<
   TTaskOutputs extends Record<string, unknown>,
   TStateId extends string,
-  TItemState extends Record<string, unknown> = Record<string, never>,
+  TWorkflowInstanceState extends Record<string, unknown> = Record<
+    string,
+    never
+  >,
 > = {
-  state: WorkflowItemState<TTaskOutputs, TStateId, TItemState>;
+  state: WorkflowInstanceState<TTaskOutputs, TStateId, TWorkflowInstanceState>;
   commands: WorkflowCommand[];
 };
 
@@ -63,12 +66,15 @@ export type ReduceResult<
 export function reduce<
   TTaskOutputs extends Record<string, unknown>,
   TStateId extends string,
-  TItemState extends Record<string, unknown> = Record<string, never>,
+  TWorkflowInstanceState extends Record<string, unknown> = Record<
+    string,
+    never
+  >,
 >(
-  state: WorkflowItemState<TTaskOutputs, TStateId, TItemState>,
+  state: WorkflowInstanceState<TTaskOutputs, TStateId, TWorkflowInstanceState>,
   event: WorkflowEvent<TTaskOutputs, TStateId>,
-  states: readonly StateDef<TTaskOutputs, TStateId, TItemState>[]
-): ReduceResult<TTaskOutputs, TStateId, TItemState> {
+  states: readonly StateDef<TTaskOutputs, TStateId, TWorkflowInstanceState>[]
+): ReduceResult<TTaskOutputs, TStateId, TWorkflowInstanceState> {
   switch (event.type) {
     case "action_triggered": {
       const transitionEntry: WorkflowHistoryEntry<TTaskOutputs, TStateId> = {
@@ -78,7 +84,11 @@ export function reduce<
         timestamp: new Date().toISOString(),
         actionId: event.actionId,
       };
-      const nextState: WorkflowItemState<TTaskOutputs, TStateId, TItemState> = {
+      const nextState: WorkflowInstanceState<
+        TTaskOutputs,
+        TStateId,
+        TWorkflowInstanceState
+      > = {
         ...state,
         currentState: event.transitionTo,
         hasRunningTask: false,
@@ -162,7 +172,11 @@ export function reduce<
         return h;
       });
 
-      const newState: WorkflowItemState<TTaskOutputs, TStateId, TItemState> = {
+      const newState: WorkflowInstanceState<
+        TTaskOutputs,
+        TStateId,
+        TWorkflowInstanceState
+      > = {
         ...state,
         taskOutputs: newOutputs,
         hasRunningTask: false,
@@ -223,7 +237,11 @@ export function reduce<
         return h;
       });
 
-      const newState: WorkflowItemState<TTaskOutputs, TStateId, TItemState> = {
+      const newState: WorkflowInstanceState<
+        TTaskOutputs,
+        TStateId,
+        TWorkflowInstanceState
+      > = {
         ...state,
         taskOutputs: newOutputs,
         hasRunningTask: false,
@@ -293,11 +311,14 @@ export function reduce<
 function evaluateAutoTransitions<
   TTaskOutputs extends Record<string, unknown>,
   TStateId extends string,
-  TItemState extends Record<string, unknown> = Record<string, never>,
+  TWorkflowInstanceState extends Record<string, unknown> = Record<
+    string,
+    never
+  >,
 >(
-  states: readonly StateDef<TTaskOutputs, TStateId, TItemState>[],
+  states: readonly StateDef<TTaskOutputs, TStateId, TWorkflowInstanceState>[],
   currentState: TStateId,
-  state: WorkflowItemState<TTaskOutputs, TStateId, TItemState>
+  state: WorkflowInstanceState<TTaskOutputs, TStateId, TWorkflowInstanceState>
 ): TStateId | undefined {
   const stateDef = states.find((s) => s.id === currentState);
   if (!stateDef?.autoTransitions) return undefined;
@@ -306,7 +327,8 @@ function evaluateAutoTransitions<
     taskOutputs: state.taskOutputs,
     hasRunningTask: state.hasRunningTask,
     runningTaskContext: state.runningTaskContext,
-    itemState: state.itemState,
+    workflowInstanceState: state.workflowInstanceState,
+    flowState: {} as Record<string, never>,
   };
 
   for (const at of stateDef.autoTransitions) {

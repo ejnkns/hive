@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { getAvailableActions } from "./get-available-actions";
 import { reduce } from "./reduce";
-import type { WorkflowItemState } from "./shared/workflow-item-state";
+import type { WorkflowInstanceState } from "./shared/workflow-instance-state";
 import { defineWorkflow, type NoOutput } from "./workflow-types";
 
 const cardsWorkflow = defineWorkflow({
@@ -140,7 +140,7 @@ const cardsWorkflow = defineWorkflow({
 });
 
 // --- Helpers ---
-const initial: WorkflowItemState<
+const initial: WorkflowInstanceState<
   { implement: {}; review: {}; coordinate: {} },
   "ready"
 > = {
@@ -149,7 +149,7 @@ const initial: WorkflowItemState<
   hasRunningTask: false,
   runningTaskId: null,
   runningTaskContext: null,
-  itemState: {},
+  workflowInstanceState: {},
   history: [],
 };
 
@@ -213,7 +213,7 @@ describe("cards workflow", () => {
       hasRunningTask: true,
       runningTaskId: "implement",
       runningTaskContext: { role: "ai-task" as const, messages: [] },
-      itemState: {},
+      workflowInstanceState: {},
       history: [],
     };
 
@@ -239,7 +239,7 @@ describe("cards workflow", () => {
       hasRunningTask: true,
       runningTaskId: "implement",
       runningTaskContext: { role: "ai-task" as const, messages: [] },
-      itemState: {},
+      workflowInstanceState: {},
       history: [],
     };
 
@@ -262,7 +262,7 @@ describe("cards workflow", () => {
       hasRunningTask: true,
       runningTaskId: "implement",
       runningTaskContext: { role: "ai-task" as const, messages: [] },
-      itemState: {},
+      workflowInstanceState: {},
     };
 
     const actions = visible(state, "in_progress");
@@ -278,7 +278,7 @@ describe("cards workflow", () => {
       hasRunningTask: true,
       runningTaskId: "implement",
       runningTaskContext: { role: "ai-task" as const, messages: [] },
-      itemState: {},
+      workflowInstanceState: {},
       history: [],
     };
 
@@ -419,7 +419,7 @@ describe("cards workflow", () => {
       hasRunningTask: true,
       runningTaskId: "implement",
       runningTaskContext: { role: "ai-task" as const, messages: [] },
-      itemState: {},
+      workflowInstanceState: {},
       history: [],
     };
 

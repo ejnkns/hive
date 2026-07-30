@@ -1,6 +1,6 @@
 import { getAvailableActions } from "./get-available-actions";
 import { reduce, type WorkflowEvent } from "./reduce";
-import type { WorkflowItemState } from "./shared/workflow-item-state";
+import type { WorkflowInstanceState } from "./shared/workflow-instance-state";
 import type { TaskDefinition, TaskRunner } from "./task-runner";
 import type {
   RunningTaskContext,
@@ -13,10 +13,9 @@ type ErasedState = StateDef<
   string,
   Record<string, unknown>
 >;
-type ErasedItemState = WorkflowItemState<
+type ErasedInstanceState = WorkflowInstanceState<
   Record<string, unknown>,
-  string,
-  Record<string, unknown>
+  string
 >;
 
 // === Workflow configuration ===
@@ -24,13 +23,16 @@ type ErasedItemState = WorkflowItemState<
 export type WorkflowConfig<
   TTaskOutputs extends Record<string, unknown>,
   TStateId extends string,
-  TItemState extends Record<string, unknown> = Record<string, never>,
+  TWorkflowInstanceState extends Record<string, unknown> = Record<
+    string,
+    never
+  >,
 > = {
   id: string;
   label: string;
   description?: string;
   taskOutputs: TTaskOutputs;
-  states: readonly StateDef<TTaskOutputs, TStateId, TItemState>[];
+  states: readonly StateDef<TTaskOutputs, TStateId, TWorkflowInstanceState>[];
   initial: TStateId;
   terminalStates: readonly TStateId[];
 };
@@ -42,14 +44,21 @@ export class UnknownRoleError extends Error {
   }
 }
 
-export type OrchestratorEvent<
+export type WorkflowInstanceEvent<
   TTaskOutputs extends Record<string, unknown>,
   TStateId extends string,
-  TItemState extends Record<string, unknown> = Record<string, never>,
+  TWorkflowInstanceState extends Record<string, unknown> = Record<
+    string,
+    never
+  >,
 > =
   | {
       type: "state_changed";
-      state: WorkflowItemState<TTaskOutputs, TStateId, TItemState>;
+      state: WorkflowInstanceState<
+        TTaskOutputs,
+        TStateId,
+        TWorkflowInstanceState
+      >;
     }
   | { type: "available_actions_changed"; actions: VisibleAction[] }
   | { type: "task_started"; taskId: string }
@@ -57,22 +66,29 @@ export type OrchestratorEvent<
   | { type: "task_errored"; taskId: string; error: string };
 
 type EventHandler = (
-  event: OrchestratorEvent<Record<string, unknown>, string>
+  event: WorkflowInstanceEvent<Record<string, unknown>, string>
 ) => void;
 
-export type OrchestratorAPI<
+export type WorkflowInstanceControllerAPI<
   TTaskOutputs extends Record<string, unknown>,
   TStateId extends string,
-  TItemState extends Record<string, unknown> = Record<string, never>,
+  TWorkflowInstanceState extends Record<string, unknown> = Record<
+    string,
+    never
+  >,
 > = {
-  getState(): WorkflowItemState<TTaskOutputs, TStateId, TItemState>;
+  getState(): WorkflowInstanceState<
+    TTaskOutputs,
+    TStateId,
+    TWorkflowInstanceState
+  >;
   getAvailableActions(): VisibleAction[];
   on(handler: EventHandler): () => void;
   dispatchAction(actionId: string): void;
   startTask(taskId: string, metadata?: Record<string, unknown>): Promise<void>;
   sendTaskInput(taskId: string, content: string, role: string): void;
   patchRunningTaskMetadata(metadata: Record<string, unknown>): void;
-  patchItemState(patch: Partial<TItemState>): void;
+  patchWorkflowInstanceState(patch: Partial<TWorkflowInstanceState>): void;
   onTaskCompleted(taskId: string, output: unknown): Promise<void>;
   onTaskErrored(taskId: string, error: string): Promise<void>;
   cancel(): void;
@@ -81,17 +97,32 @@ export type OrchestratorAPI<
 
 // === Factory ===
 
-export function createOrchestrator<
+export function createWorkflowInstanceController<
   TTaskOutputs extends Record<string, unknown>,
   TStateId extends string,
-  TItemState extends Record<string, unknown> = Record<string, never>,
+  TWorkflowInstanceState extends Record<string, unknown> = Record<
+    string,
+    never
+  >,
 >(
-  workflow: WorkflowConfig<TTaskOutputs, TStateId, TItemState>,
+  workflow: WorkflowConfig<TTaskOutputs, TStateId, TWorkflowInstanceState>,
   runners: Record<string, TaskRunner>,
-  initialState?: WorkflowItemState<TTaskOutputs, TStateId, TItemState>,
-  countItems?: (stateId?: string) => number
-): OrchestratorAPI<TTaskOutputs, TStateId, TItemState> {
-  let state: WorkflowItemState<TTaskOutputs, TStateId, TItemState> =
+  initialState?: WorkflowInstanceState<
+    TTaskOutputs,
+    TStateId,
+    TWorkflowInstanceState
+  >,
+  workflowInstancesInState?: (stateId?: string) => { currentState: string }[]
+): WorkflowInstanceControllerAPI<
+  TTaskOutputs,
+  TStateId,
+  TWorkflowInstanceState
+> {
+  let state: WorkflowInstanceState<
+    TTaskOutputs,
+    TStateId,
+    TWorkflowInstanceState
+  > =
     initialState ??
     ({
       currentState: workflow.initial,
@@ -99,18 +130,18 @@ export function createOrchestrator<
       hasRunningTask: false,
       runningTaskId: null,
       runningTaskContext: null,
-      itemState: {} as TItemState,
+      workflowInstanceState: {} as TWorkflowInstanceState,
       history: [],
-    } as WorkflowItemState<TTaskOutputs, TStateId, TItemState>);
+    } as WorkflowInstanceState<TTaskOutputs, TStateId, TWorkflowInstanceState>);
 
   let runningRunner: TaskRunner | null = null;
   const handlers: EventHandler[] = [];
 
   function emit(
-    event: OrchestratorEvent<TTaskOutputs, TStateId, TItemState>
+    event: WorkflowInstanceEvent<TTaskOutputs, TStateId, TWorkflowInstanceState>
   ): void {
     for (const handler of handlers) {
-      handler(event as OrchestratorEvent<Record<string, unknown>, string>);
+      handler(event as WorkflowInstanceEvent<Record<string, unknown>, string>);
     }
   }
 
@@ -136,8 +167,8 @@ export function createOrchestrator<
     return getAvailableActions(
       workflow.states as unknown as readonly ErasedState[],
       state.currentState as string,
-      state as unknown as ErasedItemState,
-      countItems
+      state as unknown as ErasedInstanceState,
+      workflowInstancesInState
     );
   }
 
@@ -237,8 +268,13 @@ export function createOrchestrator<
     runningRunner?.sendMessage?.(content, role);
   }
 
-  function patchItemState(patch: Partial<TItemState>): void {
-    state = { ...state, itemState: { ...state.itemState, ...patch } };
+  function patchWorkflowInstanceState(
+    patch: Partial<TWorkflowInstanceState>
+  ): void {
+    state = {
+      ...state,
+      workflowInstanceState: { ...state.workflowInstanceState, ...patch },
+    };
     emit({ type: "state_changed", state });
   }
 
@@ -281,7 +317,7 @@ export function createOrchestrator<
     startTask,
     sendTaskInput,
     patchRunningTaskMetadata,
-    patchItemState,
+    patchWorkflowInstanceState,
     onTaskCompleted,
     onTaskErrored,
     cancel,
