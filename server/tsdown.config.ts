@@ -4,7 +4,7 @@ export default defineConfig({
   format: "esm",
   platform: "node",
   deps: {
-    alwaysBundle: [/^(shared|telemetry)(\/|$)/],
+    alwaysBundle: [/^(shared|telemetry|workflow-engine)(\/|$)/],
   },
   dts: true,
   sourcemap: true,
