@@ -43,14 +43,7 @@ async function loadFlows() {
       const reqInstance = reqFlow.instances.find(
         (i) => i.workflowId === "requirements"
       );
-      const taskOutputs = reqInstance?.state?.taskOutputs;
-      draftContent =
-        ((
-          (taskOutputs?.draft as Record<string, unknown>)?.output as Record<
-            string,
-            unknown
-          >
-        )?.content as string) ?? "";
+      draftContent = readDraftContent(reqInstance?.state?.taskOutputs?.draft);
     }
   } catch (err) {
     error = err instanceof Error ? err.message : "Failed to load flows";
@@ -91,6 +84,14 @@ function handleWsEvent(event: FlowWsEvent) {
   ) {
     void loadFlows();
   }
+}
+
+function readDraftContent(draft: unknown): string {
+  if (draft === null || typeof draft !== "object") return "";
+  const outcome = draft as Record<string, unknown>;
+  if (typeof outcome.output !== "object" || outcome.output === null) return "";
+  const output = outcome.output as Record<string, unknown>;
+  return typeof output.content === "string" ? output.content : "";
 }
 
 let currentFlow = $derived(flows.find((f) => f.id === projectId) ?? null);

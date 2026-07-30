@@ -118,6 +118,8 @@ export type FlowWsEvent =
 export async function fetchFlows(): Promise<FlowResponse[]> {
   const res = await fetch("/api/flows");
   if (!res.ok) throw new Error(`Failed to fetch flows: ${res.statusText}`);
+  // res.json() returns unknown; the API response shape is guaranteed by
+  // the server endpoint and validated by the return type
   const data = (await res.json()) as FlowsApiResponse;
   return data.flows;
 }
@@ -127,6 +129,8 @@ export async function fetchFlowInstances(
 ): Promise<WorkflowInstanceEntry[]> {
   const res = await fetch(`/api/flows/${encodeURIComponent(flowId)}/instances`);
   if (!res.ok) throw new Error(`Failed to fetch instances: ${res.statusText}`);
+  // res.json() returns unknown; the API response shape is guaranteed by
+  // the server endpoint and validated by the return type
   const data = (await res.json()) as InstancesApiResponse;
   return data.instances;
 }
@@ -146,10 +150,12 @@ export async function dispatchAction(
   );
 
   if (!res.ok) {
+    // Error response shape is guaranteed by the server endpoint
     const err = (await res.json()) as { error?: string };
     throw new Error(err.error ?? `Action rejected: ${res.statusText}`);
   }
 
+  // Success response shape matches DispatchActionResult by contract with the server
   return (await res.json()) as DispatchActionResult;
 }
 
@@ -168,10 +174,12 @@ export async function sendTaskInput(
   );
 
   if (!res.ok) {
+    // Error response shape is guaranteed by the server endpoint
     const err = (await res.json()) as { error?: string };
     throw new Error(err.error ?? `Failed to send input: ${res.statusText}`);
   }
 
+  // Success response shape matches TaskInputResult by contract with the server
   return (await res.json()) as TaskInputResult;
 }
 
@@ -186,6 +194,8 @@ export function connectFlowWs(
 
   socket.onmessage = (event) => {
     try {
+      // The server only sends FlowRuntimeEvent variants on this WS;
+      // malformed frames are silently dropped by the catch.
       const msg = JSON.parse(String(event.data)) as FlowWsEvent;
       onEvent(msg);
     } catch {

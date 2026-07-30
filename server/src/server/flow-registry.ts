@@ -321,15 +321,23 @@ function convertDataDrivenDef(
         systemPrompt: t.systemPrompt,
         completionTool: t.completionTool,
       })),
-      autoTransitions: s.autoTransitions?.map((t) => ({
-        to: t.to,
-        gate: t.onTaskStatus
-          ? (ctx: any) => {
-              const outcome = ctx.taskOutputs[t.onTaskStatus!.taskId];
-              return outcome?.status === t.onTaskStatus!.status;
-            }
-          : () => true,
-      })),
+      autoTransitions: s.autoTransitions?.map((t) => {
+        const statusFilter = t.onTaskStatus;
+        return {
+          to: t.to,
+          gate:
+            statusFilter !== undefined
+              ? (ctx: {
+                  taskOutputs: Partial<
+                    Record<string, { status: string } | undefined>
+                  >;
+                }) => {
+                  const outcome = ctx.taskOutputs[statusFilter.taskId];
+                  return outcome?.status === statusFilter.status;
+                }
+              : () => true,
+        };
+      }),
       actions: s.actions?.map((a) => ({
         id: a.id,
         label: a.label,
@@ -339,6 +347,9 @@ function convertDataDrivenDef(
     })),
     initial: def.initial,
     terminalStates: def.terminalStates,
+    // WorkflowConfig generics (TTaskOutputs, TStateId, TWorkflowInstanceState)
+    // are inferred structurally. The return matches the shape the engine
+    // consumes via its erased internal workflowMap (WorkflowConfig<any, any, any>).
   } as unknown as WorkflowConfig<any, any, any>;
 }
 
@@ -380,6 +391,9 @@ export function createFlowFromDefinition(
 function resolveWorkflowConfigs(
   config: Record<string, unknown>
 ): WorkflowConfig<any, any, any>[] {
+  // FlowConfig values are set by createFlowOnLink; these casts narrow
+  // from Record<string, unknown> to the expected types at the
+  // boundary where config enters the system
   const maxWorkers = (config.maxConcurrentWorkers as number) ?? 3;
   const systemPrompts = config.systemPrompts as
     | Record<string, string>
@@ -460,6 +474,8 @@ export function rehydrateFlow(
     state: Record<string, unknown>;
   }>
 ): FlowRuntimeAPI<any, any> | null {
+  // flowConfig comes from persistence; the shape is guaranteed by
+  // createFlowFromDefinition which serializes workflowDefinitions into config
   const cfg = flowConfig as Record<string, unknown>;
   const storedDefs = cfg.workflowDefinitions as
     | WorkflowConfig<any, any, any>[]
@@ -468,6 +484,8 @@ export function rehydrateFlow(
   if (flowId !== queenBeeFlow.id && !storedDefs) return null;
 
   const runners = createEngineRunners();
+  // flowConfig is typed as unknown from persistence; narrowed here to
+  // pass to resolveWorkflowConfigs which takes Record<string, unknown>
   const resolvedWorkflows =
     storedDefs ?? resolveWorkflowConfigs(flowConfig as Record<string, unknown>);
   const runtime = createFlowRuntime(

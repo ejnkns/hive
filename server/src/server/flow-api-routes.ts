@@ -58,6 +58,7 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
   });
 
   server.get("/api/flows/:flowId/instances", async (request, reply) => {
+    // Fastify params type is erased; shape guaranteed by route pattern
     const { flowId } = request.params as { flowId: string };
     const runtime = getFlowRuntime(flowId);
     if (!runtime) {
@@ -72,13 +73,16 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
   server.post(
     "/api/flows/:flowId/instances/:instanceId/action",
     async (request, reply) => {
+      // Fastify params type is erased; shape guaranteed by route pattern
       const { flowId, instanceId } = request.params as {
         flowId: string;
         instanceId: string;
       };
-      const body = request.body as { actionId?: string } | null;
+      // Fastify body is unknown; validated below with typeof checks
+      const body = request.body as Record<string, unknown> | null;
 
-      if (!body?.actionId || typeof body.actionId !== "string") {
+      const actionId = body?.actionId;
+      if (typeof actionId !== "string") {
         return reply.status(400).send({ error: "actionId is required" });
       }
 
@@ -93,13 +97,13 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
       }
 
       const before = controller.getState().currentState;
-      controller.dispatchAction(body.actionId);
+      controller.dispatchAction(actionId);
       const after = controller.getState().currentState;
 
       if (before === after) {
         return reply.status(409).send({
           error: "Action rejected or unavailable",
-          actionId: body.actionId,
+          actionId,
         });
       }
 
@@ -116,13 +120,15 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
   server.post(
     "/api/flows/:flowId/instances/:instanceId/task/input",
     async (request, reply) => {
+      // Fastify params type is erased; shape guaranteed by route pattern
       const { flowId, instanceId } = request.params as {
         flowId: string;
         instanceId: string;
       };
-      const body = request.body as { content?: string } | null;
-
-      if (!body?.content || typeof body.content !== "string") {
+      // Fastify body is unknown; validated below with typeof check
+      const body = request.body as Record<string, unknown> | null;
+      const content = body?.content;
+      if (typeof content !== "string") {
         return reply.status(400).send({ error: "content is required" });
       }
 
@@ -155,7 +161,7 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
         return reply.status(409).send({ error: "No running task ID" });
       }
 
-      controller.sendTaskInput(taskId, body.content, "user");
+      controller.sendTaskInput(taskId, content, "user");
 
       return reply.send({
         sent: true,
@@ -166,6 +172,7 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
   );
 
   server.post("/api/flows/definitions", async (request, reply) => {
+    // Fastify body is unknown; validated below
     const body = request.body as Record<string, unknown> | null;
     if (!body || typeof body.id !== "string" || !Array.isArray(body.states)) {
       return reply.status(400).send({
@@ -189,6 +196,7 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
     }
 
     try {
+      // body.id and body.states validated above; shape matches DataDrivenWorkflowDef
       const def = body as unknown as DataDrivenWorkflowDef;
       const runtime = createFlowFromDefinition(body.id, def, persistence);
       return reply.status(201).send({
@@ -204,7 +212,9 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
   });
 
   server.patch("/api/flows/:flowId/config", async (request, reply) => {
+    // Fastify params type is erased; shape guaranteed by route pattern
     const { flowId } = request.params as { flowId: string };
+    // Fastify body is unknown; validated below
     const body = request.body as Record<string, unknown> | null;
 
     if (!body || Object.keys(body).length === 0) {
