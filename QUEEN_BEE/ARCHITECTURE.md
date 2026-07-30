@@ -1,5 +1,11 @@
 # Queen Bee architecture
 
+> **Note: Pre-workflow-engine reference.** This document describes the legacy
+> component architecture (Worker Supervisor, Requirements Session Manager,
+> Planning Manager). These roles have been replaced by the workflow engine's
+> state-machine model — see root-level [`ARCHITECTURE.md`](../ARCHITECTURE.md)
+> and [`CONTEXT.md`](../CONTEXT.md) for the current architecture.
+
 ## Status
 
 Phases 1-9 are implemented on the `queen-bee` branch. This document describes the implemented local-only architecture, not the superseded pre-Phase-6 design.
