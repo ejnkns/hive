@@ -19,6 +19,16 @@ export {
   createStandardToolRegistry,
 } from "./runners/create-standard-tool-registry";
 export { createReviewSnapshot } from "./runners/create-standard-tool-registry/create-review-snapshot";
+export {
+  checkIntegrationReadiness,
+  compareIntegrationCommits,
+  discardWorktree,
+  ensureIntegrationBranch,
+  fastForwardTargetBranch,
+  mergeToIntegrationBranch,
+  writeFlowArtifacts,
+  writeFlowSnapshot,
+} from "./runners/create-standard-tool-registry/git-operations";
 export { loadProjectContext } from "./runners/create-standard-tool-registry/load-project-context";
 export { prepareWorktree } from "./runners/prepare-worktree";
 export type {
