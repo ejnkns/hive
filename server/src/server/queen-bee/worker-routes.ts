@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { Card } from "shared/board-types";
 import { isRecord } from "shared/board-types";
 import type { QueenBeeEvent } from "shared/queen-bee-events";
-import { getFlowRuntime } from "../flow-registry";
+import { getAllFlows, getFlowRuntime } from "../flow-registry";
 import {
   getOrCreateInstance,
   runningCardIds,
@@ -93,6 +93,20 @@ export function registerWorkerRoutes(
       }
     };
     onQueenBeeEvent(queenBeeHandler);
+
+    for (const flow of getAllFlows()) {
+      try {
+        socket.send(
+          JSON.stringify({
+            type: "board_snapshot",
+            version: 1,
+            board: { projectId: flow.id, cards: [], ideas: [] },
+          })
+        );
+      } catch {
+        // project not ready, skip
+      }
+    }
 
     socket.on("close", () => {
       offQueenBeeEvent(queenBeeHandler);

@@ -259,6 +259,11 @@ export function createFlowOnLink(
     persistence
   );
 
+  // Seed the requirements workflow instance (starts in "no_session")
+  runtime.addWorkflowInstance("requirements", {
+    workflowInstanceState: { projectId: flowId, repoPath },
+  });
+
   persistence.saveFlow(flowId, flowConfig, {});
   runtimes.set(flowId, runtime);
   return runtime;
