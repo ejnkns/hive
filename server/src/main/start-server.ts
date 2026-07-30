@@ -1,5 +1,4 @@
 import { printBanner } from "shared/ascii-banner";
-import { HIVE_DIR } from "shared/hive-dir";
 import { getServerConfig, type ServerConfig } from "shared/server-config";
 import {
   createServer,
@@ -21,12 +20,9 @@ import {
 } from "../server/proxy";
 import { loadModelPriority } from "../server/proxy/model-priority-config";
 import {
-  createIntegrationManager,
-  createProjectStore,
   registerIntegrationRoutes,
   registerProjectRoutes,
 } from "../server/queen-bee";
-import { emitProjectsChanged } from "../server/queen-bee/worker-event-bus";
 
 export async function startServer(overrides?: Partial<ServerConfig>) {
   printBanner();
@@ -42,12 +38,6 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
   loadModelPriority();
 
   start();
-
-  const projectStore = createProjectStore(() => {
-    emitProjectsChanged();
-  });
-
-  const integrationManager = createIntegrationManager(HIVE_DIR);
 
   const server = await createServer({
     getProviders: () => getProviders(),
@@ -72,8 +62,8 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     rehydrateFlow(persistence, flowId, flowConfig, flowState, instances);
   }
 
-  registerIntegrationRoutes(server, { integrationManager });
-  registerProjectRoutes(server, projectStore, persistence);
+  registerIntegrationRoutes(server);
+  registerProjectRoutes(server, persistence);
 
   listen(server, config);
 

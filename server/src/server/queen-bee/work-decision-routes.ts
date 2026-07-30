@@ -2,7 +2,9 @@
 
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { Card } from "shared/board-types";
+import { getFlowRuntime } from "../flow-registry";
 import { getOrCreateInstance } from "../workflow-instance-registry";
+import { emitCardAccepted } from "./worker-event-bus";
 
 type BoardStore = {
   getBoard(
@@ -17,18 +19,10 @@ type BoardStore = {
   ): Card;
 };
 
-import type { ProjectStore } from "./create-project-store";
-import type { IntegrationManager } from "./integration-manager";
-import { emitCardAccepted } from "./worker-event-bus";
-
 export function registerWorkDecisionRoutes(
   server: FastifyInstance,
   deps: {
     boardStore: BoardStore;
-    projectStore: ProjectStore;
-    integrationManager: IntegrationManager;
-    reviewer: unknown;
-    workspacesBasePath: string;
   }
 ): void {
   // ── accept ──────────────────────────────────────────────────────
@@ -122,21 +116,23 @@ export function registerWorkDecisionRoutes(
 
 async function withCard(
   params: { projectId: string; cardId: string },
-  deps: { boardStore: BoardStore; projectStore: ProjectStore },
+  deps: { boardStore: BoardStore },
   reply: FastifyReply,
   handler: (
     card: Card,
     project: { id: string; repoPath: string }
   ) => Promise<FastifyReply>
 ): Promise<FastifyReply> {
-  const project = deps.projectStore
-    .getAll()
-    .find((p) => p.id === params.projectId);
-  if (!project) return reply.status(404).send({ error: "Project not found" });
+  const runtime = getFlowRuntime(params.projectId);
+  if (!runtime) return reply.status(404).send({ error: "Project not found" });
 
-  const board = deps.boardStore.getBoard(params.projectId, project.repoPath);
+  const config = runtime.getFlowConfig() as Record<string, unknown>;
+  const repoPath = (config.repoPath as string) ?? "";
+  if (!repoPath) return reply.status(404).send({ error: "Project not found" });
+
+  const board = deps.boardStore.getBoard(params.projectId, repoPath);
   const card = board.cards.find((c) => c.id === params.cardId);
   if (!card) return reply.status(404).send({ error: "Card not found" });
 
-  return handler(card, project);
+  return handler(card, { id: params.projectId, repoPath });
 }

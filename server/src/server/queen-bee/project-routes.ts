@@ -2,28 +2,21 @@
 
 import type { FastifyInstance } from "fastify";
 import { isRecord } from "shared/board-types";
+import { isMaxConcurrentWorkers } from "shared/project-types";
 import type { FlowPersistence } from "workflow-engine/create-flow-runtime";
 import {
-  createFlowOnLink,
+  createFlowForRepo,
   getAllFlows,
   getFlowRuntime,
   unlinkFlow,
 } from "../flow-registry";
-import type { ProjectStore } from "./create-project-store";
 
 export function registerProjectRoutes(
   server: FastifyInstance,
-  store: ProjectStore,
   persistence?: FlowPersistence
 ): void {
   server.get("/api/queen-bee/projects", async (_request, reply) => {
-    const storeProjects = store.getAll();
-    const flowProjects = getAllFlows();
-    const merged = storeProjects.map((p) => {
-      const flow = flowProjects.find((f) => f.id === p.id);
-      return flow ?? p;
-    });
-    return reply.send({ projects: merged });
+    return reply.send({ projects: getAllFlows() });
   });
 
   server.post("/api/queen-bee/projects", async (request, reply) => {
@@ -34,20 +27,17 @@ export function registerProjectRoutes(
     }
 
     try {
-      const project = store.create(
+      if (!persistence) {
+        return reply
+          .status(500)
+          .send({ error: "Flow persistence not available" });
+      }
+      const flow = createFlowForRepo(
         body.path,
+        persistence,
         typeof body.name === "string" ? body.name : undefined
       );
-
-      if (persistence) {
-        createFlowOnLink(project.id, project.repoPath, persistence, {
-          name: project.name,
-          targetBranch: project.targetBranch,
-          maxConcurrentWorkers: project.maxConcurrentWorkers,
-        });
-      }
-
-      return reply.status(201).send({ project });
+      return reply.status(201).send({ project: flow });
     } catch (err) {
       return reply.status(400).send({
         error: err instanceof Error ? err.message : "Invalid project",
@@ -68,25 +58,31 @@ export function registerProjectRoutes(
           .status(400)
           .send({ error: "maxConcurrentWorkers must be a number" });
       }
-      try {
-        const project = store.updateMaxConcurrentWorkers(
-          params.projectId,
-          body.maxConcurrentWorkers
-        );
-        const runtime = getFlowRuntime(params.projectId);
-        if (runtime) {
-          runtime.patchFlowConfig({
-            maxConcurrentWorkers: body.maxConcurrentWorkers,
-          });
-        }
-        return reply.send({ project });
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Invalid project config";
-        return reply
-          .status(message === "Project not found" ? 404 : 400)
-          .send({ error: message });
+      if (!isMaxConcurrentWorkers(body.maxConcurrentWorkers)) {
+        return reply.status(400).send({
+          error: "Parallel workers must be an integer from 1 to 16",
+        });
       }
+
+      const runtime = getFlowRuntime(params.projectId);
+      if (!runtime) {
+        return reply.status(404).send({ error: "Project not found" });
+      }
+
+      runtime.patchFlowConfig({
+        maxConcurrentWorkers: body.maxConcurrentWorkers,
+      });
+
+      const config = runtime.getFlowConfig() as Record<string, unknown>;
+      return reply.send({
+        project: {
+          id: params.projectId,
+          repoPath: config.repoPath as string,
+          name: config.name as string,
+          targetBranch: config.targetBranch as string,
+          maxConcurrentWorkers: body.maxConcurrentWorkers,
+        },
+      });
     }
   );
 
@@ -95,15 +91,13 @@ export function registerProjectRoutes(
     async (request, reply) => {
       const { projectId } = request.params as { projectId: string };
 
-      try {
-        store.unlink(projectId);
-        unlinkFlow(projectId);
-        return reply.send({ ok: true });
-      } catch (err) {
-        return reply.status(404).send({
-          error: err instanceof Error ? err.message : "Project not found",
-        });
+      const runtime = getFlowRuntime(projectId);
+      if (!runtime) {
+        return reply.status(404).send({ error: "Project not found" });
       }
+
+      unlinkFlow(projectId);
+      return reply.send({ ok: true });
     }
   );
 }

@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { execSync } from "node:child_process";
+import { mkdtempSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import Fastify, { type FastifyInstance } from "fastify";
 import {
@@ -6,10 +9,6 @@ import {
   type FlowPersistence,
 } from "workflow-engine/create-flow-runtime";
 import { registerFlowForTest } from "../flow-registry";
-import type {
-  IntegrationManager,
-  IntegrationStatus,
-} from "./integration-manager";
 import { registerIntegrationRoutes } from "./integration-routes";
 
 describe("integration routes", () => {
@@ -20,8 +19,7 @@ describe("integration routes", () => {
   });
 
   it("reports integration status for the project's target branch", async () => {
-    const calls: string[] = [];
-    const server = fixture(calls);
+    const server = fixture();
 
     const response = await server.inject({
       method: "GET",
@@ -30,12 +28,10 @@ describe("integration routes", () => {
 
     assert.equal(response.statusCode, 200);
     assert.equal(response.json().state, "ready");
-    assert.deepEqual(calls, ["status:main"]);
   });
 
   it("integrates only through the explicit mutation endpoint", async () => {
-    const calls: string[] = [];
-    const server = fixture(calls);
+    const server = fixture();
 
     const response = await server.inject({
       method: "POST",
@@ -44,10 +40,33 @@ describe("integration routes", () => {
 
     assert.equal(response.statusCode, 200);
     assert.equal(response.json().state, "integrated");
-    assert.deepEqual(calls, ["integrate:main"]);
   });
 
-  function fixture(calls: string[]): FastifyInstance {
+  function fixture(): FastifyInstance {
+    const repoPath = mkdtempSync(join("/tmp", "integration-test-"));
+    execSync("git init", { cwd: repoPath, encoding: "utf-8" });
+    execSync('git config user.email "test@test.com"', {
+      cwd: repoPath,
+      encoding: "utf-8",
+    });
+    execSync('git config user.name "Test"', {
+      cwd: repoPath,
+      encoding: "utf-8",
+    });
+    execSync('git commit --allow-empty -m "initial"', {
+      cwd: repoPath,
+      encoding: "utf-8",
+    });
+    execSync("git branch -m main", { cwd: repoPath, encoding: "utf-8" });
+    execSync("git branch hive-main main", { cwd: repoPath, encoding: "utf-8" });
+    // hive-main ahead of main → "ready" state
+    execSync("git checkout hive-main", { cwd: repoPath, encoding: "utf-8" });
+    execSync("git commit --allow-empty -m 'integration commit'", {
+      cwd: repoPath,
+      encoding: "utf-8",
+    });
+    execSync("git checkout main", { cwd: repoPath, encoding: "utf-8" });
+
     const persistence: FlowPersistence = {
       saveFlow: () => {},
       saveInstance: () => {},
@@ -62,7 +81,7 @@ describe("integration routes", () => {
       [],
       {},
       {
-        repoPath: "/project",
+        repoPath,
         targetBranch: "main",
       },
       {},
@@ -70,44 +89,9 @@ describe("integration routes", () => {
     );
     registerFlowForTest("project-1", runtime);
 
-    const integrationManager: IntegrationManager = {
-      ensure: () => ({ branchName: "hive-main", revision: "hive-1" }),
-      status: (_repoPath, targetBranch) => {
-        calls.push(`status:${targetBranch}`);
-        return status("ready");
-      },
-      integrate: (_repoPath, targetBranch) => {
-        calls.push(`integrate:${targetBranch}`);
-        return status("integrated");
-      },
-      reviewReadiness: () => {
-        throw new Error("Not used");
-      },
-      assertCurrent: () => {},
-      accept: () => ({ branchName: "hive-main", revision: "hive-1" }),
-      discardWorktree: (_a, _b, _c) => {},
-      commitPlanningSnapshot: (_repoPath, _proposalId, _projectId) => ({
-        branchName: "hive-main",
-        revision: "hive-1",
-      }),
-    };
-
     const server = Fastify();
     servers.push(server);
-    registerIntegrationRoutes(server, { integrationManager });
+    registerIntegrationRoutes(server);
     return server;
   }
 });
-
-function status(state: IntegrationStatus["state"]): IntegrationStatus {
-  return {
-    branchName: "hive-main",
-    revision: "hive-1",
-    targetBranch: "main",
-    targetRevision: state === "integrated" ? "hive-1" : "main-1",
-    state,
-    ahead: state === "ready" ? 1 : 0,
-    behind: 0,
-    canIntegrate: state === "ready",
-  };
-}

@@ -1,18 +1,14 @@
 /** @private — only imported by queen-bee.ts */
 
 import type { FastifyInstance } from "fastify";
-import { getFlowRuntime } from "../flow-registry";
-import type { IntegrationManager } from "./integration-manager";
+import {
+  getFlowRuntime,
+  integrationIntegrate,
+  integrationStatus,
+} from "../flow-registry";
 import { emitIntegrationChanged } from "./worker-event-bus";
 
-export function registerIntegrationRoutes(
-  server: FastifyInstance,
-  dependencies: {
-    integrationManager: IntegrationManager;
-  }
-): void {
-  const { integrationManager } = dependencies;
-
+export function registerIntegrationRoutes(server: FastifyInstance): void {
   server.get(
     "/api/queen-bee/:projectId/integration",
     async (request, reply) => {
@@ -21,9 +17,20 @@ export function registerIntegrationRoutes(
       );
       if (!flow) return reply.status(404).send({ error: "Project not found" });
       try {
-        return reply.send(
-          integrationManager.status(flow.repoPath, flow.targetBranch)
-        );
+        const result = integrationStatus(flow.repoPath, flow.targetBranch);
+        if (!result.ok) {
+          return reply.status(409).send({ error: result.error as string });
+        }
+        return reply.send({
+          branchName: "hive-main",
+          revision: result.integrationRevision as string,
+          targetBranch: flow.targetBranch,
+          targetRevision: result.targetRevision as string,
+          state: result.state as string,
+          ahead: result.ahead as number,
+          behind: result.behind as number,
+          canIntegrate: result.canIntegrate as boolean,
+        });
       } catch (error) {
         return reply.status(409).send({ error: errorMessage(error) });
       }
@@ -38,12 +45,27 @@ export function registerIntegrationRoutes(
       );
       if (!flow) return reply.status(404).send({ error: "Project not found" });
       try {
-        const status = integrationManager.integrate(
+        const result = integrationIntegrate(flow.repoPath, flow.targetBranch);
+        if (!result.ok) {
+          return reply.status(409).send({ error: result.error as string });
+        }
+        const statusResult = integrationStatus(
           flow.repoPath,
           flow.targetBranch
         );
-        emitIntegrationChanged(status);
-        return reply.send(status);
+        const integrationStatusData = {
+          branchName: "hive-main" as const,
+          revision: (statusResult.integrationRevision ??
+            statusResult.revision) as string,
+          targetBranch: flow.targetBranch,
+          targetRevision: statusResult.targetRevision as string,
+          state: statusResult.state as "integrated" | "ready" | "diverged",
+          ahead: (statusResult.ahead as number) ?? 0,
+          behind: (statusResult.behind as number) ?? 0,
+          canIntegrate: (statusResult.canIntegrate as boolean) ?? false,
+        };
+        emitIntegrationChanged(integrationStatusData);
+        return reply.send(integrationStatusData);
       } catch (error) {
         return reply.status(409).send({ error: errorMessage(error) });
       }
