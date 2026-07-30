@@ -62,7 +62,8 @@ export const cardsWorkflow = defineWorkflow({
           id: "run",
           label: "Run Worker Agent",
           variant: "primary",
-          gate: (ctx) => !ctx.hasRunningTask,
+          gate: (ctx) =>
+            !ctx.hasRunningTask && (ctx.countItems?.("in_progress") ?? 0) < 3,
           transitionTo: "in_progress",
         },
       ],
@@ -206,9 +207,9 @@ export const cardsWorkflow = defineWorkflow({
             "git_show",
             "submit_review",
           ],
+          completionTool: "submit_review",
           systemPrompt:
             "You are a code reviewer. Inspect the worker changes and submit a structured review.",
-          operations: [],
         },
       ],
       autoTransitions: [

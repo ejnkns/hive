@@ -39,12 +39,13 @@ export function createAiTaskRunner(config: AiTaskRunnerConfig): TaskRunner {
 
         messages.push({ role: "assistant", content: response.content });
 
+        const completionTool = task.completionTool ?? config.completionTool;
         if (
-          config.completionTool &&
-          response.toolCalls?.some((c) => c.name === config.completionTool)
+          completionTool &&
+          response.toolCalls?.some((c) => c.name === completionTool)
         ) {
           const completionCall = response.toolCalls.find(
-            (c) => c.name === config.completionTool
+            (c) => c.name === completionTool
           );
           return { output: JSON.parse(completionCall!.arguments) };
         }

@@ -21,7 +21,35 @@ import type {
 } from "shared/board-types";
 import { HIVE_DIR } from "shared/hive-dir";
 import type { Message } from "shared/message";
-import type { ReviewPackage } from "./reviewer";
+
+type ReviewPackage = {
+  id: string;
+  card: {
+    id: string;
+    title: string;
+    description: string;
+    acceptanceCriteria: string[];
+    requirementRefs: string[];
+  };
+  requirements: { revision: string; content: string };
+  revisions: {
+    baseCommit: string;
+    headCommit: string;
+    reviewCommit: string;
+    reviewReference?: string;
+    integrationCommit: string;
+    cardRevision: string;
+  };
+  commits: Array<{ sha: string; subject: string }>;
+  changedFiles: string[];
+  diff: string;
+  diffStat: string;
+  verification: {
+    commands: unknown[];
+    notRunReason?: string;
+  };
+  noChangeRationale?: string;
+};
 
 export type { ActivityActor, CardActivityEvent } from "shared/board-types";
 

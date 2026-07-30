@@ -148,6 +148,7 @@ export type StateDef<
     tools?: string[];
     operations?: string[];
     systemPrompt?: string;
+    completionTool?: string;
   }[];
 
   autoTransitions?: AutoTransition<TTaskOutputs, TStateId, TItemState>[];

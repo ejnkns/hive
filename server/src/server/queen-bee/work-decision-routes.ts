@@ -1,8 +1,22 @@
 /** @public */
 
 import type { FastifyInstance, FastifyReply } from "fastify";
+import type { Card } from "shared/board-types";
 import { getOrCreateOrchestrator } from "../orchestrator-registry";
-import type { BoardStore, Card } from "./board-store";
+
+type BoardStore = {
+  getBoard(
+    projectId: string,
+    repoPath: string
+  ): { projectId: string; cards: Card[]; ideas: unknown[] };
+  moveCard(
+    projectId: string,
+    repoPath: string,
+    cardId: string,
+    column: string
+  ): Card;
+};
+
 import type { ProjectStore } from "./create-project-store";
 import type { IntegrationManager } from "./integration-manager";
 import type { QueenBeeRuntimeStore } from "./queen-bee-runtime-store";

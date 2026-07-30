@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Card } from "./board-store";
+import type { Card } from "shared/board-types";
 import {
   ensureIntegrationBranch,
   type IntegrationRevision,

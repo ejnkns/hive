@@ -1,14 +1,24 @@
 import type { FastifyInstance } from "fastify";
+import type { Card } from "shared/board-types";
 import { isRecord } from "shared/board-types";
 import type { QueenBeeEvent } from "shared/queen-bee-events";
 import {
   getOrCreateOrchestrator,
   runningCardIds,
 } from "../orchestrator-registry";
-import type { BoardStore } from "./board-store";
 import type { ProjectStore } from "./create-project-store";
 import { evaluateWorkerAdmission } from "./worker-admission";
 import { offQueenBeeEvent, onQueenBeeEvent } from "./worker-event-bus";
+
+type Board = {
+  projectId: string;
+  cards: Card[];
+  ideas: unknown[];
+};
+
+type BoardStore = {
+  getBoard(projectId: string, repoPath: string): Board;
+};
 
 export function registerWorkerRoutes(
   server: FastifyInstance,
@@ -91,11 +101,7 @@ export function registerWorkerRoutes(
       try {
         const board = deps.boardStore.getBoard(project.id, project.repoPath);
         socket.send(
-          JSON.stringify({
-            type: "board_snapshot",
-            version: 1,
-            board,
-          })
+          JSON.stringify({ type: "board_snapshot", version: 1, board })
         );
       } catch {
         // project not ready, skip

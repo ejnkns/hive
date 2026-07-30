@@ -1,10 +1,10 @@
 /** @public */
 
 import type {
+  Card,
   WorkerAdmission,
   WorkerAdmissionBlocker,
 } from "shared/board-types";
-import type { Card } from "./board-store";
 
 export function evaluateWorkerAdmission(input: {
   card: Card;
