@@ -36,6 +36,7 @@ export const queenBeeFlow = {
         draft: {} as { content: string; revision: string },
         plan: {} as { kind: "proposal" | "feedback"; cards?: unknown[] },
       },
+      workflowOutput: {} as { plan: { kind: string; cards?: unknown[] } },
       states: [
         {
           id: "no_session",

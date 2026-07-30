@@ -2,7 +2,8 @@ import type { FlowEdge, TaskOutputMap } from "./workflow-types";
 
 export type EdgeEffect = {
   fromWorkflow: string;
-  toWorkflow: string;
+  toWorkflow?: string;
+  toFlowState?: boolean;
   fromState: string;
   transformedData: Record<string, unknown>;
 };
@@ -11,7 +12,7 @@ export function evaluateEdges(
   edges: FlowEdge[],
   fromWorkflow: string,
   newState: string,
-  taskOutputs: Partial<TaskOutputMap<Record<string, unknown>>>
+  workflowOutput: Record<string, unknown>
 ): EdgeEffect[] {
   const effects: EdgeEffect[] = [];
 
@@ -20,12 +21,13 @@ export function evaluateEdges(
     if (!edge.fromStates.includes(newState)) continue;
 
     const transformedData: Record<string, unknown> = edge.transform
-      ? edge.transform(taskOutputs)
+      ? edge.transform(workflowOutput as any)
       : {};
 
     effects.push({
       fromWorkflow: edge.fromWorkflow,
       toWorkflow: edge.toWorkflow,
+      toFlowState: edge.toFlowState,
       fromState: newState,
       transformedData,
     });

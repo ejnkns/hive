@@ -83,4 +83,18 @@ describe("evaluateEdges", () => {
     assert.equal(effects[0]!.toWorkflow, "target-a");
     assert.equal(effects[1]!.toWorkflow, "target-b");
   });
+
+  it("activates toFlowState edge when state matches", () => {
+    const edges: FlowEdge[] = [
+      {
+        fromWorkflow: "source",
+        fromStates: ["done"],
+        toFlowState: true,
+      },
+    ];
+    const effects = evaluateEdges(edges, "source", "done", { result: "ok" });
+    assert.equal(effects.length, 1);
+    assert.equal(effects[0]!.toFlowState, true);
+    assert.equal(effects[0]!.toWorkflow, undefined);
+  });
 });
