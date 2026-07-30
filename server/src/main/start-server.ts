@@ -7,6 +7,7 @@ import {
   listen,
   loadProviders,
 } from "../server";
+import { registerFlowApiRoutes } from "../server/flow-api-routes";
 import { createFlowPersistence } from "../server/flow-persistence";
 import { rehydrateFlow, setFlowPersistence } from "../server/flow-registry";
 import {
@@ -63,6 +64,7 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     rehydrateFlow(persistence, flowId, flowConfig, flowState, instances);
   }
 
+  registerFlowApiRoutes(server);
   registerIntegrationRoutes(server);
   registerProjectRoutes(server, persistence);
   registerRequirementsRoutes(server);

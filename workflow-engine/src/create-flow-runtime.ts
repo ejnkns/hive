@@ -6,7 +6,36 @@ import {
 import { evaluateEdges } from "./evaluate-edges";
 import type { WorkflowInstanceState } from "./shared/workflow-instance-state";
 import type { TaskRunner } from "./task-runner";
-import type { FlowEdge } from "./workflow-types";
+import type {
+  ActionVariant,
+  FlowEdge,
+  StateCategory,
+  VisibleAction,
+} from "./workflow-types";
+
+// ── API response types ──
+
+export type WorkflowDefResponse = {
+  id: string;
+  label: string;
+  description?: string;
+  states: Array<{
+    id: string;
+    label: string;
+    description?: string;
+    category?: StateCategory;
+    actions: Array<{ id: string; label: string; variant: ActionVariant }>;
+  }>;
+  initial: string;
+  terminalStates: string[];
+};
+
+export type WorkflowInstanceEntry = {
+  id: string;
+  workflowId: string;
+  state: WorkflowInstanceState<any, any, any>;
+  availableActions: VisibleAction[];
+};
 
 // ── Persistence interface (stub — Ticket 6 implements) ──
 
@@ -81,6 +110,8 @@ export type FlowRuntimeAPI<TFlowConfig, TFlowState> = {
     stateId?: string
   ): WorkflowInstanceState<any, any, any>[];
   on(handler: FlowEventHandler): () => void;
+  getWorkflowDefinitions(): WorkflowDefResponse[];
+  getWorkflowInstanceEntries(): WorkflowInstanceEntry[];
 };
 
 // ── Factory ──
@@ -103,6 +134,7 @@ export function createFlowRuntime<
     string,
     WorkflowInstanceControllerAPI<any, any, any>
   >();
+  const instanceWorkflowIds = new Map<string, string>();
   const workflowMap = new Map<string, WorkflowConfig<any, any, any>>();
   const eventHandlers = new Set<FlowEventHandler>();
 
@@ -167,6 +199,38 @@ export function createFlowRuntime<
 
   // ── public methods ──
 
+  function getWorkflowDefinitions(): WorkflowDefResponse[] {
+    return Array.from(workflowMap.values()).map((wf) => ({
+      id: wf.id,
+      label: wf.label,
+      description: wf.description,
+      states: wf.states.map((s) => ({
+        id: s.id,
+        label: s.label,
+        description: s.description,
+        category: s.category,
+        actions: s.actions
+          ? s.actions.map((a) => ({
+              id: a.id,
+              label: a.label,
+              variant: a.variant ?? "default",
+            }))
+          : [],
+      })),
+      initial: wf.initial,
+      terminalStates: [...wf.terminalStates],
+    }));
+  }
+
+  function getWorkflowInstanceEntries(): WorkflowInstanceEntry[] {
+    return Array.from(controllers.entries()).map(([id, ctrl]) => ({
+      id,
+      workflowId: instanceWorkflowIds.get(id) ?? "",
+      state: ctrl.getState(),
+      availableActions: ctrl.getAvailableActions(),
+    }));
+  }
+
   function addWorkflowInstance(
     workflowId: string,
     instanceState?: Partial<WorkflowInstanceState<any, any, any>>
@@ -195,6 +259,7 @@ export function createFlowRuntime<
     );
 
     controllers.set(instanceId, controller);
+    instanceWorkflowIds.set(instanceId, workflowId);
 
     controller.on((event) => {
       if (event.type === "state_changed") {
@@ -241,5 +306,7 @@ export function createFlowRuntime<
         eventHandlers.delete(handler);
       };
     },
+    getWorkflowDefinitions,
+    getWorkflowInstanceEntries,
   };
 }

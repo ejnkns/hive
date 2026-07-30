@@ -45,20 +45,44 @@ export function getAllFlows(): Array<{
   targetBranch: string;
   maxConcurrentWorkers: number;
 }> {
-  if (!_persistence) return [];
-  return _persistence
-    .loadAllFlows()
-    .map(({ flowId, config }) => {
+  const seen = new Set<string>();
+  const result: Array<{
+    id: string;
+    repoPath: string;
+    name: string;
+    targetBranch: string;
+    maxConcurrentWorkers: number;
+  }> = [];
+
+  // Flows from persistence
+  if (_persistence) {
+    for (const { flowId, config } of _persistence.loadAllFlows()) {
+      seen.add(flowId);
       const cfg = config as Record<string, unknown>;
-      return {
+      result.push({
         id: flowId,
         repoPath: (cfg.repoPath as string) ?? "",
         name: (cfg.name as string) ?? flowId,
         targetBranch: (cfg.targetBranch as string) ?? "main",
         maxConcurrentWorkers: (cfg.maxConcurrentWorkers as number) ?? 3,
-      };
-    })
-    .filter((f) => f.repoPath);
+      });
+    }
+  }
+
+  // Flows registered directly (e.g. for tests)
+  for (const [flowId, runtime] of runtimes) {
+    if (seen.has(flowId)) continue;
+    const cfg = runtime.getFlowConfig() as Record<string, unknown>;
+    result.push({
+      id: flowId,
+      repoPath: (cfg.repoPath as string) ?? "",
+      name: (cfg.name as string) ?? flowId,
+      targetBranch: (cfg.targetBranch as string) ?? "main",
+      maxConcurrentWorkers: (cfg.maxConcurrentWorkers as number) ?? 3,
+    });
+  }
+
+  return result.filter((f) => f.repoPath);
 }
 
 export function unlinkFlow(flowId: string): void {
