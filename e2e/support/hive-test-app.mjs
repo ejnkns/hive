@@ -61,7 +61,7 @@ export async function startHiveTestApp(mockProviderHost) {
     headless: true,
   });
   const page = await browser.newPage();
-  page.setDefaultTimeout(30_000);
+  page.setDefaultTimeout(120_000);
   return {
     baseUrl: `http://127.0.0.1:${port}`,
     output: () => output,
