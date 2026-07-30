@@ -3,7 +3,12 @@
 import type { FastifyInstance } from "fastify";
 import { isRecord } from "shared/board-types";
 import type { FlowPersistence } from "workflow-engine/create-flow-runtime";
-import { createFlowOnLink, getFlowRuntime } from "../flow-registry";
+import {
+  createFlowOnLink,
+  getAllFlows,
+  getFlowRuntime,
+  unlinkFlow,
+} from "../flow-registry";
 import type { ProjectStore } from "./create-project-store";
 
 export function registerProjectRoutes(
@@ -12,7 +17,13 @@ export function registerProjectRoutes(
   persistence?: FlowPersistence
 ): void {
   server.get("/api/queen-bee/projects", async (_request, reply) => {
-    return reply.send({ projects: store.getAll() });
+    const storeProjects = store.getAll();
+    const flowProjects = getAllFlows();
+    const merged = storeProjects.map((p) => {
+      const flow = flowProjects.find((f) => f.id === p.id);
+      return flow ?? p;
+    });
+    return reply.send({ projects: merged });
   });
 
   server.post("/api/queen-bee/projects", async (request, reply) => {
@@ -30,6 +41,7 @@ export function registerProjectRoutes(
 
       if (persistence) {
         createFlowOnLink(project.id, project.repoPath, persistence, {
+          name: project.name,
           targetBranch: project.targetBranch,
           maxConcurrentWorkers: project.maxConcurrentWorkers,
         });
@@ -63,7 +75,7 @@ export function registerProjectRoutes(
         );
         const runtime = getFlowRuntime(params.projectId);
         if (runtime) {
-          runtime.patchFlowState({
+          runtime.patchFlowConfig({
             maxConcurrentWorkers: body.maxConcurrentWorkers,
           });
         }
@@ -85,6 +97,7 @@ export function registerProjectRoutes(
 
       try {
         store.unlink(projectId);
+        unlinkFlow(projectId);
         return reply.send({ ok: true });
       } catch (err) {
         return reply.status(404).send({

@@ -9,7 +9,7 @@ import {
   loadProviders,
 } from "../server";
 import { createFlowPersistence } from "../server/flow-persistence";
-import { rehydrateFlow } from "../server/flow-registry";
+import { rehydrateFlow, setFlowPersistence } from "../server/flow-registry";
 import {
   getLastUsed,
   getProviderStates,
@@ -57,11 +57,10 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
       handleChatCompletion(body, headers, signal),
   });
 
-  registerIntegrationRoutes(server, { projectStore, integrationManager });
-
   // ── Flow persistence & rehydration ──
 
   const persistence = createFlowPersistence();
+  setFlowPersistence(persistence);
   const flows = persistence.loadAllFlows();
 
   for (const {
@@ -73,7 +72,7 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     rehydrateFlow(persistence, flowId, flowConfig, flowState, instances);
   }
 
-  // Register project routes with flow creation capability
+  registerIntegrationRoutes(server, { integrationManager });
   registerProjectRoutes(server, projectStore, persistence);
 
   listen(server, config);

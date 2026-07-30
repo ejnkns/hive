@@ -9,11 +9,54 @@ import { queenBeeFlow } from "../../../queen-bee/flow";
 import { createEngineRunners } from "./engine-bridge";
 
 const runtimes = new Map<string, FlowRuntimeAPI<any, any>>();
+let _persistence: FlowPersistence | null = null;
+
+export function setFlowPersistence(persistence: FlowPersistence): void {
+  _persistence = persistence;
+}
+
+/** @private — test support */
+/** @public — test support */
+export function registerFlowForTest(
+  flowId: string,
+  runtime: FlowRuntimeAPI<any, any>
+): void {
+  runtimes.set(flowId, runtime);
+}
 
 export function getFlowRuntime(
   flowId: string
 ): FlowRuntimeAPI<any, any> | undefined {
   return runtimes.get(flowId);
+}
+
+export function getAllFlows(): Array<{
+  id: string;
+  repoPath: string;
+  name: string;
+  targetBranch: string;
+  maxConcurrentWorkers: number;
+}> {
+  if (!_persistence) return [];
+  return _persistence
+    .loadAllFlows()
+    .map(({ flowId, config }) => {
+      const cfg = config as Record<string, unknown>;
+      return {
+        id: flowId,
+        repoPath: (cfg.repoPath as string) ?? "",
+        name: (cfg.name as string) ?? flowId,
+        targetBranch: (cfg.targetBranch as string) ?? "main",
+        maxConcurrentWorkers: (cfg.maxConcurrentWorkers as number) ?? 3,
+      };
+    })
+    .filter((f) => f.repoPath);
+}
+
+export function unlinkFlow(flowId: string): void {
+  runtimes.delete(flowId);
+  // Persistence removal handled by caller — the persistence layer
+  // doesn't support deletion, so we just clear the runtime.
 }
 
 export function createFlowOnLink(
@@ -25,6 +68,7 @@ export function createFlowOnLink(
   const runners = createEngineRunners();
   const flowConfig: Record<string, unknown> = {
     repoPath,
+    name: config?.name ?? flowId,
     maxConcurrentWorkers: 3,
     targetBranch: "main",
     ...config,

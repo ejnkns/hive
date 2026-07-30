@@ -1,31 +1,28 @@
 /** @private — only imported by queen-bee.ts */
 
 import type { FastifyInstance } from "fastify";
-import type { ProjectStore } from "./create-project-store";
+import { getFlowRuntime } from "../flow-registry";
 import type { IntegrationManager } from "./integration-manager";
 import { emitIntegrationChanged } from "./worker-event-bus";
 
 export function registerIntegrationRoutes(
   server: FastifyInstance,
   dependencies: {
-    projectStore: ProjectStore;
     integrationManager: IntegrationManager;
   }
 ): void {
-  const { projectStore, integrationManager } = dependencies;
+  const { integrationManager } = dependencies;
 
   server.get(
     "/api/queen-bee/:projectId/integration",
     async (request, reply) => {
-      const project = findProject(
-        projectStore,
+      const flow = findFlow(
         (request.params as { projectId: string }).projectId
       );
-      if (!project)
-        return reply.status(404).send({ error: "Project not found" });
+      if (!flow) return reply.status(404).send({ error: "Project not found" });
       try {
         return reply.send(
-          integrationManager.status(project.repoPath, project.targetBranch)
+          integrationManager.status(flow.repoPath, flow.targetBranch)
         );
       } catch (error) {
         return reply.status(409).send({ error: errorMessage(error) });
@@ -36,16 +33,14 @@ export function registerIntegrationRoutes(
   server.post(
     "/api/queen-bee/:projectId/integration/integrate",
     async (request, reply) => {
-      const project = findProject(
-        projectStore,
+      const flow = findFlow(
         (request.params as { projectId: string }).projectId
       );
-      if (!project)
-        return reply.status(404).send({ error: "Project not found" });
+      if (!flow) return reply.status(404).send({ error: "Project not found" });
       try {
         const status = integrationManager.integrate(
-          project.repoPath,
-          project.targetBranch
+          flow.repoPath,
+          flow.targetBranch
         );
         emitIntegrationChanged(status);
         return reply.send(status);
@@ -56,8 +51,17 @@ export function registerIntegrationRoutes(
   );
 }
 
-function findProject(projectStore: ProjectStore, projectId: string) {
-  return projectStore.getAll().find((project) => project.id === projectId);
+function findFlow(flowId: string): {
+  repoPath: string;
+  targetBranch: string;
+} | null {
+  const runtime = getFlowRuntime(flowId);
+  if (!runtime) return null;
+  const config = runtime.getFlowConfig() as Record<string, unknown>;
+  return {
+    repoPath: (config.repoPath as string) ?? "",
+    targetBranch: (config.targetBranch as string) ?? "main",
+  };
 }
 
 function errorMessage(error: unknown): string {

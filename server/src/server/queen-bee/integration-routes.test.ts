@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import Fastify, { type FastifyInstance } from "fastify";
-import type { ProjectListItem } from "shared/project-types";
-import type { ProjectStore } from "./create-project-store";
+import {
+  createFlowRuntime,
+  type FlowPersistence,
+} from "workflow-engine/create-flow-runtime";
+import { registerFlowForTest } from "../flow-registry";
 import type {
   IntegrationManager,
   IntegrationStatus,
@@ -45,24 +48,28 @@ describe("integration routes", () => {
   });
 
   function fixture(calls: string[]): FastifyInstance {
-    const project: ProjectListItem = {
-      id: "project-1",
-      name: "Project",
-      repoPath: "/project",
-      createdAt: "",
-      systemPrompt: "",
-      codingGuidelines: "",
-      targetBranch: "main",
-      maxConcurrentWorkers: 3,
+    const persistence: FlowPersistence = {
+      saveFlow: () => {},
+      saveInstance: () => {},
+      saveRunningTaskContext: () => {},
+      loadFlow: () => null,
+      loadAllFlows: () => [],
     };
-    const projectStore: ProjectStore = {
-      getAll: () => [project],
-      create: () => {
-        throw new Error("Not used");
+
+    const runtime = createFlowRuntime(
+      "project-1",
+      [],
+      [],
+      {},
+      {
+        repoPath: "/project",
+        targetBranch: "main",
       },
-      updateMaxConcurrentWorkers: () => project,
-      unlink: () => {},
-    };
+      {},
+      persistence
+    );
+    registerFlowForTest("project-1", runtime);
+
     const integrationManager: IntegrationManager = {
       ensure: () => ({ branchName: "hive-main", revision: "hive-1" }),
       status: (_repoPath, targetBranch) => {
@@ -84,9 +91,10 @@ describe("integration routes", () => {
         revision: "hive-1",
       }),
     };
+
     const server = Fastify();
     servers.push(server);
-    registerIntegrationRoutes(server, { projectStore, integrationManager });
+    registerIntegrationRoutes(server, { integrationManager });
     return server;
   }
 });

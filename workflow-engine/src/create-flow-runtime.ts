@@ -67,6 +67,7 @@ export type FlowEventHandler = (event: FlowRuntimeEvent) => void;
 export type FlowRuntimeAPI<TFlowConfig, TFlowState> = {
   getFlowConfig(): TFlowConfig;
   getFlowState(): TFlowState;
+  patchFlowConfig(patch: Partial<TFlowConfig>): void;
   patchFlowState(patch: Partial<TFlowState>): void;
   addWorkflowInstance(
     workflowId: string,
@@ -123,6 +124,11 @@ export function createFlowRuntime<
     return Array.from(controllers.values())
       .map((c) => c.getState())
       .filter((s) => stateId === undefined || s.currentState === stateId);
+  }
+
+  function patchFlowConfig(patch: Partial<TFlowConfig>): void {
+    Object.assign(_flowConfig, patch);
+    persistence?.saveFlow(flowId, _flowConfig, _flowState);
   }
 
   function patchFlowState(patch: Partial<TFlowState>): void {
@@ -221,6 +227,7 @@ export function createFlowRuntime<
   return {
     getFlowConfig: () => _flowConfig,
     getFlowState: () => _flowState,
+    patchFlowConfig,
     patchFlowState,
     addWorkflowInstance,
     getWorkflowInstance: (instanceId: string) => controllers.get(instanceId),

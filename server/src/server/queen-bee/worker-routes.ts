@@ -2,11 +2,11 @@ import type { FastifyInstance } from "fastify";
 import type { Card } from "shared/board-types";
 import { isRecord } from "shared/board-types";
 import type { QueenBeeEvent } from "shared/queen-bee-events";
+import { getFlowRuntime } from "../flow-registry";
 import {
   getOrCreateInstance,
   runningCardIds,
 } from "../workflow-instance-registry";
-import type { ProjectStore } from "./create-project-store";
 import { offQueenBeeEvent, onQueenBeeEvent } from "./worker-event-bus";
 
 type Board = {
@@ -23,7 +23,6 @@ export function registerWorkerRoutes(
   server: FastifyInstance,
   deps: {
     boardStore: BoardStore;
-    projectStore: ProjectStore;
   }
 ): void {
   server.post(
@@ -34,20 +33,20 @@ export function registerWorkerRoutes(
         cardId: string;
       };
 
-      const project = deps.projectStore
-        .getAll()
-        .find((p) => p.id === projectId);
-      if (!project) {
+      const flow = getFlowRuntime(projectId);
+      if (!flow) {
         return reply.status(404).send({ error: "Project not found" });
       }
+      const config = flow.getFlowConfig() as Record<string, unknown>;
+      const repoPath = (config.repoPath as string) ?? "";
 
-      const board = deps.boardStore.getBoard(projectId, project.repoPath);
+      const board = deps.boardStore.getBoard(projectId, repoPath);
       const card = board.cards.find((c) => c.id === cardId);
       if (!card) {
         return reply.status(404).send({ error: "Card not found" });
       }
 
-      const instance = getOrCreateInstance(projectId, cardId, project.repoPath);
+      const instance = getOrCreateInstance(projectId, cardId, repoPath);
 
       if (instance.getState().currentState !== "ready") {
         return reply.status(400).send({
@@ -55,7 +54,7 @@ export function registerWorkerRoutes(
         });
       }
 
-      // File overlap check: reject if card shares relevant files with a running card
+      // File overlap check
       const blockers = fileOverlapBlockers(
         card,
         board.cards,
@@ -74,7 +73,6 @@ export function registerWorkerRoutes(
 
       instance.dispatchAction("run");
 
-      // Engine rejected the action (capacity, dependency, or gate check failed)
       if (instance.getState().currentState !== "in_progress") {
         return reply.status(409).send({
           error:
@@ -95,17 +93,6 @@ export function registerWorkerRoutes(
       }
     };
     onQueenBeeEvent(queenBeeHandler);
-
-    for (const project of deps.projectStore.getAll()) {
-      try {
-        const board = deps.boardStore.getBoard(project.id, project.repoPath);
-        socket.send(
-          JSON.stringify({ type: "board_snapshot", version: 1, board })
-        );
-      } catch {
-        // project not ready, skip
-      }
-    }
 
     socket.on("close", () => {
       offQueenBeeEvent(queenBeeHandler);
