@@ -3,7 +3,7 @@
 import type { FastifyInstance } from "fastify";
 import { isRecord } from "shared/board-types";
 import type { FlowPersistence } from "workflow-engine/create-flow-runtime";
-import { createFlowOnLink } from "../flow-registry";
+import { createFlowOnLink, getFlowRuntime } from "../flow-registry";
 import type { ProjectStore } from "./create-project-store";
 
 export function registerProjectRoutes(
@@ -61,6 +61,12 @@ export function registerProjectRoutes(
           params.projectId,
           body.maxConcurrentWorkers
         );
+        const runtime = getFlowRuntime(params.projectId);
+        if (runtime) {
+          runtime.patchFlowState({
+            maxConcurrentWorkers: body.maxConcurrentWorkers,
+          });
+        }
         return reply.send({ project });
       } catch (error) {
         const message =
