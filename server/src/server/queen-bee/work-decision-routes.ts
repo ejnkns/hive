@@ -19,7 +19,6 @@ type BoardStore = {
 
 import type { ProjectStore } from "./create-project-store";
 import type { IntegrationManager } from "./integration-manager";
-import type { QueenBeeRuntimeStore } from "./queen-bee-runtime-store";
 import { emitCardAccepted } from "./worker-event-bus";
 
 export function registerWorkDecisionRoutes(
@@ -28,7 +27,6 @@ export function registerWorkDecisionRoutes(
     boardStore: BoardStore;
     projectStore: ProjectStore;
     integrationManager: IntegrationManager;
-    runtimeStore: QueenBeeRuntimeStore;
     reviewer: unknown;
     workspacesBasePath: string;
   }

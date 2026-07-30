@@ -15,6 +15,7 @@ export type FlowPersistence = {
   saveInstance(
     flowId: string,
     instanceId: string,
+    workflowId: string,
     state: WorkflowInstanceState<any, any, any>
   ): void;
   saveRunningTaskContext(
@@ -25,13 +26,19 @@ export type FlowPersistence = {
   loadFlow(flowId: string): {
     config: unknown;
     state: unknown;
-    instances: WorkflowInstanceState<any, any, any>[];
+    instances: Array<{
+      workflowId: string;
+      state: WorkflowInstanceState<any, any, any>;
+    }>;
   } | null;
   loadAllFlows(): Array<{
     flowId: string;
     config: unknown;
     state: unknown;
-    instances: WorkflowInstanceState<any, any, any>[];
+    instances: Array<{
+      workflowId: string;
+      state: WorkflowInstanceState<any, any, any>;
+    }>;
   }>;
 };
 
@@ -192,7 +199,7 @@ export function createFlowRuntime<
           state: event.state,
         });
 
-        persistence?.saveInstance(flowId, instanceId, event.state);
+        persistence?.saveInstance(flowId, instanceId, workflowId, event.state);
 
         if (workflow.terminalStates.includes(event.state.currentState)) {
           emit({

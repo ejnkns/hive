@@ -608,10 +608,10 @@ describe("FlowRuntime", () => {
         },
         saveInstance() {},
         saveRunningTaskContext() {},
-        loadFlow() {
+        loadFlow(): any {
           return null;
         },
-        loadAllFlows() {
+        loadAllFlows(): any {
           return [];
         },
       };
@@ -640,14 +640,14 @@ describe("FlowRuntime", () => {
       }> = [];
       const persistence: FlowPersistence = {
         saveFlow() {},
-        saveInstance(flowId, instanceId, state) {
+        saveInstance(flowId, instanceId, _workflowId, state) {
           saved.push({ flowId, instanceId, state });
         },
         saveRunningTaskContext() {},
-        loadFlow() {
+        loadFlow(): any {
           return null;
         },
-        loadAllFlows() {
+        loadAllFlows(): any {
           return [];
         },
       };
