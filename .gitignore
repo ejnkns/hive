@@ -8,6 +8,7 @@ contexts/
 !README.md
 !CONTRIBUTING.md
 !ARCHITECTURE.md
+!implementation-gaps.md
 repomix-output.xml
 vault
 docs/
