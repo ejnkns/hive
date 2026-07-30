@@ -159,6 +159,28 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
     }
   );
 
+  server.patch("/api/flows/:flowId/config", async (request, reply) => {
+    const { flowId } = request.params as { flowId: string };
+    const body = request.body as Record<string, unknown> | null;
+
+    if (!body || Object.keys(body).length === 0) {
+      return reply.status(400).send({ error: "Config patch body is required" });
+    }
+
+    const runtime = getFlowRuntime(flowId);
+    if (!runtime) {
+      return reply.status(404).send({ error: "Flow not found" });
+    }
+
+    runtime.patchFlowConfig(body);
+
+    return reply.send({
+      ok: true,
+      flowId,
+      config: runtime.getFlowConfig(),
+    });
+  });
+
   // ── WebSocket endpoint ──
 
   server.get("/api/flows/ws", { websocket: true }, (socket) => {

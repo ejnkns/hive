@@ -8,6 +8,7 @@ import {
   createFlowRuntime,
   type FlowRuntimeAPI,
 } from "workflow-engine/create-flow-runtime";
+import type { WorkflowConfig } from "workflow-engine/create-workflow-instance-controller";
 import {
   checkIntegrationReadiness,
   ensureIntegrationBranch,
@@ -253,6 +254,40 @@ export function integrationIntegrate(
   return fastForwardTargetBranch(DUMMY_TASK, { repoPath, targetBranch });
 }
 
+// ── Workflow definition resolver ──
+
+function resolveWorkflowConfigs(
+  config: Record<string, unknown>
+): WorkflowConfig<any, any, any>[] {
+  const maxWorkers = (config.maxConcurrentWorkers as number) ?? 3;
+  const systemPrompts = config.systemPrompts as
+    | Record<string, string>
+    | undefined;
+
+  return queenBeeFlow.workflows.map((wf) => ({
+    ...wf,
+    states: wf.states.map((state) => ({
+      ...state,
+      actions: state.actions?.map((action) => {
+        if (
+          action.id === "run" &&
+          wf.id === "cards" &&
+          action.maxWorkflowInstancesInTarget !== undefined
+        ) {
+          return { ...action, maxWorkflowInstancesInTarget: maxWorkers };
+        }
+        return action;
+      }),
+      tasks: state.tasks?.map((task) => {
+        if (task.systemPrompt && systemPrompts?.[task.id]) {
+          return { ...task, systemPrompt: systemPrompts[task.id] };
+        }
+        return task;
+      }),
+    })),
+  })) as unknown as WorkflowConfig<any, any, any>[];
+}
+
 // ── Flow lifecycle ──
 
 export function createFlowOnLink(
@@ -269,9 +304,10 @@ export function createFlowOnLink(
     targetBranch: "main",
     ...config,
   };
+  const resolvedWorkflows = resolveWorkflowConfigs(flowConfig);
   const runtime = createFlowRuntime(
     flowId,
-    queenBeeFlow.workflows,
+    resolvedWorkflows,
     queenBeeFlow.edges,
     {
       operation: runners.operationRunner,
@@ -306,9 +342,12 @@ export function rehydrateFlow(
   if (flowId !== queenBeeFlow.id) return null;
 
   const runners = createEngineRunners();
+  const resolvedWorkflows = resolveWorkflowConfigs(
+    flowConfig as Record<string, unknown>
+  );
   const runtime = createFlowRuntime(
     flowId,
-    queenBeeFlow.workflows,
+    resolvedWorkflows,
     queenBeeFlow.edges,
     {
       operation: runners.operationRunner,
