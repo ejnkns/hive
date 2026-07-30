@@ -22,7 +22,7 @@ function key(projectId: string, cardId: string): string {
   return `${projectId}\0${cardId}`;
 }
 
-export function getOrCreateOrchestrator(
+export function getOrCreateInstance(
   projectId: string,
   cardId: string,
   repoPath: string
@@ -32,10 +32,10 @@ export function getOrCreateOrchestrator(
   CardsItemState
 > {
   const k = key(projectId, cardId);
-  let orch = instances.get(k);
-  if (orch) return orch;
+  let ctrl = instances.get(k);
+  if (ctrl) return ctrl;
 
-  orch = createWorkflowInstanceController(
+  ctrl = createWorkflowInstanceController(
     cardsWorkflow,
     {
       operation: runners.operationRunner,
@@ -58,11 +58,11 @@ export function getOrCreateOrchestrator(
     }
   );
 
-  instances.set(k, orch);
-  return orch;
+  instances.set(k, ctrl);
+  return ctrl;
 }
 
-export function getOrchestrator(
+export function getInstance(
   projectId: string,
   cardId: string
 ):
@@ -77,8 +77,8 @@ export function getOrchestrator(
 
 export function runningCardIds(projectId: string): string[] {
   const result: string[] = [];
-  for (const [k, orch] of instances) {
-    if (k.startsWith(`${projectId}\0`) && orch.getState().hasRunningTask) {
+  for (const [k, ctrl] of instances) {
+    if (k.startsWith(`${projectId}\0`) && ctrl.getState().hasRunningTask) {
       result.push(k.slice(projectId.length + 1));
     }
   }

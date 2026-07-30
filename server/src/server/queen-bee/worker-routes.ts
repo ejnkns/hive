@@ -3,9 +3,9 @@ import type { Card } from "shared/board-types";
 import { isRecord } from "shared/board-types";
 import type { QueenBeeEvent } from "shared/queen-bee-events";
 import {
-  getOrCreateOrchestrator,
+  getOrCreateInstance,
   runningCardIds,
-} from "../orchestrator-registry";
+} from "../workflow-instance-registry";
 import type { ProjectStore } from "./create-project-store";
 import { evaluateWorkerAdmission } from "./worker-admission";
 import { offQueenBeeEvent, onQueenBeeEvent } from "./worker-event-bus";
@@ -48,18 +48,14 @@ export function registerWorkerRoutes(
         return reply.status(404).send({ error: "Card not found" });
       }
 
-      const orchestrator = getOrCreateOrchestrator(
-        projectId,
-        cardId,
-        project.repoPath
-      );
+      const instance = getOrCreateInstance(projectId, cardId, project.repoPath);
 
-      if (orchestrator.getState().currentState !== "ready") {
+      if (instance.getState().currentState !== "ready") {
         return reply.status(400).send({
           error: "Card must be in the 'ready' column to run",
         });
       }
-      if (orchestrator.getState().hasRunningTask) {
+      if (instance.getState().hasRunningTask) {
         return reply
           .status(409)
           .send({ error: "Worker Agent is already running" });
@@ -82,7 +78,7 @@ export function registerWorkerRoutes(
         });
       }
 
-      orchestrator.dispatchAction("run");
+      instance.dispatchAction("run");
       reply.send({ started: true, cardId, admission });
     }
   );
@@ -121,12 +117,12 @@ export function registerWorkerRoutes(
         cardId: string;
       };
 
-      const orchestrator = getOrCreateOrchestrator(projectId, cardId, "");
-      if (!orchestrator.getState().hasRunningTask) {
+      const instance = getOrCreateInstance(projectId, cardId, "");
+      if (!instance.getState().hasRunningTask) {
         return reply.status(409).send({ error: "Worker Agent is not running" });
       }
 
-      orchestrator.cancel();
+      instance.cancel();
       return reply.send({ cancelled: true, cardId });
     }
   );

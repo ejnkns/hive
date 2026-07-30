@@ -2,7 +2,7 @@
 
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { Card } from "shared/board-types";
-import { getOrCreateOrchestrator } from "../orchestrator-registry";
+import { getOrCreateInstance } from "../workflow-instance-registry";
 
 type BoardStore = {
   getBoard(
@@ -70,12 +70,12 @@ export function registerWorkDecisionRoutes(
           card.id,
           "in_progress"
         );
-        const orchestrator = getOrCreateOrchestrator(
+        const instance = getOrCreateInstance(
           project.id,
           card.id,
           project.repoPath
         );
-        orchestrator.dispatchAction("update_changes");
+        instance.dispatchAction("update_changes");
         return reply.send({ action: "update_changes", cardId: card.id });
       });
     }
@@ -92,12 +92,12 @@ export function registerWorkDecisionRoutes(
           card.id,
           "ready"
         );
-        const orchestrator = getOrCreateOrchestrator(
+        const instance = getOrCreateInstance(
           project.id,
           card.id,
           project.repoPath
         );
-        orchestrator.dispatchAction("new_changes");
+        instance.dispatchAction("new_changes");
         return reply.send({ action: "new_changes", cardId: card.id });
       });
     }
@@ -108,12 +108,12 @@ export function registerWorkDecisionRoutes(
     async (request, reply) => {
       const params = request.params as { projectId: string; cardId: string };
       return withCard(params, deps, reply, async (card, project) => {
-        const orchestrator = getOrCreateOrchestrator(
+        const instance = getOrCreateInstance(
           project.id,
           card.id,
           project.repoPath
         );
-        orchestrator.dispatchAction("restart_review");
+        instance.dispatchAction("restart_review");
         return reply.send({ action: "restart_review", cardId: card.id });
       });
     }

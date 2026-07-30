@@ -44,7 +44,7 @@ export type WorkflowEvent<
       taskId: keyof TTaskOutputs & string;
     };
 
-// === Commands emitted to the orchestrator ===
+// === Commands emitted to the controller ===
 
 export type WorkflowCommand = { type: "noop" } | { type: "start_auto_tasks" };
 

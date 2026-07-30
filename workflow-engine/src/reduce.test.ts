@@ -192,7 +192,7 @@ describe("cards workflow", () => {
     assert.equal(result.commands[0]!.type, "start_auto_tasks");
   });
 
-  // 3. After running, orchestrator starts implement task
+  // 3. After running, controller starts implement task
   it("task_started sets hasRunningTask", () => {
     const state = { ...initial, currentState: "in_progress" };
     const result = apply(state, {
