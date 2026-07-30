@@ -1,7 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import type { FlowRuntimeEvent } from "workflow-engine/create-flow-runtime";
 import type { WebSocket } from "ws";
-import { getAllFlows, getFlowRuntime } from "./flow-registry";
+import {
+  createFlowFromDefinition,
+  type DataDrivenWorkflowDef,
+  getAllFlows,
+  getFlowPersistence,
+  getFlowRuntime,
+} from "./flow-registry";
 
 export function registerFlowApiRoutes(server: FastifyInstance): void {
   const activeSockets = new Set<WebSocket>();
@@ -158,6 +164,44 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
       });
     }
   );
+
+  server.post("/api/flows/definitions", async (request, reply) => {
+    const body = request.body as Record<string, unknown> | null;
+    if (!body || typeof body.id !== "string" || !Array.isArray(body.states)) {
+      return reply.status(400).send({
+        error:
+          "Invalid definition: id (string) and states (array) are required",
+      });
+    }
+
+    const persistence = getFlowPersistence();
+    if (!persistence) {
+      return reply
+        .status(500)
+        .send({ error: "Flow persistence not available" });
+    }
+
+    const existing = getFlowRuntime(body.id);
+    if (existing) {
+      return reply
+        .status(409)
+        .send({ error: `Flow "${body.id}" already exists` });
+    }
+
+    try {
+      const def = body as unknown as DataDrivenWorkflowDef;
+      const runtime = createFlowFromDefinition(body.id, def, persistence);
+      return reply.status(201).send({
+        ok: true,
+        flowId: body.id,
+        workflows: runtime.getWorkflowDefinitions(),
+      });
+    } catch (err) {
+      return reply.status(400).send({
+        error: err instanceof Error ? err.message : "Invalid definition",
+      });
+    }
+  });
 
   server.patch("/api/flows/:flowId/config", async (request, reply) => {
     const { flowId } = request.params as { flowId: string };

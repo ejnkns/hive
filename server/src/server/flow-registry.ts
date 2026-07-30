@@ -15,6 +15,10 @@ import {
   fastForwardTargetBranch,
 } from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
+import type {
+  ActionVariant,
+  StateCategory,
+} from "workflow-engine/workflow-types";
 import { queenBeeFlow } from "../../../queen-bee/flow";
 import { createEngineRunners } from "./engine-bridge";
 
@@ -24,6 +28,10 @@ let _persistence: FlowPersistence | null = null;
 
 export function setFlowPersistence(persistence: FlowPersistence): void {
   _persistence = persistence;
+}
+
+export function getFlowPersistence(): FlowPersistence | null {
+  return _persistence;
 }
 
 export function registerFlowForTest(
@@ -254,6 +262,119 @@ export function integrationIntegrate(
   return fastForwardTargetBranch(DUMMY_TASK, { repoPath, targetBranch });
 }
 
+// ── Data-driven workflow definition types ──
+
+export type DataDrivenStateDef = {
+  id: string;
+  label: string;
+  description?: string;
+  category?: StateCategory;
+  tasks?: Array<{
+    id: string;
+    label: string;
+    trigger: "auto" | "manual";
+    role: "ai-task" | "ai-chat" | "operation";
+    systemPrompt?: string;
+    completionTool?: string;
+  }>;
+  autoTransitions?: Array<{
+    to: string;
+    onTaskStatus?: { taskId: string; status: "success" | "error" };
+  }>;
+  actions?: Array<{
+    id: string;
+    label: string;
+    variant?: ActionVariant;
+    transitionTo: string;
+  }>;
+};
+
+export type DataDrivenWorkflowDef = {
+  id: string;
+  label: string;
+  description?: string;
+  states: DataDrivenStateDef[];
+  initial: string;
+  terminalStates: string[];
+};
+
+// ── Converter ──
+
+function convertDataDrivenDef(
+  def: DataDrivenWorkflowDef
+): WorkflowConfig<any, any, any> {
+  return {
+    id: def.id,
+    label: def.label,
+    description: def.description,
+    taskOutputs: {},
+    states: def.states.map((s) => ({
+      id: s.id,
+      label: s.label,
+      description: s.description,
+      category: s.category,
+      tasks: s.tasks?.map((t) => ({
+        id: t.id,
+        label: t.label,
+        trigger: t.trigger,
+        role: t.role,
+        systemPrompt: t.systemPrompt,
+        completionTool: t.completionTool,
+      })),
+      autoTransitions: s.autoTransitions?.map((t) => ({
+        to: t.to,
+        gate: t.onTaskStatus
+          ? (ctx: any) => {
+              const outcome = ctx.taskOutputs[t.onTaskStatus!.taskId];
+              return outcome?.status === t.onTaskStatus!.status;
+            }
+          : () => true,
+      })),
+      actions: s.actions?.map((a) => ({
+        id: a.id,
+        label: a.label,
+        variant: a.variant ?? "default",
+        transitionTo: a.transitionTo,
+      })),
+    })),
+    initial: def.initial,
+    terminalStates: def.terminalStates,
+  } as unknown as WorkflowConfig<any, any, any>;
+}
+
+export function createFlowFromDefinition(
+  flowId: string,
+  def: DataDrivenWorkflowDef,
+  persistence: FlowPersistence,
+  config?: Record<string, unknown>
+): FlowRuntimeAPI<any, any> {
+  const runners = createEngineRunners();
+  const workflowDefs = [convertDataDrivenDef(def)];
+  const flowConfig: Record<string, unknown> = {
+    name: def.label,
+    ...config,
+    workflowDefinitions: workflowDefs,
+  };
+
+  const runtime = createFlowRuntime(
+    flowId,
+    workflowDefs,
+    [],
+    {
+      operation: runners.operationRunner,
+      "ai-task": runners.aiTaskRunner,
+      "ai-chat": runners.aiChatRunner,
+    },
+    flowConfig,
+    {},
+    persistence
+  );
+
+  persistence.saveFlow(flowId, flowConfig, {});
+  runtimes.set(flowId, runtime);
+  return runtime;
+}
+
 // ── Workflow definition resolver ──
 
 function resolveWorkflowConfigs(
@@ -339,12 +460,16 @@ export function rehydrateFlow(
     state: Record<string, unknown>;
   }>
 ): FlowRuntimeAPI<any, any> | null {
-  if (flowId !== queenBeeFlow.id) return null;
+  const cfg = flowConfig as Record<string, unknown>;
+  const storedDefs = cfg.workflowDefinitions as
+    | WorkflowConfig<any, any, any>[]
+    | undefined;
+
+  if (flowId !== queenBeeFlow.id && !storedDefs) return null;
 
   const runners = createEngineRunners();
-  const resolvedWorkflows = resolveWorkflowConfigs(
-    flowConfig as Record<string, unknown>
-  );
+  const resolvedWorkflows =
+    storedDefs ?? resolveWorkflowConfigs(flowConfig as Record<string, unknown>);
   const runtime = createFlowRuntime(
     flowId,
     resolvedWorkflows,
