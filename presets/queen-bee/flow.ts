@@ -8,14 +8,19 @@ import type {
 } from "workflow-engine/workflow-types";
 import { cardsWorkflow } from "./cards-workflow";
 import { ideasWorkflow } from "./ideas-workflow";
+import { integrationWorkflow } from "./integration-workflow";
+import { onboardingWorkflow } from "./onboarding-workflow";
 import { queenBeeOperations } from "./operations";
 import { requirementsWorkflow } from "./requirements-workflow";
 import { queenBeeTools } from "./tools";
 
 // === QUEEN BEE FLOW ===
 //
-// The queen-bee project lifecycle expressed as three interacting workflows
+// The queen-bee project lifecycle expressed as five interacting workflows
 // wired together by a FlowDefinition.
+//
+// Onboarding: turns a plain flow into a Project by binding a repository.
+//    validating → ensuring → writing → binding → complete | failed
 //
 // Requirements: one item (the requirements doc). Session + planner agent.
 //    no_session → drafting (session) → complete → planning (agent) → planned → accepted
@@ -26,17 +31,40 @@ import { queenBeeTools } from "./tools";
 // Cards: per-card items. Worker agent, reviewer, coordinator.
 //    ready → in_progress → reviewing → done | unfulfillable
 //
+// Integration: fast-forward the target branch on demand.
+//    ready → integrating → integrated
+//
 // Flow edges:
+//    onboarding/complete → requirements (seed the project's requirements)
+//    onboarding/complete → integration (seed the project's integration)
 //    ideas/submitted → requirements (merge draft, trigger planning)
 //    requirements/accepted → cards (create cards in ready)
 
 export const queenBeeFlow = {
   id: "queen-bee",
   label: "Queen Bee",
-  workflows: [requirementsWorkflow, ideasWorkflow, cardsWorkflow],
+  workflows: [
+    onboardingWorkflow,
+    requirementsWorkflow,
+    ideasWorkflow,
+    cardsWorkflow,
+    integrationWorkflow,
+  ],
   tools: queenBeeTools,
   operations: queenBeeOperations,
   edges: [
+    {
+      fromWorkflow: "onboarding",
+      fromStates: ["complete"],
+      toWorkflow: "requirements",
+      transform: () => ({}),
+    },
+    {
+      fromWorkflow: "onboarding",
+      fromStates: ["complete"],
+      toWorkflow: "integration",
+      transform: () => ({}),
+    },
     {
       fromWorkflow: "ideas",
       fromStates: ["submitted"],

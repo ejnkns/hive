@@ -1,7 +1,9 @@
 /** @public — one-time engine wiring. Creates configured runners with server-side dependencies. */
 
 import type { Readable } from "node:stream";
+import type { FlowRuntimeAPI } from "workflow-engine/create-flow-runtime";
 import type {
+  OperationContext,
   OperationFn,
   Tool,
   ToolCall,
@@ -39,6 +41,35 @@ function wrapPrepareWorktree(
     attempt: params.attempt as number,
   });
   return result as unknown as OperationResult;
+}
+
+// ─── patch_flow_config ─────────────────────────────────────────────────
+
+// patch_flow_config writes fields into FlowConfig from within a workflow task,
+// wrapping the runtime's patchFlowConfig. Params come from the task's
+// operationInputs. A value equal to `@flow:<field>` copies the current value
+// of that flow config field instead — used when the task's inputs are decided
+// by an earlier step at runtime (e.g. a computed targetBranch).
+const FLOW_CONFIG_REF_PREFIX = "@flow:";
+
+function isFlowConfigRef(value: unknown): value is string {
+  return typeof value === "string" && value.startsWith(FLOW_CONFIG_REF_PREFIX);
+}
+
+function resolveAndPatchFlowConfig(
+  _task: TaskDefinition,
+  params: Record<string, unknown>,
+  ctx: OperationContext
+): OperationResult {
+  const config = ctx.flowConfig();
+  const patch: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(params)) {
+    patch[key] = isFlowConfigRef(value)
+      ? config[value.slice(FLOW_CONFIG_REF_PREFIX.length)]
+      : value;
+  }
+  ctx.patchFlowConfig(patch);
+  return { ok: true, config: ctx.flowConfig() };
 }
 
 // ─── Model caller adapter ──────────────────────────────────────────────
@@ -176,6 +207,12 @@ export type EngineRunners = {
   aiChatRunner: () => ReturnType<typeof createAiChatRunner>;
   toolDefinitions: Record<string, ToolDefinition>;
   toolExecutors: Record<string, ToolExecutor>;
+  // Binds the flow runtime so infrastructure operations (patch_flow_config)
+  // can read and patch flow config. Called by the flow registry immediately
+  // after the runtime is created.
+  bindRuntime(
+    runtime: FlowRuntimeAPI<Record<string, unknown>, Record<string, unknown>>
+  ): void;
 };
 
 export function createEngineRunners(
@@ -197,13 +234,33 @@ export function createEngineRunners(
 
   const engineTools = Object.values(toolDefinitions);
 
+  let runtime: FlowRuntimeAPI<
+    Record<string, unknown>,
+    Record<string, unknown>
+  > | null = null;
+
+  function requireRuntime(): FlowRuntimeAPI<
+    Record<string, unknown>,
+    Record<string, unknown>
+  > {
+    if (!runtime) throw new Error("Engine runners are not bound to a runtime");
+    return runtime;
+  }
+
+  const getOperationContext = (): OperationContext => ({
+    flowConfig: () => requireRuntime().getFlowConfig(),
+    patchFlowConfig: (patch) => requireRuntime().patchFlowConfig(patch),
+  });
+
   return {
     // Factories: each task execution gets an isolated runner instance so
     // concurrent ai-chat/ai-task sessions in one flow do not share state.
     operationRunner: () =>
       createOperationRunner({
+        getContext: getOperationContext,
         operations: {
           prepare_worktree: wrapPrepareWorktree,
+          patch_flow_config: resolveAndPatchFlowConfig,
           ...domain.operations,
         },
       }),
@@ -221,5 +278,8 @@ export function createEngineRunners(
       }),
     toolDefinitions,
     toolExecutors,
+    bindRuntime: (bound) => {
+      runtime = bound;
+    },
   };
 }

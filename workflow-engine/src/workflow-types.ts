@@ -178,6 +178,7 @@ export type StateDef<
     role: "ai-task" | "ai-chat" | "operation";
     tools?: ToolName[];
     operations?: string[];
+    operationInputs?: Record<string, unknown>;
     systemPrompt?: string;
     completionTool?: string;
   }[];

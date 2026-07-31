@@ -172,13 +172,15 @@ export function createFlow(
     {},
     persistence
   );
+  runners.bindRuntime(runtime);
 
   // Seed one instance of the first workflow so the flow is immediately
-  // renderable (queen-bee: the requirements instance; custom defs: the
-  // single workflow).
+  // renderable (queen-bee: the onboarding workflow; custom defs: the
+  // single workflow). Auto tasks in the initial state run right away.
   const seedWorkflow = workflows[0];
   if (seedWorkflow) {
-    runtime.addWorkflowInstance(seedWorkflow.id);
+    const controller = runtime.addWorkflowInstance(seedWorkflow.id);
+    void controller.startAutoTasks();
   }
 
   persistence.saveFlow(flowId, flowConfig, {});
@@ -237,6 +239,7 @@ export function rehydrateFlow(
     flowState as Record<string, unknown>,
     persistence
   );
+  runners.bindRuntime(runtime);
 
   for (const instance of instances) {
     const restoredState = {
@@ -373,10 +376,12 @@ export function createFlowFromDefinition(
     {},
     persistence
   );
+  runners.bindRuntime(runtime);
 
   // Seed one instance in the workflow's initial state so the flow is
-  // immediately renderable.
-  runtime.addWorkflowInstance(def.id);
+  // immediately renderable; initial-state auto tasks run right away.
+  const controller = runtime.addWorkflowInstance(def.id);
+  void controller.startAutoTasks();
 
   persistence.saveFlow(flowId, flowConfig, {});
   runtimes.set(flowId, runtime);

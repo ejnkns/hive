@@ -80,4 +80,55 @@ describe("createOperationRunner", () => {
     const result = await runner.run({ ...dummyTask, operations: [] });
     assert.deepEqual(result.output, {});
   });
+
+  it("passes operationInputs as the operation params", async () => {
+    const runner = createOperationRunner({
+      operations: {
+        echo: (_task, params) => ({ seen: params }),
+      },
+    });
+
+    const result = await runner.run({
+      ...dummyTask,
+      operations: ["echo"],
+      operationInputs: { repoPath: "/tmp/repo" },
+    });
+
+    assert.deepEqual(result.output, { seen: { repoPath: "/tmp/repo" } });
+  });
+
+  it("provides the operation context from getContext", async () => {
+    const context = {
+      flowConfig: () => ({ repoPath: "/tmp/repo" }),
+      patchFlowConfig: () => {},
+    };
+    const runner = createOperationRunner({
+      getContext: () => context,
+      operations: {
+        read: (_task, _params, ctx) => ({
+          repoPath: ctx.flowConfig().repoPath,
+        }),
+      },
+    });
+
+    const result = await runner.run({ ...dummyTask, operations: ["read"] });
+
+    assert.deepEqual(result.output, { repoPath: "/tmp/repo" });
+  });
+
+  it("keys multi-operation task results by operation name", async () => {
+    const runner = createOperationRunner({
+      operations: {
+        first: () => ({ n: 1 }),
+        second: () => ({ n: 2 }),
+      },
+    });
+
+    const result = await runner.run({
+      ...dummyTask,
+      operations: ["first", "second"],
+    });
+
+    assert.deepEqual(result.output, { first: { n: 1 }, second: { n: 2 } });
+  });
 });

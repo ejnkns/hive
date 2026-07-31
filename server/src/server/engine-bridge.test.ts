@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import type { FlowRuntimeAPI } from "workflow-engine/create-flow-runtime";
 import type { Tool } from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
 import { createEngineRunners } from "./engine-bridge";
@@ -68,6 +69,93 @@ describe("createEngineRunners", () => {
       () => runners.operationRunner().run(task),
       (err: unknown) =>
         !(err instanceof Error) || !err.message.includes("Unknown operation")
+    );
+  });
+
+  it("patch_flow_config writes inputs into the bound runtime's config", async () => {
+    let config: Record<string, unknown> = {
+      repoPath: "/tmp/repo",
+      name: "Project",
+      targetBranch: "main",
+    };
+    const runtime = {
+      getFlowConfig: () => config,
+      patchFlowConfig: (patch: Record<string, unknown>) => {
+        config = { ...config, ...patch };
+      },
+    } as unknown as FlowRuntimeAPI<
+      Record<string, unknown>,
+      Record<string, unknown>
+    >;
+
+    const runners = createEngineRunners();
+    runners.bindRuntime(runtime);
+
+    const task: TaskDefinition = {
+      id: "bind",
+      label: "Bind",
+      role: "operation",
+      operations: ["patch_flow_config"],
+      operationInputs: {
+        repoPath: "@flow:repoPath",
+        targetBranch: "@flow:targetBranch",
+        name: "@flow:name",
+        maxConcurrentWorkers: 5,
+      },
+    };
+
+    const result = await runners.operationRunner().run(task);
+    const output = result.output as Record<string, unknown>;
+
+    assert.equal(output.ok, true);
+    assert.equal(config.name, "Project");
+    assert.equal(config.repoPath, "/tmp/repo");
+    assert.equal(config.targetBranch, "main");
+    assert.equal(config.maxConcurrentWorkers, 5);
+  });
+
+  it("patch_flow_config resolves @flow: refs from the current config", async () => {
+    let config: Record<string, unknown> = { repoPath: "/tmp/repo" };
+    const runtime = {
+      getFlowConfig: () => config,
+      patchFlowConfig: (patch: Record<string, unknown>) => {
+        config = { ...config, ...patch };
+      },
+    } as unknown as FlowRuntimeAPI<
+      Record<string, unknown>,
+      Record<string, unknown>
+    >;
+
+    const runners = createEngineRunners();
+    runners.bindRuntime(runtime);
+
+    const task: TaskDefinition = {
+      id: "bind",
+      label: "Bind",
+      role: "operation",
+      operations: ["patch_flow_config"],
+      operationInputs: { repoPath: "@flow:repoPath" },
+    };
+
+    await runners.operationRunner().run(task);
+
+    assert.equal(config.repoPath, "/tmp/repo");
+  });
+
+  it("operations that touch context reject before bindRuntime", async () => {
+    const runners = createEngineRunners();
+
+    const task: TaskDefinition = {
+      id: "bind",
+      label: "Bind",
+      role: "operation",
+      operations: ["patch_flow_config"],
+      operationInputs: {},
+    };
+
+    await assert.rejects(
+      () => runners.operationRunner().run(task),
+      /not bound to a runtime/
     );
   });
 });

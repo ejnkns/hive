@@ -12,6 +12,7 @@ export {
 } from "./runners/create-ai-task-runner";
 export {
   createOperationRunner,
+  type OperationContext,
   type OperationFn,
   type OperationRunnerConfig,
 } from "./runners/create-operation-runner";

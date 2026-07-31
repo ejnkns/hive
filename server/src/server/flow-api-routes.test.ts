@@ -9,7 +9,11 @@ import {
 } from "workflow-engine/create-flow-runtime";
 import { defineWorkflow } from "workflow-engine/workflow-types";
 import { registerFlowApiRoutes } from "./flow-api-routes";
-import { registerFlowForTest, setFlowPersistence } from "./flow-registry";
+import {
+  registerFlowDefinition,
+  registerFlowForTest,
+  setFlowPersistence,
+} from "./flow-registry";
 
 const testWorkflow = defineWorkflow({
   id: "test-wf",
@@ -362,6 +366,55 @@ describe("flow API routes", () => {
 
     assert.equal(response.statusCode, 404);
     assert.equal(response.json().error, "Flow not found");
+  });
+
+  it("POST /api/flows creates a flow from a registered definition", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition({
+      id: "test-def",
+      label: "Test Definition",
+      buildWorkflows: () => [testWorkflow],
+      edges: [],
+    });
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/flows",
+      body: {
+        definitionId: "test-def",
+        config: { name: "My Project" },
+      },
+    });
+
+    assert.equal(response.statusCode, 201);
+    const body = response.json();
+    assert.equal(body.flowId, "my-project");
+    assert.equal(body.workflows[0].id, "test-wf");
+  });
+
+  it("POST /api/flows requires definitionId and rejects unknown definitions", async () => {
+    setFlowPersistence(noopPersistence);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const missing = await server.inject({
+      method: "POST",
+      url: "/api/flows",
+      body: {},
+    });
+    assert.equal(missing.statusCode, 400);
+    assert.equal(missing.json().error, "definitionId is required");
+
+    const unknown = await server.inject({
+      method: "POST",
+      url: "/api/flows",
+      body: { definitionId: "missing-def" },
+    });
+    assert.equal(unknown.statusCode, 400);
   });
 
   function fixture(): FastifyInstance {

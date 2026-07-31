@@ -4,6 +4,7 @@ export type TaskDefinition = {
   role: string;
   tools?: string[];
   operations?: string[];
+  operationInputs?: Record<string, unknown>;
   systemPrompt?: string;
   completionTool?: string;
   workspacePath?: string;

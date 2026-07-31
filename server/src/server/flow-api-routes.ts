@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { FlowRuntimeEvent } from "workflow-engine/create-flow-runtime";
 import type { WebSocket } from "ws";
 import {
+  createFlow,
   createFlowFromDefinition,
   type DataDrivenWorkflowDef,
   getFlowPersistence,
@@ -244,6 +245,50 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
     return reply.send({ ok: true, flowId });
   });
 
+  server.post("/api/flows", async (request, reply) => {
+    // Fastify body is unknown; validated below
+    const body = request.body as Record<string, unknown> | null;
+    const definitionId = body?.definitionId;
+    if (typeof definitionId !== "string") {
+      return reply.status(400).send({ error: "definitionId is required" });
+    }
+
+    const persistence = getFlowPersistence();
+    if (!persistence) {
+      return reply
+        .status(500)
+        .send({ error: "Flow persistence not available" });
+    }
+
+    const config =
+      body?.config !== null && typeof body?.config === "object"
+        ? (body.config as Record<string, unknown>)
+        : {};
+    const flowId =
+      typeof body?.flowId === "string" && body.flowId !== ""
+        ? body.flowId
+        : generateFlowId(definitionId, config);
+
+    if (getFlowRuntime(flowId)) {
+      return reply
+        .status(409)
+        .send({ error: `Flow "${flowId}" already exists` });
+    }
+
+    try {
+      const runtime = createFlow(flowId, definitionId, persistence, config);
+      return reply.status(201).send({
+        ok: true,
+        flowId,
+        workflows: runtime.getWorkflowDefinitions(),
+      });
+    } catch (err) {
+      return reply.status(400).send({
+        error: err instanceof Error ? err.message : "Invalid flow definition",
+      });
+    }
+  });
+
   // ── WebSocket endpoint ──
 
   server.get("/api/flows/ws", { websocket: true }, (socket) => {
@@ -283,4 +328,27 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
   });
 
   subscribeToFlowEvents();
+}
+
+// Derives a unique flow id from the requested name or definition id, suffixing
+// until it does not collide with an existing runtime.
+function generateFlowId(
+  definitionId: string,
+  config: Record<string, unknown>
+): string {
+  const name = typeof config.name === "string" ? config.name : definitionId;
+  const slug =
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 50) || definitionId;
+
+  const existing = new Set(Array.from(getFlowRuntimes().keys()));
+  if (!existing.has(slug)) return slug;
+  let n = 2;
+  while (existing.has(`${slug}-${n}`)) {
+    n++;
+  }
+  return `${slug}-${n}`;
 }
