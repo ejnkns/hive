@@ -329,7 +329,7 @@ describe("FlowRuntime", () => {
         "test",
         [sourceWorkflow, targetWorkflow],
         edges,
-        { "ai-task": runner }
+        { "ai-task": () => runner }
       );
 
       const controller = runtime.addWorkflowInstance("source");
@@ -364,7 +364,7 @@ describe("FlowRuntime", () => {
         "test",
         [sourceWorkflow, targetWorkflow],
         edges,
-        { "ai-task": runner }
+        { "ai-task": () => runner }
       );
 
       const controller = runtime.addWorkflowInstance("source");
@@ -397,7 +397,7 @@ describe("FlowRuntime", () => {
         "test",
         [sourceWorkflow, targetWorkflow],
         edges,
-        { "ai-task": runner }
+        { "ai-task": () => runner }
       );
 
       const controller = runtime.addWorkflowInstance("source");
@@ -421,7 +421,7 @@ describe("FlowRuntime", () => {
         "test",
         [sourceWorkflow, targetWorkflow],
         edges,
-        { "ai-task": runner }
+        { "ai-task": () => runner }
       );
 
       const controller = runtime.addWorkflowInstance("source");
@@ -446,7 +446,7 @@ describe("FlowRuntime", () => {
         "test",
         [sourceWorkflow, targetWorkflow],
         edges,
-        { "ai-task": runner }
+        { "ai-task": () => runner }
       );
 
       const created: string[] = [];
@@ -481,7 +481,7 @@ describe("FlowRuntime", () => {
         "test",
         [sourceWorkflow],
         edges,
-        { "ai-task": runner },
+        { "ai-task": () => runner },
         {},
         { lastResult: null }
       );
@@ -505,7 +505,7 @@ describe("FlowRuntime", () => {
       ];
       const runner = new MockRunner();
       const runtime = createFlowRuntime("test", [sourceWorkflow], edges, {
-        "ai-task": runner,
+        "ai-task": () => runner,
       });
 
       let stateChanged = false;
@@ -544,7 +544,7 @@ describe("FlowRuntime", () => {
         "test",
         [sourceWorkflow, targetWorkflow],
         edges,
-        { "ai-task": runner },
+        { "ai-task": () => runner },
         {},
         { done: false }
       );
@@ -579,7 +579,7 @@ describe("FlowRuntime", () => {
     it("emits instance_terminated when reaching terminal state", async () => {
       const runner = new MockRunner();
       const runtime = createFlowRuntime("test", [sourceWorkflow], [], {
-        "ai-task": runner,
+        "ai-task": () => runner,
       });
 
       let terminated = false;
@@ -607,6 +607,7 @@ describe("FlowRuntime", () => {
         },
         saveInstance() {},
         saveRunningTaskContext() {},
+        deleteFlow() {},
         loadFlow() {
           return null;
         },
@@ -649,6 +650,7 @@ describe("FlowRuntime", () => {
           saved.push({ flowId, instanceId, state });
         },
         saveRunningTaskContext() {},
+        deleteFlow() {},
         loadFlow() {
           return null;
         },
@@ -662,7 +664,7 @@ describe("FlowRuntime", () => {
         "test-flow",
         [sourceWorkflow],
         [],
-        { "ai-task": runner },
+        { "ai-task": () => runner },
         {},
         {},
         persistence

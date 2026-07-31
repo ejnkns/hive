@@ -4,7 +4,7 @@ import {
 } from "./create-workflow-instance-controller";
 import { evaluateEdges } from "./evaluate-edges";
 import type { RuntimeWorkflowInstanceState } from "./shared/workflow-instance-state";
-import type { TaskRunner } from "./task-runner";
+import type { TaskRunnerFactory } from "./task-runner";
 import type {
   ActionVariant,
   RuntimeFlowEdge,
@@ -52,6 +52,7 @@ export type FlowPersistence = {
     instanceId: string,
     context: unknown
   ): void;
+  deleteFlow(flowId: string): void;
   loadFlow(flowId: string): {
     config: unknown;
     state: unknown;
@@ -121,7 +122,7 @@ export function createFlowRuntime<
   flowId: string,
   workflowDefs: RuntimeWorkflowConfig[],
   edges: RuntimeFlowEdge[],
-  runners: Record<string, TaskRunner>,
+  runners: Record<string, TaskRunnerFactory>,
   config?: TFlowConfig,
   initialState?: TFlowState,
   persistence?: FlowPersistence
@@ -266,6 +267,10 @@ export function createFlowRuntime<
 
     controllers.set(instanceId, controller);
     instanceWorkflowIds.set(instanceId, workflowId);
+
+    // Persist the initial state so freshly-created instances (including
+    // seeds) survive a restart, not just ones that later changed state.
+    persistence?.saveInstance(flowId, instanceId, workflowId, initialState);
 
     controller.on((event) => {
       if (event.type === "state_changed") {

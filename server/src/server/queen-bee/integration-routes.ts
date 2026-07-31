@@ -1,11 +1,8 @@
 /** @private — only imported by queen-bee.ts */
 
 import type { FastifyInstance } from "fastify";
-import {
-  getFlowRuntime,
-  integrationIntegrate,
-  integrationStatus,
-} from "../flow-registry";
+import { getFlowRuntime } from "../flow-registry";
+import { integrationIntegrate, integrationStatus } from "./project-lifecycle";
 import { emitIntegrationChanged } from "./worker-event-bus";
 
 export function registerIntegrationRoutes(server: FastifyInstance): void {

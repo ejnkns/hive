@@ -63,6 +63,7 @@ const noopPersistence: FlowPersistence = {
   saveFlow: () => {},
   saveInstance: () => {},
   saveRunningTaskContext: () => {},
+  deleteFlow: () => {},
   loadFlow: () => null,
   loadAllFlows: () => [],
 };

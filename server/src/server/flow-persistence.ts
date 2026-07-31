@@ -7,6 +7,7 @@ import {
   readdirSync,
   readFileSync,
   renameSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
@@ -192,10 +193,15 @@ export function createFlowPersistence(
     }
   }
 
+  function deleteFlow(flowId: string): void {
+    rmSync(flowDir(flowId), { recursive: true, force: true });
+  }
+
   return {
     saveFlow,
     saveInstance,
     saveRunningTaskContext,
+    deleteFlow,
     loadFlow,
     loadAllFlows,
   };

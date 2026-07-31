@@ -4,9 +4,9 @@ import type { WebSocket } from "ws";
 import {
   createFlowFromDefinition,
   type DataDrivenWorkflowDef,
-  getAllFlows,
   getFlowPersistence,
   getFlowRuntime,
+  getFlowRuntimes,
 } from "./flow-registry";
 
 export function registerFlowApiRoutes(server: FastifyInstance): void {
@@ -26,8 +26,8 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
   }
 
   function subscribeToFlowEvents(): void {
-    for (const flow of getAllFlows()) {
-      const runtime = getFlowRuntime(flow.id);
+    for (const [flowId] of getFlowRuntimes()) {
+      const runtime = getFlowRuntime(flowId);
       if (!runtime) continue;
       const unsub = runtime.on((event) => {
         broadcastFlowEvent(event);
@@ -39,22 +39,17 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
   // ── REST endpoints ──
 
   server.get("/api/flows", async (_request, reply) => {
-    const flows = getAllFlows();
-    const result = flows
-      .map((flow) => {
-        const runtime = getFlowRuntime(flow.id);
-        if (!runtime) return null;
+    const flows = Array.from(getFlowRuntimes()).map(([flowId, runtime]) => {
+      const cfg = runtime.getFlowConfig();
+      return {
+        id: flowId,
+        label: (cfg.name as string) ?? flowId,
+        workflows: runtime.getWorkflowDefinitions(),
+        instances: runtime.getWorkflowInstanceEntries(),
+      };
+    });
 
-        return {
-          id: flow.id,
-          label: flow.name,
-          workflows: runtime.getWorkflowDefinitions(),
-          instances: runtime.getWorkflowInstanceEntries(),
-        };
-      })
-      .filter((f): f is NonNullable<typeof f> => f !== null);
-
-    return reply.send({ flows: result });
+    return reply.send({ flows });
   });
 
   server.get("/api/flows/:flowId/instances", async (request, reply) => {
@@ -242,8 +237,8 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
 
     const currentUnsubscribers: Array<() => void> = [];
 
-    for (const flow of getAllFlows()) {
-      const runtime = getFlowRuntime(flow.id);
+    for (const [flowId] of getFlowRuntimes()) {
+      const runtime = getFlowRuntime(flowId);
       if (!runtime) continue;
       const unsub = runtime.on((event) => {
         try {

@@ -113,7 +113,7 @@ describe("createWorkflowInstanceController", () => {
   it("dispatchAction transitions state and starts auto tasks", async () => {
     const runner = new MockRunner();
     const controller = createWorkflowInstanceController(testWorkflow, {
-      "ai-task": runner,
+      "ai-task": () => runner,
     });
 
     controller.dispatchAction("start");
@@ -139,7 +139,7 @@ describe("createWorkflowInstanceController", () => {
   it("cancel transitions back to idle", async () => {
     const runner = new MockRunner();
     const controller = createWorkflowInstanceController(testWorkflow, {
-      "ai-task": runner,
+      "ai-task": () => runner,
     });
 
     controller.dispatchAction("start");
@@ -167,7 +167,7 @@ describe("createWorkflowInstanceController", () => {
   it("task error returns to idle", async () => {
     const runner = new MockRunner(true);
     const controller = createWorkflowInstanceController(testWorkflow, {
-      "ai-task": runner,
+      "ai-task": () => runner,
     });
 
     controller.dispatchAction("start");
@@ -182,7 +182,7 @@ describe("createWorkflowInstanceController", () => {
   it("cancel action is visible while task is running", () => {
     const runner = new MockRunner();
     const controller = createWorkflowInstanceController(testWorkflow, {
-      "ai-task": runner,
+      "ai-task": () => runner,
     });
 
     controller.dispatchAction("start");
@@ -280,7 +280,7 @@ describe("startTask", () => {
   it("starts a manual task runner", async () => {
     const runner = new ChattyMockRunner();
     const controller = createWorkflowInstanceController(manualTaskWorkflow, {
-      "ai-chat": runner,
+      "ai-chat": () => runner,
     });
 
     controller.dispatchAction("begin");
@@ -300,7 +300,7 @@ describe("startTask", () => {
   it("completes task when runner resolves", async () => {
     const runner = new ChattyMockRunner();
     const controller = createWorkflowInstanceController(manualTaskWorkflow, {
-      "ai-chat": runner,
+      "ai-chat": () => runner,
     });
 
     controller.dispatchAction("begin");
@@ -317,7 +317,7 @@ describe("startTask", () => {
   it("is no-op when task is already running", async () => {
     const runner = new ChattyMockRunner();
     const controller = createWorkflowInstanceController(manualTaskWorkflow, {
-      "ai-chat": runner,
+      "ai-chat": () => runner,
     });
 
     controller.dispatchAction("begin");
@@ -340,7 +340,7 @@ describe("sendTaskInput", () => {
   it("delegates to the running runner", async () => {
     const runner = new ChattyMockRunner();
     const controller = createWorkflowInstanceController(manualTaskWorkflow, {
-      "ai-chat": runner,
+      "ai-chat": () => runner,
     });
 
     controller.dispatchAction("begin");
@@ -361,7 +361,7 @@ describe("sendTaskInput", () => {
   it("is no-op when no task is running", () => {
     const runner = new ChattyMockRunner();
     const controller = createWorkflowInstanceController(manualTaskWorkflow, {
-      "ai-chat": runner,
+      "ai-chat": () => runner,
     });
 
     controller.sendTaskInput("nonexistent", "Hello", "user");
@@ -371,7 +371,7 @@ describe("sendTaskInput", () => {
   it("is no-op when wrong taskId specified", async () => {
     const runner = new ChattyMockRunner();
     const controller = createWorkflowInstanceController(manualTaskWorkflow, {
-      "ai-chat": runner,
+      "ai-chat": () => runner,
     });
 
     controller.dispatchAction("begin");
@@ -385,6 +385,40 @@ describe("sendTaskInput", () => {
     runner.complete("done");
     await new Promise((r) => setTimeout(r, 0));
     await taskPromise;
+  });
+
+  it("creates a fresh runner per execution so concurrent tasks stay isolated", () => {
+    const created: ChattyMockRunner[] = [];
+    const factory = () => {
+      const runner = new ChattyMockRunner();
+      created.push(runner);
+      return runner;
+    };
+
+    const a = createWorkflowInstanceController(manualTaskWorkflow, {
+      "ai-chat": factory,
+    });
+    const b = createWorkflowInstanceController(manualTaskWorkflow, {
+      "ai-chat": factory,
+    });
+
+    a.dispatchAction("begin");
+    b.dispatchAction("begin");
+    void a.startTask("chat");
+    void b.startTask("chat");
+
+    assert.equal(created.length, 2);
+    assert.notEqual(created[0], created[1]);
+
+    a.sendTaskInput("chat", "hello A", "user");
+    b.sendTaskInput("chat", "hello B", "user");
+
+    assert.deepEqual(created[0]!.receivedMessages, [
+      { content: "hello A", role: "user" },
+    ]);
+    assert.deepEqual(created[1]!.receivedMessages, [
+      { content: "hello B", role: "user" },
+    ]);
   });
 });
 

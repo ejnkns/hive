@@ -43,7 +43,7 @@ export const requirementsWorkflow = defineWorkflow({
         {
           id: "draft",
           label: "Requirements session",
-          trigger: "manual",
+          trigger: "auto",
           role: "ai-chat",
           tools: ["read_file", "search_code"],
           systemPrompt:

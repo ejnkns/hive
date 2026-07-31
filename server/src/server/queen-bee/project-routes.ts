@@ -4,12 +4,8 @@ import type { FastifyInstance } from "fastify";
 import { isRecord } from "shared/board-types";
 import { isMaxConcurrentWorkers } from "shared/project-types";
 import type { FlowPersistence } from "workflow-engine/create-flow-runtime";
-import {
-  createFlowForRepo,
-  getAllFlows,
-  getFlowRuntime,
-  unlinkFlow,
-} from "../flow-registry";
+import { getAllFlows, getFlowRuntime, unlinkFlow } from "../flow-registry";
+import { createFlowForRepo } from "./project-lifecycle";
 
 export function registerProjectRoutes(
   server: FastifyInstance,

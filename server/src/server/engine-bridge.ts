@@ -285,9 +285,9 @@ function createModelCaller(_engineTools: ToolDefinition[]) {
 // ─── Public API ────────────────────────────────────────────────────────
 
 export type EngineRunners = {
-  operationRunner: ReturnType<typeof createOperationRunner>;
-  aiTaskRunner: ReturnType<typeof createAiTaskRunner>;
-  aiChatRunner: ReturnType<typeof createAiChatRunner>;
+  operationRunner: () => ReturnType<typeof createOperationRunner>;
+  aiTaskRunner: () => ReturnType<typeof createAiTaskRunner>;
+  aiChatRunner: () => ReturnType<typeof createAiChatRunner>;
   toolDefinitions: Record<string, ToolDefinition>;
   toolExecutors: Record<string, ToolExecutor>;
 };
@@ -313,23 +313,28 @@ export function createEngineRunners(): EngineRunners {
   const engineTools = Object.values(toolDefinitions);
 
   return {
-    operationRunner: createOperationRunner({
-      operations: {
-        prepare_worktree: wrapPrepareWorktree,
-        validate_completion: validateCompletion,
-        build_review_package: buildReviewPackage,
-      },
-    }),
-    aiTaskRunner: createAiTaskRunner({
-      modelCaller: createModelCaller(engineTools),
-      toolDefinitions,
-      toolExecutors,
-    }),
-    aiChatRunner: createAiChatRunner({
-      modelCaller: createModelCaller(engineTools),
-      toolDefinitions,
-      toolExecutors,
-    }),
+    // Factories: each task execution gets an isolated runner instance so
+    // concurrent ai-chat/ai-task sessions in one flow do not share state.
+    operationRunner: () =>
+      createOperationRunner({
+        operations: {
+          prepare_worktree: wrapPrepareWorktree,
+          validate_completion: validateCompletion,
+          build_review_package: buildReviewPackage,
+        },
+      }),
+    aiTaskRunner: () =>
+      createAiTaskRunner({
+        modelCaller: createModelCaller(engineTools),
+        toolDefinitions,
+        toolExecutors,
+      }),
+    aiChatRunner: () =>
+      createAiChatRunner({
+        modelCaller: createModelCaller(engineTools),
+        toolDefinitions,
+        toolExecutors,
+      }),
     toolDefinitions,
     toolExecutors,
   };

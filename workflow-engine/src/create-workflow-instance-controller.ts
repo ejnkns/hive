@@ -1,7 +1,11 @@
 import { getAvailableActions } from "./get-available-actions";
 import { reduce, type WorkflowEvent } from "./reduce";
 import type { RuntimeWorkflowInstanceState } from "./shared/workflow-instance-state";
-import type { TaskDefinition, TaskRunner } from "./task-runner";
+import type {
+  TaskDefinition,
+  TaskRunner,
+  TaskRunnerFactory,
+} from "./task-runner";
 import type {
   RunningTaskContext,
   RuntimeStateDef,
@@ -47,7 +51,7 @@ export type WorkflowInstanceControllerAPI = {
 
 export function createWorkflowInstanceController(
   workflow: RuntimeWorkflowConfig,
-  runners: Record<string, TaskRunner>,
+  runners: Record<string, TaskRunnerFactory>,
   initialState?: RuntimeWorkflowInstanceState,
   workflowInstancesInState?: (
     stateId?: string
@@ -110,8 +114,8 @@ export function createWorkflowInstanceController(
     task: TaskDefinition,
     metadata?: Record<string, unknown>
   ): Promise<void> {
-    const runner = runners[task.role];
-    if (!runner) {
+    const createRunner = runners[task.role];
+    if (!createRunner) {
       emit({
         type: "task_errored",
         taskId: task.id,
@@ -120,6 +124,9 @@ export function createWorkflowInstanceController(
       return;
     }
 
+    // A fresh runner per execution isolates session state (messages, abort
+    // signal) so concurrent tasks in the same flow do not clobber each other.
+    const runner = createRunner();
     runningRunner = runner;
 
     dispatcher({

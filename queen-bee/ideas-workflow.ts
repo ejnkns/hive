@@ -46,7 +46,7 @@ export const ideasWorkflow = defineWorkflow({
         {
           id: "elaborate",
           label: "Elaborate session",
-          trigger: "manual",
+          trigger: "auto",
           role: "ai-chat",
           tools: ["read_file", "search_code"],
           systemPrompt:

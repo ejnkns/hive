@@ -14,3 +14,8 @@ export type TaskRunner = {
   cancel(): void;
   sendMessage?(content: string, role: string): Promise<void>;
 };
+
+// Runners that hold per-session mutable state (messages, abort signal) must
+// be created per task execution so concurrent tasks in the same flow do not
+// share state. A factory produces an isolated instance for each execution.
+export type TaskRunnerFactory = () => TaskRunner;

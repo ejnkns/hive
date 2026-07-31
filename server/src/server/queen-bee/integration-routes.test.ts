@@ -71,6 +71,7 @@ describe("integration routes", () => {
       saveFlow: () => {},
       saveInstance: () => {},
       saveRunningTaskContext: () => {},
+      deleteFlow: () => {},
       loadFlow: () => null,
       loadAllFlows: () => [],
     };

@@ -1,34 +1,49 @@
-/** @public — manages FlowRuntime instances accessible to routes */
+/** @public — generic FlowRuntime registry. No domain (queen-bee) knowledge. */
 
-import { execFileSync, execSync } from "node:child_process";
-import { statSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import type { FlowPersistence } from "workflow-engine/create-flow-runtime";
 import {
   createFlowRuntime,
   type FlowRuntimeAPI,
 } from "workflow-engine/create-flow-runtime";
-import {
-  checkIntegrationReadiness,
-  ensureIntegrationBranch,
-  fastForwardTargetBranch,
-} from "workflow-engine/runners";
-import type { TaskDefinition } from "workflow-engine/task-runner";
 import type {
   ActionVariant,
+  RuntimeFlowEdge,
   RuntimeGateContext,
   RuntimeWorkflowConfig,
   StateCategory,
 } from "workflow-engine/workflow-types";
-import { queenBeeFlow } from "../../../queen-bee/flow";
 import { createEngineRunners } from "./engine-bridge";
 
-const DUMMY_TASK: TaskDefinition = { id: "", label: "", role: "" };
 const runtimes = new Map<
   string,
   FlowRuntimeAPI<Record<string, unknown>, Record<string, unknown>>
 >();
 let _persistence: FlowPersistence | null = null;
+
+// ── Flow definition registry ──
+
+// A FlowDefinition is external config: it maps a definition id to the
+// workflows + edges that build a flow. Definitions are registered at the
+// composition root (e.g. queen-bee registers itself); the registry itself
+// is generic.
+export type FlowDefinition = {
+  id: string;
+  label: string;
+  buildWorkflows: (config: Record<string, unknown>) => RuntimeWorkflowConfig[];
+  edges: RuntimeFlowEdge[];
+};
+
+const definitions = new Map<string, FlowDefinition>();
+
+export function registerFlowDefinition(definition: FlowDefinition): void {
+  definitions.set(definition.id, definition);
+}
+
+export function getFlowDefinition(id: string): FlowDefinition | undefined {
+  return definitions.get(id);
+}
+
+// ── Persistence accessors ──
 
 export function setFlowPersistence(persistence: FlowPersistence): void {
   _persistence = persistence;
@@ -37,6 +52,8 @@ export function setFlowPersistence(persistence: FlowPersistence): void {
 export function getFlowPersistence(): FlowPersistence | null {
   return _persistence;
 }
+
+// ── Runtime accessors ──
 
 export function registerFlowForTest(
   flowId: string,
@@ -52,6 +69,20 @@ export function getFlowRuntime(
   | undefined {
   return runtimes.get(flowId);
 }
+
+export function getFlowRuntimes(): Map<
+  string,
+  FlowRuntimeAPI<Record<string, unknown>, Record<string, unknown>>
+> {
+  return runtimes;
+}
+
+export function unlinkFlow(flowId: string): void {
+  runtimes.delete(flowId);
+  _persistence?.deleteFlow(flowId);
+}
+
+// ── Project-style listing (flows with a repoPath) ──
 
 export function getAllFlows(): Array<{
   id: string;
@@ -102,172 +133,118 @@ export function getAllFlows(): Array<{
   return result.filter((f) => f.repoPath);
 }
 
-export function unlinkFlow(flowId: string): void {
-  runtimes.delete(flowId);
-}
+// ── Flow lifecycle ──
 
-// ── Project creation helpers ──
-
-export function createFlowForRepo(
-  repoPath: string,
+export function createFlow(
+  flowId: string,
+  definitionId: string,
   persistence: FlowPersistence,
-  name?: string
-): { id: string; repoPath: string; name: string; targetBranch: string } {
-  const resolved = resolveRepoPath(repoPath);
-  validateGitRepo(resolved);
-  ensureRepoInitialized(resolved);
-
-  const result = ensureIntegrationBranch(DUMMY_TASK, {
-    repoPath: resolved,
-    ok: true,
-  });
-  if (!result.ok) throw new Error("Failed to create integration branch");
-
-  const projectName = name ?? resolved.split("/").pop() ?? resolved;
-  const slug = slugify(projectName);
-  const id = makeUnique(slug);
-  const targetBranch = inferTargetBranch(resolved);
-
-  createFlowOnLink(id, resolved, persistence, {
-    name: projectName,
-    targetBranch,
-  });
-
-  return { id, repoPath: resolved, name: projectName, targetBranch };
-}
-
-function resolveRepoPath(input: string): string {
-  if (input.startsWith("/")) return input;
-  return join(process.cwd(), input);
-}
-
-function validateGitRepo(repoPath: string): void {
-  try {
-    const stat = statSync(join(repoPath, ".git"));
-    if (!stat.isDirectory()) {
-      throw new Error(`Not a git repository: ${repoPath}`);
-    }
-  } catch (err) {
-    if (err instanceof Error && err.message.startsWith("Not a git repository"))
-      throw err;
-    throw new Error(`Not a git repository: ${repoPath}`);
+  config?: Record<string, unknown>
+): FlowRuntimeAPI<Record<string, unknown>, Record<string, unknown>> {
+  const definition = definitions.get(definitionId);
+  if (!definition) {
+    throw new Error(`Flow definition "${definitionId}" not registered`);
   }
+
+  const flowConfig: Record<string, unknown> = {
+    definitionId,
+    ...config,
+  };
+
+  const runners = createEngineRunners();
+  const workflows = definition.buildWorkflows(flowConfig);
+  const runtime = createFlowRuntime(
+    flowId,
+    workflows,
+    definition.edges,
+    {
+      operation: runners.operationRunner,
+      "ai-task": runners.aiTaskRunner,
+      "ai-chat": runners.aiChatRunner,
+    },
+    flowConfig,
+    {},
+    persistence
+  );
+
+  // Seed one instance of the first workflow so the flow is immediately
+  // renderable (queen-bee: the requirements instance; custom defs: the
+  // single workflow).
+  const seedWorkflow = workflows[0];
+  if (seedWorkflow) {
+    runtime.addWorkflowInstance(seedWorkflow.id);
+  }
+
+  persistence.saveFlow(flowId, flowConfig, {});
+  runtimes.set(flowId, runtime);
+  return runtime;
 }
 
-function ensureRepoInitialized(repoPath: string): void {
-  try {
-    execSync("git rev-parse HEAD", {
-      cwd: repoPath,
-      encoding: "utf-8",
-      timeout: 5_000,
-      stdio: "pipe",
-    });
-    return;
-  } catch {
-    // no commits yet
+export function rehydrateFlow(
+  persistence: FlowPersistence,
+  flowId: string,
+  flowConfig: unknown,
+  flowState: unknown,
+  instances: Array<{
+    workflowId: string;
+    state: Record<string, unknown>;
+  }>
+): FlowRuntimeAPI<Record<string, unknown>, Record<string, unknown>> | null {
+  // flowConfig comes from persistence as unknown; its runtime shape is
+  // guaranteed by the code that wrote it (createFlow / createFlowFromDefinition)
+  const cfg = flowConfig as Record<string, unknown>;
+  const storedDefs = cfg.workflowDefinitions as
+    | RuntimeWorkflowConfig[]
+    | undefined;
+
+  let workflows: RuntimeWorkflowConfig[];
+  let edges: RuntimeFlowEdge[];
+
+  if (storedDefs) {
+    workflows = storedDefs;
+    edges = [];
+  } else {
+    const definitionId = cfg.definitionId;
+    if (typeof definitionId !== "string") return null;
+    const definition = definitions.get(definitionId);
+    if (!definition) return null;
+    workflows = definition.buildWorkflows(cfg);
+    edges = definition.edges;
   }
-  try {
-    writeFileSync(
-      join(repoPath, "README.md"),
-      `# ${repoPath.split("/").pop()}\n`
+
+  const runners = createEngineRunners();
+  const runtime = createFlowRuntime(
+    flowId,
+    workflows,
+    edges,
+    {
+      operation: runners.operationRunner,
+      "ai-task": runners.aiTaskRunner,
+      "ai-chat": runners.aiChatRunner,
+    },
+    cfg,
+    flowState as Record<string, unknown>,
+    persistence
+  );
+
+  for (const instance of instances) {
+    const restoredState = {
+      ...instance.state,
+      hasRunningTask: false,
+      runningTaskId: null,
+      runningTaskContext: null,
+    };
+    const controller = runtime.addWorkflowInstance(
+      instance.workflowId,
+      restoredState
     );
-    execSync("git add -A", {
-      cwd: repoPath,
-      encoding: "utf-8",
-      timeout: 5_000,
-    });
-    execSync('git commit -m "Initial commit"', {
-      cwd: repoPath,
-      encoding: "utf-8",
-      timeout: 5_000,
-    });
-  } catch {
-    try {
-      execSync('git commit --allow-empty -m "Initial commit"', {
-        cwd: repoPath,
-        encoding: "utf-8",
-        timeout: 5_000,
-      });
-    } catch {
-      // ignore
+    if (instance.state.hasRunningTask) {
+      controller.startAutoTasks();
     }
   }
-}
 
-function inferTargetBranch(repoPath: string): string {
-  const current = gitOptional(repoPath, ["branch", "--show-current"]);
-  if (current && current !== "hive-main") return current;
-
-  const branches = gitOptional(repoPath, [
-    "for-each-ref",
-    "--sort=-committerdate",
-    "--format=%(refname:short)",
-    "refs/heads",
-  ])
-    .split("\n")
-    .filter(
-      (b) =>
-        b && b !== "hive-main" && !b.startsWith("hive/") && !b.startsWith("qb/")
-    );
-  const preferred =
-    branches.find((b) => b === "main") ??
-    branches.find((b) => b === "master") ??
-    branches[0];
-  if (!preferred) {
-    throw new Error("Project requires a target branch for Hive integration");
-  }
-  return preferred;
-}
-
-function gitOptional(repoPath: string, args: string[]): string {
-  try {
-    return execFileSync("git", args, {
-      cwd: repoPath,
-      encoding: "utf-8",
-      timeout: 5_000,
-      stdio: "pipe",
-    }).trim();
-  } catch {
-    return "";
-  }
-}
-
-function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 50);
-}
-
-function makeUnique(slug: string): string {
-  if (_persistence) {
-    const existing = _persistence.loadAllFlows();
-    const ids = new Set(existing.map((f) => f.flowId));
-    if (!ids.has(slug)) return slug;
-    let n = 2;
-    while (ids.has(`${slug}-${n}`)) {
-      n++;
-    }
-    return `${slug}-${n}`;
-  }
-  return slug;
-}
-
-// ── Integration operations ──
-
-export function integrationStatus(
-  repoPath: string,
-  targetBranch: string
-): Record<string, unknown> {
-  return checkIntegrationReadiness(DUMMY_TASK, { repoPath, targetBranch });
-}
-
-export function integrationIntegrate(
-  repoPath: string,
-  targetBranch: string
-): Record<string, unknown> {
-  return fastForwardTargetBranch(DUMMY_TASK, { repoPath, targetBranch });
+  runtimes.set(flowId, runtime);
+  return runtime;
 }
 
 // ── Data-driven workflow definition types ──
@@ -387,159 +364,10 @@ export function createFlowFromDefinition(
   );
 
   // Seed one instance in the workflow's initial state so the flow is
-  // immediately renderable, mirroring createFlowOnLink's requirements seed.
+  // immediately renderable.
   runtime.addWorkflowInstance(def.id);
 
   persistence.saveFlow(flowId, flowConfig, {});
-  runtimes.set(flowId, runtime);
-  return runtime;
-}
-
-// ── Workflow definition resolver ──
-
-function readMaxWorkers(config: Record<string, unknown>): number {
-  const raw = config.maxConcurrentWorkers;
-  return typeof raw === "number" ? raw : 3;
-}
-
-function readSystemPrompts(
-  config: Record<string, unknown>
-): Record<string, string> | undefined {
-  const raw = config.systemPrompts;
-  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
-    return undefined;
-  }
-  const result: Record<string, string> = {};
-  for (const [key, value] of Object.entries(raw)) {
-    if (typeof value === "string") result[key] = value;
-  }
-  return result;
-}
-
-function resolveWorkflowConfigs(
-  config: Record<string, unknown>
-): RuntimeWorkflowConfig[] {
-  const maxWorkers = readMaxWorkers(config);
-  const systemPrompts = readSystemPrompts(config);
-
-  return queenBeeFlow.workflows.map((wf) => ({
-    ...wf,
-    states: wf.states.map((state) => ({
-      ...state,
-      actions: state.actions?.map((action) => {
-        if (
-          action.id === "run" &&
-          wf.id === "cards" &&
-          action.maxWorkflowInstancesInTarget !== undefined
-        ) {
-          return { ...action, maxWorkflowInstancesInTarget: maxWorkers };
-        }
-        return action;
-      }),
-      tasks: state.tasks?.map((task) => {
-        if (task.systemPrompt && systemPrompts?.[task.id]) {
-          return { ...task, systemPrompt: systemPrompts[task.id] };
-        }
-        return task;
-      }),
-    })),
-  }));
-}
-
-// ── Flow lifecycle ──
-
-export function createFlowOnLink(
-  flowId: string,
-  repoPath: string,
-  persistence: FlowPersistence,
-  config?: Record<string, unknown>
-): FlowRuntimeAPI<Record<string, unknown>, Record<string, unknown>> {
-  const runners = createEngineRunners();
-  const flowConfig: Record<string, unknown> = {
-    repoPath,
-    name: config?.name ?? flowId,
-    maxConcurrentWorkers: 3,
-    targetBranch: "main",
-    ...config,
-  };
-  const resolvedWorkflows = resolveWorkflowConfigs(flowConfig);
-  const runtime = createFlowRuntime(
-    flowId,
-    resolvedWorkflows,
-    queenBeeFlow.edges,
-    {
-      operation: runners.operationRunner,
-      "ai-task": runners.aiTaskRunner,
-      "ai-chat": runners.aiChatRunner,
-    },
-    flowConfig,
-    {},
-    persistence
-  );
-
-  // Seed the requirements workflow instance (starts in "no_session")
-  runtime.addWorkflowInstance("requirements", {
-    workflowInstanceState: { projectId: flowId, repoPath },
-  });
-
-  persistence.saveFlow(flowId, flowConfig, {});
-  runtimes.set(flowId, runtime);
-  return runtime;
-}
-
-export function rehydrateFlow(
-  persistence: FlowPersistence,
-  flowId: string,
-  flowConfig: unknown,
-  flowState: unknown,
-  instances: Array<{
-    workflowId: string;
-    state: Record<string, unknown>;
-  }>
-): FlowRuntimeAPI<Record<string, unknown>, Record<string, unknown>> | null {
-  // flowConfig comes from persistence as unknown; its runtime shape is
-  // guaranteed by the code that wrote it (createFlowOnLink / createFlowFromDefinition)
-  const cfg = flowConfig as Record<string, unknown>;
-  const storedDefs = cfg.workflowDefinitions as
-    | RuntimeWorkflowConfig[]
-    | undefined;
-
-  if (flowId !== queenBeeFlow.id && !storedDefs) return null;
-
-  const runners = createEngineRunners();
-  // same persistence-boundary narrowing as above
-  const resolvedWorkflows =
-    storedDefs ?? resolveWorkflowConfigs(flowConfig as Record<string, unknown>);
-  const runtime = createFlowRuntime(
-    flowId,
-    resolvedWorkflows,
-    queenBeeFlow.edges,
-    {
-      operation: runners.operationRunner,
-      "ai-task": runners.aiTaskRunner,
-      "ai-chat": runners.aiChatRunner,
-    },
-    flowConfig as Record<string, unknown>,
-    flowState as Record<string, unknown>,
-    persistence
-  );
-
-  for (const instance of instances) {
-    const restoredState = {
-      ...instance.state,
-      hasRunningTask: false,
-      runningTaskId: null,
-      runningTaskContext: null,
-    };
-    const controller = runtime.addWorkflowInstance(
-      instance.workflowId,
-      restoredState
-    );
-    if (instance.state.hasRunningTask) {
-      controller.startAutoTasks();
-    }
-  }
-
   runtimes.set(flowId, runtime);
   return runtime;
 }
