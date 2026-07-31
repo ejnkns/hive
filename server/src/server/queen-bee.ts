@@ -1,6 +1,3 @@
-/** @public — Queen Bee module API: external flow definition + routes. */
+/** @public — Queen Bee module API: the external flow definition. No server routes. */
 
-export { registerFlowApiRoutes } from "./flow-api-routes";
-export { registerIntegrationRoutes } from "./queen-bee/integration-routes";
 export { queenBeeFlowDefinition } from "./queen-bee/project-lifecycle";
-export { registerProjectRoutes } from "./queen-bee/project-routes";

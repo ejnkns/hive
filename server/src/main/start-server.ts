@@ -9,11 +9,7 @@ import {
 } from "../server";
 import { registerFlowApiRoutes } from "../server/flow-api-routes";
 import { createFlowPersistence } from "../server/flow-persistence";
-import {
-  registerFlowDefinition,
-  rehydrateFlow,
-  setFlowPersistence,
-} from "../server/flow-registry";
+import { rehydrateFlow, setFlowPersistence } from "../server/flow-registry";
 import {
   getLastUsed,
   getProviderStates,
@@ -24,11 +20,7 @@ import {
   start,
 } from "../server/proxy";
 import { loadModelPriority } from "../server/proxy/model-priority-config";
-import {
-  queenBeeFlowDefinition,
-  registerIntegrationRoutes,
-  registerProjectRoutes,
-} from "../server/queen-bee";
+import { registerBuiltinFlowDefinitions } from "./register-builtin-flow-definitions";
 
 export async function startServer(overrides?: Partial<ServerConfig>) {
   printBanner();
@@ -55,9 +47,10 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
 
   // ── Flow persistence & rehydration ──
 
-  // Register external flow definitions before rehydration so persisted
-  // flows can rebuild their runtimes from the definition registry.
-  registerFlowDefinition(queenBeeFlowDefinition);
+  // Register built-in flow definitions before rehydration so persisted flows
+  // can rebuild their runtimes from the definition registry. The server does
+  // not know what any preset is; it just loads the definitions it ships.
+  registerBuiltinFlowDefinitions();
 
   const persistence = createFlowPersistence();
   setFlowPersistence(persistence);
@@ -73,8 +66,6 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
   }
 
   registerFlowApiRoutes(server);
-  registerIntegrationRoutes(server);
-  registerProjectRoutes(server, persistence);
 
   listen(server, config);
 

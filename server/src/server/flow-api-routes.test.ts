@@ -330,6 +330,40 @@ describe("flow API routes", () => {
     );
   });
 
+  it("DELETE /api/flows/:flowId unlinks the flow", async () => {
+    const server = fixture();
+
+    const response = await server.inject({
+      method: "DELETE",
+      url: "/api/flows/test-flow",
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.json(), { ok: true, flowId: "test-flow" });
+
+    const listResponse = await server.inject({
+      method: "GET",
+      url: "/api/flows",
+    });
+    assert.equal(listResponse.statusCode, 200);
+    const flowIds = listResponse
+      .json()
+      .flows.map((flow: { id: string }) => flow.id);
+    assert.ok(!flowIds.includes("test-flow"));
+  });
+
+  it("DELETE /api/flows/:flowId returns 404 for an unknown flow", async () => {
+    const server = fixture();
+
+    const response = await server.inject({
+      method: "DELETE",
+      url: "/api/flows/nonexistent",
+    });
+
+    assert.equal(response.statusCode, 404);
+    assert.equal(response.json().error, "Flow not found");
+  });
+
   function fixture(): FastifyInstance {
     const runtime = createFlowRuntime(
       "test-flow",

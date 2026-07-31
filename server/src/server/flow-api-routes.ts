@@ -7,6 +7,7 @@ import {
   getFlowPersistence,
   getFlowRuntime,
   getFlowRuntimes,
+  unlinkFlow,
 } from "./flow-registry";
 
 export function registerFlowApiRoutes(server: FastifyInstance): void {
@@ -228,6 +229,19 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
       flowId,
       config: runtime.getFlowConfig(),
     });
+  });
+
+  server.delete("/api/flows/:flowId", async (request, reply) => {
+    // Fastify params type is erased; shape guaranteed by route pattern
+    const { flowId } = request.params as { flowId: string };
+
+    const runtime = getFlowRuntime(flowId);
+    if (!runtime) {
+      return reply.status(404).send({ error: "Flow not found" });
+    }
+
+    unlinkFlow(flowId);
+    return reply.send({ ok: true, flowId });
   });
 
   // ── WebSocket endpoint ──
