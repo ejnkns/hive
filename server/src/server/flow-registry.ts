@@ -172,7 +172,6 @@ export function createFlow(
     {},
     persistence
   );
-  runners.bindRuntime(runtime);
 
   // Seed one instance of the first workflow so the flow is immediately
   // renderable (queen-bee: the onboarding workflow; custom defs: the
@@ -239,7 +238,6 @@ export function rehydrateFlow(
     flowState as Record<string, unknown>,
     persistence
   );
-  runners.bindRuntime(runtime);
 
   for (const instance of instances) {
     const restoredState = {
@@ -376,7 +374,6 @@ export function createFlowFromDefinition(
     {},
     persistence
   );
-  runners.bindRuntime(runtime);
 
   // Seed one instance in the workflow's initial state so the flow is
   // immediately renderable; initial-state auto tasks run right away.

@@ -4,11 +4,11 @@ import type { RuntimeWorkflowInstanceState } from "./shared/workflow-instance-st
 import type {
   TaskDefinition,
   TaskRunner,
+  TaskRunnerContext,
   TaskRunnerFactory,
 } from "./task-runner";
 import type {
   RunningTaskContext,
-  RuntimeStateDef,
   RuntimeWorkflowConfig,
   VisibleAction,
 } from "./workflow-types";
@@ -49,6 +49,15 @@ export type WorkflowInstanceControllerAPI = {
 
 // === Factory ===
 
+// Runtime-level context the controller threads into every task runner factory
+// invocation: flow config access and the instance's identity.
+export type ControllerRuntimeContext = {
+  flowConfig: Record<string, unknown>;
+  patchFlowConfig(patch: Record<string, unknown>): void;
+  instanceId: string;
+  workflowId: string;
+};
+
 export function createWorkflowInstanceController(
   workflow: RuntimeWorkflowConfig,
   runners: Record<string, TaskRunnerFactory>,
@@ -56,8 +65,19 @@ export function createWorkflowInstanceController(
   workflowInstancesInState?: (
     stateId?: string
   ) => { currentState: string; id: string }[],
-  flowState?: Record<string, unknown>
+  flowState?: Record<string, unknown>,
+  runtimeContext?: ControllerRuntimeContext
 ): WorkflowInstanceControllerAPI {
+  const taskContext = {
+    flowConfig: runtimeContext?.flowConfig ?? {},
+    patchFlowConfig:
+      runtimeContext?.patchFlowConfig ??
+      ((_patch: Record<string, unknown>) => {
+        /* no runtime bound */
+      }),
+    instanceId: runtimeContext?.instanceId ?? "",
+    workflowId: runtimeContext?.workflowId ?? "",
+  };
   let state: RuntimeWorkflowInstanceState = initialState ?? {
     currentState: workflow.initial,
     taskOutputs: {},
@@ -126,7 +146,7 @@ export function createWorkflowInstanceController(
 
     // A fresh runner per execution isolates session state (messages, abort
     // signal) so concurrent tasks in the same flow do not clobber each other.
-    const runner = createRunner();
+    const runner = createRunner(buildTaskRunnerContext());
     runningRunner = runner;
 
     dispatcher({
@@ -225,6 +245,14 @@ export function createWorkflowInstanceController(
     return null;
   }
 
+  function buildTaskRunnerContext(): TaskRunnerContext {
+    return {
+      ...taskContext,
+      workflowInstanceState: state.workflowInstanceState,
+      patchWorkflowInstanceState: patchWorkflowInstanceState,
+    };
+  }
+
   return {
     getState: () => state,
     getAvailableActions: getVisibleActions,
@@ -290,7 +318,7 @@ export function createWorkflowInstanceController(
 // dependsOn is written into workflowInstanceState by the flow edges /
 // callers as a string[]; it is not part of the domain type contract.
 function readDependsOn(itemState: Record<string, unknown>): string[] {
-  const raw = itemState["dependsOn"];
+  const raw = itemState.dependsOn;
   if (!Array.isArray(raw)) return [];
   return raw.filter((id): id is string => typeof id === "string");
 }

@@ -101,19 +101,28 @@ describe("createOperationRunner", () => {
     const context = {
       flowConfig: () => ({ repoPath: "/tmp/repo" }),
       patchFlowConfig: () => {},
+      instanceId: "instance-1",
+      workflowId: "test-wf",
+      workflowInstanceState: () => ({ attempt: 2 }),
     };
     const runner = createOperationRunner({
       getContext: () => context,
       operations: {
         read: (_task, _params, ctx) => ({
           repoPath: ctx.flowConfig().repoPath,
+          cardId: ctx.instanceId,
+          attempt: ctx.workflowInstanceState().attempt,
         }),
       },
     });
 
     const result = await runner.run({ ...dummyTask, operations: ["read"] });
 
-    assert.deepEqual(result.output, { repoPath: "/tmp/repo" });
+    assert.deepEqual(result.output, {
+      repoPath: "/tmp/repo",
+      cardId: "instance-1",
+      attempt: 2,
+    });
   });
 
   it("keys multi-operation task results by operation name", async () => {

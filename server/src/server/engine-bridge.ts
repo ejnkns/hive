@@ -1,10 +1,12 @@
 /** @public — one-time engine wiring. Creates configured runners with server-side dependencies. */
 
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type { Readable } from "node:stream";
-import type { FlowRuntimeAPI } from "workflow-engine/create-flow-runtime";
 import type {
   OperationContext,
   OperationFn,
+  TaskRunnerContext,
   Tool,
   ToolCall,
   ToolDefinition,
@@ -16,7 +18,7 @@ import {
   createOperationRunner,
   createStandardToolDefinitions,
   createStandardToolRegistry,
-  prepareWorktree,
+  prepareIsolatedWorkspace,
   toToolMaps,
 } from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
@@ -26,21 +28,46 @@ import { handleChatCompletion } from "./proxy/handle-chat-completion";
 
 type OperationResult = Record<string, unknown>;
 
-// prepare_worktree is an engine infrastructure operation. This wrapper adapts
-// the engine's prepareWorktree signature to the OperationFn shape the
-// operation runner expects.
+// prepare_worktree is an engine infrastructure operation. It branches on the
+// flow's repo binding: with a repo it prepares a git worktree on a feature
+// branch; without one it prepares a plain sandbox directory. The repo binding
+// and workspace base come from flow config; the card id and attempt come from
+// the workflow instance context or the task's operationInputs.
 function wrapPrepareWorktree(
   _task: TaskDefinition,
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
+  ctx: OperationContext
 ): OperationResult {
-  const result = prepareWorktree({
-    repoPath: params.repoPath as string,
-    workspacesBasePath: params.workspacesBasePath as string,
-    projectId: params.projectId as string,
-    cardId: params.cardId as string,
-    attempt: params.attempt as number,
+  const config = ctx.flowConfig();
+  const instanceState = ctx.workflowInstanceState();
+  const result = prepareIsolatedWorkspace({
+    repoPath: typeof config.repoPath === "string" ? config.repoPath : undefined,
+    workspacesBasePath: readWorkspacesBasePath(config),
+    projectId:
+      readString(params.projectId) ??
+      readString(instanceState.projectId) ??
+      ctx.workflowId,
+    cardId: readString(params.cardId) ?? ctx.instanceId,
+    attempt:
+      readNumber(params.attempt) ?? readNumber(instanceState.attempt) ?? 1,
   });
   return result as unknown as OperationResult;
+}
+
+const DEFAULT_WORKSPACES_BASE_PATH = join(homedir(), ".hive", "workspaces");
+
+function readWorkspacesBasePath(config: Record<string, unknown>): string {
+  return readString(config.workspacesBasePath) ?? DEFAULT_WORKSPACES_BASE_PATH;
+}
+
+function readString(value: unknown): string | undefined {
+  return typeof value === "string" && value !== "" ? value : undefined;
+}
+
+function readNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 // ─── patch_flow_config ─────────────────────────────────────────────────
@@ -202,17 +229,17 @@ export type DomainCapabilities = {
 };
 
 export type EngineRunners = {
-  operationRunner: () => ReturnType<typeof createOperationRunner>;
-  aiTaskRunner: () => ReturnType<typeof createAiTaskRunner>;
-  aiChatRunner: () => ReturnType<typeof createAiChatRunner>;
+  operationRunner: (
+    ctx: TaskRunnerContext
+  ) => ReturnType<typeof createOperationRunner>;
+  aiTaskRunner: (
+    ctx: TaskRunnerContext
+  ) => ReturnType<typeof createAiTaskRunner>;
+  aiChatRunner: (
+    ctx: TaskRunnerContext
+  ) => ReturnType<typeof createAiChatRunner>;
   toolDefinitions: Record<string, ToolDefinition>;
   toolExecutors: Record<string, ToolExecutor>;
-  // Binds the flow runtime so infrastructure operations (patch_flow_config)
-  // can read and patch flow config. Called by the flow registry immediately
-  // after the runtime is created.
-  bindRuntime(
-    runtime: FlowRuntimeAPI<Record<string, unknown>, Record<string, unknown>>
-  ): void;
 };
 
 export function createEngineRunners(
@@ -234,43 +261,35 @@ export function createEngineRunners(
 
   const engineTools = Object.values(toolDefinitions);
 
-  let runtime: FlowRuntimeAPI<
-    Record<string, unknown>,
-    Record<string, unknown>
-  > | null = null;
-
-  function requireRuntime(): FlowRuntimeAPI<
-    Record<string, unknown>,
-    Record<string, unknown>
-  > {
-    if (!runtime) throw new Error("Engine runners are not bound to a runtime");
-    return runtime;
+  function buildOperationContext(ctx: TaskRunnerContext): OperationContext {
+    return {
+      flowConfig: () => ctx.flowConfig,
+      patchFlowConfig: ctx.patchFlowConfig,
+      instanceId: ctx.instanceId,
+      workflowId: ctx.workflowId,
+      workflowInstanceState: () => ctx.workflowInstanceState,
+    };
   }
-
-  const getOperationContext = (): OperationContext => ({
-    flowConfig: () => requireRuntime().getFlowConfig(),
-    patchFlowConfig: (patch) => requireRuntime().patchFlowConfig(patch),
-  });
 
   return {
     // Factories: each task execution gets an isolated runner instance so
     // concurrent ai-chat/ai-task sessions in one flow do not share state.
-    operationRunner: () =>
+    operationRunner: (ctx) =>
       createOperationRunner({
-        getContext: getOperationContext,
+        getContext: () => buildOperationContext(ctx),
         operations: {
           prepare_worktree: wrapPrepareWorktree,
           patch_flow_config: resolveAndPatchFlowConfig,
           ...domain.operations,
         },
       }),
-    aiTaskRunner: () =>
+    aiTaskRunner: (_ctx) =>
       createAiTaskRunner({
         modelCaller: createModelCaller(engineTools),
         toolDefinitions,
         toolExecutors,
       }),
-    aiChatRunner: () =>
+    aiChatRunner: (_ctx) =>
       createAiChatRunner({
         modelCaller: createModelCaller(engineTools),
         toolDefinitions,
@@ -278,8 +297,5 @@ export function createEngineRunners(
       }),
     toolDefinitions,
     toolExecutors,
-    bindRuntime: (bound) => {
-      runtime = bound;
-    },
   };
 }

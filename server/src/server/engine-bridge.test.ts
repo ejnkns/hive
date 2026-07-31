@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
-import type { FlowRuntimeAPI } from "workflow-engine/create-flow-runtime";
-import type { Tool } from "workflow-engine/runners";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, it } from "node:test";
+import type { TaskRunnerContext, Tool } from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
 import { createEngineRunners } from "./engine-bridge";
 
@@ -20,6 +22,34 @@ const domainTool: Tool = {
     isError: false,
   }),
 };
+
+const tempDirs: string[] = [];
+
+function tempDir(): string {
+  const dir = mkdtempSync(join(tmpdir(), "hive-engine-bridge-"));
+  tempDirs.push(dir);
+  return dir;
+}
+
+function makeContext(
+  overrides: Partial<TaskRunnerContext> = {}
+): TaskRunnerContext {
+  return {
+    flowConfig: {},
+    patchFlowConfig: () => {},
+    instanceId: "instance-1",
+    workflowId: "test-wf",
+    workflowInstanceState: {},
+    patchWorkflowInstanceState: () => {},
+    ...overrides,
+  };
+}
+
+afterEach(() => {
+  for (const dir of tempDirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 describe("createEngineRunners", () => {
   it("merges domain tools on top of the infrastructure registry", () => {
@@ -45,7 +75,7 @@ describe("createEngineRunners", () => {
       role: "operation",
       operations: ["validate_completion", "build_review_package"],
     };
-    const result = await runners.operationRunner().run(task);
+    const result = await runners.operationRunner(makeContext()).run(task);
 
     assert.deepEqual(result.output, {
       validate_completion: { ok: true },
@@ -53,7 +83,8 @@ describe("createEngineRunners", () => {
     });
   });
 
-  it("always ships prepare_worktree with or without domain operations", async () => {
+  it("prepare_worktree prepares a sandbox workspace without a repo", async () => {
+    const workspacesBasePath = tempDir();
     const runners = createEngineRunners();
 
     const task: TaskDefinition = {
@@ -62,34 +93,57 @@ describe("createEngineRunners", () => {
       role: "operation",
       operations: ["prepare_worktree"],
     };
+    const result = await runners
+      .operationRunner(
+        makeContext({
+          flowConfig: { workspacesBasePath },
+          instanceId: "card-1",
+          workflowId: "cards",
+        })
+      )
+      .run(task);
 
-    // prepare_worktree is wired to the engine implementation, not missing from
-    // the registry — an unwired name would reject with "Unknown operation".
-    await assert.rejects(
-      () => runners.operationRunner().run(task),
-      (err: unknown) =>
-        !(err instanceof Error) || !err.message.includes("Unknown operation")
+    const output = result.output as Record<string, unknown>;
+    assert.equal(output.ok, true);
+    assert.ok(
+      existsSync(join(workspacesBasePath, "cards", "card-1", "attempt-1"))
     );
   });
 
-  it("patch_flow_config writes inputs into the bound runtime's config", async () => {
-    let config: Record<string, unknown> = {
+  it("prepare_worktree derives card and attempt from instance state", async () => {
+    const workspacesBasePath = tempDir();
+    const runners = createEngineRunners();
+
+    const task: TaskDefinition = {
+      id: "prepare",
+      label: "Prepare",
+      role: "operation",
+      operations: ["prepare_worktree"],
+    };
+    const result = await runners
+      .operationRunner(
+        makeContext({
+          flowConfig: { workspacesBasePath },
+          workflowId: "cards",
+          workflowInstanceState: { projectId: "proj-1", attempt: 2 },
+        })
+      )
+      .run(task);
+
+    const output = result.output as Record<string, unknown>;
+    assert.equal(output.ok, true);
+    assert.ok(
+      existsSync(join(workspacesBasePath, "proj-1", "instance-1", "attempt-2"))
+    );
+  });
+
+  it("patch_flow_config writes inputs into flow config", async () => {
+    const config: Record<string, unknown> = {
       repoPath: "/tmp/repo",
       name: "Project",
       targetBranch: "main",
     };
-    const runtime = {
-      getFlowConfig: () => config,
-      patchFlowConfig: (patch: Record<string, unknown>) => {
-        config = { ...config, ...patch };
-      },
-    } as unknown as FlowRuntimeAPI<
-      Record<string, unknown>,
-      Record<string, unknown>
-    >;
-
     const runners = createEngineRunners();
-    runners.bindRuntime(runtime);
 
     const task: TaskDefinition = {
       id: "bind",
@@ -103,59 +157,20 @@ describe("createEngineRunners", () => {
         maxConcurrentWorkers: 5,
       },
     };
+    const result = await runners
+      .operationRunner(
+        makeContext({
+          flowConfig: config,
+          patchFlowConfig: (patch) => Object.assign(config, patch),
+        })
+      )
+      .run(task);
 
-    const result = await runners.operationRunner().run(task);
     const output = result.output as Record<string, unknown>;
-
     assert.equal(output.ok, true);
     assert.equal(config.name, "Project");
     assert.equal(config.repoPath, "/tmp/repo");
     assert.equal(config.targetBranch, "main");
     assert.equal(config.maxConcurrentWorkers, 5);
-  });
-
-  it("patch_flow_config resolves @flow: refs from the current config", async () => {
-    let config: Record<string, unknown> = { repoPath: "/tmp/repo" };
-    const runtime = {
-      getFlowConfig: () => config,
-      patchFlowConfig: (patch: Record<string, unknown>) => {
-        config = { ...config, ...patch };
-      },
-    } as unknown as FlowRuntimeAPI<
-      Record<string, unknown>,
-      Record<string, unknown>
-    >;
-
-    const runners = createEngineRunners();
-    runners.bindRuntime(runtime);
-
-    const task: TaskDefinition = {
-      id: "bind",
-      label: "Bind",
-      role: "operation",
-      operations: ["patch_flow_config"],
-      operationInputs: { repoPath: "@flow:repoPath" },
-    };
-
-    await runners.operationRunner().run(task);
-
-    assert.equal(config.repoPath, "/tmp/repo");
-  });
-
-  it("operations that touch context reject before bindRuntime", async () => {
-    const runners = createEngineRunners();
-
-    const task: TaskDefinition = {
-      id: "bind",
-      label: "Bind",
-      role: "operation",
-      operations: ["patch_flow_config"],
-      operationInputs: {},
-    };
-
-    await assert.rejects(
-      () => runners.operationRunner().run(task),
-      /not bound to a runtime/
-    );
   });
 });

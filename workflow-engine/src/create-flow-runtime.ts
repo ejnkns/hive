@@ -262,7 +262,13 @@ export function createFlowRuntime<
       runners,
       initialState,
       _controllerInstancesInState,
-      _flowState
+      _flowState,
+      {
+        flowConfig: _flowConfig,
+        patchFlowConfig,
+        instanceId,
+        workflowId,
+      }
     );
 
     controllers.set(instanceId, controller);

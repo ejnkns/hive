@@ -32,7 +32,7 @@ export {
   writeFlowSnapshot,
 } from "./runners/create-standard-tool-registry/git-operations";
 export { loadProjectContext } from "./runners/create-standard-tool-registry/load-project-context";
-export { prepareWorktree } from "./runners/prepare-worktree";
+export { prepareIsolatedWorkspace } from "./runners/prepare-isolated-workspace";
 export { toToolMaps } from "./runners/to-tool-maps";
 export type {
   InfrastructureToolName,
@@ -44,3 +44,4 @@ export type {
   ToolName,
   ToolResult,
 } from "./runners/tool-types";
+export type { TaskRunnerContext } from "./task-runner";

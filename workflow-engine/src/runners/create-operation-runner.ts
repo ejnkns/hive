@@ -2,13 +2,17 @@
 import type { TaskDefinition, TaskRunner } from "../task-runner";
 
 // Operations are deterministic engine tasks. They receive the flow's runtime
-// context so they can read flow config and patch it (e.g. patch_flow_config
-// binds a repo to the flow). The context is wired by the composition root via
-// createOperationRunner's getContext; a no-op default keeps direct runner
-// construction safe.
+// context so they can read and patch flow config, and the identity and state
+// of the workflow instance the task runs in (e.g. prepare_worktree derives the
+// card id and attempt from the instance). The context is built by the runner
+// factory from the per-task TaskRunnerContext; a no-op default keeps direct
+// runner construction safe.
 export type OperationContext = {
   flowConfig(): Record<string, unknown>;
   patchFlowConfig(patch: Record<string, unknown>): void;
+  instanceId: string;
+  workflowId: string;
+  workflowInstanceState(): Record<string, unknown>;
 };
 
 export type OperationFn = (
@@ -25,6 +29,9 @@ export type OperationRunnerConfig = {
 const NOOP_CONTEXT: OperationContext = {
   flowConfig: () => ({}),
   patchFlowConfig: () => {},
+  instanceId: "",
+  workflowId: "",
+  workflowInstanceState: () => ({}),
 };
 
 export function createOperationRunner(
