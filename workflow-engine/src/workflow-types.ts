@@ -240,18 +240,6 @@ export function defineWorkflow<
   return config as RuntimeWorkflowConfig;
 }
 
-// Structural type for a workflow after definition — used in FlowDefinition.
-export type WorkflowDef = {
-  id: string;
-  label: string;
-  description?: string;
-  taskOutputs: Record<string, unknown>;
-  states: readonly { id: string }[];
-  initial: string;
-  terminalStates: readonly string[];
-  workflowOutput?: Record<string, unknown>;
-};
-
 // === FLOW DEFINITION ===
 
 // Edge between workflows. The transform receives the source workflow's
@@ -278,15 +266,27 @@ export type RuntimeFlowEdge = FlowEdge;
 // domain operations. Infrastructure tools and operations are not listed here —
 // the engine ships them to every flow. Capabilities are resolved by name
 // against the merged registry (engine infrastructure + this list) at runtime.
+//
+// A definition is either static (its workflows listed directly) or a factory
+// (buildWorkflows resolves flow config into workflow configs). Static
+// definitions ARE the layout; a factory exists for presets whose workflow
+// definitions depend on flow config (e.g. a concurrency limit or a system
+// prompt override). The engine executes the resolved result either way.
 export type FlowDefinition = {
   id: string;
   label: string;
   description?: string;
-  workflows: WorkflowDef[];
   edges: FlowEdge[];
   tools?: readonly Tool[];
   operations?: Record<string, OperationFn>;
-};
+} & (
+  | { workflows: RuntimeWorkflowConfig[] }
+  | {
+      buildWorkflows: (
+        config: Record<string, unknown>
+      ) => RuntimeWorkflowConfig[];
+    }
+);
 
 // --- History entries ---
 

@@ -4,6 +4,7 @@ import type {
   FlowEdge,
   GateContext,
   NoOutput,
+  RuntimeWorkflowConfig,
   StateDef,
 } from "workflow-engine/workflow-types";
 import { cardsWorkflow } from "./cards-workflow";
@@ -40,16 +41,70 @@ import { queenBeeTools } from "./tools";
 //    ideas/submitted → requirements (merge draft, trigger planning)
 //    requirements/accepted → cards (create cards in ready)
 
+const baseWorkflows = [
+  onboardingWorkflow,
+  requirementsWorkflow,
+  ideasWorkflow,
+  cardsWorkflow,
+  integrationWorkflow,
+];
+
+// The queen-bee definition is a factory: flow config (maxConcurrentWorkers,
+// systemPrompts) is resolved into the workflow definitions per flow at
+// creation time. Static definitions without per-flow config use `workflows`.
+function buildWorkflows(
+  config: Record<string, unknown>
+): RuntimeWorkflowConfig[] {
+  const maxWorkers = readMaxWorkers(config);
+  const systemPrompts = readSystemPrompts(config);
+
+  return baseWorkflows.map((wf) => ({
+    ...wf,
+    states: wf.states.map((state) => ({
+      ...state,
+      actions: state.actions?.map((action) => {
+        if (
+          action.id === "run" &&
+          wf.id === "cards" &&
+          action.maxWorkflowInstancesInTarget !== undefined
+        ) {
+          return { ...action, maxWorkflowInstancesInTarget: maxWorkers };
+        }
+        return action;
+      }),
+      tasks: state.tasks?.map((task) => {
+        if (task.systemPrompt && systemPrompts?.[task.id]) {
+          return { ...task, systemPrompt: systemPrompts[task.id] };
+        }
+        return task;
+      }),
+    })),
+  }));
+}
+
+function readMaxWorkers(config: Record<string, unknown>): number {
+  const raw = config.maxConcurrentWorkers;
+  return typeof raw === "number" ? raw : 3;
+}
+
+function readSystemPrompts(
+  config: Record<string, unknown>
+): Record<string, string> | undefined {
+  const raw = config.systemPrompts;
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    return undefined;
+  }
+  const result: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value === "string") result[key] = value;
+  }
+  return result;
+}
+
 export const queenBeeFlow = {
   id: "queen-bee",
   label: "Queen Bee",
-  workflows: [
-    onboardingWorkflow,
-    requirementsWorkflow,
-    ideasWorkflow,
-    cardsWorkflow,
-    integrationWorkflow,
-  ],
+  buildWorkflows,
   tools: queenBeeTools,
   operations: queenBeeOperations,
   edges: [

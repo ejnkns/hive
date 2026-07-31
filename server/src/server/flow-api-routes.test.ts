@@ -402,7 +402,7 @@ describe("flow API routes", () => {
     registerFlowDefinition({
       id: "test-def",
       label: "Test Definition",
-      buildWorkflows: () => [testWorkflow],
+      workflows: [testWorkflow],
       edges: [],
     });
     const server = Fastify();

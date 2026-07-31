@@ -29,7 +29,7 @@ const testWorkflow = defineWorkflow({
 const testDefinition = {
   id: "test-def",
   label: "Test Definition",
-  buildWorkflows: () => [testWorkflow],
+  workflows: [testWorkflow],
   edges: [],
 };
 

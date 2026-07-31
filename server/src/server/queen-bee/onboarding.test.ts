@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import type { FlowPersistence } from "workflow-engine/create-flow-runtime";
+import { queenBeeFlow } from "../../../../presets/queen-bee/flow";
 import { createFlowPersistence } from "../flow-persistence";
 import {
   createFlow,
@@ -18,7 +19,6 @@ import {
   registerFlowDefinition,
   setFlowPersistence,
 } from "../flow-registry";
-import { queenBeeFlowDefinition } from "./project-lifecycle";
 
 describe("queen-bee onboarding workflow", () => {
   let root: string;
@@ -42,7 +42,7 @@ describe("queen-bee onboarding workflow", () => {
 
     persistence = createFlowPersistence(join(root, "hive"));
     setFlowPersistence(persistence);
-    registerFlowDefinition(queenBeeFlowDefinition);
+    registerFlowDefinition(queenBeeFlow);
   });
 
   afterEach(() => {

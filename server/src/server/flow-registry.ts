@@ -8,6 +8,7 @@ import {
 import type { OperationFn, Tool } from "workflow-engine/runners";
 import type {
   ActionVariant,
+  FlowDefinition,
   RuntimeFlowEdge,
   RuntimeGateContext,
   RuntimeWorkflowConfig,
@@ -23,19 +24,11 @@ let _persistence: FlowPersistence | null = null;
 
 // ── Flow definition registry ──
 
-// A FlowDefinition is external config: it maps a definition id to the
-// workflows + edges that build a flow, plus the domain capabilities its
-// tasks call by name. Definitions are registered at the composition root
+// A FlowDefinition is the engine's definition type — external config mapping a
+// definition id to the workflows + edges that build a flow, plus the domain
+// capabilities its tasks call by name. It is static (`workflows`) or a factory
+// (`buildWorkflows`). Definitions are registered at the composition root
 // (e.g. queen-bee registers itself); the registry itself is generic.
-export type FlowDefinition = {
-  id: string;
-  label: string;
-  buildWorkflows: (config: Record<string, unknown>) => RuntimeWorkflowConfig[];
-  edges: RuntimeFlowEdge[];
-  tools?: readonly Tool[];
-  operations?: Record<string, OperationFn>;
-};
-
 const definitions = new Map<string, FlowDefinition>();
 
 export function registerFlowDefinition(definition: FlowDefinition): void {
@@ -44,6 +37,16 @@ export function registerFlowDefinition(definition: FlowDefinition): void {
 
 export function getFlowDefinition(id: string): FlowDefinition | undefined {
   return definitions.get(id);
+}
+
+function resolveWorkflows(
+  definition: FlowDefinition,
+  config: Record<string, unknown>
+): RuntimeWorkflowConfig[] {
+  if ("buildWorkflows" in definition) {
+    return definition.buildWorkflows(config);
+  }
+  return definition.workflows;
 }
 
 // ── Persistence accessors ──
@@ -107,7 +110,7 @@ export function createFlow(
     tools: definition.tools,
     operations: definition.operations,
   });
-  const workflows = definition.buildWorkflows(flowConfig);
+  const workflows = resolveWorkflows(definition, flowConfig);
   const runtime = createFlowRuntime(
     flowId,
     workflows,
@@ -168,7 +171,7 @@ export function rehydrateFlow(
     if (typeof definitionId !== "string") return null;
     const definition = definitions.get(definitionId);
     if (!definition) return null;
-    workflows = definition.buildWorkflows(cfg);
+    workflows = resolveWorkflows(definition, cfg);
     edges = definition.edges;
     domain = { tools: definition.tools, operations: definition.operations };
   }
