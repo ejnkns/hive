@@ -5,6 +5,7 @@ import {
   createFlowRuntime,
   type FlowRuntimeAPI,
 } from "workflow-engine/create-flow-runtime";
+import type { OperationFn, Tool } from "workflow-engine/runners";
 import type {
   ActionVariant,
   RuntimeFlowEdge,
@@ -23,14 +24,16 @@ let _persistence: FlowPersistence | null = null;
 // ── Flow definition registry ──
 
 // A FlowDefinition is external config: it maps a definition id to the
-// workflows + edges that build a flow. Definitions are registered at the
-// composition root (e.g. queen-bee registers itself); the registry itself
-// is generic.
+// workflows + edges that build a flow, plus the domain capabilities its
+// tasks call by name. Definitions are registered at the composition root
+// (e.g. queen-bee registers itself); the registry itself is generic.
 export type FlowDefinition = {
   id: string;
   label: string;
   buildWorkflows: (config: Record<string, unknown>) => RuntimeWorkflowConfig[];
   edges: RuntimeFlowEdge[];
+  tools?: readonly Tool[];
+  operations?: Record<string, OperationFn>;
 };
 
 const definitions = new Map<string, FlowDefinition>();
@@ -151,7 +154,10 @@ export function createFlow(
     ...config,
   };
 
-  const runners = createEngineRunners();
+  const runners = createEngineRunners({
+    tools: definition.tools,
+    operations: definition.operations,
+  });
   const workflows = definition.buildWorkflows(flowConfig);
   const runtime = createFlowRuntime(
     flowId,
@@ -199,6 +205,10 @@ export function rehydrateFlow(
 
   let workflows: RuntimeWorkflowConfig[];
   let edges: RuntimeFlowEdge[];
+  let domain: {
+    tools?: readonly Tool[];
+    operations?: Record<string, OperationFn>;
+  } = {};
 
   if (storedDefs) {
     workflows = storedDefs;
@@ -210,9 +220,10 @@ export function rehydrateFlow(
     if (!definition) return null;
     workflows = definition.buildWorkflows(cfg);
     edges = definition.edges;
+    domain = { tools: definition.tools, operations: definition.operations };
   }
 
-  const runners = createEngineRunners();
+  const runners = createEngineRunners(domain);
   const runtime = createFlowRuntime(
     flowId,
     workflows,

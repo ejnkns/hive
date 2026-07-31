@@ -8,7 +8,9 @@ import type {
 } from "workflow-engine/workflow-types";
 import { cardsWorkflow } from "./cards-workflow";
 import { ideasWorkflow } from "./ideas-workflow";
+import { queenBeeOperations } from "./operations";
 import { requirementsWorkflow } from "./requirements-workflow";
+import { queenBeeTools } from "./tools";
 
 // === QUEEN BEE FLOW ===
 //
@@ -32,6 +34,8 @@ export const queenBeeFlow = {
   id: "queen-bee",
   label: "Queen Bee",
   workflows: [requirementsWorkflow, ideasWorkflow, cardsWorkflow],
+  tools: queenBeeTools,
+  operations: queenBeeOperations,
   edges: [
     {
       fromWorkflow: "ideas",

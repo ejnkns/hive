@@ -2,6 +2,8 @@
 
 import type { Readable } from "node:stream";
 import type {
+  OperationFn,
+  Tool,
   ToolCall,
   ToolDefinition,
   ToolExecutor,
@@ -13,128 +15,18 @@ import {
   createStandardToolDefinitions,
   createStandardToolRegistry,
   prepareWorktree,
+  toToolMaps,
 } from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
 import { handleChatCompletion } from "./proxy/handle-chat-completion";
 
-// ─── QB-specific tool definitions ──────────────────────────────────────
-
-const submitWorkDef: ToolDefinition = {
-  type: "function",
-  function: {
-    name: "submit_work",
-    description:
-      "Submit committed work to the deterministic Completion Gate. This must be the only tool call in the response.",
-    parameters: {
-      type: "object",
-      properties: {
-        outcome: {
-          type: "string",
-          description: "Either 'implemented' or 'already_satisfied'.",
-        },
-        verificationCallIds: {
-          type: "array",
-          description:
-            "Successful run_command tool call IDs that verified the current commit.",
-          items: { type: "string" },
-        },
-        verificationNotRunReason: { type: "string" },
-        noChangeRationale: { type: "string" },
-      },
-      required: ["outcome"],
-    },
-  },
-};
-
-const submitReviewDef: ToolDefinition = {
-  type: "function",
-  function: {
-    name: "submit_review",
-    description:
-      "Submit the terminal structured review. This must be the only tool call in the response.",
-    parameters: {
-      type: "object",
-      properties: {
-        verdict: {
-          type: "string",
-          enum: ["approved", "changes_requested"],
-        },
-        recommendedApproach: {
-          type: "string",
-          enum: ["update", "new"],
-        },
-        findings: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              severity: { type: "string", enum: ["blocking", "warning"] },
-              requirement: { type: "string" },
-              evidence: { type: "string" },
-              recommendation: { type: "string" },
-            },
-            required: ["severity", "requirement", "evidence", "recommendation"],
-          },
-        },
-        verificationAssessment: {
-          type: "object",
-          properties: {
-            status: { type: "string", enum: ["sufficient", "insufficient"] },
-            notes: { type: "string" },
-          },
-          required: ["status", "notes"],
-        },
-      },
-      required: ["verdict", "findings", "verificationAssessment"],
-    },
-  },
-};
-
-const updateDraftDef: ToolDefinition = {
-  type: "function",
-  function: {
-    name: "update_requirements_draft",
-    description:
-      "Replace the session's proposed requirements draft. This never mutates the canonical requirements document.",
-    parameters: {
-      type: "object",
-      properties: {
-        content: {
-          type: "string",
-          description: "The full requirements document in markdown format.",
-        },
-      },
-      required: ["content"],
-    },
-  },
-};
-
-// ─── QB-specific tool executors ────────────────────────────────────────
-
-const submitWorkExec: ToolExecutor = async (call, _ctx) => {
-  return {
-    toolCallId: call.id,
-    content: "Work submitted for review",
-    isError: false,
-  };
-};
-
-const submitReviewExec: ToolExecutor = async (call, _ctx) => {
-  return { toolCallId: call.id, content: "Review submitted", isError: false };
-};
-
-const updateDraftExec: ToolExecutor = async (call, _ctx) => {
-  return {
-    toolCallId: call.id,
-    content: "Requirements draft updated",
-    isError: false,
-  };
-};
-
-// ─── QB-specific operations ───────────────────────────────────────────
+// ─── Infrastructure operation wiring ─────────────────────────────────────
 
 type OperationResult = Record<string, unknown>;
 
+// prepare_worktree is an engine infrastructure operation. This wrapper adapts
+// the engine's prepareWorktree signature to the OperationFn shape the
+// operation runner expects.
 function wrapPrepareWorktree(
   _task: TaskDefinition,
   params: Record<string, unknown>
@@ -147,20 +39,6 @@ function wrapPrepareWorktree(
     attempt: params.attempt as number,
   });
   return result as unknown as OperationResult;
-}
-
-function validateCompletion(
-  _task: TaskDefinition,
-  _params: Record<string, unknown>
-): OperationResult {
-  return { ok: true };
-}
-
-function buildReviewPackage(
-  _task: TaskDefinition,
-  _params: Record<string, unknown>
-): OperationResult {
-  return { packageId: "placeholder" };
 }
 
 // ─── Model caller adapter ──────────────────────────────────────────────
@@ -284,6 +162,14 @@ function createModelCaller(_engineTools: ToolDefinition[]) {
 
 // ─── Public API ────────────────────────────────────────────────────────
 
+// The domain capabilities a flow definition carries: self-contained tools and
+// deterministic operations. Infrastructure tools and prepare_worktree always
+// ship with the engine; these are merged on top.
+export type DomainCapabilities = {
+  tools?: readonly Tool[];
+  operations?: Record<string, OperationFn>;
+};
+
 export type EngineRunners = {
   operationRunner: () => ReturnType<typeof createOperationRunner>;
   aiTaskRunner: () => ReturnType<typeof createAiTaskRunner>;
@@ -292,22 +178,21 @@ export type EngineRunners = {
   toolExecutors: Record<string, ToolExecutor>;
 };
 
-export function createEngineRunners(): EngineRunners {
+export function createEngineRunners(
+  domain: DomainCapabilities = {}
+): EngineRunners {
   const standardDefs = createStandardToolDefinitions();
   const standardExecs = createStandardToolRegistry();
+  const domainMaps = toToolMaps(domain.tools ?? []);
 
   const toolDefinitions: Record<string, ToolDefinition> = {
     ...standardDefs,
-    submit_work: submitWorkDef,
-    submit_review: submitReviewDef,
-    update_requirements_draft: updateDraftDef,
+    ...domainMaps.definitions,
   };
 
   const toolExecutors: Record<string, ToolExecutor> = {
     ...standardExecs,
-    submit_work: submitWorkExec,
-    submit_review: submitReviewExec,
-    update_requirements_draft: updateDraftExec,
+    ...domainMaps.executors,
   };
 
   const engineTools = Object.values(toolDefinitions);
@@ -319,8 +204,7 @@ export function createEngineRunners(): EngineRunners {
       createOperationRunner({
         operations: {
           prepare_worktree: wrapPrepareWorktree,
-          validate_completion: validateCompletion,
-          build_review_package: buildReviewPackage,
+          ...domain.operations,
         },
       }),
     aiTaskRunner: () =>

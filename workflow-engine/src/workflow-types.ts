@@ -19,6 +19,7 @@
 // "Runtime*" aliases below are exactly those erased instantiations.
 // defineWorkflow is the single boundary where the erasure happens.
 
+import type { OperationFn } from "./runners/create-operation-runner";
 import type { Tool, ToolName } from "./runners/tool-types";
 
 // --- Convenience aliases ---
@@ -271,10 +272,11 @@ export type FlowEdge<
 export type RuntimeFlowEdge = FlowEdge;
 
 // A FlowDefinition is the complete description of one flow type: its
-// workflows, the edges between them, and the self-contained domain tools its
-// tasks can call. Infrastructure tools are not listed here — the engine ships
-// them to every flow. Tools are resolved by name against the merged registry
-// (engine infrastructure + this list) at runtime.
+// workflows, the edges between them, and the capabilities its tasks call by
+// name — self-contained domain tools (schema + executor) and deterministic
+// domain operations. Infrastructure tools and operations are not listed here —
+// the engine ships them to every flow. Capabilities are resolved by name
+// against the merged registry (engine infrastructure + this list) at runtime.
 export type FlowDefinition = {
   id: string;
   label: string;
@@ -282,6 +284,7 @@ export type FlowDefinition = {
   workflows: WorkflowDef[];
   edges: FlowEdge[];
   tools?: readonly Tool[];
+  operations?: Record<string, OperationFn>;
 };
 
 // --- History entries ---

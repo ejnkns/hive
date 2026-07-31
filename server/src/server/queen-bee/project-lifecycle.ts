@@ -76,6 +76,8 @@ export const queenBeeFlowDefinition: FlowDefinition = {
   label: queenBeeFlow.label,
   buildWorkflows: resolveWorkflowConfigs,
   edges: queenBeeFlow.edges,
+  tools: queenBeeFlow.tools,
+  operations: queenBeeFlow.operations,
 };
 
 // ── Project creation ──
