@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
+import fastifyWebsocket from "@fastify/websocket";
 import Fastify, { type FastifyInstance } from "fastify";
 import {
   createFlowRuntime,
   type FlowPersistence,
+  type FlowRuntimeEvent,
 } from "workflow-engine/create-flow-runtime";
 import { defineWorkflow } from "workflow-engine/workflow-types";
 import { registerFlowApiRoutes } from "./flow-api-routes";
-import { registerFlowForTest } from "./flow-registry";
+import { registerFlowForTest, setFlowPersistence } from "./flow-registry";
 
 const testWorkflow = defineWorkflow({
   id: "test-wf",
@@ -242,6 +244,91 @@ describe("flow API routes", () => {
     assert.equal(response.json().error, "Instance not found");
   });
 
+  it("broadcasts instance state changes over /api/flows/ws", async () => {
+    const runtime = createFlowRuntime(
+      "test-flow",
+      [testWorkflow],
+      [],
+      {},
+      { name: "Test Flow", repoPath: "/tmp/test-repo" },
+      {},
+      noopPersistence
+    );
+    let instanceId = "";
+    runtime.on((event) => {
+      if (event.type === "instance_created") instanceId = event.instanceId;
+    });
+    runtime.addWorkflowInstance("test-wf");
+    registerFlowForTest("test-flow", runtime);
+
+    const server = Fastify();
+    servers.push(server);
+    await server.register(fastifyWebsocket);
+    registerFlowApiRoutes(server);
+    await server.listen({ port: 0, host: "127.0.0.1" });
+    const address = server.server.address();
+    const port =
+      typeof address === "object" && address !== null ? address.port : 0;
+
+    const received: FlowRuntimeEvent[] = [];
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/api/flows/ws`);
+    ws.onmessage = (event) => {
+      received.push(JSON.parse(String(event.data)) as FlowRuntimeEvent);
+    };
+    await new Promise<void>((resolve) => {
+      ws.onopen = () => resolve();
+    });
+
+    await server.inject({
+      method: "POST",
+      url: `/api/flows/test-flow/instances/${instanceId}/action`,
+      body: { actionId: "start" },
+    });
+
+    await waitFor(() =>
+      received.some((e) => e.type === "instance_state_changed")
+    );
+
+    assert.ok(received.some((e) => e.type === "instance_state_changed"));
+    ws.close();
+  });
+
+  it("POST /api/flows/definitions creates a flow with a seeded instance", async () => {
+    setFlowPersistence(noopPersistence);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions",
+      body: {
+        id: "custom-flow",
+        label: "Custom Flow",
+        states: [
+          { id: "pending", label: "Pending", category: "initial" },
+          { id: "done", label: "Done", category: "terminal" },
+        ],
+        initial: "pending",
+        terminalStates: ["done"],
+      },
+    });
+
+    assert.equal(response.statusCode, 201);
+    assert.equal(response.json().flowId, "custom-flow");
+
+    const listResponse = await server.inject({
+      method: "GET",
+      url: "/api/flows/custom-flow/instances",
+    });
+    assert.equal(listResponse.statusCode, 200);
+    assert.equal(listResponse.json().instances.length, 1);
+    assert.equal(
+      listResponse.json().instances[0].state.currentState,
+      "pending"
+    );
+  });
+
   function fixture(): FastifyInstance {
     const runtime = createFlowRuntime(
       "test-flow",
@@ -263,3 +350,16 @@ describe("flow API routes", () => {
     return server;
   }
 });
+
+async function waitFor(
+  condition: () => boolean,
+  timeoutMs = 1_000
+): Promise<void> {
+  const start = Date.now();
+  while (!condition()) {
+    if (Date.now() - start > timeoutMs) {
+      throw new Error("waitFor timed out");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}

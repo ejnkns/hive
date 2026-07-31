@@ -154,6 +154,17 @@ export function createFlowRuntime<
       .filter((s) => stateId === undefined || s.currentState === stateId);
   }
 
+  // Cross-instance query for gates and depends-on checks. Unlike the public
+  // workflowInstancesInState, this carries each instance's id so callers can
+  // reference specific instances.
+  function _controllerInstancesInState(
+    stateId?: string
+  ): { currentState: string; id: string }[] {
+    return Array.from(controllers.entries())
+      .map(([id, ctrl]) => ({ id, currentState: ctrl.getState().currentState }))
+      .filter((s) => stateId === undefined || s.currentState === stateId);
+  }
+
   function patchFlowConfig(patch: Partial<TFlowConfig>): void {
     Object.assign(_flowConfig, patch);
     persistence?.saveFlow(flowId, _flowConfig, _flowState);
@@ -249,7 +260,7 @@ export function createFlowRuntime<
       workflow,
       runners,
       initialState,
-      _workflowInstancesInState,
+      _controllerInstancesInState,
       _flowState
     );
 

@@ -386,6 +386,10 @@ export function createFlowFromDefinition(
     persistence
   );
 
+  // Seed one instance in the workflow's initial state so the flow is
+  // immediately renderable, mirroring createFlowOnLink's requirements seed.
+  runtime.addWorkflowInstance(def.id);
+
   persistence.saveFlow(flowId, flowConfig, {});
   runtimes.set(flowId, runtime);
   return runtime;

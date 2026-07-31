@@ -9,7 +9,9 @@ export function getAvailableActions(
   states: readonly RuntimeStateDef[],
   currentState: string,
   state: RuntimeWorkflowInstanceState,
-  workflowInstancesInState?: (stateId?: string) => { currentState: string }[]
+  workflowInstancesInState?: (
+    stateId?: string
+  ) => { currentState: string; id: string }[]
 ): VisibleAction[] {
   const stateDef = states.find((s) => s.id === currentState);
   if (!stateDef?.actions) return [];

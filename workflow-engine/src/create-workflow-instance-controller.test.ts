@@ -441,12 +441,102 @@ describe("workflowInstancesInState", () => {
       concurrentWorkflow,
       {},
       undefined,
-      () => [{ currentState: "active" }, { currentState: "active" }]
+      () => [
+        { currentState: "active", id: "a" },
+        { currentState: "active", id: "b" },
+      ]
     );
     const actions = controller.getAvailableActions();
     assert.equal(
       actions.find((a) => a.id === "go"),
       undefined
     );
+  });
+});
+
+// --- dependsOnState gating ---
+
+const dependencyWorkflow = defineWorkflow({
+  id: "dependency",
+  label: "Dependency",
+  taskOutputs: {} as Record<string, never>,
+  states: [
+    {
+      id: "blocked",
+      label: "Blocked",
+      actions: [
+        {
+          id: "proceed",
+          label: "Proceed",
+          dependsOnState: "done",
+          transitionTo: "running",
+        },
+      ],
+    },
+    { id: "running", label: "Running" },
+  ],
+  initial: "blocked",
+  terminalStates: ["running"],
+});
+
+describe("dependsOnState gating", () => {
+  it("blocks dispatch until every dependee is in the target state", () => {
+    const controller = createWorkflowInstanceController(
+      dependencyWorkflow,
+      {},
+      {
+        currentState: "blocked",
+        taskOutputs: {},
+        hasRunningTask: false,
+        runningTaskId: null,
+        runningTaskContext: null,
+        workflowInstanceState: { dependsOn: ["target-1"] },
+        history: [],
+      },
+      () => []
+    );
+
+    controller.dispatchAction("proceed");
+    assert.equal(controller.getState().currentState, "blocked");
+  });
+
+  it("dispatches when every dependee is in the target state", () => {
+    const controller = createWorkflowInstanceController(
+      dependencyWorkflow,
+      {},
+      {
+        currentState: "blocked",
+        taskOutputs: {},
+        hasRunningTask: false,
+        runningTaskId: null,
+        runningTaskContext: null,
+        workflowInstanceState: { dependsOn: ["target-1"] },
+        history: [],
+      },
+      () => [{ currentState: "done", id: "target-1" }]
+    );
+
+    controller.dispatchAction("proceed");
+    assert.equal(controller.getState().currentState, "running");
+  });
+
+  it("blocks when only some dependees are in the target state", () => {
+    const controller = createWorkflowInstanceController(
+      dependencyWorkflow,
+      {},
+      {
+        currentState: "blocked",
+        taskOutputs: {},
+        hasRunningTask: false,
+        runningTaskId: null,
+        runningTaskContext: null,
+        workflowInstanceState: { dependsOn: ["target-1", "target-2"] },
+        history: [],
+      },
+      () => [{ currentState: "done", id: "target-1" }]
+    );
+
+    controller.dispatchAction("proceed");
+    assert.equal(controller.getState().currentState, "blocked");
   });
 });

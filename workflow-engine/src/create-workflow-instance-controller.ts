@@ -49,7 +49,9 @@ export function createWorkflowInstanceController(
   workflow: RuntimeWorkflowConfig,
   runners: Record<string, TaskRunner>,
   initialState?: RuntimeWorkflowInstanceState,
-  workflowInstancesInState?: (stateId?: string) => { currentState: string }[],
+  workflowInstancesInState?: (
+    stateId?: string
+  ) => { currentState: string; id: string }[],
   flowState?: Record<string, unknown>
 ): WorkflowInstanceControllerAPI {
   let state: RuntimeWorkflowInstanceState = initialState ?? {
@@ -72,7 +74,13 @@ export function createWorkflowInstanceController(
   }
 
   function dispatcher(event: WorkflowEvent): void {
-    const result = reduce(state, event, workflow.states, flowState);
+    const result = reduce(
+      state,
+      event,
+      workflow.states,
+      flowState,
+      workflowInstancesInState
+    );
     state = result.state;
     emit({ type: "state_changed", state });
     emit({
@@ -238,9 +246,10 @@ export function createWorkflowInstanceController(
       if (action.dependsOnState !== undefined && workflowInstancesInState) {
         const dependees = readDependsOn(state.workflowInstanceState);
         if (dependees.length > 0) {
-          const inState = workflowInstancesInState(action.dependsOnState);
           const inStateIds = new Set(
-            inState.map((instance) => readInstanceId(instance))
+            workflowInstancesInState(action.dependsOnState).map(
+              (instance) => instance.id
+            )
           );
           const allMet = dependees.every((d) => inStateIds.has(d));
           if (!allMet) return;
@@ -277,11 +286,4 @@ function readDependsOn(itemState: Record<string, unknown>): string[] {
   const raw = itemState["dependsOn"];
   if (!Array.isArray(raw)) return [];
   return raw.filter((id): id is string => typeof id === "string");
-}
-
-function readInstanceId(instance: { currentState: string }): string {
-  // The callback type erases the instance id; instances carry it at runtime
-  if (!("id" in instance)) return "";
-  const candidate = instance["id"];
-  return typeof candidate === "string" ? candidate : "";
 }
