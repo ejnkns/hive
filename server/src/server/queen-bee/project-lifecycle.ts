@@ -11,7 +11,7 @@ import {
 } from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
 import type { RuntimeWorkflowConfig } from "workflow-engine/workflow-types";
-import { queenBeeFlow } from "../../../../queen-bee/flow";
+import { queenBeeFlow } from "../../../../presets/queen-bee/flow";
 import {
   createFlow,
   type FlowDefinition,

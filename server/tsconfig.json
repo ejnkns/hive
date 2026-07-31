@@ -14,5 +14,5 @@
       "workflow-engine/*": ["../workflow-engine/src/*"]
     }
   },
-  "include": ["src/**/*.ts", "../queen-bee/**/*.ts"]
+  "include": ["src/**/*.ts", "../presets/queen-bee/**/*.ts"]
 }
