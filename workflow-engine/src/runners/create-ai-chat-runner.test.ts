@@ -42,6 +42,24 @@ describe("createAiChatRunner", () => {
     );
   });
 
+  it("completes on a task-level completion signal", async () => {
+    const runner = createAiChatRunner({
+      modelCaller: mockCaller([{ content: "REQUIREMENTS_COMPLETE" }]),
+      toolDefinitions: {},
+      toolExecutors: {},
+    });
+
+    const result = await runner.run({
+      ...dummyTask,
+      completionSignal: "REQUIREMENTS_COMPLETE",
+    });
+    assert.ok(
+      (result.output as { content: string }).content.includes(
+        "REQUIREMENTS_COMPLETE"
+      )
+    );
+  });
+
   it("completes on completion tool call", async () => {
     const runner = createAiChatRunner({
       modelCaller: mockCaller([

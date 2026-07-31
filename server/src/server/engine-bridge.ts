@@ -271,6 +271,15 @@ export function createEngineRunners(
     };
   }
 
+  // The flow's base directory — the bound repo root when present. Tools that
+  // persist flow-level domain state (queen-bee's .hive/) write relative to it.
+  function readBasePath(ctx: TaskRunnerContext): string | undefined {
+    const repoPath = ctx.flowConfig.repoPath;
+    return typeof repoPath === "string" && repoPath !== ""
+      ? repoPath
+      : undefined;
+  }
+
   return {
     // Factories: each task execution gets an isolated runner instance so
     // concurrent ai-chat/ai-task sessions in one flow do not share state.
@@ -283,17 +292,19 @@ export function createEngineRunners(
           ...domain.operations,
         },
       }),
-    aiTaskRunner: (_ctx) =>
+    aiTaskRunner: (ctx) =>
       createAiTaskRunner({
         modelCaller: createModelCaller(engineTools),
         toolDefinitions,
         toolExecutors,
+        basePath: readBasePath(ctx),
       }),
-    aiChatRunner: (_ctx) =>
+    aiChatRunner: (ctx) =>
       createAiChatRunner({
         modelCaller: createModelCaller(engineTools),
         toolDefinitions,
         toolExecutors,
+        basePath: readBasePath(ctx),
       }),
     toolDefinitions,
     toolExecutors,

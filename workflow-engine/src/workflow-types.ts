@@ -181,6 +181,7 @@ export type StateDef<
     operationInputs?: Record<string, unknown>;
     systemPrompt?: string;
     completionTool?: string;
+    completionSignal?: string;
   }[];
 
   autoTransitions?: AutoTransition<TTaskOutputs, TStateId, TItemState>[];

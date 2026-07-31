@@ -14,6 +14,7 @@ export type AiTaskRunnerConfig = {
   toolDefinitions: Record<string, ToolDefinition>;
   toolExecutors: Record<string, ToolExecutor>;
   completionTool?: string;
+  basePath?: string;
 };
 
 export function createAiTaskRunner(config: AiTaskRunnerConfig): TaskRunner {
@@ -40,14 +41,11 @@ export function createAiTaskRunner(config: AiTaskRunnerConfig): TaskRunner {
         messages.push({ role: "assistant", content: response.content });
 
         const completionTool = task.completionTool ?? config.completionTool;
-        if (
-          completionTool &&
-          response.toolCalls?.some((c) => c.name === completionTool)
-        ) {
-          const completionCall = response.toolCalls.find(
-            (c) => c.name === completionTool
-          );
-          return { output: JSON.parse(completionCall!.arguments) };
+        const completionCall = response.toolCalls?.find(
+          (c) => c.name === completionTool
+        );
+        if (completionCall) {
+          return { output: JSON.parse(completionCall.arguments) };
         }
 
         if (!response.toolCalls?.length) {
@@ -67,6 +65,7 @@ export function createAiTaskRunner(config: AiTaskRunnerConfig): TaskRunner {
 
           const result = await executor(call, {
             workspacePath: task.workspacePath ?? process.cwd(),
+            basePath: config.basePath,
             signal: abortController.signal,
           });
           messages.push({

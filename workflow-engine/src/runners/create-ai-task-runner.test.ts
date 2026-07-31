@@ -5,7 +5,7 @@ import {
   type AiTaskModelCaller,
   createAiTaskRunner,
 } from "./create-ai-task-runner";
-import type { ToolCall } from "./tool-types";
+import type { ToolCall, ToolContext } from "./tool-types";
 
 function mockCaller(
   responses: { content: string; toolCalls?: ToolCall[] }[]
@@ -126,5 +126,39 @@ describe("createAiTaskRunner", () => {
 
     runner.cancel();
     await assert.rejects(() => runner.run(dummyTask), /aborted/);
+  });
+
+  it("passes basePath to tool executors", async () => {
+    let resolveCtx: (ctx: ToolContext) => void = () => {};
+    const ctxPromise = new Promise<ToolContext>((resolve) => {
+      resolveCtx = resolve;
+    });
+    const runner = createAiTaskRunner({
+      modelCaller: mockCaller([
+        {
+          content: "tool",
+          toolCalls: [{ id: "c", name: "test_tool", arguments: "{}" }],
+        },
+        { content: "Done!" },
+      ]),
+      toolDefinitions: {},
+      toolExecutors: {
+        test_tool: async (call, ctx) => {
+          resolveCtx(ctx);
+          return {
+            toolCallId: call.id,
+            content: "ok",
+            isError: false,
+          };
+        },
+      },
+      basePath: "/repo",
+    });
+
+    await runner.run({ ...dummyTask, tools: ["test_tool"] });
+
+    const ctx = await ctxPromise;
+    assert.equal(ctx.basePath, "/repo");
+    assert.equal(ctx.workspacePath, process.cwd());
   });
 });

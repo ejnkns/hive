@@ -3,6 +3,7 @@ import { defineWorkflow } from "workflow-engine/workflow-types";
 export type RequirementsTaskOutputs = {
   draft: { content: string; revision: string };
   plan: { kind: "proposal" | "feedback"; cards?: unknown[] };
+  finalizeRequirements: { ok: boolean; path?: string };
 };
 
 export type RequirementsStateId =
@@ -11,6 +12,7 @@ export type RequirementsStateId =
   | "complete"
   | "planning"
   | "planned"
+  | "finalizing"
   | "accepted";
 
 export const requirementsWorkflow = defineWorkflow({
@@ -19,6 +21,7 @@ export const requirementsWorkflow = defineWorkflow({
   taskOutputs: {
     draft: {} as { content: string; revision: string },
     plan: {} as { kind: "proposal" | "feedback"; cards?: unknown[] },
+    finalizeRequirements: {} as { ok: boolean; path?: string },
   },
   states: [
     {
@@ -50,6 +53,7 @@ export const requirementsWorkflow = defineWorkflow({
             "You are a requirements analyst. Ask the user questions " +
             "to understand their needs, produce a structured requirements " +
             "document. Signal REQUIREMENTS_COMPLETE when done.",
+          completionSignal: "REQUIREMENTS_COMPLETE",
         },
       ],
       autoTransitions: [
@@ -135,13 +139,34 @@ export const requirementsWorkflow = defineWorkflow({
           id: "accept_all",
           label: "Accept all and create cards",
           variant: "primary",
-          transitionTo: "accepted",
+          transitionTo: "finalizing",
         },
         {
           id: "replan",
           label: "Request replanning",
           variant: "secondary",
           transitionTo: "complete",
+        },
+      ],
+    },
+    {
+      id: "finalizing",
+      label: "Finalizing",
+      category: "active",
+      tasks: [
+        {
+          id: "finalizeRequirements",
+          label: "Write requirements document",
+          trigger: "auto",
+          role: "operation",
+          operations: ["finalize_requirements"],
+        },
+      ],
+      autoTransitions: [
+        {
+          to: "accepted",
+          gate: (ctx) =>
+            ctx.taskOutputs.finalizeRequirements?.status === "success",
         },
       ],
     },

@@ -1,4 +1,5 @@
 import { execFileSync, execSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { mkdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { OperationContext, OperationFn } from "workflow-engine/runners";
@@ -7,6 +8,14 @@ import {
   fastForwardTargetBranch,
 } from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
+import {
+  type CardSpec,
+  readDraft,
+  readRequirements,
+  upsertCard,
+  writeRequirements,
+  writeReviewPackage,
+} from "./domain-state";
 
 // === QUEEN BEE DOMAIN OPERATIONS ===
 //
@@ -82,6 +91,123 @@ function writeProjectMetadata(
   }
 }
 
+// ── Requirements persistence ──
+
+function finalizeRequirementsOp(
+  _task: TaskDefinition,
+  _params: Record<string, unknown>,
+  ctx: OperationContext
+): OperationResult {
+  try {
+    const basePath = resolveRepoPath(ctx);
+    const draft = readDraft(basePath);
+    if (!draft) {
+      return { ok: false, error: "No requirements draft to finalize" };
+    }
+    const path = writeRequirements(basePath, draft);
+    return { ok: true, path };
+  } catch (err) {
+    return { ok: false, error: errorMessage(err) };
+  }
+}
+
+// ── Board persistence ──
+
+function registerCardOp(
+  _task: TaskDefinition,
+  _params: Record<string, unknown>,
+  ctx: OperationContext
+): OperationResult {
+  try {
+    const basePath = resolveRepoPath(ctx);
+    const spec = readCardSpec(ctx);
+    upsertCard(basePath, {
+      id: ctx.instanceId,
+      title: spec.title,
+      description: spec.description,
+      acceptanceCriteria: spec.acceptanceCriteria,
+      status: "in_progress",
+      dependsOn: spec.dependsOn,
+      createdAt: new Date().toISOString(),
+    });
+    return { ok: true, cardId: ctx.instanceId };
+  } catch (err) {
+    return { ok: false, error: errorMessage(err) };
+  }
+}
+
+// ── Completion gate ──
+
+// Deterministic: the worker's feature branch exists and is ahead of hive-main
+// (committed work). The worker commits with commit_work before submit_work.
+function validateCompletionOp(
+  _task: TaskDefinition,
+  _params: Record<string, unknown>,
+  ctx: OperationContext
+): OperationResult {
+  try {
+    const repoPath = resolveRepoPath(ctx);
+    const cardId = ctx.instanceId;
+    const attempt = readNumber(ctx.workflowInstanceState().attempt) ?? 1;
+    const branchName = `hive/${cardId}/attempt-${attempt}`;
+    const branchExists = gitOptional(repoPath, [
+      "rev-parse",
+      "--verify",
+      "--quiet",
+      `refs/heads/${branchName}`,
+    ]);
+    if (!branchExists) {
+      return { ok: false, error: `No work branch ${branchName} found` };
+    }
+    const aheadRaw = gitOptional(repoPath, [
+      "rev-list",
+      "--count",
+      `hive-main..${branchName}`,
+    ]);
+    const commitCount = aheadRaw === "" ? 0 : Number(aheadRaw);
+    if (commitCount < 1) {
+      return {
+        ok: false,
+        error: `No committed work on ${branchName}`,
+      };
+    }
+    return { ok: true, commitCount, branchName };
+  } catch (err) {
+    return { ok: false, error: errorMessage(err) };
+  }
+}
+
+// ── Review package ──
+
+function buildReviewPackageOp(
+  _task: TaskDefinition,
+  _params: Record<string, unknown>,
+  ctx: OperationContext
+): OperationResult {
+  try {
+    const repoPath = resolveRepoPath(ctx);
+    const cardId = ctx.instanceId;
+    const attempt = readNumber(ctx.workflowInstanceState().attempt) ?? 1;
+    const branchName = `hive/${cardId}/attempt-${attempt}`;
+    const packageId = randomUUID();
+    const pkg = {
+      packageId,
+      cardId,
+      attempt,
+      spec: readCardSpec(ctx),
+      requirements: readRequirements(repoPath),
+      baseCommit: gitOptional(repoPath, ["rev-parse", "hive-main"]),
+      workerHead: gitOptional(repoPath, ["rev-parse", branchName]),
+      diff: gitOptional(repoPath, ["diff", "--stat", "hive-main", branchName]),
+      createdAt: new Date().toISOString(),
+    };
+    const path = writeReviewPackage(repoPath, pkg);
+    return { ok: true, packageId, path };
+  } catch (err) {
+    return { ok: false, error: errorMessage(err) };
+  }
+}
+
 // ── Integration operation ──
 
 function fastForwardTargetBranchOp(
@@ -106,9 +232,11 @@ export const queenBeeOperations: Record<string, OperationFn> = {
   validate_repo: validateRepo,
   ensure_integration_branch: ensureIntegrationBranchOp,
   write_project_metadata: writeProjectMetadata,
+  finalize_requirements: finalizeRequirementsOp,
+  register_card: registerCardOp,
+  validate_completion: validateCompletionOp,
+  build_review_package: buildReviewPackageOp,
   fast_forward_target_branch: fastForwardTargetBranchOp,
-  validate_completion: (_task, _params) => ({ ok: true }),
-  build_review_package: (_task, _params) => ({ packageId: "placeholder" }),
 };
 
 // ── Git helpers ──
@@ -215,4 +343,37 @@ function gitOptional(repoPath: string, args: string[]): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Queen bee operation failed";
+}
+
+function readNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
+// The card spec lives in the cards workflow instance state (workflowInstanceState.cardSpec)
+// when the planning proposal carried one; otherwise a minimal fallback keeps the
+// board and review package well-formed.
+function readCardSpec(ctx: OperationContext): CardSpec {
+  const raw = ctx.workflowInstanceState().cardSpec;
+  if (raw !== null && typeof raw === "object") {
+    const spec = raw as Partial<CardSpec>;
+    return {
+      title: typeof spec.title === "string" ? spec.title : ctx.instanceId,
+      description: typeof spec.description === "string" ? spec.description : "",
+      acceptanceCriteria: readStringArray(spec.acceptanceCriteria),
+      dependsOn: readStringArray(spec.dependsOn),
+    };
+  }
+  return {
+    title: ctx.instanceId,
+    description: "",
+    acceptanceCriteria: [],
+    dependsOn: [],
+  };
+}
+
+function readStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is string => typeof entry === "string");
 }

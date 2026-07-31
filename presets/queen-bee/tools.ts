@@ -1,4 +1,5 @@
 import type { Tool } from "workflow-engine/runners";
+import { writeDraft } from "./domain-state";
 
 // === QUEEN BEE DOMAIN TOOLS ===
 //
@@ -118,10 +119,22 @@ export const queenBeeTools: Tool[] = [
         },
       },
     },
-    executor: async (call) => ({
-      toolCallId: call.id,
-      content: "Requirements draft updated",
-      isError: false,
-    }),
+    executor: async (call, ctx) => {
+      const args = JSON.parse(call.arguments) as { content?: string };
+      if (typeof args.content !== "string") {
+        return {
+          toolCallId: call.id,
+          content: "content is required",
+          isError: true,
+        };
+      }
+      const basePath = ctx.basePath ?? ctx.workspacePath;
+      writeDraft(basePath, args.content);
+      return {
+        toolCallId: call.id,
+        content: "Requirements draft updated",
+        isError: false,
+      };
+    },
   },
 ];

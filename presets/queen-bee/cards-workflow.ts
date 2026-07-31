@@ -79,7 +79,7 @@ export const cardsWorkflow = defineWorkflow({
           label: "Prepare worktree",
           trigger: "auto",
           role: "operation",
-          operations: ["prepare_worktree"],
+          operations: ["register_card", "prepare_worktree"],
         },
       ],
       autoTransitions: [

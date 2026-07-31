@@ -15,6 +15,7 @@ export type AiChatRunnerConfig = {
   toolExecutors: Record<string, ToolExecutor>;
   completionTool?: string;
   completionSignal?: string;
+  basePath?: string;
 };
 
 export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
@@ -28,8 +29,13 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
     });
   }
 
-  function isComplete(content: string, toolCalls?: ToolCall[]): boolean {
-    if (config.completionSignal && content.includes(config.completionSignal)) {
+  function isComplete(
+    task: TaskDefinition,
+    content: string,
+    toolCalls?: ToolCall[]
+  ): boolean {
+    const signal = task.completionSignal ?? config.completionSignal;
+    if (signal && content.includes(signal)) {
       return true;
     }
     if (
@@ -58,7 +64,7 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
 
       messages.push({ role: "assistant", content: response.content });
 
-      if (isComplete(response.content, response.toolCalls)) {
+      if (isComplete(task, response.content, response.toolCalls)) {
         return {
           output: {
             content: response.content,
@@ -85,6 +91,7 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
         }
         const result = await executor(call, {
           workspacePath: task.workspacePath ?? process.cwd(),
+          basePath: config.basePath,
           signal: abortController.signal,
         });
         messages.push({ role: "tool", content: result.content });

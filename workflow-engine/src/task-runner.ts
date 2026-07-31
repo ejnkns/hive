@@ -7,6 +7,7 @@ export type TaskDefinition = {
   operationInputs?: Record<string, unknown>;
   systemPrompt?: string;
   completionTool?: string;
+  completionSignal?: string;
   workspacePath?: string;
 };
 
