@@ -6,7 +6,9 @@
 // outcomes and runtime conditions.
 //
 // The types are generic — no domain-specific concepts. Any project
-// lifecycle can be expressed.
+// lifecycle can be expressed. Domain concepts arrive only through the
+// generic parameters and through the self-contained tools a FlowDefinition
+// declares; the engine never interprets a tool's meaning.
 //
 // == Generic-erasure convention ==
 //
@@ -16,6 +18,8 @@
 // one collection, so the generics are erased to their defaults. The
 // "Runtime*" aliases below are exactly those erased instantiations.
 // defineWorkflow is the single boundary where the erasure happens.
+
+import type { Tool, ToolName } from "./runners/tool-types";
 
 // --- Convenience aliases ---
 
@@ -171,7 +175,7 @@ export type StateDef<
     label: string;
     trigger: "auto" | "manual";
     role: "ai-task" | "ai-chat" | "operation";
-    tools?: string[];
+    tools?: ToolName[];
     operations?: string[];
     systemPrompt?: string;
     completionTool?: string;
@@ -266,12 +270,18 @@ export type FlowEdge<
 
 export type RuntimeFlowEdge = FlowEdge;
 
+// A FlowDefinition is the complete description of one flow type: its
+// workflows, the edges between them, and the self-contained domain tools its
+// tasks can call. Infrastructure tools are not listed here — the engine ships
+// them to every flow. Tools are resolved by name against the merged registry
+// (engine infrastructure + this list) at runtime.
 export type FlowDefinition = {
   id: string;
   label: string;
   description?: string;
   workflows: WorkflowDef[];
   edges: FlowEdge[];
+  tools?: readonly Tool[];
 };
 
 // --- History entries ---

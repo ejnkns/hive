@@ -40,10 +40,14 @@ import {
   definition as writeFileDef,
   execute as writeFileExec,
 } from "./create-standard-tool-registry/write-file";
-import type { ToolDefinition, ToolExecutor } from "./tool-types";
+import type {
+  InfrastructureToolName,
+  ToolDefinition,
+  ToolExecutor,
+} from "./tool-types";
 
 export function createStandardToolDefinitions(): Record<
-  string,
+  InfrastructureToolName,
   ToolDefinition
 > {
   return {
@@ -60,7 +64,10 @@ export function createStandardToolDefinitions(): Record<
   };
 }
 
-export function createStandardToolRegistry(): Record<string, ToolExecutor> {
+export function createStandardToolRegistry(): Record<
+  InfrastructureToolName,
+  ToolExecutor
+> {
   return {
     read_file: readFileExec,
     list_directory: listDirExec,
