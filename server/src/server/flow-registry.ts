@@ -85,57 +85,6 @@ export function unlinkFlow(flowId: string): void {
   _persistence?.deleteFlow(flowId);
 }
 
-// ── Project-style listing (flows with a repoPath) ──
-
-export function getAllFlows(): Array<{
-  id: string;
-  repoPath: string;
-  name: string;
-  targetBranch: string;
-  maxConcurrentWorkers: number;
-}> {
-  // Flow config arrives as unknown (persistence) or from the erased
-  // FlowRuntimeAPI generic; the field reads below narrow known fields.
-  const seen = new Set<string>();
-  const result: Array<{
-    id: string;
-    repoPath: string;
-    name: string;
-    targetBranch: string;
-    maxConcurrentWorkers: number;
-  }> = [];
-
-  // Flows from persistence
-  if (_persistence) {
-    for (const { flowId, config } of _persistence.loadAllFlows()) {
-      seen.add(flowId);
-      const cfg = config as Record<string, unknown>;
-      result.push({
-        id: flowId,
-        repoPath: (cfg.repoPath as string) ?? "",
-        name: (cfg.name as string) ?? flowId,
-        targetBranch: (cfg.targetBranch as string) ?? "main",
-        maxConcurrentWorkers: (cfg.maxConcurrentWorkers as number) ?? 3,
-      });
-    }
-  }
-
-  // Flows registered directly (e.g. for tests)
-  for (const [flowId, runtime] of runtimes) {
-    if (seen.has(flowId)) continue;
-    const cfg = runtime.getFlowConfig();
-    result.push({
-      id: flowId,
-      repoPath: (cfg.repoPath as string) ?? "",
-      name: (cfg.name as string) ?? flowId,
-      targetBranch: (cfg.targetBranch as string) ?? "main",
-      maxConcurrentWorkers: (cfg.maxConcurrentWorkers as number) ?? 3,
-    });
-  }
-
-  return result.filter((f) => f.repoPath);
-}
-
 // ── Flow lifecycle ──
 
 export function createFlow(

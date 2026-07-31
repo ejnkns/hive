@@ -121,6 +121,35 @@ describe("flow API routes", () => {
     assert.equal(body.instances[0].availableActions[0].variant, "primary");
   });
 
+  it("GET /api/flows/:flowId returns the flow with its config", async () => {
+    const server = fixture();
+
+    const response = await server.inject({
+      method: "GET",
+      url: "/api/flows/test-flow",
+    });
+
+    assert.equal(response.statusCode, 200);
+    const body = response.json();
+    assert.equal(body.id, "test-flow");
+    assert.equal(body.label, "Test Flow");
+    assert.equal(body.config.repoPath, "/tmp/test-repo");
+    assert.equal(body.workflows[0].id, "test-wf");
+    assert.equal(body.instances.length, 1);
+  });
+
+  it("GET /api/flows/:flowId returns 404 for an unknown flow", async () => {
+    const server = fixture();
+
+    const response = await server.inject({
+      method: "GET",
+      url: "/api/flows/nonexistent",
+    });
+
+    assert.equal(response.statusCode, 404);
+    assert.equal(response.json().error, "Flow not found");
+  });
+
   it("404 for unknown flow on GET instances", async () => {
     const server = fixture();
 

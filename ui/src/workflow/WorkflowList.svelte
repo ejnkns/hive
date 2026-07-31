@@ -1,42 +1,50 @@
 <script lang="ts">
-import type { ProjectListItem } from "shared/project-types";
-import CreateProjectForm from "./create-project-form.svelte";
+import { onDestroy, onMount } from "svelte";
+import CreateFlowForm from "./CreateFlowForm.svelte";
+import type { FlowResponse, FlowWsEvent } from "./workflow-api";
+import { connectFlowWs, deleteFlow, fetchFlows } from "./workflow-api";
 
-let projects: ProjectListItem[] = $state([]);
+let flows = $state<FlowResponse[]>([]);
 let loading = $state(true);
 let error = $state<string | null>(null);
 let showCreateForm = $state(false);
+let unsubWs: (() => void) | null = null;
 
-async function loadProjects() {
+onMount(() => {
+  void loadFlows();
+  unsubWs = connectFlowWs((event) => {
+    handleWsEvent(event);
+  });
+});
+
+onDestroy(() => {
+  unsubWs?.();
+});
+
+async function loadFlows() {
   loading = true;
   error = null;
   try {
-    const res = await fetch("/api/queen-bee/projects");
-    if (!res.ok) throw new Error("Failed to load projects");
-    const data = (await res.json()) as { projects: ProjectListItem[] };
-    projects = data.projects;
+    flows = await fetchFlows();
   } catch (err) {
-    error = err instanceof Error ? err.message : "Unknown error";
+    error = err instanceof Error ? err.message : "Failed to load flows";
   } finally {
     loading = false;
   }
 }
 
-async function unlinkProject(id: string) {
+async function removeFlow(flowId: string) {
   try {
-    const res = await fetch(`/api/queen-bee/projects/${id}`, {
-      method: "DELETE",
-    });
-    if (!res.ok) throw new Error("Failed to unlink project");
-    await loadProjects();
+    await deleteFlow(flowId);
+    await loadFlows();
   } catch (err) {
-    error = err instanceof Error ? err.message : "Unknown error";
+    error = err instanceof Error ? err.message : "Failed to delete flow";
   }
 }
 
-async function onCreateProject() {
+function onCreateFlow(flowId: string) {
   showCreateForm = false;
-  await loadProjects();
+  window.location.hash = `#/project/${encodeURIComponent(flowId)}`;
 }
 
 function onError(err: string) {
@@ -44,18 +52,31 @@ function onError(err: string) {
   showCreateForm = false;
 }
 
-loadProjects();
+function handleWsEvent(event: FlowWsEvent) {
+  if (
+    event.type === "instance_created" ||
+    event.type === "instance_terminated" ||
+    event.type === "instance_state_changed"
+  ) {
+    void loadFlows();
+  }
+}
+
+function readRepoPath(flow: FlowResponse): string {
+  const raw = flow.config?.repoPath;
+  return typeof raw === "string" ? raw : "";
+}
 </script>
 
-<div class="project-overview">
+<div class="flows-overview">
   <div class="header">
-    <h1>Projects</h1>
+    <h1>Flows</h1>
     <button
       type="button"
       class="btn btn-primary"
       onclick={() => (showCreateForm = true)}
     >
-      New Project
+      New Flow
     </button>
   </div>
 
@@ -64,38 +85,50 @@ loadProjects();
   {/if}
 
   {#if showCreateForm}
-    <CreateProjectForm
-      {onCreateProject}
+    <CreateFlowForm
+      {onCreateFlow}
       {onError}
       onCancel={() => (showCreateForm = false)}
     />
   {/if}
 
   {#if loading}
-    <div class="loading">Loading projects...</div>
-  {:else if projects.length === 0}
+    <div class="loading">Loading flows...</div>
+  {:else if flows.length === 0}
     <div class="empty">
-      <p>No projects yet.</p>
-      <p>Link a git repo to get started.</p>
+      <p>No flows yet.</p>
+      <p>Create a flow to get started.</p>
     </div>
   {:else}
-    <div class="project-list">
-      {#each projects as project (project.id)}
-        <div class="project-card">
-          <div class="project-info">
-            <div class="project-name">{project.name}</div>
-            <div class="project-path">{project.repoPath}</div>
+    <div class="flow-list">
+      {#each flows as flow (flow.id)}
+        <div class="flow-card">
+          <div class="flow-info">
+            <div class="flow-name">{flow.label}</div>
+            {#if readRepoPath(flow)}
+              <div class="flow-path">{readRepoPath(flow)}</div>
+            {/if}
+            <div class="flow-meta">
+              <span class="flow-id">{flow.id}</span>
+              <span class="flow-count"
+                >{flow.instances.length}
+                instance{flow.instances.length !== 1 ? "s" : ""}</span
+              >
+            </div>
           </div>
-          <div class="project-actions">
-            <a class="btn btn-outline" href={`#/project/${project.id}`}>
+          <div class="flow-actions">
+            <a
+              class="btn btn-outline"
+              href={`#/project/${encodeURIComponent(flow.id)}`}
+            >
               Open
             </a>
             <button
               type="button"
               class="btn btn-danger"
-              onclick={() => unlinkProject(project.id)}
+              onclick={() => removeFlow(flow.id)}
             >
-              Unlink
+              Delete
             </button>
           </div>
         </div>
@@ -105,7 +138,7 @@ loadProjects();
 </div>
 
 <style>
-.project-overview {
+.flows-overview {
   max-width: 800px;
   margin: 0 auto;
   padding: 2rem 1.25rem;
@@ -134,6 +167,7 @@ h1 {
   cursor: pointer;
   background: var(--surface);
   color: var(--text);
+  text-decoration: none;
   transition: background 0.15s;
 }
 
@@ -147,22 +181,10 @@ h1 {
   border-color: var(--accent);
 }
 
-.btn-primary:hover {
-  background: rgba(var(--accent-rgb), 0.85);
-}
-
-.btn-outline {
-  background: transparent;
-}
-
 .btn-danger {
   background: transparent;
   border-color: rgba(220, 60, 60, 0.3);
   color: #dc3c3c;
-}
-
-.btn-danger:hover {
-  background: rgba(220, 60, 60, 0.1);
 }
 
 .error {
@@ -193,13 +215,13 @@ h1 {
   margin: 0.25rem 0;
 }
 
-.project-list {
+.flow-list {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
 }
 
-.project-card {
+.flow-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -209,18 +231,18 @@ h1 {
   padding: 1rem 1.25rem;
 }
 
-.project-info {
+.flow-info {
   min-width: 0;
   flex: 1;
 }
 
-.project-name {
+.flow-name {
   font-size: 0.9375rem;
   font-weight: 600;
   color: var(--text);
 }
 
-.project-path {
+.flow-path {
   font-size: 0.75rem;
   color: var(--muted);
   margin-top: 0.25rem;
@@ -229,7 +251,20 @@ h1 {
   white-space: nowrap;
 }
 
-.project-actions {
+.flow-meta {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.375rem;
+}
+
+.flow-id,
+.flow-count {
+  font-size: 0.625rem;
+  color: var(--muted);
+  font-family: var(--font-mono, monospace);
+}
+
+.flow-actions {
   display: flex;
   gap: 0.5rem;
   flex-shrink: 0;

@@ -13,15 +13,10 @@ import ProviderPanel from "./dashboard/ProviderPanel.svelte";
 import ProviderPlayground from "./dashboard/ProviderPlayground.svelte";
 import Sessions from "./dashboard/Sessions.svelte";
 import Stats from "./dashboard/Stats.svelte";
-import {
-  projectHeader,
-  togglePanel,
-} from "./queen-bee/project-header-state.svelte";
-import ProjectIntegration from "./queen-bee/project-integration.svelte";
-import ProjectOverview from "./queen-bee/project-overview.svelte";
 import Header from "./shared/Header.svelte";
 import Button from "./shared/ui/Button.svelte";
 import Dialog from "./shared/ui/Dialog.svelte";
+import WorkflowList from "./workflow/WorkflowList.svelte";
 import WorkflowProjectPage from "./workflow/WorkflowProjectPage.svelte";
 
 let detailMetric: MetricData | null = $state(null);
@@ -176,33 +171,14 @@ const detailChain = $derived(
       onOverrideClear={handleOverrideClear}
       onOpenModelPriority={() => (modelPriorityModalOpen = true)}
     />
-    {#if currentHash.startsWith('#/project/') && projectHeader.projectId}
+    {#if currentHash.startsWith('#/project/')}
       <div class="project-header">
         <div class="project-header-row">
-          <a href="#/" class="back-link">&larr; Projects</a>
-          <div class="header-right">
-            {#key projectHeader.projectId}
-              <ProjectIntegration projectId={projectHeader.projectId} />
-            {/key}
-            {#if projectHeader.requirementsContent}
-              <Button variant="platinum" onclick={togglePanel}>
-                {projectHeader.panelOpen ? "Hide" : "View"}
-                Requirements
-              </Button>
-            {/if}
-            <span class="project-id">{projectHeader.projectId}</span>
-          </div>
+          <a href="#/" class="back-link">&larr; Flows</a>
+          <span class="project-id"
+            >{currentHash.slice('#/project/'.length)}</span
+          >
         </div>
-        {#if projectHeader.requirementsContent && projectHeader.panelOpen}
-          <div class="requirements-panel">
-            <div class="panel-header">
-              <h2>Requirements</h2>
-            </div>
-            <div class="panel-body">
-              <pre class="req-content">{projectHeader.requirementsContent}</pre>
-            </div>
-          </div>
-        {/if}
       </div>
     {/if}
   </div>
@@ -347,7 +323,7 @@ const detailChain = $derived(
   {:else if currentHash.startsWith('#/project/')}
     <WorkflowProjectPage projectId={currentHash.slice('#/project/'.length)} />
   {:else}
-    <ProjectOverview />
+    <WorkflowList />
   {/if}
 </div>
 
@@ -381,48 +357,10 @@ const detailChain = $derived(
 .back-link:hover {
   color: var(--text);
 }
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
 .project-id {
   font-size: 0.75rem;
   color: var(--muted);
   font-family: var(--font-mono, monospace);
-}
-.requirements-panel {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  margin-top: 0.5rem;
-  overflow: hidden;
-}
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--border);
-}
-.panel-header h2 {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--text);
-  margin: 0;
-}
-.panel-body {
-  max-height: 300px;
-  overflow-y: auto;
-}
-.req-content {
-  padding: 0.75rem 1rem;
-  margin: 0;
-  font-size: 0.6875rem;
-  font-family: var(--font-mono, monospace);
-  color: var(--text);
-  white-space: pre-wrap;
-  line-height: 1.5;
 }
 .content {
   display: flex;

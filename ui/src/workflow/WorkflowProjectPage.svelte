@@ -1,58 +1,43 @@
 <script lang="ts">
 import { onDestroy, onMount } from "svelte";
-import {
-  closePanel,
-  projectHeader,
-} from "../queen-bee/project-header-state.svelte";
 import WorkflowFlow from "./WorkflowFlow.svelte";
 import {
   connectFlowWs,
   dispatchAction,
   type FlowResponse,
   type FlowWsEvent,
-  fetchFlows,
+  fetchFlow,
   sendTaskInput,
 } from "./workflow-api";
 
 let { projectId }: { projectId: string } = $props();
 
-let flows = $state<FlowResponse[]>([]);
+let flow = $state<FlowResponse | null>(null);
 let loading = $state(true);
 let error = $state<string | null>(null);
 let unsubWs: (() => void) | null = null;
 
 onMount(() => {
-  projectHeader.projectId = projectId;
-  loadFlows();
+  void loadFlow();
   unsubWs = connectFlowWs((event) => {
     handleWsEvent(event);
   });
   return () => {
     unsubWs?.();
-    closePanel();
   };
 });
 
-async function loadFlows() {
+async function loadFlow() {
   loading = true;
   error = null;
   try {
-    flows = await fetchFlows();
-    const reqFlow = flows.find((f) => f.id === projectId);
-    if (reqFlow) {
-      const reqInstance = reqFlow.instances.find(
-        (i) => i.workflowId === "requirements"
-      );
-      draftContent = readDraftContent(reqInstance?.state?.taskOutputs?.draft);
-    }
+    flow = await fetchFlow(projectId);
   } catch (err) {
-    error = err instanceof Error ? err.message : "Failed to load flows";
+    error = err instanceof Error ? err.message : "Failed to load flow";
   } finally {
     loading = false;
   }
 }
-
-let draftContent = $state("");
 
 async function handleAction(
   flowId: string,
@@ -61,7 +46,7 @@ async function handleAction(
 ) {
   try {
     await dispatchAction(flowId, instanceId, actionId);
-    await loadFlows();
+    await loadFlow();
   } catch (err) {
     error = err instanceof Error ? err.message : "Action failed";
   }
@@ -73,7 +58,7 @@ async function handleSendMessage(
   content: string
 ) {
   await sendTaskInput(flowId, instanceId, content);
-  await loadFlows();
+  await loadFlow();
 }
 
 function handleWsEvent(event: FlowWsEvent) {
@@ -82,19 +67,9 @@ function handleWsEvent(event: FlowWsEvent) {
     event.type === "instance_terminated" ||
     event.type === "instance_created"
   ) {
-    void loadFlows();
+    void loadFlow();
   }
 }
-
-function readDraftContent(draft: unknown): string {
-  if (draft === null || typeof draft !== "object") return "";
-  const outcome = draft as Record<string, unknown>;
-  if (typeof outcome.output !== "object" || outcome.output === null) return "";
-  const output = outcome.output as Record<string, unknown>;
-  return typeof output.content === "string" ? output.content : "";
-}
-
-let currentFlow = $derived(flows.find((f) => f.id === projectId) ?? null);
 </script>
 
 <div class="project-page">
@@ -102,15 +77,15 @@ let currentFlow = $derived(flows.find((f) => f.id === projectId) ?? null);
     <div class="loading">Loading project...</div>
   {:else if error}
     <div class="error">{error}</div>
-    <button type="button" class="retry-btn" onclick={loadFlows}>Retry</button>
-  {:else if !currentFlow}
+    <button type="button" class="retry-btn" onclick={loadFlow}>Retry</button>
+  {:else if !flow}
     <div class="empty">Project not found</div>
   {:else}
     <div class="flow-sections">
       <WorkflowFlow
-        flowDef={{ id: currentFlow.id, label: currentFlow.label }}
-        flowDefs={currentFlow.workflows}
-        instances={currentFlow.instances}
+        flowDef={{ id: flow.id, label: flow.label }}
+        flowDefs={flow.workflows}
+        instances={flow.instances}
         onAction={handleAction}
         onSendMessage={handleSendMessage}
       />

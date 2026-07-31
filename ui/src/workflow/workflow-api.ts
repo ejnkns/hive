@@ -66,6 +66,7 @@ export type WorkflowInstanceEntry = {
 export type FlowResponse = {
   id: string;
   label: string;
+  config?: Record<string, unknown>;
   workflows: WorkflowDef[];
   instances: WorkflowInstanceEntry[];
 };
@@ -122,6 +123,48 @@ export async function fetchFlows(): Promise<FlowResponse[]> {
   // the server endpoint and validated by the return type
   const data = (await res.json()) as FlowsApiResponse;
   return data.flows;
+}
+
+export async function fetchFlow(flowId: string): Promise<FlowResponse> {
+  const res = await fetch(`/api/flows/${encodeURIComponent(flowId)}`);
+  if (!res.ok) {
+    // Error response shape is guaranteed by the server endpoint
+    const err = (await res.json()) as { error?: string };
+    throw new Error(err.error ?? `Failed to fetch flow: ${res.statusText}`);
+  }
+  // Success response shape matches FlowResponse by contract with the server
+  return (await res.json()) as FlowResponse;
+}
+
+export async function createFlow(input: {
+  definitionId: string;
+  flowId?: string;
+  config?: Record<string, unknown>;
+}): Promise<{ flowId: string }> {
+  const res = await fetch("/api/flows", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    // Error response shape is guaranteed by the server endpoint
+    const err = (await res.json()) as { error?: string };
+    throw new Error(err.error ?? `Failed to create flow: ${res.statusText}`);
+  }
+  // Success response shape is guaranteed by the server endpoint
+  const data = (await res.json()) as { ok: boolean; flowId: string };
+  return { flowId: data.flowId };
+}
+
+export async function deleteFlow(flowId: string): Promise<void> {
+  const res = await fetch(`/api/flows/${encodeURIComponent(flowId)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    // Error response shape is guaranteed by the server endpoint
+    const err = (await res.json()) as { error?: string };
+    throw new Error(err.error ?? `Failed to delete flow: ${res.statusText}`);
+  }
 }
 
 export async function fetchFlowInstances(

@@ -46,12 +46,31 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
       return {
         id: flowId,
         label: (cfg.name as string) ?? flowId,
+        config: cfg,
         workflows: runtime.getWorkflowDefinitions(),
         instances: runtime.getWorkflowInstanceEntries(),
       };
     });
 
     return reply.send({ flows });
+  });
+
+  server.get("/api/flows/:flowId", async (request, reply) => {
+    // Fastify params type is erased; shape guaranteed by route pattern
+    const { flowId } = request.params as { flowId: string };
+    const runtime = getFlowRuntime(flowId);
+    if (!runtime) {
+      return reply.status(404).send({ error: "Flow not found" });
+    }
+
+    const cfg = runtime.getFlowConfig();
+    return reply.send({
+      id: flowId,
+      label: (cfg.name as string) ?? flowId,
+      config: cfg,
+      workflows: runtime.getWorkflowDefinitions(),
+      instances: runtime.getWorkflowInstanceEntries(),
+    });
   });
 
   server.get("/api/flows/:flowId/instances", async (request, reply) => {
