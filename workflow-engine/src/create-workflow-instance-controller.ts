@@ -1,41 +1,13 @@
 import { getAvailableActions } from "./get-available-actions";
 import { reduce, type WorkflowEvent } from "./reduce";
-import type { WorkflowInstanceState } from "./shared/workflow-instance-state";
+import type { RuntimeWorkflowInstanceState } from "./shared/workflow-instance-state";
 import type { TaskDefinition, TaskRunner } from "./task-runner";
 import type {
   RunningTaskContext,
-  StateDef,
+  RuntimeStateDef,
+  RuntimeWorkflowConfig,
   VisibleAction,
 } from "./workflow-types";
-
-type ErasedState = StateDef<
-  Record<string, unknown>,
-  string,
-  Record<string, unknown>
->;
-type ErasedInstanceState = WorkflowInstanceState<
-  Record<string, unknown>,
-  string
->;
-
-// === Workflow configuration ===
-
-export type WorkflowConfig<
-  TTaskOutputs extends Record<string, unknown>,
-  TStateId extends string,
-  TWorkflowInstanceState extends Record<string, unknown> = Record<
-    string,
-    never
-  >,
-> = {
-  id: string;
-  label: string;
-  description?: string;
-  taskOutputs: TTaskOutputs;
-  states: readonly StateDef<TTaskOutputs, TStateId, TWorkflowInstanceState>[];
-  initial: TStateId;
-  terminalStates: readonly TStateId[];
-};
 
 export class UnknownRoleError extends Error {
   constructor(role: string) {
@@ -44,51 +16,27 @@ export class UnknownRoleError extends Error {
   }
 }
 
-export type WorkflowInstanceEvent<
-  TTaskOutputs extends Record<string, unknown>,
-  TStateId extends string,
-  TWorkflowInstanceState extends Record<string, unknown> = Record<
-    string,
-    never
-  >,
-> =
+export type WorkflowInstanceEvent =
   | {
       type: "state_changed";
-      state: WorkflowInstanceState<
-        TTaskOutputs,
-        TStateId,
-        TWorkflowInstanceState
-      >;
+      state: RuntimeWorkflowInstanceState;
     }
   | { type: "available_actions_changed"; actions: VisibleAction[] }
   | { type: "task_started"; taskId: string }
   | { type: "task_completed"; taskId: string; output: unknown }
   | { type: "task_errored"; taskId: string; error: string };
 
-type EventHandler = (
-  event: WorkflowInstanceEvent<Record<string, unknown>, string>
-) => void;
+type EventHandler = (event: WorkflowInstanceEvent) => void;
 
-export type WorkflowInstanceControllerAPI<
-  TTaskOutputs extends Record<string, unknown>,
-  TStateId extends string,
-  TWorkflowInstanceState extends Record<string, unknown> = Record<
-    string,
-    never
-  >,
-> = {
-  getState(): WorkflowInstanceState<
-    TTaskOutputs,
-    TStateId,
-    TWorkflowInstanceState
-  >;
+export type WorkflowInstanceControllerAPI = {
+  getState(): RuntimeWorkflowInstanceState;
   getAvailableActions(): VisibleAction[];
   on(handler: EventHandler): () => void;
   dispatchAction(actionId: string): void;
   startTask(taskId: string, metadata?: Record<string, unknown>): Promise<void>;
   sendTaskInput(taskId: string, content: string, role: string): void;
   patchRunningTaskMetadata(metadata: Record<string, unknown>): void;
-  patchWorkflowInstanceState(patch: Partial<TWorkflowInstanceState>): void;
+  patchWorkflowInstanceState(patch: Record<string, unknown>): void;
   onTaskCompleted(taskId: string, output: unknown): Promise<void>;
   onTaskErrored(taskId: string, error: string): Promise<void>;
   cancel(): void;
@@ -97,57 +45,33 @@ export type WorkflowInstanceControllerAPI<
 
 // === Factory ===
 
-export function createWorkflowInstanceController<
-  TTaskOutputs extends Record<string, unknown>,
-  TStateId extends string,
-  TWorkflowInstanceState extends Record<string, unknown> = Record<
-    string,
-    never
-  >,
-  TFlowState extends Record<string, unknown> = Record<string, never>,
->(
-  workflow: WorkflowConfig<TTaskOutputs, TStateId, TWorkflowInstanceState>,
+export function createWorkflowInstanceController(
+  workflow: RuntimeWorkflowConfig,
   runners: Record<string, TaskRunner>,
-  initialState?: WorkflowInstanceState<
-    TTaskOutputs,
-    TStateId,
-    TWorkflowInstanceState
-  >,
+  initialState?: RuntimeWorkflowInstanceState,
   workflowInstancesInState?: (stateId?: string) => { currentState: string }[],
-  flowState?: TFlowState
-): WorkflowInstanceControllerAPI<
-  TTaskOutputs,
-  TStateId,
-  TWorkflowInstanceState
-> {
-  let state: WorkflowInstanceState<
-    TTaskOutputs,
-    TStateId,
-    TWorkflowInstanceState
-  > =
-    initialState ??
-    ({
-      currentState: workflow.initial,
-      taskOutputs: {} as Partial<Record<string, unknown>>,
-      hasRunningTask: false,
-      runningTaskId: null,
-      runningTaskContext: null,
-      workflowInstanceState: {} as TWorkflowInstanceState,
-      history: [],
-    } as WorkflowInstanceState<TTaskOutputs, TStateId, TWorkflowInstanceState>);
+  flowState?: Record<string, unknown>
+): WorkflowInstanceControllerAPI {
+  let state: RuntimeWorkflowInstanceState = initialState ?? {
+    currentState: workflow.initial,
+    taskOutputs: {},
+    hasRunningTask: false,
+    runningTaskId: null,
+    runningTaskContext: null,
+    workflowInstanceState: {},
+    history: [],
+  };
 
   let runningRunner: TaskRunner | null = null;
   const handlers: EventHandler[] = [];
 
-  function emit(
-    event: WorkflowInstanceEvent<TTaskOutputs, TStateId, TWorkflowInstanceState>
-  ): void {
+  function emit(event: WorkflowInstanceEvent): void {
     for (const handler of handlers) {
-      handler(event as WorkflowInstanceEvent<Record<string, unknown>, string>);
+      handler(event);
     }
   }
 
-  function dispatcher(event: WorkflowEvent<TTaskOutputs, TStateId>): void {
+  function dispatcher(event: WorkflowEvent): void {
     const result = reduce(state, event, workflow.states, flowState);
     state = result.state;
     emit({ type: "state_changed", state });
@@ -167,9 +91,9 @@ export function createWorkflowInstanceController<
 
   function getVisibleActions(): VisibleAction[] {
     return getAvailableActions(
-      workflow.states as unknown as readonly ErasedState[],
-      state.currentState as string,
-      state as unknown as ErasedInstanceState,
+      workflow.states,
+      state.currentState,
+      state,
       workflowInstancesInState
     );
   }
@@ -192,7 +116,7 @@ export function createWorkflowInstanceController<
 
     dispatcher({
       type: "task_started",
-      taskId: task.id as keyof TTaskOutputs & string,
+      taskId: task.id,
       context: buildRunningContext(task.role),
       metadata,
     });
@@ -215,7 +139,7 @@ export function createWorkflowInstanceController<
   ): Promise<void> {
     dispatcher({
       type: "task_completed",
-      taskId: taskId as keyof TTaskOutputs & string,
+      taskId,
       output,
     });
   }
@@ -223,7 +147,7 @@ export function createWorkflowInstanceController<
   async function onTaskErrored(taskId: string, error: string): Promise<void> {
     dispatcher({
       type: "task_errored",
-      taskId: taskId as keyof TTaskOutputs & string,
+      taskId,
       error,
     });
   }
@@ -270,9 +194,7 @@ export function createWorkflowInstanceController<
     runningRunner?.sendMessage?.(content, role);
   }
 
-  function patchWorkflowInstanceState(
-    patch: Partial<TWorkflowInstanceState>
-  ): void {
+  function patchWorkflowInstanceState(patch: Record<string, unknown>): void {
     state = {
       ...state,
       workflowInstanceState: { ...state.workflowInstanceState, ...patch },
@@ -314,12 +236,11 @@ export function createWorkflowInstanceController<
       }
 
       if (action.dependsOnState !== undefined && workflowInstancesInState) {
-        const dependees: string[] =
-          (state.workflowInstanceState as any).dependsOn ?? [];
+        const dependees = readDependsOn(state.workflowInstanceState);
         if (dependees.length > 0) {
           const inState = workflowInstancesInState(action.dependsOnState);
           const inStateIds = new Set(
-            inState.map((i) => (i as any).id).filter(Boolean)
+            inState.map((instance) => readInstanceId(instance))
           );
           const allMet = dependees.every((d) => inStateIds.has(d));
           if (!allMet) return;
@@ -334,7 +255,7 @@ export function createWorkflowInstanceController<
       dispatcher({
         type: "action_triggered",
         actionId,
-        transitionTo: action.transitionTo as TStateId,
+        transitionTo: action.transitionTo,
       });
     },
     startTask,
@@ -346,4 +267,21 @@ export function createWorkflowInstanceController<
     cancel,
     startAutoTasks,
   };
+}
+
+// === Helpers ===
+
+// dependsOn is written into workflowInstanceState by the flow edges /
+// callers as a string[]; it is not part of the domain type contract.
+function readDependsOn(itemState: Record<string, unknown>): string[] {
+  const raw = itemState["dependsOn"];
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((id): id is string => typeof id === "string");
+}
+
+function readInstanceId(instance: { currentState: string }): string {
+  // The callback type erases the instance id; instances carry it at runtime
+  if (!("id" in instance)) return "";
+  const candidate = instance["id"];
+  return typeof candidate === "string" ? candidate : "";
 }

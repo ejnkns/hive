@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it, mock } from "node:test";
-import { createFlowRuntime, type FlowPersistence } from "./create-flow-runtime";
+import {
+  createFlowRuntime,
+  type FlowPersistence,
+  type FlowRuntimeEvent,
+} from "./create-flow-runtime";
 import type { TaskDefinition, TaskRunner } from "./task-runner";
 import type { FlowEdge } from "./workflow-types";
 import { defineWorkflow } from "./workflow-types";
@@ -132,36 +136,31 @@ describe("FlowRuntime", () => {
 
   describe("patchFlowState", () => {
     it("merges patch into flow state", () => {
-      const runtime = createFlowRuntime(
-        "test",
-        [sourceWorkflow],
-        [],
-        {},
-        {},
-        { a: 1 }
-      );
-      runtime.patchFlowState({ b: 2 } as any);
+      const runtime = createFlowRuntime<
+        Record<string, unknown>,
+        Record<string, unknown>
+      >("test", [sourceWorkflow], [], {}, {}, { a: 1 });
+      runtime.patchFlowState({ b: 2 });
       assert.deepEqual(runtime.getFlowState(), { a: 1, b: 2 });
     });
 
     it("emits flow_state_changed event", () => {
-      const runtime = createFlowRuntime("test", [sourceWorkflow], [], {});
+      const runtime = createFlowRuntime<
+        Record<string, unknown>,
+        Record<string, unknown>
+      >("test", [sourceWorkflow], [], {});
       const events: string[] = [];
       runtime.on((event) => events.push(event.type));
-      runtime.patchFlowState({ key: "val" } as any);
+      runtime.patchFlowState({ key: "val" });
       assert.ok(events.includes("flow_state_changed"));
     });
 
     it("mutates the same object reference so controllers see updates", () => {
-      const runtime = createFlowRuntime(
-        "test",
-        [sourceWorkflow],
-        [],
-        {},
-        {},
-        { shared: "original" }
-      );
-      runtime.patchFlowState({ shared: "updated" } as any);
+      const runtime = createFlowRuntime<
+        Record<string, unknown>,
+        Record<string, unknown>
+      >("test", [sourceWorkflow], [], {}, {}, { shared: "original" });
+      runtime.patchFlowState({ shared: "updated" });
       // The same object reference is mutated in-place
       const state = runtime.getFlowState();
       assert.equal(state.shared, "updated");
@@ -184,10 +183,9 @@ describe("FlowRuntime", () => {
         },
       });
       assert.equal(controller.getState().currentState, "done");
-      assert.equal(
-        controller.getState().taskOutputs.doWork?.output?.result,
-        "ok"
-      );
+      assert.deepEqual(controller.getState().taskOutputs.doWork?.output, {
+        result: "ok",
+      });
     });
 
     it("throws for unknown workflow id", () => {
@@ -208,14 +206,15 @@ describe("FlowRuntime", () => {
 
     it("instance_created event carries workflowId and instanceId", () => {
       const runtime = createFlowRuntime("test", [sourceWorkflow], [], {});
-      let event: any = null;
+      const created: Extract<FlowRuntimeEvent, { type: "instance_created" }>[] =
+        [];
       runtime.on((e) => {
-        if (e.type === "instance_created") event = e;
+        if (e.type === "instance_created") created.push(e);
       });
       const controller = runtime.addWorkflowInstance("source");
-      assert.ok(event);
-      assert.equal(event.workflowId, "source");
-      assert.ok(event.instanceId);
+      assert.equal(created.length, 1);
+      assert.equal(created[0]!.workflowId, "source");
+      assert.ok(created[0]!.instanceId);
     });
   });
 
@@ -354,8 +353,8 @@ describe("FlowRuntime", () => {
           fromWorkflow: "source",
           fromStates: ["done"],
           toWorkflow: "target",
-          transform: (source: any) => ({
-            inherited: source.doWork?.output?.result ?? null,
+          transform: (source) => ({
+            inherited: readOutputResult(source.doWork?.output) ?? null,
             dependsOn: ["parent-card"],
           }),
         },
@@ -472,8 +471,8 @@ describe("FlowRuntime", () => {
           fromWorkflow: "source",
           fromStates: ["done"],
           toFlowState: true,
-          transform: (source: any) => ({
-            lastResult: source.doWork?.output?.result ?? null,
+          transform: (source) => ({
+            lastResult: readOutputResult(source.doWork?.output) ?? null,
           }),
         },
       ];
@@ -484,7 +483,7 @@ describe("FlowRuntime", () => {
         edges,
         { "ai-task": runner },
         {},
-        { lastResult: null } as any
+        { lastResult: null }
       );
 
       const controller = runtime.addWorkflowInstance("source");
@@ -608,10 +607,10 @@ describe("FlowRuntime", () => {
         },
         saveInstance() {},
         saveRunningTaskContext() {},
-        loadFlow(): any {
+        loadFlow() {
           return null;
         },
-        loadAllFlows(): any {
+        loadAllFlows() {
           return [];
         },
       };
@@ -629,7 +628,13 @@ describe("FlowRuntime", () => {
       runtime.patchFlowState({ count: 1 });
       assert.equal(saved.length, 1);
       assert.equal(saved[0]!.flowId, "test-flow");
-      assert.equal((saved[0]!.state as any).count, 1);
+      const savedState = saved[0]!.state;
+      assert.ok(
+        savedState !== null &&
+          typeof savedState === "object" &&
+          "count" in savedState
+      );
+      assert.equal(savedState["count"], 1);
     });
 
     it("calls persistence.saveInstance on state change", async () => {
@@ -644,10 +649,10 @@ describe("FlowRuntime", () => {
           saved.push({ flowId, instanceId, state });
         },
         saveRunningTaskContext() {},
-        loadFlow(): any {
+        loadFlow() {
           return null;
         },
-        loadAllFlows(): any {
+        loadAllFlows() {
           return [];
         },
       };
@@ -673,3 +678,8 @@ describe("FlowRuntime", () => {
     });
   });
 });
+
+function readOutputResult(output: unknown): unknown {
+  if (output === null || typeof output !== "object") return undefined;
+  return "result" in output ? output["result"] : undefined;
+}

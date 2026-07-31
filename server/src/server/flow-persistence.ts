@@ -12,7 +12,8 @@ import {
 import { join } from "node:path";
 import { HIVE_DIR } from "shared/hive-dir";
 import type { FlowPersistence } from "workflow-engine/create-flow-runtime";
-import type { WorkflowInstanceState } from "workflow-engine/shared/workflow-instance-state";
+import type { RuntimeWorkflowInstanceState } from "workflow-engine/shared/workflow-instance-state";
+import type { RunningTaskContext } from "workflow-engine/workflow-types";
 
 const DEFAULT_FLOWS_DIR = join(HIVE_DIR, "flows");
 
@@ -30,6 +31,8 @@ function atomicWrite(filePath: string, data: unknown): void {
 function readJson<T>(filePath: string): T | null {
   try {
     if (!existsSync(filePath)) return null;
+    // The file was written by this module with the same T shape; JSON.parse
+    // returns unknown so the caller's type parameter is asserted at this boundary.
     return JSON.parse(readFileSync(filePath, "utf-8")) as T;
   } catch {
     return null;
@@ -43,7 +46,7 @@ type PersistedFlow = {
 
 type PersistedInstance = {
   workflowId: string;
-  state: WorkflowInstanceState<any, any, any>;
+  state: RuntimeWorkflowInstanceState;
 };
 
 export function createFlowPersistence(
@@ -98,7 +101,7 @@ export function createFlowPersistence(
     flowId: string,
     instanceId: string,
     workflowId: string,
-    state: WorkflowInstanceState<any, any, any>
+    state: RuntimeWorkflowInstanceState
   ): void {
     atomicWrite(instanceFilePath(flowId, instanceId), {
       workflowId,
@@ -119,7 +122,7 @@ export function createFlowPersistence(
     state: unknown;
     instances: Array<{
       workflowId: string;
-      state: WorkflowInstanceState<any, any, any>;
+      state: RuntimeWorkflowInstanceState;
     }>;
   } | null {
     const flow = readJson<PersistedFlow>(flowFilePath(flowId));
@@ -128,7 +131,7 @@ export function createFlowPersistence(
     const ids = listInstanceIds(flowId);
     const instances: Array<{
       workflowId: string;
-      state: WorkflowInstanceState<any, any, any>;
+      state: RuntimeWorkflowInstanceState;
     }> = [];
 
     for (const id of ids) {
@@ -146,7 +149,13 @@ export function createFlowPersistence(
         state: {
           ...persisted.state,
           runningTaskContext: ctx
-            ? ({ ...persisted.state.runningTaskContext, ...ctx } as any)
+            ? // ctx is the full saved running-task context (messages, role,
+              // sessionId); merging overrides any stale embedded copy. The
+              // shape is guaranteed by saveRunningTaskContext.
+              ({
+                ...persisted.state.runningTaskContext,
+                ...ctx,
+              } as RunningTaskContext)
             : persisted.state.runningTaskContext,
         },
       });
@@ -161,7 +170,7 @@ export function createFlowPersistence(
     state: unknown;
     instances: Array<{
       workflowId: string;
-      state: WorkflowInstanceState<any, any, any>;
+      state: RuntimeWorkflowInstanceState;
     }>;
   }> {
     try {

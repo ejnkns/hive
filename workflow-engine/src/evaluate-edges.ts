@@ -1,4 +1,4 @@
-import type { FlowEdge, TaskOutputMap } from "./workflow-types";
+import type { RuntimeFlowEdge } from "./workflow-types";
 
 export type EdgeEffect = {
   fromWorkflow: string;
@@ -9,7 +9,7 @@ export type EdgeEffect = {
 };
 
 export function evaluateEdges(
-  edges: FlowEdge[],
+  edges: RuntimeFlowEdge[],
   fromWorkflow: string,
   newState: string,
   workflowOutput: Record<string, unknown>
@@ -20,8 +20,15 @@ export function evaluateEdges(
     if (edge.fromWorkflow !== fromWorkflow) continue;
     if (!edge.fromStates.includes(newState)) continue;
 
+    // Edge transforms are authored against Partial<TaskOutputMap<TSourceOutputs>>
+    // but invoked with the erased runtime output map. reduce() guarantees the
+    // values are TaskOutcome-shaped, so the shape matches at runtime.
     const transformedData: Record<string, unknown> = edge.transform
-      ? edge.transform(workflowOutput as any)
+      ? edge.transform(
+          workflowOutput as Parameters<
+            NonNullable<RuntimeFlowEdge["transform"]>
+          >[0]
+        )
       : {};
 
     effects.push({

@@ -1,14 +1,14 @@
 import {
   createWorkflowInstanceController,
-  type WorkflowConfig,
   type WorkflowInstanceControllerAPI,
 } from "./create-workflow-instance-controller";
 import { evaluateEdges } from "./evaluate-edges";
-import type { WorkflowInstanceState } from "./shared/workflow-instance-state";
+import type { RuntimeWorkflowInstanceState } from "./shared/workflow-instance-state";
 import type { TaskRunner } from "./task-runner";
 import type {
   ActionVariant,
-  FlowEdge,
+  RuntimeFlowEdge,
+  RuntimeWorkflowConfig,
   StateCategory,
   VisibleAction,
 } from "./workflow-types";
@@ -33,11 +33,11 @@ export type WorkflowDefResponse = {
 export type WorkflowInstanceEntry = {
   id: string;
   workflowId: string;
-  state: WorkflowInstanceState<any, any, any>;
+  state: RuntimeWorkflowInstanceState;
   availableActions: VisibleAction[];
 };
 
-// ── Persistence interface (stub — Ticket 6 implements) ──
+// ── Persistence interface ──
 
 export type FlowPersistence = {
   saveFlow(flowId: string, config: unknown, state: unknown): void;
@@ -45,7 +45,7 @@ export type FlowPersistence = {
     flowId: string,
     instanceId: string,
     workflowId: string,
-    state: WorkflowInstanceState<any, any, any>
+    state: RuntimeWorkflowInstanceState
   ): void;
   saveRunningTaskContext(
     flowId: string,
@@ -57,7 +57,7 @@ export type FlowPersistence = {
     state: unknown;
     instances: Array<{
       workflowId: string;
-      state: WorkflowInstanceState<any, any, any>;
+      state: RuntimeWorkflowInstanceState;
     }>;
   } | null;
   loadAllFlows(): Array<{
@@ -66,7 +66,7 @@ export type FlowPersistence = {
     state: unknown;
     instances: Array<{
       workflowId: string;
-      state: WorkflowInstanceState<any, any, any>;
+      state: RuntimeWorkflowInstanceState;
     }>;
   }>;
 };
@@ -80,13 +80,13 @@ export type FlowRuntimeEvent =
       type: "instance_state_changed";
       instanceId: string;
       workflowId: string;
-      state: WorkflowInstanceState<any, any, any>;
+      state: RuntimeWorkflowInstanceState;
     }
   | {
       type: "instance_terminated";
       instanceId: string;
       workflowId: string;
-      state: WorkflowInstanceState<any, any, any>;
+      state: RuntimeWorkflowInstanceState;
     };
 
 export type FlowEventHandler = (event: FlowRuntimeEvent) => void;
@@ -100,15 +100,13 @@ export type FlowRuntimeAPI<TFlowConfig, TFlowState> = {
   patchFlowState(patch: Partial<TFlowState>): void;
   addWorkflowInstance(
     workflowId: string,
-    instanceState?: Partial<WorkflowInstanceState<any, any, any>>
-  ): WorkflowInstanceControllerAPI<any, any, any>;
+    instanceState?: Partial<RuntimeWorkflowInstanceState>
+  ): WorkflowInstanceControllerAPI;
   getWorkflowInstance(
     instanceId: string
-  ): WorkflowInstanceControllerAPI<any, any, any> | undefined;
-  workflowInstances: WorkflowInstanceState<any, any, any>[];
-  workflowInstancesInState(
-    stateId?: string
-  ): WorkflowInstanceState<any, any, any>[];
+  ): WorkflowInstanceControllerAPI | undefined;
+  workflowInstances: RuntimeWorkflowInstanceState[];
+  workflowInstancesInState(stateId?: string): RuntimeWorkflowInstanceState[];
   on(handler: FlowEventHandler): () => void;
   getWorkflowDefinitions(): WorkflowDefResponse[];
   getWorkflowInstanceEntries(): WorkflowInstanceEntry[];
@@ -117,25 +115,23 @@ export type FlowRuntimeAPI<TFlowConfig, TFlowState> = {
 // ── Factory ──
 
 export function createFlowRuntime<
-  TFlowConfig extends Record<string, unknown> = Record<string, never>,
-  TFlowState extends Record<string, unknown> = Record<string, never>,
+  TFlowConfig extends Record<string, unknown> = Record<string, unknown>,
+  TFlowState extends Record<string, unknown> = Record<string, unknown>,
 >(
   flowId: string,
-  workflowDefs: WorkflowConfig<any, any, any>[],
-  edges: FlowEdge[],
+  workflowDefs: RuntimeWorkflowConfig[],
+  edges: RuntimeFlowEdge[],
   runners: Record<string, TaskRunner>,
   config?: TFlowConfig,
   initialState?: TFlowState,
   persistence?: FlowPersistence
 ): FlowRuntimeAPI<TFlowConfig, TFlowState> {
+  // config/initialState are optional; {} satisfies the Record constraint
   const _flowConfig = (config ?? {}) as TFlowConfig;
   const _flowState = (initialState ?? {}) as TFlowState;
-  const controllers = new Map<
-    string,
-    WorkflowInstanceControllerAPI<any, any, any>
-  >();
+  const controllers = new Map<string, WorkflowInstanceControllerAPI>();
   const instanceWorkflowIds = new Map<string, string>();
-  const workflowMap = new Map<string, WorkflowConfig<any, any, any>>();
+  const workflowMap = new Map<string, RuntimeWorkflowConfig>();
   const eventHandlers = new Set<FlowEventHandler>();
 
   for (const wf of workflowDefs) {
@@ -152,7 +148,7 @@ export function createFlowRuntime<
 
   function _workflowInstancesInState(
     stateId?: string
-  ): WorkflowInstanceState<any, any, any>[] {
+  ): RuntimeWorkflowInstanceState[] {
     return Array.from(controllers.values())
       .map((c) => c.getState())
       .filter((s) => stateId === undefined || s.currentState === stateId);
@@ -167,27 +163,26 @@ export function createFlowRuntime<
     Object.assign(_flowState, patch);
     emit({
       type: "flow_state_changed",
-      state: _flowState as unknown as Record<string, unknown>,
+      state: _flowState,
     });
     persistence?.saveFlow(flowId, _flowConfig, _flowState);
   }
 
   function evaluateEdgesOnTerminal(
     workflowId: string,
-    instanceState: WorkflowInstanceState<any, any, any>
+    instanceState: RuntimeWorkflowInstanceState
   ): void {
     const effects = evaluateEdges(
       edges,
       workflowId,
       instanceState.currentState,
-      instanceState.taskOutputs as unknown as Record<string, unknown>
+      instanceState.taskOutputs
     );
 
     for (const effect of effects) {
       if (effect.toFlowState) {
-        patchFlowState(
-          effect.transformedData as unknown as Partial<TFlowState>
-        );
+        // Edge transform output is expected to be flow-state-shaped
+        patchFlowState(effect.transformedData as Partial<TFlowState>);
       }
       if (effect.toWorkflow) {
         addWorkflowInstance(effect.toWorkflow, {
@@ -233,14 +228,14 @@ export function createFlowRuntime<
 
   function addWorkflowInstance(
     workflowId: string,
-    instanceState?: Partial<WorkflowInstanceState<any, any, any>>
-  ): WorkflowInstanceControllerAPI<any, any, any> {
+    instanceState?: Partial<RuntimeWorkflowInstanceState>
+  ): WorkflowInstanceControllerAPI {
     const workflow = workflowMap.get(workflowId);
     if (!workflow) throw new Error(`Workflow "${workflowId}" not found`);
 
     const instanceId = crypto.randomUUID();
 
-    const initialState: WorkflowInstanceState<any, any, any> = {
+    const initialState: RuntimeWorkflowInstanceState = {
       currentState: instanceState?.currentState ?? workflow.initial,
       taskOutputs: instanceState?.taskOutputs ?? {},
       hasRunningTask: instanceState?.hasRunningTask ?? false,
@@ -251,11 +246,11 @@ export function createFlowRuntime<
     };
 
     const controller = createWorkflowInstanceController(
-      workflow as any,
+      workflow,
       runners,
-      initialState as any,
+      initialState,
       _workflowInstancesInState,
-      _flowState as any
+      _flowState
     );
 
     controllers.set(instanceId, controller);
@@ -296,7 +291,7 @@ export function createFlowRuntime<
     patchFlowState,
     addWorkflowInstance,
     getWorkflowInstance: (instanceId: string) => controllers.get(instanceId),
-    get workflowInstances(): WorkflowInstanceState<any, any, any>[] {
+    get workflowInstances(): RuntimeWorkflowInstanceState[] {
       return Array.from(controllers.values()).map((c) => c.getState());
     },
     workflowInstancesInState: _workflowInstancesInState,

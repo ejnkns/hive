@@ -7,6 +7,15 @@
 //
 // The types are generic — no domain-specific concepts. Any project
 // lifecycle can be expressed.
+//
+// == Generic-erasure convention ==
+//
+// The generic parameters provide type safety at definition site (the
+// workflow author's taskOutputs / item state shapes). At runtime the
+// engine stores heterogeneous workflows (cards, requirements, ideas) in
+// one collection, so the generics are erased to their defaults. The
+// "Runtime*" aliases below are exactly those erased instantiations.
+// defineWorkflow is the single boundary where the erasure happens.
 
 // --- Convenience aliases ---
 
@@ -23,7 +32,9 @@ export type TaskOutcome<TOutput> = {
 // Maps each declared task id to its typed outcome.
 // Gate functions receive Partial<> because not all tasks have run yet —
 // the engine only populates outputs for completed tasks.
-export type TaskOutputMap<TTaskOutputs extends Record<string, unknown>> = {
+export type TaskOutputMap<
+  TTaskOutputs extends Record<string, unknown> = Record<string, unknown>,
+> = {
   [K in keyof TTaskOutputs]: TaskOutcome<TTaskOutputs[K]>;
 };
 
@@ -58,12 +69,12 @@ export type ChatMessage = {
 // runningTaskContext contains the active task's runtime data (null when idle).
 // itemState carries per-item domain data (e.g. card-specific state).
 export type GateContext<
-  TTaskOutputs extends Record<string, unknown>,
+  TTaskOutputs extends Record<string, unknown> = Record<string, unknown>,
   TWorkflowInstanceState extends Record<string, unknown> = Record<
     string,
-    never
+    unknown
   >,
-  TFlowState extends Record<string, unknown> = Record<string, never>,
+  TFlowState extends Record<string, unknown> = Record<string, unknown>,
 > = {
   taskOutputs: Partial<TaskOutputMap<TTaskOutputs>>;
   hasRunningTask: boolean;
@@ -72,6 +83,8 @@ export type GateContext<
   flowState: TFlowState;
   workflowInstancesInState?: (stateId?: string) => { currentState: string }[];
 };
+
+export type RuntimeGateContext = GateContext;
 
 // --- Action variant ---
 
@@ -102,22 +115,24 @@ export type StateCategory = "initial" | "active" | "terminal" | "error";
 // AutoTransition: evaluated automatically when a state's tasks complete.
 // The gate receives the partial output map — use optional chaining.
 export type AutoTransition<
-  TTaskOutputs extends Record<string, unknown>,
-  TToStateId extends string,
-  TItemState extends Record<string, unknown> = Record<string, never>,
+  TTaskOutputs extends Record<string, unknown> = Record<string, unknown>,
+  TToStateId extends string = string,
+  TItemState extends Record<string, unknown> = Record<string, unknown>,
 > = {
   to: TToStateId;
   gate: (ctx: GateContext<TTaskOutputs, TItemState>) => boolean;
   effect?: () => void | Promise<void>;
 };
 
+export type RuntimeAutoTransition = AutoTransition;
+
 // ManualAction: a button the user can click to trigger a state change.
 // gate controls visibility; transitionTo is the target state.
 // variant provides a visual hint for UI rendering.
 export type ManualAction<
-  TTaskOutputs extends Record<string, unknown>,
-  TStateId extends string,
-  TItemState extends Record<string, unknown> = Record<string, never>,
+  TTaskOutputs extends Record<string, unknown> = Record<string, unknown>,
+  TStateId extends string = string,
+  TItemState extends Record<string, unknown> = Record<string, unknown>,
 > = {
   id: string;
   label: string;
@@ -127,6 +142,8 @@ export type ManualAction<
   dependsOnState?: TStateId;
   transitionTo: TStateId;
 };
+
+export type RuntimeManualAction = ManualAction;
 
 // --- State definition ---
 
@@ -138,9 +155,9 @@ export type ManualAction<
 //   "operation" — deterministic operations run synchronously.
 
 export type StateDef<
-  TTaskOutputs extends Record<string, unknown>,
+  TTaskOutputs extends Record<string, unknown> = Record<string, unknown>,
   TStateId extends string = string,
-  TItemState extends Record<string, unknown> = Record<string, never>,
+  TItemState extends Record<string, unknown> = Record<string, unknown>,
 > = {
   id: TStateId;
   label: string;
@@ -163,6 +180,29 @@ export type StateDef<
   actions?: ManualAction<TTaskOutputs, TStateId, TItemState>[];
 };
 
+export type RuntimeStateDef = StateDef;
+
+// --- Workflow configuration (the full runtime shape) ---
+
+export type WorkflowConfig<
+  TTaskOutputs extends Record<string, unknown> = Record<string, unknown>,
+  TStateId extends string = string,
+  TWorkflowInstanceState extends Record<string, unknown> = Record<
+    string,
+    unknown
+  >,
+> = {
+  id: string;
+  label: string;
+  description?: string;
+  taskOutputs: TTaskOutputs;
+  states: readonly StateDef<TTaskOutputs, TStateId, TWorkflowInstanceState>[];
+  initial: TStateId;
+  terminalStates: readonly TStateId[];
+};
+
+export type RuntimeWorkflowConfig = WorkflowConfig;
+
 // --- Builder ---
 
 export function defineWorkflow<
@@ -170,9 +210,9 @@ export function defineWorkflow<
   TStateId extends string,
   TWorkflowInstanceState extends Record<string, unknown> = Record<
     string,
-    never
+    unknown
   >,
-  TWorkflowOutput extends Record<string, unknown> = Record<string, never>,
+  TWorkflowOutput extends Record<string, unknown> = Record<string, unknown>,
 >(config: {
   id: string;
   label: string;
@@ -183,8 +223,13 @@ export function defineWorkflow<
   states: readonly StateDef<TTaskOutputs, TStateId, TWorkflowInstanceState>[];
   initial: TStateId;
   terminalStates: readonly TStateId[];
-}) {
-  return config;
+}): RuntimeWorkflowConfig {
+  // Gates/transforms are authored against specific generics (e.g.
+  // GateContext<CardsTaskOutputs>) but invoked at runtime against the
+  // erased RuntimeGateContext. Both share identical runtime shape — the
+  // generics only affect compile-time key typing. Erasing here means the
+  // engine never sees WorkflowConfig<any, any, any>.
+  return config as RuntimeWorkflowConfig;
 }
 
 // Structural type for a workflow after definition — used in FlowDefinition.
@@ -216,6 +261,8 @@ export type FlowEdge<
     source: Partial<TaskOutputMap<TSourceOutputs>>
   ) => Record<string, unknown>;
 };
+
+export type RuntimeFlowEdge = FlowEdge;
 
 export type FlowDefinition = {
   id: string;

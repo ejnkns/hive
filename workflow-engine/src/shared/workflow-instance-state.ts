@@ -5,11 +5,11 @@ import type {
 } from "../workflow-types";
 
 export type WorkflowInstanceState<
-  TTaskOutputs extends Record<string, unknown>,
-  TStateId extends string,
+  TTaskOutputs extends Record<string, unknown> = Record<string, unknown>,
+  TStateId extends string = string,
   TWorkflowInstanceState extends Record<string, unknown> = Record<
     string,
-    never
+    unknown
   >,
 > = {
   currentState: TStateId;
@@ -20,3 +20,6 @@ export type WorkflowInstanceState<
   workflowInstanceState: TWorkflowInstanceState;
   history: WorkflowHistoryEntry<TTaskOutputs, TStateId>[];
 };
+
+// Erased instantiation used inside the engine for heterogeneous instances.
+export type RuntimeWorkflowInstanceState = WorkflowInstanceState;

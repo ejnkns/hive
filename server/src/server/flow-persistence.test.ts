@@ -149,8 +149,12 @@ describe("FlowPersistence", () => {
       const result = p.loadFlow("test-flow");
       assert.ok(result);
       assert.equal(result.instances.length, 1);
-      const ctx = result.instances[0]!.state.runningTaskContext as any;
-      assert.equal(ctx.messages.length, 2);
+      const runningCtx = result.instances[0]!.state.runningTaskContext;
+      assert.ok(runningCtx !== null);
+      if (runningCtx.role !== "ai-task" && runningCtx.role !== "ai-chat") {
+        assert.fail("expected a message-carrying running task context");
+      }
+      assert.equal(runningCtx.messages.length, 2);
     });
   });
 

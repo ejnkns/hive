@@ -8,7 +8,6 @@ import {
   createFlowRuntime,
   type FlowRuntimeAPI,
 } from "workflow-engine/create-flow-runtime";
-import type { WorkflowConfig } from "workflow-engine/create-workflow-instance-controller";
 import {
   checkIntegrationReadiness,
   ensureIntegrationBranch,
@@ -17,13 +16,18 @@ import {
 import type { TaskDefinition } from "workflow-engine/task-runner";
 import type {
   ActionVariant,
+  RuntimeGateContext,
+  RuntimeWorkflowConfig,
   StateCategory,
 } from "workflow-engine/workflow-types";
 import { queenBeeFlow } from "../../../queen-bee/flow";
 import { createEngineRunners } from "./engine-bridge";
 
 const DUMMY_TASK: TaskDefinition = { id: "", label: "", role: "" };
-const runtimes = new Map<string, FlowRuntimeAPI<any, any>>();
+const runtimes = new Map<
+  string,
+  FlowRuntimeAPI<Record<string, unknown>, Record<string, unknown>>
+>();
 let _persistence: FlowPersistence | null = null;
 
 export function setFlowPersistence(persistence: FlowPersistence): void {
@@ -36,14 +40,16 @@ export function getFlowPersistence(): FlowPersistence | null {
 
 export function registerFlowForTest(
   flowId: string,
-  runtime: FlowRuntimeAPI<any, any>
+  runtime: FlowRuntimeAPI<Record<string, unknown>, Record<string, unknown>>
 ): void {
   runtimes.set(flowId, runtime);
 }
 
 export function getFlowRuntime(
   flowId: string
-): FlowRuntimeAPI<any, any> | undefined {
+):
+  | FlowRuntimeAPI<Record<string, unknown>, Record<string, unknown>>
+  | undefined {
   return runtimes.get(flowId);
 }
 
@@ -54,6 +60,8 @@ export function getAllFlows(): Array<{
   targetBranch: string;
   maxConcurrentWorkers: number;
 }> {
+  // Flow config arrives as unknown (persistence) or from the erased
+  // FlowRuntimeAPI generic; the field reads below narrow known fields.
   const seen = new Set<string>();
   const result: Array<{
     id: string;
@@ -81,7 +89,7 @@ export function getAllFlows(): Array<{
   // Flows registered directly (e.g. for tests)
   for (const [flowId, runtime] of runtimes) {
     if (seen.has(flowId)) continue;
-    const cfg = runtime.getFlowConfig() as Record<string, unknown>;
+    const cfg = runtime.getFlowConfig();
     result.push({
       id: flowId,
       repoPath: (cfg.repoPath as string) ?? "",
@@ -302,7 +310,7 @@ export type DataDrivenWorkflowDef = {
 
 function convertDataDrivenDef(
   def: DataDrivenWorkflowDef
-): WorkflowConfig<any, any, any> {
+): RuntimeWorkflowConfig {
   return {
     id: def.id,
     label: def.label,
@@ -327,13 +335,13 @@ function convertDataDrivenDef(
           to: t.to,
           gate:
             statusFilter !== undefined
-              ? (ctx: {
-                  taskOutputs: Partial<
-                    Record<string, { status: string } | undefined>
-                  >;
-                }) => {
+              ? (ctx: RuntimeGateContext) => {
                   const outcome = ctx.taskOutputs[statusFilter.taskId];
-                  return outcome?.status === statusFilter.status;
+                  return (
+                    outcome !== undefined &&
+                    "status" in outcome &&
+                    outcome.status === statusFilter.status
+                  );
                 }
               : () => true,
         };
@@ -347,10 +355,7 @@ function convertDataDrivenDef(
     })),
     initial: def.initial,
     terminalStates: def.terminalStates,
-    // WorkflowConfig generics (TTaskOutputs, TStateId, TWorkflowInstanceState)
-    // are inferred structurally. The return matches the shape the engine
-    // consumes via its erased internal workflowMap (WorkflowConfig<any, any, any>).
-  } as unknown as WorkflowConfig<any, any, any>;
+  };
 }
 
 export function createFlowFromDefinition(
@@ -358,7 +363,7 @@ export function createFlowFromDefinition(
   def: DataDrivenWorkflowDef,
   persistence: FlowPersistence,
   config?: Record<string, unknown>
-): FlowRuntimeAPI<any, any> {
+): FlowRuntimeAPI<Record<string, unknown>, Record<string, unknown>> {
   const runners = createEngineRunners();
   const workflowDefs = [convertDataDrivenDef(def)];
   const flowConfig: Record<string, unknown> = {
@@ -388,16 +393,30 @@ export function createFlowFromDefinition(
 
 // ── Workflow definition resolver ──
 
+function readMaxWorkers(config: Record<string, unknown>): number {
+  const raw = config.maxConcurrentWorkers;
+  return typeof raw === "number" ? raw : 3;
+}
+
+function readSystemPrompts(
+  config: Record<string, unknown>
+): Record<string, string> | undefined {
+  const raw = config.systemPrompts;
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    return undefined;
+  }
+  const result: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value === "string") result[key] = value;
+  }
+  return result;
+}
+
 function resolveWorkflowConfigs(
   config: Record<string, unknown>
-): WorkflowConfig<any, any, any>[] {
-  // FlowConfig values are set by createFlowOnLink; these casts narrow
-  // from Record<string, unknown> to the expected types at the
-  // boundary where config enters the system
-  const maxWorkers = (config.maxConcurrentWorkers as number) ?? 3;
-  const systemPrompts = config.systemPrompts as
-    | Record<string, string>
-    | undefined;
+): RuntimeWorkflowConfig[] {
+  const maxWorkers = readMaxWorkers(config);
+  const systemPrompts = readSystemPrompts(config);
 
   return queenBeeFlow.workflows.map((wf) => ({
     ...wf,
@@ -420,7 +439,7 @@ function resolveWorkflowConfigs(
         return task;
       }),
     })),
-  })) as unknown as WorkflowConfig<any, any, any>[];
+  }));
 }
 
 // ── Flow lifecycle ──
@@ -430,7 +449,7 @@ export function createFlowOnLink(
   repoPath: string,
   persistence: FlowPersistence,
   config?: Record<string, unknown>
-): FlowRuntimeAPI<any, any> {
+): FlowRuntimeAPI<Record<string, unknown>, Record<string, unknown>> {
   const runners = createEngineRunners();
   const flowConfig: Record<string, unknown> = {
     repoPath,
@@ -473,19 +492,18 @@ export function rehydrateFlow(
     workflowId: string;
     state: Record<string, unknown>;
   }>
-): FlowRuntimeAPI<any, any> | null {
-  // flowConfig comes from persistence; the shape is guaranteed by
-  // createFlowFromDefinition which serializes workflowDefinitions into config
+): FlowRuntimeAPI<Record<string, unknown>, Record<string, unknown>> | null {
+  // flowConfig comes from persistence as unknown; its runtime shape is
+  // guaranteed by the code that wrote it (createFlowOnLink / createFlowFromDefinition)
   const cfg = flowConfig as Record<string, unknown>;
   const storedDefs = cfg.workflowDefinitions as
-    | WorkflowConfig<any, any, any>[]
+    | RuntimeWorkflowConfig[]
     | undefined;
 
   if (flowId !== queenBeeFlow.id && !storedDefs) return null;
 
   const runners = createEngineRunners();
-  // flowConfig is typed as unknown from persistence; narrowed here to
-  // pass to resolveWorkflowConfigs which takes Record<string, unknown>
+  // same persistence-boundary narrowing as above
   const resolvedWorkflows =
     storedDefs ?? resolveWorkflowConfigs(flowConfig as Record<string, unknown>);
   const runtime = createFlowRuntime(

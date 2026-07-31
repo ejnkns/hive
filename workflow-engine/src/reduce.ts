@@ -1,47 +1,43 @@
-import type { WorkflowInstanceState } from "./shared/workflow-instance-state";
+import type { RuntimeWorkflowInstanceState } from "./shared/workflow-instance-state";
 import type {
-  GateContext,
   RunningTaskContext,
-  StateDef,
-  TaskOutputMap,
+  RuntimeGateContext,
+  RuntimeStateDef,
   WorkflowHistoryEntry,
 } from "./workflow-types";
 
 // === Events ===
 
-export type WorkflowEvent<
-  TTaskOutputs extends Record<string, unknown>,
-  TStateId extends string,
-> =
+export type WorkflowEvent =
   | {
       type: "action_triggered";
       actionId: string;
-      transitionTo: TStateId;
+      transitionTo: string;
     }
   | {
       type: "task_started";
-      taskId: keyof TTaskOutputs & string;
+      taskId: string;
       context: RunningTaskContext | null;
       metadata?: Record<string, unknown>;
     }
   | {
       type: "task_metadata_patched";
-      taskId: keyof TTaskOutputs & string;
+      taskId: string;
       metadata: Record<string, unknown>;
     }
   | {
       type: "task_completed";
-      taskId: keyof TTaskOutputs & string;
+      taskId: string;
       output: unknown;
     }
   | {
       type: "task_errored";
-      taskId: keyof TTaskOutputs & string;
+      taskId: string;
       error: string;
     }
   | {
       type: "task_cancelled";
-      taskId: keyof TTaskOutputs & string;
+      taskId: string;
     };
 
 // === Commands emitted to the controller ===
@@ -50,47 +46,29 @@ export type WorkflowCommand = { type: "noop" } | { type: "start_auto_tasks" };
 
 // === Reduce result ===
 
-export type ReduceResult<
-  TTaskOutputs extends Record<string, unknown>,
-  TStateId extends string,
-  TWorkflowInstanceState extends Record<string, unknown> = Record<
-    string,
-    never
-  >,
-> = {
-  state: WorkflowInstanceState<TTaskOutputs, TStateId, TWorkflowInstanceState>;
+export type ReduceResult = {
+  state: RuntimeWorkflowInstanceState;
   commands: WorkflowCommand[];
 };
 
 // === Reducer ===
 
-export function reduce<
-  TTaskOutputs extends Record<string, unknown>,
-  TStateId extends string,
-  TWorkflowInstanceState extends Record<string, unknown> = Record<
-    string,
-    never
-  >,
->(
-  state: WorkflowInstanceState<TTaskOutputs, TStateId, TWorkflowInstanceState>,
-  event: WorkflowEvent<TTaskOutputs, TStateId>,
-  states: readonly StateDef<TTaskOutputs, TStateId, TWorkflowInstanceState>[],
+export function reduce(
+  state: RuntimeWorkflowInstanceState,
+  event: WorkflowEvent,
+  states: readonly RuntimeStateDef[],
   flowState?: Record<string, unknown>
-): ReduceResult<TTaskOutputs, TStateId, TWorkflowInstanceState> {
+): ReduceResult {
   switch (event.type) {
     case "action_triggered": {
-      const transitionEntry: WorkflowHistoryEntry<TTaskOutputs, TStateId> = {
+      const transitionEntry: WorkflowHistoryEntry = {
         type: "state_transition",
         fromState: state.currentState,
         toState: event.transitionTo,
         timestamp: new Date().toISOString(),
         actionId: event.actionId,
       };
-      const nextState: WorkflowInstanceState<
-        TTaskOutputs,
-        TStateId,
-        TWorkflowInstanceState
-      > = {
+      const nextState: RuntimeWorkflowInstanceState = {
         ...state,
         currentState: event.transitionTo,
         hasRunningTask: false,
@@ -108,7 +86,7 @@ export function reduce<
       const previousAttempts = state.history.filter(
         (h) => h.type === "task_execution" && h.taskId === event.taskId
       ).length;
-      const taskEntry: WorkflowHistoryEntry<TTaskOutputs, TStateId> = {
+      const taskEntry: WorkflowHistoryEntry = {
         type: "task_execution",
         taskId: event.taskId,
         attempt: previousAttempts + 1,
@@ -139,7 +117,7 @@ export function reduce<
           return {
             ...h,
             metadata: { ...h.metadata, ...event.metadata },
-          } as WorkflowHistoryEntry<TTaskOutputs, TStateId>;
+          };
         }
         return h;
       });
@@ -156,7 +134,7 @@ export function reduce<
           status: "success" as const,
           output: event.output,
         },
-      } as Partial<TaskOutputMap<TTaskOutputs>>;
+      };
 
       const history = state.history.map((h) => {
         if (
@@ -169,16 +147,12 @@ export function reduce<
             status: "success" as const,
             output: event.output,
             finishedAt: new Date().toISOString(),
-          } as WorkflowHistoryEntry<TTaskOutputs, TStateId>;
+          };
         }
         return h;
       });
 
-      const newState: WorkflowInstanceState<
-        TTaskOutputs,
-        TStateId,
-        TWorkflowInstanceState
-      > = {
+      const newState: RuntimeWorkflowInstanceState = {
         ...state,
         taskOutputs: newOutputs,
         hasRunningTask: false,
@@ -194,7 +168,7 @@ export function reduce<
         flowState
       );
       if (transition) {
-        const transitionEntry: WorkflowHistoryEntry<TTaskOutputs, TStateId> = {
+        const transitionEntry: WorkflowHistoryEntry = {
           type: "state_transition",
           fromState: newState.currentState,
           toState: transition,
@@ -222,7 +196,7 @@ export function reduce<
           error: event.error,
           output: undefined,
         },
-      } as Partial<TaskOutputMap<TTaskOutputs>>;
+      };
 
       const history = state.history.map((h) => {
         if (
@@ -235,16 +209,12 @@ export function reduce<
             status: "error" as const,
             error: event.error,
             finishedAt: new Date().toISOString(),
-          } as WorkflowHistoryEntry<TTaskOutputs, TStateId>;
+          };
         }
         return h;
       });
 
-      const newState: WorkflowInstanceState<
-        TTaskOutputs,
-        TStateId,
-        TWorkflowInstanceState
-      > = {
+      const newState: RuntimeWorkflowInstanceState = {
         ...state,
         taskOutputs: newOutputs,
         hasRunningTask: false,
@@ -260,7 +230,7 @@ export function reduce<
         flowState
       );
       if (transition) {
-        const transitionEntry: WorkflowHistoryEntry<TTaskOutputs, TStateId> = {
+        const transitionEntry: WorkflowHistoryEntry = {
           type: "state_transition",
           fromState: newState.currentState,
           toState: transition,
@@ -291,7 +261,7 @@ export function reduce<
             ...h,
             status: "cancelled" as const,
             finishedAt: new Date().toISOString(),
-          } as WorkflowHistoryEntry<TTaskOutputs, TStateId>;
+          };
         }
         return h;
       });
@@ -312,29 +282,22 @@ export function reduce<
 
 // === Helpers ===
 
-function evaluateAutoTransitions<
-  TTaskOutputs extends Record<string, unknown>,
-  TStateId extends string,
-  TWorkflowInstanceState extends Record<string, unknown> = Record<
-    string,
-    never
-  >,
->(
-  states: readonly StateDef<TTaskOutputs, TStateId, TWorkflowInstanceState>[],
-  currentState: TStateId,
-  state: WorkflowInstanceState<TTaskOutputs, TStateId, TWorkflowInstanceState>,
+function evaluateAutoTransitions(
+  states: readonly RuntimeStateDef[],
+  currentState: string,
+  state: RuntimeWorkflowInstanceState,
   flowState?: Record<string, unknown>
-): TStateId | undefined {
+): string | undefined {
   const stateDef = states.find((s) => s.id === currentState);
   if (!stateDef?.autoTransitions) return undefined;
 
-  const ctx = {
+  const ctx: RuntimeGateContext = {
     taskOutputs: state.taskOutputs,
     hasRunningTask: state.hasRunningTask,
     runningTaskContext: state.runningTaskContext,
     workflowInstanceState: state.workflowInstanceState,
     flowState: flowState ?? {},
-  } as GateContext<TTaskOutputs, TWorkflowInstanceState>;
+  };
 
   for (const at of stateDef.autoTransitions) {
     if (at.gate(ctx)) {

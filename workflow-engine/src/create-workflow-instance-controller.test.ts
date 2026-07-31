@@ -441,10 +441,7 @@ describe("workflowInstancesInState", () => {
       concurrentWorkflow,
       {},
       undefined,
-      () => [
-        { currentState: "active" } as any,
-        { currentState: "active" } as any,
-      ]
+      () => [{ currentState: "active" }, { currentState: "active" }]
     );
     const actions = controller.getAvailableActions();
     assert.equal(

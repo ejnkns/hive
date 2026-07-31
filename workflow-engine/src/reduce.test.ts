@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { getAvailableActions } from "./get-available-actions";
-import { reduce } from "./reduce";
-import type { WorkflowInstanceState } from "./shared/workflow-instance-state";
+import { reduce, type WorkflowCommand, type WorkflowEvent } from "./reduce";
+import type { RuntimeWorkflowInstanceState } from "./shared/workflow-instance-state";
 import { defineWorkflow, type NoOutput } from "./workflow-types";
 
 const cardsWorkflow = defineWorkflow({
@@ -140,11 +140,8 @@ const cardsWorkflow = defineWorkflow({
 });
 
 // --- Helpers ---
-const initial: WorkflowInstanceState<
-  { implement: {}; review: {}; coordinate: {} },
-  "ready"
-> = {
-  currentState: "ready" as const,
+const initial: RuntimeWorkflowInstanceState = {
+  currentState: "ready",
   taskOutputs: {},
   hasRunningTask: false,
   runningTaskId: null,
@@ -153,18 +150,30 @@ const initial: WorkflowInstanceState<
   history: [],
 };
 
-function apply(state: any, event: any): { state: any; commands: any[] } {
-  return reduce(state, event, cardsWorkflow.states as any);
+function apply(
+  state: RuntimeWorkflowInstanceState,
+  event: WorkflowEvent
+): { state: RuntimeWorkflowInstanceState; commands: WorkflowCommand[] } {
+  return reduce(state, event, cardsWorkflow.states);
 }
 
 function visible(
-  state: any,
+  state: Partial<RuntimeWorkflowInstanceState>,
   fromState?: string
 ): { id: string; label: string }[] {
+  const fullState: RuntimeWorkflowInstanceState = {
+    currentState: state.currentState ?? "ready",
+    taskOutputs: state.taskOutputs ?? {},
+    hasRunningTask: state.hasRunningTask ?? false,
+    runningTaskId: state.runningTaskId ?? null,
+    runningTaskContext: state.runningTaskContext ?? null,
+    workflowInstanceState: state.workflowInstanceState ?? {},
+    history: state.history ?? [],
+  };
   return getAvailableActions(
-    cardsWorkflow.states as any,
-    fromState ?? state.currentState,
-    state
+    cardsWorkflow.states,
+    fromState ?? fullState.currentState,
+    fullState
   );
 }
 

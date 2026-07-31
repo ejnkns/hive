@@ -8,7 +8,7 @@ const testEdges: FlowEdge[] = [
     fromWorkflow: "source",
     fromStates: ["done"],
     toWorkflow: "target",
-    transform: (source: any) => ({
+    transform: (source) => ({
       merged: source.doWork?.output,
       triggeredAt: new Date().toISOString(),
     }),
@@ -38,7 +38,7 @@ describe("evaluateEdges", () => {
     });
 
     assert.equal(effects.length, 1);
-    assert.deepEqual((effects[0]!.transformedData as any).merged, {
+    assert.deepEqual(readMerged(effects[0]!.transformedData), {
       result: "ok",
     });
   });
@@ -98,3 +98,7 @@ describe("evaluateEdges", () => {
     assert.equal(effects[0]!.toWorkflow, undefined);
   });
 });
+
+function readMerged(data: Record<string, unknown>): unknown {
+  return data["merged"];
+}
