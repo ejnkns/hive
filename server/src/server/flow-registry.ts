@@ -229,6 +229,7 @@ export async function rehydrateFlow(
   flowConfig: unknown,
   flowState: unknown,
   instances: Array<{
+    instanceId: string;
     workflowId: string;
     state: Record<string, unknown>;
   }>
@@ -313,7 +314,8 @@ export async function rehydrateFlow(
     };
     const controller = runtime.addWorkflowInstance(
       instance.workflowId,
-      restoredState
+      restoredState,
+      instance.instanceId
     );
     if (instance.state.hasRunningTask) {
       controller.startAutoTasks();

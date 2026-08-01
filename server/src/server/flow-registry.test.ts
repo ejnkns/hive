@@ -109,6 +109,32 @@ describe("flow-registry", () => {
     assert.equal(persistence.loadFlow("flow-a"), null);
   });
 
+  it("rehydrateFlow restores instances under their original ids without duplicating files", async () => {
+    const persistence = getFlowPersistence()!;
+    createFlow("flow-a", "test-def", persistence);
+
+    const before = persistence.loadFlow("flow-a")!;
+    const beforeIds = before.instances.map((instance) => instance.instanceId);
+    assert.equal(before.instances.length, 1);
+
+    const runtime = await rehydrateFlow(
+      persistence,
+      "flow-a",
+      before.config,
+      before.state,
+      before.instances
+    );
+    assert.ok(runtime);
+    assert.equal(runtime.workflowInstances.length, 1);
+
+    const after = persistence.loadFlow("flow-a")!;
+    assert.deepEqual(
+      after.instances.map((instance) => instance.instanceId),
+      beforeIds
+    );
+    assert.equal(after.instances.length, 1);
+  });
+
   it("rehydrate uses the creation-time snapshot, not a later definition edit", async () => {
     const persistence = getFlowPersistence()!;
     const source = `

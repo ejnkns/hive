@@ -57,6 +57,7 @@ export type FlowPersistence = {
     config: unknown;
     state: unknown;
     instances: Array<{
+      instanceId: string;
       workflowId: string;
       state: RuntimeWorkflowInstanceState;
     }>;
@@ -66,6 +67,7 @@ export type FlowPersistence = {
     config: unknown;
     state: unknown;
     instances: Array<{
+      instanceId: string;
       workflowId: string;
       state: RuntimeWorkflowInstanceState;
     }>;
@@ -101,7 +103,11 @@ export type FlowRuntimeAPI<TFlowConfig, TFlowState> = {
   patchFlowState(patch: Partial<TFlowState>): void;
   addWorkflowInstance(
     workflowId: string,
-    instanceState?: Partial<RuntimeWorkflowInstanceState>
+    instanceState?: Partial<RuntimeWorkflowInstanceState>,
+    // When restoring a persisted instance, reuse its original id so the
+    // persistence layer overwrites the same file instead of orphaning a new
+    // one per restart (which compounded into unbounded instance growth).
+    restoreId?: string
   ): WorkflowInstanceControllerAPI;
   getWorkflowInstance(
     instanceId: string
@@ -240,12 +246,13 @@ export function createFlowRuntime<
 
   function addWorkflowInstance(
     workflowId: string,
-    instanceState?: Partial<RuntimeWorkflowInstanceState>
+    instanceState?: Partial<RuntimeWorkflowInstanceState>,
+    restoreId?: string
   ): WorkflowInstanceControllerAPI {
     const workflow = workflowMap.get(workflowId);
     if (!workflow) throw new Error(`Workflow "${workflowId}" not found`);
 
-    const instanceId = crypto.randomUUID();
+    const instanceId = restoreId ?? crypto.randomUUID();
 
     const initialState: RuntimeWorkflowInstanceState = {
       currentState: instanceState?.currentState ?? workflow.initial,

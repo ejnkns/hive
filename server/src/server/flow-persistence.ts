@@ -122,6 +122,7 @@ export function createFlowPersistence(
     config: unknown;
     state: unknown;
     instances: Array<{
+      instanceId: string;
       workflowId: string;
       state: RuntimeWorkflowInstanceState;
     }>;
@@ -131,6 +132,7 @@ export function createFlowPersistence(
 
     const ids = listInstanceIds(flowId);
     const instances: Array<{
+      instanceId: string;
       workflowId: string;
       state: RuntimeWorkflowInstanceState;
     }> = [];
@@ -146,6 +148,7 @@ export function createFlowPersistence(
       );
 
       instances.push({
+        instanceId: id,
         workflowId: persisted.workflowId,
         state: {
           ...persisted.state,
@@ -170,6 +173,7 @@ export function createFlowPersistence(
     config: unknown;
     state: unknown;
     instances: Array<{
+      instanceId: string;
       workflowId: string;
       state: RuntimeWorkflowInstanceState;
     }>;
