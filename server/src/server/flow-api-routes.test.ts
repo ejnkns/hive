@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { afterEach, describe, it } from "node:test";
+import { afterEach, beforeEach, describe, it } from "node:test";
 import fastifyWebsocket from "@fastify/websocket";
 import Fastify, { type FastifyInstance } from "fastify";
 import {
@@ -9,7 +9,10 @@ import {
 } from "workflow-engine/create-flow-runtime";
 import { defineWorkflow } from "workflow-engine/workflow-types";
 import { registerFlowApiRoutes } from "./flow-api-routes";
-import { registerFlowDefinition } from "./flow-definitions";
+import {
+  registerFlowDefinition,
+  resetFlowDefinitionsForTest,
+} from "./flow-definitions";
 import { registerFlowForTest, setFlowPersistence } from "./flow-registry";
 
 const testWorkflow = defineWorkflow({
@@ -69,8 +72,35 @@ const noopPersistence: FlowPersistence = {
   loadAllFlows: () => [],
 };
 
+const flowDefinitionSource = `
+import { defineWorkflow } from "workflow-engine/workflow-types";
+
+const wf = defineWorkflow({
+  id: "custom",
+  label: "Custom",
+  taskOutputs: {} as Record<string, never>,
+  states: [
+    { id: "pending", label: "Pending", category: "initial" },
+    { id: "done", label: "Done", category: "terminal" },
+  ],
+  initial: "pending",
+  terminalStates: ["done"],
+});
+
+export const flow = {
+  id: "custom-flow",
+  label: "Custom Flow",
+  workflows: [wf],
+  edges: [],
+};
+`;
+
 describe("flow API routes", () => {
   const servers: FastifyInstance[] = [];
+
+  beforeEach(() => {
+    resetFlowDefinitionsForTest();
+  });
 
   afterEach(async () => {
     await Promise.all(servers.splice(0).map((s) => s.close()));
@@ -324,7 +354,7 @@ describe("flow API routes", () => {
     ws.close();
   });
 
-  it("POST /api/flows/definitions creates a flow with a seeded instance", async () => {
+  it("POST /api/flows/definitions registers a TS source definition", async () => {
     setFlowPersistence(noopPersistence);
     const server = Fastify();
     servers.push(server);
@@ -334,30 +364,109 @@ describe("flow API routes", () => {
       method: "POST",
       url: "/api/flows/definitions",
       body: {
-        id: "custom-flow",
-        label: "Custom Flow",
-        states: [
-          { id: "pending", label: "Pending", category: "initial" },
-          { id: "done", label: "Done", category: "terminal" },
-        ],
-        initial: "pending",
-        terminalStates: ["done"],
+        name: "Custom Flow",
+        source: flowDefinitionSource,
       },
     });
 
     assert.equal(response.statusCode, 201);
-    assert.equal(response.json().flowId, "custom-flow");
+    assert.equal(response.json().id, "custom-flow");
 
     const listResponse = await server.inject({
       method: "GET",
-      url: "/api/flows/custom-flow/instances",
+      url: "/api/flows/definitions",
     });
-    assert.equal(listResponse.statusCode, 200);
-    assert.equal(listResponse.json().instances.length, 1);
-    assert.equal(
-      listResponse.json().instances[0].state.currentState,
-      "pending"
+    const listed = listResponse
+      .json()
+      .definitions.find((d: { id: string }) => d.id === "custom-flow");
+    assert.ok(listed);
+    assert.equal(listed.builtIn, false);
+    assert.equal(listed.name, "Custom Flow");
+  });
+
+  it("POST /api/flows/definitions returns 400 for invalid TS source", async () => {
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions",
+      body: {
+        name: "Broken Flow",
+        source: "export const flow = {",
+      },
+    });
+
+    assert.equal(response.statusCode, 400);
+    assert.ok(
+      typeof response.json().error === "string",
+      "error message should be present"
     );
+  });
+
+  it("POST /api/flows/definitions returns 409 for a duplicate name", async () => {
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const body = { name: "Custom Flow", source: flowDefinitionSource };
+    const first = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions",
+      body,
+    });
+    assert.equal(first.statusCode, 201);
+
+    const second = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions",
+      body,
+    });
+    assert.equal(second.statusCode, 409);
+  });
+
+  it("PUT /api/flows/definitions/:id edits an existing user definition", async () => {
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions",
+      body: { name: "Custom Flow", source: flowDefinitionSource },
+    });
+
+    const response = await server.inject({
+      method: "PUT",
+      url: "/api/flows/definitions/custom-flow",
+      body: {
+        name: "Custom Flow Renamed",
+        source: flowDefinitionSource,
+      },
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json().id, "custom-flow");
+
+    const detailResponse = await server.inject({
+      method: "GET",
+      url: "/api/flows/definitions/custom-flow",
+    });
+    assert.equal(detailResponse.json().name, "Custom Flow Renamed");
+  });
+
+  it("PUT /api/flows/definitions/:id returns 404 for an unknown id", async () => {
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const response = await server.inject({
+      method: "PUT",
+      url: "/api/flows/definitions/nope",
+      body: { name: "X", source: flowDefinitionSource },
+    });
+
+    assert.equal(response.statusCode, 404);
   });
 
   it("DELETE /api/flows/:flowId unlinks the flow", async () => {

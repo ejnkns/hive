@@ -2,14 +2,15 @@ import type { FastifyInstance } from "fastify";
 import type { FlowRuntimeEvent } from "workflow-engine/create-flow-runtime";
 import type { WebSocket } from "ws";
 import {
+  DefinitionAlreadyExistsError,
   deleteUserDefinition,
   getRegisteredFlowDefinition,
   listRegisteredDefinitions,
+  registerUserDefinition,
+  updateUserDefinition,
 } from "./flow-definitions";
 import {
   createFlow,
-  createFlowFromDefinition,
-  type DataDrivenWorkflowDef,
   getFlowPersistence,
   getFlowRuntime,
   getFlowRuntimes,
@@ -243,37 +244,73 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
   server.post("/api/flows/definitions", async (request, reply) => {
     // Fastify body is unknown; validated below
     const body = request.body as Record<string, unknown> | null;
-    if (!body || typeof body.id !== "string" || !Array.isArray(body.states)) {
-      return reply.status(400).send({
-        error:
-          "Invalid definition: id (string) and states (array) are required",
-      });
+    const name = typeof body?.name === "string" ? body.name.trim() : "";
+    const source = typeof body?.source === "string" ? body.source : "";
+    const description =
+      typeof body?.description === "string" ? body.description : undefined;
+    if (name === "") {
+      return reply.status(400).send({ error: "name is required" });
     }
-
-    const persistence = getFlowPersistence();
-    if (!persistence) {
-      return reply
-        .status(500)
-        .send({ error: "Flow persistence not available" });
-    }
-
-    const existing = getFlowRuntime(body.id);
-    if (existing) {
-      return reply
-        .status(409)
-        .send({ error: `Flow "${body.id}" already exists` });
+    if (source === "") {
+      return reply.status(400).send({ error: "source is required" });
     }
 
     try {
-      // body.id and body.states validated above; shape matches DataDrivenWorkflowDef
-      const def = body as unknown as DataDrivenWorkflowDef;
-      const runtime = createFlowFromDefinition(body.id, def, persistence);
+      const record = await registerUserDefinition({
+        name,
+        description,
+        source,
+      });
       return reply.status(201).send({
         ok: true,
-        flowId: body.id,
-        workflows: runtime.getWorkflowDefinitions(),
+        id: record.id,
+        name: record.name,
+        builtIn: record.builtIn,
+        configSchema: record.configSchema,
       });
     } catch (err) {
+      if (err instanceof DefinitionAlreadyExistsError) {
+        return reply.status(409).send({ error: err.message });
+      }
+      return reply.status(400).send({
+        error: err instanceof Error ? err.message : "Invalid definition",
+      });
+    }
+  });
+
+  server.put("/api/flows/definitions/:id", async (request, reply) => {
+    // Fastify params type is erased; shape guaranteed by route pattern
+    const { id } = request.params as { id: string };
+    // Fastify body is unknown; validated below
+    const body = request.body as Record<string, unknown> | null;
+    const name = typeof body?.name === "string" ? body.name.trim() : "";
+    const source = typeof body?.source === "string" ? body.source : "";
+    const description =
+      typeof body?.description === "string" ? body.description : undefined;
+    if (name === "") {
+      return reply.status(400).send({ error: "name is required" });
+    }
+    if (source === "") {
+      return reply.status(400).send({ error: "source is required" });
+    }
+
+    try {
+      const record = await updateUserDefinition(id, {
+        name,
+        description,
+        source,
+      });
+      return reply.send({
+        ok: true,
+        id: record.id,
+        name: record.name,
+        builtIn: record.builtIn,
+        configSchema: record.configSchema,
+      });
+    } catch (err) {
+      if (err instanceof Error && err.message.includes("not found")) {
+        return reply.status(404).send({ error: err.message });
+      }
       return reply.status(400).send({
         error: err instanceof Error ? err.message : "Invalid definition",
       });

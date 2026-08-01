@@ -71,6 +71,10 @@ export function listRegisteredDefinitions(): RegisteredFlowDefinition[] {
 
 // ── User-definition registration ──
 
+// Thrown when a definition name slugifies to an id that is already registered.
+// Distinct from generic load errors so routes can map it to a 409.
+export class DefinitionAlreadyExistsError extends Error {}
+
 export async function registerUserDefinition(input: {
   name: string;
   description?: string;
@@ -81,7 +85,9 @@ export async function registerUserDefinition(input: {
     throw new Error('"new" is a reserved flow definition name');
   }
   if (definitions.has(slug)) {
-    throw new Error(`A flow definition named "${slug}" already exists`);
+    throw new DefinitionAlreadyExistsError(
+      `A flow definition named "${slug}" already exists`
+    );
   }
 
   const flow = await loadDefinitionFromSource(slug, input.source);
@@ -95,6 +101,35 @@ export async function registerUserDefinition(input: {
     source: input.source,
   };
   definitions.set(slug, record);
+  persistUserDefinition(record);
+  return record;
+}
+
+// Re-registers an existing user definition from edited source. The id (slug)
+// is stable — a name change updates the display name only, never the route.
+export async function updateUserDefinition(
+  id: string,
+  input: { name: string; description?: string; source: string }
+): Promise<RegisteredFlowDefinition> {
+  const existing = definitions.get(id);
+  if (!existing) {
+    throw new Error(`Flow definition "${id}" not found`);
+  }
+  if (existing.builtIn) {
+    throw new Error("Built-in flow definitions cannot be edited");
+  }
+
+  const flow = await loadDefinitionFromSource(id, input.source);
+  const record: RegisteredFlowDefinition = {
+    id,
+    name: input.name,
+    description: input.description,
+    builtIn: false,
+    configSchema: flow.configSchema ?? [],
+    flow,
+    source: input.source,
+  };
+  definitions.set(id, record);
   persistUserDefinition(record);
   return record;
 }

@@ -7,12 +7,9 @@ import {
 } from "workflow-engine/create-flow-runtime";
 import type { OperationFn, Tool } from "workflow-engine/runners";
 import type {
-  ActionVariant,
   FlowDefinition,
   RuntimeFlowEdge,
-  RuntimeGateContext,
   RuntimeWorkflowConfig,
-  StateCategory,
 } from "workflow-engine/workflow-types";
 import { createEngineRunners } from "./engine-bridge";
 import { getFlowDefinition } from "./flow-definitions";
@@ -139,7 +136,7 @@ export function rehydrateFlow(
   }>
 ): FlowRuntimeAPI<Record<string, unknown>, Record<string, unknown>> | null {
   // flowConfig comes from persistence as unknown; its runtime shape is
-  // guaranteed by the code that wrote it (createFlow / createFlowFromDefinition)
+  // guaranteed by the code that wrote it (createFlow).
   const cfg = flowConfig as Record<string, unknown>;
   const storedDefs = cfg.workflowDefinitions as
     | RuntimeWorkflowConfig[]
@@ -196,131 +193,6 @@ export function rehydrateFlow(
     }
   }
 
-  runtimes.set(flowId, runtime);
-  return runtime;
-}
-
-// ── Data-driven workflow definition types ──
-
-export type DataDrivenStateDef = {
-  id: string;
-  label: string;
-  description?: string;
-  category?: StateCategory;
-  tasks?: Array<{
-    id: string;
-    label: string;
-    trigger: "auto" | "manual";
-    role: "ai-task" | "ai-chat" | "operation";
-    systemPrompt?: string;
-    completionTool?: string;
-  }>;
-  autoTransitions?: Array<{
-    to: string;
-    onTaskStatus?: { taskId: string; status: "success" | "error" };
-  }>;
-  actions?: Array<{
-    id: string;
-    label: string;
-    variant?: ActionVariant;
-    transitionTo: string;
-  }>;
-};
-
-export type DataDrivenWorkflowDef = {
-  id: string;
-  label: string;
-  description?: string;
-  states: DataDrivenStateDef[];
-  initial: string;
-  terminalStates: string[];
-};
-
-// ── Converter ──
-
-function convertDataDrivenDef(
-  def: DataDrivenWorkflowDef
-): RuntimeWorkflowConfig {
-  return {
-    id: def.id,
-    label: def.label,
-    description: def.description,
-    taskOutputs: {},
-    states: def.states.map((s) => ({
-      id: s.id,
-      label: s.label,
-      description: s.description,
-      category: s.category,
-      tasks: s.tasks?.map((t) => ({
-        id: t.id,
-        label: t.label,
-        trigger: t.trigger,
-        role: t.role,
-        systemPrompt: t.systemPrompt,
-        completionTool: t.completionTool,
-      })),
-      autoTransitions: s.autoTransitions?.map((t) => {
-        const statusFilter = t.onTaskStatus;
-        return {
-          to: t.to,
-          gate:
-            statusFilter !== undefined
-              ? (ctx: RuntimeGateContext) => {
-                  const outcome = ctx.taskOutputs[statusFilter.taskId];
-                  return (
-                    outcome !== undefined &&
-                    "status" in outcome &&
-                    outcome.status === statusFilter.status
-                  );
-                }
-              : () => true,
-        };
-      }),
-      actions: s.actions?.map((a) => ({
-        id: a.id,
-        label: a.label,
-        variant: a.variant ?? "default",
-        transitionTo: a.transitionTo,
-      })),
-    })),
-    initial: def.initial,
-    terminalStates: def.terminalStates,
-  };
-}
-
-export function createFlowFromDefinition(
-  flowId: string,
-  def: DataDrivenWorkflowDef,
-  persistence: FlowPersistence,
-  config?: Record<string, unknown>
-): FlowRuntimeAPI<Record<string, unknown>, Record<string, unknown>> {
-  const runners = createEngineRunners();
-  const workflowDefs = [convertDataDrivenDef(def)];
-  const flowConfig: Record<string, unknown> = {
-    name: def.label,
-    ...config,
-    workflowDefinitions: workflowDefs,
-  };
-
-  const runtime = createFlowRuntime(
-    flowId,
-    workflowDefs,
-    [],
-    {
-      operation: runners.operationRunner,
-      "ai-task": runners.aiTaskRunner,
-      "ai-chat": runners.aiChatRunner,
-    },
-    flowConfig,
-    {},
-    persistence
-  );
-
-  // Seed one instance in the workflow's initial state so the flow is
-  // immediately renderable; fresh instances auto-run initial-state tasks.
-  runtime.addWorkflowInstance(def.id);
-
-  persistence.saveFlow(flowId, flowConfig, {});
   runtimes.set(flowId, runtime);
   return runtime;
 }
