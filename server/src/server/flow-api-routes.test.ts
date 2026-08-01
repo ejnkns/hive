@@ -369,6 +369,21 @@ describe("flow API routes", () => {
     ws.close();
   });
 
+  it("POST /api/flows/definitions/generate requires a prompt", async () => {
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions/generate",
+      body: {},
+    });
+
+    assert.equal(response.statusCode, 400);
+    assert.equal(response.json().error, "prompt is required");
+  });
+
   it("POST /api/flows/definitions registers a TS source definition", async () => {
     setFlowPersistence(noopPersistence);
     const server = Fastify();

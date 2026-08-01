@@ -19,6 +19,7 @@ import {
   unlinkFlow,
   validateInstanceConfig,
 } from "./flow-registry";
+import { generateFlowDefinitionSource } from "./generate-flow-definition";
 import { computeInstanceStatus } from "./instance-status";
 
 export function registerFlowApiRoutes(server: FastifyInstance): void {
@@ -260,6 +261,24 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
     }
     deleteUserDefinition(id);
     return reply.send({ ok: true, id });
+  });
+
+  server.post("/api/flows/definitions/generate", async (request, reply) => {
+    // Fastify body is unknown; validated below
+    const body = request.body as { prompt?: string } | null;
+    const prompt = body?.prompt;
+    if (typeof prompt !== "string" || prompt.trim() === "") {
+      return reply.status(400).send({ error: "prompt is required" });
+    }
+
+    try {
+      const source = await generateFlowDefinitionSource(prompt.trim());
+      return reply.send({ source });
+    } catch (err) {
+      return reply.status(400).send({
+        error: err instanceof Error ? err.message : "Generation failed",
+      });
+    }
   });
 
   server.post("/api/flows/definitions", async (request, reply) => {
