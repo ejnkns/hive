@@ -9,6 +9,7 @@ import {
   deleteFlowDefinition,
   fetchFlowDefinition,
   generateFlowDefinition,
+  slugify,
   updateFlowDefinition,
 } from "./workflow-api";
 
@@ -56,6 +57,13 @@ let aiOpen = $state(true);
 let aiPrompt = $state("");
 let deleteOpen = $state(false);
 
+let nameWarning = $derived.by(() => {
+  if (name.trim() !== "" && slugify(name.trim()) === "new") {
+    return '"new" is a reserved definition name';
+  }
+  return null;
+});
+
 onMount(async () => {
   if (isNew || !definitionId) return;
   loading = true;
@@ -75,6 +83,10 @@ onMount(async () => {
 async function save() {
   if (!name.trim()) {
     error = "Definition name is required";
+    return;
+  }
+  if (nameWarning) {
+    error = nameWarning;
     return;
   }
   saving = true;
@@ -156,6 +168,9 @@ async function remove() {
       <label class="field">
         <span class="label">Name</span>
         <TextInput bind:value={name} placeholder="My Flow" />
+        {#if nameWarning}
+          <span class="hint warning">{nameWarning}</span>
+        {/if}
       </label>
       {#if !isNew}
         <label class="field">
@@ -299,6 +314,10 @@ h1 {
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+.hint.warning {
+  color: var(--warning);
 }
 
 .panes {

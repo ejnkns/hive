@@ -14,6 +14,13 @@ let loading = $state(true);
 let error = $state<string | null>(null);
 let submitting = $state(false);
 
+let nameWarning = $derived.by(() => {
+  if (name.trim() !== "" && slugify(name.trim()) === "new") {
+    return '"new" is a reserved flow name';
+  }
+  return null;
+});
+
 onMount(async () => {
   try {
     definition = await fetchFlowDefinition(definitionId);
@@ -47,6 +54,11 @@ async function submit() {
 
   submitting = true;
   error = null;
+  if (nameWarning) {
+    error = nameWarning;
+    submitting = false;
+    return;
+  }
   try {
     const config: Record<string, unknown> = { name: name.trim() };
     for (const field of definition.configSchema) {
@@ -96,7 +108,9 @@ async function submit() {
           placeholder="My instance"
           disabled={submitting}
         />
-        <span class="hint">Used as the instance's URL slug.</span>
+        <span class="hint"
+          >{nameWarning ?? "Used as the instance's URL slug."}</span
+        >
       </label>
 
       {#each definition.configSchema as field (field.key)}

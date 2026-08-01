@@ -75,6 +75,15 @@ function definitionHref(id: string): string {
     <div class="error">{error}</div>
   {/if}
 
+  <div class="status-legend">
+    <span class="legend-title">Instance status</span>
+    <span class="legend-item"><i class="dot dot-running"></i>running</span>
+    <span class="legend-item"><i class="dot dot-waiting"></i>waiting</span>
+    <span class="legend-item"><i class="dot dot-error"></i>error</span>
+    <span class="legend-item"><i class="dot dot-idle"></i>idle</span>
+    <span class="legend-item"><i class="dot dot-complete"></i>complete</span>
+  </div>
+
   {#if loading}
     <div class="loading">Loading flows...</div>
   {:else if definitions.length === 0}
@@ -232,5 +241,53 @@ h1 {
 .btn-link {
   text-decoration: none;
   color: inherit;
+}
+
+.status-legend {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  font-size: 0.625rem;
+  color: var(--muted);
+}
+
+.legend-title {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.dot-running {
+  background: var(--accent);
+}
+
+.dot-waiting {
+  background: var(--warning);
+}
+
+.dot-error {
+  background: var(--error);
+}
+
+.dot-idle {
+  background: var(--muted);
+}
+
+.dot-complete {
+  background: var(--success);
 }
 </style>
