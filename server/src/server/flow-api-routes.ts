@@ -14,6 +14,7 @@ import {
   getFlowPersistence,
   getFlowRuntime,
   getFlowRuntimes,
+  purgeFlow,
   unlinkFlow,
   validateInstanceConfig,
 } from "./flow-registry";
@@ -349,13 +350,19 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
   server.delete("/api/flows/:flowId", async (request, reply) => {
     // Fastify params type is erased; shape guaranteed by route pattern
     const { flowId } = request.params as { flowId: string };
+    // Fastify body is unknown; validated below
+    const body = request.body as { purge?: boolean } | null;
 
     const runtime = getFlowRuntime(flowId);
     if (!runtime) {
       return reply.status(404).send({ error: "Flow not found" });
     }
 
-    unlinkFlow(flowId);
+    if (body?.purge === true) {
+      purgeFlow(flowId);
+    } else {
+      unlinkFlow(flowId);
+    }
     return reply.send({ ok: true, flowId });
   });
 

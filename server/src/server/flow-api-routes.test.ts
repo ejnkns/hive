@@ -1,4 +1,13 @@
 import assert from "node:assert/strict";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import fastifyWebsocket from "@fastify/websocket";
 import Fastify, { type FastifyInstance } from "fastify";
@@ -502,6 +511,75 @@ describe("flow API routes", () => {
 
     assert.equal(response.statusCode, 404);
     assert.equal(response.json().error, "Flow not found");
+  });
+
+  it("DELETE /api/flows/:flowId without purge keeps basePath/.hive", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "hive-unlink-"));
+    mkdirSync(join(dir, ".hive"), { recursive: true });
+    writeFileSync(join(dir, ".hive", "project.json"), "{}");
+    try {
+      registerFlowForTest(
+        "unlink-flow",
+        createFlowRuntime(
+          "unlink-flow",
+          [testWorkflow],
+          [],
+          {},
+          { name: "Unlink Flow", basePath: dir },
+          {},
+          noopPersistence
+        )
+      );
+      setFlowPersistence(noopPersistence);
+      const server = Fastify();
+      servers.push(server);
+      registerFlowApiRoutes(server);
+
+      const response = await server.inject({
+        method: "DELETE",
+        url: "/api/flows/unlink-flow",
+      });
+
+      assert.equal(response.statusCode, 200);
+      assert.equal(existsSync(join(dir, ".hive")), true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("DELETE /api/flows/:flowId with purge removes basePath/.hive", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "hive-purge-"));
+    mkdirSync(join(dir, ".hive"), { recursive: true });
+    writeFileSync(join(dir, ".hive", "project.json"), "{}");
+    try {
+      registerFlowForTest(
+        "purge-flow",
+        createFlowRuntime(
+          "purge-flow",
+          [testWorkflow],
+          [],
+          {},
+          { name: "Purge Flow", basePath: dir },
+          {},
+          noopPersistence
+        )
+      );
+      setFlowPersistence(noopPersistence);
+      const server = Fastify();
+      servers.push(server);
+      registerFlowApiRoutes(server);
+
+      const response = await server.inject({
+        method: "DELETE",
+        url: "/api/flows/purge-flow",
+        body: { purge: true },
+      });
+
+      assert.equal(response.statusCode, 200);
+      assert.equal(existsSync(join(dir, ".hive")), false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("POST /api/flows creates a flow from a registered definition", async () => {

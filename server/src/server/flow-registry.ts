@@ -1,5 +1,7 @@
 /** @public — generic FlowRuntime registry. No domain (queen-bee) knowledge. */
 
+import { rmSync } from "node:fs";
+import { join } from "node:path";
 import type { FlowPersistence } from "workflow-engine/create-flow-runtime";
 import {
   createFlowRuntime,
@@ -134,6 +136,26 @@ export function getFlowRuntimes(): Map<
 export function unlinkFlow(flowId: string): void {
   runtimes.delete(flowId);
   _persistence?.deleteFlow(flowId);
+}
+
+// Removes operational state like unlinkFlow, and additionally deletes the
+// flow's authoritative domain state under basePath/.hive. The basePath comes
+// from the flow config; without one purge degrades to a plain unlink.
+export function purgeFlow(flowId: string): void {
+  const runtime = runtimes.get(flowId);
+  const config = runtime?.getFlowConfig() as
+    | Record<string, unknown>
+    | undefined;
+  const basePath =
+    typeof config?.basePath === "string" && config.basePath !== ""
+      ? config.basePath
+      : undefined;
+
+  unlinkFlow(flowId);
+
+  if (basePath) {
+    rmSync(join(basePath, ".hive"), { recursive: true, force: true });
+  }
 }
 
 // ── Flow lifecycle ──
