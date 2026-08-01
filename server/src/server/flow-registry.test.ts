@@ -3,12 +3,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { defineWorkflow } from "workflow-engine/workflow-types";
+import { registerFlowDefinition } from "./flow-definitions";
 import { createFlowPersistence } from "./flow-persistence";
 import {
   createFlow,
   getFlowPersistence,
   getFlowRuntime,
-  registerFlowDefinition,
   rehydrateFlow,
   setFlowPersistence,
   unlinkFlow,

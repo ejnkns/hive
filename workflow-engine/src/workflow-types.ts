@@ -263,6 +263,18 @@ export type FlowEdge<
 
 export type RuntimeFlowEdge = FlowEdge;
 
+// A field a definition's instances take as input at instantiation time.
+// Declared by the definition (configSchema) and rendered by the UI as a form;
+// the server validates instance config against it (required fields, types,
+// unknown-field rejection).
+export type ConfigField = {
+  key: string;
+  label: string;
+  type: "string" | "boolean" | "number";
+  required?: boolean;
+  hint?: string;
+};
+
 // A FlowDefinition is the complete description of one flow type: its
 // workflows, the edges between them, and the capabilities its tasks call by
 // name — self-contained domain tools (schema + executor) and deterministic
@@ -279,6 +291,7 @@ export type FlowDefinition = {
   id: string;
   label: string;
   description?: string;
+  configSchema?: ConfigField[];
   edges: FlowEdge[];
   tools?: readonly Tool[];
   operations?: Record<string, OperationFn>;

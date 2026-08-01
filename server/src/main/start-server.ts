@@ -8,6 +8,7 @@ import {
   loadProviders,
 } from "../server";
 import { registerFlowApiRoutes } from "../server/flow-api-routes";
+import { loadUserDefinitionsFromDisk } from "../server/flow-definitions";
 import { createFlowPersistence } from "../server/flow-persistence";
 import { rehydrateFlow, setFlowPersistence } from "../server/flow-registry";
 import {
@@ -51,6 +52,7 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
   // can rebuild their runtimes from the definition registry. The server does
   // not know what any preset is; it just loads the definitions it ships.
   registerBuiltinFlowDefinitions();
+  await loadUserDefinitionsFromDisk();
 
   const persistence = createFlowPersistence();
   setFlowPersistence(persistence);

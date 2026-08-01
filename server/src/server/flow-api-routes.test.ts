@@ -9,11 +9,8 @@ import {
 } from "workflow-engine/create-flow-runtime";
 import { defineWorkflow } from "workflow-engine/workflow-types";
 import { registerFlowApiRoutes } from "./flow-api-routes";
-import {
-  registerFlowDefinition,
-  registerFlowForTest,
-  setFlowPersistence,
-} from "./flow-registry";
+import { registerFlowDefinition } from "./flow-definitions";
+import { registerFlowForTest, setFlowPersistence } from "./flow-registry";
 
 const testWorkflow = defineWorkflow({
   id: "test-wf",

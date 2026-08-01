@@ -2,6 +2,11 @@ import type { FastifyInstance } from "fastify";
 import type { FlowRuntimeEvent } from "workflow-engine/create-flow-runtime";
 import type { WebSocket } from "ws";
 import {
+  deleteUserDefinition,
+  getRegisteredFlowDefinition,
+  listRegisteredDefinitions,
+} from "./flow-definitions";
+import {
   createFlow,
   createFlowFromDefinition,
   type DataDrivenWorkflowDef,
@@ -186,6 +191,54 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
       });
     }
   );
+
+  // ── Flow definition library ──
+
+  server.get("/api/flows/definitions", async (_request, reply) => {
+    const definitions = listRegisteredDefinitions().map(
+      ({ id, name, description, builtIn, configSchema }) => ({
+        id,
+        name,
+        description,
+        builtIn,
+        configSchema,
+      })
+    );
+    return reply.send({ definitions });
+  });
+
+  server.get("/api/flows/definitions/:id", async (request, reply) => {
+    // Fastify params type is erased; shape guaranteed by route pattern
+    const { id } = request.params as { id: string };
+    const record = getRegisteredFlowDefinition(id);
+    if (!record) {
+      return reply.status(404).send({ error: "Flow definition not found" });
+    }
+    return reply.send({
+      id: record.id,
+      name: record.name,
+      description: record.description,
+      builtIn: record.builtIn,
+      configSchema: record.configSchema,
+      source: record.source,
+    });
+  });
+
+  server.delete("/api/flows/definitions/:id", async (request, reply) => {
+    // Fastify params type is erased; shape guaranteed by route pattern
+    const { id } = request.params as { id: string };
+    const record = getRegisteredFlowDefinition(id);
+    if (!record) {
+      return reply.status(404).send({ error: "Flow definition not found" });
+    }
+    if (record.builtIn) {
+      return reply
+        .status(409)
+        .send({ error: "Built-in flow definitions cannot be deleted" });
+    }
+    deleteUserDefinition(id);
+    return reply.send({ ok: true, id });
+  });
 
   server.post("/api/flows/definitions", async (request, reply) => {
     // Fastify body is unknown; validated below

@@ -27,12 +27,12 @@ import {
 import { queenBeeFlow } from "../../../../presets/queen-bee/flow";
 import { queenBeeOperations } from "../../../../presets/queen-bee/operations";
 import { queenBeeTools } from "../../../../presets/queen-bee/tools";
+import { registerFlowDefinition } from "../flow-definitions";
 import { createFlowPersistence } from "../flow-persistence";
 import {
   createFlow,
   getFlowPersistence,
   getFlowRuntime,
-  registerFlowDefinition,
   setFlowPersistence,
 } from "../flow-registry";
 

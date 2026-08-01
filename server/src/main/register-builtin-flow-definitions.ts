@@ -1,8 +1,8 @@
 /** @public — composition root: registers the built-in flow definitions the server ships. */
 
 import { queenBeeFlow } from "../../../presets/queen-bee/flow";
-import { registerFlowDefinition } from "../server/flow-registry";
+import { registerFlowDefinition } from "../server/flow-definitions";
 
 export function registerBuiltinFlowDefinitions(): void {
-  registerFlowDefinition(queenBeeFlow);
+  registerFlowDefinition(queenBeeFlow, { builtIn: true });
 }

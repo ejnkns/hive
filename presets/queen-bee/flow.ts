@@ -1,5 +1,6 @@
 import type {
   AutoTransition,
+  ConfigField,
   FlowDefinition,
   FlowEdge,
   GateContext,
@@ -102,9 +103,22 @@ function readSystemPrompts(
   return result;
 }
 
+export const queenBeeConfigSchema: ConfigField[] = [
+  {
+    key: "basePath",
+    label: "Base path",
+    type: "string",
+    required: true,
+    hint: "A git repository root or a plain directory to bind the flow to.",
+  },
+];
+
 export const queenBeeFlow = {
   id: "queen-bee",
   label: "Queen Bee",
+  description:
+    "Project lifecycle: onboarding, requirements, ideas, cards, integration.",
+  configSchema: queenBeeConfigSchema,
   buildWorkflows,
   tools: queenBeeTools,
   operations: queenBeeOperations,

@@ -2,6 +2,7 @@ node_modules/
 dist/
 .env
 *.log
+server/.runtime/
 
 contexts/
 *.md

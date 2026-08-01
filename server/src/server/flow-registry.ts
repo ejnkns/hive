@@ -15,6 +15,7 @@ import type {
   StateCategory,
 } from "workflow-engine/workflow-types";
 import { createEngineRunners } from "./engine-bridge";
+import { getFlowDefinition } from "./flow-definitions";
 
 const runtimes = new Map<
   string,
@@ -23,21 +24,10 @@ const runtimes = new Map<
 let _persistence: FlowPersistence | null = null;
 
 // ── Flow definition registry ──
-
-// A FlowDefinition is the engine's definition type — external config mapping a
-// definition id to the workflows + edges that build a flow, plus the domain
-// capabilities its tasks call by name. It is static (`workflows`) or a factory
-// (`buildWorkflows`). Definitions are registered at the composition root
-// (e.g. queen-bee registers itself); the registry itself is generic.
-const definitions = new Map<string, FlowDefinition>();
-
-export function registerFlowDefinition(definition: FlowDefinition): void {
-  definitions.set(definition.id, definition);
-}
-
-export function getFlowDefinition(id: string): FlowDefinition | undefined {
-  return definitions.get(id);
-}
+//
+// The definition library (register/list/get/delete, TS loading, persistence)
+// lives in flow-definitions.ts. The registry here is generic: it owns only the
+// FlowRuntime instances, resolving definitions by id on demand.
 
 function resolveWorkflows(
   definition: FlowDefinition,
@@ -96,7 +86,7 @@ export function createFlow(
   persistence: FlowPersistence,
   config?: Record<string, unknown>
 ): FlowRuntimeAPI<Record<string, unknown>, Record<string, unknown>> {
-  const definition = definitions.get(definitionId);
+  const definition = getFlowDefinition(definitionId);
   if (!definition) {
     throw new Error(`Flow definition "${definitionId}" not registered`);
   }
@@ -168,7 +158,7 @@ export function rehydrateFlow(
   } else {
     const definitionId = cfg.definitionId;
     if (typeof definitionId !== "string") return null;
-    const definition = definitions.get(definitionId);
+    const definition = getFlowDefinition(definitionId);
     if (!definition) return null;
     workflows = resolveWorkflows(definition, cfg);
     edges = definition.edges;
