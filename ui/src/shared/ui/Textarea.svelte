@@ -4,12 +4,14 @@ let {
   placeholder = "",
   disabled = false,
   size = "small",
+  rows,
   restProps = {} as Record<string, unknown>,
 }: {
   value?: string;
   placeholder?: string;
   disabled?: boolean;
   size?: "small" | "default";
+  rows?: number;
   restProps?: Record<string, unknown>;
 } = $props();
 </script>
@@ -19,6 +21,7 @@ let {
   bind:value
   {placeholder}
   {disabled}
+  {rows}
   {...restProps}
 ></textarea>
 

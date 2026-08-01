@@ -1,0 +1,236 @@
+<script lang="ts">
+import { onDestroy, onMount } from "svelte";
+import Badge from "../shared/ui/Badge.svelte";
+import Button from "../shared/ui/Button.svelte";
+import InstanceRoster from "./InstanceRoster.svelte";
+import type {
+  FlowDefinitionSummary,
+  FlowResponse,
+  FlowWsEvent,
+} from "./workflow-api";
+import {
+  connectFlowWs,
+  fetchFlowDefinitions,
+  fetchFlows,
+} from "./workflow-api";
+
+let definitions = $state<FlowDefinitionSummary[]>([]);
+let flows = $state<FlowResponse[]>([]);
+let loading = $state(true);
+let error = $state<string | null>(null);
+let unsubWs: (() => void) | null = null;
+
+onMount(() => {
+  void load();
+  unsubWs = connectFlowWs((event) => {
+    handleWsEvent(event);
+  });
+});
+
+onDestroy(() => {
+  unsubWs?.();
+});
+
+async function load() {
+  loading = true;
+  error = null;
+  try {
+    [definitions, flows] = await Promise.all([
+      fetchFlowDefinitions(),
+      fetchFlows(),
+    ]);
+  } catch (err) {
+    error = err instanceof Error ? err.message : "Failed to load flows";
+  } finally {
+    loading = false;
+  }
+}
+
+function handleWsEvent(event: FlowWsEvent) {
+  if (
+    event.type === "instance_created" ||
+    event.type === "instance_terminated" ||
+    event.type === "instance_state_changed"
+  ) {
+    void load();
+  }
+}
+
+function instancesFor(definitionId: string): FlowResponse[] {
+  return flows.filter((flow) => flow.config?.definitionId === definitionId);
+}
+
+function definitionHref(id: string): string {
+  return `#/flows/${encodeURIComponent(id)}`;
+}
+</script>
+
+<div class="library">
+  <div class="header">
+    <h1>Flows</h1>
+    <a class="btn-new" href="#/flows/new">New flow definition</a>
+  </div>
+
+  {#if error}
+    <div class="error">{error}</div>
+  {/if}
+
+  {#if loading}
+    <div class="loading">Loading flows...</div>
+  {:else if definitions.length === 0}
+    <div class="empty">
+      <p>No flow definitions yet.</p>
+      <p>Author a definition to get started.</p>
+    </div>
+  {:else}
+    <div class="definition-list">
+      {#each definitions as definition (definition.id)}
+        <div class="definition-card">
+          <div class="definition-head">
+            <a class="definition-name" href={definitionHref(definition.id)}>
+              {definition.name}
+            </a>
+            {#if definition.builtIn}
+              <Badge variant="platinum" outline>built-in</Badge>
+            {/if}
+            <span class="definition-count"
+              >{instancesFor(definition.id).length}
+              instance{instancesFor(definition.id).length !== 1 ? "s" : ""}</span
+            >
+          </div>
+          {#if definition.description}
+            <div class="definition-description">{definition.description}</div>
+          {/if}
+          <div class="definition-actions">
+            <Button variant="platinum">
+              <a class="btn-link" href={definitionHref(definition.id)}>Open</a>
+            </Button>
+            <Button variant="mint">
+              <a class="btn-link" href={`${definitionHref(definition.id)}/new`}
+                >New instance</a
+              >
+            </Button>
+          </div>
+          <div class="definition-instances">
+            <InstanceRoster
+              definitionId={definition.id}
+              flows={instancesFor(definition.id)}
+              onDeleted={load}
+              onError={(err) => (error = err)}
+            />
+          </div>
+        </div>
+      {/each}
+    </div>
+  {/if}
+</div>
+
+<style>
+.library {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+h1 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.btn-new {
+  text-decoration: none;
+  font-family: monospace;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 6px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: var(--bg);
+  background: var(--accent);
+}
+
+.error {
+  background: rgba(220, 60, 60, 0.1);
+  border: 1px solid rgba(220, 60, 60, 0.3);
+  color: #dc3c3c;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  margin-bottom: 1rem;
+}
+
+.loading,
+.empty {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.empty p {
+  margin: 0.25rem 0;
+}
+
+.definition-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.definition-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+}
+
+.definition-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.definition-name {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.definition-name:hover {
+  color: var(--accent);
+}
+
+.definition-count {
+  margin-left: auto;
+  font-size: 0.625rem;
+  color: var(--muted);
+  font-family: var(--font-mono, monospace);
+}
+
+.definition-description {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-top: 0.25rem;
+}
+
+.definition-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.btn-link {
+  text-decoration: none;
+  color: inherit;
+}
+</style>

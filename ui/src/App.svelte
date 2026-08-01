@@ -16,8 +16,11 @@ import Stats from "./dashboard/Stats.svelte";
 import Header from "./shared/Header.svelte";
 import Button from "./shared/ui/Button.svelte";
 import Dialog from "./shared/ui/Dialog.svelte";
-import WorkflowList from "./workflow/WorkflowList.svelte";
-import WorkflowProjectPage from "./workflow/WorkflowProjectPage.svelte";
+import DefinitionEditor from "./workflow/DefinitionEditor.svelte";
+import FlowDefinitionPage from "./workflow/FlowDefinitionPage.svelte";
+import FlowInstancePage from "./workflow/FlowInstancePage.svelte";
+import FlowLibrary from "./workflow/FlowLibrary.svelte";
+import InstantiateForm from "./workflow/InstantiateForm.svelte";
 
 let detailMetric: MetricData | null = $state(null);
 let detailAllMetrics: MetricData[] = $state([]);
@@ -36,6 +39,35 @@ onMount(() => {
     dashboardSocket.disconnect();
   };
 });
+
+type FlowRoute =
+  | { kind: "library" }
+  | { kind: "new-definition" }
+  | { kind: "definition"; flowName: string }
+  | { kind: "edit-definition"; flowName: string }
+  | { kind: "new-instance"; flowName: string }
+  | { kind: "instance"; flowName: string; instanceName: string };
+
+function parseFlowRoute(hash: string): FlowRoute | null {
+  if (hash === "#/flows" || hash === "" || hash === "#") {
+    return { kind: "library" };
+  }
+  if (hash === "#/flows/new") {
+    return { kind: "new-definition" };
+  }
+  const match = hash.match(/^#\/flows\/([^/]+)(?:\/([^/]+))?$/);
+  if (!match) return null;
+  const flowNameRaw = match[1];
+  if (flowNameRaw === undefined) return null;
+  const flowName = decodeURIComponent(flowNameRaw);
+  const rest = match[2];
+  if (rest === undefined) return { kind: "definition", flowName };
+  if (rest === "edit") return { kind: "edit-definition", flowName };
+  if (rest === "new") return { kind: "new-instance", flowName };
+  return { kind: "instance", flowName, instanceName: decodeURIComponent(rest) };
+}
+
+const flowRoute = $derived(parseFlowRoute(currentHash));
 
 let headerData = $derived.by(() => {
   const p = dashboardSocket.providers;
@@ -171,13 +203,13 @@ const detailChain = $derived(
       onOverrideClear={handleOverrideClear}
       onOpenModelPriority={() => (modelPriorityModalOpen = true)}
     />
-    {#if currentHash.startsWith('#/project/')}
+    {#if flowRoute && flowRoute.kind !== "library"}
       <div class="project-header">
         <div class="project-header-row">
-          <a href="#/" class="back-link">&larr; Flows</a>
-          <span class="project-id"
-            >{currentHash.slice('#/project/'.length)}</span
-          >
+          <a href="#/flows" class="back-link">&larr; Flows</a>
+          {#if flowRoute.kind === "definition" || flowRoute.kind === "edit-definition" || flowRoute.kind === "new-instance" || flowRoute.kind === "instance"}
+            <span class="project-id">{flowRoute.flowName}</span>
+          {/if}
         </div>
       </div>
     {/if}
@@ -320,10 +352,21 @@ const detailChain = $derived(
       {/if}
     </Dialog>
     <ModelPriorityModal bind:open={modelPriorityModalOpen} />
-  {:else if currentHash.startsWith('#/project/')}
-    <WorkflowProjectPage projectId={currentHash.slice('#/project/'.length)} />
+  {:else if flowRoute?.kind === "new-definition"}
+    <DefinitionEditor isNew={true} />
+  {:else if flowRoute?.kind === "definition"}
+    <FlowDefinitionPage definitionId={flowRoute.flowName} />
+  {:else if flowRoute?.kind === "edit-definition"}
+    <DefinitionEditor isNew={false} definitionId={flowRoute.flowName} />
+  {:else if flowRoute?.kind === "new-instance"}
+    <InstantiateForm definitionId={flowRoute.flowName} />
+  {:else if flowRoute?.kind === "instance"}
+    <FlowInstancePage
+      definitionId={flowRoute.flowName}
+      instanceName={flowRoute.instanceName}
+    />
   {:else}
-    <WorkflowList />
+    <FlowLibrary />
   {/if}
 </div>
 

@@ -1,0 +1,393 @@
+<script lang="ts">
+import { onMount } from "svelte";
+import Button from "../shared/ui/Button.svelte";
+import Dialog from "../shared/ui/Dialog.svelte";
+import Textarea from "../shared/ui/Textarea.svelte";
+import TextInput from "../shared/ui/TextInput.svelte";
+import {
+  createFlowDefinition,
+  deleteFlowDefinition,
+  fetchFlowDefinition,
+  generateFlowDefinition,
+  updateFlowDefinition,
+} from "./workflow-api";
+
+let {
+  definitionId,
+  isNew,
+}: {
+  definitionId?: string;
+  isNew: boolean;
+} = $props();
+
+const defaultTemplate = `import { defineWorkflow } from "workflow-engine/workflow-types";
+
+const wf = defineWorkflow({
+  id: "my-workflow",
+  label: "My Workflow",
+  taskOutputs: {} as Record<string, never>,
+  states: [
+    { id: "idle", label: "Idle", category: "initial" },
+    { id: "done", label: "Done", category: "terminal" },
+  ],
+  initial: "idle",
+  terminalStates: ["done"],
+});
+
+export const flow = {
+  id: "my-flow",
+  label: "My Flow",
+  configSchema: [
+    { key: "title", label: "Title", type: "string", required: true },
+  ],
+  workflows: [wf],
+  edges: [],
+};
+`;
+
+let name = $state("");
+let description = $state("");
+let source = $state(defaultTemplate);
+let loading = $state(false);
+let saving = $state(false);
+let generating = $state(false);
+let error = $state<string | null>(null);
+let aiOpen = $state(true);
+let aiPrompt = $state("");
+let deleteOpen = $state(false);
+
+onMount(async () => {
+  if (isNew || !definitionId) return;
+  loading = true;
+  error = null;
+  try {
+    const detail = await fetchFlowDefinition(definitionId);
+    name = detail.name;
+    description = detail.description ?? "";
+    source = detail.source;
+  } catch (err) {
+    error = err instanceof Error ? err.message : "Failed to load definition";
+  } finally {
+    loading = false;
+  }
+});
+
+async function save() {
+  if (!name.trim()) {
+    error = "Definition name is required";
+    return;
+  }
+  saving = true;
+  error = null;
+  try {
+    const result = isNew
+      ? await createFlowDefinition({ name: name.trim(), description, source })
+      : await updateDefinition(definitionId);
+    window.location.hash = `#/flows/${encodeURIComponent(result.id)}`;
+  } catch (err) {
+    error = err instanceof Error ? err.message : "Failed to save definition";
+  } finally {
+    saving = false;
+  }
+}
+
+async function updateDefinition(id: string | undefined) {
+  if (id === undefined) {
+    throw new Error("Definition id is missing");
+  }
+  return updateFlowDefinition(id, {
+    name: name.trim(),
+    description,
+    source,
+  });
+}
+
+async function generate() {
+  if (!aiPrompt.trim()) return;
+  generating = true;
+  error = null;
+  try {
+    const result = await generateFlowDefinition(aiPrompt.trim());
+    source = result.source;
+  } catch (err) {
+    error =
+      err instanceof Error ? err.message : "Failed to generate definition";
+  } finally {
+    generating = false;
+  }
+}
+
+async function remove() {
+  if (!definitionId) return;
+  try {
+    await deleteFlowDefinition(definitionId);
+    window.location.hash = "#/flows";
+  } catch (err) {
+    error = err instanceof Error ? err.message : "Failed to delete definition";
+  }
+}
+</script>
+
+<div class="editor">
+  <div class="breadcrumb">
+    <a href="#/flows">Flows</a>
+    <span class="crumb-sep">/</span>
+    {#if isNew}
+      <span class="crumb-current">New flow definition</span>
+    {:else}
+      <a href={`#/flows/${encodeURIComponent(definitionId ?? "")}`}
+        >{definitionId}</a
+      >
+      <span class="crumb-sep">/</span>
+      <span class="crumb-current">Edit</span>
+    {/if}
+  </div>
+
+  <h1>{isNew ? "New flow definition" : `Edit ${definitionId}`}</h1>
+
+  {#if error}
+    <div class="error">{error}</div>
+  {/if}
+
+  {#if loading}
+    <div class="loading">Loading definition...</div>
+  {:else}
+    <div class="name-row">
+      <label class="field">
+        <span class="label">Name</span>
+        <TextInput bind:value={name} placeholder="My Flow" />
+      </label>
+      {#if !isNew}
+        <label class="field">
+          <span class="label">Slug (read-only)</span>
+          <TextInput value={definitionId ?? ""} disabled />
+        </label>
+      {/if}
+      <label class="field">
+        <span class="label">Description</span>
+        <TextInput
+          bind:value={description}
+          placeholder="What does this flow do?"
+        />
+      </label>
+    </div>
+
+    <div class="panes">
+      <div class="ai-pane">
+        <div class="pane-header">
+          <button
+            type="button"
+            class="pane-toggle"
+            onclick={() => (aiOpen = !aiOpen)}
+          >
+            {aiOpen ? "Hide" : "Show"}
+            AI
+          </button>
+        </div>
+        {#if aiOpen}
+          <div class="ai-body">
+            <p class="ai-hint">
+              Describe the flow you want; the model returns a TypeScript
+              definition matching the engine schema.
+            </p>
+            <Textarea
+              bind:value={aiPrompt}
+              placeholder="A review flow: a ready state with an approve/reject action..."
+            />
+            <Button
+              variant="azure"
+              block
+              disabled={generating || !aiPrompt.trim()}
+              onclick={generate}
+            >
+              {generating ? "Generating..." : "Generate"}
+            </Button>
+          </div>
+        {/if}
+      </div>
+
+      <div class="ts-pane">
+        <div class="pane-header">
+          <span class="pane-title">Definition source (.ts)</span>
+        </div>
+        <div class="code-editor">
+          <Textarea bind:value={source} rows={30} />
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="footer-actions">
+        <Button variant="mint" disabled={saving || !name.trim()} onclick={save}>
+          {saving ? "Saving..." : "Save definition"}
+        </Button>
+        {#if !isNew}
+          <Button variant="rose" onclick={() => (deleteOpen = true)}>
+            Delete this flow definition
+          </Button>
+        {/if}
+      </div>
+    </div>
+  {/if}
+</div>
+
+<Dialog bind:open={deleteOpen} label="Delete flow definition">
+  <h2 class="dialog-title">Delete flow definition</h2>
+  <p class="dialog-text">
+    Existing instances keep their snapshot of this definition, but the
+    definition will no longer be listed or instantiable.
+  </p>
+  <Button variant="rose" onclick={remove}>Delete definition</Button>
+</Dialog>
+
+<style>
+.editor {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem;
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.6875rem;
+  color: var(--muted);
+  margin-bottom: 0.5rem;
+}
+
+.breadcrumb a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.breadcrumb a:hover {
+  color: var(--text);
+}
+
+.crumb-sep {
+  opacity: 0.5;
+}
+
+.crumb-current {
+  color: var(--text);
+}
+
+h1 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 1.5rem 0;
+}
+
+.name-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.panes {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 1rem;
+}
+
+.pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.375rem 0;
+}
+
+.pane-toggle {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-family: monospace;
+  font-size: 0.6875rem;
+  cursor: pointer;
+}
+
+.pane-title {
+  font-size: 0.625rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+.ai-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ai-hint {
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.code-editor :global(textarea) {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  tab-size: 2;
+}
+
+.footer {
+  margin-top: 1.5rem;
+}
+
+.footer-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.loading {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.error {
+  background: rgba(220, 60, 60, 0.1);
+  border: 1px solid rgba(220, 60, 60, 0.3);
+  color: #dc3c3c;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  margin-bottom: 1rem;
+}
+
+.dialog-title {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.dialog-text {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0 0 1rem 0;
+}
+</style>

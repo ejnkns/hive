@@ -63,9 +63,40 @@ export type WorkflowInstanceEntry = {
   availableActions: VisibleAction[];
 };
 
+export type FlowStatus = "error" | "running" | "waiting" | "idle" | "complete";
+
+export type ConfigField = {
+  key: string;
+  label: string;
+  type: "string" | "boolean" | "number";
+  required?: boolean;
+  hint?: string;
+};
+
+export function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 50);
+}
+
+export type FlowDefinitionSummary = {
+  id: string;
+  name: string;
+  description?: string;
+  builtIn: boolean;
+  configSchema: ConfigField[];
+};
+
+export type FlowDefinitionDetail = FlowDefinitionSummary & {
+  source: string;
+};
+
 export type FlowResponse = {
   id: string;
   label: string;
+  status: FlowStatus;
   config?: Record<string, unknown>;
   workflows: WorkflowDef[];
   instances: WorkflowInstanceEntry[];
@@ -73,6 +104,10 @@ export type FlowResponse = {
 
 export type FlowsApiResponse = {
   flows: FlowResponse[];
+};
+
+export type FlowDefinitionsApiResponse = {
+  definitions: FlowDefinitionSummary[];
 };
 
 export type InstancesApiResponse = {
@@ -116,8 +151,15 @@ export type FlowWsEvent =
       state: WorkflowInstanceState;
     };
 
-export async function fetchFlows(): Promise<FlowResponse[]> {
-  const res = await fetch("/api/flows");
+export async function fetchFlows(options?: {
+  definitionId?: string;
+  name?: string;
+}): Promise<FlowResponse[]> {
+  const query = new URLSearchParams();
+  if (options?.definitionId) query.set("definitionId", options.definitionId);
+  if (options?.name) query.set("name", options.name);
+  const suffix = query.size > 0 ? `?${query.toString()}` : "";
+  const res = await fetch(`/api/flows${suffix}`);
   if (!res.ok) throw new Error(`Failed to fetch flows: ${res.statusText}`);
   // res.json() returns unknown; the API response shape is guaranteed by
   // the server endpoint and validated by the return type
@@ -156,15 +198,115 @@ export async function createFlow(input: {
   return { flowId: data.flowId };
 }
 
-export async function deleteFlow(flowId: string): Promise<void> {
+export async function deleteFlow(flowId: string, purge = false): Promise<void> {
   const res = await fetch(`/api/flows/${encodeURIComponent(flowId)}`, {
     method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ purge }),
   });
   if (!res.ok) {
     // Error response shape is guaranteed by the server endpoint
     const err = (await res.json()) as { error?: string };
     throw new Error(err.error ?? `Failed to delete flow: ${res.statusText}`);
   }
+}
+
+export async function fetchFlowDefinitions(): Promise<FlowDefinitionSummary[]> {
+  const res = await fetch("/api/flows/definitions");
+  if (!res.ok)
+    throw new Error(`Failed to fetch definitions: ${res.statusText}`);
+  // res.json() returns unknown; the API response shape is guaranteed by
+  // the server endpoint and validated by the return type
+  const data = (await res.json()) as FlowDefinitionsApiResponse;
+  return data.definitions;
+}
+
+export async function fetchFlowDefinition(
+  id: string
+): Promise<FlowDefinitionDetail> {
+  const res = await fetch(`/api/flows/definitions/${encodeURIComponent(id)}`);
+  if (!res.ok) {
+    // Error response shape is guaranteed by the server endpoint
+    const err = (await res.json()) as { error?: string };
+    throw new Error(
+      err.error ?? `Failed to fetch definition: ${res.statusText}`
+    );
+  }
+  // Success response shape matches FlowDefinitionDetail by contract with the server
+  return (await res.json()) as FlowDefinitionDetail;
+}
+
+export async function createFlowDefinition(input: {
+  name: string;
+  description?: string;
+  source: string;
+}): Promise<FlowDefinitionSummary> {
+  const res = await fetch("/api/flows/definitions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    // Error response shape is guaranteed by the server endpoint
+    const err = (await res.json()) as { error?: string };
+    throw new Error(
+      err.error ?? `Failed to create definition: ${res.statusText}`
+    );
+  }
+  // Success response shape matches FlowDefinitionSummary by contract with the server
+  return (await res.json()) as FlowDefinitionSummary;
+}
+
+export async function updateFlowDefinition(
+  id: string,
+  input: { name: string; description?: string; source: string }
+): Promise<FlowDefinitionSummary> {
+  const res = await fetch(`/api/flows/definitions/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    // Error response shape is guaranteed by the server endpoint
+    const err = (await res.json()) as { error?: string };
+    throw new Error(
+      err.error ?? `Failed to update definition: ${res.statusText}`
+    );
+  }
+  // Success response shape matches FlowDefinitionSummary by contract with the server
+  return (await res.json()) as FlowDefinitionSummary;
+}
+
+export async function deleteFlowDefinition(id: string): Promise<void> {
+  const res = await fetch(`/api/flows/definitions/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    // Error response shape is guaranteed by the server endpoint
+    const err = (await res.json()) as { error?: string };
+    throw new Error(
+      err.error ?? `Failed to delete definition: ${res.statusText}`
+    );
+  }
+}
+
+export async function generateFlowDefinition(
+  prompt: string
+): Promise<{ source: string }> {
+  const res = await fetch("/api/flows/definitions/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt }),
+  });
+  if (!res.ok) {
+    // Error response shape is guaranteed by the server endpoint
+    const err = (await res.json()) as { error?: string };
+    throw new Error(
+      err.error ?? `Failed to generate definition: ${res.statusText}`
+    );
+  }
+  // Success response shape is guaranteed by the server endpoint
+  return (await res.json()) as { source: string };
 }
 
 export async function fetchFlowInstances(
