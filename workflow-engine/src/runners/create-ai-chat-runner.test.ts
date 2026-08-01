@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { TaskDefinition } from "../task-runner";
+import type { ChatMessage } from "../workflow-types";
 import {
   type AiChatModelCaller,
   createAiChatRunner,
@@ -148,6 +149,133 @@ describe("createAiChatRunner", () => {
     assert.ok(
       (result.output as { content: string }).content.includes("##COMPLETE##")
     );
+  });
+
+  it("waits for the first user message before calling the model with startOnUserInput", async () => {
+    let calls = 0;
+    const modelCaller: AiChatModelCaller = async (
+      _prompt,
+      msgs,
+      _tools,
+      _signal
+    ) => {
+      calls++;
+      const hasUser = msgs.some((m) => m.role === "user");
+      return { content: hasUser ? "##COMPLETE##" : "unexpected" };
+    };
+
+    const runner = createAiChatRunner({
+      modelCaller,
+      toolDefinitions: {},
+      toolExecutors: {},
+      completionSignal: "##COMPLETE##",
+    });
+
+    const runPromise = runner.run({ ...dummyTask, startOnUserInput: true });
+    await new Promise((r) => setTimeout(r, 20));
+    assert.equal(calls, 0, "no model call before the first user message");
+
+    await runner.sendMessage?.("Hello!", "user");
+    const result = await runPromise;
+    assert.equal(calls, 1);
+    assert.ok(
+      (result.output as { content: string }).content.includes("##COMPLETE##")
+    );
+  });
+
+  it("surfaces a throwing tool executor as a tool message instead of failing", async () => {
+    const runner = createAiChatRunner({
+      modelCaller: mockCaller([
+        {
+          content: "Let me read",
+          toolCalls: [{ id: "c1", name: "read_file", arguments: "{}" }],
+        },
+        { content: "##COMPLETE##" },
+      ]),
+      toolDefinitions: {
+        read_file: {
+          type: "function",
+          function: {
+            name: "read_file",
+            description: "",
+            parameters: { type: "object", properties: {}, required: [] },
+          },
+        },
+      },
+      toolExecutors: {
+        read_file: async () => {
+          throw new Error("ENOENT: no such file");
+        },
+      },
+      completionSignal: "##COMPLETE##",
+    });
+
+    const result = await runner.run(dummyTask);
+    assert.ok(
+      (result.output as { content: string }).content.includes("##COMPLETE##")
+    );
+    const messages = (result.output as { messages: unknown[] }).messages;
+    assert.ok(
+      messages.some(
+        (m) =>
+          typeof m === "object" &&
+          m !== null &&
+          "content" in m &&
+          String((m as { content: string }).content).includes("ENOENT")
+      ),
+      "tool failure should be surfaced to the model, not fatal"
+    );
+  });
+
+  it("includes tool_calls and tool_call_id so providers accept tool-using conversations", async () => {
+    let seenMessages: ChatMessage[] = [];
+    const modelCaller: AiChatModelCaller = async (
+      _prompt,
+      msgs,
+      _tools,
+      _signal
+    ) => {
+      seenMessages = msgs;
+      if (msgs.length <= 1) {
+        return {
+          content: "reading",
+          toolCalls: [{ id: "c1", name: "read_file", arguments: "{}" }],
+        };
+      }
+      return { content: "##COMPLETE##" };
+    };
+
+    const runner = createAiChatRunner({
+      modelCaller,
+      toolDefinitions: {
+        read_file: {
+          type: "function",
+          function: {
+            name: "read_file",
+            description: "",
+            parameters: { type: "object", properties: {}, required: [] },
+          },
+        },
+      },
+      toolExecutors: {
+        read_file: async (call) => ({
+          toolCallId: call.id,
+          content: "ok",
+          isError: false,
+        }),
+      },
+      completionSignal: "##COMPLETE##",
+    });
+
+    await runner.run(dummyTask);
+
+    const assistant = seenMessages.find(
+      (m) => m.role === "assistant" && m.tool_calls !== undefined
+    );
+    const toolMsg = seenMessages.find((m) => m.role === "tool");
+    assert.equal(assistant?.tool_calls?.[0]?.function.name, "read_file");
+    assert.equal(assistant?.tool_calls?.[0]?.type, "function");
+    assert.equal(toolMsg?.tool_call_id, "c1");
   });
 
   it("cancel aborts execution", async () => {

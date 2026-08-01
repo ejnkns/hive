@@ -1,10 +1,16 @@
 /** @private — only imported by runners.ts */
 import type { TaskDefinition, TaskRunner } from "../task-runner";
-import type { ToolCall, ToolDefinition, ToolExecutor } from "./tool-types";
+import type { ChatMessage } from "../workflow-types";
+import type {
+  ToolCall,
+  ToolDefinition,
+  ToolExecutor,
+  ToolResult,
+} from "./tool-types";
 
 export type AiTaskModelCaller = (
   systemPrompt: string,
-  messages: { role: string; content: string }[],
+  messages: ChatMessage[],
   tools: ToolDefinition[],
   signal: AbortSignal
 ) => Promise<{ content: string; toolCalls?: ToolCall[] }>;
@@ -27,7 +33,7 @@ export function createAiTaskRunner(config: AiTaskRunnerConfig): TaskRunner {
         .map((name) => config.toolDefinitions[name])
         .filter(Boolean);
 
-      const messages: { role: string; content: string }[] = [];
+      const messages: ChatMessage[] = [];
 
       for (let iteration = 0; iteration < 50; iteration++) {
         abortController.signal.throwIfAborted();
@@ -39,7 +45,19 @@ export function createAiTaskRunner(config: AiTaskRunnerConfig): TaskRunner {
           abortController.signal
         );
 
-        messages.push({ role: "assistant", content: response.content });
+        messages.push({
+          role: "assistant",
+          content: response.content,
+          ...(response.toolCalls?.length
+            ? {
+                tool_calls: response.toolCalls.map((call) => ({
+                  id: call.id,
+                  type: "function" as const,
+                  function: { name: call.name, arguments: call.arguments },
+                })),
+              }
+            : {}),
+        });
 
         const completionTool = task.completionTool ?? config.completionTool;
         const completionCall = response.toolCalls?.find(
@@ -60,19 +78,33 @@ export function createAiTaskRunner(config: AiTaskRunnerConfig): TaskRunner {
             messages.push({
               role: "tool",
               content: `Unknown tool: ${call.name}`,
+              tool_call_id: call.id,
             });
             continue;
           }
 
-          const result = await executor(call, {
-            workspacePath: task.workspacePath ?? process.cwd(),
-            basePath: config.basePath,
-            instanceId: config.instanceId,
-            signal: abortController.signal,
-          });
+          let result: ToolResult;
+          try {
+            result = await executor(call, {
+              workspacePath: task.workspacePath ?? process.cwd(),
+              basePath: config.basePath,
+              instanceId: config.instanceId,
+              signal: abortController.signal,
+            });
+          } catch (err) {
+            messages.push({
+              role: "tool",
+              content: `Tool "${call.name}" failed: ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+              tool_call_id: call.id,
+            });
+            continue;
+          }
           messages.push({
             role: "tool",
             content: result.content,
+            tool_call_id: call.id,
           });
         }
       }

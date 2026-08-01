@@ -60,6 +60,7 @@ export const ideasWorkflow = defineWorkflow({
           trigger: "auto",
           role: "ai-chat",
           tools: ["read_file", "search_code"],
+          startOnUserInput: true,
           systemPrompt:
             "You are a product analyst. Ask the user questions " +
             "to clarify this idea. Produce a structured proposal.",

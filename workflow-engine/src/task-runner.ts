@@ -9,6 +9,11 @@ export type TaskDefinition = {
   completionTool?: string;
   completionSignal?: string;
   workspacePath?: string;
+  // For ai-chat sessions: wait for the user's first message before the first
+  // model call, instead of calling the model on start. Suits conversational
+  // sessions (requirements/ideas) where the agent should react to the user,
+  // not open the conversation itself.
+  startOnUserInput?: boolean;
 };
 
 export type TaskRunner = {

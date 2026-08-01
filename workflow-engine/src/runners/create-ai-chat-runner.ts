@@ -1,10 +1,16 @@
 /** @private — only imported by runners.ts */
 import type { TaskDefinition, TaskRunner } from "../task-runner";
-import type { ToolCall, ToolDefinition, ToolExecutor } from "./tool-types";
+import type { ChatMessage } from "../workflow-types";
+import type {
+  ToolCall,
+  ToolDefinition,
+  ToolExecutor,
+  ToolResult,
+} from "./tool-types";
 
 export type AiChatModelCaller = (
   systemPrompt: string,
-  messages: { role: string; content: string }[],
+  messages: ChatMessage[],
   tools: ToolDefinition[],
   signal: AbortSignal
 ) => Promise<{ content: string; toolCalls?: ToolCall[] }>;
@@ -21,7 +27,7 @@ export type AiChatRunnerConfig = {
 
 export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
   const abortController = new AbortController();
-  let messages: { role: string; content: string }[] = [];
+  let messages: ChatMessage[] = [];
   let turnResolve: (() => void) | null = null;
 
   function waitForInput(): Promise<void> {
@@ -63,7 +69,19 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
         abortController.signal
       );
 
-      messages.push({ role: "assistant", content: response.content });
+      messages.push({
+        role: "assistant",
+        content: response.content,
+        ...(response.toolCalls?.length
+          ? {
+              tool_calls: response.toolCalls.map((call) => ({
+                id: call.id,
+                type: "function" as const,
+                function: { name: call.name, arguments: call.arguments },
+              })),
+            }
+          : {}),
+      });
 
       if (isComplete(task, response.content, response.toolCalls)) {
         return {
@@ -87,16 +105,35 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
           messages.push({
             role: "tool",
             content: `Unknown tool: ${call.name}`,
+            tool_call_id: call.id,
           });
           continue;
         }
-        const result = await executor(call, {
-          workspacePath: task.workspacePath ?? process.cwd(),
-          basePath: config.basePath,
-          instanceId: config.instanceId,
-          signal: abortController.signal,
+        let result: ToolResult;
+        try {
+          result = await executor(call, {
+            workspacePath: task.workspacePath ?? process.cwd(),
+            basePath: config.basePath,
+            instanceId: config.instanceId,
+            signal: abortController.signal,
+          });
+        } catch (err) {
+          // A throwing tool must not kill the whole session — surface the
+          // failure to the model as a tool result so it can recover.
+          messages.push({
+            role: "tool",
+            content: `Tool "${call.name}" failed: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+            tool_call_id: call.id,
+          });
+          continue;
+        }
+        messages.push({
+          role: "tool",
+          content: result.content,
+          tool_call_id: call.id,
         });
-        messages.push({ role: "tool", content: result.content });
       }
     }
 
@@ -106,6 +143,12 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
   return {
     async run(task: TaskDefinition) {
       messages = [{ role: "system", content: task.systemPrompt ?? "" }];
+      if (task.startOnUserInput) {
+        // Wait for the first user message before calling the model, so a
+        // transient provider failure cannot break the session before it
+        // starts. The first sendMessage releases this.
+        await waitForInput();
+      }
       return await agentLoop(task);
     },
 
@@ -115,7 +158,7 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
       turnResolve = null;
     },
 
-    async sendMessage(content: string, role: string) {
+    async sendMessage(content: string, role: ChatMessage["role"]) {
       messages.push({ role, content });
       turnResolve?.();
       turnResolve = null;

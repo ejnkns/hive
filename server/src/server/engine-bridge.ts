@@ -22,6 +22,7 @@ import {
   toToolMaps,
 } from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
+import type { ChatMessage } from "workflow-engine/workflow-types";
 import { handleChatCompletion } from "./proxy/handle-chat-completion";
 
 // ─── Infrastructure operation wiring ─────────────────────────────────────
@@ -190,7 +191,7 @@ function consumeStream(
 function createModelCaller(_engineTools: ToolDefinition[]) {
   return async (
     systemPrompt: string,
-    messages: { role: string; content: string }[],
+    messages: ChatMessage[],
     tools: ToolDefinition[],
     signal?: AbortSignal
   ): Promise<{ content: string; toolCalls?: ToolCall[] }> => {

@@ -368,31 +368,50 @@ export async function sendTaskInput(
   return (await res.json()) as TaskInputResult;
 }
 
-export function connectFlowWs(
-  onEvent: (event: FlowWsEvent) => void
-): () => void {
+// Shared flow-event socket. The app keeps one open for its lifetime instead of
+// opening/closing a WebSocket per page — navigating between flow views churns
+// the proxy connection otherwise (visible as vite ws proxy EPIPE noise). Pages
+// subscribe via connectFlowWs; the socket reopens automatically if it drops
+// while at least one page is listening.
+let flowWsSocket: WebSocket | null = null;
+const flowWsListeners = new Set<(event: FlowWsEvent) => void>();
+
+function openFlowWs(): void {
   const protocol = window.location.protocol === "http:" ? "ws:" : "wss:";
   const socket = new WebSocket(
     `${protocol}//${window.location.host}/api/flows/ws`
   );
-  let closed = false;
+  flowWsSocket = socket;
 
   socket.onmessage = (event) => {
     try {
       // The server only sends FlowRuntimeEvent variants on this WS;
       // malformed frames are silently dropped by the catch.
       const msg = JSON.parse(String(event.data)) as FlowWsEvent;
-      onEvent(msg);
+      for (const listener of flowWsListeners) {
+        listener(msg);
+      }
     } catch {
       // ignore malformed frames
     }
   };
 
   socket.onclose = () => {
-    closed = true;
+    if (flowWsSocket !== socket) return;
+    flowWsSocket = null;
+    if (flowWsListeners.size > 0) {
+      setTimeout(openFlowWs, 1_000);
+    }
   };
+}
+
+export function connectFlowWs(
+  onEvent: (event: FlowWsEvent) => void
+): () => void {
+  flowWsListeners.add(onEvent);
+  if (!flowWsSocket) openFlowWs();
 
   return () => {
-    if (!closed) socket.close();
+    flowWsListeners.delete(onEvent);
   };
 }

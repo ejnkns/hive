@@ -50,6 +50,7 @@ export const requirementsWorkflow = defineWorkflow({
           trigger: "auto",
           role: "ai-chat",
           tools: ["read_file", "search_code"],
+          startOnUserInput: true,
           systemPrompt:
             "You are a requirements analyst. Ask the user questions " +
             "to understand their needs, produce a structured requirements " +

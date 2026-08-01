@@ -64,6 +64,15 @@ export type RunningTaskContext =
 export type ChatMessage = {
   role: "user" | "assistant" | "system" | "tool";
   content: string;
+  // OpenAI-compatible tool call state: assistant messages carry the tool_calls
+  // they issued, and the matching tool messages reference them by id. Required
+  // for providers to accept a conversation that used tools.
+  tool_call_id?: string;
+  tool_calls?: Array<{
+    id: string;
+    type: "function";
+    function: { name: string; arguments: string };
+  }>;
 };
 
 // --- Gate context ---
@@ -182,6 +191,7 @@ export type StateDef<
     systemPrompt?: string;
     completionTool?: string;
     completionSignal?: string;
+    startOnUserInput?: boolean;
   }[];
 
   autoTransitions?: AutoTransition<TTaskOutputs, TStateId, TItemState>[];
