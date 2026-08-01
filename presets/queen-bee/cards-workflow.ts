@@ -18,7 +18,6 @@ export type CardsTaskOutputs = {
 
 export type CardsItemState = {
   projectId: string;
-  repoPath: string;
   attempt: number;
   validationFailures: number;
   cardSpec?: {

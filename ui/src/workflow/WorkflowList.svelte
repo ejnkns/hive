@@ -62,8 +62,8 @@ function handleWsEvent(event: FlowWsEvent) {
   }
 }
 
-function readRepoPath(flow: FlowResponse): string {
-  const raw = flow.config?.repoPath;
+function readBasePath(flow: FlowResponse): string {
+  const raw = flow.config?.basePath;
   return typeof raw === "string" ? raw : "";
 }
 </script>
@@ -105,8 +105,8 @@ function readRepoPath(flow: FlowResponse): string {
         <div class="flow-card">
           <div class="flow-info">
             <div class="flow-name">{flow.label}</div>
-            {#if readRepoPath(flow)}
-              <div class="flow-path">{readRepoPath(flow)}</div>
+            {#if readBasePath(flow)}
+              <div class="flow-path">{readBasePath(flow)}</div>
             {/if}
             <div class="flow-meta">
               <span class="flow-id">{flow.id}</span>

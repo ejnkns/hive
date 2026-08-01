@@ -16,7 +16,7 @@ const IDENTITY = {
 };
 
 export type ReviewSnapshotParams = {
-  repoPath: string;
+  basePath: string;
   workspacePath: string;
   baseCommit: string;
   integrationCommit?: string;
@@ -26,20 +26,20 @@ export function createReviewSnapshot(
   _task: TaskDefinition,
   params: Record<string, unknown>
 ): Record<string, unknown> {
-  const { repoPath, workspacePath, baseCommit, integrationCommit } =
+  const { basePath, workspacePath, baseCommit, integrationCommit } =
     params as unknown as ReviewSnapshotParams;
 
-  if (!repoPath || !workspacePath || !baseCommit) {
+  if (!basePath || !workspacePath || !baseCommit) {
     return {
       ok: false,
-      error: "Missing required params: repoPath, workspacePath, baseCommit",
+      error: "Missing required params: basePath, workspacePath, baseCommit",
     };
   }
 
   try {
     const headCommit = git(workspacePath, ["rev-parse", "HEAD"]);
     const integCommit =
-      integrationCommit ?? git(repoPath, ["rev-parse", "hive-main"]);
+      integrationCommit ?? git(basePath, ["rev-parse", "hive-main"]);
     const diff = git(workspacePath, [
       "diff",
       "--no-ext-diff",
@@ -55,8 +55,8 @@ export function createReviewSnapshot(
       "--stat",
       `${baseCommit}...${headCommit}`,
     ]);
-    const commits = commitList(repoPath, baseCommit, headCommit);
-    const mergedTree = computeMergedTree(repoPath, integCommit, headCommit);
+    const commits = commitList(basePath, baseCommit, headCommit);
+    const mergedTree = computeMergedTree(basePath, integCommit, headCommit);
 
     return {
       ok: true,
@@ -85,19 +85,19 @@ export function createReviewWorkspace(
   _task: TaskDefinition,
   params: Record<string, unknown>
 ): Record<string, unknown> {
-  const { repoPath, commit, workspacesBasePath, projectId } = params as Record<
+  const { basePath, commit, workspacesBasePath, projectId } = params as Record<
     string,
     string
   >;
   const worktreesDir = join(workspacesBasePath, "workspaces", projectId);
   mkdirSync(worktreesDir, { recursive: true });
   const path = join(worktreesDir, `.hive-review-${randomUUID()}`);
-  git(repoPath, ["worktree", "add", "--detach", path, commit]);
+  git(basePath, ["worktree", "add", "--detach", path, commit]);
   return { path };
 }
 
 function computeMergedTree(
-  repoPath: string,
+  basePath: string,
   integrationCommit: string,
   headCommit: string
 ): { commit: string; reference: string } {
@@ -105,7 +105,7 @@ function computeMergedTree(
     "git",
     ["merge-tree", "--write-tree", integrationCommit, headCommit],
     {
-      cwd: repoPath,
+      cwd: basePath,
       encoding: "utf-8",
       timeout: 30_000,
     }
@@ -125,23 +125,23 @@ function computeMergedTree(
       `hive: review combined state`,
     ],
     {
-      cwd: repoPath,
+      cwd: basePath,
       encoding: "utf-8",
       timeout: 30_000,
       env: { ...process.env, ...IDENTITY },
     }
   ).trim();
   const reference = `refs/hive/reviews/${commit}`;
-  git(repoPath, ["update-ref", reference, commit]);
+  git(basePath, ["update-ref", reference, commit]);
   return { commit, reference };
 }
 
 function commitList(
-  repoPath: string,
+  basePath: string,
   baseCommit: string,
   headCommit: string
 ): Array<{ sha: string; subject: string }> {
-  return gitLines(repoPath, [
+  return gitLines(basePath, [
     "log",
     "--format=%H%x09%s",
     `${baseCommit}..${headCommit}`,

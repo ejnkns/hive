@@ -140,7 +140,7 @@ describe("createEngineRunners", () => {
 
   it("patch_flow_config writes inputs into flow config", async () => {
     const config: Record<string, unknown> = {
-      repoPath: "/tmp/repo",
+      basePath: "/tmp/repo",
       name: "Project",
       targetBranch: "main",
     };
@@ -152,7 +152,7 @@ describe("createEngineRunners", () => {
       role: "operation",
       operations: ["patch_flow_config"],
       operationInputs: {
-        repoPath: "@flow:repoPath",
+        basePath: "@flow:basePath",
         targetBranch: "@flow:targetBranch",
         name: "@flow:name",
         maxConcurrentWorkers: 5,
@@ -170,7 +170,7 @@ describe("createEngineRunners", () => {
     const output = result.output as Record<string, unknown>;
     assert.equal(output.ok, true);
     assert.equal(config.name, "Project");
-    assert.equal(config.repoPath, "/tmp/repo");
+    assert.equal(config.basePath, "/tmp/repo");
     assert.equal(config.targetBranch, "main");
     assert.equal(config.maxConcurrentWorkers, 5);
   });

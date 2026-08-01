@@ -11,11 +11,11 @@ export type IsolatedWorkspaceResult = {
   message?: string;
 };
 
-// repoPath is optional: with a bound repo the workspace is a git worktree on a
+// basePath is optional: with a bound repo the workspace is a git worktree on a
 // feature branch; without one it is a plain sandbox directory. Both use the
 // same directory layout under workspacesBasePath.
 export type PrepareIsolatedWorkspaceParams = {
-  repoPath?: string;
+  basePath?: string;
   workspacesBasePath: string;
   projectId: string;
   cardId: string;
@@ -25,7 +25,7 @@ export type PrepareIsolatedWorkspaceParams = {
 export function prepareIsolatedWorkspace(
   params: PrepareIsolatedWorkspaceParams
 ): IsolatedWorkspaceResult {
-  const { repoPath, workspacesBasePath, projectId, cardId, attempt } = params;
+  const { basePath, workspacesBasePath, projectId, cardId, attempt } = params;
 
   const workspacePath = join(
     workspacesBasePath,
@@ -35,7 +35,7 @@ export function prepareIsolatedWorkspace(
   );
 
   // No repo bound — plain sandboxed workspace. Nothing to branch or check out.
-  if (!repoPath) {
+  if (!basePath) {
     try {
       mkdirSync(workspacePath, { recursive: true });
       return { ok: true, path: workspacePath };
@@ -51,7 +51,7 @@ export function prepareIsolatedWorkspace(
   try {
     const branchName = `hive/${cardId}/attempt-${attempt}`;
     const baseCommit = execFileSync("git", ["rev-parse", "hive-main"], {
-      cwd: repoPath,
+      cwd: basePath,
       encoding: "utf-8",
       timeout: 10_000,
     }).trim();
@@ -59,7 +59,7 @@ export function prepareIsolatedWorkspace(
     if (!existsSync(workspacePath)) {
       mkdirSync(workspacePath, { recursive: true });
       execFileSync("git", ["worktree", "add", workspacePath, "hive-main"], {
-        cwd: repoPath,
+        cwd: basePath,
         encoding: "utf-8",
         timeout: 15_000,
       });

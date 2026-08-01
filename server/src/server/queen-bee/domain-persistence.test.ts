@@ -63,23 +63,23 @@ function findTool(name: string): Tool {
 
 describe("queen-bee domain persistence", () => {
   let root: string;
-  let repoPath: string;
+  let basePath: string;
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), "hive-domain-persist-"));
-    repoPath = join(root, "repo");
-    mkdirSync(repoPath);
-    execSync("git init -b main", { cwd: repoPath, encoding: "utf-8" });
+    basePath = join(root, "repo");
+    mkdirSync(basePath);
+    execSync("git init -b main", { cwd: basePath, encoding: "utf-8" });
     execSync("git config user.email test@example.com", {
-      cwd: repoPath,
+      cwd: basePath,
       encoding: "utf-8",
     });
-    execSync("git config user.name Test", { cwd: repoPath, encoding: "utf-8" });
+    execSync("git config user.name Test", { cwd: basePath, encoding: "utf-8" });
     execSync("git commit --allow-empty -m initial", {
-      cwd: repoPath,
+      cwd: basePath,
       encoding: "utf-8",
     });
-    execSync("git branch hive-main", { cwd: repoPath, encoding: "utf-8" });
+    execSync("git branch hive-main", { cwd: basePath, encoding: "utf-8" });
   });
 
   afterEach(() => {
@@ -88,7 +88,7 @@ describe("queen-bee domain persistence", () => {
 
   it("update_requirements_draft writes the draft under basePath", async () => {
     const tool = findTool("update_requirements_draft");
-    const ctx: ToolContext = { workspacePath: repoPath, basePath: repoPath };
+    const ctx: ToolContext = { workspacePath: basePath, basePath: basePath };
 
     const result = await tool.executor(
       {
@@ -101,13 +101,13 @@ describe("queen-bee domain persistence", () => {
 
     assert.equal(result.isError, false);
     assert.equal(
-      readFileSync(join(repoPath, ".hive", "draft.md"), "utf-8"),
+      readFileSync(join(basePath, ".hive", "draft.md"), "utf-8"),
       "# Draft requirements\n"
     );
   });
 
   it("finalize_requirements writes requirements.md from the draft", async () => {
-    const runner = makeRunner({ repoPath });
+    const runner = makeRunner({ basePath });
     const draftTool = findTool("update_requirements_draft");
     await draftTool.executor(
       {
@@ -115,7 +115,7 @@ describe("queen-bee domain persistence", () => {
         name: "update_requirements_draft",
         arguments: JSON.stringify({ content: "# Final requirements\n" }),
       },
-      { workspacePath: repoPath, basePath: repoPath }
+      { workspacePath: basePath, basePath: basePath }
     );
 
     const result = await runner.run({
@@ -124,12 +124,12 @@ describe("queen-bee domain persistence", () => {
     });
 
     assert.equal((result.output as { ok: boolean }).ok, true);
-    assert.equal(readRequirements(repoPath), "# Final requirements\n");
+    assert.equal(readRequirements(basePath), "# Final requirements\n");
   });
 
   it("sync_card_status registers the card on the board with its state status", async () => {
     const runner = makeRunner(
-      { repoPath },
+      { basePath },
       {
         cardSpec: {
           title: "Implement X",
@@ -146,14 +146,14 @@ describe("queen-bee domain persistence", () => {
     });
 
     assert.equal((result.output as { ok: boolean }).ok, true);
-    const board = readBoard(repoPath);
+    const board = readBoard(basePath);
     assert.equal(board.cards.length, 1);
     assert.equal(board.cards[0]?.title, "Implement X");
     assert.equal(board.cards[0]?.status, "ready");
   });
 
   it("validate_completion rejects a card with no committed work", async () => {
-    const runner = makeRunner({ repoPath }, { attempt: 1 });
+    const runner = makeRunner({ basePath }, { attempt: 1 });
 
     const result = await runner.run({
       ...dummyTask,
@@ -167,16 +167,16 @@ describe("queen-bee domain persistence", () => {
 
   it("validate_completion accepts committed work ahead of hive-main", async () => {
     execSync("git checkout -b hive/card-1/attempt-1", {
-      cwd: repoPath,
+      cwd: basePath,
       encoding: "utf-8",
     });
-    writeFileSync(join(repoPath, "x.txt"), "work\n");
+    writeFileSync(join(basePath, "x.txt"), "work\n");
     execSync("git add -A && git commit -m work", {
-      cwd: repoPath,
+      cwd: basePath,
       encoding: "utf-8",
     });
 
-    const runner = makeRunner({ repoPath }, { attempt: 1 });
+    const runner = makeRunner({ basePath }, { attempt: 1 });
     const result = await runner.run({
       ...dummyTask,
       operations: ["validate_completion"],
@@ -186,7 +186,7 @@ describe("queen-bee domain persistence", () => {
     assert.equal(output.ok, true);
     assert.ok(output.commitCount >= 1);
 
-    const events = readCardEvents(repoPath, "card-1");
+    const events = readCardEvents(basePath, "card-1");
     assert.equal(events[0]?.type, "completion_validated");
   });
 
@@ -198,11 +198,11 @@ describe("queen-bee domain persistence", () => {
         name: "submit_work",
         arguments: JSON.stringify({ outcome: "implemented" }),
       },
-      { workspacePath: repoPath, basePath: repoPath, instanceId: "card-1" }
+      { workspacePath: basePath, basePath: basePath, instanceId: "card-1" }
     );
 
     assert.equal(result.isError, false);
-    const events = readCardEvents(repoPath, "card-1");
+    const events = readCardEvents(basePath, "card-1");
     assert.equal(events.length, 1);
     assert.equal(events[0]?.type, "submitted");
     assert.deepEqual(events[0]?.data, { outcome: "implemented" });
@@ -210,7 +210,7 @@ describe("queen-bee domain persistence", () => {
 
   it("sync_idea registers the idea on the board", async () => {
     const runner = makeRunner(
-      { repoPath },
+      { basePath },
       { title: "New idea", brief: "Do it" }
     );
     const result = await runner.run({
@@ -219,26 +219,26 @@ describe("queen-bee domain persistence", () => {
     });
 
     assert.equal((result.output as { ok: boolean }).ok, true);
-    const board = readBoard(repoPath);
+    const board = readBoard(basePath);
     assert.equal(board.ideas.length, 1);
     assert.equal(board.ideas[0]?.title, "New idea");
     assert.equal(board.ideas[0]?.status, "backlog");
   });
 
   it("build_review_package writes an immutable review package", async () => {
-    writeRequirements(repoPath, "# Requirements\n");
+    writeRequirements(basePath, "# Requirements\n");
     execSync("git checkout -b hive/card-1/attempt-1", {
-      cwd: repoPath,
+      cwd: basePath,
       encoding: "utf-8",
     });
-    writeFileSync(join(repoPath, "x.txt"), "work\n");
+    writeFileSync(join(basePath, "x.txt"), "work\n");
     execSync("git add -A && git commit -m work", {
-      cwd: repoPath,
+      cwd: basePath,
       encoding: "utf-8",
     });
 
     const runner = makeRunner(
-      { repoPath },
+      { basePath },
       {
         attempt: 1,
         cardSpec: {
@@ -275,7 +275,7 @@ describe("queen-bee domain persistence", () => {
     const persistence = getFlowPersistence();
     assert.ok(persistence);
     createFlow("project", "queen-bee", persistence, {
-      repoPath,
+      basePath,
       name: "Project",
       workspacesBasePath,
     });
@@ -307,11 +307,11 @@ describe("queen-bee domain persistence", () => {
       .find((entry) => entry.workflowId === "cards")?.id;
 
     await waitFor(() => {
-      const board = readBoard(repoPath);
+      const board = readBoard(basePath);
       return cardId !== undefined && board.cards.some((c) => c.id === cardId);
     });
 
-    const board = readBoard(repoPath);
+    const board = readBoard(basePath);
     assert.equal(board.cards[0]?.title, "Implement X");
 
     // The card has advanced to running_agent and the worker session would call

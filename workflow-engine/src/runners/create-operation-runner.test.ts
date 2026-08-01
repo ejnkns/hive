@@ -91,15 +91,15 @@ describe("createOperationRunner", () => {
     const result = await runner.run({
       ...dummyTask,
       operations: ["echo"],
-      operationInputs: { repoPath: "/tmp/repo" },
+      operationInputs: { basePath: "/tmp/repo" },
     });
 
-    assert.deepEqual(result.output, { seen: { repoPath: "/tmp/repo" } });
+    assert.deepEqual(result.output, { seen: { basePath: "/tmp/repo" } });
   });
 
   it("provides the operation context from getContext", async () => {
     const context = {
-      flowConfig: () => ({ repoPath: "/tmp/repo" }),
+      flowConfig: () => ({ basePath: "/tmp/repo" }),
       patchFlowConfig: () => {},
       instanceId: "instance-1",
       workflowId: "test-wf",
@@ -110,7 +110,7 @@ describe("createOperationRunner", () => {
       getContext: () => context,
       operations: {
         read: (_task, _params, ctx) => ({
-          repoPath: ctx.flowConfig().repoPath,
+          basePath: ctx.flowConfig().basePath,
           cardId: ctx.instanceId,
           attempt: ctx.workflowInstanceState().attempt,
         }),
@@ -120,7 +120,7 @@ describe("createOperationRunner", () => {
     const result = await runner.run({ ...dummyTask, operations: ["read"] });
 
     assert.deepEqual(result.output, {
-      repoPath: "/tmp/repo",
+      basePath: "/tmp/repo",
       cardId: "instance-1",
       attempt: 2,
     });

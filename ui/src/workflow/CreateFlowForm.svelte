@@ -15,7 +15,7 @@ let {
 
 let definitionId = $state("queen-bee");
 let name = $state("");
-let repoPath = $state("");
+let basePath = $state("");
 let submitting = $state(false);
 
 async function submit() {
@@ -32,7 +32,7 @@ async function submit() {
   submitting = true;
   try {
     const config: Record<string, string> = { name: name.trim() };
-    if (repoPath.trim()) config.repoPath = repoPath.trim();
+    if (basePath.trim()) config.basePath = basePath.trim();
     const { flowId } = await createFlow({ definitionId: definition, config });
     onCreateFlow(flowId);
   } catch (err) {
@@ -63,7 +63,7 @@ async function submit() {
   <label class="field">
     <span class="label">Repository path (optional)</span>
     <TextInput
-      bind:value={repoPath}
+      bind:value={basePath}
       placeholder="/path/to/git/repo"
       disabled={submitting}
     />

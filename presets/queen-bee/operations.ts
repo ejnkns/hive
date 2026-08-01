@@ -39,10 +39,10 @@ function validateRepo(
   ctx: OperationContext
 ): OperationResult {
   try {
-    const repoPath = resolveRepoPath(ctx);
-    validateGitRepo(repoPath);
-    ensureRepoInitialized(repoPath);
-    return { ok: true, repoPath };
+    const basePath = resolveBasePath(ctx);
+    validateGitRepo(basePath);
+    ensureRepoInitialized(basePath);
+    return { ok: true, basePath };
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
   }
@@ -54,12 +54,12 @@ function ensureIntegrationBranchOp(
   ctx: OperationContext
 ): OperationResult {
   try {
-    const repoPath = resolveRepoPath(ctx);
-    const result = ensureIntegrationBranch(task, { repoPath });
+    const basePath = resolveBasePath(ctx);
+    const result = ensureIntegrationBranch(task, { basePath });
     if (result.ok !== true) return result;
 
-    const targetBranch = inferTargetBranch(repoPath);
-    ctx.patchFlowConfig({ repoPath, targetBranch });
+    const targetBranch = inferTargetBranch(basePath);
+    ctx.patchFlowConfig({ basePath, targetBranch });
     return { ok: true, targetBranch };
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
@@ -73,20 +73,20 @@ function writeProjectMetadata(
 ): OperationResult {
   try {
     const config = ctx.flowConfig();
-    const repoPath = resolveRepoPath(ctx);
+    const basePath = resolveBasePath(ctx);
     const name =
       typeof config.name === "string"
         ? config.name
-        : (repoPath.split("/").pop() ?? repoPath);
+        : (basePath.split("/").pop() ?? basePath);
     const targetBranch =
       typeof config.targetBranch === "string" ? config.targetBranch : "main";
 
-    const hiveDir = join(repoPath, ".hive");
+    const hiveDir = join(basePath, ".hive");
     mkdirSync(hiveDir, { recursive: true });
     const projectJsonPath = join(hiveDir, "project.json");
     writeFileSync(
       projectJsonPath,
-      JSON.stringify({ name, repoPath, targetBranch }, null, 2)
+      JSON.stringify({ name, basePath, targetBranch }, null, 2)
     );
     return { ok: true, path: projectJsonPath };
   } catch (err) {
@@ -102,7 +102,7 @@ function finalizeRequirementsOp(
   ctx: OperationContext
 ): OperationResult {
   try {
-    const basePath = resolveRepoPath(ctx);
+    const basePath = resolveBasePath(ctx);
     const draft = readDraft(basePath);
     if (!draft) {
       return { ok: false, error: "No requirements draft to finalize" };
@@ -137,7 +137,7 @@ function syncCardStatusOp(
   ctx: OperationContext
 ): OperationResult {
   try {
-    const basePath = resolveRepoPath(ctx);
+    const basePath = resolveBasePath(ctx);
     const status = BOARD_STATUS_BY_STATE[ctx.currentState];
     if (!status) {
       return { ok: true, skipped: true };
@@ -164,7 +164,7 @@ function syncIdeaOp(
   ctx: OperationContext
 ): OperationResult {
   try {
-    const basePath = resolveRepoPath(ctx);
+    const basePath = resolveBasePath(ctx);
     const state = ctx.workflowInstanceState();
     const title =
       typeof state.title === "string" ? state.title : ctx.instanceId;
@@ -198,11 +198,11 @@ function validateCompletionOp(
   ctx: OperationContext
 ): OperationResult {
   try {
-    const repoPath = resolveRepoPath(ctx);
+    const basePath = resolveBasePath(ctx);
     const cardId = ctx.instanceId;
     const attempt = readNumber(ctx.workflowInstanceState().attempt) ?? 1;
     const branchName = `hive/${cardId}/attempt-${attempt}`;
-    const branchExists = gitOptional(repoPath, [
+    const branchExists = gitOptional(basePath, [
       "rev-parse",
       "--verify",
       "--quiet",
@@ -211,7 +211,7 @@ function validateCompletionOp(
     if (!branchExists) {
       return { ok: false, error: `No work branch ${branchName} found` };
     }
-    const aheadRaw = gitOptional(repoPath, [
+    const aheadRaw = gitOptional(basePath, [
       "rev-list",
       "--count",
       `hive-main..${branchName}`,
@@ -223,7 +223,7 @@ function validateCompletionOp(
         error: `No committed work on ${branchName}`,
       };
     }
-    recordCardEvent(repoPath, cardId, {
+    recordCardEvent(basePath, cardId, {
       type: "completion_validated",
       at: new Date().toISOString(),
       data: { commitCount, branchName },
@@ -242,7 +242,7 @@ function buildReviewPackageOp(
   ctx: OperationContext
 ): OperationResult {
   try {
-    const repoPath = resolveRepoPath(ctx);
+    const basePath = resolveBasePath(ctx);
     const cardId = ctx.instanceId;
     const attempt = readNumber(ctx.workflowInstanceState().attempt) ?? 1;
     const branchName = `hive/${cardId}/attempt-${attempt}`;
@@ -252,14 +252,14 @@ function buildReviewPackageOp(
       cardId,
       attempt,
       spec: readCardSpec(ctx),
-      requirements: readRequirements(repoPath),
-      baseCommit: gitOptional(repoPath, ["rev-parse", "hive-main"]),
-      workerHead: gitOptional(repoPath, ["rev-parse", branchName]),
-      diff: gitOptional(repoPath, ["diff", "--stat", "hive-main", branchName]),
+      requirements: readRequirements(basePath),
+      baseCommit: gitOptional(basePath, ["rev-parse", "hive-main"]),
+      workerHead: gitOptional(basePath, ["rev-parse", branchName]),
+      diff: gitOptional(basePath, ["diff", "--stat", "hive-main", branchName]),
       createdAt: new Date().toISOString(),
     };
-    const path = writeReviewPackage(repoPath, pkg);
-    recordCardEvent(repoPath, cardId, {
+    const path = writeReviewPackage(basePath, pkg);
+    recordCardEvent(basePath, cardId, {
       type: "review_package_built",
       at: new Date().toISOString(),
       data: { packageId },
@@ -279,10 +279,10 @@ function fastForwardTargetBranchOp(
 ): OperationResult {
   try {
     const config = ctx.flowConfig();
-    const repoPath = typeof config.repoPath === "string" ? config.repoPath : "";
+    const basePath = typeof config.basePath === "string" ? config.basePath : "";
     const targetBranch =
       typeof config.targetBranch === "string" ? config.targetBranch : "main";
-    return fastForwardTargetBranch(task, { repoPath, targetBranch });
+    return fastForwardTargetBranch(task, { basePath, targetBranch });
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
   }
@@ -306,30 +306,30 @@ export const queenBeeOperations: Record<string, OperationFn> = {
 
 type OperationResult = Record<string, unknown>;
 
-function readRepoPath(ctx: OperationContext): string {
-  const raw = ctx.flowConfig().repoPath;
+function readBasePath(ctx: OperationContext): string {
+  const raw = ctx.flowConfig().basePath;
   if (typeof raw !== "string" || raw === "") {
-    throw new Error("Flow config repoPath is not set");
+    throw new Error("Flow config basePath is not set");
   }
   return raw;
 }
 
-function resolveRepoPath(ctx: OperationContext): string {
-  const repoPath = readRepoPath(ctx);
-  return repoPath.startsWith("/") ? repoPath : join(process.cwd(), repoPath);
+function resolveBasePath(ctx: OperationContext): string {
+  const basePath = readBasePath(ctx);
+  return basePath.startsWith("/") ? basePath : join(process.cwd(), basePath);
 }
 
-function validateGitRepo(repoPath: string): void {
-  const stat = statSync(join(repoPath, ".git"));
+function validateGitRepo(basePath: string): void {
+  const stat = statSync(join(basePath, ".git"));
   if (!stat.isDirectory()) {
-    throw new Error(`Not a git repository: ${repoPath}`);
+    throw new Error(`Not a git repository: ${basePath}`);
   }
 }
 
-function ensureRepoInitialized(repoPath: string): void {
+function ensureRepoInitialized(basePath: string): void {
   try {
     execSync("git rev-parse HEAD", {
-      cwd: repoPath,
+      cwd: basePath,
       encoding: "utf-8",
       timeout: 5_000,
       stdio: "pipe",
@@ -340,23 +340,23 @@ function ensureRepoInitialized(repoPath: string): void {
   }
   try {
     writeFileSync(
-      join(repoPath, "README.md"),
-      `# ${repoPath.split("/").pop()}\n`
+      join(basePath, "README.md"),
+      `# ${basePath.split("/").pop()}\n`
     );
     execSync("git add -A", {
-      cwd: repoPath,
+      cwd: basePath,
       encoding: "utf-8",
       timeout: 5_000,
     });
     execSync('git commit -m "Initial commit"', {
-      cwd: repoPath,
+      cwd: basePath,
       encoding: "utf-8",
       timeout: 5_000,
     });
   } catch {
     try {
       execSync('git commit --allow-empty -m "Initial commit"', {
-        cwd: repoPath,
+        cwd: basePath,
         encoding: "utf-8",
         timeout: 5_000,
       });
@@ -366,11 +366,11 @@ function ensureRepoInitialized(repoPath: string): void {
   }
 }
 
-function inferTargetBranch(repoPath: string): string {
-  const current = gitOptional(repoPath, ["branch", "--show-current"]);
+function inferTargetBranch(basePath: string): string {
+  const current = gitOptional(basePath, ["branch", "--show-current"]);
   if (current && current !== "hive-main") return current;
 
-  const branches = gitOptional(repoPath, [
+  const branches = gitOptional(basePath, [
     "for-each-ref",
     "--sort=-committerdate",
     "--format=%(refname:short)",
@@ -391,10 +391,10 @@ function inferTargetBranch(repoPath: string): string {
   return preferred;
 }
 
-function gitOptional(repoPath: string, args: string[]): string {
+function gitOptional(basePath: string, args: string[]): string {
   try {
     return execFileSync("git", args, {
-      cwd: repoPath,
+      cwd: basePath,
       encoding: "utf-8",
       timeout: 5_000,
       stdio: "pipe",

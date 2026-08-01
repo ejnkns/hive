@@ -25,12 +25,12 @@ describe("FlowPersistence", () => {
       const dir = tempDir("save-load-flow");
       const p = createFlowPersistence(dir);
 
-      p.saveFlow("test-flow", { repoPath: "/tmp/repo" }, { count: 1 });
+      p.saveFlow("test-flow", { basePath: "/tmp/repo" }, { count: 1 });
 
       const result = p.loadFlow("test-flow");
       assert.ok(result);
       assert.deepEqual(result.config as Record<string, unknown>, {
-        repoPath: "/tmp/repo",
+        basePath: "/tmp/repo",
       });
       assert.deepEqual(result.state as Record<string, unknown>, { count: 1 });
       assert.deepEqual(result.instances, []);
@@ -70,7 +70,7 @@ describe("FlowPersistence", () => {
         runningTaskContext: null,
         workflowInstanceState: {
           projectId: "p1",
-          repoPath: "/tmp",
+          basePath: "/tmp",
           attempt: 0,
           validationFailures: 0,
         },

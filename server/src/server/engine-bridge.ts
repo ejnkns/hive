@@ -41,7 +41,7 @@ function wrapPrepareWorktree(
   const config = ctx.flowConfig();
   const instanceState = ctx.workflowInstanceState();
   const result = prepareIsolatedWorkspace({
-    repoPath: typeof config.repoPath === "string" ? config.repoPath : undefined,
+    basePath: typeof config.basePath === "string" ? config.basePath : undefined,
     workspacesBasePath: readWorkspacesBasePath(config),
     projectId:
       readString(params.projectId) ??
@@ -275,9 +275,9 @@ export function createEngineRunners(
   // The flow's base directory — the bound repo root when present. Tools that
   // persist flow-level domain state (queen-bee's .hive/) write relative to it.
   function readBasePath(ctx: TaskRunnerContext): string | undefined {
-    const repoPath = ctx.flowConfig.repoPath;
-    return typeof repoPath === "string" && repoPath !== ""
-      ? repoPath
+    const basePath = ctx.flowConfig.basePath;
+    return typeof basePath === "string" && basePath !== ""
+      ? basePath
       : undefined;
   }
 

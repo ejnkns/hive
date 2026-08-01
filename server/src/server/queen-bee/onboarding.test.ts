@@ -22,21 +22,21 @@ import {
 
 describe("queen-bee onboarding workflow", () => {
   let root: string;
-  let repoPath: string;
+  let basePath: string;
   let persistence: FlowPersistence;
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), "hive-onboarding-"));
-    repoPath = join(root, "repo");
-    mkdirSync(repoPath);
-    execSync("git init -b main", { cwd: repoPath, encoding: "utf-8" });
+    basePath = join(root, "repo");
+    mkdirSync(basePath);
+    execSync("git init -b main", { cwd: basePath, encoding: "utf-8" });
     execSync("git config user.email test@example.com", {
-      cwd: repoPath,
+      cwd: basePath,
       encoding: "utf-8",
     });
-    execSync("git config user.name Test", { cwd: repoPath, encoding: "utf-8" });
+    execSync("git config user.name Test", { cwd: basePath, encoding: "utf-8" });
     execSync("git commit --allow-empty -m initial", {
-      cwd: repoPath,
+      cwd: basePath,
       encoding: "utf-8",
     });
 
@@ -51,7 +51,7 @@ describe("queen-bee onboarding workflow", () => {
 
   it("binds a repository and seeds requirements and integration", async () => {
     createFlow("my-project", "queen-bee", persistence, {
-      repoPath,
+      basePath,
       name: "My Project",
     });
 
@@ -65,17 +65,17 @@ describe("queen-bee onboarding workflow", () => {
     });
 
     const config = runtime.getFlowConfig() as Record<string, unknown>;
-    assert.equal(config.repoPath, repoPath);
+    assert.equal(config.basePath, basePath);
     assert.equal(config.targetBranch, "main");
     assert.equal(config.name, "My Project");
 
     const projectJson = JSON.parse(
-      readFileSync(join(repoPath, ".hive", "project.json"), "utf-8")
-    ) as { repoPath: string; targetBranch: string };
-    assert.equal(projectJson.repoPath, repoPath);
+      readFileSync(join(basePath, ".hive", "project.json"), "utf-8")
+    ) as { basePath: string; targetBranch: string };
+    assert.equal(projectJson.basePath, basePath);
     assert.equal(projectJson.targetBranch, "main");
 
-    assert.ok(existsSync(join(repoPath, ".hive", "project.json")));
+    assert.ok(existsSync(join(basePath, ".hive", "project.json")));
 
     await waitFor(() => {
       const entries = runtime.getWorkflowInstanceEntries();
@@ -91,7 +91,7 @@ describe("queen-bee onboarding workflow", () => {
     mkdirSync(badPath);
 
     createFlow("bad-project", "queen-bee", persistence, {
-      repoPath: badPath,
+      basePath: badPath,
       name: "Bad Project",
     });
 

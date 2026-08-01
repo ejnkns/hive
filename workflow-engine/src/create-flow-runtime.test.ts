@@ -108,10 +108,10 @@ describe("FlowRuntime", () => {
         [],
         {},
         {
-          repoPath: "/tmp/repo",
+          basePath: "/tmp/repo",
         }
       );
-      assert.deepEqual(runtime.getFlowConfig(), { repoPath: "/tmp/repo" });
+      assert.deepEqual(runtime.getFlowConfig(), { basePath: "/tmp/repo" });
     });
 
     it("returns initial flow state", () => {
@@ -720,7 +720,7 @@ describe("FlowRuntime", () => {
         [sourceWorkflow],
         [],
         {},
-        { repoPath: "/tmp" },
+        { basePath: "/tmp" },
         { count: 0 },
         persistence
       );

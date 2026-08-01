@@ -133,7 +133,7 @@ describe("flow API routes", () => {
     const body = response.json();
     assert.equal(body.id, "test-flow");
     assert.equal(body.label, "Test Flow");
-    assert.equal(body.config.repoPath, "/tmp/test-repo");
+    assert.equal(body.config.basePath, "/tmp/test-repo");
     assert.equal(body.workflows[0].id, "test-wf");
     assert.equal(body.instances.length, 1);
   });
@@ -284,7 +284,7 @@ describe("flow API routes", () => {
       [testWorkflow],
       [],
       {},
-      { name: "Test Flow", repoPath: "/tmp/test-repo" },
+      { name: "Test Flow", basePath: "/tmp/test-repo" },
       {},
       noopPersistence
     );
@@ -452,7 +452,7 @@ describe("flow API routes", () => {
       [testWorkflow],
       [],
       {},
-      { name: "Test Flow", repoPath: "/tmp/test-repo" },
+      { name: "Test Flow", basePath: "/tmp/test-repo" },
       {},
       noopPersistence
     );

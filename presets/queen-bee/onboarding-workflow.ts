@@ -4,12 +4,12 @@ import { defineWorkflow } from "workflow-engine/workflow-types";
 //
 // Turns a plain queen-bee flow into a Project: validates the bound repository,
 // ensures the Integration Branch, writes `.hive/project.json`, and patches the
-// flow config with the repo binding (repoPath/targetBranch) via the
+// flow config with the repo binding (basePath/targetBranch) via the
 // `patch_flow_config` task operation. This is the replacement for the old
 // imperative createFlowForRepo — project creation is a workflow, not an API.
 
 export type OnboardingTaskOutputs = {
-  validateRepo: { ok: boolean; repoPath?: string };
+  validateRepo: { ok: boolean; basePath?: string };
   ensureIntegrationBranch: { ok: boolean; targetBranch?: string };
   writeProjectMetadata: { ok: boolean; path?: string };
   bindFlow: { ok: boolean; config?: Record<string, unknown> };
@@ -29,7 +29,7 @@ export const onboardingWorkflow = defineWorkflow({
   description:
     "Bind a repository to a flow: validate, ensure integration branch, write project metadata, patch flow config.",
   taskOutputs: {
-    validateRepo: {} as { ok: boolean; repoPath?: string },
+    validateRepo: {} as { ok: boolean; basePath?: string },
     ensureIntegrationBranch: {} as { ok: boolean; targetBranch?: string },
     writeProjectMetadata: {} as { ok: boolean; path?: string },
     bindFlow: {} as { ok: boolean; config?: Record<string, unknown> },
@@ -123,7 +123,7 @@ export const onboardingWorkflow = defineWorkflow({
           role: "operation",
           operations: ["patch_flow_config"],
           operationInputs: {
-            repoPath: "@flow:repoPath",
+            basePath: "@flow:basePath",
             targetBranch: "@flow:targetBranch",
             name: "@flow:name",
           },

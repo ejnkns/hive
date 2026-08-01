@@ -13,7 +13,7 @@ import { join } from "node:path";
 import type { TaskDefinition } from "../../task-runner";
 
 export type LoadProjectContextParams = {
-  repoPath: string;
+  basePath: string;
   manifestPaths?: string[];
   cacheRoot?: string;
 };
@@ -22,16 +22,16 @@ export function loadProjectContext(
   _task: TaskDefinition,
   params: Record<string, unknown>
 ): Record<string, unknown> {
-  const { repoPath, manifestPaths, cacheRoot } =
+  const { basePath, manifestPaths, cacheRoot } =
     params as unknown as LoadProjectContextParams;
 
-  if (!repoPath) {
-    return { ok: false, error: "Missing required param: repoPath" };
+  if (!basePath) {
+    return { ok: false, error: "Missing required param: basePath" };
   }
 
   try {
-    const revision = git(repoPath, ["rev-parse", "HEAD"]);
-    const cacheDir = cacheRoot ?? join(repoPath, ".hive", "project-context");
+    const revision = git(basePath, ["rev-parse", "HEAD"]);
+    const cacheDir = cacheRoot ?? join(basePath, ".hive", "project-context");
     const cachePath = join(cacheDir, `${revision}.json`);
 
     // Try cache
@@ -45,7 +45,7 @@ export function loadProjectContext(
       /* cache miss */
     }
 
-    const files = gitLines(repoPath, [
+    const files = gitLines(basePath, [
       "ls-tree",
       "-r",
       "--name-only",
@@ -54,7 +54,7 @@ export function loadProjectContext(
     const manifests: Record<string, string> = {};
     for (const manifestPath of manifestPaths ?? ["package.json", "README.md"]) {
       try {
-        manifests[manifestPath] = git(repoPath, [
+        manifests[manifestPath] = git(basePath, [
           "show",
           `${revision}:${manifestPath}`,
         ]);
