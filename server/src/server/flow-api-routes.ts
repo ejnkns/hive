@@ -17,6 +17,7 @@ import {
   unlinkFlow,
   validateInstanceConfig,
 } from "./flow-registry";
+import { computeInstanceStatus } from "./instance-status";
 
 export function registerFlowApiRoutes(server: FastifyInstance): void {
   const activeSockets = new Set<WebSocket>();
@@ -47,17 +48,27 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
 
   // ── REST endpoints ──
 
+  function flowPayload(
+    flowId: string,
+    runtime: NonNullable<ReturnType<typeof getFlowRuntime>>
+  ) {
+    const cfg = runtime.getFlowConfig();
+    const workflows = runtime.getWorkflowDefinitions();
+    const instances = runtime.getWorkflowInstanceEntries();
+    return {
+      id: flowId,
+      label: (cfg.name as string) ?? flowId,
+      status: computeInstanceStatus(workflows, instances),
+      config: cfg,
+      workflows,
+      instances,
+    };
+  }
+
   server.get("/api/flows", async (_request, reply) => {
-    const flows = Array.from(getFlowRuntimes()).map(([flowId, runtime]) => {
-      const cfg = runtime.getFlowConfig();
-      return {
-        id: flowId,
-        label: (cfg.name as string) ?? flowId,
-        config: cfg,
-        workflows: runtime.getWorkflowDefinitions(),
-        instances: runtime.getWorkflowInstanceEntries(),
-      };
-    });
+    const flows = Array.from(getFlowRuntimes()).map(([flowId, runtime]) =>
+      flowPayload(flowId, runtime)
+    );
 
     return reply.send({ flows });
   });
@@ -70,14 +81,7 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
       return reply.status(404).send({ error: "Flow not found" });
     }
 
-    const cfg = runtime.getFlowConfig();
-    return reply.send({
-      id: flowId,
-      label: (cfg.name as string) ?? flowId,
-      config: cfg,
-      workflows: runtime.getWorkflowDefinitions(),
-      instances: runtime.getWorkflowInstanceEntries(),
-    });
+    return reply.send(flowPayload(flowId, runtime));
   });
 
   server.get("/api/flows/:flowId/instances", async (request, reply) => {
