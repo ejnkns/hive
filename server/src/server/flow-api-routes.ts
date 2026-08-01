@@ -7,6 +7,7 @@ import {
   getRegisteredFlowDefinition,
   listRegisteredDefinitions,
   registerUserDefinition,
+  slugify,
   updateUserDefinition,
 } from "./flow-definitions";
 import {
@@ -66,10 +67,24 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
     };
   }
 
-  server.get("/api/flows", async (_request, reply) => {
-    const flows = Array.from(getFlowRuntimes()).map(([flowId, runtime]) =>
+  server.get("/api/flows", async (request, reply) => {
+    // Fastify query types are erased; shape guaranteed by route usage
+    const query = request.query as { definitionId?: string; name?: string };
+    let flows = Array.from(getFlowRuntimes()).map(([flowId, runtime]) =>
       flowPayload(flowId, runtime)
     );
+
+    if (query.definitionId !== undefined || query.name !== undefined) {
+      flows = flows.filter((flow) => {
+        const matchesDefinition =
+          query.definitionId === undefined ||
+          flow.config?.definitionId === query.definitionId;
+        const matchesName =
+          query.name === undefined ||
+          slugify(String(flow.config?.name ?? "")) === query.name;
+        return matchesDefinition && matchesName;
+      });
+    }
 
     return reply.send({ flows });
   });
@@ -393,6 +408,32 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
         .send({ error: `Invalid flow config: ${validationErrors.join("; ")}` });
     }
 
+    // Instance names slugify to route segments; "new" is reserved. Names must
+    // be unique within the definition's instances.
+    const instanceSlug = slugify(String(config.name));
+    if (instanceSlug === "") {
+      return reply
+        .status(400)
+        .send({ error: "Instance name must produce a non-empty slug" });
+    }
+    if (instanceSlug === "new") {
+      return reply.status(400).send({ error: '"new" is a reserved flow name' });
+    }
+    const duplicateInDefinition = Array.from(getFlowRuntimes()).some(
+      ([, runtime]) => {
+        const existing = runtime.getFlowConfig() as Record<string, unknown>;
+        return (
+          existing.definitionId === definitionId &&
+          slugify(String(existing.name)) === instanceSlug
+        );
+      }
+    );
+    if (duplicateInDefinition) {
+      return reply.status(409).send({
+        error: `An instance named "${config.name}" already exists for this definition`,
+      });
+    }
+
     const flowId =
       typeof body?.flowId === "string" && body.flowId !== ""
         ? body.flowId
@@ -460,18 +501,15 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
 }
 
 // Derives a unique flow id from the requested name or definition id, suffixing
-// until it does not collide with an existing runtime.
+// until it does not collide with an existing runtime. Instance names are unique
+// within a definition (enforced at POST), but flow ids are a global map key so
+// same-named instances across definitions still get distinct ids.
 function generateFlowId(
   definitionId: string,
   config: Record<string, unknown>
 ): string {
   const name = typeof config.name === "string" ? config.name : definitionId;
-  const slug =
-    name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "")
-      .slice(0, 50) || definitionId;
+  const slug = slugify(name) || definitionId;
 
   const existing = new Set(Array.from(getFlowRuntimes().keys()));
   if (!existing.has(slug)) return slug;

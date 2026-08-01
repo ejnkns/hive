@@ -23,7 +23,11 @@ import {
   registerFlowDefinition,
   resetFlowDefinitionsForTest,
 } from "./flow-definitions";
-import { registerFlowForTest, setFlowPersistence } from "./flow-registry";
+import {
+  registerFlowForTest,
+  resetFlowRuntimesForTest,
+  setFlowPersistence,
+} from "./flow-registry";
 
 const testWorkflow = defineWorkflow({
   id: "test-wf",
@@ -110,6 +114,7 @@ describe("flow API routes", () => {
 
   beforeEach(() => {
     resetFlowDefinitionsForTest();
+    resetFlowRuntimesForTest();
   });
 
   afterEach(async () => {
@@ -607,6 +612,134 @@ describe("flow API routes", () => {
     const body = response.json();
     assert.equal(body.flowId, "my-project");
     assert.equal(body.workflows[0].id, "test-wf");
+  });
+
+  it("POST /api/flows rejects a duplicate instance name within a definition", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition({
+      id: "test-def",
+      label: "Test Definition",
+      workflows: [testWorkflow],
+      edges: [],
+    });
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const createBody = {
+      definitionId: "test-def",
+      config: { name: "My Project" },
+    };
+    const first = await server.inject({
+      method: "POST",
+      url: "/api/flows",
+      body: createBody,
+    });
+    assert.equal(first.statusCode, 201);
+
+    const second = await server.inject({
+      method: "POST",
+      url: "/api/flows",
+      body: createBody,
+    });
+    assert.equal(second.statusCode, 409);
+  });
+
+  it("POST /api/flows allows the same name under a different definition", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition({
+      id: "test-def",
+      label: "Test Definition",
+      workflows: [testWorkflow],
+      edges: [],
+    });
+    registerFlowDefinition({
+      id: "other-def",
+      label: "Other Definition",
+      workflows: [testWorkflow],
+      edges: [],
+    });
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const first = await server.inject({
+      method: "POST",
+      url: "/api/flows",
+      body: { definitionId: "test-def", config: { name: "Shared" } },
+    });
+    const second = await server.inject({
+      method: "POST",
+      url: "/api/flows",
+      body: { definitionId: "other-def", config: { name: "Shared" } },
+    });
+
+    assert.equal(first.statusCode, 201);
+    assert.equal(second.statusCode, 201);
+    assert.equal(first.json().flowId, "shared");
+    assert.equal(second.json().flowId, "shared-2");
+  });
+
+  it("POST /api/flows rejects the reserved name 'new'", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition({
+      id: "test-def",
+      label: "Test Definition",
+      workflows: [testWorkflow],
+      edges: [],
+    });
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/flows",
+      body: { definitionId: "test-def", config: { name: "new" } },
+    });
+
+    assert.equal(response.statusCode, 400);
+  });
+
+  it("GET /api/flows resolves a flow by definitionId and instance name", async () => {
+    registerFlowForTest(
+      "alpha",
+      createFlowRuntime(
+        "alpha",
+        [testWorkflow],
+        [],
+        {},
+        { name: "Alpha Project", definitionId: "test-def", basePath: "/tmp/a" },
+        {},
+        noopPersistence
+      )
+    );
+    registerFlowForTest(
+      "beta",
+      createFlowRuntime(
+        "beta",
+        [testWorkflow],
+        [],
+        {},
+        { name: "Beta Project", definitionId: "test-def", basePath: "/tmp/b" },
+        {},
+        noopPersistence
+      )
+    );
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const response = await server.inject({
+      method: "GET",
+      url: "/api/flows?definitionId=test-def&name=beta-project",
+    });
+
+    assert.equal(response.statusCode, 200);
+    const flows = response.json().flows;
+    assert.equal(flows.length, 1);
+    assert.equal(flows[0].id, "beta");
+    assert.equal(flows[0].config.name, "Beta Project");
   });
 
   it("POST /api/flows requires definitionId and rejects unknown definitions", async () => {

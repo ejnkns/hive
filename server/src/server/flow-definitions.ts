@@ -80,7 +80,10 @@ export async function registerUserDefinition(input: {
   description?: string;
   source: string;
 }): Promise<RegisteredFlowDefinition> {
-  const slug = slugifyDefinitionName(input.name);
+  const slug = slugify(input.name);
+  if (slug === "") {
+    throw new Error("Definition name must produce a non-empty slug");
+  }
   if (slug === "new") {
     throw new Error('"new" is a reserved flow definition name');
   }
@@ -315,14 +318,10 @@ function findServerPackageRoot(): string {
   }
 }
 
-function slugifyDefinitionName(name: string): string {
-  const slug = name
+export function slugify(name: string): string {
+  return name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 50);
-  if (slug === "") {
-    throw new Error("Definition name must produce a non-empty slug");
-  }
-  return slug;
 }

@@ -133,6 +133,12 @@ export function getFlowRuntimes(): Map<
   return runtimes;
 }
 
+// Test seam: clears the live runtime map so tests start fresh. Production
+// callers never invoke this.
+export function resetFlowRuntimesForTest(): void {
+  runtimes.clear();
+}
+
 export function unlinkFlow(flowId: string): void {
   runtimes.delete(flowId);
   _persistence?.deleteFlow(flowId);
