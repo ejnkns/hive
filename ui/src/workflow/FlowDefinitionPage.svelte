@@ -74,13 +74,15 @@ function handleWsEvent(event: FlowWsEvent) {
         {/if}
       </div>
       <div class="header-actions">
-        <Button variant="platinum">
-          <a
-            class="btn-link"
-            href={`#/flows/${encodeURIComponent(definition.id)}/edit`}
-            >Edit</a
-          >
-        </Button>
+        {#if !definition.builtIn}
+          <Button variant="platinum">
+            <a
+              class="btn-link"
+              href={`#/flows/${encodeURIComponent(definition.id)}/edit`}
+              >Edit</a
+            >
+          </Button>
+        {/if}
         <Button variant="mint">
           <a
             class="btn-link"

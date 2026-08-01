@@ -49,6 +49,7 @@ export const flow = {
 let name = $state("");
 let description = $state("");
 let source = $state(defaultTemplate);
+let isBuiltIn = $state(false);
 let loading = $state(false);
 let saving = $state(false);
 let generating = $state(false);
@@ -70,9 +71,10 @@ onMount(async () => {
   error = null;
   try {
     const detail = await fetchFlowDefinition(definitionId);
+    isBuiltIn = detail.builtIn;
     name = detail.name;
     description = detail.description ?? "";
-    source = detail.source;
+    source = detail.source ?? defaultTemplate;
   } catch (err) {
     error = err instanceof Error ? err.message : "Failed to load definition";
   } finally {
@@ -163,6 +165,11 @@ async function remove() {
 
   {#if loading}
     <div class="loading">Loading definition...</div>
+  {:else if isBuiltIn}
+    <div class="builtin-notice">
+      Built-in flow definitions ship with the server and cannot be edited.
+      Existing instances use their snapshot of this definition.
+    </div>
   {:else}
     <div class="name-row">
       <label class="field">
@@ -384,6 +391,16 @@ h1 {
   padding: 3rem 1rem;
   color: var(--muted);
   font-size: 0.875rem;
+}
+
+.builtin-notice {
+  background: rgba(250, 200, 60, 0.08);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  padding: 1rem 1.25rem;
 }
 
 .error {
