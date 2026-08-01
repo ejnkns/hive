@@ -103,6 +103,7 @@ describe("createOperationRunner", () => {
       patchFlowConfig: () => {},
       instanceId: "instance-1",
       workflowId: "test-wf",
+      currentState: "working",
       workflowInstanceState: () => ({ attempt: 2 }),
     };
     const runner = createOperationRunner({

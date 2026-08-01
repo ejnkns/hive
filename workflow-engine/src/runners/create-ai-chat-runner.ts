@@ -16,6 +16,7 @@ export type AiChatRunnerConfig = {
   completionTool?: string;
   completionSignal?: string;
   basePath?: string;
+  instanceId?: string;
 };
 
 export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
@@ -92,6 +93,7 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
         const result = await executor(call, {
           workspacePath: task.workspacePath ?? process.cwd(),
           basePath: config.basePath,
+          instanceId: config.instanceId,
           signal: abortController.signal,
         });
         messages.push({ role: "tool", content: result.content });

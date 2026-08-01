@@ -5,6 +5,7 @@ import {
   type FlowPersistence,
   type FlowRuntimeEvent,
 } from "./create-flow-runtime";
+import { createOperationRunner } from "./runners/create-operation-runner";
 import type { TaskDefinition, TaskRunner } from "./task-runner";
 import type { FlowEdge } from "./workflow-types";
 import { defineWorkflow } from "./workflow-types";
@@ -215,6 +216,104 @@ describe("FlowRuntime", () => {
       assert.equal(created.length, 1);
       assert.equal(created[0]!.workflowId, "source");
       assert.ok(created[0]!.instanceId);
+    });
+
+    it("auto-starts initial-state auto tasks on fresh instances", async () => {
+      const bootWorkflow = defineWorkflow({
+        id: "boot",
+        label: "Boot",
+        taskOutputs: { greet: {} as { ok: boolean } },
+        states: [
+          {
+            id: "initial",
+            label: "Initial",
+            tasks: [
+              {
+                id: "greet",
+                label: "Greet",
+                trigger: "auto",
+                role: "operation",
+                operations: ["greet"],
+              },
+            ],
+          },
+          { id: "done", label: "Done" },
+        ],
+        initial: "initial",
+        terminalStates: ["done"],
+      });
+
+      let ran = false;
+      const runtime = createFlowRuntime("test", [bootWorkflow], [], {
+        operation: () =>
+          createOperationRunner({
+            operations: {
+              greet: () => {
+                ran = true;
+                return { ok: true };
+              },
+            },
+          }),
+      });
+
+      runtime.addWorkflowInstance("boot");
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      assert.equal(ran, true);
+    });
+
+    it("does not auto-start restored instances with taskOutputs", async () => {
+      const bootWorkflow = defineWorkflow({
+        id: "boot",
+        label: "Boot",
+        taskOutputs: { greet: {} as { ok: boolean } },
+        states: [
+          {
+            id: "initial",
+            label: "Initial",
+            tasks: [
+              {
+                id: "greet",
+                label: "Greet",
+                trigger: "auto",
+                role: "operation",
+                operations: ["greet"],
+              },
+            ],
+          },
+          { id: "done", label: "Done" },
+        ],
+        initial: "initial",
+        terminalStates: ["done"],
+      });
+
+      let ran = false;
+      const runtime = createFlowRuntime("test", [bootWorkflow], [], {
+        operation: () =>
+          createOperationRunner({
+            operations: {
+              greet: () => {
+                ran = true;
+                return { ok: true };
+              },
+            },
+          }),
+      });
+
+      runtime.addWorkflowInstance("boot", {
+        currentState: "initial",
+        taskOutputs: {
+          greet: { status: "success", output: { ok: true } },
+        },
+        hasRunningTask: false,
+        runningTaskId: null,
+        runningTaskContext: null,
+        workflowInstanceState: {},
+        history: [],
+      });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      assert.equal(ran, false);
     });
   });
 

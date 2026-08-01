@@ -303,6 +303,14 @@ export function createFlowRuntime<
 
     emit({ type: "instance_created", instanceId, workflowId });
 
+    // A freshly created instance (no restored taskOutputs) auto-runs its
+    // initial-state auto tasks — e.g. the onboarding workflow validates the
+    // repo, and edge-created cards register on the board. Rehydrated
+    // instances (restored taskOutputs) are resumed explicitly by the caller.
+    if (instanceState?.taskOutputs === undefined) {
+      void controller.startAutoTasks();
+    }
+
     return controller;
   }
 

@@ -8,6 +8,7 @@ import type {
   StateDef,
 } from "workflow-engine/workflow-types";
 import { cardsWorkflow } from "./cards-workflow";
+import type { PlanCard, PlanProposal } from "./domain-state";
 import { ideasWorkflow } from "./ideas-workflow";
 import { integrationWorkflow } from "./integration-workflow";
 import { onboardingWorkflow } from "./onboarding-workflow";
@@ -133,9 +134,22 @@ export const queenBeeFlow = {
       fromWorkflow: "requirements",
       fromStates: ["accepted"],
       toWorkflow: "cards",
-      transform: (source) => ({
-        planOutcome: source.plan,
-      }),
+      // Fan out: one cards instance per planned card. The transform runs with
+      // the erased runtime output map; the plan task's structured output is
+      // parsed by the planner's submit_plan completion tool.
+      transform: (source) => {
+        const plan = source.plan?.output as PlanProposal | undefined;
+        if (plan?.kind !== "proposal") return [];
+        return plan.cards.map((card: PlanCard) => ({
+          cardSpec: {
+            title: card.title,
+            description: card.description,
+            acceptanceCriteria: card.acceptanceCriteria,
+            dependsOn: card.dependencies,
+          },
+          dependsOn: card.dependencies,
+        }));
+      },
     },
   ],
 } satisfies FlowDefinition;

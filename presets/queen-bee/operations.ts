@@ -9,10 +9,13 @@ import {
 } from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
 import {
+  type BoardCardStatus,
   type CardSpec,
   readDraft,
   readRequirements,
+  recordCardEvent,
   upsertCard,
+  upsertIdea,
   writeRequirements,
   writeReviewPackage,
 } from "./domain-state";
@@ -113,27 +116,76 @@ function finalizeRequirementsOp(
 
 // ── Board persistence ──
 
-function registerCardOp(
+// Maps a cards workflow state to the board status it represents. The op runs
+// from the states where the card's lifecycle position changes; it upserts the
+// card (preserving its original createdAt) so the board reflects the workflow.
+const BOARD_STATUS_BY_STATE: Record<string, BoardCardStatus> = {
+  ready: "ready",
+  in_progress: "in_progress",
+  running_agent: "in_progress",
+  validating: "in_progress",
+  reviewing: "reviewing",
+  running_review: "reviewing",
+  reviewed: "reviewing",
+  done: "done",
+  unfulfillable: "unfulfillable",
+};
+
+function syncCardStatusOp(
   _task: TaskDefinition,
   _params: Record<string, unknown>,
   ctx: OperationContext
 ): OperationResult {
   try {
     const basePath = resolveRepoPath(ctx);
+    const status = BOARD_STATUS_BY_STATE[ctx.currentState];
+    if (!status) {
+      return { ok: true, skipped: true };
+    }
     const spec = readCardSpec(ctx);
     upsertCard(basePath, {
       id: ctx.instanceId,
       title: spec.title,
       description: spec.description,
       acceptanceCriteria: spec.acceptanceCriteria,
-      status: "in_progress",
+      status,
       dependsOn: spec.dependsOn,
       createdAt: new Date().toISOString(),
     });
-    return { ok: true, cardId: ctx.instanceId };
+    return { ok: true, status, cardId: ctx.instanceId };
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
   }
+}
+
+function syncIdeaOp(
+  _task: TaskDefinition,
+  _params: Record<string, unknown>,
+  ctx: OperationContext
+): OperationResult {
+  try {
+    const basePath = resolveRepoPath(ctx);
+    const state = ctx.workflowInstanceState();
+    const title =
+      typeof state.title === "string" ? state.title : ctx.instanceId;
+    const brief = typeof state.brief === "string" ? state.brief : "";
+    const status = ideaStatusForState(ctx.currentState);
+    upsertIdea(basePath, {
+      id: ctx.instanceId,
+      title,
+      brief,
+      status,
+    });
+    return { ok: true, ideaId: ctx.instanceId };
+  } catch (err) {
+    return { ok: false, error: errorMessage(err) };
+  }
+}
+
+function ideaStatusForState(state: string): "backlog" | "refined" | "archived" {
+  if (state === "archived") return "archived";
+  if (state === "submitted" || state === "refined") return "refined";
+  return "backlog";
 }
 
 // ── Completion gate ──
@@ -171,6 +223,11 @@ function validateCompletionOp(
         error: `No committed work on ${branchName}`,
       };
     }
+    recordCardEvent(repoPath, cardId, {
+      type: "completion_validated",
+      at: new Date().toISOString(),
+      data: { commitCount, branchName },
+    });
     return { ok: true, commitCount, branchName };
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
@@ -202,6 +259,11 @@ function buildReviewPackageOp(
       createdAt: new Date().toISOString(),
     };
     const path = writeReviewPackage(repoPath, pkg);
+    recordCardEvent(repoPath, cardId, {
+      type: "review_package_built",
+      at: new Date().toISOString(),
+      data: { packageId },
+    });
     return { ok: true, packageId, path };
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
@@ -233,7 +295,8 @@ export const queenBeeOperations: Record<string, OperationFn> = {
   ensure_integration_branch: ensureIntegrationBranchOp,
   write_project_metadata: writeProjectMetadata,
   finalize_requirements: finalizeRequirementsOp,
-  register_card: registerCardOp,
+  sync_card_status: syncCardStatusOp,
+  sync_idea: syncIdeaOp,
   validate_completion: validateCompletionOp,
   build_review_package: buildReviewPackageOp,
   fast_forward_target_branch: fastForwardTargetBranchOp,

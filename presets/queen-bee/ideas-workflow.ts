@@ -1,6 +1,7 @@
 import { defineWorkflow } from "workflow-engine/workflow-types";
 
 export type IdeasTaskOutputs = {
+  registerIdea: { ok: boolean };
   elaborate: { ideaBrief: string; elaboratedSpec: string };
 };
 
@@ -15,6 +16,7 @@ export const ideasWorkflow = defineWorkflow({
   id: "ideas",
   label: "Ideas",
   taskOutputs: {
+    registerIdea: {} as { ok: boolean },
     elaborate: {} as { ideaBrief: string; elaboratedSpec: string },
   },
   states: [
@@ -22,6 +24,15 @@ export const ideasWorkflow = defineWorkflow({
       id: "backlog",
       label: "Backlog",
       category: "initial",
+      tasks: [
+        {
+          id: "registerIdea",
+          label: "Register on board",
+          trigger: "auto",
+          role: "operation",
+          operations: ["sync_idea"],
+        },
+      ],
       actions: [
         {
           id: "elaborate",

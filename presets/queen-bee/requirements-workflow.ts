@@ -1,8 +1,9 @@
 import { defineWorkflow } from "workflow-engine/workflow-types";
+import type { PlanProposal } from "./domain-state";
 
 export type RequirementsTaskOutputs = {
   draft: { content: string; revision: string };
-  plan: { kind: "proposal" | "feedback"; cards?: unknown[] };
+  plan: PlanProposal;
   finalizeRequirements: { ok: boolean; path?: string };
 };
 
@@ -20,7 +21,7 @@ export const requirementsWorkflow = defineWorkflow({
   label: "Requirements",
   taskOutputs: {
     draft: {} as { content: string; revision: string },
-    plan: {} as { kind: "proposal" | "feedback"; cards?: unknown[] },
+    plan: {} as PlanProposal,
     finalizeRequirements: {} as { ok: boolean; path?: string },
   },
   states: [
@@ -107,10 +108,13 @@ export const requirementsWorkflow = defineWorkflow({
           label: "Run planner",
           trigger: "auto",
           role: "ai-task",
-          tools: ["read_file", "search_code"],
+          tools: ["read_file", "search_code", "submit_plan"],
+          completionTool: "submit_plan",
           systemPrompt:
             "You are a technical planner. Decompose requirements " +
-            "into cards with acceptance criteria.",
+            "into cards with acceptance criteria. Submit a proposal " +
+            "via submit_plan with the cards to create, or feedback " +
+            "if more clarification is needed.",
         },
       ],
       actions: [

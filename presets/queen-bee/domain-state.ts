@@ -45,6 +45,27 @@ export type CardSpec = {
   dependsOn: string[];
 };
 
+// A card proposed by the planning agent. Dependencies reference other card
+// titles; the engine's dependsOnState gates reference card instance ids, so
+// the queen-bee flow keeps them as titles at plan time and the worker
+// admission wiring resolves them against the created cards.
+export type PlanCard = {
+  title: string;
+  description: string;
+  acceptanceCriteria: string[];
+  dependencies: string[];
+};
+
+export type PlanProposal =
+  | { kind: "proposal"; cards: PlanCard[] }
+  | { kind: "feedback"; guidance: string };
+
+export type CardEvent = {
+  type: string;
+  at: string;
+  data?: Record<string, unknown>;
+};
+
 export type ReviewPackage = {
   packageId: string;
   cardId: string;
@@ -97,8 +118,22 @@ export function writeBoard(basePath: string, board: Board): string {
 export function upsertCard(basePath: string, card: BoardCard): void {
   const board = readBoard(basePath);
   const idx = board.cards.findIndex((c) => c.id === card.id);
-  if (idx >= 0) board.cards[idx] = card;
-  else board.cards.push(card);
+  if (idx >= 0) {
+    board.cards[idx] = { ...card, createdAt: board.cards[idx]!.createdAt };
+  } else {
+    board.cards.push(card);
+  }
+  writeBoard(basePath, board);
+}
+
+export function upsertIdea(basePath: string, idea: BoardIdea): void {
+  const board = readBoard(basePath);
+  const idx = board.ideas.findIndex((i) => i.id === idea.id);
+  if (idx >= 0) {
+    board.ideas[idx] = { ...idea, status: idea.status };
+  } else {
+    board.ideas.push(idea);
+  }
   writeBoard(basePath, board);
 }
 
@@ -112,6 +147,26 @@ export function updateCardStatus(
   if (!card) return;
   card.status = status;
   writeBoard(basePath, board);
+}
+
+// ── Per-card event log ──
+
+export function readCardEvents(basePath: string, cardId: string): CardEvent[] {
+  return readJson(join(hiveDir(basePath), "cards", `${cardId}.json`), []);
+}
+
+export function recordCardEvent(
+  basePath: string,
+  cardId: string,
+  event: CardEvent
+): string {
+  const dir = join(hiveDir(basePath), "cards");
+  mkdirSync(dir, { recursive: true });
+  const path = join(dir, `${cardId}.json`);
+  const events = readCardEvents(basePath, cardId);
+  events.push(event);
+  writeFileSync(path, JSON.stringify(events, null, 2));
+  return path;
 }
 
 // ── Requirements ──

@@ -39,6 +39,8 @@ export type ToolContext = {
   // knows it. Tools that persist flow-level state (a requirements draft, a
   // board) write relative to this; falls back to workspacePath when unset.
   basePath?: string;
+  // The workflow instance this task runs in (e.g. the card id) when known.
+  instanceId?: string;
   signal?: AbortSignal;
   baseCommit?: string;
   projectRevision?: string;

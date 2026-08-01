@@ -15,6 +15,7 @@ export type AiTaskRunnerConfig = {
   toolExecutors: Record<string, ToolExecutor>;
   completionTool?: string;
   basePath?: string;
+  instanceId?: string;
 };
 
 export function createAiTaskRunner(config: AiTaskRunnerConfig): TaskRunner {
@@ -66,6 +67,7 @@ export function createAiTaskRunner(config: AiTaskRunnerConfig): TaskRunner {
           const result = await executor(call, {
             workspacePath: task.workspacePath ?? process.cwd(),
             basePath: config.basePath,
+            instanceId: config.instanceId,
             signal: abortController.signal,
           });
           messages.push({

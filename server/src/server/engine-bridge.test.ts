@@ -39,6 +39,7 @@ function makeContext(
     patchFlowConfig: () => {},
     instanceId: "instance-1",
     workflowId: "test-wf",
+    currentState: "ready",
     workflowInstanceState: {},
     patchWorkflowInstanceState: () => {},
     ...overrides,

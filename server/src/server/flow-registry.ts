@@ -127,11 +127,10 @@ export function createFlow(
 
   // Seed one instance of the first workflow so the flow is immediately
   // renderable (queen-bee: the onboarding workflow; custom defs: the
-  // single workflow). Auto tasks in the initial state run right away.
+  // single workflow). Fresh instances auto-run their initial-state tasks.
   const seedWorkflow = workflows[0];
   if (seedWorkflow) {
-    const controller = runtime.addWorkflowInstance(seedWorkflow.id);
-    void controller.startAutoTasks();
+    runtime.addWorkflowInstance(seedWorkflow.id);
   }
 
   persistence.saveFlow(flowId, flowConfig, {});
@@ -328,9 +327,8 @@ export function createFlowFromDefinition(
   );
 
   // Seed one instance in the workflow's initial state so the flow is
-  // immediately renderable; initial-state auto tasks run right away.
-  const controller = runtime.addWorkflowInstance(def.id);
-  void controller.startAutoTasks();
+  // immediately renderable; fresh instances auto-run initial-state tasks.
+  runtime.addWorkflowInstance(def.id);
 
   persistence.saveFlow(flowId, flowConfig, {});
   runtimes.set(flowId, runtime);

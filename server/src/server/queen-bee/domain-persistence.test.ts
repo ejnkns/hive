@@ -20,6 +20,7 @@ import {
 import type { TaskDefinition } from "workflow-engine/task-runner";
 import {
   readBoard,
+  readCardEvents,
   readRequirements,
   writeRequirements,
 } from "../../../../presets/queen-bee/domain-state";
@@ -47,6 +48,7 @@ function makeRunner(
       patchFlowConfig: () => {},
       instanceId: "card-1",
       workflowId: "cards",
+      currentState: "ready",
       workflowInstanceState: () => instanceState,
     }),
     operations: queenBeeOperations,
@@ -125,7 +127,7 @@ describe("queen-bee domain persistence", () => {
     assert.equal(readRequirements(repoPath), "# Final requirements\n");
   });
 
-  it("register_card upserts the card onto the board", async () => {
+  it("sync_card_status registers the card on the board with its state status", async () => {
     const runner = makeRunner(
       { repoPath },
       {
@@ -140,14 +142,14 @@ describe("queen-bee domain persistence", () => {
 
     const result = await runner.run({
       ...dummyTask,
-      operations: ["register_card"],
+      operations: ["sync_card_status"],
     });
 
     assert.equal((result.output as { ok: boolean }).ok, true);
     const board = readBoard(repoPath);
     assert.equal(board.cards.length, 1);
     assert.equal(board.cards[0]?.title, "Implement X");
-    assert.equal(board.cards[0]?.status, "in_progress");
+    assert.equal(board.cards[0]?.status, "ready");
   });
 
   it("validate_completion rejects a card with no committed work", async () => {
@@ -183,6 +185,44 @@ describe("queen-bee domain persistence", () => {
     const output = result.output as { ok: boolean; commitCount: number };
     assert.equal(output.ok, true);
     assert.ok(output.commitCount >= 1);
+
+    const events = readCardEvents(repoPath, "card-1");
+    assert.equal(events[0]?.type, "completion_validated");
+  });
+
+  it("submit_work records a submission event on the card", async () => {
+    const tool = findTool("submit_work");
+    const result = await tool.executor(
+      {
+        id: "c1",
+        name: "submit_work",
+        arguments: JSON.stringify({ outcome: "implemented" }),
+      },
+      { workspacePath: repoPath, basePath: repoPath, instanceId: "card-1" }
+    );
+
+    assert.equal(result.isError, false);
+    const events = readCardEvents(repoPath, "card-1");
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.type, "submitted");
+    assert.deepEqual(events[0]?.data, { outcome: "implemented" });
+  });
+
+  it("sync_idea registers the idea on the board", async () => {
+    const runner = makeRunner(
+      { repoPath },
+      { title: "New idea", brief: "Do it" }
+    );
+    const result = await runner.run({
+      ...dummyTask,
+      operations: ["sync_idea"],
+    });
+
+    assert.equal((result.output as { ok: boolean }).ok, true);
+    const board = readBoard(repoPath);
+    assert.equal(board.ideas.length, 1);
+    assert.equal(board.ideas[0]?.title, "New idea");
+    assert.equal(board.ideas[0]?.status, "backlog");
   });
 
   it("build_review_package writes an immutable review package", async () => {
@@ -273,6 +313,11 @@ describe("queen-bee domain persistence", () => {
 
     const board = readBoard(repoPath);
     assert.equal(board.cards[0]?.title, "Implement X");
+
+    // The card has advanced to running_agent and the worker session would call
+    // the model — not available in tests. Cancel so the runner aborts and the
+    // process drains.
+    controller.cancel();
   });
 });
 

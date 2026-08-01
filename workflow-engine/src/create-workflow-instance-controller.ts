@@ -248,6 +248,7 @@ export function createWorkflowInstanceController(
   function buildTaskRunnerContext(): TaskRunnerContext {
     return {
       ...taskContext,
+      currentState: state.currentState,
       workflowInstanceState: state.workflowInstanceState,
       patchWorkflowInstanceState: patchWorkflowInstanceState,
     };

@@ -1,6 +1,7 @@
 import { defineWorkflow } from "workflow-engine/workflow-types";
 
 export type CardsTaskOutputs = {
+  registerCard: { ok: boolean };
   prepareWorktree: {
     branchName: string;
     worktreePath: string;
@@ -11,6 +12,8 @@ export type CardsTaskOutputs = {
   buildPackage: { packageId: string };
   review: { verdict: "approved" | "changes_requested"; findings: unknown[] };
   coordinate: { summary: string };
+  syncDone: { ok: boolean };
+  syncUnfulfillable: { ok: boolean };
 };
 
 export type CardsItemState = {
@@ -18,6 +21,12 @@ export type CardsItemState = {
   repoPath: string;
   attempt: number;
   validationFailures: number;
+  cardSpec?: {
+    title: string;
+    description: string;
+    acceptanceCriteria: string[];
+    dependsOn: string[];
+  };
 };
 
 export type CardsStateId =
@@ -37,6 +46,7 @@ export const cardsWorkflow = defineWorkflow({
   description:
     "Per-card workflow: worktree, worker agent, completion gate, reviewer, coordinator.",
   taskOutputs: {
+    registerCard: {} as { ok: boolean },
     prepareWorktree: {} as {
       branchName: string;
       worktreePath: string;
@@ -50,6 +60,8 @@ export const cardsWorkflow = defineWorkflow({
       findings: unknown[];
     },
     coordinate: {} as { summary: string },
+    syncDone: {} as { ok: boolean },
+    syncUnfulfillable: {} as { ok: boolean },
   },
   workflowInstanceState: {} as CardsItemState,
   states: [
@@ -57,6 +69,15 @@ export const cardsWorkflow = defineWorkflow({
       id: "ready",
       label: "Ready",
       category: "initial",
+      tasks: [
+        {
+          id: "registerCard",
+          label: "Register on board",
+          trigger: "auto",
+          role: "operation",
+          operations: ["sync_card_status"],
+        },
+      ],
       actions: [
         {
           id: "run",
@@ -79,7 +100,7 @@ export const cardsWorkflow = defineWorkflow({
           label: "Prepare worktree",
           trigger: "auto",
           role: "operation",
-          operations: ["register_card", "prepare_worktree"],
+          operations: ["sync_card_status", "prepare_worktree"],
         },
       ],
       autoTransitions: [
@@ -180,7 +201,7 @@ export const cardsWorkflow = defineWorkflow({
           label: "Build review package",
           trigger: "auto",
           role: "operation",
-          operations: ["build_review_package"],
+          operations: ["build_review_package", "sync_card_status"],
         },
       ],
       autoTransitions: [
@@ -266,7 +287,20 @@ export const cardsWorkflow = defineWorkflow({
         },
       ],
     },
-    { id: "done", label: "Done", category: "terminal" },
+    {
+      id: "done",
+      label: "Done",
+      category: "terminal",
+      tasks: [
+        {
+          id: "syncDone",
+          label: "Sync board",
+          trigger: "auto",
+          role: "operation",
+          operations: ["sync_card_status"],
+        },
+      ],
+    },
     {
       id: "unfulfillable",
       label: "Unfulfillable",
@@ -281,6 +315,13 @@ export const cardsWorkflow = defineWorkflow({
           systemPrompt:
             "You are a coordinator. Analyze why the card could not be completed and suggest remediation.",
           operations: [],
+        },
+        {
+          id: "syncUnfulfillable",
+          label: "Sync board",
+          trigger: "auto",
+          role: "operation",
+          operations: ["sync_card_status"],
         },
       ],
       actions: [

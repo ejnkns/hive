@@ -267,6 +267,7 @@ export function createEngineRunners(
       patchFlowConfig: ctx.patchFlowConfig,
       instanceId: ctx.instanceId,
       workflowId: ctx.workflowId,
+      currentState: ctx.currentState,
       workflowInstanceState: () => ctx.workflowInstanceState,
     };
   }
@@ -298,6 +299,7 @@ export function createEngineRunners(
         toolDefinitions,
         toolExecutors,
         basePath: readBasePath(ctx),
+        instanceId: ctx.instanceId,
       }),
     aiChatRunner: (ctx) =>
       createAiChatRunner({
@@ -305,6 +307,7 @@ export function createEngineRunners(
         toolDefinitions,
         toolExecutors,
         basePath: readBasePath(ctx),
+        instanceId: ctx.instanceId,
       }),
     toolDefinitions,
     toolExecutors,

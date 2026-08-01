@@ -23,7 +23,7 @@ export function evaluateEdges(
     // Edge transforms are authored against Partial<TaskOutputMap<TSourceOutputs>>
     // but invoked with the erased runtime output map. reduce() guarantees the
     // values are TaskOutcome-shaped, so the shape matches at runtime.
-    const transformedData: Record<string, unknown> = edge.transform
+    const transformed = edge.transform
       ? edge.transform(
           workflowOutput as Parameters<
             NonNullable<RuntimeFlowEdge["transform"]>
@@ -31,13 +31,18 @@ export function evaluateEdges(
         )
       : {};
 
-    effects.push({
-      fromWorkflow: edge.fromWorkflow,
-      toWorkflow: edge.toWorkflow,
-      toFlowState: edge.toFlowState,
-      fromState: newState,
-      transformedData,
-    });
+    // An array transform fans out: one effect per element, so the target
+    // workflow gets one instance per element (e.g. one card per plan card).
+    const items = Array.isArray(transformed) ? transformed : [transformed];
+    for (const item of items) {
+      effects.push({
+        fromWorkflow: edge.fromWorkflow,
+        toWorkflow: edge.toWorkflow,
+        toFlowState: edge.toFlowState,
+        fromState: newState,
+        transformedData: item,
+      });
+    }
   }
 
   return effects;

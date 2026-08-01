@@ -97,6 +97,41 @@ describe("evaluateEdges", () => {
     assert.equal(effects[0]!.toFlowState, true);
     assert.equal(effects[0]!.toWorkflow, undefined);
   });
+
+  it("fans out one effect per element of an array transform", () => {
+    const edges: FlowEdge[] = [
+      {
+        fromWorkflow: "source",
+        fromStates: ["done"],
+        toWorkflow: "cards",
+        transform: (source) => {
+          // The source output map is erased to Record; the plan shape is
+          // established by the workflow authoring the transform.
+          const planOutput = source.plan?.output as
+            | { cards?: Array<{ title: string }> }
+            | undefined;
+          return (planOutput?.cards ?? []).map((card) => ({
+            cardSpec: card,
+          }));
+        },
+      },
+    ];
+
+    const effects = evaluateEdges(edges, "source", "done", {
+      plan: {
+        status: "success",
+        output: {
+          kind: "proposal",
+          cards: [{ title: "A" }, { title: "B" }],
+        },
+      },
+    });
+
+    assert.equal(effects.length, 2);
+    assert.equal(effects[0]!.toWorkflow, "cards");
+    assert.deepEqual(effects[0]!.transformedData, { cardSpec: { title: "A" } });
+    assert.deepEqual(effects[1]!.transformedData, { cardSpec: { title: "B" } });
+  });
 });
 
 function readMerged(data: Record<string, unknown>): unknown {

@@ -29,6 +29,7 @@ export type TaskRunnerContext = {
   patchFlowConfig(patch: Record<string, unknown>): void;
   instanceId: string;
   workflowId: string;
+  currentState: string;
   workflowInstanceState: Record<string, unknown>;
   patchWorkflowInstanceState(patch: Record<string, unknown>): void;
 };

@@ -12,6 +12,7 @@ export type OperationContext = {
   patchFlowConfig(patch: Record<string, unknown>): void;
   instanceId: string;
   workflowId: string;
+  currentState: string;
   workflowInstanceState(): Record<string, unknown>;
 };
 
@@ -31,6 +32,7 @@ const NOOP_CONTEXT: OperationContext = {
   patchFlowConfig: () => {},
   instanceId: "",
   workflowId: "",
+  currentState: "",
   workflowInstanceState: () => ({}),
 };
 

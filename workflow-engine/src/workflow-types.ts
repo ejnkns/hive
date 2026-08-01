@@ -244,8 +244,10 @@ export function defineWorkflow<
 // === FLOW DEFINITION ===
 
 // Edge between workflows. The transform receives the source workflow's
-// task outputs and produces context for the target workflow.
-// When toFlowState is true, the transformed output updates FlowState
+// task outputs and produces context for the target workflow. It returns either
+// one instance-state object or an array of them — an array creates one target
+// workflow instance per element (fan-out, e.g. one cards instance per planned
+// card). When toFlowState is true, the transformed output updates FlowState
 // instead of creating new instances. Omit or set toWorkflow for instance creation.
 export type FlowEdge<
   TSourceOutputs extends Record<string, unknown> = Record<string, unknown>,
@@ -256,7 +258,7 @@ export type FlowEdge<
   toFlowState?: boolean;
   transform?: (
     source: Partial<TaskOutputMap<TSourceOutputs>>
-  ) => Record<string, unknown>;
+  ) => Record<string, unknown> | Record<string, unknown>[];
 };
 
 export type RuntimeFlowEdge = FlowEdge;
