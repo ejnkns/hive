@@ -194,11 +194,16 @@ export async function loadUserDefinitionsFromDisk(): Promise<void> {
 // only resolves from inside the server package, so each definition is
 // materialized into an in-package working copy at server/.runtime/definitions/
 // before being imported. The durable source stays in ~/.hive/definitions/.
-async function loadDefinitionFromSource(
-  slug: string,
-  source: string
+//
+// runtimeSlug names the materialized working copy; flowId is the id stamped
+// onto the loaded definition (normally equal to the slug, but a rehydrated
+// instance snapshot re-stamps the original definition id).
+export async function loadDefinitionFromSource(
+  runtimeSlug: string,
+  source: string,
+  flowId: string = runtimeSlug
 ): Promise<FlowDefinition> {
-  const runtimeFile = join(runtimeDefinitionsDir(), `${slug}.ts`);
+  const runtimeFile = join(runtimeDefinitionsDir(), `${runtimeSlug}.ts`);
   mkdirSync(runtimeDefinitionsDir(), { recursive: true });
   writeFileSync(runtimeFile, source, "utf-8");
 
@@ -208,7 +213,7 @@ async function loadDefinitionFromSource(
   if (module.flow === null || typeof module.flow !== "object") {
     throw new Error("Definition module must export a `flow` object");
   }
-  return { ...(module.flow as FlowDefinition), id: slug };
+  return { ...(module.flow as FlowDefinition), id: flowId };
 }
 
 // ── Persistence ──

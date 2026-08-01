@@ -64,7 +64,7 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     state: flowState,
     instances,
   } of flows) {
-    rehydrateFlow(persistence, flowId, flowConfig, flowState, instances);
+    await rehydrateFlow(persistence, flowId, flowConfig, flowState, instances);
   }
 
   registerFlowApiRoutes(server);

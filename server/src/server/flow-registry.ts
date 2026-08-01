@@ -13,7 +13,11 @@ import type {
   RuntimeWorkflowConfig,
 } from "workflow-engine/workflow-types";
 import { createEngineRunners } from "./engine-bridge";
-import { getFlowDefinition } from "./flow-definitions";
+import {
+  getFlowDefinition,
+  getRegisteredFlowDefinition,
+  loadDefinitionFromSource,
+} from "./flow-definitions";
 
 const runtimes = new Map<
   string,
@@ -150,6 +154,15 @@ export function createFlow(
     ...config,
   };
 
+  // Snapshot the definition source for user definitions so the instance keeps
+  // its creation-time behavior even if the definition is later edited or
+  // deleted. Built-ins ship with the server and are never editable, so their
+  // live definition is authoritative.
+  const registered = getRegisteredFlowDefinition(definitionId);
+  if (registered && !registered.builtIn && registered.source) {
+    flowConfig.definitionSource = registered.source;
+  }
+
   const runners = createEngineRunners({
     tools: definition.tools,
     operations: definition.operations,
@@ -182,7 +195,7 @@ export function createFlow(
   return runtime;
 }
 
-export function rehydrateFlow(
+export async function rehydrateFlow(
   persistence: FlowPersistence,
   flowId: string,
   flowConfig: unknown,
@@ -191,13 +204,13 @@ export function rehydrateFlow(
     workflowId: string;
     state: Record<string, unknown>;
   }>
-): FlowRuntimeAPI<Record<string, unknown>, Record<string, unknown>> | null {
+): Promise<FlowRuntimeAPI<
+  Record<string, unknown>,
+  Record<string, unknown>
+> | null> {
   // flowConfig comes from persistence as unknown; its runtime shape is
   // guaranteed by the code that wrote it (createFlow).
   const cfg = flowConfig as Record<string, unknown>;
-  const storedDefs = cfg.workflowDefinitions as
-    | RuntimeWorkflowConfig[]
-    | undefined;
 
   let workflows: RuntimeWorkflowConfig[];
   let edges: RuntimeFlowEdge[];
@@ -206,11 +219,40 @@ export function rehydrateFlow(
     operations?: Record<string, OperationFn>;
   } = {};
 
-  if (storedDefs) {
-    workflows = storedDefs;
-    edges = [];
+  // A user-definition snapshot re-transpiles the creation-time source so a
+  // later definition edit/delete cannot change the instance's behavior. Reuse
+  // the live definition for built-ins (never editable) and legacy flows.
+  const snapshotSource =
+    typeof cfg.definitionSource === "string" ? cfg.definitionSource : undefined;
+  const definitionId = cfg.definitionId;
+
+  if (snapshotSource && typeof definitionId === "string") {
+    try {
+      const snapshotFlow = await loadDefinitionFromSource(
+        `snapshot-${flowId}`,
+        snapshotSource,
+        definitionId
+      );
+      workflows = resolveWorkflows(snapshotFlow, cfg);
+      edges = snapshotFlow.edges;
+      domain = {
+        tools: snapshotFlow.tools,
+        operations: snapshotFlow.operations,
+      };
+    } catch (err) {
+      console.warn(
+        `Flow "${flowId}" snapshot failed to load, falling back to live definition: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+      if (typeof definitionId !== "string") return null;
+      const definition = getFlowDefinition(definitionId);
+      if (!definition) return null;
+      workflows = resolveWorkflows(definition, cfg);
+      edges = definition.edges;
+      domain = { tools: definition.tools, operations: definition.operations };
+    }
   } else {
-    const definitionId = cfg.definitionId;
     if (typeof definitionId !== "string") return null;
     const definition = getFlowDefinition(definitionId);
     if (!definition) return null;
