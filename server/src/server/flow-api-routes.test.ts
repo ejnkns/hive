@@ -8,6 +8,7 @@ import {
   type FlowRuntimeEvent,
 } from "workflow-engine/create-flow-runtime";
 import { defineWorkflow } from "workflow-engine/workflow-types";
+import { queenBeeFlow } from "../../../presets/queen-bee/flow";
 import { registerFlowApiRoutes } from "./flow-api-routes";
 import {
   registerFlowDefinition,
@@ -550,6 +551,93 @@ describe("flow API routes", () => {
       body: { definitionId: "missing-def" },
     });
     assert.equal(unknown.statusCode, 400);
+  });
+
+  it("POST /api/flows rejects config missing required schema fields", async () => {
+    registerFlowDefinition(queenBeeFlow, { builtIn: true });
+    setFlowPersistence(noopPersistence);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/flows",
+      body: { definitionId: "queen-bee", config: {} },
+    });
+
+    assert.equal(response.statusCode, 400);
+    const error = response.json().error as string;
+    assert.ok(error.includes('"name"'), `error should mention name: ${error}`);
+    assert.ok(
+      error.includes('"basePath"'),
+      `error should mention basePath: ${error}`
+    );
+  });
+
+  it("POST /api/flows rejects unknown config fields", async () => {
+    registerFlowDefinition(queenBeeFlow, { builtIn: true });
+    setFlowPersistence(noopPersistence);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/flows",
+      body: {
+        definitionId: "queen-bee",
+        config: { name: "X", basePath: "/tmp", bogus: 1 },
+      },
+    });
+
+    assert.equal(response.statusCode, 400);
+    assert.ok(
+      (response.json().error as string).includes("bogus"),
+      "error should name the unknown field"
+    );
+  });
+
+  it("POST /api/flows rejects config fields of the wrong type", async () => {
+    registerFlowDefinition(queenBeeFlow, { builtIn: true });
+    setFlowPersistence(noopPersistence);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/flows",
+      body: {
+        definitionId: "queen-bee",
+        config: { name: "X", basePath: 123 },
+      },
+    });
+
+    assert.equal(response.statusCode, 400);
+    assert.ok(
+      (response.json().error as string).includes("basePath"),
+      "error should name the mistyped field"
+    );
+  });
+
+  it("POST /api/flows accepts config matching the schema", async () => {
+    registerFlowDefinition(queenBeeFlow, { builtIn: true });
+    setFlowPersistence(noopPersistence);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/flows",
+      body: {
+        definitionId: "queen-bee",
+        config: { name: "My Project", basePath: "/tmp/repo" },
+      },
+    });
+
+    assert.equal(response.statusCode, 201);
   });
 
   function fixture(): FastifyInstance {

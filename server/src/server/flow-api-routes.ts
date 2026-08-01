@@ -15,6 +15,7 @@ import {
   getFlowRuntime,
   getFlowRuntimes,
   unlinkFlow,
+  validateInstanceConfig,
 } from "./flow-registry";
 
 export function registerFlowApiRoutes(server: FastifyInstance): void {
@@ -373,6 +374,14 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
       body?.config !== null && typeof body?.config === "object"
         ? (body.config as Record<string, unknown>)
         : {};
+
+    const validationErrors = validateInstanceConfig(definitionId, config);
+    if (validationErrors.length > 0) {
+      return reply
+        .status(400)
+        .send({ error: `Invalid flow config: ${validationErrors.join("; ")}` });
+    }
+
     const flowId =
       typeof body?.flowId === "string" && body.flowId !== ""
         ? body.flowId
