@@ -241,13 +241,11 @@ export function defineWorkflow<
     string,
     unknown
   >,
-  TWorkflowOutput extends Record<string, unknown> = Record<string, unknown>,
 >(
   config: WorkflowConfig<TTaskOutputs, TStateId, TWorkflowInstanceState> & {
-    // Authoring-only generic anchors, erased from the returned
+    // Authoring-only generic anchor, erased from the returned
     // RuntimeWorkflowConfig.
     workflowInstanceState?: TWorkflowInstanceState;
-    workflowOutput?: TWorkflowOutput;
   }
 ): RuntimeWorkflowConfig {
   // Gates/transforms are authored against specific generics (e.g.
