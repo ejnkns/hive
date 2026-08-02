@@ -46,7 +46,7 @@ export const execute: ToolExecutor = async (call, ctx) => {
       if (!file.startsWith(prefix)) continue;
       const rem = file.slice(prefix.length);
       const [name, ...rest] = rem.split("/");
-      if (!name || (name.startsWith(".") && name !== ".hive")) continue;
+      if (!name || name.startsWith(".")) continue;
       entries.add(rest.length > 0 ? `${prefix}${name}/` : `${prefix}${name}`);
     }
     return {
@@ -59,7 +59,7 @@ export const execute: ToolExecutor = async (call, ctx) => {
   const dirPath = resolve(ctx.workspacePath, requested);
   const entries = readdirSync(dirPath, { withFileTypes: true });
   const listing = entries
-    .filter((e) => !e.name.startsWith(".") || e.name === ".hive")
+    .filter((e) => !e.name.startsWith("."))
     .map((e) => {
       const relP = relative(ctx.workspacePath, join(dirPath, e.name));
       return e.isDirectory() ? `${relP}/` : relP;

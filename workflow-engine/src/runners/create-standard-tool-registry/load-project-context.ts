@@ -2,13 +2,8 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { TaskDefinition } from "../../task-runner";
 
@@ -31,7 +26,9 @@ export function loadProjectContext(
 
   try {
     const revision = git(basePath, ["rev-parse", "HEAD"]);
-    const cacheDir = cacheRoot ?? join(basePath, ".hive", "project-context");
+    // Content-addressed cache keyed by revision, outside the repo so it never
+    // pollutes or is committed with the project.
+    const cacheDir = cacheRoot ?? join(tmpdir(), "hive-project-context");
     const cachePath = join(cacheDir, `${revision}.json`);
 
     // Try cache

@@ -49,10 +49,7 @@ describe("queen-bee onboarding workflow", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  // Skipped until Phase 4 wires integrationBranch/branchPrefix into queen-bee
-  // flow config — the engine now requires them (no defaults) and the onboarding
-  // workflow fails at ensure_integration_branch without them.
-  it.skip("binds a repository and seeds requirements and integration", async () => {
+  it("binds a repository and seeds requirements and integration", async () => {
     createFlow("my-project", "queen-bee", persistence, {
       basePath,
       name: "My Project",
@@ -71,14 +68,16 @@ describe("queen-bee onboarding workflow", () => {
     assert.equal(config.basePath, basePath);
     assert.equal(config.targetBranch, "main");
     assert.equal(config.name, "My Project");
+    assert.equal(config.integrationBranch, "queen-bee-main");
+    assert.equal(config.branchPrefix, "queen-bee/");
 
     const projectJson = JSON.parse(
-      readFileSync(join(basePath, ".hive", "project.json"), "utf-8")
+      readFileSync(join(basePath, ".queen-bee", "project.json"), "utf-8")
     ) as { basePath: string; targetBranch: string };
     assert.equal(projectJson.basePath, basePath);
     assert.equal(projectJson.targetBranch, "main");
 
-    assert.ok(existsSync(join(basePath, ".hive", "project.json")));
+    assert.ok(existsSync(join(basePath, ".queen-bee", "project.json")));
 
     await waitFor(() => {
       const entries = runtime.getWorkflowInstanceEntries();

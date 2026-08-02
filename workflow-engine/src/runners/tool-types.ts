@@ -41,6 +41,10 @@ export type ToolContext = {
   basePath?: string;
   // The workflow instance this task runs in (e.g. the card id) when known.
   instanceId?: string;
+  // Patches the workflow instance's domain data. Tools use this to record
+  // session running state (e.g. the requirements draft) instead of writing
+  // files; the engine persists it as part of the instance.
+  patchWorkflowInstanceState?: (patch: Record<string, unknown>) => void;
   signal?: AbortSignal;
   baseCommit?: string;
   projectRevision?: string;

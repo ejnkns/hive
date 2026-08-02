@@ -4,7 +4,8 @@ import type { PlanProposal } from "./domain-state";
 export type RequirementsTaskOutputs = {
   draft: { content: string; revision: string };
   plan: PlanProposal;
-  finalizeRequirements: { ok: boolean; path?: string };
+  finalizeRequirements: string;
+  commitState: { ok: boolean; revision?: string };
 };
 
 export type RequirementsStateId =
@@ -19,10 +20,12 @@ export type RequirementsStateId =
 export const requirementsWorkflow = defineWorkflow({
   id: "requirements",
   label: "Requirements",
+  item: { title: "Requirements" },
   taskOutputs: {
     draft: {} as { content: string; revision: string },
     plan: {} as PlanProposal,
-    finalizeRequirements: {} as { ok: boolean; path?: string },
+    finalizeRequirements: {} as string,
+    commitState: {} as { ok: boolean; revision?: string },
   },
   states: [
     {
@@ -165,13 +168,28 @@ export const requirementsWorkflow = defineWorkflow({
           trigger: "auto",
           role: "operation",
           operations: ["finalize_requirements"],
+          persist: { path: "requirements.md" },
+        },
+        {
+          id: "commitState",
+          label: "Commit requirements document",
+          trigger: "auto",
+          role: "operation",
+          operations: ["commit_flow_state"],
         },
       ],
       autoTransitions: [
         {
           to: "accepted",
           gate: (ctx) =>
-            ctx.taskOutputs.finalizeRequirements?.status === "success",
+            ctx.taskOutputs.finalizeRequirements?.status === "success" &&
+            ctx.taskOutputs.commitState?.status === "success",
+        },
+        {
+          to: "complete",
+          gate: (ctx) =>
+            ctx.taskOutputs.finalizeRequirements?.status === "error" ||
+            ctx.taskOutputs.commitState?.status === "error",
         },
       ],
     },

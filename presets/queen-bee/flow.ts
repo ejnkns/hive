@@ -119,9 +119,42 @@ export const queenBeeFlow = {
   description:
     "Project lifecycle: onboarding, requirements, ideas, cards, integration.",
   configSchema: queenBeeConfigSchema,
+  domainDir: ".queen-bee",
   buildWorkflows,
   tools: queenBeeTools,
   operations: queenBeeOperations,
+  actions: [
+    {
+      id: "add_idea",
+      label: "Add idea",
+      variant: "primary",
+      createInstance: {
+        workflowId: "ideas",
+        fields: [
+          {
+            key: "title",
+            label: "Title",
+            type: "string",
+            required: true,
+            hint: "A short statement of the idea.",
+          },
+          { key: "brief", label: "Brief", type: "string" },
+        ],
+      },
+    },
+    {
+      id: "revise_requirements",
+      label: "Revise requirements",
+      variant: "secondary",
+      dispatchToAll: { workflowId: "requirements", actionId: "start" },
+    },
+    {
+      id: "integrate",
+      label: "Integrate",
+      variant: "secondary",
+      dispatchToAll: { workflowId: "integration", actionId: "integrate" },
+    },
+  ],
   edges: [
     {
       fromWorkflow: "onboarding",

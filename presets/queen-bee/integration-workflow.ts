@@ -17,6 +17,7 @@ export const integrationWorkflow = defineWorkflow({
   label: "Integration",
   description:
     "Fast-forward the target branch to the integration branch on demand.",
+  item: { title: "Integration" },
   taskOutputs: {
     integrate: {} as Record<string, unknown>,
   },
@@ -51,11 +52,11 @@ export const integrationWorkflow = defineWorkflow({
       autoTransitions: [
         {
           to: "integrated",
-          gate: (ctx) => ctx.taskOutputs.integrate?.output?.ok === true,
+          gate: (ctx) => ctx.taskOutputs.integrate?.status === "success",
         },
         {
           to: "ready",
-          gate: (ctx) => ctx.taskOutputs.integrate?.output?.ok === false,
+          gate: (ctx) => ctx.taskOutputs.integrate?.status === "error",
         },
       ],
     },

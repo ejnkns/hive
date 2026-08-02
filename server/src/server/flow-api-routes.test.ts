@@ -749,10 +749,10 @@ describe("flow API routes", () => {
     assert.equal(response.json().error, "Flow not found");
   });
 
-  it("DELETE /api/flows/:flowId without purge keeps basePath/.hive", async () => {
+  it("DELETE /api/flows/:flowId without purge keeps the domain dir", async () => {
     const dir = mkdtempSync(join(tmpdir(), "hive-unlink-"));
-    mkdirSync(join(dir, ".hive"), { recursive: true });
-    writeFileSync(join(dir, ".hive", "project.json"), "{}");
+    mkdirSync(join(dir, ".test-flow"), { recursive: true });
+    writeFileSync(join(dir, ".test-flow", "project.json"), "{}");
     try {
       registerFlowForTest(
         "unlink-flow",
@@ -761,7 +761,7 @@ describe("flow API routes", () => {
           [testWorkflow],
           [],
           {},
-          { name: "Unlink Flow", basePath: dir },
+          { name: "Unlink Flow", basePath: dir, definitionId: "test-flow" },
           {},
           noopPersistence
         )
@@ -777,16 +777,16 @@ describe("flow API routes", () => {
       });
 
       assert.equal(response.statusCode, 200);
-      assert.equal(existsSync(join(dir, ".hive")), true);
+      assert.equal(existsSync(join(dir, ".test-flow")), true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  it("DELETE /api/flows/:flowId with purge removes basePath/.hive", async () => {
+  it("DELETE /api/flows/:flowId with purge removes the domain dir", async () => {
     const dir = mkdtempSync(join(tmpdir(), "hive-purge-"));
-    mkdirSync(join(dir, ".hive"), { recursive: true });
-    writeFileSync(join(dir, ".hive", "project.json"), "{}");
+    mkdirSync(join(dir, ".test-flow"), { recursive: true });
+    writeFileSync(join(dir, ".test-flow", "project.json"), "{}");
     try {
       registerFlowForTest(
         "purge-flow",
@@ -795,7 +795,7 @@ describe("flow API routes", () => {
           [testWorkflow],
           [],
           {},
-          { name: "Purge Flow", basePath: dir },
+          { name: "Purge Flow", basePath: dir, definitionId: "test-flow" },
           {},
           noopPersistence
         )
@@ -812,7 +812,7 @@ describe("flow API routes", () => {
       });
 
       assert.equal(response.statusCode, 200);
-      assert.equal(existsSync(join(dir, ".hive")), false);
+      assert.equal(existsSync(join(dir, ".test-flow")), false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

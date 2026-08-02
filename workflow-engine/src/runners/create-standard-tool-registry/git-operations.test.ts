@@ -120,16 +120,18 @@ describe("git operations (config-driven)", () => {
       assert.deepEqual(result, { ok: true, skipped: true });
     });
 
-    it("errors when integrationBranch is not configured", () => {
+    it("throws when integrationBranch is not configured", () => {
       root = mkdtempSync(join(tmpdir(), "hive-commit-"));
       basePath = setupRepo();
-      const result = commitFlowState(
-        dummyTask,
-        {},
-        ctxFor({ basePath, domainDir: ".flow" })
+      assert.throws(
+        () =>
+          commitFlowState(
+            dummyTask,
+            {},
+            ctxFor({ basePath, domainDir: ".flow" })
+          ),
+        /integrationBranch/
       );
-      assert.equal(result.ok, false);
-      assert.match(String(result.error), /integrationBranch/);
     });
   });
 
@@ -150,12 +152,13 @@ describe("git operations (config-driven)", () => {
       );
     });
 
-    it("errors without flow config context", () => {
+    it("throws without flow config context", () => {
       root = mkdtempSync(join(tmpdir(), "hive-gitops-"));
       basePath = setupRepo();
-      const result = ensureIntegrationBranch(dummyTask, { basePath });
-      assert.equal(result.ok, false);
-      assert.match(String(result.error), /integrationBranch/);
+      assert.throws(
+        () => ensureIntegrationBranch(dummyTask, { basePath }),
+        /integrationBranch/
+      );
     });
   });
 
@@ -167,16 +170,14 @@ describe("git operations (config-driven)", () => {
       assert.equal(result.ok, true);
     });
 
-    it("rejects a non-repository directory", () => {
+    it("throws for a non-repository directory", () => {
       root = mkdtempSync(join(tmpdir(), "hive-gitops-"));
       const plainDir = join(root, "not-a-repo");
       mkdirSync(plainDir);
-      const result = validateRepo(
-        dummyTask,
-        {},
-        ctxFor({ basePath: plainDir })
+      assert.throws(
+        () => validateRepo(dummyTask, {}, ctxFor({ basePath: plainDir })),
+        /not a git repository|is-inside-work-tree/
       );
-      assert.equal(result.ok, false);
     });
   });
 });

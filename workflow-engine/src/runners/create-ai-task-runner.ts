@@ -22,6 +22,7 @@ export type AiTaskRunnerConfig = {
   completionTool?: string;
   basePath?: string;
   instanceId?: string;
+  patchWorkflowInstanceState?: (patch: Record<string, unknown>) => void;
 };
 
 export function createAiTaskRunner(config: AiTaskRunnerConfig): TaskRunner {
@@ -89,6 +90,7 @@ export function createAiTaskRunner(config: AiTaskRunnerConfig): TaskRunner {
               workspacePath: task.workspacePath ?? process.cwd(),
               basePath: config.basePath,
               instanceId: config.instanceId,
+              patchWorkflowInstanceState: config.patchWorkflowInstanceState,
               signal: abortController.signal,
             });
           } catch (err) {

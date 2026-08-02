@@ -16,8 +16,9 @@ import type { OperationContext } from "../create-operation-runner";
 
 // Branch names and the domain root come from flow config, never hardcoded.
 // integrationBranch/branchPrefix/domainDir have no engine defaults — a flow
-// must declare them (queen-bee wires them in a later phase). Ops return
-// { ok: ... } results; gates inspect them directly.
+// must declare them (queen-bee wires them in a later phase). Ops THROW on
+// logical failure so the task errors and gates inspect taskOutputs.<t>.status
+// rather than an ok field; successful ops return their result directly.
 
 // ─── public operation exports ──────────────────────────────────────────
 
@@ -26,23 +27,19 @@ export function ensureIntegrationBranch(
   params: Record<string, unknown>,
   ctx?: OperationContext
 ): Record<string, unknown> {
-  try {
-    const basePath = params.basePath as string;
-    const integrationBranch = readIntegrationBranch(ctx);
-    if (!integrationBranch) {
-      return { ok: false, error: "Flow config integrationBranch is not set" };
-    }
-    if (!hasBranch(basePath, integrationBranch)) {
-      git(basePath, ["branch", integrationBranch, "HEAD"]);
-    }
-    return {
-      ok: true,
-      branchName: integrationBranch,
-      revision: git(basePath, ["rev-parse", integrationBranch]),
-    };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
+  const basePath = params.basePath as string;
+  const integrationBranch = readIntegrationBranch(ctx);
+  if (!integrationBranch) {
+    throw new Error("Flow config integrationBranch is not set");
   }
+  if (!hasBranch(basePath, integrationBranch)) {
+    git(basePath, ["branch", integrationBranch, "HEAD"]);
+  }
+  return {
+    ok: true,
+    branchName: integrationBranch,
+    revision: git(basePath, ["rev-parse", integrationBranch]),
+  };
 }
 
 export function checkIntegrationReadiness(
@@ -50,56 +47,52 @@ export function checkIntegrationReadiness(
   params: Record<string, unknown>,
   ctx?: OperationContext
 ): Record<string, unknown> {
-  try {
-    const basePath = params.basePath as string;
-    const targetBranch = params.targetBranch as string;
-    const integrationBranch = readIntegrationBranch(ctx);
-    if (!integrationBranch) {
-      return { ok: false, error: "Flow config integrationBranch is not set" };
-    }
-    const integration = git(basePath, ["rev-parse", integrationBranch]);
-    const targetRev = git(basePath, ["rev-parse", targetBranch]);
-    const ahead = Number(
-      git(basePath, [
-        "rev-list",
-        "--count",
-        `${targetBranch}..${integrationBranch}`,
-      ])
-    );
-    const behind = Number(
-      git(basePath, [
-        "rev-list",
-        "--count",
-        `${integrationBranch}..${targetBranch}`,
-      ])
-    );
-    const integrated = gitSucceeds(basePath, [
-      "merge-base",
-      "--is-ancestor",
-      integrationBranch,
-      targetBranch,
-    ]);
-    const ready = gitSucceeds(basePath, [
-      "merge-base",
-      "--is-ancestor",
-      targetBranch,
-      integrationBranch,
-    ]);
-    const state = integrated ? "integrated" : ready ? "ready" : "diverged";
-    return {
-      ok: true,
-      integrationBranch,
-      integrationRevision: integration,
-      targetBranch,
-      targetRevision: targetRev,
-      state,
-      ahead,
-      behind,
-      canIntegrate: state === "ready" && ahead > 0,
-    };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
+  const basePath = params.basePath as string;
+  const targetBranch = params.targetBranch as string;
+  const integrationBranch = readIntegrationBranch(ctx);
+  if (!integrationBranch) {
+    throw new Error("Flow config integrationBranch is not set");
   }
+  const integration = git(basePath, ["rev-parse", integrationBranch]);
+  const targetRev = git(basePath, ["rev-parse", targetBranch]);
+  const ahead = Number(
+    git(basePath, [
+      "rev-list",
+      "--count",
+      `${targetBranch}..${integrationBranch}`,
+    ])
+  );
+  const behind = Number(
+    git(basePath, [
+      "rev-list",
+      "--count",
+      `${integrationBranch}..${targetBranch}`,
+    ])
+  );
+  const integrated = gitSucceeds(basePath, [
+    "merge-base",
+    "--is-ancestor",
+    integrationBranch,
+    targetBranch,
+  ]);
+  const ready = gitSucceeds(basePath, [
+    "merge-base",
+    "--is-ancestor",
+    targetBranch,
+    integrationBranch,
+  ]);
+  const state = integrated ? "integrated" : ready ? "ready" : "diverged";
+  return {
+    ok: true,
+    integrationBranch,
+    integrationRevision: integration,
+    targetBranch,
+    targetRevision: targetRev,
+    state,
+    ahead,
+    behind,
+    canIntegrate: state === "ready" && ahead > 0,
+  };
 }
 
 export function fastForwardTargetBranch(
@@ -107,41 +100,35 @@ export function fastForwardTargetBranch(
   params: Record<string, unknown>,
   ctx?: OperationContext
 ): Record<string, unknown> {
-  try {
-    const basePath = params.basePath as string;
-    const targetBranch = params.targetBranch as string;
-    const integrationBranch = readIntegrationBranch(ctx);
-    if (!integrationBranch) {
-      return { ok: false, error: "Flow config integrationBranch is not set" };
-    }
-    const result = checkIntegrationReadiness(task, params, ctx);
-    if (!result.ok) return result;
-    if (result.state === "integrated")
-      return { ok: true, alreadyIntegrated: true };
-    if (result.state === "diverged")
-      return {
-        ok: false,
-        error: `${targetBranch} and ${integrationBranch} have diverged`,
-      };
-
-    const checkedOutPath = branchWorktreePath(basePath, targetBranch);
-    if (checkedOutPath) {
-      if (git(checkedOutPath, ["status", "--porcelain"])) {
-        return { ok: false, error: `${targetBranch} has uncommitted changes` };
-      }
-      git(checkedOutPath, ["merge", "--ff-only", integrationBranch]);
-    } else {
-      git(basePath, [
-        "update-ref",
-        `refs/heads/${targetBranch}`,
-        result.integrationRevision as string,
-        result.targetRevision as string,
-      ]);
-    }
-    return { ok: true, revision: git(basePath, ["rev-parse", targetBranch]) };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
+  const basePath = params.basePath as string;
+  const targetBranch = params.targetBranch as string;
+  const integrationBranch = readIntegrationBranch(ctx);
+  if (!integrationBranch) {
+    throw new Error("Flow config integrationBranch is not set");
   }
+  const result = checkIntegrationReadiness(task, params, ctx);
+  if (result.state === "integrated") {
+    return { ok: true, alreadyIntegrated: true };
+  }
+  if (result.state === "diverged") {
+    throw new Error(`${targetBranch} and ${integrationBranch} have diverged`);
+  }
+
+  const checkedOutPath = branchWorktreePath(basePath, targetBranch);
+  if (checkedOutPath) {
+    if (git(checkedOutPath, ["status", "--porcelain"])) {
+      throw new Error(`${targetBranch} has uncommitted changes`);
+    }
+    git(checkedOutPath, ["merge", "--ff-only", integrationBranch]);
+  } else {
+    git(basePath, [
+      "update-ref",
+      `refs/heads/${targetBranch}`,
+      result.integrationRevision as string,
+      result.targetRevision as string,
+    ]);
+  }
+  return { ok: true, revision: git(basePath, ["rev-parse", targetBranch]) };
 }
 
 export function writeFlowArtifacts(
@@ -180,90 +167,82 @@ export function commitFlowState(
   params: Record<string, unknown>,
   ctx: OperationContext
 ): Record<string, unknown> {
+  const { basePath, domainDir, integrationBranch } = readFlowSettings(
+    ctx.flowConfig()
+  );
+  if (!basePath) return { ok: true, skipped: true };
+  if (!domainDir) throw new Error("Flow config domainDir is not set");
+  if (!integrationBranch) {
+    throw new Error("Flow config integrationBranch is not set");
+  }
+
+  const message =
+    typeof params.message === "string" ? params.message : "commit flow state";
+  const sourceDir = join(basePath, domainDir);
+  if (!existsSync(sourceDir)) {
+    return {
+      ok: true,
+      unchanged: true,
+      revision: git(basePath, ["rev-parse", integrationBranch]),
+    };
+  }
+  if (!hasBranch(basePath, integrationBranch)) {
+    git(basePath, ["branch", integrationBranch, "HEAD"]);
+  }
+
+  if (git(basePath, ["branch", "--show-current"]) === integrationBranch) {
+    git(basePath, ["add", "-A", "--", domainDir]);
+    if (!gitSucceeds(basePath, ["diff", "--cached", "--quiet"])) {
+      git(basePath, ["commit", "-m", message]);
+    }
+    return {
+      ok: true,
+      revision: git(basePath, ["rev-parse", integrationBranch]),
+    };
+  }
+
+  const worktreePath = mkdtempSync(join(tmpdir(), "hive-commit-"));
+  git(basePath, ["worktree", "add", worktreePath, integrationBranch]);
   try {
-    const { basePath, domainDir, integrationBranch } = readFlowSettings(
-      ctx.flowConfig()
-    );
-    if (!basePath) return { ok: true, skipped: true };
-    if (!domainDir)
-      return { ok: false, error: "Flow config domainDir is not set" };
-    if (!integrationBranch) {
-      return { ok: false, error: "Flow config integrationBranch is not set" };
+    const targetDir = join(worktreePath, domainDir);
+    mkdirSync(targetDir, { recursive: true });
+    cpSync(sourceDir, targetDir, { recursive: true });
+    git(worktreePath, ["add", "-A", "--", domainDir]);
+    if (!gitSucceeds(worktreePath, ["diff", "--cached", "--quiet"])) {
+      git(worktreePath, ["commit", "-m", message]);
     }
-
-    const message =
-      typeof params.message === "string" ? params.message : "commit flow state";
-    const sourceDir = join(basePath, domainDir);
-    if (!existsSync(sourceDir)) {
-      return {
-        ok: true,
-        unchanged: true,
-        revision: git(basePath, ["rev-parse", integrationBranch]),
-      };
-    }
-    if (!hasBranch(basePath, integrationBranch)) {
-      git(basePath, ["branch", integrationBranch, "HEAD"]);
-    }
-
-    if (git(basePath, ["branch", "--show-current"]) === integrationBranch) {
-      git(basePath, ["add", "-A", "--", domainDir]);
-      if (!gitSucceeds(basePath, ["diff", "--cached", "--quiet"])) {
-        git(basePath, ["commit", "-m", message]);
-      }
-      return {
-        ok: true,
-        revision: git(basePath, ["rev-parse", integrationBranch]),
-      };
-    }
-
-    const worktreePath = mkdtempSync(join(tmpdir(), "hive-commit-"));
-    git(basePath, ["worktree", "add", worktreePath, integrationBranch]);
-    try {
-      const targetDir = join(worktreePath, domainDir);
-      mkdirSync(targetDir, { recursive: true });
-      cpSync(sourceDir, targetDir, { recursive: true });
-      git(worktreePath, ["add", "-A", "--", domainDir]);
-      if (!gitSucceeds(worktreePath, ["diff", "--cached", "--quiet"])) {
-        git(worktreePath, ["commit", "-m", message]);
-      }
-      return {
-        ok: true,
-        revision: git(basePath, ["rev-parse", integrationBranch]),
-      };
-    } finally {
-      git(basePath, ["worktree", "remove", worktreePath, "--force"]);
-    }
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
+    return {
+      ok: true,
+      revision: git(basePath, ["rev-parse", integrationBranch]),
+    };
+  } finally {
+    git(basePath, ["worktree", "remove", worktreePath, "--force"]);
   }
 }
 
 // Generic repo validation the engine can run on any bound repo: the base path
-// must exist, be a git repository, and have at least one commit.
+// must exist, be a git repository, and have at least one commit. Throws when
+// the repo is not usable so the task errors.
 export function validateRepo(
   _task: TaskDefinition,
   params: Record<string, unknown>,
   ctx: OperationContext
 ): Record<string, unknown> {
-  try {
-    const configuredBase = readFlowSettings(ctx.flowConfig()).basePath;
-    const rawBasePath =
-      (typeof params.basePath === "string" ? params.basePath : undefined) ??
-      configuredBase;
-    if (!rawBasePath) return { ok: false, error: "No basePath to validate" };
+  const configuredBase = readFlowSettings(ctx.flowConfig()).basePath;
+  const rawBasePath =
+    (typeof params.basePath === "string" ? params.basePath : undefined) ??
+    configuredBase;
+  if (!rawBasePath) throw new Error("No basePath to validate");
 
-    const basePath = rawBasePath.startsWith("/")
-      ? rawBasePath
-      : join(process.cwd(), rawBasePath);
-    if (!existsSync(basePath)) {
-      return { ok: false, error: `Path does not exist: ${basePath}` };
-    }
-    git(basePath, ["rev-parse", "--is-inside-work-tree"]);
-    git(basePath, ["rev-parse", "HEAD"]);
-    return { ok: true, basePath };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
+  const basePath = rawBasePath.startsWith("/")
+    ? rawBasePath
+    : join(process.cwd(), rawBasePath);
+  if (!existsSync(basePath)) {
+    throw new Error(`Path does not exist: ${basePath}`);
   }
+  git(basePath, ["rev-parse", "--is-inside-work-tree"]);
+  git(basePath, ["rev-parse", "HEAD"]);
+  return { ok: true, basePath };
 }
 
 // ─── private helpers ────────────────────────────────────────────────────

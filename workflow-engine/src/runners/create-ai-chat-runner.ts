@@ -23,6 +23,7 @@ export type AiChatRunnerConfig = {
   completionSignal?: string;
   basePath?: string;
   instanceId?: string;
+  patchWorkflowInstanceState?: (patch: Record<string, unknown>) => void;
 };
 
 export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
@@ -115,6 +116,7 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
             workspacePath: task.workspacePath ?? process.cwd(),
             basePath: config.basePath,
             instanceId: config.instanceId,
+            patchWorkflowInstanceState: config.patchWorkflowInstanceState,
             signal: abortController.signal,
           });
         } catch (err) {

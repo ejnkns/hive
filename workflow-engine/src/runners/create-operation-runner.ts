@@ -20,7 +20,7 @@ export type OperationFn = (
   task: TaskDefinition,
   params: Record<string, unknown>,
   ctx: OperationContext
-) => Record<string, unknown> | Promise<Record<string, unknown>>;
+) => unknown | Promise<unknown>;
 
 export type OperationRunnerConfig = {
   operations: Record<string, OperationFn>;

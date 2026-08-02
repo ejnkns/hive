@@ -57,6 +57,9 @@ function wrapPrepareWorktree(
     attempt:
       readNumber(params.attempt) ?? readNumber(instanceState.attempt) ?? 1,
   });
+  if (result.ok !== true) {
+    throw new Error(result.message ?? "Failed to prepare isolated workspace");
+  }
   return result as unknown as OperationResult;
 }
 
@@ -278,8 +281,8 @@ export function createEngineRunners(
     };
   }
 
-  // The flow's base directory — the bound repo root when present. Tools that
-  // persist flow-level domain state (queen-bee's .hive/) write relative to it.
+  // The flow's base directory — the bound repo root when present. Tools read
+  // and write the flow's domain state relative to it (via the domain root).
   function readBasePath(ctx: TaskRunnerContext): string | undefined {
     const basePath = ctx.flowConfig.basePath;
     return typeof basePath === "string" && basePath !== ""
@@ -308,6 +311,7 @@ export function createEngineRunners(
         toolExecutors,
         basePath: readBasePath(ctx),
         instanceId: ctx.instanceId,
+        patchWorkflowInstanceState: ctx.patchWorkflowInstanceState,
       }),
     aiChatRunner: (ctx) =>
       createAiChatRunner({
@@ -316,6 +320,7 @@ export function createEngineRunners(
         toolExecutors,
         basePath: readBasePath(ctx),
         instanceId: ctx.instanceId,
+        patchWorkflowInstanceState: ctx.patchWorkflowInstanceState,
       }),
     toolDefinitions,
     toolExecutors,

@@ -1,27 +1,13 @@
 import type { Tool } from "workflow-engine/runners";
-import { recordCardEvent, writeDraft } from "./domain-state";
 
 // === QUEEN BEE DOMAIN TOOLS ===
 //
 // Self-contained tool bundles (schema + executor) for the queen-bee preset.
 // The engine never interprets what these mean — it offers the schema and
-// invokes the executor. The composition root merges them with the engine's
-// infrastructure registry.
-
-function eventTarget(callId: string, basePath?: string, instanceId?: string) {
-  const cardId = instanceId ?? "";
-  return {
-    record: (type: string, data: Record<string, unknown>) => {
-      if (!basePath || !cardId) return;
-      recordCardEvent(basePath, cardId, {
-        type,
-        at: new Date().toISOString(),
-        data,
-      });
-    },
-    toolCallId: callId,
-  };
-}
+// invokes the executor. No tool touches the filesystem: submit_* tools are
+// pure completion signals (their effects live in the instance history), and
+// update_requirements_draft records the draft in the requirements session's
+// instance state.
 
 export const queenBeeTools: Tool[] = [
   {
@@ -51,20 +37,11 @@ export const queenBeeTools: Tool[] = [
         },
       },
     },
-    executor: async (call, ctx) => {
-      const target = eventTarget(call.id, ctx.basePath, ctx.instanceId);
-      try {
-        const args = JSON.parse(call.arguments) as Record<string, unknown>;
-        target.record("submitted", { outcome: args.outcome });
-      } catch {
-        // malformed args — still acknowledge the submission signal
-      }
-      return {
-        toolCallId: target.toolCallId,
-        content: "Work submitted for review",
-        isError: false,
-      };
-    },
+    executor: async (call) => ({
+      toolCallId: call.id,
+      content: "Work submitted for review",
+      isError: false,
+    }),
   },
   {
     definition: {
@@ -118,23 +95,11 @@ export const queenBeeTools: Tool[] = [
         },
       },
     },
-    executor: async (call, ctx) => {
-      const target = eventTarget(call.id, ctx.basePath, ctx.instanceId);
-      try {
-        const args = JSON.parse(call.arguments) as Record<string, unknown>;
-        target.record("reviewed", {
-          verdict: args.verdict,
-          recommendedApproach: args.recommendedApproach,
-        });
-      } catch {
-        // malformed args — still acknowledge the review signal
-      }
-      return {
-        toolCallId: target.toolCallId,
-        content: "Review submitted",
-        isError: false,
-      };
-    },
+    executor: async (call) => ({
+      toolCallId: call.id,
+      content: "Review submitted",
+      isError: false,
+    }),
   },
   {
     definition: {
@@ -215,8 +180,9 @@ export const queenBeeTools: Tool[] = [
           isError: true,
         };
       }
-      const basePath = ctx.basePath ?? ctx.workspacePath;
-      writeDraft(basePath, args.content);
+      ctx.patchWorkflowInstanceState?.({
+        requirementsDraft: args.content,
+      });
       return {
         toolCallId: call.id,
         content: "Requirements draft updated",

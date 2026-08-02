@@ -2,20 +2,28 @@ import { defineWorkflow } from "workflow-engine/workflow-types";
 
 // === ONBOARDING WORKFLOW ===
 //
-// Turns a plain queen-bee flow into a Project: validates the bound repository,
-// ensures the Integration Branch, writes `.hive/project.json`, and patches the
-// flow config with the repo binding (basePath/targetBranch) via the
-// `patch_flow_config` task operation. This is the replacement for the old
-// imperative createFlowForRepo — project creation is a workflow, not an API.
+// Turns a plain queen-bee flow into a Project: patches the flow config with the
+// queen-bee git identity (integration branch, branch prefix, domain dir),
+// validates the bound repository, ensures the Integration Branch, writes
+// project metadata (persisted as project.json and committed), and patches the
+// flow config with the repo binding (basePath/targetBranch). Project creation
+// is a workflow, not an API.
 
 export type OnboardingTaskOutputs = {
+  configureFlow: Record<string, unknown>;
   validateRepo: { ok: boolean; basePath?: string };
   ensureIntegrationBranch: { ok: boolean; targetBranch?: string };
-  writeProjectMetadata: { ok: boolean; path?: string };
+  writeProjectMetadata: {
+    name: string;
+    basePath: string;
+    targetBranch: string;
+  };
+  commitState: { ok: boolean; revision?: string };
   bindFlow: { ok: boolean; config?: Record<string, unknown> };
 };
 
 export type OnboardingStateId =
+  | "configuring"
   | "validating"
   | "ensuring"
   | "writing"
@@ -27,18 +35,50 @@ export const onboardingWorkflow = defineWorkflow({
   id: "onboarding",
   label: "Onboarding",
   description:
-    "Bind a repository to a flow: validate, ensure integration branch, write project metadata, patch flow config.",
+    "Bind a repository to a flow: configure the git identity, validate, ensure the integration branch, write project metadata, patch flow config.",
+  item: { title: "Onboarding" },
   taskOutputs: {
+    configureFlow: {} as Record<string, unknown>,
     validateRepo: {} as { ok: boolean; basePath?: string },
     ensureIntegrationBranch: {} as { ok: boolean; targetBranch?: string },
-    writeProjectMetadata: {} as { ok: boolean; path?: string },
+    writeProjectMetadata: {} as {
+      name: string;
+      basePath: string;
+      targetBranch: string;
+    },
+    commitState: {} as { ok: boolean; revision?: string },
     bindFlow: {} as { ok: boolean; config?: Record<string, unknown> },
   },
   states: [
     {
+      id: "configuring",
+      label: "Configuring",
+      category: "initial",
+      tasks: [
+        {
+          id: "configureFlow",
+          label: "Configure git identity",
+          trigger: "auto",
+          role: "operation",
+          operations: ["patch_flow_config"],
+          operationInputs: {
+            integrationBranch: "queen-bee-main",
+            branchPrefix: "queen-bee/",
+            domainDir: ".queen-bee",
+          },
+        },
+      ],
+      autoTransitions: [
+        {
+          to: "validating",
+          gate: (ctx) => ctx.taskOutputs.configureFlow?.status === "success",
+        },
+      ],
+    },
+    {
       id: "validating",
       label: "Validating",
-      category: "initial",
+      category: "active",
       tasks: [
         {
           id: "validateRepo",
@@ -51,11 +91,11 @@ export const onboardingWorkflow = defineWorkflow({
       autoTransitions: [
         {
           to: "ensuring",
-          gate: (ctx) => ctx.taskOutputs.validateRepo?.output?.ok === true,
+          gate: (ctx) => ctx.taskOutputs.validateRepo?.status === "success",
         },
         {
           to: "failed",
-          gate: (ctx) => ctx.taskOutputs.validateRepo?.output?.ok === false,
+          gate: (ctx) => ctx.taskOutputs.validateRepo?.status === "error",
         },
       ],
     },
@@ -76,12 +116,12 @@ export const onboardingWorkflow = defineWorkflow({
         {
           to: "writing",
           gate: (ctx) =>
-            ctx.taskOutputs.ensureIntegrationBranch?.output?.ok === true,
+            ctx.taskOutputs.ensureIntegrationBranch?.status === "success",
         },
         {
           to: "failed",
           gate: (ctx) =>
-            ctx.taskOutputs.ensureIntegrationBranch?.output?.ok === false,
+            ctx.taskOutputs.ensureIntegrationBranch?.status === "error",
         },
       ],
     },
@@ -96,18 +136,28 @@ export const onboardingWorkflow = defineWorkflow({
           trigger: "auto",
           role: "operation",
           operations: ["write_project_metadata"],
+          persist: { path: "project.json" },
+        },
+        {
+          id: "commitState",
+          label: "Commit project metadata",
+          trigger: "auto",
+          role: "operation",
+          operations: ["commit_flow_state"],
         },
       ],
       autoTransitions: [
         {
           to: "binding",
           gate: (ctx) =>
-            ctx.taskOutputs.writeProjectMetadata?.output?.ok === true,
+            ctx.taskOutputs.writeProjectMetadata?.status === "success" &&
+            ctx.taskOutputs.commitState?.status === "success",
         },
         {
           to: "failed",
           gate: (ctx) =>
-            ctx.taskOutputs.writeProjectMetadata?.output?.ok === false,
+            ctx.taskOutputs.writeProjectMetadata?.status === "error" ||
+            ctx.taskOutputs.commitState?.status === "error",
         },
       ],
     },
@@ -155,6 +205,6 @@ export const onboardingWorkflow = defineWorkflow({
       ],
     },
   ],
-  initial: "validating",
+  initial: "configuring",
   terminalStates: ["complete"],
 });

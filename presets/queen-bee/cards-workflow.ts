@@ -1,19 +1,21 @@
 import { defineWorkflow } from "workflow-engine/workflow-types";
+import type { ReviewPackage } from "./domain-state";
 
 export type CardsTaskOutputs = {
-  registerCard: { ok: boolean };
   prepareWorktree: {
     branchName: string;
     worktreePath: string;
     baseCommit: string;
   };
   runAgent: { content: string };
-  validateCompletion: { ok: boolean };
-  buildPackage: { packageId: string };
+  validateCompletion: {
+    ok: boolean;
+    commitCount?: number;
+    branchName?: string;
+  };
+  buildPackage: ReviewPackage;
   review: { verdict: "approved" | "changes_requested"; findings: unknown[] };
   coordinate: { summary: string };
-  syncDone: { ok: boolean };
-  syncUnfulfillable: { ok: boolean };
 };
 
 export type CardsItemState = {
@@ -44,23 +46,25 @@ export const cardsWorkflow = defineWorkflow({
   label: "Cards",
   description:
     "Per-card workflow: worktree, worker agent, completion gate, reviewer, coordinator.",
+  item: { title: "cardSpec.title" },
   taskOutputs: {
-    registerCard: {} as { ok: boolean },
     prepareWorktree: {} as {
       branchName: string;
       worktreePath: string;
       baseCommit: string;
     },
     runAgent: {} as { content: string },
-    validateCompletion: {} as { ok: boolean },
-    buildPackage: {} as { packageId: string },
+    validateCompletion: {} as {
+      ok: boolean;
+      commitCount?: number;
+      branchName?: string;
+    },
+    buildPackage: {} as ReviewPackage,
     review: {} as {
       verdict: "approved" | "changes_requested";
       findings: unknown[];
     },
     coordinate: {} as { summary: string },
-    syncDone: {} as { ok: boolean },
-    syncUnfulfillable: {} as { ok: boolean },
   },
   workflowInstanceState: {} as CardsItemState,
   states: [
@@ -68,15 +72,6 @@ export const cardsWorkflow = defineWorkflow({
       id: "ready",
       label: "Ready",
       category: "initial",
-      tasks: [
-        {
-          id: "registerCard",
-          label: "Register on board",
-          trigger: "auto",
-          role: "operation",
-          operations: ["sync_card_status"],
-        },
-      ],
       actions: [
         {
           id: "run",
@@ -99,7 +94,7 @@ export const cardsWorkflow = defineWorkflow({
           label: "Prepare worktree",
           trigger: "auto",
           role: "operation",
-          operations: ["sync_card_status", "prepare_worktree"],
+          operations: ["prepare_worktree"],
         },
       ],
       autoTransitions: [
@@ -175,7 +170,7 @@ export const cardsWorkflow = defineWorkflow({
         {
           to: "reviewing",
           gate: (ctx) =>
-            ctx.taskOutputs.validateCompletion?.output?.ok === true,
+            ctx.taskOutputs.validateCompletion?.status === "success",
         },
         {
           to: "unfulfillable",
@@ -200,7 +195,8 @@ export const cardsWorkflow = defineWorkflow({
           label: "Build review package",
           trigger: "auto",
           role: "operation",
-          operations: ["build_review_package", "sync_card_status"],
+          operations: ["build_review_package"],
+          persist: { path: "reviews/{instanceId}-{attempt}.json" },
         },
       ],
       autoTransitions: [
@@ -290,15 +286,6 @@ export const cardsWorkflow = defineWorkflow({
       id: "done",
       label: "Done",
       category: "terminal",
-      tasks: [
-        {
-          id: "syncDone",
-          label: "Sync board",
-          trigger: "auto",
-          role: "operation",
-          operations: ["sync_card_status"],
-        },
-      ],
     },
     {
       id: "unfulfillable",
@@ -314,13 +301,6 @@ export const cardsWorkflow = defineWorkflow({
           systemPrompt:
             "You are a coordinator. Analyze why the card could not be completed and suggest remediation.",
           operations: [],
-        },
-        {
-          id: "syncUnfulfillable",
-          label: "Sync board",
-          trigger: "auto",
-          role: "operation",
-          operations: ["sync_card_status"],
         },
       ],
       actions: [

@@ -99,16 +99,13 @@ export function prepareIsolatedWorkspace(
       // worktree may already be on the integration branch
     }
 
-    const existing = execFileSync(
-      "git",
-      ["rev-parse", "--verify", "--quiet", `refs/heads/${branchName}`],
-      {
-        cwd: workspacePath,
-        encoding: "utf-8",
-        timeout: 5_000,
-      }
-    ).trim();
-    if (!existing) {
+    const branchExists = gitSucceeds(workspacePath, [
+      "rev-parse",
+      "--verify",
+      "--quiet",
+      `refs/heads/${branchName}`,
+    ]);
+    if (!branchExists) {
       execFileSync("git", ["checkout", "-b", branchName], {
         cwd: workspacePath,
         encoding: "utf-8",
@@ -129,5 +126,19 @@ export function prepareIsolatedWorkspace(
       message:
         err instanceof Error ? err.message : "Failed to prepare worktree",
     };
+  }
+}
+
+function gitSucceeds(cwd: string, args: string[]): boolean {
+  try {
+    execFileSync("git", args, {
+      cwd,
+      encoding: "utf-8",
+      timeout: 5_000,
+      stdio: "pipe",
+    });
+    return true;
+  } catch {
+    return false;
   }
 }

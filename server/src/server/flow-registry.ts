@@ -9,6 +9,7 @@ import {
   type WorkflowInstanceEntry,
 } from "workflow-engine/create-flow-runtime";
 import type { OperationFn, Tool } from "workflow-engine/runners";
+import { readFlowSettings } from "workflow-engine/runners";
 import type {
   ConfigField,
   FlowDefinition,
@@ -300,22 +301,20 @@ export function unlinkFlow(flowId: string): void {
 }
 
 // Removes operational state like unlinkFlow, and additionally deletes the
-// flow's authoritative domain state under basePath/.hive. The basePath comes
-// from the flow config; without one purge degrades to a plain unlink.
+// flow's authoritative domain state under basePath/<domainDir>. The domain
+// root comes from the flow config (default .<definition-id>); without a base
+// path purge degrades to a plain unlink.
 export function purgeFlow(flowId: string): void {
   const runtime = runtimes.get(flowId);
   const config = runtime?.getFlowConfig() as
     | Record<string, unknown>
     | undefined;
-  const basePath =
-    typeof config?.basePath === "string" && config.basePath !== ""
-      ? config.basePath
-      : undefined;
+  const { basePath, domainDir } = readFlowSettings(config ?? {});
 
   unlinkFlow(flowId);
 
-  if (basePath) {
-    rmSync(join(basePath, ".hive"), { recursive: true, force: true });
+  if (basePath && domainDir) {
+    rmSync(join(basePath, domainDir), { recursive: true, force: true });
   }
 }
 
