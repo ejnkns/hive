@@ -242,18 +242,14 @@ export function defineWorkflow<
     unknown
   >,
   TWorkflowOutput extends Record<string, unknown> = Record<string, unknown>,
->(config: {
-  id: string;
-  label: string;
-  description?: string;
-  item?: { title: string; subtitle?: string };
-  taskOutputs: TTaskOutputs;
-  workflowInstanceState?: TWorkflowInstanceState;
-  workflowOutput?: TWorkflowOutput;
-  states: readonly StateDef<TTaskOutputs, TStateId, TWorkflowInstanceState>[];
-  initial: TStateId;
-  terminalStates: readonly TStateId[];
-}): RuntimeWorkflowConfig {
+>(
+  config: WorkflowConfig<TTaskOutputs, TStateId, TWorkflowInstanceState> & {
+    // Authoring-only generic anchors, erased from the returned
+    // RuntimeWorkflowConfig.
+    workflowInstanceState?: TWorkflowInstanceState;
+    workflowOutput?: TWorkflowOutput;
+  }
+): RuntimeWorkflowConfig {
   // Gates/transforms are authored against specific generics (e.g.
   // GateContext<CardsTaskOutputs>) but invoked at runtime against the
   // erased RuntimeGateContext. Both share identical runtime shape — the
