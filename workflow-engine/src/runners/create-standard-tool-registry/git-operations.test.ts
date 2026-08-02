@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { execFileSync, execSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
@@ -9,6 +15,7 @@ import type { OperationContext } from "../create-operation-runner";
 import {
   commitFlowState,
   ensureIntegrationBranch,
+  mergeBranch,
   validateRepo,
 } from "./git-operations";
 
@@ -29,14 +36,18 @@ function setupRepo(): string {
   return dir;
 }
 
-function ctxFor(config: Record<string, unknown>): OperationContext {
+function ctxFor(
+  config: Record<string, unknown>,
+  instanceState: Record<string, unknown> = {}
+): OperationContext {
   return {
     flowConfig: () => config,
     patchFlowConfig: () => {},
     instanceId: "i1",
     workflowId: "w1",
     currentState: "s1",
-    workflowInstanceState: () => ({}),
+    workflowInstanceState: () => instanceState,
+    patchWorkflowInstanceState: () => {},
   };
 }
 
@@ -177,6 +188,160 @@ describe("git operations (config-driven)", () => {
       assert.throws(
         () => validateRepo(dummyTask, {}, ctxFor({ basePath: plainDir })),
         /not a git repository|is-inside-work-tree/
+      );
+    });
+  });
+
+  describe("mergeBranch", () => {
+    function setupMergeRepo(): {
+      basePath: string;
+      worktree: string;
+      featureBranch: string;
+    } {
+      root = mkdtempSync(join(tmpdir(), "hive-merge-"));
+      basePath = join(root, "repo");
+      mkdirSync(basePath);
+      execSync("git init -b main", { cwd: basePath, encoding: "utf-8" });
+      execSync("git config user.email test@example.com", {
+        cwd: basePath,
+        encoding: "utf-8",
+      });
+      execSync("git config user.name Test", {
+        cwd: basePath,
+        encoding: "utf-8",
+      });
+      execSync("git commit --allow-empty -m initial", {
+        cwd: basePath,
+        encoding: "utf-8",
+      });
+      execSync("git branch integ", { cwd: basePath, encoding: "utf-8" });
+
+      const worktree = join(root, "wt");
+      execSync(`git worktree add ${worktree} integ`, {
+        cwd: basePath,
+        encoding: "utf-8",
+      });
+      const featureBranch = "queen-bee/i1/attempt-1";
+      execSync(`git checkout -b ${featureBranch}`, {
+        cwd: worktree,
+        encoding: "utf-8",
+      });
+      writeFileSync(join(worktree, "x.txt"), "work\n");
+      execSync("git add -A && git commit -m work", {
+        cwd: worktree,
+        encoding: "utf-8",
+      });
+      return { basePath, worktree, featureBranch };
+    }
+
+    it("no-ff merges the feature branch into the integration branch and cleans up", () => {
+      const { basePath, worktree, featureBranch } = setupMergeRepo();
+
+      const result = mergeBranch(
+        dummyTask,
+        {},
+        ctxFor(
+          {
+            basePath,
+            integrationBranch: "integ",
+            branchPrefix: "queen-bee/",
+          },
+          { attempt: 1, worktreePath: worktree }
+        )
+      );
+
+      assert.equal(result.ok, true);
+      assert.equal(result.merged, featureBranch);
+      assert.equal(
+        execSync("git show integ:x.txt", {
+          cwd: basePath,
+          encoding: "utf-8",
+        }).trim(),
+        "work"
+      );
+      // no-ff: the integration tip is a merge commit with two parents
+      const parents = execSync("git rev-list --parents -n 1 integ", {
+        cwd: basePath,
+        encoding: "utf-8",
+      })
+        .trim()
+        .split(" ");
+      assert.equal(parents.length, 3);
+      // feature branch deleted
+      const refs = execSync("git for-each-ref refs/heads", {
+        cwd: basePath,
+        encoding: "utf-8",
+      }).toString();
+      assert.ok(!refs.includes(`refs/heads/${featureBranch}`));
+      // card worktree discarded
+      assert.ok(!existsSync(worktree));
+    });
+
+    it("merges a branchName passed as a param", () => {
+      const { basePath, worktree } = setupMergeRepo();
+      execSync("git checkout -b custom/feature", {
+        cwd: worktree,
+        encoding: "utf-8",
+      });
+      writeFileSync(join(worktree, "y.txt"), "other\n");
+      execSync("git add -A && git commit -m other", {
+        cwd: worktree,
+        encoding: "utf-8",
+      });
+
+      const result = mergeBranch(
+        dummyTask,
+        { branchName: "custom/feature" },
+        ctxFor(
+          {
+            basePath,
+            integrationBranch: "integ",
+            branchPrefix: "queen-bee/",
+          },
+          { attempt: 1, worktreePath: worktree }
+        )
+      );
+
+      assert.equal(result.ok, true);
+      assert.equal(result.merged, "custom/feature");
+      assert.equal(
+        execSync("git show integ:y.txt", {
+          cwd: basePath,
+          encoding: "utf-8",
+        }).trim(),
+        "other"
+      );
+    });
+
+    it("is a no-op when no repo is bound", () => {
+      const result = mergeBranch(
+        dummyTask,
+        {},
+        ctxFor({ integrationBranch: "integ", branchPrefix: "queen-bee/" })
+      );
+      assert.deepEqual(result, { ok: true, skipped: true });
+    });
+
+    it("throws when integrationBranch or branchPrefix is not configured", () => {
+      root = mkdtempSync(join(tmpdir(), "hive-merge-"));
+      basePath = setupRepo();
+      assert.throws(
+        () =>
+          mergeBranch(
+            dummyTask,
+            {},
+            ctxFor({ basePath, branchPrefix: "queen-bee/" })
+          ),
+        /integrationBranch/
+      );
+      assert.throws(
+        () =>
+          mergeBranch(
+            dummyTask,
+            {},
+            ctxFor({ basePath, integrationBranch: "integ" })
+          ),
+        /branchPrefix/
       );
     });
   });

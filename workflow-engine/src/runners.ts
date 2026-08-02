@@ -26,6 +26,7 @@ export {
   commitFlowState,
   ensureIntegrationBranch,
   fastForwardTargetBranch,
+  mergeBranch,
   validateRepo,
   writeFlowArtifacts,
 } from "./runners/create-standard-tool-registry/git-operations";

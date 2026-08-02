@@ -195,6 +195,10 @@ export type StateDef<
     completionTool?: string;
     completionSignal?: string;
     startOnUserInput?: boolean;
+    // A literal workspace directory or an "@instance:<field>" ref into the
+    // workflow instance state (e.g. "@instance:worktreePath") that the ai
+    // runners resolve before building the tool context.
+    workspacePath?: string;
     // Written on successful completion to basePath/<domainDir>/<path>.
     // {instanceId} and {attempt} in path are substituted per workflow
     // instance. Format is inferred from the output: string becomes a text

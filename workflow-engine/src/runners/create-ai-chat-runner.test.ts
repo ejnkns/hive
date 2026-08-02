@@ -1,11 +1,18 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, it } from "node:test";
 import type { TaskDefinition } from "../task-runner";
 import type { ChatMessage } from "../workflow-types";
 import {
   type AiChatModelCaller,
   createAiChatRunner,
 } from "./create-ai-chat-runner";
+import {
+  createStandardToolDefinitions,
+  createStandardToolRegistry,
+} from "./create-standard-tool-registry";
 import type { ToolCall } from "./tool-types";
 
 function mockCaller(
@@ -28,6 +35,20 @@ describe("createAiChatRunner", () => {
     systemPrompt: "You are a helpful assistant.",
     tools: [],
   };
+
+  const tempDirs: string[] = [];
+
+  function tempDir(): string {
+    const dir = mkdtempSync(join(tmpdir(), "hive-ai-chat-"));
+    tempDirs.push(dir);
+    return dir;
+  }
+
+  afterEach(() => {
+    for (const dir of tempDirs.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 
   it("completes on completion signal in content", async () => {
     const runner = createAiChatRunner({
@@ -59,6 +80,59 @@ describe("createAiChatRunner", () => {
         "REQUIREMENTS_COMPLETE"
       )
     );
+  });
+
+  it("completes on a task-level completion tool call", async () => {
+    const runner = createAiChatRunner({
+      modelCaller: mockCaller([
+        {
+          content: "Submitting",
+          toolCalls: [{ id: "c1", name: "submit_work", arguments: "{}" }],
+        },
+      ]),
+      toolDefinitions: {},
+      toolExecutors: {},
+    });
+
+    const result = await runner.run({
+      ...dummyTask,
+      completionTool: "submit_work",
+    });
+    assert.equal((result.output as { content: string }).content, "Submitting");
+  });
+
+  it("resolves an @instance workspacePath ref so tools operate in the instance workspace", async () => {
+    const worktree = tempDir();
+    const toolDefs = createStandardToolDefinitions();
+    const toolExecs = createStandardToolRegistry();
+
+    const runner = createAiChatRunner({
+      modelCaller: mockCaller([
+        {
+          content: "writing",
+          toolCalls: [
+            {
+              id: "c1",
+              name: "write_file",
+              arguments: JSON.stringify({ path: "note.txt", content: "hi" }),
+            },
+          ],
+        },
+        { content: "##COMPLETE##" },
+      ]),
+      toolDefinitions: toolDefs,
+      toolExecutors: toolExecs,
+      workflowInstanceState: { worktreePath: worktree },
+      completionSignal: "##COMPLETE##",
+    });
+
+    await runner.run({
+      ...dummyTask,
+      workspacePath: "@instance:worktreePath",
+      tools: ["write_file"],
+    });
+
+    assert.equal(readFileSync(join(worktree, "note.txt"), "utf-8"), "hi");
   });
 
   it("completes on completion tool call", async () => {

@@ -1,6 +1,7 @@
 /** @private — only imported by runners.ts */
 import type { TaskDefinition, TaskRunner } from "../task-runner";
 import type { ChatMessage } from "../workflow-types";
+import { resolveWorkspacePath } from "./resolve-workspace-path";
 import type {
   ToolCall,
   ToolDefinition,
@@ -23,6 +24,9 @@ export type AiTaskRunnerConfig = {
   basePath?: string;
   instanceId?: string;
   patchWorkflowInstanceState?: (patch: Record<string, unknown>) => void;
+  // The instance's domain data, resolved against by @instance: workspacePath
+  // refs (e.g. "@instance:worktreePath").
+  workflowInstanceState?: Record<string, unknown>;
 };
 
 export function createAiTaskRunner(config: AiTaskRunnerConfig): TaskRunner {
@@ -30,6 +34,10 @@ export function createAiTaskRunner(config: AiTaskRunnerConfig): TaskRunner {
 
   return {
     async run(task: TaskDefinition) {
+      const workspacePath = resolveWorkspacePath(
+        task.workspacePath,
+        config.workflowInstanceState
+      );
       const toolDefs = (task.tools ?? [])
         .map((name) => config.toolDefinitions[name])
         .filter(Boolean);
@@ -87,7 +95,7 @@ export function createAiTaskRunner(config: AiTaskRunnerConfig): TaskRunner {
           let result: ToolResult;
           try {
             result = await executor(call, {
-              workspacePath: task.workspacePath ?? process.cwd(),
+              workspacePath,
               basePath: config.basePath,
               instanceId: config.instanceId,
               patchWorkflowInstanceState: config.patchWorkflowInstanceState,

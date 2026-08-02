@@ -178,6 +178,48 @@ function fastForwardTargetBranchOp(
   return fastForwardTargetBranch(task, { basePath, targetBranch }, ctx);
 }
 
+// ── Review freshness ──
+
+// Deterministic stale-review guard. The review package records the integration
+// head it was built against; if the live integration branch has moved since,
+// accepting would merge stale-reviewed work. Reads the persisted package (fs
+// READ only — ops still never write files), patches reviewIsStale into the
+// instance state, and gates read that flag. Throws on logical failure.
+function checkReviewFreshnessOp(
+  _task: TaskDefinition,
+  _params: Record<string, unknown>,
+  ctx: OperationContext
+): OperationResult {
+  const basePath = resolveBasePath(ctx);
+  const cardId = ctx.instanceId;
+  const attempt = readNumber(ctx.workflowInstanceState().attempt) ?? 1;
+  const { integrationBranch, domainDir } = readFlowSettings(ctx.flowConfig());
+  if (!integrationBranch || !domainDir) {
+    throw new Error("Flow config integrationBranch and domainDir are required");
+  }
+  const packagePath = join(
+    basePath,
+    domainDir,
+    "reviews",
+    `${cardId}-${attempt}.json`
+  );
+  const raw = readFileSafe(packagePath);
+  if (raw === "") {
+    throw new Error(`No review package at ${packagePath}`);
+  }
+  const pkg = JSON.parse(raw) as { baseCommit?: string };
+  if (typeof pkg.baseCommit !== "string" || pkg.baseCommit === "") {
+    throw new Error(`Review package ${packagePath} has no baseCommit`);
+  }
+  const liveHead = gitOptional(basePath, ["rev-parse", integrationBranch]);
+  if (liveHead === "") {
+    throw new Error(`Integration branch ${integrationBranch} not found`);
+  }
+  const reviewIsStale = pkg.baseCommit !== liveHead;
+  ctx.patchWorkflowInstanceState({ reviewIsStale });
+  return { ok: true, reviewIsStale };
+}
+
 // ── Operation exports ──
 
 export const queenBeeOperations: Record<string, OperationFn> = {
@@ -186,6 +228,7 @@ export const queenBeeOperations: Record<string, OperationFn> = {
   finalize_requirements: finalizeRequirementsOp,
   validate_completion: validateCompletionOp,
   build_review_package: buildReviewPackageOp,
+  check_review_freshness: checkReviewFreshnessOp,
   fast_forward_target_branch: fastForwardTargetBranchOp,
 };
 

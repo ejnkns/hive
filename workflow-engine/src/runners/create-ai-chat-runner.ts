@@ -1,6 +1,7 @@
 /** @private — only imported by runners.ts */
 import type { TaskDefinition, TaskRunner } from "../task-runner";
 import type { ChatMessage } from "../workflow-types";
+import { resolveWorkspacePath } from "./resolve-workspace-path";
 import type {
   ToolCall,
   ToolDefinition,
@@ -24,6 +25,9 @@ export type AiChatRunnerConfig = {
   basePath?: string;
   instanceId?: string;
   patchWorkflowInstanceState?: (patch: Record<string, unknown>) => void;
+  // The instance's domain data, resolved against by @instance: workspacePath
+  // refs (e.g. "@instance:worktreePath").
+  workflowInstanceState?: Record<string, unknown>;
 };
 
 export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
@@ -46,16 +50,18 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
     if (signal && content.includes(signal)) {
       return true;
     }
-    if (
-      config.completionTool &&
-      toolCalls?.some((c) => c.name === config.completionTool)
-    ) {
+    const completionTool = task.completionTool ?? config.completionTool;
+    if (completionTool && toolCalls?.some((c) => c.name === completionTool)) {
       return true;
     }
     return false;
   }
 
   async function agentLoop(task: TaskDefinition): Promise<{ output: unknown }> {
+    const workspacePath = resolveWorkspacePath(
+      task.workspacePath,
+      config.workflowInstanceState
+    );
     const toolDefs = (task.tools ?? [])
       .map((name) => config.toolDefinitions[name])
       .filter(Boolean);
@@ -113,7 +119,7 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
         let result: ToolResult;
         try {
           result = await executor(call, {
-            workspacePath: task.workspacePath ?? process.cwd(),
+            workspacePath,
             basePath: config.basePath,
             instanceId: config.instanceId,
             patchWorkflowInstanceState: config.patchWorkflowInstanceState,

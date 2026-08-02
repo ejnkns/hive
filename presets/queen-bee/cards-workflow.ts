@@ -15,6 +15,13 @@ export type CardsTaskOutputs = {
   };
   buildPackage: ReviewPackage;
   review: { verdict: "approved" | "changes_requested"; findings: unknown[] };
+  checkFreshness: { ok: boolean; reviewIsStale: boolean };
+  mergeWork: {
+    ok: boolean;
+    skipped?: boolean;
+    revision?: string;
+    merged?: string;
+  };
   coordinate: { summary: string };
 };
 
@@ -22,6 +29,9 @@ export type CardsItemState = {
   projectId: string;
   attempt: number;
   validationFailures: number;
+  reviewIsStale?: boolean;
+  worktreePath?: string;
+  branchName?: string;
   cardSpec?: {
     title: string;
     description: string;
@@ -38,6 +48,7 @@ export type CardsStateId =
   | "reviewing"
   | "running_review"
   | "reviewed"
+  | "accepting"
   | "done"
   | "unfulfillable";
 
@@ -63,6 +74,13 @@ export const cardsWorkflow = defineWorkflow({
     review: {} as {
       verdict: "approved" | "changes_requested";
       findings: unknown[];
+    },
+    checkFreshness: {} as { ok: boolean; reviewIsStale: boolean },
+    mergeWork: {} as {
+      ok: boolean;
+      skipped?: boolean;
+      revision?: string;
+      merged?: string;
     },
     coordinate: {} as { summary: string },
   },
@@ -127,6 +145,7 @@ export const cardsWorkflow = defineWorkflow({
           label: "Run worker agent",
           trigger: "auto",
           role: "ai-chat",
+          workspacePath: "@instance:worktreePath",
           tools: [
             "read_file",
             "write_file",
@@ -137,6 +156,7 @@ export const cardsWorkflow = defineWorkflow({
             "commit_work",
             "submit_work",
           ],
+          completionTool: "submit_work",
           systemPrompt:
             "You are a feature implementer. Use commit_work to save changes and submit_work to signal completion.",
           operations: [],
@@ -216,6 +236,7 @@ export const cardsWorkflow = defineWorkflow({
           label: "Run reviewer agent",
           trigger: "auto",
           role: "ai-task",
+          workspacePath: "@instance:worktreePath",
           tools: [
             "read_file",
             "list_directory",
@@ -241,21 +262,33 @@ export const cardsWorkflow = defineWorkflow({
       id: "reviewed",
       label: "Reviewed",
       category: "active",
+      tasks: [
+        {
+          id: "checkFreshness",
+          label: "Check review freshness",
+          trigger: "auto",
+          role: "operation",
+          operations: ["check_review_freshness"],
+        },
+      ],
       actions: [
         {
           id: "accept",
           label: "Accept work",
           variant: "primary",
-          gate: (ctx) => ctx.taskOutputs.review?.output?.verdict === "approved",
-          transitionTo: "done",
+          gate: (ctx) =>
+            ctx.taskOutputs.review?.output?.verdict === "approved" &&
+            ctx.workflowInstanceState.reviewIsStale !== true,
+          transitionTo: "accepting",
         },
         {
           id: "accept_anyway",
           label: "Accept anyway",
           variant: "destructive",
           gate: (ctx) =>
-            ctx.taskOutputs.review?.output?.verdict === "changes_requested",
-          transitionTo: "done",
+            ctx.taskOutputs.review?.output?.verdict === "changes_requested" &&
+            ctx.workflowInstanceState.reviewIsStale !== true,
+          transitionTo: "accepting",
         },
         {
           id: "update_changes",
@@ -280,6 +313,43 @@ export const cardsWorkflow = defineWorkflow({
           gate: (ctx) => ctx.taskOutputs.review?.status === "error",
           transitionTo: "running_review",
         },
+        {
+          id: "re_review",
+          label: "Re-review",
+          variant: "secondary",
+          // A stale review must be re-built against the current integration
+          // head (reviewing runs build_review_package), otherwise re-running
+          // the reviewer on the same package keeps the reviewIsStale flag set
+          // and accept stays blocked forever.
+          gate: (ctx) => ctx.workflowInstanceState.reviewIsStale === true,
+          transitionTo: "reviewing",
+        },
+      ],
+    },
+    {
+      id: "accepting",
+      label: "Accepting",
+      category: "active",
+      tasks: [
+        {
+          id: "mergeWork",
+          label: "Merge work",
+          trigger: "auto",
+          role: "operation",
+          operations: ["merge_branch"],
+        },
+      ],
+      autoTransitions: [
+        {
+          to: "done",
+          gate: (ctx) => ctx.taskOutputs.mergeWork?.status === "success",
+        },
+        {
+          // Merge failure returns to reviewed with the attempt and its
+          // worktree preserved so the user can retry or re-review.
+          to: "reviewed",
+          gate: (ctx) => ctx.taskOutputs.mergeWork?.status === "error",
+        },
       ],
     },
     {
@@ -297,6 +367,7 @@ export const cardsWorkflow = defineWorkflow({
           label: "Analyze handover",
           trigger: "auto",
           role: "ai-task",
+          workspacePath: "@instance:worktreePath",
           tools: ["read_file", "search_code"],
           systemPrompt:
             "You are a coordinator. Analyze why the card could not be completed and suggest remediation.",

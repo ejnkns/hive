@@ -1,10 +1,17 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, it } from "node:test";
 import type { TaskDefinition } from "../task-runner";
 import {
   type AiTaskModelCaller,
   createAiTaskRunner,
 } from "./create-ai-task-runner";
+import {
+  createStandardToolDefinitions,
+  createStandardToolRegistry,
+} from "./create-standard-tool-registry";
 import type { ToolCall, ToolContext } from "./tool-types";
 
 function mockCaller(
@@ -26,6 +33,20 @@ describe("createAiTaskRunner", () => {
     role: "ai-task",
     systemPrompt: "You are a helpful assistant.",
   };
+
+  const tempDirs: string[] = [];
+
+  function tempDir(): string {
+    const dir = mkdtempSync(join(tmpdir(), "hive-ai-task-"));
+    tempDirs.push(dir);
+    return dir;
+  }
+
+  afterEach(() => {
+    for (const dir of tempDirs.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 
   it("returns model output when no tool calls", async () => {
     const runner = createAiTaskRunner({
@@ -160,5 +181,38 @@ describe("createAiTaskRunner", () => {
     const ctx = await ctxPromise;
     assert.equal(ctx.basePath, "/repo");
     assert.equal(ctx.workspacePath, process.cwd());
+  });
+
+  it("resolves an @instance workspacePath ref so tools operate in the instance workspace", async () => {
+    const worktree = tempDir();
+    const toolDefs = createStandardToolDefinitions();
+    const toolExecs = createStandardToolRegistry();
+
+    const runner = createAiTaskRunner({
+      modelCaller: mockCaller([
+        {
+          content: "writing",
+          toolCalls: [
+            {
+              id: "c1",
+              name: "write_file",
+              arguments: JSON.stringify({ path: "note.txt", content: "hello" }),
+            },
+          ],
+        },
+        { content: "Done!" },
+      ]),
+      toolDefinitions: toolDefs,
+      toolExecutors: toolExecs,
+      workflowInstanceState: { worktreePath: worktree },
+    });
+
+    await runner.run({
+      ...dummyTask,
+      workspacePath: "@instance:worktreePath",
+      tools: ["write_file"],
+    });
+
+    assert.equal(readFileSync(join(worktree, "note.txt"), "utf-8"), "hello");
   });
 });

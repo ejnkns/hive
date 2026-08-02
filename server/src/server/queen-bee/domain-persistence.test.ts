@@ -4,15 +4,22 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
+import { createFlowRuntime } from "workflow-engine/create-flow-runtime";
 import {
+  type AiChatModelCaller,
+  type AiTaskModelCaller,
+  createAiChatRunner,
+  createAiTaskRunner,
   createOperationRunner,
   type OperationContext,
+  type TaskRunnerContext,
   type Tool,
   type ToolContext,
 } from "workflow-engine/runners";
@@ -21,6 +28,7 @@ import type { ReviewPackage } from "../../../../presets/queen-bee/domain-state";
 import { queenBeeFlow } from "../../../../presets/queen-bee/flow";
 import { queenBeeOperations } from "../../../../presets/queen-bee/operations";
 import { queenBeeTools } from "../../../../presets/queen-bee/tools";
+import { createEngineRunners } from "../engine-bridge";
 import { registerFlowDefinition } from "../flow-definitions";
 import { createFlowPersistence } from "../flow-persistence";
 import {
@@ -50,6 +58,8 @@ function makeRunner(
       workflowId: "cards",
       currentState: "ready",
       workflowInstanceState: () => instanceState,
+      patchWorkflowInstanceState: (patch) =>
+        Object.assign(instanceState, patch),
     }),
     operations: queenBeeOperations,
   });
@@ -222,6 +232,75 @@ describe("queen-bee domain persistence", () => {
     assert.ok(pkg.packageId.length > 0);
   });
 
+  it("check_review_freshness marks a package built at the live head as fresh", async () => {
+    const reviewsDir = join(basePath, ".queen-bee", "reviews");
+    mkdirSync(reviewsDir, { recursive: true });
+    const head = execSync("git rev-parse queen-bee-main", {
+      cwd: basePath,
+      encoding: "utf-8",
+    }).trim();
+    writeFileSync(
+      join(reviewsDir, "card-1-1.json"),
+      JSON.stringify({ cardId: "card-1", attempt: 1, baseCommit: head }),
+      "utf-8"
+    );
+
+    const instanceState: Record<string, unknown> = { attempt: 1 };
+    const runner = makeRunner({ ...queenBeeConfig, basePath }, instanceState);
+    const result = await runner.run({
+      ...dummyTask,
+      operations: ["check_review_freshness"],
+    });
+
+    const output = result.output as { ok: boolean; reviewIsStale: boolean };
+    assert.equal(output.ok, true);
+    assert.equal(output.reviewIsStale, false);
+    assert.equal(instanceState.reviewIsStale, false);
+  });
+
+  it("check_review_freshness marks a package stale when the integration branch moved", async () => {
+    const reviewsDir = join(basePath, ".queen-bee", "reviews");
+    mkdirSync(reviewsDir, { recursive: true });
+    const head = execSync("git rev-parse queen-bee-main", {
+      cwd: basePath,
+      encoding: "utf-8",
+    }).trim();
+    writeFileSync(
+      join(reviewsDir, "card-1-1.json"),
+      JSON.stringify({ cardId: "card-1", attempt: 1, baseCommit: head }),
+      "utf-8"
+    );
+    execSync("git checkout queen-bee-main", {
+      cwd: basePath,
+      encoding: "utf-8",
+    });
+    writeFileSync(join(basePath, "later.txt"), "later\n");
+    execSync("git add -A && git commit -m later", {
+      cwd: basePath,
+      encoding: "utf-8",
+    });
+
+    const instanceState: Record<string, unknown> = { attempt: 1 };
+    const runner = makeRunner({ ...queenBeeConfig, basePath }, instanceState);
+    const result = await runner.run({
+      ...dummyTask,
+      operations: ["check_review_freshness"],
+    });
+
+    const output = result.output as { ok: boolean; reviewIsStale: boolean };
+    assert.equal(output.ok, true);
+    assert.equal(output.reviewIsStale, true);
+    assert.equal(instanceState.reviewIsStale, true);
+  });
+
+  it("check_review_freshness throws without a review package", async () => {
+    const runner = makeRunner({ ...queenBeeConfig, basePath }, { attempt: 1 });
+    await assert.rejects(
+      runner.run({ ...dummyTask, operations: ["check_review_freshness"] }),
+      /No review package/
+    );
+  });
+
   it("a running card advances through the cards workflow", async () => {
     const workspacesBasePath = join(root, "workspaces");
     setFlowPersistence(createFlowPersistence(join(root, "hive")));
@@ -275,6 +354,191 @@ describe("queen-bee domain persistence", () => {
     // so the runner aborts and the process drains.
     controller.cancel();
   });
+
+  it("worker edits land in the worktree and accept merges into the integration branch", async () => {
+    const workspacesBasePath = join(root, "workspaces");
+    const runtime = makeCardRuntime({
+      basePath,
+      workspacesBasePath,
+      workerCaller: writingWorkerCaller(),
+      reviewerCaller: approvingReviewerCaller(),
+    });
+
+    const controller = runtime.addWorkflowInstance("cards", {
+      workflowInstanceState: {
+        attempt: 1,
+        cardSpec: {
+          title: "Implement X",
+          description: "Do the thing",
+          acceptanceCriteria: ["works"],
+          dependsOn: [],
+        },
+      },
+    });
+    controller.dispatchAction("run");
+
+    // The worker's edits land in the prepared worktree and appear on the
+    // feature branch — the isolated-workspace DoD. Reviewed is the first
+    // stable stop after the worker, gate, and reviewer have all run.
+    await waitFor(() => {
+      const card = runtime
+        .getWorkflowInstanceEntries()
+        .find((entry) => entry.workflowId === "cards");
+      return card?.state.currentState === "reviewed";
+    });
+    const card = runtime
+      .getWorkflowInstanceEntries()
+      .find((entry) => entry.workflowId === "cards");
+    assert.ok(card);
+    const worktreePath = readStateString(card, "worktreePath");
+    const branchName = readStateString(card, "branchName");
+    assert.ok(worktreePath, "prepare_worktree records the worktree path");
+    assert.equal(branchName, `queen-bee/${card.id}/attempt-1`);
+    assert.ok(existsSync(join(worktreePath, "feature.txt")));
+    assert.equal(
+      readFileSync(join(worktreePath, "feature.txt"), "utf-8"),
+      "implemented"
+    );
+    assert.equal(
+      execSync(`git show ${branchName}:feature.txt`, {
+        cwd: basePath,
+        encoding: "utf-8",
+      }).trim(),
+      "implemented"
+    );
+    const ahead = execSync(
+      `git rev-list --count queen-bee-main..${branchName}`,
+      {
+        cwd: basePath,
+        encoding: "utf-8",
+      }
+    ).trim();
+    assert.ok(
+      Number(ahead) >= 1,
+      "feature branch is ahead of the integration branch"
+    );
+
+    // Accept merges the feature branch into queen-bee-main and cleans up.
+    assert.ok(
+      card.availableActions.some((action) => action.id === "accept"),
+      "accept is available when the review is fresh"
+    );
+    runtime.getWorkflowInstance(card.id)?.dispatchAction("accept");
+
+    await waitFor(() => {
+      const entry = runtime
+        .getWorkflowInstanceEntries()
+        .find((entry) => entry.workflowId === "cards");
+      return entry?.state.currentState === "done";
+    });
+
+    assert.equal(
+      execSync("git show queen-bee-main:feature.txt", {
+        cwd: basePath,
+        encoding: "utf-8",
+      }).trim(),
+      "implemented"
+    );
+    assert.ok(!existsSync(worktreePath), "worktree discarded after accept");
+    const refs = execSync("git for-each-ref refs/heads", {
+      cwd: basePath,
+      encoding: "utf-8",
+    }).toString();
+    assert.ok(
+      !refs.includes(`refs/heads/${branchName}`),
+      "feature branch deleted after accept"
+    );
+  });
+
+  it("stale reviews block accept until the card is re-reviewed", async () => {
+    const workspacesBasePath = join(root, "workspaces");
+    let releaseReview: () => void = () => {};
+    const reviewGate = new Promise<void>((resolve) => {
+      releaseReview = resolve;
+    });
+    const runtime = makeCardRuntime({
+      basePath,
+      workspacesBasePath,
+      workerCaller: writingWorkerCaller(),
+      reviewerCaller: gatedReviewerCaller(reviewGate),
+    });
+
+    const controller = runtime.addWorkflowInstance("cards", {
+      workflowInstanceState: {
+        attempt: 1,
+        cardSpec: {
+          title: "Implement X",
+          description: "Do the thing",
+          acceptanceCriteria: ["works"],
+          dependsOn: [],
+        },
+      },
+    });
+    controller.dispatchAction("run");
+
+    // Wait until the review package is built (the reviewer is gated, so the
+    // card cannot advance past running_review), then move the integration
+    // branch so the package's baseCommit is stale when the freshness check
+    // eventually runs.
+    await waitFor(() => {
+      const card = runtime
+        .getWorkflowInstanceEntries()
+        .find((entry) => entry.workflowId === "cards");
+      return card?.state.taskOutputs.buildPackage?.status === "success";
+    });
+    execSync("git checkout queen-bee-main", {
+      cwd: basePath,
+      encoding: "utf-8",
+    });
+    writeFileSync(join(basePath, "later.txt"), "later\n");
+    execSync("git add -A && git commit -m later", {
+      cwd: basePath,
+      encoding: "utf-8",
+    });
+    releaseReview();
+
+    await waitFor(() => {
+      const card = runtime
+        .getWorkflowInstanceEntries()
+        .find((entry) => entry.workflowId === "cards");
+      return (
+        card?.state.currentState === "reviewed" &&
+        card.state.workflowInstanceState.reviewIsStale === true
+      );
+    });
+    const card = runtime
+      .getWorkflowInstanceEntries()
+      .find((entry) => entry.workflowId === "cards");
+    assert.ok(card);
+    const actionIds = card.availableActions.map((action) => action.id);
+    assert.ok(
+      !actionIds.includes("accept"),
+      "accept hidden when review is stale"
+    );
+    assert.ok(
+      actionIds.includes("re_review"),
+      "re-review offered when review is stale"
+    );
+
+    // Re-review rebuilds the package against the current head and re-enables accept.
+    runtime.getWorkflowInstance(card.id)?.dispatchAction("re_review");
+    await waitFor(() => {
+      const entry = runtime
+        .getWorkflowInstanceEntries()
+        .find((entry) => entry.workflowId === "cards");
+      return (
+        entry?.state.currentState === "reviewed" &&
+        entry.state.workflowInstanceState.reviewIsStale === false
+      );
+    });
+    const refreshed = runtime
+      .getWorkflowInstanceEntries()
+      .find((entry) => entry.workflowId === "cards");
+    assert.ok(
+      refreshed?.availableActions.some((action) => action.id === "accept"),
+      "accept re-enabled after re-review"
+    );
+  });
 });
 
 async function waitFor(
@@ -288,4 +552,155 @@ async function waitFor(
     }
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
+}
+
+// Builds a queen-bee runtime whose ai-chat/ai-task sessions run against stubbed
+// model callers, while operations and tools use the real engine wiring. Flow
+// config declares the git identity upfront (as the onboarding workflow would),
+// so a cards instance can run end-to-end without a model.
+function makeCardRuntime(options: {
+  basePath: string;
+  workspacesBasePath: string;
+  workerCaller: AiChatModelCaller;
+  reviewerCaller: AiTaskModelCaller;
+}): ReturnType<typeof createFlowRuntime> {
+  const flowConfig = {
+    definitionId: "queen-bee",
+    name: "Project",
+    basePath: options.basePath,
+    integrationBranch: "queen-bee-main",
+    branchPrefix: "queen-bee/",
+    domainDir: ".queen-bee",
+    workspacesBasePath: options.workspacesBasePath,
+  };
+  const baseRunners = createEngineRunners({
+    tools: queenBeeFlow.tools,
+    operations: queenBeeOperations,
+  });
+  return createFlowRuntime(
+    "project",
+    queenBeeFlow.buildWorkflows(flowConfig),
+    queenBeeFlow.edges,
+    {
+      operation: baseRunners.operationRunner,
+      "ai-chat": (ctx) =>
+        createAiChatRunner({
+          modelCaller: options.workerCaller,
+          toolDefinitions: baseRunners.toolDefinitions,
+          toolExecutors: baseRunners.toolExecutors,
+          basePath: readConfiguredBasePath(ctx),
+          instanceId: ctx.instanceId,
+          patchWorkflowInstanceState: ctx.patchWorkflowInstanceState,
+          workflowInstanceState: ctx.workflowInstanceState,
+        }),
+      "ai-task": (ctx) =>
+        createAiTaskRunner({
+          modelCaller: options.reviewerCaller,
+          toolDefinitions: baseRunners.toolDefinitions,
+          toolExecutors: baseRunners.toolExecutors,
+          basePath: readConfiguredBasePath(ctx),
+          instanceId: ctx.instanceId,
+          patchWorkflowInstanceState: ctx.patchWorkflowInstanceState,
+          workflowInstanceState: ctx.workflowInstanceState,
+        }),
+    },
+    flowConfig
+  );
+}
+
+function readConfiguredBasePath(ctx: TaskRunnerContext): string | undefined {
+  const basePath = ctx.flowConfig.basePath;
+  return typeof basePath === "string" && basePath !== "" ? basePath : undefined;
+}
+
+function writingWorkerCaller(): AiChatModelCaller {
+  let calls = 0;
+  return async () => {
+    calls++;
+    if (calls === 1) {
+      return {
+        content: "Writing the feature",
+        toolCalls: [
+          {
+            id: "w1",
+            name: "write_file",
+            arguments: JSON.stringify({
+              path: "feature.txt",
+              content: "implemented",
+            }),
+          },
+        ],
+      };
+    }
+    if (calls === 2) {
+      return {
+        content: "Committing the feature",
+        toolCalls: [
+          {
+            id: "w2",
+            name: "commit_work",
+            arguments: JSON.stringify({
+              message: "implement feature",
+              paths: ["feature.txt"],
+            }),
+          },
+        ],
+      };
+    }
+    return {
+      content: "Submitting work",
+      toolCalls: [
+        {
+          id: "w3",
+          name: "submit_work",
+          arguments: JSON.stringify({ outcome: "implemented" }),
+        },
+      ],
+    };
+  };
+}
+
+function approvingReviewerCaller(): AiTaskModelCaller {
+  return async () => ({
+    content: "The change looks good",
+    toolCalls: [
+      {
+        id: "r1",
+        name: "submit_review",
+        arguments: JSON.stringify({
+          verdict: "approved",
+          findings: [],
+          verificationAssessment: { status: "sufficient", notes: "ok" },
+        }),
+      },
+    ],
+  });
+}
+
+function gatedReviewerCaller(release: Promise<void>): AiTaskModelCaller {
+  return async () => {
+    await release;
+    return {
+      content: "The change looks good",
+      toolCalls: [
+        {
+          id: "r1",
+          name: "submit_review",
+          arguments: JSON.stringify({
+            verdict: "approved",
+            findings: [],
+            verificationAssessment: { status: "sufficient", notes: "ok" },
+          }),
+        },
+      ],
+    };
+  };
+}
+
+function readStateString(
+  entry: { state: { workflowInstanceState: Record<string, unknown> } },
+  key: string
+): string {
+  const value = entry.state.workflowInstanceState[key];
+  return typeof value === "string" ? value : "";
 }

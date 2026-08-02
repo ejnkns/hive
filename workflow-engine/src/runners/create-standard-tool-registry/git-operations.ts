@@ -245,6 +245,64 @@ export function validateRepo(
   return { ok: true, basePath };
 }
 
+// Merges a card's feature branch into the config-driven integration branch
+// with a no-ff merge (so the merge commit is visible), then discards the card's
+// worktree (from workflowInstanceState.worktreePath, when present) and deletes
+// the feature branch. The branch is derived from the instance as
+// `${branchPrefix}${instanceId}/attempt-${attempt}` (consistent with
+// validate_completion) or taken from params.branchName. Safe no-op when no repo
+// is bound; requires integrationBranch + branchPrefix for a git-bound flow.
+export function mergeBranch(
+  _task: TaskDefinition,
+  params: Record<string, unknown>,
+  ctx: OperationContext
+): Record<string, unknown> {
+  const { basePath, integrationBranch, branchPrefix } = readFlowSettings(
+    ctx.flowConfig()
+  );
+  if (!basePath) return { ok: true, skipped: true };
+  if (!integrationBranch || !branchPrefix) {
+    throw new Error(
+      "Flow config integrationBranch and branchPrefix are required"
+    );
+  }
+  const attempt = readAttempt(ctx.workflowInstanceState());
+  const branchName =
+    typeof params.branchName === "string" && params.branchName !== ""
+      ? params.branchName
+      : `${branchPrefix}${ctx.instanceId}/attempt-${attempt}`;
+
+  if (!hasBranch(basePath, integrationBranch)) {
+    git(basePath, ["branch", integrationBranch, "HEAD"]);
+  }
+  if (!hasBranch(basePath, branchName)) {
+    throw new Error(`No work branch ${branchName} found`);
+  }
+
+  const worktreePath = mkdtempSync(join(tmpdir(), "hive-merge-"));
+  git(basePath, ["worktree", "add", worktreePath, integrationBranch]);
+  try {
+    git(worktreePath, [
+      "merge",
+      "--no-ff",
+      "-m",
+      `Merge ${branchName}`,
+      branchName,
+    ]);
+  } finally {
+    git(basePath, ["worktree", "remove", worktreePath, "--force"]);
+  }
+
+  discardCardWorktree(ctx, basePath);
+  git(basePath, ["branch", "-D", branchName]);
+
+  return {
+    ok: true,
+    revision: git(basePath, ["rev-parse", integrationBranch]),
+    merged: branchName,
+  };
+}
+
 // ─── private helpers ────────────────────────────────────────────────────
 
 function readIntegrationBranch(
@@ -272,6 +330,20 @@ function branchWorktreePath(basePath: string, branch: string): string | null {
     if (line) return line.slice("worktree ".length);
   }
   return null;
+}
+
+function readAttempt(instanceState: Record<string, unknown>): number {
+  const raw = instanceState.attempt;
+  return typeof raw === "number" && Number.isFinite(raw) ? raw : 1;
+}
+
+// The card's worktree was recorded as an absolute path by prepare_worktree;
+// discard it best-effort so a stale or already-removed path cannot fail the
+// merge. The feature branch is only deleted after this succeeds.
+function discardCardWorktree(ctx: OperationContext, basePath: string): void {
+  const raw = ctx.workflowInstanceState().worktreePath;
+  if (typeof raw !== "string" || raw === "") return;
+  gitSucceeds(basePath, ["worktree", "remove", raw, "--force"]);
 }
 
 function git(cwd: string, args: string[]): string {

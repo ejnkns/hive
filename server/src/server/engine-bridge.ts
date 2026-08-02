@@ -19,6 +19,7 @@ import {
   createOperationRunner,
   createStandardToolDefinitions,
   createStandardToolRegistry,
+  mergeBranch,
   prepareIsolatedWorkspace,
   readFlowSettings,
   toToolMaps,
@@ -60,6 +61,13 @@ function wrapPrepareWorktree(
   if (result.ok !== true) {
     throw new Error(result.message ?? "Failed to prepare isolated workspace");
   }
+  // Record the prepared workspace on the card instance so its tasks can target
+  // it via `workspacePath: "@instance:worktreePath"` and the merge-on-accept
+  // path can discard it.
+  ctx.patchWorkflowInstanceState({
+    worktreePath: result.path,
+    branchName: result.branchName,
+  });
   return result as unknown as OperationResult;
 }
 
@@ -278,6 +286,7 @@ export function createEngineRunners(
       workflowId: ctx.workflowId,
       currentState: ctx.currentState,
       workflowInstanceState: () => ctx.workflowInstanceState,
+      patchWorkflowInstanceState: ctx.patchWorkflowInstanceState,
     };
   }
 
@@ -300,6 +309,7 @@ export function createEngineRunners(
           prepare_worktree: wrapPrepareWorktree,
           patch_flow_config: resolveAndPatchFlowConfig,
           commit_flow_state: commitFlowState,
+          merge_branch: mergeBranch,
           validate_repo: validateRepo,
           ...domain.operations,
         },
@@ -312,6 +322,7 @@ export function createEngineRunners(
         basePath: readBasePath(ctx),
         instanceId: ctx.instanceId,
         patchWorkflowInstanceState: ctx.patchWorkflowInstanceState,
+        workflowInstanceState: ctx.workflowInstanceState,
       }),
     aiChatRunner: (ctx) =>
       createAiChatRunner({
@@ -321,6 +332,7 @@ export function createEngineRunners(
         basePath: readBasePath(ctx),
         instanceId: ctx.instanceId,
         patchWorkflowInstanceState: ctx.patchWorkflowInstanceState,
+        workflowInstanceState: ctx.workflowInstanceState,
       }),
     toolDefinitions,
     toolExecutors,
