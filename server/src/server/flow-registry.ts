@@ -2,17 +2,21 @@
 
 import { rmSync } from "node:fs";
 import { join } from "node:path";
-import type { FlowPersistence } from "workflow-engine/create-flow-runtime";
 import {
   createFlowRuntime,
+  type FlowPersistence,
   type FlowRuntimeAPI,
+  type WorkflowInstanceEntry,
 } from "workflow-engine/create-flow-runtime";
 import type { OperationFn, Tool } from "workflow-engine/runners";
 import type {
   ConfigField,
   FlowDefinition,
+  FlowLevelAction,
   RuntimeFlowEdge,
+  RuntimeGateContext,
   RuntimeWorkflowConfig,
+  VisibleAction,
 } from "workflow-engine/workflow-types";
 import { createEngineRunners } from "./engine-bridge";
 import {
@@ -97,6 +101,157 @@ function configValueMatchesType(field: ConfigField, value: unknown): boolean {
     case "number":
       return typeof value === "number" && Number.isFinite(value);
   }
+}
+
+// ── Flow-level actions ──
+//
+// Project-level actions declared on the FlowDefinition (`actions`) and rendered
+// on the instance header. The server resolves them from the flow's definition,
+// evaluates their gate against a flow-scoped GateContext, and executes
+// createInstance or dispatchToAll through the runtime so the realtime channel
+// observes the resulting events.
+
+export type FlowLevelActionDispatchResult =
+  | {
+      kind: "create_instance";
+      workflowId: string;
+      instance: WorkflowInstanceEntry;
+    }
+  | { kind: "dispatch_to_all"; workflowId: string; dispatched: string[] };
+
+// The gate-evaluated, UI-facing list of flow-level actions for a flow.
+export function getAvailableFlowActions(flowId: string): VisibleAction[] {
+  const runtime = runtimes.get(flowId);
+  if (!runtime) return [];
+  const actions = readFlowLevelActions(runtime);
+  if (actions.length === 0) return [];
+  const ctx = buildFlowGateContext(runtime);
+  return actions
+    .filter((action) => action.gate === undefined || action.gate(ctx))
+    .map((action) => ({
+      id: action.id,
+      label: action.label,
+      variant: action.variant ?? "default",
+    }));
+}
+
+// Executes a flow-level action. Throws Error for a missing flow/action (404),
+// a failing gate (409), or an invalid form payload (400).
+export function dispatchFlowLevelAction(
+  flowId: string,
+  actionId: string,
+  payload: Record<string, unknown>
+): FlowLevelActionDispatchResult {
+  const runtime = runtimes.get(flowId);
+  if (!runtime) throw new Error("Flow not found");
+
+  const action = readFlowLevelActions(runtime).find((a) => a.id === actionId);
+  if (!action) throw new Error(`Flow-level action "${actionId}" not found`);
+
+  const ctx = buildFlowGateContext(runtime);
+  if (action.gate !== undefined && !action.gate(ctx)) {
+    throw new Error(`Flow-level action "${actionId}" is not available`);
+  }
+
+  if (action.createInstance) {
+    const { workflowId, fields } = action.createInstance;
+    const instanceState = collectActionFields(fields, payload);
+    const before = new Set(
+      runtime.getWorkflowInstanceEntries().map((entry) => entry.id)
+    );
+    runtime.addWorkflowInstance(workflowId, {
+      workflowInstanceState: instanceState,
+    });
+    const instance = runtime
+      .getWorkflowInstanceEntries()
+      .find(
+        (entry) => entry.workflowId === workflowId && !before.has(entry.id)
+      );
+    if (!instance)
+      throw new Error("Flow-level action did not create an instance");
+    return { kind: "create_instance", workflowId, instance };
+  }
+
+  if (action.dispatchToAll) {
+    const { workflowId, actionId: targetActionId } = action.dispatchToAll;
+    const dispatched: string[] = [];
+    for (const entry of runtime.getWorkflowInstanceEntries()) {
+      if (entry.workflowId !== workflowId) continue;
+      if (!entry.availableActions.some((a) => a.id === targetActionId))
+        continue;
+      runtime.getWorkflowInstance(entry.id)?.dispatchAction(targetActionId);
+      dispatched.push(entry.id);
+    }
+    return { kind: "dispatch_to_all", workflowId, dispatched };
+  }
+
+  throw new Error(`Flow-level action "${actionId}" declares no behavior`);
+}
+
+function readFlowLevelActions(
+  runtime: FlowRuntimeAPI<Record<string, unknown>, Record<string, unknown>>
+): FlowLevelAction[] {
+  const config = runtime.getFlowConfig();
+  const definitionId = config.definitionId;
+  const definition =
+    typeof definitionId === "string"
+      ? getFlowDefinition(definitionId)
+      : undefined;
+  return definition?.actions ?? [];
+}
+
+function buildFlowGateContext(
+  runtime: FlowRuntimeAPI<Record<string, unknown>, Record<string, unknown>>
+): RuntimeGateContext {
+  return {
+    taskOutputs: {},
+    hasRunningTask: runtime.workflowInstances.some((s) => s.hasRunningTask),
+    runningTaskContext: null,
+    workflowInstanceState: {},
+    flowState: runtime.getFlowState(),
+    workflowInstancesInState: (stateId) =>
+      runtime
+        .getWorkflowInstanceEntries()
+        .filter(
+          (entry) =>
+            stateId === undefined || entry.state.currentState === stateId
+        )
+        .map((entry) => ({
+          id: entry.id,
+          currentState: entry.state.currentState,
+        })),
+  };
+}
+
+// Validates a createInstance form payload against its declared ConfigFields:
+// unknown fields rejected, required fields present, values type-checked. The
+// collected values become the new instance's workflowInstanceState.
+function collectActionFields(
+  fields: ConfigField[] | undefined,
+  payload: Record<string, unknown>
+): Record<string, unknown> {
+  const declared = new Set((fields ?? []).map((field) => field.key));
+  for (const key of Object.keys(payload)) {
+    if (!declared.has(key)) {
+      throw new Error(`Unknown field "${key}"`);
+    }
+  }
+
+  const collected: Record<string, unknown> = {};
+  for (const field of fields ?? []) {
+    const value = payload[field.key];
+    if (value === undefined) {
+      if (field.required) {
+        throw new Error(`Missing required field "${field.key}"`);
+      }
+      continue;
+    }
+    if (!configValueMatchesType(field, value)) {
+      throw new Error(`Field "${field.key}" must be a ${field.type}`);
+    }
+    collected[field.key] = value;
+  }
+  return collected;
 }
 
 // ── Persistence accessors ──

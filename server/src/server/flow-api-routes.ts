@@ -12,6 +12,8 @@ import {
 } from "./flow-definitions";
 import {
   createFlow,
+  dispatchFlowLevelAction,
+  getAvailableFlowActions,
   getFlowPersistence,
   getFlowRuntime,
   getFlowRuntimes,
@@ -65,6 +67,7 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
       config: cfg,
       workflows,
       instances,
+      availableFlowActions: getAvailableFlowActions(flowId),
     };
   }
 
@@ -113,6 +116,37 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
       instances: runtime.getWorkflowInstanceEntries(),
     });
   });
+
+  server.post(
+    "/api/flows/:flowId/actions/:actionId",
+    async (request, reply) => {
+      // Fastify params type is erased; shape guaranteed by route pattern
+      const { flowId, actionId } = request.params as {
+        flowId: string;
+        actionId: string;
+      };
+      // Fastify body is unknown; validated by the action's field collection
+      const body = request.body as Record<string, unknown> | null;
+
+      if (!getFlowRuntime(flowId)) {
+        return reply.status(404).send({ error: "Flow not found" });
+      }
+
+      try {
+        const result = dispatchFlowLevelAction(flowId, actionId, body ?? {});
+        return reply.send({ ok: true, ...result });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (message === "Flow not found" || message.includes("not found")) {
+          return reply.status(404).send({ error: message });
+        }
+        if (message.includes("not available")) {
+          return reply.status(409).send({ error: message });
+        }
+        return reply.status(400).send({ error: message });
+      }
+    }
+  );
 
   server.post(
     "/api/flows/:flowId/instances/:instanceId/action",

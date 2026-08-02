@@ -16,7 +16,10 @@ import {
   type FlowPersistence,
   type FlowRuntimeEvent,
 } from "workflow-engine/create-flow-runtime";
-import { defineWorkflow } from "workflow-engine/workflow-types";
+import {
+  defineWorkflow,
+  type FlowDefinition,
+} from "workflow-engine/workflow-types";
 import { queenBeeFlow } from "../../../presets/queen-bee/flow";
 import { registerFlowApiRoutes } from "./flow-api-routes";
 import {
@@ -85,6 +88,50 @@ const noopPersistence: FlowPersistence = {
   loadFlow: () => null,
   loadAllFlows: () => [],
 };
+
+const actionItemWorkflow = defineWorkflow({
+  id: "item",
+  label: "Item",
+  taskOutputs: {} as Record<string, never>,
+  states: [
+    {
+      id: "ready",
+      label: "Ready",
+      category: "initial",
+      actions: [{ id: "finish", label: "Finish", transitionTo: "done" }],
+    },
+    { id: "done", label: "Done", category: "terminal" },
+  ],
+  initial: "ready",
+  terminalStates: ["done"],
+});
+
+const actionApiDefinition = {
+  id: "action-def",
+  label: "Action Definition",
+  workflows: [actionItemWorkflow],
+  edges: [],
+  actions: [
+    {
+      id: "add_item",
+      label: "Add item",
+      variant: "primary",
+      createInstance: {
+        workflowId: "item",
+        fields: [
+          { key: "title", label: "Title", type: "string", required: true },
+          { key: "count", label: "Count", type: "number" },
+        ],
+      },
+    },
+    {
+      id: "gated",
+      label: "Gated",
+      gate: () => false,
+      createInstance: { workflowId: "item" },
+    },
+  ],
+} satisfies FlowDefinition;
 
 const flowDefinitionSource = `
 import { defineWorkflow } from "workflow-engine/workflow-types";
@@ -279,6 +326,175 @@ describe("flow API routes", () => {
 
     assert.equal(response.statusCode, 404);
     assert.equal(response.json().error, "Instance not found");
+  });
+
+  it("POST flow-level action creates an instance from the form payload", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition(actionApiDefinition);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const createResponse = await server.inject({
+      method: "POST",
+      url: "/api/flows",
+      body: { definitionId: "action-def", config: { name: "Action Flow" } },
+    });
+    const flowId = createResponse.json().flowId as string;
+
+    const response = await server.inject({
+      method: "POST",
+      url: `/api/flows/${flowId}/actions/add_item`,
+      body: { title: "New idea", count: 2 },
+    });
+
+    assert.equal(response.statusCode, 200);
+    const body = response.json();
+    assert.equal(body.kind, "create_instance");
+    assert.equal(body.workflowId, "item");
+    assert.deepEqual(body.instance.state.workflowInstanceState, {
+      title: "New idea",
+      count: 2,
+    });
+  });
+
+  it("POST flow-level action returns 404 for an unknown action", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition(actionApiDefinition);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const createResponse = await server.inject({
+      method: "POST",
+      url: "/api/flows",
+      body: { definitionId: "action-def", config: { name: "Action Flow" } },
+    });
+    const flowId = createResponse.json().flowId as string;
+
+    const response = await server.inject({
+      method: "POST",
+      url: `/api/flows/${flowId}/actions/nope`,
+      body: {},
+    });
+    assert.equal(response.statusCode, 404);
+  });
+
+  it("POST flow-level action returns 409 when its gate fails", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition(actionApiDefinition);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const createResponse = await server.inject({
+      method: "POST",
+      url: "/api/flows",
+      body: { definitionId: "action-def", config: { name: "Action Flow" } },
+    });
+    const flowId = createResponse.json().flowId as string;
+
+    const response = await server.inject({
+      method: "POST",
+      url: `/api/flows/${flowId}/actions/gated`,
+      body: {},
+    });
+    assert.equal(response.statusCode, 409);
+  });
+
+  it("POST flow-level action returns 400 for an invalid form payload", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition(actionApiDefinition);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const createResponse = await server.inject({
+      method: "POST",
+      url: "/api/flows",
+      body: { definitionId: "action-def", config: { name: "Action Flow" } },
+    });
+    const flowId = createResponse.json().flowId as string;
+
+    const response = await server.inject({
+      method: "POST",
+      url: `/api/flows/${flowId}/actions/add_item`,
+      body: {},
+    });
+    assert.equal(response.statusCode, 400);
+    assert.match(response.json().error as string, /title/);
+  });
+
+  it("GET flow payload includes gate-evaluated flow-level actions", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition(actionApiDefinition);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const createResponse = await server.inject({
+      method: "POST",
+      url: "/api/flows",
+      body: { definitionId: "action-def", config: { name: "Action Flow" } },
+    });
+    const flowId = createResponse.json().flowId as string;
+
+    const response = await server.inject({
+      method: "GET",
+      url: `/api/flows/${flowId}`,
+    });
+    assert.equal(response.statusCode, 200);
+    const actions = response.json().availableFlowActions as Array<{
+      id: string;
+      label: string;
+      variant: string;
+    }>;
+    assert.deepEqual(actions, [
+      { id: "add_item", label: "Add item", variant: "primary" },
+    ]);
+  });
+
+  it("POST /api/flows accepts integrationBranch and branchPrefix declared in configSchema", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition({
+      id: "git-def",
+      label: "Git Definition",
+      workflows: [testWorkflow],
+      edges: [],
+      configSchema: [
+        {
+          key: "integrationBranch",
+          label: "Integration branch",
+          type: "string",
+        },
+        { key: "branchPrefix", label: "Branch prefix", type: "string" },
+      ],
+    });
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/flows",
+      body: {
+        definitionId: "git-def",
+        config: {
+          name: "Git Flow",
+          integrationBranch: "integ",
+          branchPrefix: "hive/",
+        },
+      },
+    });
+    assert.equal(response.statusCode, 201);
+
+    const flowId = response.json().flowId as string;
+    const detail = await server.inject({
+      method: "GET",
+      url: `/api/flows/${flowId}`,
+    });
+    assert.equal(detail.json().config.integrationBranch, "integ");
+    assert.equal(detail.json().config.branchPrefix, "hive/");
   });
 
   it("POST task/input requires content", async () => {
