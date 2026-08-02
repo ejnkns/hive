@@ -4,11 +4,16 @@ import Button from "../shared/ui/Button.svelte";
 import Dialog from "../shared/ui/Dialog.svelte";
 import StatusDot from "./StatusDot.svelte";
 import WorkflowFlow from "./WorkflowFlow.svelte";
-import type { FlowResponse, FlowWsEvent } from "./workflow-api";
+import type {
+  FlowLevelAction,
+  FlowResponse,
+  FlowWsEvent,
+} from "./workflow-api";
 import {
   connectFlowWs,
   deleteFlow,
   dispatchAction,
+  dispatchFlowAction,
   fetchFlows,
   sendTaskInput,
 } from "./workflow-api";
@@ -27,6 +32,11 @@ let error = $state<string | null>(null);
 let deleteOpen = $state(false);
 let deleteBusy = $state(false);
 let unsubWs: (() => void) | null = null;
+
+let actionDialogOpen = $state(false);
+let activeFlowAction = $state<FlowLevelAction | null>(null);
+let actionValues = $state<Record<string, string | boolean | number>>({});
+let actionBusy = $state(false);
 
 onMount(() => {
   void loadFlow();
@@ -97,6 +107,61 @@ async function removeInstance(purge: boolean) {
     deleteOpen = false;
   }
 }
+
+function actionVariant(action: FlowLevelAction): string {
+  switch (action.variant) {
+    case "primary":
+      return "mint";
+    case "destructive":
+      return "rose";
+    default:
+      return "platinum";
+  }
+}
+
+function runFlowAction(action: FlowLevelAction) {
+  if (action.createInstance) {
+    activeFlowAction = action;
+    actionValues = {};
+    actionDialogOpen = true;
+    return;
+  }
+  void executeFlowAction(action, {});
+}
+
+async function executeFlowAction(
+  action: FlowLevelAction,
+  payload: Record<string, unknown>
+) {
+  if (!flow) return;
+  actionBusy = true;
+  error = null;
+  try {
+    await dispatchFlowAction(flow.id, action.id, payload);
+    await loadFlow();
+  } catch (err) {
+    error = err instanceof Error ? err.message : "Flow action failed";
+  } finally {
+    actionBusy = false;
+  }
+}
+
+function missingRequiredActionField(): boolean {
+  const fields = activeFlowAction?.createInstance?.fields ?? [];
+  return fields.some((field) => {
+    if (!field.required) return false;
+    const value = actionValues[field.key];
+    return value === undefined || value === "";
+  });
+}
+
+function submitFlowActionForm() {
+  const action = activeFlowAction;
+  if (!action) return;
+  actionDialogOpen = false;
+  activeFlowAction = null;
+  void executeFlowAction(action, { ...actionValues });
+}
 </script>
 
 <div class="instance-page">
@@ -127,6 +192,20 @@ async function removeInstance(purge: boolean) {
           Delete
         </Button>
       </div>
+      {#if flow.availableFlowActions.length > 0}
+        <div class="flow-actions">
+          {#each flow.availableFlowActions as action}
+            <Button
+              variant={actionVariant(action) as "mint" | "rose" | "platinum"}
+              size="small"
+              disabled={actionBusy}
+              onclick={() => runFlowAction(action)}
+            >
+              {action.label}
+            </Button>
+          {/each}
+        </div>
+      {/if}
     </div>
 
     <div class="flow-sections">
@@ -141,12 +220,72 @@ async function removeInstance(purge: boolean) {
   {/if}
 </div>
 
+<Dialog
+  bind:open={actionDialogOpen}
+  label={activeFlowAction?.label ?? "Flow action"}
+  contentMaxWidth="420px"
+>
+  {#if activeFlowAction?.createInstance}
+    <h2 class="dialog-title">{activeFlowAction.label}</h2>
+    <div class="action-form">
+      {#each activeFlowAction.createInstance.fields as field (field.key)}
+        <label class="field">
+          <span class="label">{field.label}{field.required ? " *" : ""}</span>
+          {#if field.type === "boolean"}
+            <input
+              type="checkbox"
+              checked={actionValues[field.key] === true}
+              onchange={(event) => {
+                actionValues[field.key] = event.currentTarget.checked;
+              }}
+            >
+          {:else}
+            <input
+              class="text-input text-input-small"
+              type={field.type === "number" ? "number" : "text"}
+              value={String(actionValues[field.key] ?? "")}
+              oninput={(event) => {
+                if (field.type === "number") {
+                  actionValues[field.key] = Number(event.currentTarget.value);
+                } else {
+                  actionValues[field.key] = event.currentTarget.value;
+                }
+              }}
+            >
+          {/if}
+          {#if field.hint}
+            <span class="hint">{field.hint}</span>
+          {/if}
+        </label>
+      {/each}
+    </div>
+    <div class="dialog-actions">
+      <Button
+        variant="mint"
+        disabled={missingRequiredActionField()}
+        onclick={submitFlowActionForm}
+      >
+        Run
+      </Button>
+      <Button
+        variant="platinum"
+        onclick={() => {
+          actionDialogOpen = false;
+          activeFlowAction = null;
+        }}
+      >
+        Cancel
+      </Button>
+    </div>
+  {/if}
+</Dialog>
+
 <Dialog bind:open={deleteOpen} label="Delete instance" contentMaxWidth="420px">
   <h2 class="dialog-title">Delete instance</h2>
   <p class="dialog-text">
     "Delete instance" removes Hive's operational state. "Delete instance and its
-    data" also removes the <code>basePath/.hive</code> directory and cannot be
-    undone.
+    data" also removes the flow's persisted domain state in the repository and
+    cannot be undone.
   </p>
   <div class="dialog-actions">
     <Button
@@ -219,6 +358,13 @@ h1 {
   margin: 0;
 }
 
+.flow-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-top: 0.75rem;
+}
+
 .dialog-title {
   margin: 0 0 0.75rem 0;
   font-size: 0.75rem;
@@ -233,14 +379,45 @@ h1 {
   margin: 0 0 1rem 0;
 }
 
-.dialog-text code {
-  font-size: 0.75rem;
-}
-
 .dialog-actions {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
+}
+
+.action-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hint {
+  font-size: 0.6875rem;
+  color: var(--muted);
+}
+
+.text-input-small {
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.75rem;
 }
 
 .flow-sections {

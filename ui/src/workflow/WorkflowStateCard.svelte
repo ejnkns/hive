@@ -28,6 +28,26 @@ let stateDef = $derived(
     null
 );
 
+// The workflow's item hint is a dotted path into the instance's
+// workflowInstanceState (e.g. "cardSpec.title"); unresolved, the card falls
+// back to the state label.
+let itemTitle = $derived(
+  workflowDef.item
+    ? resolveItemPath(
+        workflowDef.item.title,
+        instanceEntry.state.workflowInstanceState
+      )
+    : undefined
+);
+let itemSubtitle = $derived(
+  workflowDef.item?.subtitle
+    ? resolveItemPath(
+        workflowDef.item.subtitle,
+        instanceEntry.state.workflowInstanceState
+      )
+    : undefined
+);
+
 let category = $derived(stateDef?.category ?? "active");
 let isTerminal = $derived(
   workflowDef.terminalStates.includes(instanceEntry.state.currentState)
@@ -97,6 +117,21 @@ let categoryLabel = $derived.by(() => {
   if (category === "initial") return "Ready";
   return "";
 });
+
+// Resolves a dotted path like "cardSpec.title" against instance state. Used
+// by the workflow's item hint to render a derived item title.
+function resolveItemPath(
+  path: string,
+  state: Record<string, unknown>
+): string | undefined {
+  let value: unknown = state;
+  for (const part of path.split(".")) {
+    if (value === null || typeof value !== "object") return undefined;
+    const record = value as Record<string, unknown>;
+    value = record[part];
+  }
+  return typeof value === "string" ? value : undefined;
+}
 </script>
 
 <div class="state-card state-card-{categoryClass}" class:compact>
@@ -104,8 +139,11 @@ let categoryLabel = $derived.by(() => {
     <div class="card-header">
       <div class="card-title-row">
         <span class="card-title"
-          >{stateDef?.label ?? instanceEntry.state.currentState}</span
+          >{itemTitle ?? stateDef?.label ?? instanceEntry.state.currentState}</span
         >
+        {#if itemSubtitle}
+          <span class="card-subtitle">{itemSubtitle}</span>
+        {/if}
         {#if categoryClass !== "active"}
           <Badge
             variant={categoryClass === "terminal" ? "mint" : categoryClass === "error" ? "rose" : "platinum"}
@@ -268,6 +306,11 @@ let categoryLabel = $derived.by(() => {
   font-size: 0.8125rem;
   font-weight: 700;
   color: var(--text);
+}
+
+.card-subtitle {
+  font-size: 0.625rem;
+  color: var(--muted);
 }
 
 .state-description {

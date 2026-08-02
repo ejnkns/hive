@@ -16,6 +16,9 @@ export type WorkflowDef = {
   id: string;
   label: string;
   description?: string;
+  // UI-side rendering hint for derived views; never stored. The title is a
+  // dotted path into the instance's workflowInstanceState.
+  item?: { title: string; subtitle?: string };
   states: StateDef[];
   initial: string;
   terminalStates: string[];
@@ -93,6 +96,14 @@ export type FlowDefinitionDetail = FlowDefinitionSummary & {
   source: string;
 };
 
+export type FlowLevelAction = {
+  id: string;
+  label: string;
+  variant: VisibleAction["variant"];
+  createInstance?: { workflowId: string; fields: ConfigField[] };
+  dispatchToAll?: { workflowId: string; actionId: string };
+};
+
 export type FlowResponse = {
   id: string;
   label: string;
@@ -100,6 +111,7 @@ export type FlowResponse = {
   config?: Record<string, unknown>;
   workflows: WorkflowDef[];
   instances: WorkflowInstanceEntry[];
+  availableFlowActions: FlowLevelAction[];
 };
 
 export type FlowsApiResponse = {
@@ -342,6 +354,30 @@ export async function dispatchAction(
 
   // Success response shape matches DispatchActionResult by contract with the server
   return (await res.json()) as DispatchActionResult;
+}
+
+export async function dispatchFlowAction(
+  flowId: string,
+  actionId: string,
+  payload: Record<string, unknown> = {}
+): Promise<Record<string, unknown>> {
+  const res = await fetch(
+    `/api/flows/${encodeURIComponent(flowId)}/actions/${encodeURIComponent(actionId)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }
+  );
+
+  if (!res.ok) {
+    // Error response shape is guaranteed by the server endpoint
+    const err = (await res.json()) as { error?: string };
+    throw new Error(err.error ?? `Flow action rejected: ${res.statusText}`);
+  }
+
+  // Success response shape is guaranteed by the server endpoint
+  return (await res.json()) as Record<string, unknown>;
 }
 
 export async function sendTaskInput(

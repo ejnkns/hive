@@ -11,13 +11,13 @@ import {
 import type { OperationFn, Tool } from "workflow-engine/runners";
 import { readFlowSettings } from "workflow-engine/runners";
 import type {
+  ActionVariant,
   ConfigField,
   FlowDefinition,
   FlowLevelAction,
   RuntimeFlowEdge,
   RuntimeGateContext,
   RuntimeWorkflowConfig,
-  VisibleAction,
 } from "workflow-engine/workflow-types";
 import { createEngineRunners } from "./engine-bridge";
 import {
@@ -120,8 +120,18 @@ export type FlowLevelActionDispatchResult =
     }
   | { kind: "dispatch_to_all"; workflowId: string; dispatched: string[] };
 
+// The gate-evaluated, UI-facing view of a flow-level action: enough for the
+// header buttons and the createInstance form, without the gate function.
+export type FlowLevelActionView = {
+  id: string;
+  label: string;
+  variant: ActionVariant;
+  createInstance?: { workflowId: string; fields: ConfigField[] };
+  dispatchToAll?: { workflowId: string; actionId: string };
+};
+
 // The gate-evaluated, UI-facing list of flow-level actions for a flow.
-export function getAvailableFlowActions(flowId: string): VisibleAction[] {
+export function getAvailableFlowActions(flowId: string): FlowLevelActionView[] {
   const runtime = runtimes.get(flowId);
   if (!runtime) return [];
   const actions = readFlowLevelActions(runtime);
@@ -133,6 +143,15 @@ export function getAvailableFlowActions(flowId: string): VisibleAction[] {
       id: action.id,
       label: action.label,
       variant: action.variant ?? "default",
+      ...(action.createInstance
+        ? {
+            createInstance: {
+              workflowId: action.createInstance.workflowId,
+              fields: action.createInstance.fields ?? [],
+            },
+          }
+        : {}),
+      ...(action.dispatchToAll ? { dispatchToAll: action.dispatchToAll } : {}),
     }));
 }
 

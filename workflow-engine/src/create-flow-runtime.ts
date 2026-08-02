@@ -19,6 +19,8 @@ export type WorkflowDefResponse = {
   id: string;
   label: string;
   description?: string;
+  // UI-side rendering hint for derived views; never stored.
+  item?: { title: string; subtitle?: string };
   states: Array<{
     id: string;
     label: string;
@@ -217,6 +219,7 @@ export function createFlowRuntime<
       id: wf.id,
       label: wf.label,
       description: wf.description,
+      item: wf.item,
       states: wf.states.map((s) => ({
         id: s.id,
         label: s.label,

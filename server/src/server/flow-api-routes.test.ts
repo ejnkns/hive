@@ -448,10 +448,16 @@ describe("flow API routes", () => {
       id: string;
       label: string;
       variant: string;
+      createInstance: { workflowId: string; fields: Array<{ key: string }> };
     }>;
-    assert.deepEqual(actions, [
-      { id: "add_item", label: "Add item", variant: "primary" },
-    ]);
+    assert.equal(actions.length, 1);
+    assert.equal(actions[0]?.id, "add_item");
+    assert.equal(actions[0]?.variant, "primary");
+    assert.equal(actions[0]?.createInstance.workflowId, "item");
+    assert.deepEqual(
+      actions[0]?.createInstance.fields.map((f) => f.key),
+      ["title", "count"]
+    );
   });
 
   it("POST /api/flows accepts integrationBranch and branchPrefix declared in configSchema", async () => {
