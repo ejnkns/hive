@@ -1,4 +1,4 @@
-import { isRecord } from "shared/board-types";
+import { isRecord } from "shared/is-record";
 
 export type PlaygroundRoute = {
   providerName: string;
