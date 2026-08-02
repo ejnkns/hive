@@ -14,6 +14,11 @@ export type TaskDefinition = {
   // sessions (requirements/ideas) where the agent should react to the user,
   // not open the conversation itself.
   startOnUserInput?: boolean;
+  // Written on successful completion to basePath/<domainDir>/<path>.
+  // {instanceId} and {attempt} in path are substituted per workflow instance.
+  // Format is inferred from the output: string becomes a text file,
+  // object/array becomes JSON.
+  persist?: { path: string };
 };
 
 export type TaskRunner = {

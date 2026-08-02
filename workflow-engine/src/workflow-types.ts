@@ -156,6 +156,9 @@ export type ManualAction<
   gate?: (ctx: GateContext<TTaskOutputs, TItemState>) => boolean;
   maxWorkflowInstancesInTarget?: number;
   dependsOnState?: TStateId;
+  // Spawns a new workflow instance. fields render as a form; the collected
+  // values become the new instance's workflowInstanceState.
+  createInstance?: { workflowId: string; fields?: ConfigField[] };
   transitionTo: TStateId;
 };
 
@@ -192,6 +195,11 @@ export type StateDef<
     completionTool?: string;
     completionSignal?: string;
     startOnUserInput?: boolean;
+    // Written on successful completion to basePath/<domainDir>/<path>.
+    // {instanceId} and {attempt} in path are substituted per workflow
+    // instance. Format is inferred from the output: string becomes a text
+    // file, object/array becomes JSON.
+    persist?: { path: string };
   }[];
 
   autoTransitions?: AutoTransition<TTaskOutputs, TStateId, TItemState>[];
@@ -214,6 +222,8 @@ export type WorkflowConfig<
   id: string;
   label: string;
   description?: string;
+  // UI-side rendering hint for derived views; never stored.
+  item?: { title: string; subtitle?: string };
   taskOutputs: TTaskOutputs;
   states: readonly StateDef<TTaskOutputs, TStateId, TWorkflowInstanceState>[];
   initial: TStateId;
@@ -236,6 +246,7 @@ export function defineWorkflow<
   id: string;
   label: string;
   description?: string;
+  item?: { title: string; subtitle?: string };
   taskOutputs: TTaskOutputs;
   workflowInstanceState?: TWorkflowInstanceState;
   workflowOutput?: TWorkflowOutput;
@@ -285,6 +296,23 @@ export type ConfigField = {
   hint?: string;
 };
 
+// A project-level action rendered on the flow instance header. Unlike a
+// ManualAction (which lives on a workflow state), a flow-level action is
+// declared on the FlowDefinition and may create a new workflow instance or
+// dispatch a state-level action to every eligible instance of a workflow.
+export type FlowLevelAction = {
+  id: string;
+  label: string;
+  variant?: ActionVariant;
+  gate?: (ctx: RuntimeGateContext) => boolean;
+  // Creates a new instance of the workflow; fields render as a form and the
+  // collected values become the new instance's workflowInstanceState.
+  createInstance?: { workflowId: string; fields?: ConfigField[] };
+  // Dispatches the referenced state-level action to every instance of the
+  // workflow where that action is available (per-instance gates respected).
+  dispatchToAll?: { workflowId: string; actionId: string };
+};
+
 // A FlowDefinition is the complete description of one flow type: its
 // workflows, the edges between them, and the capabilities its tasks call by
 // name — self-contained domain tools (schema + executor) and deterministic
@@ -305,6 +333,11 @@ export type FlowDefinition = {
   edges: FlowEdge[];
   tools?: readonly Tool[];
   operations?: Record<string, OperationFn>;
+  // Directory under basePath that holds this instance's persisted domain
+  // state; defaults to .<definition-id>.
+  domainDir?: string;
+  // Project-level actions rendered on the instance header.
+  actions?: FlowLevelAction[];
 } & (
   | { workflows: RuntimeWorkflowConfig[] }
   | {
