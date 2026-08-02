@@ -1,5 +1,6 @@
 /** @public — runner factories, standard tools, and operations. Import from here, not from runners/ directly. */
 
+export { readFlowSettings } from "./read-flow-settings";
 export {
   type AiChatModelCaller,
   type AiChatRunnerConfig,
@@ -20,18 +21,16 @@ export {
   createStandardToolDefinitions,
   createStandardToolRegistry,
 } from "./runners/create-standard-tool-registry";
-export { createReviewSnapshot } from "./runners/create-standard-tool-registry/create-review-snapshot";
 export {
   checkIntegrationReadiness,
-  compareIntegrationCommits,
-  discardWorktree,
+  commitFlowState,
   ensureIntegrationBranch,
   fastForwardTargetBranch,
-  mergeToIntegrationBranch,
+  validateRepo,
   writeFlowArtifacts,
-  writeFlowSnapshot,
 } from "./runners/create-standard-tool-registry/git-operations";
 export { loadProjectContext } from "./runners/create-standard-tool-registry/load-project-context";
+export { persistOutput } from "./runners/persist-output";
 export { prepareIsolatedWorkspace } from "./runners/prepare-isolated-workspace";
 export { toToolMaps } from "./runners/to-tool-maps";
 export type {

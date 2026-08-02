@@ -1,5 +1,14 @@
 import assert from "node:assert/strict";
-import { describe, it, mock } from "node:test";
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, it } from "node:test";
 import {
   createFlowRuntime,
   type FlowPersistence,
@@ -7,8 +16,7 @@ import {
 } from "./create-flow-runtime";
 import { createOperationRunner } from "./runners/create-operation-runner";
 import type { TaskDefinition, TaskRunner } from "./task-runner";
-import type { FlowEdge } from "./workflow-types";
-import { defineWorkflow } from "./workflow-types";
+import { defineWorkflow, type FlowEdge } from "./workflow-types";
 
 // ─── Test workflows ───
 
@@ -61,15 +69,6 @@ const targetWorkflow = defineWorkflow({
   states: [{ id: "ready", label: "Ready" }],
   initial: "ready",
   terminalStates: ["ready"],
-});
-
-const otherWorkflow = defineWorkflow({
-  id: "other",
-  label: "Other",
-  taskOutputs: {} as Record<string, never>,
-  states: [{ id: "init", label: "Init" }],
-  initial: "init",
-  terminalStates: ["init"],
 });
 
 // ─── Mock Runner ───
@@ -212,10 +211,10 @@ describe("FlowRuntime", () => {
       runtime.on((e) => {
         if (e.type === "instance_created") created.push(e);
       });
-      const controller = runtime.addWorkflowInstance("source");
+      runtime.addWorkflowInstance("source");
       assert.equal(created.length, 1);
-      assert.equal(created[0]!.workflowId, "source");
-      assert.ok(created[0]!.instanceId);
+      assert.equal(created[0].workflowId, "source");
+      assert.ok(created[0].instanceId);
     });
 
     it("auto-starts initial-state auto tasks on fresh instances", async () => {
@@ -331,7 +330,7 @@ describe("FlowRuntime", () => {
       });
       const controller = runtime.addWorkflowInstance("source");
       assert.ok(instanceId);
-      assert.equal(runtime.getWorkflowInstance(instanceId!), controller);
+      assert.equal(runtime.getWorkflowInstance(instanceId), controller);
     });
   });
 
@@ -346,8 +345,8 @@ describe("FlowRuntime", () => {
       runtime.addWorkflowInstance("source");
       runtime.addWorkflowInstance("source");
       assert.equal(runtime.workflowInstances.length, 2);
-      assert.equal(runtime.workflowInstances[0]!.currentState, "idle");
-      assert.equal(runtime.workflowInstances[1]!.currentState, "idle");
+      assert.equal(runtime.workflowInstances[0].currentState, "idle");
+      assert.equal(runtime.workflowInstances[1].currentState, "idle");
     });
   });
 
@@ -474,11 +473,8 @@ describe("FlowRuntime", () => {
 
       const targetInstances = runtime.workflowInstancesInState("ready");
       assert.equal(targetInstances.length, 1);
-      assert.equal(
-        targetInstances[0]!.workflowInstanceState.inherited,
-        "hello"
-      );
-      assert.deepEqual(targetInstances[0]!.workflowInstanceState.dependsOn, [
+      assert.equal(targetInstances[0].workflowInstanceState.inherited, "hello");
+      assert.deepEqual(targetInstances[0].workflowInstanceState.dependsOn, [
         "parent-card",
       ]);
     });
@@ -727,14 +723,14 @@ describe("FlowRuntime", () => {
 
       runtime.patchFlowState({ count: 1 });
       assert.equal(saved.length, 1);
-      assert.equal(saved[0]!.flowId, "test-flow");
-      const savedState = saved[0]!.state;
+      assert.equal(saved[0].flowId, "test-flow");
+      const savedState = saved[0].state;
       assert.ok(
         savedState !== null &&
           typeof savedState === "object" &&
           "count" in savedState
       );
-      assert.equal(savedState["count"], 1);
+      assert.equal(savedState.count, 1);
     });
 
     it("calls persistence.saveInstance on state change", async () => {
@@ -775,12 +771,188 @@ describe("FlowRuntime", () => {
 
       // state_changed emitted for transition idle → working
       assert.ok(saved.length >= 1);
-      assert.equal(saved[0]!.flowId, "test-flow");
+      assert.equal(saved[0].flowId, "test-flow");
+    });
+  });
+
+  describe("persist on task completion", () => {
+    let root: string;
+
+    afterEach(() => {
+      rmSync(root, { recursive: true, force: true });
+    });
+
+    function buildRuntime(taskDef: {
+      persist: { path: string };
+      operationInputs?: Record<string, unknown>;
+    }): ReturnType<typeof createFlowRuntime> {
+      const persistWorkflow = defineWorkflow({
+        id: "persist",
+        label: "Persist",
+        taskOutputs: { save: {} as { hello: string } },
+        states: [
+          {
+            id: "ready",
+            label: "Ready",
+            tasks: [
+              {
+                id: "save",
+                label: "Save",
+                trigger: "auto",
+                role: "operation",
+                operations: ["save_output"],
+                operationInputs: taskDef.operationInputs,
+                persist: taskDef.persist,
+              },
+            ],
+            autoTransitions: [
+              {
+                to: "done",
+                gate: (ctx) => ctx.taskOutputs.save?.status === "success",
+              },
+            ],
+          },
+          { id: "done", label: "Done" },
+        ],
+        initial: "ready",
+        terminalStates: ["done"],
+      });
+
+      return createFlowRuntime(
+        "test",
+        [persistWorkflow],
+        [],
+        {
+          operation: () =>
+            createOperationRunner({
+              getContext: () => ({
+                flowConfig: () => ({}),
+                patchFlowConfig: () => {},
+                instanceId: "",
+                workflowId: "",
+                currentState: "",
+                workflowInstanceState: () => ({}),
+              }),
+              operations: {
+                save_output: () => ({ hello: "world" }),
+              },
+            }),
+        },
+        {
+          basePath: root,
+          definitionId: "test",
+        }
+      );
+    }
+
+    async function waitForDone(
+      runtime: ReturnType<typeof createFlowRuntime>
+    ): Promise<void> {
+      for (let i = 0; i < 200; i++) {
+        const entries = runtime.getWorkflowInstanceEntries();
+        if (entries.some((e) => e.state.currentState === "done")) return;
+        await new Promise((r) => setTimeout(r, 10));
+      }
+      throw new Error("persist workflow did not reach done");
+    }
+
+    it("writes task output to basePath/<domainDir>/<path> on success", async () => {
+      root = mkdtempSync(join(tmpdir(), "hive-persist-"));
+      const runtime = buildRuntime({ persist: { path: "output.json" } });
+      runtime.addWorkflowInstance("persist");
+      await waitForDone(runtime);
+
+      const target = join(root, ".test", "output.json");
+      assert.ok(existsSync(target));
+      assert.deepEqual(JSON.parse(readFileSync(target, "utf-8")), {
+        hello: "world",
+      });
+    });
+
+    it("substitutes {instanceId} and {attempt} from the workflow instance", async () => {
+      root = mkdtempSync(join(tmpdir(), "hive-persist-"));
+      const runtime = buildRuntime({
+        persist: { path: "reviews/{instanceId}-{attempt}.json" },
+      });
+      runtime.addWorkflowInstance("persist", {
+        workflowInstanceState: { attempt: 2 },
+      });
+      await waitForDone(runtime);
+
+      const reviewsDir = join(root, ".test", "reviews");
+      assert.ok(existsSync(reviewsDir));
+      const written = readdirSync(reviewsDir);
+      assert.equal(written.length, 1);
+      const entry = runtime
+        .getWorkflowInstanceEntries()
+        .find((e) => e.workflowId === "persist");
+      assert.ok(entry);
+      assert.equal(written[0], `${entry.id}-2.json`);
+    });
+
+    it("does not persist when no base path is bound", async () => {
+      root = mkdtempSync(join(tmpdir(), "hive-persist-"));
+      const runtime = createFlowRuntime(
+        "test",
+        [
+          defineWorkflow({
+            id: "persist",
+            label: "Persist",
+            taskOutputs: { save: {} as { hello: string } },
+            states: [
+              {
+                id: "ready",
+                label: "Ready",
+                tasks: [
+                  {
+                    id: "save",
+                    label: "Save",
+                    trigger: "auto",
+                    role: "operation",
+                    operations: ["save_output"],
+                    persist: { path: "output.json" },
+                  },
+                ],
+                autoTransitions: [
+                  {
+                    to: "done",
+                    gate: (ctx) => ctx.taskOutputs.save?.status === "success",
+                  },
+                ],
+              },
+              { id: "done", label: "Done" },
+            ],
+            initial: "ready",
+            terminalStates: ["done"],
+          }),
+        ],
+        [],
+        {
+          operation: () =>
+            createOperationRunner({
+              getContext: () => ({
+                flowConfig: () => ({}),
+                patchFlowConfig: () => {},
+                instanceId: "",
+                workflowId: "",
+                currentState: "",
+                workflowInstanceState: () => ({}),
+              }),
+              operations: {
+                save_output: () => ({ hello: "world" }),
+              },
+            }),
+        },
+        { definitionId: "test" }
+      );
+      runtime.addWorkflowInstance("persist");
+      await waitForDone(runtime);
+      assert.ok(!existsSync(join(root, ".test")));
     });
   });
 });
 
 function readOutputResult(output: unknown): unknown {
   if (output === null || typeof output !== "object") return undefined;
-  return "result" in output ? output["result"] : undefined;
+  return "result" in output ? output.result : undefined;
 }

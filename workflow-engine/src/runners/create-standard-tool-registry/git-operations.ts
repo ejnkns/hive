@@ -1,32 +1,44 @@
 /** @private — only imported by create-standard-tool-registry.ts */
 
-import { execFileSync, spawnSync } from "node:child_process";
-import { createHash, randomUUID } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import {
   cpSync,
   existsSync,
   mkdirSync,
-  readFileSync,
+  mkdtempSync,
   writeFileSync,
 } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { readFlowSettings } from "../../read-flow-settings";
 import type { TaskDefinition } from "../../task-runner";
+import type { OperationContext } from "../create-operation-runner";
+
+// Branch names and the domain root come from flow config, never hardcoded.
+// integrationBranch/branchPrefix/domainDir have no engine defaults — a flow
+// must declare them (queen-bee wires them in a later phase). Ops return
+// { ok: ... } results; gates inspect them directly.
 
 // ─── public operation exports ──────────────────────────────────────────
 
 export function ensureIntegrationBranch(
   _task: TaskDefinition,
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
+  ctx?: OperationContext
 ): Record<string, unknown> {
-  const basePath = params.basePath as string;
   try {
-    if (!hasBranch(basePath, "hive-main")) {
-      git(basePath, ["branch", "hive-main", "HEAD"]);
+    const basePath = params.basePath as string;
+    const integrationBranch = readIntegrationBranch(ctx);
+    if (!integrationBranch) {
+      return { ok: false, error: "Flow config integrationBranch is not set" };
+    }
+    if (!hasBranch(basePath, integrationBranch)) {
+      git(basePath, ["branch", integrationBranch, "HEAD"]);
     }
     return {
       ok: true,
-      branchName: "hive-main",
-      revision: git(basePath, ["rev-parse", "hive-main"]),
+      branchName: integrationBranch,
+      revision: git(basePath, ["rev-parse", integrationBranch]),
     };
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
@@ -35,35 +47,48 @@ export function ensureIntegrationBranch(
 
 export function checkIntegrationReadiness(
   _task: TaskDefinition,
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
+  ctx?: OperationContext
 ): Record<string, unknown> {
   try {
     const basePath = params.basePath as string;
     const targetBranch = params.targetBranch as string;
-    const integration = git(basePath, ["rev-parse", "hive-main"]);
+    const integrationBranch = readIntegrationBranch(ctx);
+    if (!integrationBranch) {
+      return { ok: false, error: "Flow config integrationBranch is not set" };
+    }
+    const integration = git(basePath, ["rev-parse", integrationBranch]);
     const targetRev = git(basePath, ["rev-parse", targetBranch]);
     const ahead = Number(
-      git(basePath, ["rev-list", "--count", `${targetBranch}..hive-main`])
+      git(basePath, [
+        "rev-list",
+        "--count",
+        `${targetBranch}..${integrationBranch}`,
+      ])
     );
     const behind = Number(
-      git(basePath, ["rev-list", "--count", `hive-main..${targetBranch}`])
+      git(basePath, [
+        "rev-list",
+        "--count",
+        `${integrationBranch}..${targetBranch}`,
+      ])
     );
     const integrated = gitSucceeds(basePath, [
       "merge-base",
       "--is-ancestor",
-      "hive-main",
+      integrationBranch,
       targetBranch,
     ]);
     const ready = gitSucceeds(basePath, [
       "merge-base",
       "--is-ancestor",
       targetBranch,
-      "hive-main",
+      integrationBranch,
     ]);
     const state = integrated ? "integrated" : ready ? "ready" : "diverged";
     return {
       ok: true,
-      integrationBranch: "hive-main",
+      integrationBranch,
       integrationRevision: integration,
       targetBranch,
       targetRevision: targetRev,
@@ -78,20 +103,25 @@ export function checkIntegrationReadiness(
 }
 
 export function fastForwardTargetBranch(
-  _task: TaskDefinition,
-  params: Record<string, unknown>
+  task: TaskDefinition,
+  params: Record<string, unknown>,
+  ctx?: OperationContext
 ): Record<string, unknown> {
   try {
     const basePath = params.basePath as string;
     const targetBranch = params.targetBranch as string;
-    const result = checkIntegrationReadiness(_task, params);
+    const integrationBranch = readIntegrationBranch(ctx);
+    if (!integrationBranch) {
+      return { ok: false, error: "Flow config integrationBranch is not set" };
+    }
+    const result = checkIntegrationReadiness(task, params, ctx);
     if (!result.ok) return result;
     if (result.state === "integrated")
       return { ok: true, alreadyIntegrated: true };
     if (result.state === "diverged")
       return {
         ok: false,
-        error: `${targetBranch} and hive-main have diverged`,
+        error: `${targetBranch} and ${integrationBranch} have diverged`,
       };
 
     const checkedOutPath = branchWorktreePath(basePath, targetBranch);
@@ -99,7 +129,7 @@ export function fastForwardTargetBranch(
       if (git(checkedOutPath, ["status", "--porcelain"])) {
         return { ok: false, error: `${targetBranch} has uncommitted changes` };
       }
-      git(checkedOutPath, ["merge", "--ff-only", "hive-main"]);
+      git(checkedOutPath, ["merge", "--ff-only", integrationBranch]);
     } else {
       git(basePath, [
         "update-ref",
@@ -109,144 +139,6 @@ export function fastForwardTargetBranch(
       ]);
     }
     return { ok: true, revision: git(basePath, ["rev-parse", targetBranch]) };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
-  }
-}
-
-export function compareIntegrationCommits(
-  _task: TaskDefinition,
-  params: Record<string, unknown>
-): Record<string, unknown> {
-  try {
-    const basePath = params.basePath as string;
-    const branchName = params.branchName as string;
-    const reviewedHead = params.reviewedHead as string;
-    const reviewedIntegrationRevision =
-      params.reviewedIntegrationRevision as string;
-    const worktreePath = params.worktreePath as string;
-    const integrationRevision = git(basePath, ["rev-parse", "hive-main"]);
-    const branchHead = git(basePath, ["rev-parse", branchName]);
-
-    if (branchHead !== reviewedHead) {
-      return {
-        state: "branch_changed",
-        canAccept: false,
-        canRefresh: false,
-        message: "Branch changed since review",
-      };
-    }
-    if (
-      worktreePath &&
-      existsSync(worktreePath) &&
-      git(worktreePath, ["status", "--porcelain"])
-    ) {
-      return {
-        state: "dirty",
-        canAccept: false,
-        canRefresh: false,
-        message: "Worktree has uncommitted changes",
-      };
-    }
-    if (integrationRevision === reviewedIntegrationRevision) {
-      return {
-        state: "current",
-        canAccept: true,
-        canRefresh: false,
-        message: "Work is current",
-      };
-    }
-
-    const mergeResult = analyzeMerge(basePath, branchName);
-    if (mergeResult.state === "mergeable") {
-      return {
-        state: "stale",
-        canAccept: false,
-        canRefresh: true,
-        message: "Review is stale; refresh",
-      };
-    }
-    return {
-      state: "conflicted",
-      canAccept: false,
-      canRefresh: false,
-      conflictingFiles: mergeResult.files ?? [],
-      message: "Conflicts with integration branch",
-    };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
-  }
-}
-
-export function discardWorktree(
-  _task: TaskDefinition,
-  params: Record<string, unknown>
-): Record<string, unknown> {
-  const worktreePath = params.worktreePath as string;
-  const basePath = params.basePath as string;
-  if (!worktreePath) return { ok: false, error: "worktreePath is required" };
-
-  const workspaceProjectDir = resolve(
-    (params.workspacesBasePath as string) ?? "",
-    "workspaces",
-    (params.projectId as string) ?? ""
-  );
-  if (workspaceProjectDir) {
-    const rel = relative(workspaceProjectDir, resolve(worktreePath));
-    if (!rel || rel.startsWith("..") || rel.includes("/../")) {
-      return { ok: false, error: "Unsafe worktree path" };
-    }
-  }
-
-  if (!existsSync(worktreePath))
-    return { ok: true, message: "Worktree does not exist" };
-  try {
-    git(basePath, ["worktree", "remove", worktreePath, "--force"]);
-    return { ok: true, message: "Worktree removed" };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
-  }
-}
-
-export function writeFlowSnapshot(
-  _task: TaskDefinition,
-  params: Record<string, unknown>
-): Record<string, unknown> {
-  try {
-    const basePath = params.basePath as string;
-    const proposalId = params.proposalId as string;
-    const projectId = params.projectId as string;
-    const workspacesBasePath = params.workspacesBasePath as string;
-
-    ensureIntegrationBranch(_task, { basePath });
-    const worktree = acquireWorktree(basePath, projectId, workspacesBasePath);
-    try {
-      if (worktree.temporary) {
-        copyFileSafe(basePath, worktree.path, ".hive/requirements.md");
-        copyFileSafe(basePath, worktree.path, ".hive/board.json");
-        copyFileSafe(basePath, worktree.path, ".hive/project.json");
-        const sourceCards = join(basePath, ".hive", "cards");
-        if (existsSync(sourceCards)) {
-          cpSync(sourceCards, join(worktree.path, ".hive", "cards"), {
-            recursive: true,
-          });
-        }
-      }
-      git(worktree.path, ["add", "-A", "--", ".hive"]);
-      git(worktree.path, ["add", "-f", "--", ".hive/requirements.md"]);
-      if (!gitSucceeds(worktree.path, ["diff", "--cached", "--quiet"])) {
-        git(worktree.path, [
-          "commit",
-          "-m",
-          `hive: apply planning proposal ${proposalId}`,
-        ]);
-      }
-      return { ok: true, revision: git(basePath, ["rev-parse", "hive-main"]) };
-    } finally {
-      if (worktree.temporary) {
-        git(basePath, ["worktree", "remove", worktree.path, "--force"]);
-      }
-    }
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
   }
@@ -278,62 +170,97 @@ export function writeFlowArtifacts(
   }
 }
 
-export function mergeToIntegrationBranch(
+// Commits the declared domainDir (under basePath) to integrationBranch.
+// Explicit, never automatic: persisting writes the working-tree file; the flow
+// author decides when a state becomes a checkpoint by running this op. Safe
+// when no repo is bound (no-op); requires integrationBranch + domainDir in
+// flow config for a git-bound flow.
+export function commitFlowState(
   _task: TaskDefinition,
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
+  ctx: OperationContext
 ): Record<string, unknown> {
   try {
-    const basePath = params.basePath as string;
-    const branchName = params.branchName as string;
-    const message = (params.commitMessage as string) ?? `hive: accept work`;
-    const requirementRefs = params.requirementRefs as string[] | undefined;
-    const worktreePath = params.worktreePath as string;
-    const projectId = params.projectId as string;
-    const workspacesBasePath = params.workspacesBasePath as string;
+    const { basePath, domainDir, integrationBranch } = readFlowSettings(
+      ctx.flowConfig()
+    );
+    if (!basePath) return { ok: true, skipped: true };
+    if (!domainDir)
+      return { ok: false, error: "Flow config domainDir is not set" };
+    if (!integrationBranch) {
+      return { ok: false, error: "Flow config integrationBranch is not set" };
+    }
 
-    const readResult = compareIntegrationCommits(_task, params);
-    if (!readResult.ok) return readResult;
+    const message =
+      typeof params.message === "string" ? params.message : "commit flow state";
+    const sourceDir = join(basePath, domainDir);
+    if (!existsSync(sourceDir)) {
+      return {
+        ok: true,
+        unchanged: true,
+        revision: git(basePath, ["rev-parse", integrationBranch]),
+      };
+    }
+    if (!hasBranch(basePath, integrationBranch)) {
+      git(basePath, ["branch", integrationBranch, "HEAD"]);
+    }
 
-    const worktree = acquireWorktree(basePath, projectId, workspacesBasePath);
-    try {
-      git(worktree.path, [
-        "merge",
-        "--no-ff",
-        "--no-edit",
-        "-m",
-        message,
-        branchName,
-      ]);
-      if (requirementRefs?.length) {
-        markRequirementsDone(
-          worktree.path,
-          requirementRefs,
-          params.cardId as string
-        );
+    if (git(basePath, ["branch", "--show-current"]) === integrationBranch) {
+      git(basePath, ["add", "-A", "--", domainDir]);
+      if (!gitSucceeds(basePath, ["diff", "--cached", "--quiet"])) {
+        git(basePath, ["commit", "-m", message]);
       }
-    } catch (err) {
-      abortMerge(worktree.path);
-      return { ok: false, error: `Could not merge: ${errorMessage(err)}` };
+      return {
+        ok: true,
+        revision: git(basePath, ["rev-parse", integrationBranch]),
+      };
+    }
+
+    const worktreePath = mkdtempSync(join(tmpdir(), "hive-commit-"));
+    git(basePath, ["worktree", "add", worktreePath, integrationBranch]);
+    try {
+      const targetDir = join(worktreePath, domainDir);
+      mkdirSync(targetDir, { recursive: true });
+      cpSync(sourceDir, targetDir, { recursive: true });
+      git(worktreePath, ["add", "-A", "--", domainDir]);
+      if (!gitSucceeds(worktreePath, ["diff", "--cached", "--quiet"])) {
+        git(worktreePath, ["commit", "-m", message]);
+      }
+      return {
+        ok: true,
+        revision: git(basePath, ["rev-parse", integrationBranch]),
+      };
     } finally {
-      if (worktree.temporary) {
-        git(basePath, ["worktree", "remove", worktree.path, "--force"]);
-      }
+      git(basePath, ["worktree", "remove", worktreePath, "--force"]);
     }
+  } catch (err) {
+    return { ok: false, error: errorMessage(err) };
+  }
+}
 
-    if (worktreePath) {
-      discardWorktree(_task, {
-        basePath,
-        worktreePath,
-        workspacesBasePath,
-        projectId,
-      });
+// Generic repo validation the engine can run on any bound repo: the base path
+// must exist, be a git repository, and have at least one commit.
+export function validateRepo(
+  _task: TaskDefinition,
+  params: Record<string, unknown>,
+  ctx: OperationContext
+): Record<string, unknown> {
+  try {
+    const configuredBase = readFlowSettings(ctx.flowConfig()).basePath;
+    const rawBasePath =
+      (typeof params.basePath === "string" ? params.basePath : undefined) ??
+      configuredBase;
+    if (!rawBasePath) return { ok: false, error: "No basePath to validate" };
+
+    const basePath = rawBasePath.startsWith("/")
+      ? rawBasePath
+      : join(process.cwd(), rawBasePath);
+    if (!existsSync(basePath)) {
+      return { ok: false, error: `Path does not exist: ${basePath}` };
     }
-    try {
-      git(basePath, ["branch", "-D", branchName]);
-    } catch {
-      /* already deleted */
-    }
-    return { ok: true, revision: git(basePath, ["rev-parse", "hive-main"]) };
+    git(basePath, ["rev-parse", "--is-inside-work-tree"]);
+    git(basePath, ["rev-parse", "HEAD"]);
+    return { ok: true, basePath };
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
   }
@@ -341,22 +268,11 @@ export function mergeToIntegrationBranch(
 
 // ─── private helpers ────────────────────────────────────────────────────
 
-function acquireWorktree(
-  basePath: string,
-  projectId: string,
-  workspacesBasePath: string
-): { path: string; temporary: boolean } {
-  if (git(basePath, ["branch", "--show-current"]) === "hive-main") {
-    if (git(basePath, ["status", "--porcelain", "--untracked-files=no"])) {
-      throw new Error("hive-main is checked out with uncommitted changes");
-    }
-    return { path: basePath, temporary: false };
-  }
-  const dir = join(workspacesBasePath, "workspaces", projectId);
-  mkdirSync(dir, { recursive: true });
-  const path = join(dir, `.hive-integration-${randomUUID()}`);
-  git(basePath, ["worktree", "add", path, "hive-main"]);
-  return { path, temporary: true };
+function readIntegrationBranch(
+  ctx: OperationContext | undefined
+): string | undefined {
+  if (!ctx) return undefined;
+  return readFlowSettings(ctx.flowConfig()).integrationBranch;
 }
 
 function hasBranch(basePath: string, branch: string): boolean {
@@ -377,71 +293,6 @@ function branchWorktreePath(basePath: string, branch: string): string | null {
     if (line) return line.slice("worktree ".length);
   }
   return null;
-}
-
-function copyFileSafe(
-  sourceDir: string,
-  targetDir: string,
-  relPath: string
-): void {
-  const src = join(sourceDir, relPath);
-  if (!existsSync(src)) return;
-  const dest = join(targetDir, relPath);
-  mkdirSync(join(dest, ".."), { recursive: true });
-  cpSync(src, dest);
-}
-
-function markRequirementsDone(
-  worktreePath: string,
-  refs: string[],
-  cardId: string
-): void {
-  const path = join(worktreePath, ".hive", "requirements.md");
-  if (!existsSync(path)) return;
-  const content = readFileSync(path, "utf-8");
-  const refSet = new Set(refs);
-  const updated = content
-    .split("\n")
-    .map((line) => {
-      const m = line.match(/^(-\s*\[([^\]]+)\])(.*)/);
-      if (m && refSet.has(m[2]) && !m[3].trimStart().startsWith("(done)")) {
-        return `${m[1]} (done)${m[3]}`;
-      }
-      return line;
-    })
-    .join("\n");
-  if (updated === content) return;
-  writeFileSync(path, updated, "utf-8");
-  git(worktreePath, ["add", ".hive/requirements.md"]);
-  git(worktreePath, ["commit", "-m", `hive: mark done ${cardId}`]);
-}
-
-function analyzeMerge(
-  basePath: string,
-  branchName: string
-): { state: string; files?: string[] } {
-  const result = spawnSync(
-    "git",
-    ["merge-tree", "--write-tree", "--name-only", "hive-main", branchName],
-    {
-      cwd: basePath,
-      encoding: "utf-8",
-      timeout: 30_000,
-      maxBuffer: 10 * 1024 * 1024,
-    }
-  );
-  if (result.status === 0) return { state: "mergeable" };
-  if (result.signal) return { state: "error", files: [] };
-  const files = (result.stdout || "").split("\n").filter(Boolean);
-  return { state: "conflicted", files };
-}
-
-function abortMerge(worktreePath: string): void {
-  try {
-    git(worktreePath, ["merge", "--abort"]);
-  } catch {
-    /* ok */
-  }
 }
 
 function git(cwd: string, args: string[]): string {

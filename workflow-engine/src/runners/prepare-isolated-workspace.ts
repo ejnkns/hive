@@ -20,12 +20,24 @@ export type PrepareIsolatedWorkspaceParams = {
   projectId: string;
   cardId: string;
   attempt: number;
+  // Required when a repo is bound; read from flow config by the caller. No
+  // engine defaults — a git-capable flow must declare them.
+  integrationBranch?: string;
+  branchPrefix?: string;
 };
 
 export function prepareIsolatedWorkspace(
   params: PrepareIsolatedWorkspaceParams
 ): IsolatedWorkspaceResult {
-  const { basePath, workspacesBasePath, projectId, cardId, attempt } = params;
+  const {
+    basePath,
+    workspacesBasePath,
+    projectId,
+    cardId,
+    attempt,
+    integrationBranch,
+    branchPrefix,
+  } = params;
 
   const workspacePath = join(
     workspacesBasePath,
@@ -48,9 +60,17 @@ export function prepareIsolatedWorkspace(
     }
   }
 
+  if (!integrationBranch || !branchPrefix) {
+    return {
+      ok: false,
+      message:
+        "Flow config integrationBranch and branchPrefix are required for a repo-bound workspace",
+    };
+  }
+
   try {
-    const branchName = `hive/${cardId}/attempt-${attempt}`;
-    const baseCommit = execFileSync("git", ["rev-parse", "hive-main"], {
+    const branchName = `${branchPrefix}${cardId}/attempt-${attempt}`;
+    const baseCommit = execFileSync("git", ["rev-parse", integrationBranch], {
       cwd: basePath,
       encoding: "utf-8",
       timeout: 10_000,
@@ -58,21 +78,25 @@ export function prepareIsolatedWorkspace(
 
     if (!existsSync(workspacePath)) {
       mkdirSync(workspacePath, { recursive: true });
-      execFileSync("git", ["worktree", "add", workspacePath, "hive-main"], {
-        cwd: basePath,
-        encoding: "utf-8",
-        timeout: 15_000,
-      });
+      execFileSync(
+        "git",
+        ["worktree", "add", workspacePath, integrationBranch],
+        {
+          cwd: basePath,
+          encoding: "utf-8",
+          timeout: 15_000,
+        }
+      );
     }
 
     try {
-      execFileSync("git", ["checkout", "hive-main"], {
+      execFileSync("git", ["checkout", integrationBranch], {
         cwd: workspacePath,
         encoding: "utf-8",
         timeout: 10_000,
       });
     } catch {
-      // worktree may already be on hive-main
+      // worktree may already be on the integration branch
     }
 
     const existing = execFileSync(

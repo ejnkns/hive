@@ -13,13 +13,16 @@ import type {
   ToolExecutor,
 } from "workflow-engine/runners";
 import {
+  commitFlowState,
   createAiChatRunner,
   createAiTaskRunner,
   createOperationRunner,
   createStandardToolDefinitions,
   createStandardToolRegistry,
   prepareIsolatedWorkspace,
+  readFlowSettings,
   toToolMaps,
+  validateRepo,
 } from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
 import type { ChatMessage } from "workflow-engine/workflow-types";
@@ -39,11 +42,13 @@ function wrapPrepareWorktree(
   params: Record<string, unknown>,
   ctx: OperationContext
 ): OperationResult {
-  const config = ctx.flowConfig();
+  const settings = readFlowSettings(ctx.flowConfig());
   const instanceState = ctx.workflowInstanceState();
   const result = prepareIsolatedWorkspace({
-    basePath: typeof config.basePath === "string" ? config.basePath : undefined,
-    workspacesBasePath: readWorkspacesBasePath(config),
+    basePath: settings.basePath,
+    workspacesBasePath: readWorkspacesBasePath(ctx.flowConfig()),
+    integrationBranch: settings.integrationBranch,
+    branchPrefix: settings.branchPrefix,
     projectId:
       readString(params.projectId) ??
       readString(instanceState.projectId) ??
@@ -291,6 +296,8 @@ export function createEngineRunners(
         operations: {
           prepare_worktree: wrapPrepareWorktree,
           patch_flow_config: resolveAndPatchFlowConfig,
+          commit_flow_state: commitFlowState,
+          validate_repo: validateRepo,
           ...domain.operations,
         },
       }),

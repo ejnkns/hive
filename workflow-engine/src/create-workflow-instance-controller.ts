@@ -1,5 +1,7 @@
 import { getAvailableActions } from "./get-available-actions";
+import { readFlowSettings } from "./read-flow-settings";
 import { reduce, type WorkflowEvent } from "./reduce";
+import { persistOutput } from "./runners/persist-output";
 import type { RuntimeWorkflowInstanceState } from "./shared/workflow-instance-state";
 import type {
   TaskDefinition,
@@ -159,6 +161,7 @@ export function createWorkflowInstanceController(
     try {
       const { output } = await runner.run(task);
       runningRunner = null;
+      persistTaskOutput(task, output);
       await onTaskCompleted(task.id, output);
     } catch (err: unknown) {
       runningRunner = null;
@@ -176,6 +179,23 @@ export function createWorkflowInstanceController(
       type: "task_completed",
       taskId,
       output,
+    });
+  }
+
+  // Declared persist paths write the task output to the flow's domain root on
+  // successful completion. Without a bound base path there is nowhere to write
+  // and persistence is a no-op; a failed write surfaces as a task error.
+  function persistTaskOutput(task: TaskDefinition, output: unknown): void {
+    if (!task.persist) return;
+    const settings = readFlowSettings(taskContext.flowConfig);
+    if (!settings.basePath || !settings.domainDir) return;
+    persistOutput({
+      output,
+      persistPath: task.persist.path,
+      basePath: settings.basePath,
+      domainDir: settings.domainDir,
+      instanceId: taskContext.instanceId,
+      attempt: readAttempt(state.workflowInstanceState),
     });
   }
 
@@ -322,4 +342,12 @@ function readDependsOn(itemState: Record<string, unknown>): string[] {
   const raw = itemState.dependsOn;
   if (!Array.isArray(raw)) return [];
   return raw.filter((id): id is string => typeof id === "string");
+}
+
+// The {attempt} placeholder in a persist path is per-workflow-attempt; items
+// that track attempts (e.g. cards) carry it in workflowInstanceState, others
+// default to attempt 1.
+function readAttempt(itemState: Record<string, unknown>): number {
+  const raw = itemState.attempt;
+  return typeof raw === "number" && Number.isFinite(raw) ? raw : 1;
 }
