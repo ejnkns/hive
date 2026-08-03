@@ -3,22 +3,25 @@
 import type { OperationContext, OperationFn } from "workflow-engine/runners";
 import {
   ensureIntegrationBranch,
+  gitOptional,
   readFlowSettings,
+  resolveBasePath,
 } from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
-import { gitOptional, type OperationResult, resolveBasePath } from "../shared";
 
 export const onboardingOperations: Record<string, OperationFn> = {
   ensure_integration_branch: ensureIntegrationBranchOp,
   write_project_metadata: writeProjectMetadata,
 };
 
+type OperationResult = Record<string, unknown>;
+
 function ensureIntegrationBranchOp(
   task: TaskDefinition,
   _params: Record<string, unknown>,
   ctx: OperationContext
 ): OperationResult {
-  const basePath = resolveBasePath(ctx);
+  const basePath = resolveBasePath(ctx.flowConfig());
   const { integrationBranch, branchPrefix } = readFlowSettings(
     ctx.flowConfig()
   );
@@ -43,7 +46,7 @@ function writeProjectMetadata(
   ctx: OperationContext
 ): OperationResult {
   const config = ctx.flowConfig();
-  const basePath = resolveBasePath(ctx);
+  const basePath = resolveBasePath(ctx.flowConfig());
   const name =
     typeof config.name === "string"
       ? config.name

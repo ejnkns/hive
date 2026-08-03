@@ -1,8 +1,15 @@
-/** @private — persist helper for the task-completion path. Only imported by create-workflow-instance-controller.ts. */
+/** @private — persist helpers for the task-completion and operation-read paths. Imported by create-workflow-instance-controller.ts and re-exported via runners.ts. */
 
 import { randomBytes } from "node:crypto";
-import { mkdirSync, renameSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, isAbsolute, join, normalize, sep } from "node:path";
+import { readFlowSettings } from "../read-flow-settings";
 
 export type PersistOutputParams = {
   output: unknown;
@@ -16,17 +23,40 @@ export type PersistOutputParams = {
   attempt: number;
 };
 
+// The placeholders a persist path may reference, substituted from the workflow
+// instance when the engine resolves the file location.
+export type PersistPathVars = {
+  instanceId: string;
+  attempt: number;
+};
+
+// Resolves a declared persist path to its absolute location under
+// basePath/<domainDir>, substituting {instanceId}/{attempt}. Shared by the
+// write and read helpers so a task's persist path and an operation that reads
+// the output back never drift.
+export function resolvePersistedPath(
+  basePath: string,
+  domainDir: string,
+  persistPath: string,
+  vars: PersistPathVars
+): string {
+  const relativePath = persistPath
+    .replaceAll("{instanceId}", vars.instanceId)
+    .replaceAll("{attempt}", String(vars.attempt));
+  return resolveDomainPath(basePath, domainDir, relativePath);
+}
+
 // Writes a task's output to basePath/<domainDir>/<path> on successful
 // completion. Format is inferred from the value: a string becomes a text file,
 // anything else becomes JSON. The write is atomic (temp file + rename) and the
 // resolved path is confined to the domain root. Returns the absolute written
 // path.
 export function persistOutput(params: PersistOutputParams): string {
-  const relativePath = substitutePathPlaceholders(params);
-  const target = resolveDomainPath(
+  const target = resolvePersistedPath(
     params.basePath,
     params.domainDir,
-    relativePath
+    params.persistPath,
+    { instanceId: params.instanceId, attempt: params.attempt }
   );
 
   mkdirSync(dirname(target), { recursive: true });
@@ -37,10 +67,23 @@ export function persistOutput(params: PersistOutputParams): string {
   return target;
 }
 
-function substitutePathPlaceholders(params: PersistOutputParams): string {
-  return params.persistPath
-    .replaceAll("{instanceId}", params.instanceId)
-    .replaceAll("{attempt}", String(params.attempt));
+// Reads a task's persisted output back at basePath/<domainDir>/<path>,
+// returning "" when the file does not exist. The engine owns persist-path
+// resolution, so operations read exactly what the engine wrote.
+export function readPersistedOutput(
+  flowConfig: Record<string, unknown>,
+  persistPath: string,
+  vars?: PersistPathVars
+): string {
+  const settings = readFlowSettings(flowConfig);
+  if (!settings.basePath || !settings.domainDir) return "";
+  const target = resolvePersistedPath(
+    settings.basePath,
+    settings.domainDir,
+    persistPath,
+    vars ?? { instanceId: "", attempt: 1 }
+  );
+  return existsSync(target) ? readFileSync(target, "utf-8") : "";
 }
 
 // Rejects absolute paths and any resolved path that escapes the domain root.

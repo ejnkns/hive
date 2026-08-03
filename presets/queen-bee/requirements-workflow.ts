@@ -76,7 +76,12 @@ export const requirementsWorkflow = defineWorkflow({
           label: "Requirements session",
           trigger: "auto",
           role: "ai-chat",
-          tools: ["list_directory", "read_file", "search_code"],
+          tools: [
+            "list_directory",
+            "read_file",
+            "search_code",
+            "update_requirements_draft",
+          ],
           startOnUserInput: true,
           systemPrompt: REQUIREMENTS_DRAFT_SYSTEM_PROMPT,
           completionSignal: "REQUIREMENTS_COMPLETE",

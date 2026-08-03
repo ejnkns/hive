@@ -1,19 +1,23 @@
 // Cards workflow internals; import via cards-workflow.ts.
 
 import { randomUUID } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import type { OperationContext, OperationFn } from "workflow-engine/runners";
-import { readFlowSettings } from "workflow-engine/runners";
+import {
+  gitOptional,
+  readFlowSettings,
+  readPersistedOutput,
+  resolveBasePath,
+} from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
 import type { CardSpec, ReviewPackage } from "../cards-workflow";
-import { gitOptional, type OperationResult, resolveBasePath } from "../shared";
 
 export const cardsOperations: Record<string, OperationFn> = {
   validate_completion: validateCompletionOp,
   build_review_package: buildReviewPackageOp,
   check_review_freshness: checkReviewFreshnessOp,
 };
+
+type OperationResult = Record<string, unknown>;
 
 // Deterministic: the worker's feature branch exists and is ahead of the
 // integration branch (committed work). The worker commits with commit_work
@@ -23,7 +27,7 @@ function validateCompletionOp(
   _params: Record<string, unknown>,
   ctx: OperationContext
 ): OperationResult {
-  const basePath = resolveBasePath(ctx);
+  const basePath = resolveBasePath(ctx.flowConfig());
   const cardId = ctx.instanceId;
   const attempt = readNumber(ctx.workflowInstanceState().attempt) ?? 1;
   const { branchPrefix, integrationBranch } = readFlowSettings(
@@ -61,7 +65,7 @@ function buildReviewPackageOp(
   _params: Record<string, unknown>,
   ctx: OperationContext
 ): ReviewPackage {
-  const basePath = resolveBasePath(ctx);
+  const basePath = resolveBasePath(ctx.flowConfig());
   const cardId = ctx.instanceId;
   const attempt = readNumber(ctx.workflowInstanceState().attempt) ?? 1;
   const { branchPrefix, integrationBranch, domainDir } = readFlowSettings(
@@ -78,7 +82,7 @@ function buildReviewPackageOp(
     cardId,
     attempt,
     spec: readCardSpec(ctx),
-    requirements: readFileSafe(join(basePath, domainDir, "requirements.md")),
+    requirements: readPersistedOutput(ctx.flowConfig(), "requirements.md"),
     baseCommit: gitOptional(basePath, ["rev-parse", integrationBranch]),
     workerHead: gitOptional(basePath, ["rev-parse", branchName]),
     diff: gitOptional(basePath, [
@@ -101,26 +105,27 @@ function checkReviewFreshnessOp(
   _params: Record<string, unknown>,
   ctx: OperationContext
 ): OperationResult {
-  const basePath = resolveBasePath(ctx);
+  const basePath = resolveBasePath(ctx.flowConfig());
   const cardId = ctx.instanceId;
   const attempt = readNumber(ctx.workflowInstanceState().attempt) ?? 1;
-  const { integrationBranch, domainDir } = readFlowSettings(ctx.flowConfig());
-  if (!integrationBranch || !domainDir) {
-    throw new Error("Flow config integrationBranch and domainDir are required");
+  const { integrationBranch } = readFlowSettings(ctx.flowConfig());
+  if (!integrationBranch) {
+    throw new Error("Flow config integrationBranch is required");
   }
-  const packagePath = join(
-    basePath,
-    domainDir,
-    "reviews",
-    `${cardId}-${attempt}.json`
+  const raw = readPersistedOutput(
+    ctx.flowConfig(),
+    "reviews/{instanceId}-{attempt}.json",
+    {
+      instanceId: cardId,
+      attempt,
+    }
   );
-  const raw = readFileSafe(packagePath);
   if (raw === "") {
-    throw new Error(`No review package at ${packagePath}`);
+    throw new Error(`No review package for card ${cardId} attempt ${attempt}`);
   }
   const pkg = JSON.parse(raw) as { baseCommit?: string };
   if (typeof pkg.baseCommit !== "string" || pkg.baseCommit === "") {
-    throw new Error(`Review package ${packagePath} has no baseCommit`);
+    throw new Error(`Review package for card ${cardId} has no baseCommit`);
   }
   const liveHead = gitOptional(basePath, ["rev-parse", integrationBranch]);
   if (liveHead === "") {
@@ -153,10 +158,6 @@ function readCardSpec(ctx: OperationContext): CardSpec {
 function readStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((entry): entry is string => typeof entry === "string");
-}
-
-function readFileSafe(path: string): string {
-  return existsSync(path) ? readFileSync(path, "utf-8") : "";
 }
 
 function readNumber(value: unknown): number | undefined {

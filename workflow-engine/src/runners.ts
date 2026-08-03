@@ -31,7 +31,17 @@ export {
   writeFlowArtifacts,
 } from "./runners/create-standard-tool-registry/git-operations";
 export { loadProjectContext } from "./runners/create-standard-tool-registry/load-project-context";
-export { persistOutput } from "./runners/persist-output";
+export {
+  gitOptional,
+  readFileSafe,
+  resolveBasePath,
+} from "./runners/operation-utils";
+export {
+  type PersistPathVars,
+  persistOutput,
+  readPersistedOutput,
+  resolvePersistedPath,
+} from "./runners/persist-output";
 export { prepareIsolatedWorkspace } from "./runners/prepare-isolated-workspace";
 export { toToolMaps } from "./runners/to-tool-maps";
 export type {
