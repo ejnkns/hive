@@ -1,5 +1,6 @@
+/** @public — the ideas workflow module. */
 import { defineWorkflow } from "workflow-engine/workflow-types";
-import { IDEA_ELABORATION_SYSTEM_PROMPT } from "./prompts";
+import { IDEA_ELABORATION_SYSTEM_PROMPT } from "./ideas-workflow/prompts";
 
 export type IdeasTaskOutputs = {
   elaborate: { ideaBrief: string; elaboratedSpec: string };

@@ -24,9 +24,11 @@ import {
   type ToolContext,
 } from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
-import type { ReviewPackage } from "../../../../presets/queen-bee/domain-state";
-import { queenBeeFlow } from "../../../../presets/queen-bee/flow";
-import { queenBeeOperations } from "../../../../presets/queen-bee/operations";
+import type { ReviewPackage } from "../../../../presets/queen-bee/cards-workflow";
+import {
+  queenBeeFlow,
+  queenBeeOperations,
+} from "../../../../presets/queen-bee/flow";
 import { queenBeeTools } from "../../../../presets/queen-bee/tools";
 import { createEngineRunners } from "../engine-bridge";
 import { registerFlowDefinition } from "../flow-definitions";
@@ -148,14 +150,39 @@ describe("queen-bee domain persistence", () => {
     );
   });
 
-  it("finalize_requirements falls back to the draft task output when no session draft was recorded", async () => {
+  it("finalize_requirements recovers the draft from the session's update_requirements_draft tool calls", async () => {
     const runner = makeRunner(
       { ...queenBeeConfig, basePath },
       {},
       {
         draft: {
           status: "success",
-          output: { content: "# Draft delivered as text\n" },
+          output: {
+            content: "Thanks — here's the structured requirements document.",
+            messages: [
+              {
+                role: "assistant",
+                content: "Drafting",
+                tool_calls: [
+                  {
+                    id: "c1",
+                    type: "function",
+                    function: {
+                      name: "update_requirements_draft",
+                      arguments: JSON.stringify({
+                        content: "# Structured requirements\n",
+                      }),
+                    },
+                  },
+                ],
+              },
+              {
+                role: "tool",
+                content: "Requirements draft updated",
+                tool_call_id: "c1",
+              },
+            ],
+          },
         },
       }
     );
@@ -165,7 +192,28 @@ describe("queen-bee domain persistence", () => {
       operations: ["finalize_requirements"],
     });
 
-    assert.equal(result.output, "# Draft delivered as text\n");
+    assert.equal(result.output, "# Structured requirements\n");
+  });
+
+  it("finalize_requirements ignores the agent's chat reply and throws when no structured draft was recorded", async () => {
+    const runner = makeRunner(
+      { ...queenBeeConfig, basePath },
+      {},
+      {
+        draft: {
+          status: "success",
+          output: {
+            content: "Thanks — here's the structured requirements document.",
+            messages: [],
+          },
+        },
+      }
+    );
+
+    await assert.rejects(
+      runner.run({ ...dummyTask, operations: ["finalize_requirements"] }),
+      /No requirements draft/
+    );
   });
 
   it("validate_completion throws for a card with no committed work", async () => {

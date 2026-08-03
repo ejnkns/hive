@@ -8,14 +8,32 @@ import type {
   RuntimeWorkflowConfig,
   StateDef,
 } from "workflow-engine/workflow-types";
-import { cardsWorkflow } from "./cards-workflow";
-import type { PlanCard, PlanProposal } from "./domain-state";
+import type { CardSpec } from "./cards-workflow";
+import { cardsOperations, cardsWorkflow } from "./cards-workflow";
 import { ideasWorkflow } from "./ideas-workflow";
-import { integrationWorkflow } from "./integration-workflow";
-import { onboardingWorkflow } from "./onboarding-workflow";
-import { queenBeeOperations } from "./operations";
-import { requirementsWorkflow } from "./requirements-workflow";
+import {
+  integrationOperations,
+  integrationWorkflow,
+} from "./integration-workflow";
+import {
+  onboardingOperations,
+  onboardingWorkflow,
+} from "./onboarding-workflow";
+import type { PlanCard, PlanProposal } from "./requirements-workflow";
+import {
+  requirementsOperations,
+  requirementsWorkflow,
+} from "./requirements-workflow";
 import { queenBeeTools } from "./tools";
+
+// The merged domain operations across all workflows, keyed by the names the
+// workflow tasks reference. Exported so tests can run them directly.
+export const queenBeeOperations = {
+  ...onboardingOperations,
+  ...requirementsOperations,
+  ...cardsOperations,
+  ...integrationOperations,
+};
 
 // === QUEEN BEE FLOW ===
 //
@@ -193,7 +211,7 @@ export const queenBeeFlow = {
             description: card.description,
             acceptanceCriteria: card.acceptanceCriteria,
             dependsOn: card.dependencies,
-          },
+          } satisfies CardSpec,
           dependsOn: card.dependencies,
         }));
       },

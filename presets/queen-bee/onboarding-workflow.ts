@@ -1,4 +1,7 @@
+/** @public — the onboarding workflow module. */
 import { defineWorkflow } from "workflow-engine/workflow-types";
+
+export { onboardingOperations } from "./onboarding-workflow/operations";
 
 // === ONBOARDING WORKFLOW ===
 //

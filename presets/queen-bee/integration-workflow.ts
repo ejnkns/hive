@@ -1,4 +1,7 @@
+/** @public — the integration workflow module. */
 import { defineWorkflow } from "workflow-engine/workflow-types";
+
+export { integrationOperations } from "./integration-workflow/operations";
 
 // === INTEGRATION WORKFLOW ===
 //

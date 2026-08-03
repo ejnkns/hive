@@ -1,9 +1,29 @@
+/** @public — the requirements workflow module. */
 import { defineWorkflow } from "workflow-engine/workflow-types";
-import type { PlanProposal } from "./domain-state";
 import {
   PLANNER_SYSTEM_PROMPT,
   REQUIREMENTS_DRAFT_SYSTEM_PROMPT,
-} from "./prompts";
+} from "./requirements-workflow/prompts";
+
+export { requirementsOperations } from "./requirements-workflow/operations";
+
+// A card proposed by the planning agent. Dependencies reference other card
+// titles; the engine's dependsOnState gates reference card instance ids, so
+// the queen-bee flow keeps them as titles at plan time and the worker
+// admission wiring resolves them against the created cards.
+export type PlanCard = {
+  title: string;
+  description: string;
+  acceptanceCriteria: string[];
+  dependencies: string[];
+};
+
+// The planner's structured output (parsed from its submit_plan completion
+// tool call). A proposal fans out into cards; feedback sends the user back
+// to the requirements session.
+export type PlanProposal =
+  | { kind: "proposal"; cards: PlanCard[] }
+  | { kind: "feedback"; guidance: string };
 
 export type RequirementsTaskOutputs = {
   draft: { content: string; revision: string };

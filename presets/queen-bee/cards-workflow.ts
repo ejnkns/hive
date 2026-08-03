@@ -1,10 +1,35 @@
+/** @public — the cards workflow module. */
 import { defineWorkflow } from "workflow-engine/workflow-types";
-import type { ReviewPackage } from "./domain-state";
 import {
   COORDINATOR_SYSTEM_PROMPT,
   REVIEWER_SYSTEM_PROMPT,
   WORKER_SYSTEM_PROMPT,
-} from "./prompts";
+} from "./cards-workflow/prompts";
+
+export { cardsOperations } from "./cards-workflow/operations";
+
+// The domain data a card instance carries (workflowInstanceState.cardSpec),
+// authored by the requirements→cards edge from the accepted plan.
+export type CardSpec = {
+  title: string;
+  description: string;
+  acceptanceCriteria: string[];
+  dependsOn: string[];
+};
+
+// The immutable review artifact built by build_review_package and persisted to
+// reviews/{instanceId}-{attempt}.json under the domain root.
+export type ReviewPackage = {
+  packageId: string;
+  cardId: string;
+  attempt: number;
+  spec: CardSpec;
+  requirements: string;
+  baseCommit: string;
+  workerHead: string;
+  diff: string;
+  createdAt: string;
+};
 
 export type CardsTaskOutputs = {
   prepareWorktree: {
