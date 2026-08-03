@@ -70,7 +70,10 @@ function writeProjectMetadata(
 
 // The requirements draft is the requirements session's running output, recorded
 // in the instance state by the update_requirements_draft tool. Finalizing
-// returns the text; the task persists it as requirements.md.
+// returns the text; the task persists it as requirements.md. As a recovery for
+// sessions where the agent delivered the document as its final response without
+// calling update_requirements_draft, it falls back to the draft task's output
+// content.
 function finalizeRequirementsOp(
   _task: TaskDefinition,
   _params: Record<string, unknown>,
@@ -78,10 +81,16 @@ function finalizeRequirementsOp(
 ): string {
   const raw = ctx.workflowInstanceState().requirementsDraft;
   const draft = typeof raw === "string" ? raw : "";
-  if (draft === "") {
-    throw new Error("No requirements draft to finalize");
-  }
-  return draft;
+  if (draft !== "") return draft;
+
+  const draftTask = ctx.taskOutputs().draft as
+    | { status?: string; output?: { content?: unknown } }
+    | undefined;
+  const content =
+    draftTask?.status === "success" ? draftTask.output?.content : undefined;
+  if (typeof content === "string" && content !== "") return content;
+
+  throw new Error("No requirements draft to finalize");
 }
 
 // ── Completion gate ──

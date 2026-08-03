@@ -1,5 +1,9 @@
 import { defineWorkflow } from "workflow-engine/workflow-types";
 import type { PlanProposal } from "./domain-state";
+import {
+  PLANNER_SYSTEM_PROMPT,
+  REQUIREMENTS_DRAFT_SYSTEM_PROMPT,
+} from "./prompts";
 
 export type RequirementsTaskOutputs = {
   draft: { content: string; revision: string };
@@ -52,12 +56,9 @@ export const requirementsWorkflow = defineWorkflow({
           label: "Requirements session",
           trigger: "auto",
           role: "ai-chat",
-          tools: ["read_file", "search_code"],
+          tools: ["list_directory", "read_file", "search_code"],
           startOnUserInput: true,
-          systemPrompt:
-            "You are a requirements analyst. Ask the user questions " +
-            "to understand their needs, produce a structured requirements " +
-            "document. Signal REQUIREMENTS_COMPLETE when done.",
+          systemPrompt: REQUIREMENTS_DRAFT_SYSTEM_PROMPT,
           completionSignal: "REQUIREMENTS_COMPLETE",
         },
       ],
@@ -92,6 +93,13 @@ export const requirementsWorkflow = defineWorkflow({
           id: "approve",
           label: "Submit for planning",
           variant: "primary",
+          // A requirements document must be recorded before planning: the
+          // planner is grounded in it, and finalizing persists it. Prevents
+          // reaching planning/finalizing with no requirements.
+          gate: (ctx) => {
+            const draft = ctx.workflowInstanceState.requirementsDraft;
+            return typeof draft === "string" && draft.trim() !== "";
+          },
           transitionTo: "planning",
         },
         {
@@ -114,11 +122,10 @@ export const requirementsWorkflow = defineWorkflow({
           role: "ai-task",
           tools: ["read_file", "search_code", "submit_plan"],
           completionTool: "submit_plan",
-          systemPrompt:
-            "You are a technical planner. Decompose requirements " +
-            "into cards with acceptance criteria. Submit a proposal " +
-            "via submit_plan with the cards to create, or feedback " +
-            "if more clarification is needed.",
+          // The requirements document is injected into the planner's first
+          // message; without it the planner would propose cards ungrounded.
+          inputFromInstanceState: "requirementsDraft",
+          systemPrompt: PLANNER_SYSTEM_PROMPT,
         },
       ],
       actions: [
@@ -126,14 +133,20 @@ export const requirementsWorkflow = defineWorkflow({
           id: "accept_proposal",
           label: "Accept proposal",
           variant: "primary",
-          gate: (ctx) => ctx.taskOutputs.plan?.output.kind === "proposal",
+          // Not while the planner is running (or a stale proposal from a
+          // previous planning pass is sitting in taskOutputs).
+          gate: (ctx) =>
+            !ctx.hasRunningTask &&
+            ctx.taskOutputs.plan?.output.kind === "proposal",
           transitionTo: "planned",
         },
         {
           id: "repair",
           label: "Start repair session",
           variant: "secondary",
-          gate: (ctx) => ctx.taskOutputs.plan?.output.kind === "feedback",
+          gate: (ctx) =>
+            !ctx.hasRunningTask &&
+            ctx.taskOutputs.plan?.output.kind === "feedback",
           transitionTo: "drafting",
         },
       ],

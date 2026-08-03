@@ -1,4 +1,5 @@
 import { defineWorkflow } from "workflow-engine/workflow-types";
+import { IDEA_ELABORATION_SYSTEM_PROMPT } from "./prompts";
 
 export type IdeasTaskOutputs = {
   elaborate: { ideaBrief: string; elaboratedSpec: string };
@@ -49,11 +50,9 @@ export const ideasWorkflow = defineWorkflow({
           label: "Elaborate session",
           trigger: "auto",
           role: "ai-chat",
-          tools: ["read_file", "search_code"],
+          tools: ["list_directory", "read_file", "search_code"],
           startOnUserInput: true,
-          systemPrompt:
-            "You are a product analyst. Ask the user questions " +
-            "to clarify this idea. Produce a structured proposal.",
+          systemPrompt: IDEA_ELABORATION_SYSTEM_PROMPT,
         },
       ],
       autoTransitions: [

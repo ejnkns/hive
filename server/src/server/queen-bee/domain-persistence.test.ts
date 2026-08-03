@@ -48,7 +48,8 @@ const queenBeeConfig = {
 
 function makeRunner(
   flowConfig: Record<string, unknown>,
-  instanceState: Record<string, unknown> = {}
+  instanceState: Record<string, unknown> = {},
+  taskOutputs: Record<string, unknown> = {}
 ) {
   return createOperationRunner({
     getContext: (): OperationContext => ({
@@ -58,6 +59,7 @@ function makeRunner(
       workflowId: "cards",
       currentState: "ready",
       workflowInstanceState: () => instanceState,
+      taskOutputs: () => taskOutputs,
       patchWorkflowInstanceState: (patch) =>
         Object.assign(instanceState, patch),
     }),
@@ -144,6 +146,26 @@ describe("queen-bee domain persistence", () => {
       runner.run({ ...dummyTask, operations: ["finalize_requirements"] }),
       /No requirements draft/
     );
+  });
+
+  it("finalize_requirements falls back to the draft task output when no session draft was recorded", async () => {
+    const runner = makeRunner(
+      { ...queenBeeConfig, basePath },
+      {},
+      {
+        draft: {
+          status: "success",
+          output: { content: "# Draft delivered as text\n" },
+        },
+      }
+    );
+
+    const result = await runner.run({
+      ...dummyTask,
+      operations: ["finalize_requirements"],
+    });
+
+    assert.equal(result.output, "# Draft delivered as text\n");
   });
 
   it("validate_completion throws for a card with no committed work", async () => {

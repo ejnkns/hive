@@ -1,5 +1,10 @@
 import { defineWorkflow } from "workflow-engine/workflow-types";
 import type { ReviewPackage } from "./domain-state";
+import {
+  COORDINATOR_SYSTEM_PROMPT,
+  REVIEWER_SYSTEM_PROMPT,
+  WORKER_SYSTEM_PROMPT,
+} from "./prompts";
 
 export type CardsTaskOutputs = {
   prepareWorktree: {
@@ -157,8 +162,7 @@ export const cardsWorkflow = defineWorkflow({
             "submit_work",
           ],
           completionTool: "submit_work",
-          systemPrompt:
-            "You are a feature implementer. Use commit_work to save changes and submit_work to signal completion.",
+          systemPrompt: WORKER_SYSTEM_PROMPT,
           operations: [],
         },
       ],
@@ -247,8 +251,7 @@ export const cardsWorkflow = defineWorkflow({
             "submit_review",
           ],
           completionTool: "submit_review",
-          systemPrompt:
-            "You are a code reviewer. Inspect the worker changes and submit a structured review.",
+          systemPrompt: REVIEWER_SYSTEM_PROMPT,
         },
       ],
       autoTransitions: [
@@ -369,8 +372,7 @@ export const cardsWorkflow = defineWorkflow({
           role: "ai-task",
           workspacePath: "@instance:worktreePath",
           tools: ["read_file", "search_code"],
-          systemPrompt:
-            "You are a coordinator. Analyze why the card could not be completed and suggest remediation.",
+          systemPrompt: COORDINATOR_SYSTEM_PROMPT,
           operations: [],
         },
       ],
