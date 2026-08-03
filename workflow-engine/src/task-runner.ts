@@ -55,6 +55,14 @@ export type TaskRunnerContext = {
   // ai-chat sessions sync their live transcript into the instance state so
   // observers see messages at each turn boundary.
   patchRunningTaskMessages(messages: ChatMessage[]): void;
+  // Creates a new workflow instance in this flow (the capability behind the
+  // create_instance infra tool, so an agent can spawn fresh instances — e.g.
+  // graduate fog into new decision tickets). The instanceState becomes the new
+  // instance's domain data; returns the new instance id.
+  createWorkflowInstance(
+    workflowId: string,
+    instanceState?: Record<string, unknown>
+  ): { id: string };
 };
 
 export type TaskRunnerFactory = (ctx: TaskRunnerContext) => TaskRunner;

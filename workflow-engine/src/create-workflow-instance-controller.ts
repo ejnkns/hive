@@ -36,6 +36,7 @@ export type WorkflowInstanceEvent =
 type EventHandler = (event: WorkflowInstanceEvent) => void;
 
 export type WorkflowInstanceControllerAPI = {
+  id: string;
   getState(): RuntimeWorkflowInstanceState;
   getAvailableActions(): VisibleAction[];
   on(handler: EventHandler): () => void;
@@ -53,12 +54,17 @@ export type WorkflowInstanceControllerAPI = {
 // === Factory ===
 
 // Runtime-level context the controller threads into every task runner factory
-// invocation: flow config access and the instance's identity.
+// invocation: flow config access, the instance's identity, and the flow's
+// instance-creation capability (so an agent tool can spawn fresh instances).
 export type ControllerRuntimeContext = {
   flowConfig: Record<string, unknown>;
   patchFlowConfig(patch: Record<string, unknown>): void;
   instanceId: string;
   workflowId: string;
+  createWorkflowInstance: (
+    workflowId: string,
+    instanceState?: Record<string, unknown>
+  ) => { id: string };
 };
 
 export function createWorkflowInstanceController(
@@ -80,6 +86,11 @@ export function createWorkflowInstanceController(
       }),
     instanceId: runtimeContext?.instanceId ?? "",
     workflowId: runtimeContext?.workflowId ?? "",
+    createWorkflowInstance:
+      runtimeContext?.createWorkflowInstance ??
+      (() => {
+        throw new Error("createWorkflowInstance requires a flow runtime");
+      }),
   };
   let state: RuntimeWorkflowInstanceState = initialState ?? {
     currentState: workflow.initial,
@@ -288,10 +299,14 @@ export function createWorkflowInstanceController(
       patchWorkflowInstanceState: patchWorkflowInstanceState,
       taskOutputs: state.taskOutputs,
       patchRunningTaskMessages,
+      createWorkflowInstance: taskContext.createWorkflowInstance,
     };
   }
 
   return {
+    get id() {
+      return taskContext.instanceId;
+    },
     getState: () => state,
     getAvailableActions: getVisibleActions,
     on: (handler: EventHandler) => {

@@ -27,6 +27,12 @@ export type AiTaskRunnerConfig = {
   // The instance's domain data, resolved against by @instance: workspacePath
   // refs (e.g. "@instance:worktreePath").
   workflowInstanceState?: Record<string, unknown>;
+  // The create_instance capability, offered to the model when the task declares
+  // the tool. Takes domain state and returns the new instance id.
+  createWorkflowInstance?: (
+    workflowId: string,
+    instanceState?: Record<string, unknown>
+  ) => { id: string };
 };
 
 export function createAiTaskRunner(config: AiTaskRunnerConfig): TaskRunner {
@@ -113,6 +119,7 @@ export function createAiTaskRunner(config: AiTaskRunnerConfig): TaskRunner {
               basePath: config.basePath,
               instanceId: config.instanceId,
               patchWorkflowInstanceState: config.patchWorkflowInstanceState,
+              createWorkflowInstance: config.createWorkflowInstance,
               signal: abortController.signal,
             });
           } catch (err) {

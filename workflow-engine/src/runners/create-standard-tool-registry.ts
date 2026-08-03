@@ -5,6 +5,10 @@ import {
   execute as commitWorkExec,
 } from "./create-standard-tool-registry/commit-work";
 import {
+  definition as createInstanceDef,
+  execute as createInstanceExec,
+} from "./create-standard-tool-registry/create-instance";
+import {
   definition as gitDiffDef,
   execute as gitDiffExec,
 } from "./create-standard-tool-registry/git-diff";
@@ -61,6 +65,7 @@ export function createStandardToolDefinitions(): Record<
     git_log: gitLogDef,
     git_show: gitShowDef,
     commit_work: commitWorkDef,
+    create_instance: createInstanceDef,
   };
 }
 
@@ -79,5 +84,6 @@ export function createStandardToolRegistry(): Record<
     git_log: gitLogExec,
     git_show: gitShowExec,
     commit_work: commitWorkExec,
+    create_instance: createInstanceExec,
   };
 }

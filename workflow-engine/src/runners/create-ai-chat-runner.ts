@@ -31,6 +31,12 @@ export type AiChatRunnerConfig = {
   // Syncs the live conversation into the instance state at each turn boundary
   // so observers (the flow snapshot push) render the transcript as it grows.
   patchRunningTaskMessages?: (messages: ChatMessage[]) => void;
+  // The create_instance capability, offered to the model when the task declares
+  // the tool. Takes domain state and returns the new instance id.
+  createWorkflowInstance?: (
+    workflowId: string,
+    instanceState?: Record<string, unknown>
+  ) => { id: string };
 };
 
 export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
@@ -129,6 +135,7 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
             basePath: config.basePath,
             instanceId: config.instanceId,
             patchWorkflowInstanceState: config.patchWorkflowInstanceState,
+            createWorkflowInstance: config.createWorkflowInstance,
             signal: abortController.signal,
           });
         } catch (err) {
@@ -159,6 +166,19 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
   return {
     async run(task: TaskDefinition) {
       messages = [{ role: "system", content: task.systemPrompt ?? "" }];
+      const injectedInput = resolveDottedPath(
+        config.workflowInstanceState ?? {},
+        task.inputFromInstanceState
+      );
+      if (injectedInput !== undefined) {
+        messages.push({
+          role: "user",
+          content:
+            typeof injectedInput === "string"
+              ? injectedInput
+              : JSON.stringify(injectedInput),
+        });
+      }
       config.patchRunningTaskMessages?.(messages);
       if (task.startOnUserInput) {
         // Wait for the first user message before calling the model, so a
@@ -182,4 +202,17 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
       turnResolve = null;
     },
   };
+}
+
+function resolveDottedPath(
+  state: Record<string, unknown>,
+  dottedPath: string | undefined
+): unknown {
+  if (!dottedPath) return undefined;
+  let current: unknown = state;
+  for (const segment of dottedPath.split(".")) {
+    if (current === null || typeof current !== "object") return undefined;
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return current;
 }

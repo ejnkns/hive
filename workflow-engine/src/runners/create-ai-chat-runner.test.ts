@@ -406,4 +406,25 @@ describe("createAiChatRunner", () => {
       "the assistant reply should be synced"
     );
   });
+
+  it("injects inputFromInstanceState as the first user message", async () => {
+    let seenMessages: ChatMessage[] = [];
+    const runner = createAiChatRunner({
+      modelCaller: async (_prompt, msgs, _tools, _signal) => {
+        seenMessages = [...msgs];
+        return { content: "##COMPLETE##" };
+      },
+      toolDefinitions: {},
+      toolExecutors: {},
+      workflowInstanceState: { ticket: { title: "Build the thing" } },
+      completionSignal: "##COMPLETE##",
+    });
+
+    await runner.run({ ...dummyTask, inputFromInstanceState: "ticket" });
+
+    assert.equal(seenMessages.length, 2);
+    assert.equal(seenMessages[0]?.role, "system");
+    assert.equal(seenMessages[1]?.role, "user");
+    assert.ok(seenMessages[1]?.content.includes("Build the thing"));
+  });
 });

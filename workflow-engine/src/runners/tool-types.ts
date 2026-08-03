@@ -45,6 +45,12 @@ export type ToolContext = {
   // session running state (e.g. the requirements draft) instead of writing
   // files; the engine persists it as part of the instance.
   patchWorkflowInstanceState?: (patch: Record<string, unknown>) => void;
+  // Creates a new workflow instance in this flow (the capability behind the
+  // create_instance tool). Absent when the task does not declare it.
+  createWorkflowInstance?: (
+    workflowId: string,
+    instanceState?: Record<string, unknown>
+  ) => { id: string };
   signal?: AbortSignal;
   baseCommit?: string;
   projectRevision?: string;
@@ -69,7 +75,8 @@ export type InfrastructureToolName =
   | "git_diff"
   | "git_log"
   | "git_show"
-  | "commit_work";
+  | "commit_work"
+  | "create_instance";
 
 // A self-contained tool: the schema the model is offered plus the executor
 // that implements it. The engine never interprets a Tool's meaning — it

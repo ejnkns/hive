@@ -278,6 +278,14 @@ export function createFlowRuntime<
         patchFlowConfig,
         instanceId,
         workflowId,
+        // Expose instance creation to agents via the create_instance tool: the
+        // caller's domain state becomes the new instance's workflowInstanceState.
+        createWorkflowInstance: (newWorkflowId, domainState) => {
+          const created = addWorkflowInstance(newWorkflowId, {
+            workflowInstanceState: domainState ?? {},
+          });
+          return { id: created.id };
+        },
       }
     );
 

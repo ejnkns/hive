@@ -14,7 +14,12 @@ import {
   type FlowPersistence,
   type FlowRuntimeEvent,
 } from "./create-flow-runtime";
+import { createAiTaskRunner } from "./runners/create-ai-task-runner";
 import { createOperationRunner } from "./runners/create-operation-runner";
+import {
+  createStandardToolDefinitions,
+  createStandardToolRegistry,
+} from "./runners/create-standard-tool-registry";
 import type { TaskDefinition, TaskRunner } from "./task-runner";
 import { defineWorkflow, type FlowEdge } from "./workflow-types";
 
@@ -960,3 +965,91 @@ function readOutputResult(output: unknown): unknown {
   if (output === null || typeof output !== "object") return undefined;
   return "result" in output ? output.result : undefined;
 }
+
+// ── agent-created instances (create_instance) ──
+
+const ticketWorkflow = defineWorkflow({
+  id: "ticket",
+  label: "Ticket",
+  taskOutputs: {} as Record<string, never>,
+  states: [
+    { id: "fog", label: "Fog", category: "initial" },
+    { id: "closed", label: "Closed", category: "terminal" },
+  ],
+  initial: "fog",
+  terminalStates: ["closed"],
+});
+
+const resolverWorkflow = defineWorkflow({
+  id: "resolver",
+  label: "Resolver",
+  taskOutputs: {} as Record<string, never>,
+  states: [
+    {
+      id: "working",
+      label: "Working",
+      category: "active",
+      tasks: [
+        {
+          id: "resolve",
+          label: "Resolve",
+          trigger: "manual",
+          role: "ai-task",
+          tools: ["create_instance"],
+        },
+      ],
+    },
+  ],
+  initial: "working",
+  terminalStates: [],
+});
+
+describe("agent-created instances", () => {
+  it("an ai-task can graduate a fresh instance via the create_instance tool", async () => {
+    let calls = 0;
+    const runtime = createFlowRuntime(
+      "flow",
+      [resolverWorkflow, ticketWorkflow],
+      [],
+      {
+        "ai-task": (ctx) =>
+          createAiTaskRunner({
+            modelCaller: async (_prompt, _msgs, _tools, _signal) => {
+              calls++;
+              if (calls === 1) {
+                return {
+                  content: "graduating",
+                  toolCalls: [
+                    {
+                      id: "c1",
+                      name: "create_instance",
+                      arguments: JSON.stringify({
+                        workflowId: "ticket",
+                        instanceState: { title: "Graduated ticket" },
+                      }),
+                    },
+                  ],
+                };
+              }
+              return { content: "done" };
+            },
+            toolDefinitions: createStandardToolDefinitions(),
+            toolExecutors: createStandardToolRegistry(),
+            createWorkflowInstance: ctx.createWorkflowInstance,
+          }),
+      }
+    );
+
+    const resolver = runtime.addWorkflowInstance("resolver");
+    await resolver.startTask("resolve");
+
+    const tickets = runtime
+      .getWorkflowInstanceEntries()
+      .filter((entry) => entry.workflowId === "ticket");
+    assert.equal(tickets.length, 1);
+    assert.deepEqual(tickets[0]?.state.workflowInstanceState, {
+      title: "Graduated ticket",
+    });
+    assert.equal(tickets[0]?.state.currentState, "fog");
+  });
+});
