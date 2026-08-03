@@ -14,7 +14,6 @@ import Fastify, { type FastifyInstance } from "fastify";
 import {
   createFlowRuntime,
   type FlowPersistence,
-  type FlowRuntimeEvent,
 } from "workflow-engine/create-flow-runtime";
 import {
   defineWorkflow,
@@ -155,6 +154,25 @@ export const flow = {
   edges: [],
 };
 `;
+
+// The push-authoritative frames the flow WebSocket sends. Structural subset of
+// FlowResponse covering only the fields the WS tests assert on.
+type FlowWsMessage =
+  | {
+      type: "init";
+      flows: Array<{
+        id: string;
+        instances: Array<{ state: { currentState: string } }>;
+      }>;
+    }
+  | {
+      type: "flow_snapshot";
+      flow: {
+        id: string;
+        instances: Array<{ id: string; state: { currentState: string } }>;
+      };
+    }
+  | { type: "flow_deleted"; flowId: string };
 
 describe("flow API routes", () => {
   const servers: FastifyInstance[] = [];
@@ -542,7 +560,7 @@ describe("flow API routes", () => {
     assert.equal(response.json().error, "Instance not found");
   });
 
-  it("broadcasts instance state changes over /api/flows/ws", async () => {
+  it("sends init on connect and flow_snapshot after an action", async () => {
     const runtime = createFlowRuntime(
       "test-flow",
       [testWorkflow],
@@ -559,23 +577,18 @@ describe("flow API routes", () => {
     runtime.addWorkflowInstance("test-wf");
     registerFlowForTest("test-flow", runtime);
 
-    const server = Fastify();
-    servers.push(server);
-    await server.register(fastifyWebsocket);
-    registerFlowApiRoutes(server);
-    await server.listen({ port: 0, host: "127.0.0.1" });
-    const address = server.server.address();
-    const port =
-      typeof address === "object" && address !== null ? address.port : 0;
+    const server = await flowSocketServer();
+    const { ws, received } = await openFlowWs(server);
 
-    const received: FlowRuntimeEvent[] = [];
-    const ws = new WebSocket(`ws://127.0.0.1:${port}/api/flows/ws`);
-    ws.onmessage = (event) => {
-      received.push(JSON.parse(String(event.data)) as FlowRuntimeEvent);
-    };
-    await new Promise<void>((resolve) => {
-      ws.onopen = () => resolve();
-    });
+    await waitFor(() => received.some((message) => message.type === "init"));
+    const init = received.find(
+      (message): message is Extract<FlowWsMessage, { type: "init" }> =>
+        message.type === "init"
+    );
+    assert.ok(init, "init should be sent on connect");
+    assert.equal(init.flows.length, 1);
+    assert.equal(init.flows[0].id, "test-flow");
+    assert.equal(init.flows[0].instances[0].state.currentState, "pending");
 
     await server.inject({
       method: "POST",
@@ -584,10 +597,75 @@ describe("flow API routes", () => {
     });
 
     await waitFor(() =>
-      received.some((e) => e.type === "instance_state_changed")
+      received.some(
+        (message) =>
+          message.type === "flow_snapshot" &&
+          message.flow.instances.some(
+            (instance) =>
+              instance.id === instanceId &&
+              instance.state.currentState === "running"
+          )
+      )
     );
+    ws.close();
+  });
 
-    assert.ok(received.some((e) => e.type === "instance_state_changed"));
+  it("pushes a flow_snapshot for a flow created after connect", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition({
+      id: "test-def",
+      label: "Test Definition",
+      workflows: [testWorkflow],
+      edges: [],
+    });
+
+    const server = await flowSocketServer();
+    const { ws, received } = await openFlowWs(server);
+
+    await server.inject({
+      method: "POST",
+      url: "/api/flows",
+      body: { definitionId: "test-def", config: { name: "My Project" } },
+    });
+
+    await waitFor(() =>
+      received.some(
+        (message) =>
+          message.type === "flow_snapshot" && message.flow.id === "my-project"
+      )
+    );
+    ws.close();
+  });
+
+  it("pushes flow_deleted after DELETE /api/flows/:flowId", async () => {
+    const runtime = createFlowRuntime(
+      "test-flow",
+      [testWorkflow],
+      [],
+      {},
+      { name: "Test Flow", basePath: "/tmp/test-repo" },
+      {},
+      noopPersistence
+    );
+    runtime.addWorkflowInstance("test-wf");
+    registerFlowForTest("test-flow", runtime);
+
+    const server = await flowSocketServer();
+    const { ws, received } = await openFlowWs(server);
+
+    await waitFor(() => received.some((message) => message.type === "init"));
+
+    await server.inject({
+      method: "DELETE",
+      url: "/api/flows/test-flow",
+    });
+
+    await waitFor(() =>
+      received.some(
+        (message) =>
+          message.type === "flow_deleted" && message.flowId === "test-flow"
+      )
+    );
     ws.close();
   });
 
@@ -1107,6 +1185,33 @@ describe("flow API routes", () => {
     servers.push(server);
     registerFlowApiRoutes(server);
     return server;
+  }
+
+  async function flowSocketServer(): Promise<FastifyInstance> {
+    const server = Fastify();
+    servers.push(server);
+    await server.register(fastifyWebsocket);
+    registerFlowApiRoutes(server);
+    await server.listen({ port: 0, host: "127.0.0.1" });
+    return server;
+  }
+
+  async function openFlowWs(server: FastifyInstance): Promise<{
+    ws: WebSocket;
+    received: FlowWsMessage[];
+  }> {
+    const address = server.server.address();
+    const port =
+      typeof address === "object" && address !== null ? address.port : 0;
+    const received: FlowWsMessage[] = [];
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/api/flows/ws`);
+    ws.onmessage = (event) => {
+      received.push(JSON.parse(String(event.data)) as FlowWsMessage);
+    };
+    await new Promise<void>((resolve) => {
+      ws.onopen = () => resolve();
+    });
+    return { ws, received };
   }
 });
 

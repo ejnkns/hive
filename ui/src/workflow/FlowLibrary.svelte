@@ -1,44 +1,26 @@
 <script lang="ts">
-import { onDestroy, onMount } from "svelte";
+import { onMount } from "svelte";
 import Badge from "../shared/ui/Badge.svelte";
 import Button from "../shared/ui/Button.svelte";
+import { flowStore } from "./flow-store.svelte";
 import InstanceRoster from "./InstanceRoster.svelte";
-import type {
-  FlowDefinitionSummary,
-  FlowResponse,
-  FlowWsEvent,
-} from "./workflow-api";
-import {
-  connectFlowWs,
-  fetchFlowDefinitions,
-  fetchFlows,
-} from "./workflow-api";
+import type { FlowDefinitionSummary } from "./workflow-api";
+import { fetchFlowDefinitions } from "./workflow-api";
 
 let definitions = $state<FlowDefinitionSummary[]>([]);
-let flows = $state<FlowResponse[]>([]);
 let loading = $state(true);
 let error = $state<string | null>(null);
-let unsubWs: (() => void) | null = null;
+let flows = $derived(flowStore.flows);
 
 onMount(() => {
   void load();
-  unsubWs = connectFlowWs((event) => {
-    handleWsEvent(event);
-  });
-});
-
-onDestroy(() => {
-  unsubWs?.();
 });
 
 async function load() {
   loading = true;
   error = null;
   try {
-    [definitions, flows] = await Promise.all([
-      fetchFlowDefinitions(),
-      fetchFlows(),
-    ]);
+    definitions = await fetchFlowDefinitions();
   } catch (err) {
     error = err instanceof Error ? err.message : "Failed to load flows";
   } finally {
@@ -46,17 +28,7 @@ async function load() {
   }
 }
 
-function handleWsEvent(event: FlowWsEvent) {
-  if (
-    event.type === "instance_created" ||
-    event.type === "instance_terminated" ||
-    event.type === "instance_state_changed"
-  ) {
-    void load();
-  }
-}
-
-function instancesFor(definitionId: string): FlowResponse[] {
+function instancesFor(definitionId: string) {
   return flows.filter((flow) => flow.config?.definitionId === definitionId);
 }
 

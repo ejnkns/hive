@@ -6,6 +6,7 @@ import {
   createFlowRuntime,
   type FlowPersistence,
   type FlowRuntimeAPI,
+  type FlowRuntimeEvent,
   type WorkflowInstanceEntry,
 } from "workflow-engine/create-flow-runtime";
 import type { OperationFn, Tool } from "workflow-engine/runners";
@@ -31,6 +32,46 @@ const runtimes = new Map<
   FlowRuntimeAPI<Record<string, unknown>, Record<string, unknown>>
 >();
 let _persistence: FlowPersistence | null = null;
+
+// ── Flow event hub ──
+//
+// The single authoritative stream of flow lifecycle events. Every runtime
+// created or rehydrated here is wired into the hub, and unlink/purge emit a
+// deletion, so a listener (e.g. the flow WebSocket endpoint) observes all flow
+// state changes without subscribing to each runtime itself.
+
+export type FlowEventBusEvent =
+  | { type: "flow_deleted"; flowId: string }
+  | { type: "flow_event"; flowId: string; event: FlowRuntimeEvent };
+
+const flowEventListeners = new Set<(event: FlowEventBusEvent) => void>();
+
+export function onFlowEvent(
+  listener: (event: FlowEventBusEvent) => void
+): () => void {
+  flowEventListeners.add(listener);
+  return () => {
+    flowEventListeners.delete(listener);
+  };
+}
+
+function emitFlowEvent(event: FlowEventBusEvent): void {
+  for (const listener of flowEventListeners) {
+    listener(event);
+  }
+}
+
+// Subscribes a runtime's events into the hub. The registry owns the runtime's
+// lifetime, so the subscription is never torn down explicitly — it dies with
+// the runtime when unlink/purge drops the last reference.
+function wireRuntimeToEventHub(
+  flowId: string,
+  runtime: FlowRuntimeAPI<Record<string, unknown>, Record<string, unknown>>
+): void {
+  runtime.on((event) => {
+    emitFlowEvent({ type: "flow_event", flowId, event });
+  });
+}
 
 // ── Flow definition registry ──
 //
@@ -291,6 +332,7 @@ export function registerFlowForTest(
   runtime: FlowRuntimeAPI<Record<string, unknown>, Record<string, unknown>>
 ): void {
   runtimes.set(flowId, runtime);
+  wireRuntimeToEventHub(flowId, runtime);
 }
 
 export function getFlowRuntime(
@@ -316,6 +358,7 @@ export function resetFlowRuntimesForTest(): void {
 
 export function unlinkFlow(flowId: string): void {
   runtimes.delete(flowId);
+  emitFlowEvent({ type: "flow_deleted", flowId });
   _persistence?.deleteFlow(flowId);
 }
 
@@ -383,6 +426,13 @@ export function createFlow(
     persistence
   );
 
+  // Register the runtime and wire it into the event hub BEFORE seeding the
+  // first instance, so the seed's events (instance_created, auto task starts)
+  // reach connected clients and the runtime is already findable by flowId
+  // while the hub transforms them into snapshots.
+  runtimes.set(flowId, runtime);
+  wireRuntimeToEventHub(flowId, runtime);
+
   // Seed one instance of the first workflow so the flow is immediately
   // renderable (queen-bee: the onboarding workflow; custom defs: the
   // single workflow). Fresh instances auto-run their initial-state tasks.
@@ -392,7 +442,6 @@ export function createFlow(
   }
 
   persistence.saveFlow(flowId, flowConfig, {});
-  runtimes.set(flowId, runtime);
   return runtime;
 }
 
@@ -478,6 +527,9 @@ export async function rehydrateFlow(
     persistence
   );
 
+  runtimes.set(flowId, runtime);
+  wireRuntimeToEventHub(flowId, runtime);
+
   for (const instance of instances) {
     const restoredState = {
       ...instance.state,
@@ -495,6 +547,5 @@ export async function rehydrateFlow(
     }
   }
 
-  runtimes.set(flowId, runtime);
   return runtime;
 }

@@ -1,16 +1,12 @@
 <script lang="ts">
-import { onDestroy, onMount } from "svelte";
+import { onMount } from "svelte";
 import Button from "../shared/ui/Button.svelte";
 import Dialog from "../shared/ui/Dialog.svelte";
+import { flowStore } from "./flow-store.svelte";
 import StatusDot from "./StatusDot.svelte";
 import WorkflowFlow from "./WorkflowFlow.svelte";
-import type {
-  FlowLevelAction,
-  FlowResponse,
-  FlowWsEvent,
-} from "./workflow-api";
+import type { FlowLevelAction } from "./workflow-api";
 import {
-  connectFlowWs,
   deleteFlow,
   dispatchAction,
   dispatchFlowAction,
@@ -26,38 +22,49 @@ let {
   instanceName: string;
 } = $props();
 
-let flow = $state<FlowResponse | null>(null);
-let loading = $state(true);
+let flowId = $state<string | null>(null);
+let resolving = $state(true);
 let error = $state<string | null>(null);
 let deleteOpen = $state(false);
 let deleteBusy = $state(false);
-let unsubWs: (() => void) | null = null;
 
 let actionDialogOpen = $state(false);
 let activeFlowAction = $state<FlowLevelAction | null>(null);
 let actionValues = $state<Record<string, string | boolean | number>>({});
 let actionBusy = $state(false);
 
+// The flow renders from the store so every snapshot pushes live. Commands keep
+// their REST calls; the resulting snapshot arrives over WS (no refetch).
+const flow = $derived(flowId ? flowStore.getFlow(flowId) : null);
+
 onMount(() => {
-  void loadFlow();
-  unsubWs = connectFlowWs((event) => {
-    handleWsEvent(event);
-  });
-  return () => {
-    unsubWs?.();
-  };
+  void resolveFlowId();
 });
 
-async function loadFlow() {
-  loading = true;
+async function resolveFlowId() {
+  resolving = true;
   error = null;
+  const fromStore = flowStore.findFlow(definitionId, instanceName);
+  if (fromStore) {
+    flowId = fromStore.id;
+    resolving = false;
+    return;
+  }
+  // The store may not be hydrated yet (init not received) — fall back to one
+  // REST read and seed the store. The next init/snapshot overwrites it.
   try {
     const matches = await fetchFlows({ definitionId, name: instanceName });
-    flow = matches[0] ?? null;
+    const matched = matches[0] ?? null;
+    if (matched) {
+      flowStore.upsert(matched);
+      flowId = matched.id;
+    } else {
+      flowId = null;
+    }
   } catch (err) {
     error = err instanceof Error ? err.message : "Failed to load flow";
   } finally {
-    loading = false;
+    resolving = false;
   }
 }
 
@@ -68,7 +75,6 @@ async function handleAction(
 ) {
   try {
     await dispatchAction(flowId, instanceId, actionId);
-    await loadFlow();
   } catch (err) {
     error = err instanceof Error ? err.message : "Action failed";
   }
@@ -80,17 +86,6 @@ async function handleSendMessage(
   content: string
 ) {
   await sendTaskInput(flowId, instanceId, content);
-  await loadFlow();
-}
-
-function handleWsEvent(event: FlowWsEvent) {
-  if (
-    event.type === "instance_state_changed" ||
-    event.type === "instance_terminated" ||
-    event.type === "instance_created"
-  ) {
-    void loadFlow();
-  }
 }
 
 async function removeInstance(purge: boolean) {
@@ -99,6 +94,7 @@ async function removeInstance(purge: boolean) {
   error = null;
   try {
     await deleteFlow(flow.id, purge);
+    flowStore.removeFlow(flow.id);
     window.location.hash = `#/flows/${encodeURIComponent(definitionId)}`;
   } catch (err) {
     error = err instanceof Error ? err.message : "Failed to delete flow";
@@ -138,7 +134,6 @@ async function executeFlowAction(
   error = null;
   try {
     await dispatchFlowAction(flow.id, action.id, payload);
-    await loadFlow();
   } catch (err) {
     error = err instanceof Error ? err.message : "Flow action failed";
   } finally {
@@ -165,11 +160,13 @@ function submitFlowActionForm() {
 </script>
 
 <div class="instance-page">
-  {#if loading}
+  {#if resolving}
     <div class="loading">Loading instance...</div>
   {:else if error}
     <div class="error">{error}</div>
-    <button type="button" class="retry-btn" onclick={loadFlow}>Retry</button>
+    <button type="button" class="retry-btn" onclick={resolveFlowId}>
+      Retry
+    </button>
   {:else if !flow}
     <div class="empty">Instance not found</div>
   {:else}

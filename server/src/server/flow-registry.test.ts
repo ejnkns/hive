@@ -16,12 +16,14 @@ import {
   updateUserDefinition,
 } from "./flow-definitions";
 import { createFlowPersistence } from "./flow-persistence";
+import type { FlowEventBusEvent } from "./flow-registry";
 import {
   createFlow,
   dispatchFlowLevelAction,
   getAvailableFlowActions,
   getFlowPersistence,
   getFlowRuntime,
+  onFlowEvent,
   rehydrateFlow,
   setFlowPersistence,
   unlinkFlow,
@@ -107,6 +109,74 @@ describe("flow-registry", () => {
       []
     );
     assert.equal(runtime, null);
+  });
+
+  it("onFlowEvent emits flow_event for a runtime created after subscription", () => {
+    const persistence = getFlowPersistence();
+    assert.ok(persistence);
+    const events: FlowEventBusEvent[] = [];
+    const unsubscribe = onFlowEvent((event) => events.push(event));
+    try {
+      createFlow("flow-a", "test-def", persistence);
+      assert.ok(
+        events.some(
+          (event) => event.type === "flow_event" && event.flowId === "flow-a"
+        ),
+        "createFlow events should reach a subscriber"
+      );
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it("onFlowEvent emits flow_event for a rehydrated runtime", async () => {
+    const persistence = getFlowPersistence();
+    assert.ok(persistence);
+    createFlow("flow-a", "test-def", persistence);
+
+    const persisted = persistence.loadFlow("flow-a");
+    assert.ok(persisted);
+
+    const events: FlowEventBusEvent[] = [];
+    const unsubscribe = onFlowEvent((event) => events.push(event));
+    try {
+      const runtime = await rehydrateFlow(
+        persistence,
+        "flow-a",
+        persisted.config,
+        persisted.state,
+        persisted.instances
+      );
+      assert.ok(runtime);
+      assert.ok(
+        events.some(
+          (event) => event.type === "flow_event" && event.flowId === "flow-a"
+        ),
+        "rehydrate events should reach a subscriber"
+      );
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it("onFlowEvent emits flow_deleted on unlink", () => {
+    const persistence = getFlowPersistence();
+    assert.ok(persistence);
+    createFlow("flow-a", "test-def", persistence);
+
+    const events: FlowEventBusEvent[] = [];
+    const unsubscribe = onFlowEvent((event) => events.push(event));
+    try {
+      unlinkFlow("flow-a");
+      assert.ok(
+        events.some(
+          (event) => event.type === "flow_deleted" && event.flowId === "flow-a"
+        ),
+        "unlink should emit flow_deleted"
+      );
+    } finally {
+      unsubscribe();
+    }
   });
 
   it("unlinkFlow removes the flow from persistence and the runtime map", () => {

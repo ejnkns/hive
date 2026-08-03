@@ -20,6 +20,7 @@ import DefinitionEditor from "./workflow/DefinitionEditor.svelte";
 import FlowDefinitionPage from "./workflow/FlowDefinitionPage.svelte";
 import FlowInstancePage from "./workflow/FlowInstancePage.svelte";
 import FlowLibrary from "./workflow/FlowLibrary.svelte";
+import { flowStore } from "./workflow/flow-store.svelte";
 import InstantiateForm from "./workflow/InstantiateForm.svelte";
 
 let detailMetric: MetricData | null = $state(null);
@@ -34,9 +35,11 @@ onMount(() => {
   };
   window.addEventListener("hashchange", onHashChange);
   dashboardSocket.connect();
+  flowStore.connect();
   return () => {
     window.removeEventListener("hashchange", onHashChange);
     dashboardSocket.disconnect();
+    flowStore.disconnect();
   };
 });
 

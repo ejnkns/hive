@@ -1,0 +1,114 @@
+// Module-level singleton holding the authoritative flow state pushed over the
+// flow WebSocket. The server sends whole-flow snapshots (init on connect,
+// flow_snapshot on any flow change, flow_deleted on removal); the store applies
+// each directly and pages render from it with no per-event REST refetch. On
+// reconnect the server re-sends init, which replaces the store and closes the
+// missed-events hole during a drop.
+
+import type { FlowResponse, FlowWsMessage } from "./workflow-api";
+import { slugify } from "./workflow-api";
+
+let flows = $state<FlowResponse[]>([]);
+let socket: WebSocket | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let reconnectDelay = 1_000;
+let disconnectedByCaller = false;
+
+function applyMessage(message: FlowWsMessage): void {
+  if (message.type === "init") {
+    flows = message.flows;
+    return;
+  }
+  if (message.type === "flow_snapshot") {
+    upsert(message.flow);
+    return;
+  }
+  if (message.type === "flow_deleted") {
+    removeFlow(message.flowId);
+  }
+}
+
+function upsert(flow: FlowResponse): void {
+  const index = flows.findIndex((existing) => existing.id === flow.id);
+  if (index === -1) {
+    flows = [...flows, flow];
+    return;
+  }
+  flows = [...flows.slice(0, index), flow, ...flows.slice(index + 1)];
+}
+
+function removeFlow(flowId: string): void {
+  flows = flows.filter((flow) => flow.id !== flowId);
+}
+
+function scheduleReconnect(): void {
+  reconnectDelay = Math.min(reconnectDelay * 2, 30_000);
+  reconnectTimer = setTimeout(() => {
+    connect();
+  }, reconnectDelay);
+}
+
+function connect(): void {
+  disconnectedByCaller = false;
+  closeSocket();
+  reconnectDelay = 1_000;
+
+  const protocol = window.location.protocol === "http:" ? "ws:" : "wss:";
+  const opened = new WebSocket(
+    `${protocol}//${window.location.host}/api/flows/ws`
+  );
+  socket = opened;
+
+  opened.onmessage = (event) => {
+    try {
+      // The server sends init/flow_snapshot/flow_deleted frames; malformed
+      // frames are dropped so a bad payload cannot wedge the store.
+      const message = JSON.parse(String(event.data)) as FlowWsMessage;
+      applyMessage(message);
+    } catch {
+      // ignore malformed frames
+    }
+  };
+
+  opened.onclose = () => {
+    if (socket !== opened) return;
+    socket = null;
+    if (!disconnectedByCaller) scheduleReconnect();
+  };
+}
+
+function closeSocket(): void {
+  if (reconnectTimer !== null) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  socket?.close();
+  socket = null;
+}
+
+function disconnect(): void {
+  disconnectedByCaller = true;
+  closeSocket();
+}
+
+export const flowStore = {
+  connect,
+  disconnect,
+  get flows() {
+    return flows;
+  },
+  getFlow(flowId: string): FlowResponse | null {
+    return flows.find((flow) => flow.id === flowId) ?? null;
+  },
+  findFlow(definitionId: string, name: string): FlowResponse | null {
+    return (
+      flows.find(
+        (flow) =>
+          flow.config?.definitionId === definitionId &&
+          slugify(String(flow.config?.name ?? "")) === name
+      ) ?? null
+    );
+  },
+  upsert,
+  removeFlow,
+};
