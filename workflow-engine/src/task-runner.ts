@@ -1,3 +1,5 @@
+import type { ChatMessage } from "./workflow-types";
+
 export type TaskDefinition = {
   id: string;
   label: string;
@@ -14,6 +16,11 @@ export type TaskDefinition = {
   // sessions (requirements/ideas) where the agent should react to the user,
   // not open the conversation itself.
   startOnUserInput?: boolean;
+  // A dotted path into the instance's workflowInstanceState (e.g.
+  // "requirementsDraft"). Resolved at task start and injected as the first
+  // user message, so an agent receives runtime context (the requirements
+  // document, a proposal) without reading files or calling a tool.
+  inputFromInstanceState?: string;
   // Written on successful completion to basePath/<domainDir>/<path>.
   // {instanceId} and {attempt} in path are substituted per workflow instance.
   // Format is inferred from the output: string becomes a text file,
@@ -42,6 +49,12 @@ export type TaskRunnerContext = {
   currentState: string;
   workflowInstanceState: Record<string, unknown>;
   patchWorkflowInstanceState(patch: Record<string, unknown>): void;
+  // Completed task outputs on the instance, so operations can read sibling
+  // tasks' results (e.g. finalize reading the draft session's output).
+  taskOutputs: Record<string, unknown>;
+  // ai-chat sessions sync their live transcript into the instance state so
+  // observers see messages at each turn boundary.
+  patchRunningTaskMessages(messages: ChatMessage[]): void;
 };
 
 export type TaskRunnerFactory = (ctx: TaskRunnerContext) => TaskRunner;

@@ -47,6 +47,7 @@ function ctxFor(
     workflowId: "w1",
     currentState: "s1",
     workflowInstanceState: () => instanceState,
+    taskOutputs: () => ({}),
     patchWorkflowInstanceState: () => {},
   };
 }

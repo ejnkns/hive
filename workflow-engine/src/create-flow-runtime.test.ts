@@ -832,6 +832,7 @@ describe("FlowRuntime", () => {
                 workflowId: "",
                 currentState: "",
                 workflowInstanceState: () => ({}),
+                taskOutputs: () => ({}),
                 patchWorkflowInstanceState: () => {},
               }),
               operations: {
@@ -938,6 +939,7 @@ describe("FlowRuntime", () => {
                 workflowId: "",
                 currentState: "",
                 workflowInstanceState: () => ({}),
+                taskOutputs: () => ({}),
                 patchWorkflowInstanceState: () => {},
               }),
               operations: {

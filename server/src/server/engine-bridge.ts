@@ -286,6 +286,7 @@ export function createEngineRunners(
       workflowId: ctx.workflowId,
       currentState: ctx.currentState,
       workflowInstanceState: () => ctx.workflowInstanceState,
+      taskOutputs: () => ctx.taskOutputs,
       patchWorkflowInstanceState: ctx.patchWorkflowInstanceState,
     };
   }
@@ -333,6 +334,7 @@ export function createEngineRunners(
         instanceId: ctx.instanceId,
         patchWorkflowInstanceState: ctx.patchWorkflowInstanceState,
         workflowInstanceState: ctx.workflowInstanceState,
+        patchRunningTaskMessages: ctx.patchRunningTaskMessages,
       }),
     toolDefinitions,
     toolExecutors,

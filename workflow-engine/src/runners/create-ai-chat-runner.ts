@@ -28,6 +28,9 @@ export type AiChatRunnerConfig = {
   // The instance's domain data, resolved against by @instance: workspacePath
   // refs (e.g. "@instance:worktreePath").
   workflowInstanceState?: Record<string, unknown>;
+  // Syncs the live conversation into the instance state at each turn boundary
+  // so observers (the flow snapshot push) render the transcript as it grows.
+  patchRunningTaskMessages?: (messages: ChatMessage[]) => void;
 };
 
 export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
@@ -60,7 +63,8 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
   async function agentLoop(task: TaskDefinition): Promise<{ output: unknown }> {
     const workspacePath = resolveWorkspacePath(
       task.workspacePath,
-      config.workflowInstanceState
+      config.workflowInstanceState,
+      config.basePath
     );
     const toolDefs = (task.tools ?? [])
       .map((name) => config.toolDefinitions[name])
@@ -89,6 +93,7 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
             }
           : {}),
       });
+      config.patchRunningTaskMessages?.(messages);
 
       if (isComplete(task, response.content, response.toolCalls)) {
         return {
@@ -114,6 +119,7 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
             content: `Unknown tool: ${call.name}`,
             tool_call_id: call.id,
           });
+          config.patchRunningTaskMessages?.(messages);
           continue;
         }
         let result: ToolResult;
@@ -135,6 +141,7 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
             }`,
             tool_call_id: call.id,
           });
+          config.patchRunningTaskMessages?.(messages);
           continue;
         }
         messages.push({
@@ -142,6 +149,7 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
           content: result.content,
           tool_call_id: call.id,
         });
+        config.patchRunningTaskMessages?.(messages);
       }
     }
 
@@ -151,6 +159,7 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
   return {
     async run(task: TaskDefinition) {
       messages = [{ role: "system", content: task.systemPrompt ?? "" }];
+      config.patchRunningTaskMessages?.(messages);
       if (task.startOnUserInput) {
         // Wait for the first user message before calling the model, so a
         // transient provider failure cannot break the session before it
@@ -168,6 +177,7 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
 
     async sendMessage(content: string, role: ChatMessage["role"]) {
       messages.push({ role, content });
+      config.patchRunningTaskMessages?.(messages);
       turnResolve?.();
       turnResolve = null;
     },

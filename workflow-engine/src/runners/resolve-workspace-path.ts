@@ -4,11 +4,13 @@ const INSTANCE_REF_PREFIX = "@instance:";
 
 // A task declares its workspace with either a literal path or an @instance: ref
 // into the workflow instance state (e.g. "@instance:worktreePath" resolves the
-// worktree prepare_worktree recorded). An unresolvable or non-string ref falls
-// back to the process cwd, matching the previous no-workspace default.
+// worktree prepare_worktree recorded). A task without a declared workspace
+// operates in the flow's basePath (the bound project repo); with no bound repo
+// it falls back to the process cwd, matching the previous no-workspace default.
 export function resolveWorkspacePath(
   declared: string | undefined,
-  instanceState: Record<string, unknown> | undefined
+  instanceState: Record<string, unknown> | undefined,
+  basePath?: string
 ): string {
   if (declared?.startsWith(INSTANCE_REF_PREFIX)) {
     const resolved = readDottedPath(
@@ -16,9 +18,9 @@ export function resolveWorkspacePath(
       declared.slice(INSTANCE_REF_PREFIX.length)
     );
     if (typeof resolved === "string" && resolved !== "") return resolved;
-    return process.cwd();
+    return basePath ?? process.cwd();
   }
-  return declared ?? process.cwd();
+  return declared ?? basePath ?? process.cwd();
 }
 
 function readDottedPath(

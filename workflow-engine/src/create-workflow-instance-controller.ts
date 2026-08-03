@@ -10,6 +10,7 @@ import type {
   TaskRunnerFactory,
 } from "./task-runner";
 import type {
+  ChatMessage,
   RunningTaskContext,
   RuntimeWorkflowConfig,
   VisibleAction,
@@ -257,6 +258,20 @@ export function createWorkflowInstanceController(
     emit({ type: "state_changed", state });
   }
 
+  // The ai-chat runner keeps its conversation locally; this syncs the latest
+  // transcript into the instance state and emits a state_changed so observers
+  // (the flow snapshot push) see each message as it arrives. No-op when no
+  // chat session is running.
+  function patchRunningTaskMessages(messages: ChatMessage[]): void {
+    if (!state.hasRunningTask || !state.runningTaskContext) return;
+    if (state.runningTaskContext.role === "operation") return;
+    state = {
+      ...state,
+      runningTaskContext: { ...state.runningTaskContext, messages },
+    };
+    emit({ type: "state_changed", state });
+  }
+
   function buildRunningContext(role: string): RunningTaskContext | null {
     if (role === "ai-task") return { role: "ai-task", messages: [] };
     if (role === "ai-chat")
@@ -271,6 +286,8 @@ export function createWorkflowInstanceController(
       currentState: state.currentState,
       workflowInstanceState: state.workflowInstanceState,
       patchWorkflowInstanceState: patchWorkflowInstanceState,
+      taskOutputs: state.taskOutputs,
+      patchRunningTaskMessages,
     };
   }
 

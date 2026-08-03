@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { createWorkflowInstanceController } from "./create-workflow-instance-controller";
-import type { TaskDefinition, TaskRunner } from "./task-runner";
+import type {
+  TaskDefinition,
+  TaskRunner,
+  TaskRunnerContext,
+} from "./task-runner";
 import { defineWorkflow } from "./workflow-types";
 
 const testWorkflow = defineWorkflow({
@@ -419,6 +423,46 @@ describe("sendTaskInput", () => {
     assert.deepEqual(created[1]!.receivedMessages, [
       { content: "hello B", role: "user" },
     ]);
+  });
+
+  it("patchRunningTaskMessages syncs the transcript into state and emits state_changed", async () => {
+    // Assigned by the factory below when the task starts; definite assignment
+    // because the assignment happens inside the runner-factory callback.
+    let capturedCtx!: TaskRunnerContext;
+    const runner = new ChattyMockRunner();
+    const controller = createWorkflowInstanceController(manualTaskWorkflow, {
+      "ai-chat": (ctx) => {
+        capturedCtx = ctx;
+        return runner;
+      },
+    });
+
+    const events: string[] = [];
+    controller.on((event) => events.push(event.type));
+
+    controller.dispatchAction("begin");
+    const taskPromise = controller.startTask("chat");
+    await new Promise((r) => setTimeout(r, 0));
+
+    capturedCtx.patchRunningTaskMessages([
+      { role: "user", content: "hello" },
+      { role: "assistant", content: "hi" },
+    ]);
+
+    const runningContext = controller.getState().runningTaskContext;
+    assert.ok(runningContext && runningContext.role === "ai-chat");
+    assert.deepEqual(
+      runningContext.messages.map((m) => m.content),
+      ["hello", "hi"]
+    );
+    assert.ok(
+      events.filter((event) => event === "state_changed").length >= 1,
+      "syncing messages should emit a state_changed"
+    );
+
+    runner.complete("done");
+    await new Promise((r) => setTimeout(r, 0));
+    await taskPromise;
   });
 });
 

@@ -195,6 +195,10 @@ export type StateDef<
     completionTool?: string;
     completionSignal?: string;
     startOnUserInput?: boolean;
+    // A dotted path into the instance's workflowInstanceState resolved at task
+    // start and injected as the first user message (e.g. the requirements
+    // document for the planner). Mirrors TaskDefinition.inputFromInstanceState.
+    inputFromInstanceState?: string;
     // A literal workspace directory or an "@instance:<field>" ref into the
     // workflow instance state (e.g. "@instance:worktreePath") that the ai
     // runners resolve before building the tool context.

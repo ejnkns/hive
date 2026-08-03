@@ -14,6 +14,9 @@ export type OperationContext = {
   workflowId: string;
   currentState: string;
   workflowInstanceState(): Record<string, unknown>;
+  // Completed task outputs on the instance (read-only), so operations can read
+  // sibling tasks' results.
+  taskOutputs(): Record<string, unknown>;
   // Patches the workflow instance's domain data. Ops use this to record
   // per-instance state (e.g. the worktree a card's worker operates in);
   // the engine persists it as part of the instance.
@@ -38,6 +41,7 @@ const NOOP_CONTEXT: OperationContext = {
   workflowId: "",
   currentState: "",
   workflowInstanceState: () => ({}),
+  taskOutputs: () => ({}),
   patchWorkflowInstanceState: () => {},
 };
 

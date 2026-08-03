@@ -36,13 +36,27 @@ export function createAiTaskRunner(config: AiTaskRunnerConfig): TaskRunner {
     async run(task: TaskDefinition) {
       const workspacePath = resolveWorkspacePath(
         task.workspacePath,
-        config.workflowInstanceState
+        config.workflowInstanceState,
+        config.basePath
       );
       const toolDefs = (task.tools ?? [])
         .map((name) => config.toolDefinitions[name])
         .filter(Boolean);
 
       const messages: ChatMessage[] = [];
+      const injectedInput = resolveDottedPath(
+        config.workflowInstanceState ?? {},
+        task.inputFromInstanceState
+      );
+      if (injectedInput !== undefined) {
+        messages.push({
+          role: "user",
+          content:
+            typeof injectedInput === "string"
+              ? injectedInput
+              : JSON.stringify(injectedInput),
+        });
+      }
 
       for (let iteration = 0; iteration < 50; iteration++) {
         abortController.signal.throwIfAborted();
@@ -126,4 +140,17 @@ export function createAiTaskRunner(config: AiTaskRunnerConfig): TaskRunner {
       abortController.abort();
     },
   };
+}
+
+function resolveDottedPath(
+  state: Record<string, unknown>,
+  dottedPath: string | undefined
+): unknown {
+  if (!dottedPath) return undefined;
+  let current: unknown = state;
+  for (const segment of dottedPath.split(".")) {
+    if (current === null || typeof current !== "object") return undefined;
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return current;
 }

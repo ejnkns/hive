@@ -369,4 +369,41 @@ describe("createAiChatRunner", () => {
     runner.cancel();
     await assert.rejects(() => runPromise, /Aborted/);
   });
+
+  it("syncs each transcript change through patchRunningTaskMessages", async () => {
+    const snapshots: ChatMessage[][] = [];
+    const runner = createAiChatRunner({
+      modelCaller: mockCaller([
+        { content: "Hi, how can I help?" },
+        { content: "##COMPLETE##" },
+      ]),
+      toolDefinitions: {},
+      toolExecutors: {},
+      completionSignal: "##COMPLETE##",
+      patchRunningTaskMessages: (messages) => snapshots.push([...messages]),
+    });
+
+    const runPromise = runner.run(dummyTask);
+    await new Promise((r) => setTimeout(r, 0));
+    await runner.sendMessage?.("I need a spec", "user");
+    await runPromise;
+
+    assert.ok(snapshots.length >= 2, "system + user + assistant should sync");
+    assert.ok(
+      snapshots.some((messages) =>
+        messages.some((m) => m.role === "user" && m.content === "I need a spec")
+      ),
+      "the user message should be synced"
+    );
+    assert.ok(
+      snapshots.some((messages) =>
+        messages.some(
+          (m) =>
+            m.role === "assistant" &&
+            m.content.toLowerCase().includes("how can i help")
+        )
+      ),
+      "the assistant reply should be synced"
+    );
+  });
 });

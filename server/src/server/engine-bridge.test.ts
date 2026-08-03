@@ -42,6 +42,8 @@ function makeContext(
     currentState: "ready",
     workflowInstanceState: {},
     patchWorkflowInstanceState: () => {},
+    taskOutputs: {},
+    patchRunningTaskMessages: () => {},
     ...overrides,
   };
 }

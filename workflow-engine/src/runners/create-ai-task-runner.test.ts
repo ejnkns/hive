@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import type { TaskDefinition } from "../task-runner";
+import type { ChatMessage } from "../workflow-types";
 import {
   type AiTaskModelCaller,
   createAiTaskRunner,
@@ -180,7 +181,7 @@ describe("createAiTaskRunner", () => {
 
     const ctx = await ctxPromise;
     assert.equal(ctx.basePath, "/repo");
-    assert.equal(ctx.workspacePath, process.cwd());
+    assert.equal(ctx.workspacePath, "/repo");
   });
 
   it("resolves an @instance workspacePath ref so tools operate in the instance workspace", async () => {
@@ -214,5 +215,47 @@ describe("createAiTaskRunner", () => {
     });
 
     assert.equal(readFileSync(join(worktree, "note.txt"), "utf-8"), "hello");
+  });
+
+  it("injects inputFromInstanceState as the first user message", async () => {
+    let seenMessages: ChatMessage[] = [];
+    const runner = createAiTaskRunner({
+      modelCaller: async (_prompt, msgs, _tools, _signal) => {
+        seenMessages = [...msgs];
+        return { content: "Done!" };
+      },
+      toolDefinitions: {},
+      toolExecutors: {},
+      workflowInstanceState: { requirementsDraft: "# The requirements" },
+    });
+
+    await runner.run({
+      ...dummyTask,
+      inputFromInstanceState: "requirementsDraft",
+    });
+
+    assert.equal(seenMessages.length, 1);
+    assert.equal(seenMessages[0]?.role, "user");
+    assert.equal(seenMessages[0]?.content, "# The requirements");
+  });
+
+  it("omits the injected message when the state field is missing", async () => {
+    let seenMessages: ChatMessage[] = [];
+    const runner = createAiTaskRunner({
+      modelCaller: async (_prompt, msgs, _tools, _signal) => {
+        seenMessages = [...msgs];
+        return { content: "Done!" };
+      },
+      toolDefinitions: {},
+      toolExecutors: {},
+      workflowInstanceState: {},
+    });
+
+    await runner.run({
+      ...dummyTask,
+      inputFromInstanceState: "requirementsDraft",
+    });
+
+    assert.equal(seenMessages.length, 0);
   });
 });
