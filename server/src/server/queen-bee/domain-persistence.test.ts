@@ -649,7 +649,7 @@ function makeCardRuntime(options: {
   });
   return createFlowRuntime(
     "project",
-    queenBeeFlow.buildWorkflows(flowConfig),
+    queenBeeFlow.workflows,
     queenBeeFlow.edges,
     {
       operation: baseRunners.operationRunner,
