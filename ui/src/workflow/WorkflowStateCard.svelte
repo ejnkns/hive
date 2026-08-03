@@ -57,6 +57,72 @@ let runningCtx = $derived(instanceEntry.state.runningTaskContext);
 let chatInput = $state("");
 let sending = $state(false);
 
+let taskOutputEntries = $derived(
+  Object.entries(instanceEntry.state.taskOutputs)
+);
+
+// The workflow's domain data (e.g. the requirements draft) rendered as readable
+// key/value pairs. String values are shown inline; structured values as JSON.
+let domainDataEntries = $derived.by(() =>
+  Object.entries(instanceEntry.state.workflowInstanceState).map(
+    ([key, value]) =>
+      [
+        key,
+        typeof value === "string"
+          ? value
+          : truncate(JSON.stringify(value, null, 2), 2000),
+      ] as [string, string]
+  )
+);
+
+type TaskOutcomeShape = {
+  status?: string;
+  error?: string;
+  output?: unknown;
+};
+
+function outcomeStatus(outcome: unknown): string {
+  const status = (outcome as TaskOutcomeShape | null)?.status;
+  return typeof status === "string" ? status : "unknown";
+}
+
+function outcomeError(outcome: unknown): string | null {
+  const error = (outcome as TaskOutcomeShape | null)?.error;
+  return typeof error === "string" && error !== "" ? error : null;
+}
+
+function outcomeCards(outcome: unknown): Array<{
+  title: string;
+  description?: string;
+  acceptanceCriteria?: string[];
+}> | null {
+  const output = (outcome as TaskOutcomeShape | null)?.output;
+  if (!output || typeof output !== "object") return null;
+  const cards = (output as Record<string, unknown>).cards;
+  if (!Array.isArray(cards)) return null;
+  return cards as Array<{
+    title: string;
+    description?: string;
+    acceptanceCriteria?: string[];
+  }>;
+}
+
+function outcomeSummary(outcome: unknown): string | null {
+  const taskOutcome = outcome as TaskOutcomeShape | null;
+  if (taskOutcome?.status !== "success") return null;
+  const output = taskOutcome.output;
+  if (typeof output === "string") return truncate(output, 2000);
+  if (output === null || output === undefined) return null;
+  if (typeof output !== "object") return String(output);
+  const content = (output as Record<string, unknown>).content;
+  if (typeof content === "string") return truncate(content, 2000);
+  return truncate(JSON.stringify(output, null, 2), 2000);
+}
+
+function truncate(value: string, maxLength: number): string {
+  return value.length > maxLength ? `${value.slice(0, maxLength)}...` : value;
+}
+
 let actionVariantToButton = $derived.by((): Record<string, string> => {
   const map: Record<string, string> = {};
   for (const action of instanceEntry.availableActions) {
@@ -219,15 +285,55 @@ function resolveItemPath(
               </div>
             {/if}
           </div>
-        {:else if !compact && instanceEntry.state.taskOutputs && Object.keys(instanceEntry.state.taskOutputs).length > 0}
+        {:else if !compact && taskOutputEntries.length > 0}
           <div class="task-outputs">
             <span class="outputs-label">Task outputs</span>
-            {#each Object.entries(instanceEntry.state.taskOutputs) as [ taskId, outcome ]}
+            {#each taskOutputEntries as [ taskId, outcome ]}
+              {@const cards = outcomeCards(outcome)}
               <div class="output-item">
-                <span class="output-task-id">{taskId}</span>
-                <span class="output-status"
-                  >{(outcome as Record<string, unknown>)?.status as string ?? "unknown"}</span
-                >
+                <div class="output-head">
+                  <span class="output-task-id">{taskId}</span>
+                  <span
+                    class="output-status output-status-{outcomeStatus(outcome)}"
+                    >{outcomeStatus(outcome)}</span
+                  >
+                </div>
+                {#if outcomeError(outcome)}
+                  <div class="output-error">{outcomeError(outcome)}</div>
+                {/if}
+                {#if cards && cards.length > 0}
+                  <div class="output-cards">
+                    {#each cards as card}
+                      <div class="output-card">
+                        <div class="output-card-title">{card.title}</div>
+                        {#if card.description}
+                          <div class="output-card-desc">{card.description}</div>
+                        {/if}
+                        {#if card.acceptanceCriteria && card.acceptanceCriteria.length > 0}
+                          <ul class="output-card-criteria">
+                            {#each card.acceptanceCriteria as criterion}
+                              <li>{criterion}</li>
+                            {/each}
+                          </ul>
+                        {/if}
+                      </div>
+                    {/each}
+                  </div>
+                {:else if outcomeSummary(outcome)}
+                  <pre class="output-summary">{outcomeSummary(outcome)}</pre>
+                {/if}
+              </div>
+            {/each}
+          </div>
+        {/if}
+
+        {#if domainDataEntries.length > 0}
+          <div class="domain-data">
+            <span class="outputs-label">Session data</span>
+            {#each domainDataEntries as [ key, value ]}
+              <div class="domain-data-item">
+                <span class="domain-data-key">{key}</span>
+                <pre class="domain-data-value">{value}</pre>
               </div>
             {/each}
           </div>
@@ -412,6 +518,19 @@ function resolveItemPath(
 
 .output-item {
   display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.25rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.output-item:first-child {
+  border-top: none;
+}
+
+.output-head {
+  display: flex;
+  align-items: center;
   gap: 0.5rem;
 }
 
@@ -422,6 +541,93 @@ function resolveItemPath(
 
 .output-status {
   color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.output-status-success {
+  color: var(--success);
+}
+
+.output-status-error {
+  color: var(--error);
+}
+
+.output-error {
+  color: var(--error);
+  white-space: pre-wrap;
+}
+
+.output-summary {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+  font-family: var(--font-mono, monospace);
+}
+
+.output-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.output-card {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.375rem 0.5rem;
+  background: var(--bg);
+}
+
+.output-card-title {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.output-card-desc {
+  color: var(--muted);
+  margin-top: 0.125rem;
+}
+
+.output-card-criteria {
+  margin: 0.25rem 0 0 0;
+  padding-left: 1rem;
+  color: var(--muted);
+}
+
+.domain-data {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+  font-size: 0.625rem;
+}
+
+.domain-data-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding: 0.25rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.domain-data-item:first-child {
+  border-top: none;
+}
+
+.domain-data-key {
+  color: var(--accent);
+  font-family: monospace;
+  font-weight: 600;
+}
+
+.domain-data-value {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+  font-family: var(--font-mono, monospace);
 }
 
 .card-actions {
