@@ -47,9 +47,9 @@ export class WorkflowInstanceCard extends LitElement {
 
     .card {
       border: 1px solid var(--card-border, var(--border));
-      border-radius: 6px;
+      border-radius: 8px;
       background: var(--surface);
-      padding: 0.625rem 0.75rem;
+      padding: 0.875rem 1rem;
       transition: opacity 0.15s;
     }
 
@@ -66,41 +66,45 @@ export class WorkflowInstanceCard extends LitElement {
     }
 
     .body {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
       margin-bottom: 0.75rem;
     }
 
     .task-panel {
       background: var(--bg);
       border: 1px solid var(--border);
-      border-radius: 4px;
+      border-radius: 6px;
       padding: 0.5rem;
-      max-height: 200px;
+      max-height: 220px;
       overflow-y: auto;
     }
 
     .task-outputs {
       display: flex;
       flex-direction: column;
-      gap: 0.125rem;
-      font-size: 0.625rem;
+      gap: 0.5rem;
+      font-size: 0.6875rem;
     }
 
     .outputs-label {
       color: var(--muted);
-      font-weight: 600;
+      font-weight: 700;
+      font-size: 0.5625rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
       margin-bottom: 0.125rem;
     }
 
     .output-item {
       display: flex;
       flex-direction: column;
-      gap: 0.25rem;
-      padding: 0.25rem 0;
-      border-top: 1px solid var(--border);
-    }
-
-    .output-item:first-child {
-      border-top: none;
+      gap: 0.375rem;
+      padding: 0.5rem 0.625rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
     }
 
     .output-head {
@@ -112,6 +116,7 @@ export class WorkflowInstanceCard extends LitElement {
     .output-task-id {
       color: var(--accent);
       font-family: monospace;
+      font-size: 0.6875rem;
     }
 
     .output-status {
@@ -119,6 +124,7 @@ export class WorkflowInstanceCard extends LitElement {
       text-transform: uppercase;
       letter-spacing: 0.05em;
       font-weight: 600;
+      font-size: 0.5625rem;
     }
 
     .output-status-success {
@@ -132,16 +138,15 @@ export class WorkflowInstanceCard extends LitElement {
     .domain-data {
       display: flex;
       flex-direction: column;
-      gap: 0.25rem;
-      margin-top: 0.5rem;
-      font-size: 0.625rem;
+      gap: 0.375rem;
+      font-size: 0.6875rem;
     }
 
     .domain-data-item {
       display: flex;
       flex-direction: column;
-      gap: 0.125rem;
-      padding: 0.25rem 0;
+      gap: 0.25rem;
+      padding: 0.375rem 0;
       border-top: 1px solid var(--border);
     }
 

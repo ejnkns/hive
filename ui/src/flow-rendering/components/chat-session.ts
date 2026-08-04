@@ -11,23 +11,31 @@ export class ChatSession extends LitElement {
     .messages {
       display: flex;
       flex-direction: column;
-      gap: 0.25rem;
+      gap: 0.375rem;
       margin-bottom: 0.5rem;
     }
 
     .msg {
       display: flex;
       gap: 0.5rem;
-      font-size: 0.625rem;
+      font-size: 0.6875rem;
+      line-height: 1.45;
     }
 
     .label {
-      color: var(--accent);
+      color: var(--muted);
+      background: var(--border);
+      border-radius: 3px;
       font-weight: 700;
       flex-shrink: 0;
-      width: 5rem;
+      min-width: 3.75rem;
+      padding: 0 0.375rem;
+      height: 1.25rem;
+      display: inline-flex;
+      align-items: center;
       text-transform: uppercase;
       font-size: 0.5625rem;
+      letter-spacing: 0.04em;
     }
 
     .text {

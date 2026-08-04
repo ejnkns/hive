@@ -22,22 +22,27 @@ export class WorkflowInstances extends LitElement {
 
   static styles = css`
     .flow {
-      margin-bottom: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .flow:last-child {
+      margin-bottom: 0;
     }
 
     .flow-header {
       display: flex;
-      align-items: center;
+      align-items: baseline;
       gap: 0.5rem;
-      padding: 0.5rem 0;
+      padding: 0.375rem 0 0.5rem;
+      border-bottom: 1px solid var(--border);
     }
 
     .flow-label {
-      font-size: 0.75rem;
+      font-size: 0.6875rem;
       font-weight: 700;
       color: var(--text);
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.08em;
     }
 
     .flow-count {
@@ -49,7 +54,8 @@ export class WorkflowInstances extends LitElement {
     .flow-instances {
       display: flex;
       flex-direction: column;
-      gap: 0.5rem;
+      gap: 0.625rem;
+      padding-top: 0.625rem;
     }
   `;
 

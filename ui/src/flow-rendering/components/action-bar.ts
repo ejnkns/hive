@@ -34,13 +34,14 @@ export class ActionBar extends LitElement {
     button {
       font-family: inherit;
       font-size: 0.6875rem;
-      height: 24px;
-      padding: 0 0.5rem;
-      border-radius: 4px;
+      height: 26px;
+      padding: 0 0.625rem;
+      border-radius: 5px;
       border: 1px solid var(--border);
       background: var(--surface);
       color: var(--text);
       cursor: pointer;
+      transition: background 0.15s, filter 0.15s;
     }
 
     button:hover {

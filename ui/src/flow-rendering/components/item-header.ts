@@ -13,7 +13,7 @@ export class ItemHeader extends LitElement {
 
   static styles = css`
     .header {
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.625rem;
     }
 
     .title-row {
@@ -23,7 +23,7 @@ export class ItemHeader extends LitElement {
     }
 
     .title {
-      font-size: 0.8125rem;
+      font-size: 0.875rem;
       font-weight: 700;
       color: var(--text);
     }
@@ -34,9 +34,10 @@ export class ItemHeader extends LitElement {
     }
 
     .description {
-      font-size: 0.625rem;
+      font-size: 0.6875rem;
+      line-height: 1.4;
       color: var(--muted);
-      margin-top: 0.25rem;
+      margin-top: 0.375rem;
     }
 
     .badge {

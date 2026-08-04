@@ -10,29 +10,31 @@ export class CardView extends LitElement {
   static styles = css`
     .card {
       border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 0.375rem 0.5rem;
+      border-radius: 6px;
+      padding: 0.5rem 0.625rem;
       background: var(--bg);
     }
 
     .title {
       font-weight: 700;
       color: var(--text);
-      font-size: 0.6875rem;
+      font-size: 0.75rem;
     }
 
     .description {
       color: var(--muted);
-      margin-top: 0.125rem;
-      font-size: 0.625rem;
+      margin-top: 0.25rem;
+      font-size: 0.6875rem;
+      line-height: 1.45;
       white-space: pre-wrap;
     }
 
     ul {
-      margin: 0.25rem 0 0 0;
-      padding-left: 1rem;
+      margin: 0.375rem 0 0 0;
+      padding-left: 1.25rem;
       color: var(--muted);
-      font-size: 0.625rem;
+      font-size: 0.6875rem;
+      line-height: 1.45;
     }
   `;
 
