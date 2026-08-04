@@ -478,6 +478,58 @@ describe("flow API routes", () => {
     );
   });
 
+  it("GET flow payload carries flow-level custom render kinds", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition({
+      id: "custom-ui-def",
+      label: "Custom UI Definition",
+      workflows: [testWorkflow],
+      edges: [],
+      ui: {
+        kinds: [
+          {
+            kind: "mycards",
+            contract: {
+              props: [
+                { name: "items", type: "array", scope: "output" },
+                { name: "title", type: "string", scope: "element" },
+              ],
+            },
+          },
+        ],
+      },
+    });
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const createResponse = await server.inject({
+      method: "POST",
+      url: "/api/flows",
+      body: { definitionId: "custom-ui-def", config: { name: "UI Flow" } },
+    });
+    const flowId = createResponse.json().flowId as string;
+
+    const response = await server.inject({
+      method: "GET",
+      url: `/api/flows/${flowId}`,
+    });
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.json().ui, {
+      kinds: [
+        {
+          kind: "mycards",
+          contract: {
+            props: [
+              { name: "items", type: "array", scope: "output" },
+              { name: "title", type: "string", scope: "element" },
+            ],
+          },
+        },
+      ],
+    });
+  });
+
   it("POST /api/flows accepts integrationBranch and branchPrefix declared in configSchema", async () => {
     setFlowPersistence(noopPersistence);
     registerFlowDefinition({

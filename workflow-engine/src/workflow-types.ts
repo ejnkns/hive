@@ -170,6 +170,169 @@ export type ManualAction<
 
 export type RuntimeManualAction = ManualAction;
 
+// --- Render hints ---
+//
+// A small optional vocabulary a workflow definition uses to self-describe how
+// its data renders in the generic flow UI. Hints are pure data — JSON
+// serializable, never functions — so they cross the server wire unchanged. The
+// rendering surface resolves each hint against a kind's input contract and
+// falls back to raw rendering when a hint is absent or its contract mismatches.
+//
+// `kind` is a type-shape discriminator (what shape the component consumes), not
+// a presentation pick. Built-in kinds ship with the engine; a flow definition
+// may declare custom kinds and their input contracts (FlowDefinition.ui.kinds).
+// The `kind` field stays open so custom kinds can register later without a
+// schema change.
+
+export type BuiltinRenderKind = "markdown" | "text" | "card" | "cards" | "json";
+export type RenderKind = BuiltinRenderKind | (string & {});
+
+// The value types a render contract's props may declare. The runtime validates
+// resolved prop values against these; "unknown" accepts anything.
+export type RenderPropType =
+  | "string"
+  | "string[]"
+  | "array"
+  | "boolean"
+  | "number"
+  | "unknown";
+
+// Where a contract prop resolves its value from.
+//   output:  against the task output / display field value
+//   element: against each item of the kind's array input (the output-scoped
+//            prop declared with type "array")
+export type RenderPropScope = "output" | "element";
+
+export type RenderContractProp = {
+  name: string;
+  type: RenderPropType;
+  scope: RenderPropScope;
+};
+
+export type RenderContract = {
+  props: readonly RenderContractProp[];
+};
+
+// The built-in kind contracts, shipped to the UI for runtime validation. A
+// custom kind declares the same shape in the flow definition
+// (FlowDefinition.ui.kinds).
+export const builtinRenderContracts = {
+  markdown: {
+    props: [{ name: "content", type: "string", scope: "output" }],
+  },
+  text: {
+    props: [{ name: "content", type: "string", scope: "output" }],
+  },
+  card: {
+    props: [
+      { name: "title", type: "string", scope: "output" },
+      { name: "description", type: "string", scope: "output" },
+      { name: "bullets", type: "string[]", scope: "output" },
+    ],
+  },
+  cards: {
+    props: [
+      { name: "items", type: "array", scope: "output" },
+      { name: "title", type: "string", scope: "element" },
+      { name: "description", type: "string", scope: "element" },
+      { name: "bullets", type: "string[]", scope: "element" },
+    ],
+  },
+  json: { props: [] },
+} as const satisfies Record<BuiltinRenderKind, RenderContract>;
+
+// A dotted path into TOutput ("cardSpec.title"). The empty string resolves to
+// the root. For a union output every member's paths are allowed (distributive),
+// so a discriminated-union output (e.g. a plan proposal) accepts paths that
+// exist on any member. Array and non-object outputs accept any path string —
+// their element shapes are unknown to the hint's static type.
+export type PropPath<TOutput> = TOutput extends object
+  ? TOutput extends readonly unknown[]
+    ? string
+    : {
+        [K in keyof TOutput & string]: K | `${K}.${PropPath<TOutput[K]>}`;
+      }[keyof TOutput & string]
+  : string;
+
+// The serialized (runtime) render hint shape: kind open to any string, props a
+// plain path map. This is the wire form and the erasure RenderHint compiles to.
+export type RuntimeRenderHint = {
+  kind: RenderKind;
+  props?: Record<string, string>;
+};
+
+type ContractForKind<K extends BuiltinRenderKind> =
+  (typeof builtinRenderContracts)[K];
+type OutputPropNames<C extends RenderContract> = Extract<
+  C["props"][number],
+  { scope: "output" }
+>["name"];
+type ElementPropNames<C extends RenderContract> = Extract<
+  C["props"][number],
+  { scope: "element" }
+>["name"];
+
+// The compile-time checked hint for a built-in kind: props keys must be the
+// kind's contract prop names; output-scoped prop values must be paths into the
+// task output. Element-scoped prop values are left as strings — their
+// resolution base (the items array element) depends on another prop's value,
+// which TypeScript cannot express, so the runtime validates them.
+export type BuiltinRenderHint<TOutput> = {
+  [K in BuiltinRenderKind]: K extends "json"
+    ? { kind: K; props?: Record<string, never> }
+    : {
+        kind: K;
+        props?: {
+          [P in OutputPropNames<ContractForKind<K>>]?: PropPath<TOutput>;
+        } & {
+          [P in ElementPropNames<ContractForKind<K>>]?: string;
+        };
+      };
+}[BuiltinRenderKind];
+
+// A render hint, authored against the task's output type. Built-in kinds are
+// checked against their contract (Level B). Custom kinds are intentionally not
+// writable through this default: the schema anticipates them (open kind
+// strings, serialized contracts, runtime validation with json fallback), and
+// widening TCustomRenderKinds to a definition's custom kind set is the
+// boundary future work (serving custom components) will cross.
+export type RenderHint<
+  TOutput = unknown,
+  TCustomRenderKinds extends string = never,
+> =
+  | BuiltinRenderHint<TOutput>
+  | { kind: TCustomRenderKinds; props?: Record<string, PropPath<TOutput>> };
+
+// A flow-declared custom render kind: a name and the input contract the
+// rendering surface validates resolved props against at runtime.
+export type CustomRenderKind = {
+  kind: string;
+  contract: RenderContract;
+};
+
+// The instance-state body hint: which workflowInstanceState fields the
+// instance card shows. Each field's render props resolve against that field's
+// value. Without a display hint the raw state dump is shown.
+export type DisplayField<
+  TWorkflowInstanceState extends Record<string, unknown> = Record<
+    string,
+    unknown
+  >,
+> = {
+  path: PropPath<TWorkflowInstanceState>;
+  label?: string;
+  render?: RuntimeRenderHint;
+};
+
+export type DisplayHint<
+  TWorkflowInstanceState extends Record<string, unknown> = Record<
+    string,
+    unknown
+  >,
+> = {
+  fields: readonly DisplayField<TWorkflowInstanceState>[];
+};
+
 // --- State definition ---
 
 // Each task role tells the engine how to run it:
@@ -179,18 +342,13 @@ export type RuntimeManualAction = ManualAction;
 //     are evaluated only after the AI signals completion.
 //   "operation" — deterministic operations run synchronously.
 
-export type StateDef<
+// One task inside a StateDef. Mapped over TTaskOutputs so each task's `render`
+// hint is typed against that specific task's output (id anchors the member).
+export type StateTaskDef<
   TTaskOutputs extends Record<string, unknown> = Record<string, unknown>,
-  TStateId extends string = string,
-  TItemState extends Record<string, unknown> = Record<string, unknown>,
 > = {
-  id: TStateId;
-  label: string;
-  description?: string;
-  category?: StateCategory;
-
-  tasks?: {
-    id: keyof TTaskOutputs & string;
+  [K in keyof TTaskOutputs & string]: {
+    id: K;
     label: string;
     trigger: "auto" | "manual";
     role: "ai-task" | "ai-chat" | "operation";
@@ -214,7 +372,22 @@ export type StateDef<
     // instance. Format is inferred from the output: string becomes a text
     // file, object/array becomes JSON.
     persist?: { path: string };
-  }[];
+    // How the task's completed output renders in the generic UI. Pure data.
+    render?: RenderHint<TTaskOutputs[K]>;
+  };
+}[keyof TTaskOutputs & string];
+
+export type StateDef<
+  TTaskOutputs extends Record<string, unknown> = Record<string, unknown>,
+  TStateId extends string = string,
+  TItemState extends Record<string, unknown> = Record<string, unknown>,
+> = {
+  id: TStateId;
+  label: string;
+  description?: string;
+  category?: StateCategory;
+
+  tasks?: StateTaskDef<TTaskOutputs>[];
 
   autoTransitions?: AutoTransition<TTaskOutputs, TStateId, TItemState>[];
 
@@ -236,8 +409,18 @@ export type WorkflowConfig<
   id: string;
   label: string;
   description?: string;
-  // UI-side rendering hint for derived views; never stored.
-  item?: { title: string; subtitle?: string };
+  // The workflow-instance header hint: dotted paths into the instance's
+  // workflowInstanceState for the title/subtitle. Pure data; never stored.
+  instance?: { title: string; subtitle?: string };
+  // The workflow-instance body hint: which workflowInstanceState fields to
+  // show, each with an optional render hint. Pure data.
+  display?: DisplayHint<TWorkflowInstanceState>;
+  // Per-workflow rendering hooks. Pure data.
+  ui?: {
+    // Registry-resolved custom instance renderer; falls back to the default
+    // WorkflowInstanceCard when unknown.
+    instanceComponent?: string;
+  };
   taskOutputs: TTaskOutputs;
   states: readonly StateDef<TTaskOutputs, TStateId, TWorkflowInstanceState>[];
   initial: TStateId;
@@ -346,6 +529,13 @@ export type FlowDefinition = {
   domainDir?: string;
   // Project-level actions rendered on the instance header.
   actions?: FlowLevelAction[];
+  // Flow-level rendering declarations. Pure data.
+  ui?: {
+    // Custom render kinds the definition's tasks may reference; the rendering
+    // surface validates resolved props against each contract and falls back to
+    // json on mismatch.
+    kinds?: CustomRenderKind[];
+  };
 } & (
   | { workflows: RuntimeWorkflowConfig[] }
   | {

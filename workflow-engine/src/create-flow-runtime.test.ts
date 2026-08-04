@@ -966,6 +966,153 @@ function readOutputResult(output: unknown): unknown {
   return "result" in output ? output.result : undefined;
 }
 
+// ── rendering hints serialization ──
+
+describe("getWorkflowDefinitions serializes rendering hints", () => {
+  it("carries instance, display, and per-workflow ui hints", () => {
+    const hintedWorkflow = defineWorkflow({
+      id: "hinted",
+      label: "Hinted",
+      instance: { title: "cardSpec.title", subtitle: "cardSpec.status" },
+      display: {
+        fields: [
+          {
+            path: "cardSpec",
+            label: "Card spec",
+            render: { kind: "card", props: { title: "title" } },
+          },
+        ],
+      },
+      ui: { instanceComponent: "CustomCard" },
+      taskOutputs: {
+        plan: {} as { cards: Array<{ title: string }> },
+      },
+      states: [
+        {
+          id: "ready",
+          label: "Ready",
+          tasks: [
+            {
+              id: "plan",
+              label: "Plan",
+              trigger: "auto",
+              role: "ai-task",
+              render: { kind: "cards", props: { items: "cards" } },
+            },
+          ],
+        },
+      ],
+      initial: "ready",
+      terminalStates: ["ready"],
+    });
+
+    const runtime = createFlowRuntime("test", [hintedWorkflow], [], {});
+    const [def] = runtime.getWorkflowDefinitions();
+
+    assert.deepEqual(def.instance, {
+      title: "cardSpec.title",
+      subtitle: "cardSpec.status",
+    });
+    assert.deepEqual(def.display, {
+      fields: [
+        {
+          path: "cardSpec",
+          label: "Card spec",
+          render: { kind: "card", props: { title: "title" } },
+        },
+      ],
+    });
+    assert.deepEqual(def.ui, { instanceComponent: "CustomCard" });
+  });
+
+  it("serializes per-task render hints alongside task id and label", () => {
+    const hintedWorkflow = defineWorkflow({
+      id: "hinted",
+      label: "Hinted",
+      taskOutputs: {
+        plan: {} as { cards: Array<{ title: string }> },
+      },
+      states: [
+        {
+          id: "ready",
+          label: "Ready",
+          tasks: [
+            {
+              id: "plan",
+              label: "Run planner",
+              trigger: "auto",
+              role: "ai-task",
+              render: {
+                kind: "cards",
+                props: {
+                  items: "cards",
+                  title: "title",
+                  bullets: "acceptanceCriteria",
+                },
+              },
+            },
+          ],
+        },
+      ],
+      initial: "ready",
+      terminalStates: ["ready"],
+    });
+
+    const runtime = createFlowRuntime("test", [hintedWorkflow], [], {});
+    const [def] = runtime.getWorkflowDefinitions();
+
+    assert.deepEqual(def.states[0]?.tasks, [
+      {
+        id: "plan",
+        label: "Run planner",
+        render: {
+          kind: "cards",
+          props: {
+            items: "cards",
+            title: "title",
+            bullets: "acceptanceCriteria",
+          },
+        },
+      },
+    ]);
+  });
+
+  it("omits render for tasks that declare none, and drops non-render task fields", () => {
+    const plainWorkflow = defineWorkflow({
+      id: "plain",
+      label: "Plain",
+      taskOutputs: {
+        doWork: {} as { result: string },
+      },
+      states: [
+        {
+          id: "ready",
+          label: "Ready",
+          tasks: [
+            {
+              id: "doWork",
+              label: "Do work",
+              trigger: "auto",
+              role: "operation",
+              operations: ["do"],
+              systemPrompt: "should not serialize",
+            },
+          ],
+        },
+      ],
+      initial: "ready",
+      terminalStates: ["ready"],
+    });
+
+    const runtime = createFlowRuntime("test", [plainWorkflow], [], {});
+    const [def] = runtime.getWorkflowDefinitions();
+
+    assert.deepEqual(def.states[0]?.tasks, [
+      { id: "doWork", label: "Do work" },
+    ]);
+  });
+});
+
 // ── agent-created instances (create_instance) ──
 
 const ticketWorkflow = defineWorkflow({

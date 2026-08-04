@@ -16,7 +16,7 @@ export type IdeasStateId =
 export const ideasWorkflow = defineWorkflow({
   id: "ideas",
   label: "Ideas",
-  item: { title: "title" },
+  instance: { title: "title" },
   taskOutputs: {
     elaborate: {} as { ideaBrief: string; elaboratedSpec: string },
   },

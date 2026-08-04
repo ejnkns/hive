@@ -7,7 +7,9 @@ import type { RuntimeWorkflowInstanceState } from "./shared/workflow-instance-st
 import type { TaskRunnerFactory } from "./task-runner";
 import type {
   ActionVariant,
+  DisplayHint,
   RuntimeFlowEdge,
+  RuntimeRenderHint,
   RuntimeWorkflowConfig,
   StateCategory,
   VisibleAction,
@@ -19,14 +21,21 @@ export type WorkflowDefResponse = {
   id: string;
   label: string;
   description?: string;
-  // UI-side rendering hint for derived views; never stored.
-  item?: { title: string; subtitle?: string };
+  // The workflow-instance header hint (dotted paths into instance state).
+  instance?: { title: string; subtitle?: string };
+  // The workflow-instance body hint (curated workflowInstanceState fields).
+  display?: DisplayHint;
+  // Per-workflow rendering hooks (e.g. a custom instance component id).
+  ui?: { instanceComponent?: string };
   states: Array<{
     id: string;
     label: string;
     description?: string;
     category?: StateCategory;
     actions: Array<{ id: string; label: string; variant: ActionVariant }>;
+    // Serialized task entries: the UI correlates completed task outputs by id
+    // and applies the per-task render hint.
+    tasks?: Array<{ id: string; label: string; render?: RuntimeRenderHint }>;
   }>;
   initial: string;
   terminalStates: string[];
@@ -219,7 +228,9 @@ export function createFlowRuntime<
       id: wf.id,
       label: wf.label,
       description: wf.description,
-      item: wf.item,
+      instance: wf.instance,
+      display: wf.display,
+      ui: wf.ui,
       states: wf.states.map((s) => ({
         id: s.id,
         label: s.label,
@@ -232,6 +243,11 @@ export function createFlowRuntime<
               variant: a.variant ?? "default",
             }))
           : [],
+        tasks: s.tasks?.map((t) => ({
+          id: t.id,
+          label: t.label,
+          ...(t.render !== undefined ? { render: t.render } : {}),
+        })),
       })),
       initial: wf.initial,
       terminalStates: [...wf.terminalStates],

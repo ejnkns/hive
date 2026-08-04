@@ -18,7 +18,7 @@ export type WorkflowDef = {
   description?: string;
   // UI-side rendering hint for derived views; never stored. The title is a
   // dotted path into the instance's workflowInstanceState.
-  item?: { title: string; subtitle?: string };
+  instance?: { title: string; subtitle?: string };
   states: StateDef[];
   initial: string;
   terminalStates: string[];
@@ -104,6 +104,23 @@ export type FlowLevelAction = {
   dispatchToAll?: { workflowId: string; actionId: string };
 };
 
+// Flow-level rendering declarations shipped alongside the flow payload; the UI
+// validates custom render kinds against their contracts with json fallback.
+export type CustomRenderContractProp = {
+  name: string;
+  type: string;
+  scope: "output" | "element";
+};
+
+export type CustomRenderContract = {
+  props: CustomRenderContractProp[];
+};
+
+export type CustomRenderKind = {
+  kind: string;
+  contract: CustomRenderContract;
+};
+
 export type FlowResponse = {
   id: string;
   label: string;
@@ -111,6 +128,7 @@ export type FlowResponse = {
   config?: Record<string, unknown>;
   workflows: WorkflowDef[];
   instances: WorkflowInstanceEntry[];
+  ui?: { kinds?: CustomRenderKind[] };
   availableFlowActions: FlowLevelAction[];
 };
 

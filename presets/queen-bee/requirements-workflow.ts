@@ -44,7 +44,7 @@ export type RequirementsStateId =
 export const requirementsWorkflow = defineWorkflow({
   id: "requirements",
   label: "Requirements",
-  item: { title: "Requirements" },
+  instance: { title: "Requirements" },
   taskOutputs: {
     draft: {} as { content: string; revision: string },
     plan: {} as PlanProposal,

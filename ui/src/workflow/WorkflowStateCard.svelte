@@ -28,21 +28,21 @@ let stateDef = $derived(
     null
 );
 
-// The workflow's item hint is a dotted path into the instance's
+// The workflow's instance hint is a dotted path into the instance's
 // workflowInstanceState (e.g. "cardSpec.title"); unresolved, the card falls
 // back to the state label.
-let itemTitle = $derived(
-  workflowDef.item
-    ? resolveItemPath(
-        workflowDef.item.title,
+let instanceTitle = $derived(
+  workflowDef.instance
+    ? resolveInstancePath(
+        workflowDef.instance.title,
         instanceEntry.state.workflowInstanceState
       )
     : undefined
 );
-let itemSubtitle = $derived(
-  workflowDef.item?.subtitle
-    ? resolveItemPath(
-        workflowDef.item.subtitle,
+let instanceSubtitle = $derived(
+  workflowDef.instance?.subtitle
+    ? resolveInstancePath(
+        workflowDef.instance.subtitle,
         instanceEntry.state.workflowInstanceState
       )
     : undefined
@@ -185,8 +185,8 @@ let categoryLabel = $derived.by(() => {
 });
 
 // Resolves a dotted path like "cardSpec.title" against instance state. Used
-// by the workflow's item hint to render a derived item title.
-function resolveItemPath(
+// by the workflow's instance hint to render a derived instance title.
+function resolveInstancePath(
   path: string,
   state: Record<string, unknown>
 ): string | undefined {
@@ -205,10 +205,10 @@ function resolveItemPath(
     <div class="card-header">
       <div class="card-title-row">
         <span class="card-title"
-          >{itemTitle ?? stateDef?.label ?? instanceEntry.state.currentState}</span
+          >{instanceTitle ?? stateDef?.label ?? instanceEntry.state.currentState}</span
         >
-        {#if itemSubtitle}
-          <span class="card-subtitle">{itemSubtitle}</span>
+        {#if instanceSubtitle}
+          <span class="card-subtitle">{instanceSubtitle}</span>
         {/if}
         {#if categoryClass !== "active"}
           <Badge

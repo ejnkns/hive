@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import {
   DefinitionAlreadyExistsError,
   deleteUserDefinition,
+  getFlowDefinition,
   getRegisteredFlowDefinition,
   listRegisteredDefinitions,
   registerUserDefinition,
@@ -33,6 +34,14 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
     const cfg = runtime.getFlowConfig();
     const workflows = runtime.getWorkflowDefinitions();
     const instances = runtime.getWorkflowInstanceEntries();
+    // Flow-level rendering declarations come from the flow's definition (the
+    // runtime carries only the resolved workflow configs). The UI uses them to
+    // validate and fall back on custom render kinds.
+    const definitionId = cfg.definitionId;
+    const definition =
+      typeof definitionId === "string"
+        ? getFlowDefinition(definitionId)
+        : undefined;
     return {
       id: flowId,
       label: (cfg.name as string) ?? flowId,
@@ -40,6 +49,7 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
       config: cfg,
       workflows,
       instances,
+      ui: { kinds: definition?.ui?.kinds ?? [] },
       availableFlowActions: getAvailableFlowActions(flowId),
     };
   }
