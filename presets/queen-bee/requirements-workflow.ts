@@ -85,6 +85,7 @@ export const requirementsWorkflow = defineWorkflow({
           startOnUserInput: true,
           systemPrompt: REQUIREMENTS_DRAFT_SYSTEM_PROMPT,
           completionSignal: "REQUIREMENTS_COMPLETE",
+          render: { kind: "markdown", props: { content: "content" } },
         },
       ],
       autoTransitions: [
@@ -151,6 +152,17 @@ export const requirementsWorkflow = defineWorkflow({
           // message; without it the planner would propose cards ungrounded.
           inputFromInstanceState: "requirementsDraft",
           systemPrompt: PLANNER_SYSTEM_PROMPT,
+          // The planner's proposal renders as cards; acceptance criteria map to
+          // the cards renderer's bullets.
+          render: {
+            kind: "cards",
+            props: {
+              items: "cards",
+              title: "title",
+              description: "description",
+              bullets: "acceptanceCriteria",
+            },
+          },
         },
       ],
       actions: [
@@ -207,6 +219,9 @@ export const requirementsWorkflow = defineWorkflow({
           role: "operation",
           operations: ["finalize_requirements"],
           persist: { path: "requirements.md" },
+          // The finalized document is a plain string; the markdown kind binds
+          // its content prop to the output root.
+          render: { kind: "markdown" },
         },
         {
           id: "commitState",

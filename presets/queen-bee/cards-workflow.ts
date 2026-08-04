@@ -88,6 +88,22 @@ export const cardsWorkflow = defineWorkflow({
   description:
     "Per-card workflow: worktree, worker agent, completion gate, reviewer, coordinator.",
   instance: { title: "cardSpec.title" },
+  display: {
+    fields: [
+      {
+        path: "cardSpec",
+        label: "Card spec",
+        render: {
+          kind: "card",
+          props: {
+            title: "title",
+            description: "description",
+            bullets: "acceptanceCriteria",
+          },
+        },
+      },
+    ],
+  },
   taskOutputs: {
     prepareWorktree: {} as {
       branchName: string;
