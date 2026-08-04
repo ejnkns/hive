@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
-  type ElementConstructor,
   getComponentRenderer,
   getKindRenderer,
   registerComponentRenderer,
@@ -12,10 +11,10 @@ import {
 // plain dummy class exercises it without pulling Lit into the Node test.
 class DummyElement {}
 
-// Casting the dummy to the constructor type is test-only: the registry stores
-// whatever constructor is registered and returns it on lookup.
-const dummy = DummyElement as unknown as ElementConstructor;
-const other = class OtherElement {} as unknown as ElementConstructor;
+// Casting the dummy to the registry's constructor type is test-only: the
+// registry stores whatever constructor is registered and returns it on lookup.
+const dummy = DummyElement as unknown as new () => HTMLElement;
+const other = class OtherElement {} as unknown as new () => HTMLElement;
 
 describe("renderer registry", () => {
   it("resolves registered render kinds", () => {

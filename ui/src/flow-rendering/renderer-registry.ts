@@ -1,8 +1,9 @@
 /** @private — maps render kinds and component ids to Lit element classes. */
 
-import type { LitElement } from "lit";
-
-export type ElementConstructor = typeof LitElement;
+// A constructor whose instances are HTMLElements. Lit element classes
+// (typeof LitElement) satisfy it; the structural type lets the registry and
+// the dynamic-element-host share one definition without importing each other.
+export type ElementConstructor = new () => HTMLElement;
 
 const kindRenderers = new Map<string, ElementConstructor>();
 const componentRenderers = new Map<string, ElementConstructor>();

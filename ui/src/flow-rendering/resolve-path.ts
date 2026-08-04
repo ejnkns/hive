@@ -7,6 +7,8 @@ export function resolvePath(value: unknown, path: string): unknown {
   let current: unknown = value;
   for (const part of path.split(".")) {
     if (current === null || typeof current !== "object") return undefined;
+    // The object check above narrows the value; the record cast reads a
+    // dynamic key that plain object typing cannot express.
     const record = current as Record<string, unknown>;
     current = record[part];
     if (current === undefined) return undefined;

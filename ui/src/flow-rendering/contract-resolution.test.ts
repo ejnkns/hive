@@ -144,6 +144,12 @@ describe("resolveRender", () => {
     assert.equal(result.kind, "json");
   });
 
+  it("falls back to json when a hint resolves to no props at all", () => {
+    const result = resolve({ kind: "card" }, planOutput);
+    assert.equal(result.kind, "json");
+    assert.equal(result.props.value, planOutput);
+  });
+
   it("renders the json kind as the raw output", () => {
     const result = resolve({ kind: "json" }, { anything: [1, 2] });
     assert.equal(result.kind, "json");

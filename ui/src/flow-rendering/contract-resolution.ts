@@ -34,6 +34,11 @@ export function resolveRender(input: {
     props: input.hint.props,
   });
   if (!resolved.ok) return jsonRender(input.output);
+  // A hint that resolves to no props is vacuous (e.g. `{ kind: "card" }` with
+  // nothing bound) — a blank render would hide the raw output, so fall back.
+  if (Object.keys(resolved.props).length === 0 && contract.props.length > 0) {
+    return jsonRender(input.output);
+  }
   return { kind: input.hint.kind, props: resolved.props };
 }
 
@@ -42,6 +47,8 @@ export function findRenderContract(
   customKinds: readonly CustomRenderKind[]
 ): RenderContract | undefined {
   if (kind in builtinRenderContracts) {
+    // The `in` check guarantees the key exists; the cast reads a concrete
+    // builtin contract, which `as const satisfies` has typed by literal kind.
     return builtinRenderContracts[kind as BuiltinRenderKind];
   }
   return customKinds.find((custom) => custom.kind === kind)?.contract;

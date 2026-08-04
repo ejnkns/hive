@@ -173,6 +173,8 @@ export class WorkflowInstanceCard extends LitElement {
     }
   `;
 
+  // Lit reactive properties need a default value, but these are always set by
+  // the parent before first paint; the null cast satisfies the initializer.
   workflowDef: WorkflowDefResponse = null as unknown as WorkflowDefResponse;
   instanceEntry: WorkflowInstanceEntry =
     null as unknown as WorkflowInstanceEntry;
@@ -275,6 +277,7 @@ export class WorkflowInstanceCard extends LitElement {
     taskDef: SerializedTaskDef | undefined,
     outcome: unknown
   ) {
+    // The wire outcome is untyped; only its optional fields are read.
     const taskOutcome = outcome as TaskOutcomeShape | null;
     if (taskOutcome?.status !== "success") return nothing;
     const output = taskOutcome.output;
@@ -423,6 +426,11 @@ export class WorkflowInstanceCard extends LitElement {
 customElements.define("workflow-instance-card", WorkflowInstanceCard);
 
 // ── task-output helpers ──
+//
+// Task outputs arrive from the wire as unknown; the casts below read the few
+// optional fields the default (no-hint) rendering understands. Each reader
+// guards its own null/non-object/typeof checks, so a malformed shape degrades
+// to an empty render rather than a crash.
 
 function outcomeStatus(outcome: unknown): string {
   const status = (outcome as TaskOutcomeShape | null)?.status;

@@ -111,6 +111,7 @@ export class ChatSession extends LitElement {
           placeholder="Type a message..."
           .value=${this.input}
           @input=${(event: Event) => {
+            // The input element is the event target; the cast reads its value.
             this.input = (event.target as HTMLInputElement).value;
           }}
           @keydown=${(event: KeyboardEvent) => {
