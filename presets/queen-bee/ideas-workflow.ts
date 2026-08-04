@@ -54,6 +54,9 @@ export const ideasWorkflow = defineWorkflow({
           tools: ["list_directory", "read_file", "search_code"],
           startOnUserInput: true,
           systemPrompt: IDEA_ELABORATION_SYSTEM_PROMPT,
+          // The session completes when the agent emits IDEA_COMPLETE, so an
+          // idea leaves elaborating and the auto-transition to refined fires.
+          completionSignal: "IDEA_COMPLETE",
         },
       ],
       autoTransitions: [

@@ -15,4 +15,8 @@ Before you ask any question, explore the codebase with list_directory, read_file
 ## Output
 
 Produce a structured idea brief covering: the problem, the proposed behavior, scope boundaries, and the open decisions that block planning. Do not decide how many cards it needs or author card contents — that is the planner's job.
+
+## Signaling completion
+
+When the full idea brief is written, write \`IDEA_COMPLETE\` on its own line as the last line of your response. Signal only after the brief is complete — the problem, proposed behavior, scope boundaries, and open decisions must all be covered.
 `;
