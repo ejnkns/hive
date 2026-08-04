@@ -11,7 +11,7 @@ import {
   generateFlowDefinition,
   slugify,
   updateFlowDefinition,
-} from "./workflow-api";
+} from "./flow-api";
 
 let {
   definitionId,

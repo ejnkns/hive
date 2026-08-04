@@ -2,10 +2,10 @@
 import { onMount } from "svelte";
 import Badge from "../shared/ui/Badge.svelte";
 import Button from "../shared/ui/Button.svelte";
+import type { FlowDefinitionSummary } from "./flow-api";
+import { fetchFlowDefinitions } from "./flow-api";
 import { flowStore } from "./flow-store.svelte";
 import InstanceRoster from "./InstanceRoster.svelte";
-import type { FlowDefinitionSummary } from "./workflow-api";
-import { fetchFlowDefinitions } from "./workflow-api";
 
 let definitions = $state<FlowDefinitionSummary[]>([]);
 let loading = $state(true);

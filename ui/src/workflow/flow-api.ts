@@ -1,88 +1,42 @@
-export type ActionDef = {
-  id: string;
-  label: string;
-  variant: "primary" | "secondary" | "destructive" | "default";
-};
+import type {
+  WorkflowDefResponse,
+  WorkflowInstanceEntry,
+} from "workflow-engine/create-flow-runtime";
+import type {
+  ActionVariant,
+  ConfigField,
+  CustomRenderKind,
+} from "workflow-engine/workflow-types";
 
-export type StateDef = {
-  id: string;
-  label: string;
-  description?: string;
-  category?: "initial" | "active" | "terminal" | "error";
-  actions: ActionDef[];
-};
-
-export type WorkflowDef = {
-  id: string;
-  label: string;
-  description?: string;
-  // UI-side rendering hint for derived views; never stored. The title is a
-  // dotted path into the instance's workflowInstanceState.
-  instance?: { title: string; subtitle?: string };
-  states: StateDef[];
-  initial: string;
-  terminalStates: string[];
-};
-
-export type ChatMessage = {
-  role: "user" | "assistant" | "system" | "tool";
-  content: string;
-};
-
-export type RunningTaskContext =
-  | {
-      role: "ai-task";
-      messages: ChatMessage[];
-    }
-  | {
-      role: "ai-chat";
-      messages: ChatMessage[];
-      sessionId: string;
-    }
-  | {
-      role: "operation";
-    };
-
-export type WorkflowInstanceState = {
-  currentState: string;
-  taskOutputs: Record<string, unknown>;
-  hasRunningTask: boolean;
-  runningTaskId: string | null;
-  runningTaskContext: RunningTaskContext | null;
-  workflowInstanceState: Record<string, unknown>;
-  history: unknown[];
-};
-
-export type VisibleAction = {
-  id: string;
-  label: string;
-  variant: "primary" | "secondary" | "destructive" | "default";
-};
-
-export type WorkflowInstanceEntry = {
-  id: string;
-  workflowId: string;
-  state: WorkflowInstanceState;
-  availableActions: VisibleAction[];
-};
+// The flow API envelope types and client functions. Workflow rendering types
+// come from the engine (WorkflowDefResponse, WorkflowInstanceEntry, ...) — this
+// module only holds the wire shapes and the REST calls.
 
 export type FlowStatus = "error" | "running" | "waiting" | "idle" | "complete";
 
-export type ConfigField = {
-  key: string;
+// The gate-evaluated, UI-facing view of a flow-level action.
+export type FlowLevelAction = {
+  id: string;
   label: string;
-  type: "string" | "boolean" | "number";
-  required?: boolean;
-  hint?: string;
+  variant: ActionVariant;
+  createInstance?: { workflowId: string; fields: ConfigField[] };
+  dispatchToAll?: { workflowId: string; actionId: string };
 };
 
-export function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 50);
-}
+export type FlowResponse = {
+  id: string;
+  label: string;
+  status: FlowStatus;
+  config?: Record<string, unknown>;
+  workflows: WorkflowDefResponse[];
+  instances: WorkflowInstanceEntry[];
+  ui?: { kinds?: CustomRenderKind[] };
+  availableFlowActions: FlowLevelAction[];
+};
+
+export type FlowsApiResponse = {
+  flows: FlowResponse[];
+};
 
 export type FlowDefinitionSummary = {
   id: string;
@@ -96,50 +50,6 @@ export type FlowDefinitionDetail = FlowDefinitionSummary & {
   source: string;
 };
 
-export type FlowLevelAction = {
-  id: string;
-  label: string;
-  variant: VisibleAction["variant"];
-  createInstance?: { workflowId: string; fields: ConfigField[] };
-  dispatchToAll?: { workflowId: string; actionId: string };
-};
-
-// Flow-level rendering declarations shipped alongside the flow payload; the UI
-// validates custom render kinds against their contracts with json fallback.
-export type CustomRenderContractProp = {
-  name: string;
-  type: string;
-  scope: "output" | "element";
-};
-
-export type CustomRenderContract = {
-  props: CustomRenderContractProp[];
-};
-
-export type CustomRenderKind = {
-  kind: string;
-  contract: CustomRenderContract;
-};
-
-export type FlowResponse = {
-  id: string;
-  label: string;
-  status: FlowStatus;
-  config?: Record<string, unknown>;
-  workflows: WorkflowDef[];
-  instances: WorkflowInstanceEntry[];
-  ui?: { kinds?: CustomRenderKind[] };
-  availableFlowActions: FlowLevelAction[];
-};
-
-export type FlowsApiResponse = {
-  flows: FlowResponse[];
-};
-
-export type FlowDefinitionsApiResponse = {
-  definitions: FlowDefinitionSummary[];
-};
-
 export type InstancesApiResponse = {
   instances: WorkflowInstanceEntry[];
 };
@@ -148,14 +58,14 @@ export type DispatchActionResult = {
   instanceId: string;
   previousState: string;
   currentState: string;
-  state: WorkflowInstanceState;
-  availableActions: VisibleAction[];
+  state: WorkflowInstanceEntry["state"];
+  availableActions: WorkflowInstanceEntry["availableActions"];
 };
 
 export type TaskInputResult = {
   sent: boolean;
   instanceId: string;
-  runningTaskContext: RunningTaskContext | null;
+  runningTaskContext: WorkflowInstanceEntry["state"]["runningTaskContext"];
 };
 
 // Push-authoritative frames the flow WebSocket sends. The server pushes
@@ -166,6 +76,14 @@ export type FlowWsMessage =
   | { type: "init"; flows: FlowResponse[] }
   | { type: "flow_snapshot"; flow: FlowResponse }
   | { type: "flow_deleted"; flowId: string };
+
+export function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 50);
+}
 
 export async function fetchFlows(options?: {
   definitionId?: string;
@@ -233,7 +151,9 @@ export async function fetchFlowDefinitions(): Promise<FlowDefinitionSummary[]> {
     throw new Error(`Failed to fetch definitions: ${res.statusText}`);
   // res.json() returns unknown; the API response shape is guaranteed by
   // the server endpoint and validated by the return type
-  const data = (await res.json()) as FlowDefinitionsApiResponse;
+  const data = (await res.json()) as {
+    definitions: FlowDefinitionSummary[];
+  };
   return data.definitions;
 }
 

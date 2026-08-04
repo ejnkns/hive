@@ -5,8 +5,8 @@
 // reconnect the server re-sends init, which replaces the store and closes the
 // missed-events hole during a drop.
 
-import type { FlowResponse, FlowWsMessage } from "./workflow-api";
-import { slugify } from "./workflow-api";
+import type { FlowResponse, FlowWsMessage } from "./flow-api";
+import { slugify } from "./flow-api";
 
 let flows = $state<FlowResponse[]>([]);
 let socket: WebSocket | null = null;

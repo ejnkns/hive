@@ -2,17 +2,17 @@
 import { onMount } from "svelte";
 import Button from "../shared/ui/Button.svelte";
 import Dialog from "../shared/ui/Dialog.svelte";
-import { flowStore } from "./flow-store.svelte";
-import StatusDot from "./StatusDot.svelte";
-import WorkflowFlow from "./WorkflowFlow.svelte";
-import type { FlowLevelAction } from "./workflow-api";
+import type { FlowLevelAction } from "./flow-api";
 import {
   deleteFlow,
   dispatchAction,
   dispatchFlowAction,
   fetchFlows,
   sendTaskInput,
-} from "./workflow-api";
+} from "./flow-api";
+import { flowStore } from "./flow-store.svelte";
+import LitFlowHost from "./LitFlowHost.svelte";
+import StatusDot from "./StatusDot.svelte";
 
 let {
   definitionId,
@@ -206,10 +206,11 @@ function submitFlowActionForm() {
     </div>
 
     <div class="flow-sections">
-      <WorkflowFlow
-        flowDef={{ id: flow.id, label: flow.label }}
-        flowDefs={flow.workflows}
+      <LitFlowHost
+        flowId={flow.id}
+        workflowDefs={flow.workflows}
         instances={flow.instances}
+        customKinds={flow.ui?.kinds ?? []}
         onAction={handleAction}
         onSendMessage={handleSendMessage}
       />

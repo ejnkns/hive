@@ -2,8 +2,8 @@
 import { onMount } from "svelte";
 import Button from "../shared/ui/Button.svelte";
 import TextInput from "../shared/ui/TextInput.svelte";
-import type { FlowDefinitionDetail } from "./workflow-api";
-import { createFlow, fetchFlowDefinition, slugify } from "./workflow-api";
+import type { FlowDefinitionDetail } from "./flow-api";
+import { createFlow, fetchFlowDefinition, slugify } from "./flow-api";
 
 let { definitionId }: { definitionId: string } = $props();
 

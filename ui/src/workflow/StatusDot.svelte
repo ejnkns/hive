@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { FlowStatus } from "./workflow-api";
+import type { FlowStatus } from "./flow-api";
 
 let { status }: { status: FlowStatus } = $props();
 </script>
