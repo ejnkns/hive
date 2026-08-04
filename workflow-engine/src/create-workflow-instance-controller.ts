@@ -344,6 +344,28 @@ export function createWorkflowInstanceController(
         }
       }
 
+      if (
+        action.completesRunningTask &&
+        state.hasRunningTask &&
+        state.runningTaskId &&
+        state.runningTaskContext?.role === "ai-chat"
+      ) {
+        const completedTaskId = state.runningTaskId;
+        const output = { messages: state.runningTaskContext.messages };
+        dispatcher({
+          type: "action_triggered",
+          actionId,
+          transitionTo: action.transitionTo,
+          completedTask: { taskId: completedTaskId, output },
+        });
+        // The completion is recorded before the runner is released, so the
+        // runner's run() rejection is swallowed by executeTask's early return
+        // once hasRunningTask is false.
+        runningRunner?.cancel();
+        runningRunner = null;
+        return;
+      }
+
       if (state.hasRunningTask) {
         runningRunner?.cancel();
         runningRunner = null;

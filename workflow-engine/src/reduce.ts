@@ -13,6 +13,12 @@ export type WorkflowEvent =
       type: "action_triggered";
       actionId: string;
       transitionTo: string;
+      // When set, the dispatched action completes the running task
+      // successfully (recording this output) instead of cancelling it.
+      // Carried on the event so one reducer case records the completion and
+      // transitions, without dispatching task_completed (whose
+      // evaluateAutoTransitions could fight the action's transitionTo).
+      completedTask?: { taskId: string; output: unknown };
     }
   | {
       type: "task_started";
@@ -64,6 +70,35 @@ export function reduce(
 ): ReduceResult {
   switch (event.type) {
     case "action_triggered": {
+      const completedTask = event.completedTask;
+      const taskOutputs = completedTask
+        ? {
+            ...state.taskOutputs,
+            [completedTask.taskId]: {
+              status: "success" as const,
+              output: completedTask.output,
+            },
+          }
+        : state.taskOutputs;
+
+      const history = completedTask
+        ? state.history.map((h) => {
+            if (
+              h.type === "task_execution" &&
+              h.taskId === completedTask.taskId &&
+              h.status === "running"
+            ) {
+              return {
+                ...h,
+                status: "success" as const,
+                output: completedTask.output,
+                finishedAt: new Date().toISOString(),
+              };
+            }
+            return h;
+          })
+        : state.history;
+
       const transitionEntry: WorkflowHistoryEntry = {
         type: "state_transition",
         fromState: state.currentState,
@@ -77,7 +112,8 @@ export function reduce(
         hasRunningTask: false,
         runningTaskId: null,
         runningTaskContext: null,
-        history: [...state.history, transitionEntry],
+        taskOutputs,
+        history: [...history, transitionEntry],
       };
       return {
         state: nextState,

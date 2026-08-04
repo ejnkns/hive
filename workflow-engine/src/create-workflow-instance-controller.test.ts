@@ -6,7 +6,11 @@ import type {
   TaskRunner,
   TaskRunnerContext,
 } from "./task-runner";
-import { defineWorkflow } from "./workflow-types";
+import {
+  type ChatMessage,
+  defineWorkflow,
+  type WorkflowHistoryEntry,
+} from "./workflow-types";
 
 const testWorkflow = defineWorkflow({
   id: "test",
@@ -462,6 +466,171 @@ describe("sendTaskInput", () => {
 
     runner.complete("done");
     await new Promise((r) => setTimeout(r, 0));
+    await taskPromise;
+  });
+});
+
+// ── HITL ai-chat session completion ──────────────────────────────
+
+const hitlWorkflow = defineWorkflow({
+  id: "hitl",
+  label: "HITL Session",
+  taskOutputs: {
+    interview: {} as { messages: ChatMessage[] },
+  },
+  states: [
+    {
+      id: "idle",
+      label: "Idle",
+      actions: [
+        {
+          id: "begin",
+          label: "Begin",
+          transitionTo: "session",
+        },
+      ],
+    },
+    {
+      id: "session",
+      label: "Session",
+      tasks: [
+        {
+          id: "interview",
+          label: "Interview",
+          trigger: "manual",
+          role: "ai-chat",
+          systemPrompt: "You are a HITL interviewer.",
+        },
+      ],
+      actions: [
+        {
+          id: "complete_session",
+          label: "Complete",
+          variant: "primary",
+          gate: (ctx) => ctx.hasRunningTask,
+          completesRunningTask: true,
+          transitionTo: "complete",
+        },
+      ],
+    },
+    {
+      id: "complete",
+      label: "Complete",
+      actions: [
+        {
+          id: "confirm",
+          label: "Confirm transcript",
+          gate: (ctx) =>
+            (ctx.taskOutputs.interview?.output.messages.length ?? 0) > 0,
+          transitionTo: "done",
+        },
+      ],
+    },
+    { id: "done", label: "Done" },
+  ],
+  initial: "idle",
+  terminalStates: ["done"],
+});
+
+// Mirrors the ai-chat runner: holds a pending run() until cancelled, syncs its
+// transcript into instance state at each turn so the recorded output is the
+// live transcript, and rejects run() on cancel so executeTask's catch path
+// runs.
+class HitlMockRunner implements TaskRunner {
+  private pendingReject: ((reason: Error) => void) | null = null;
+  private messages: ChatMessage[];
+  private patchMessages: (messages: ChatMessage[]) => void;
+  cancelled = false;
+
+  constructor(patchMessages: (messages: ChatMessage[]) => void) {
+    this.messages = [];
+    this.patchMessages = patchMessages;
+  }
+
+  run(task: TaskDefinition): Promise<{ output: unknown }> {
+    this.messages = [{ role: "system", content: task.systemPrompt ?? "" }];
+    this.patchMessages(this.messages);
+    return new Promise((_resolve, reject) => {
+      this.pendingReject = reject;
+    });
+  }
+
+  cancel(): void {
+    this.cancelled = true;
+    this.pendingReject?.(new Error("Cancelled"));
+  }
+
+  async sendMessage(content: string, role: string): Promise<void> {
+    this.messages.push({ role: role as ChatMessage["role"], content });
+    this.patchMessages(this.messages);
+  }
+}
+
+describe("HITL ai-chat session completion", () => {
+  it("completes a running session with its transcript as the task output", async () => {
+    let runner!: HitlMockRunner;
+    const controller = createWorkflowInstanceController(hitlWorkflow, {
+      "ai-chat": (ctx) => {
+        runner = new HitlMockRunner(ctx.patchRunningTaskMessages);
+        return runner;
+      },
+    });
+
+    controller.dispatchAction("begin");
+    const taskPromise = controller.startTask("interview");
+    await new Promise((r) => setTimeout(r, 0));
+
+    controller.sendTaskInput("interview", "What did you build?", "user");
+
+    const runningContext = controller.getState().runningTaskContext;
+    assert.ok(runningContext && runningContext.role === "ai-chat");
+    const transcript = [...runningContext.messages];
+    assert.deepEqual(
+      transcript.map((m) => m.content),
+      ["You are a HITL interviewer.", "What did you build?"]
+    );
+
+    controller.dispatchAction("complete_session");
+
+    const state = controller.getState();
+    assert.equal(state.currentState, "complete");
+    assert.equal(state.hasRunningTask, false);
+    assert.equal(state.runningTaskId, null);
+    assert.equal(state.runningTaskContext, null);
+
+    // The captured transcript is the task output, recorded as success.
+    assert.equal(state.taskOutputs.interview?.status, "success");
+    assert.deepEqual(state.taskOutputs.interview?.output, {
+      messages: transcript,
+    });
+    assert.equal(runner.cancelled, true);
+
+    const executionEntry = state.history.find(
+      (h): h is Extract<WorkflowHistoryEntry, { type: "task_execution" }> =>
+        h.type === "task_execution" && h.taskId === "interview"
+    );
+    assert.ok(executionEntry);
+    assert.equal(executionEntry.status, "success");
+
+    await taskPromise;
+  });
+
+  it("a follow-on gate can read the completed session transcript", async () => {
+    const controller = createWorkflowInstanceController(hitlWorkflow, {
+      "ai-chat": (ctx) => new HitlMockRunner(ctx.patchRunningTaskMessages),
+    });
+
+    controller.dispatchAction("begin");
+    const taskPromise = controller.startTask("interview");
+    await new Promise((r) => setTimeout(r, 0));
+
+    controller.sendTaskInput("interview", "Hello", "user");
+    controller.dispatchAction("complete_session");
+
+    assert.equal(controller.getState().currentState, "complete");
+    const actions = controller.getAvailableActions();
+    assert.ok(actions.find((a) => a.id === "confirm"));
+
     await taskPromise;
   });
 });

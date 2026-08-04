@@ -159,6 +159,12 @@ export type ManualAction<
   // Spawns a new workflow instance. fields render as a form; the collected
   // values become the new instance's workflowInstanceState.
   createInstance?: { workflowId: string; fields?: ConfigField[] };
+  // When true, dispatching this action completes the running ai-chat task
+  // instead of cancelling it: the live transcript becomes the task output,
+  // recorded as success, then the state transitions to transitionTo. HITL
+  // sessions (grilling, wayfinder decision tickets) end this way — the
+  // conversation is the result. Ignored unless an ai-chat task is running.
+  completesRunningTask?: boolean;
   transitionTo: TStateId;
 };
 
