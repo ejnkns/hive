@@ -124,7 +124,12 @@ export type FlowRuntimeAPI<TFlowConfig, TFlowState> = {
     instanceId: string
   ): WorkflowInstanceControllerAPI | undefined;
   workflowInstances: RuntimeWorkflowInstanceState[];
-  workflowInstancesInState(stateId?: string): RuntimeWorkflowInstanceState[];
+  // Gate-context projection: each workflow instance's id + current state,
+  // filterable by state. Gates reference instances by id (dependsOn checks),
+  // so this carries the id the raw states omit.
+  workflowInstancesInState(
+    stateId?: string
+  ): { currentState: string; id: string }[];
   on(handler: FlowEventHandler): () => void;
   getWorkflowDefinitions(): WorkflowDefResponse[];
   getWorkflowInstanceEntries(): WorkflowInstanceEntry[];
@@ -164,18 +169,11 @@ export function createFlowRuntime<
     }
   }
 
-  function _workflowInstancesInState(
-    stateId?: string
-  ): RuntimeWorkflowInstanceState[] {
-    return Array.from(controllers.values())
-      .map((c) => c.getState())
-      .filter((s) => stateId === undefined || s.currentState === stateId);
-  }
-
-  // Cross-instance query for gates and depends-on checks. Unlike the public
-  // workflowInstancesInState, this carries each instance's id so callers can
-  // reference specific instances.
-  function _controllerInstancesInState(
+  // Cross-instance query for gates and depends-on checks. The single source of
+  // the gate-context projection: id + currentState, so callers (gate contexts,
+  // depends-on checks) can reference specific instances. The full runtime
+  // states are available via the workflowInstances getter.
+  function workflowInstancesInState(
     stateId?: string
   ): { currentState: string; id: string }[] {
     return Array.from(controllers.entries())
@@ -287,7 +285,7 @@ export function createFlowRuntime<
       workflow,
       runners,
       initialState,
-      _controllerInstancesInState,
+      workflowInstancesInState,
       _flowState,
       {
         flowConfig: _flowConfig,
@@ -358,7 +356,7 @@ export function createFlowRuntime<
     get workflowInstances(): RuntimeWorkflowInstanceState[] {
       return Array.from(controllers.values()).map((c) => c.getState());
     },
-    workflowInstancesInState: _workflowInstancesInState,
+    workflowInstancesInState,
     on: (handler: FlowEventHandler) => {
       eventHandlers.add(handler);
       return () => {

@@ -271,16 +271,7 @@ function buildFlowGateContext(
     workflowInstanceState: {},
     flowState: runtime.getFlowState(),
     workflowInstancesInState: (stateId) =>
-      runtime
-        .getWorkflowInstanceEntries()
-        .filter(
-          (entry) =>
-            stateId === undefined || entry.state.currentState === stateId
-        )
-        .map((entry) => ({
-          id: entry.id,
-          currentState: entry.state.currentState,
-        })),
+      runtime.workflowInstancesInState(stateId),
   };
 }
 

@@ -476,7 +476,9 @@ describe("FlowRuntime", () => {
       runner.complete({ result: "hello" });
       await new Promise((r) => setTimeout(r, 0));
 
-      const targetInstances = runtime.workflowInstancesInState("ready");
+      const targetInstances = runtime.workflowInstances.filter(
+        (i) => i.currentState === "ready"
+      );
       assert.equal(targetInstances.length, 1);
       assert.equal(targetInstances[0].workflowInstanceState.inherited, "hello");
       assert.deepEqual(targetInstances[0].workflowInstanceState.dependsOn, [

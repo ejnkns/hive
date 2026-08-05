@@ -11,7 +11,8 @@ export function getAvailableActions(
   state: RuntimeWorkflowInstanceState,
   workflowInstancesInState?: (
     stateId?: string
-  ) => { currentState: string; id: string }[]
+  ) => { currentState: string; id: string }[],
+  flowState?: Record<string, unknown>
 ): VisibleAction[] {
   const stateDef = states.find((s) => s.id === currentState);
   if (!stateDef?.actions) return [];
@@ -21,7 +22,7 @@ export function getAvailableActions(
     hasRunningTask: state.hasRunningTask,
     runningTaskContext: state.runningTaskContext,
     workflowInstanceState: state.workflowInstanceState,
-    flowState: {},
+    flowState: flowState ?? {},
     workflowInstancesInState,
   };
 

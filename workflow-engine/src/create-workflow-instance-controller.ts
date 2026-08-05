@@ -140,7 +140,8 @@ export function createWorkflowInstanceController(
       workflow.states,
       state.currentState,
       state,
-      workflowInstancesInState
+      workflowInstancesInState,
+      flowState
     );
   }
 
