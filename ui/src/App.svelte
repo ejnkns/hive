@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { MetricData, ProviderPayload } from "shared/dashboard-types";
+import type { MetricData } from "shared/dashboard-types";
 import { onMount } from "svelte";
 import { dashboardSocket } from "./dashboard/dashboard-socket.svelte";
 import type { HeaderData } from "./shared/utils";
@@ -139,27 +139,6 @@ let statsData = $derived.by(() => {
   };
 });
 
-let providersData = $derived.by((): ProviderPayload[] => {
-  return dashboardSocket.providers.map((x) => ({
-    name: x.name,
-    displayName: x.displayName,
-    model: x.model,
-    keyConfigured: x.keyConfigured,
-    stabilityScore: x.stabilityScore,
-    subscores: x.subscores,
-    p95Latency: x.p95Latency,
-    meanTokensPerSecond: x.meanTokensPerSecond,
-    requestCount: x.requestCount,
-    recentSuccessRate: x.recentSuccessRate,
-    truncationRate: x.truncationRate,
-    refusalRate: x.refusalRate,
-    contentFilterRate: x.contentFilterRate,
-    trippedUntil: x.trippedUntil,
-    disabledFeatures: x.disabledFeatures,
-    disabled: x.disabled,
-  }));
-});
-
 let overrideKey = $derived(
   dashboardSocket.override.active &&
     dashboardSocket.override.provider &&
@@ -227,9 +206,8 @@ const detailChain = $derived(
         <div class="section-head" style="margin-top:1.5rem">Live Sessions</div>
         <Sessions sessions={dashboardSocket.sessions} />
         <ProviderPanel
-          data={providersData}
+          data={dashboardSocket.providers}
           metrics={dashboardSocket.metrics}
-          conversations={[]}
           {overrideKey}
           onRowClick={handleMetricClick}
           onToggleProvider={handleToggleProvider}
@@ -240,7 +218,7 @@ const detailChain = $derived(
       <div class="section-head" style="margin-top:1.5rem">Pipeline</div>
       <LivePipeline
         events={dashboardSocket.flowEvents}
-        providers={providersData}
+        providers={dashboardSocket.providers}
       />
       <Logs entries={dashboardSocket.logEntries} />
     </div>

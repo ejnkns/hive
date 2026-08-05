@@ -1,24 +1,18 @@
 <script lang="ts">
-import type {
-  ConversationData,
-  MetricData,
-  ProviderPayload,
-} from "shared/dashboard-types";
+import type { MetricData, ProviderPayload } from "shared/dashboard-types";
 import { formatNumber, healthColor, sc } from "../shared/utils";
 import ActivityLog from "./ActivityLog.svelte";
-import Conversations from "./Conversations.svelte";
+import { groupProviders } from "./group-providers";
 
 let {
   data = [] as ProviderPayload[],
   metrics = [] as MetricData[],
-  conversations = [] as ConversationData[],
   overrideKey = null as string | null,
   onRowClick: onRowClickCallback,
   onToggleProvider,
 } = $props<{
   data?: ProviderPayload[];
   metrics?: MetricData[];
-  conversations?: ConversationData[];
   overrideKey?: string | null;
   onRowClick?: (metric: MetricData, allMetrics: MetricData[]) => void;
   onToggleProvider?: (provider: string, disabled: boolean) => void;
@@ -26,35 +20,8 @@ let {
 
 let expandedConsoles = $state<Record<string, boolean>>({});
 let expandedModels = $state<Record<string, boolean>>({});
-let activeTabs = $state<Record<string, "activity" | "conversations">>({});
 
-const groups = $derived.by(() => {
-  const grouped = new Map<string, ProviderPayload[]>();
-  data.forEach((x: ProviderPayload) => {
-    const existing = grouped.get(x.name);
-    if (existing) existing.push(x);
-    else grouped.set(x.name, [x]);
-  });
-  return Array.from(grouped.entries())
-    .map(([name, entries]) => {
-      const maxScore = Math.max(...entries.map((e) => e.stabilityScore));
-      const keyConfigured = entries.some((e) => e.keyConfigured);
-      const disabled = entries[0]?.disabled ?? false;
-      return {
-        name,
-        displayName: entries[0].displayName || name,
-        entries,
-        maxScore,
-        keyConfigured,
-        disabled,
-      };
-    })
-    .sort((a, b) => {
-      if (a.keyConfigured && !b.keyConfigured) return -1;
-      if (!a.keyConfigured && b.keyConfigured) return 1;
-      return b.maxScore - a.maxScore;
-    });
-});
+const groups = $derived(groupProviders(data));
 
 // Live cooldown ticker
 let tick = $state(0);
@@ -76,10 +43,6 @@ function toggleModels(name: string) {
 function toggleConsole(name: string) {
   expandedConsoles[name] = !expandedConsoles[name];
 }
-
-function switchTab(name: string, tab: "activity" | "conversations") {
-  activeTabs[name] = tab;
-}
 </script>
 
 {#if groups.length === 0}
@@ -91,7 +54,6 @@ function switchTab(name: string, tab: "activity" | "conversations") {
       : null) ?? [...group.entries].sort((a, b) => b.stabilityScore - a.stabilityScore)[0]}
     {@const isExpanded = expandedConsoles[group.name] ?? false}
     {@const isModelsExpanded = expandedModels[group.name] ?? false}
-    {@const activeTab = activeTabs[group.name] || "activity"}
     <div
       class="worker"
       style="opacity:{group.keyConfigured && !group.disabled ? '1' : '0.4'}"
@@ -151,7 +113,7 @@ function switchTab(name: string, tab: "activity" | "conversations") {
               {@const sub = e.subscores}
               {@const tripped = e.trippedUntil && e.trippedUntil > Date.now() && tick > -1}
               {@const cooldownSec = tripped && e.trippedUntil ? Math.round((e.trippedUntil - Date.now()) / 1000) : 0}
-              {@const isPinned = overrideKey === `{e.name}:{e.model}`}
+              {@const isPinned = overrideKey === `${e.name}:${e.model}`}
               <div class="mrow {isPinned ? 'pinned' : ''}">
                 <div class="mrow-top">
                   <span class="mname">
@@ -241,36 +203,10 @@ function switchTab(name: string, tab: "activity" | "conversations") {
           </button>
           {#if isExpanded}
             <div class="console-content">
-              <div class="tab-bar">
-                <button
-                  type="button"
-                  class="tab {activeTab === 'activity' ? 'active' : ''}"
-                  onclick={() => switchTab(group.name, "activity")}
-                  onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && switchTab(group.name, "activity")}
-                >
-                  Recent Activity
-                </button>
-                <button
-                  type="button"
-                  class="tab {activeTab === 'conversations' ? 'active' : ''}"
-                  onclick={() => switchTab(group.name, "conversations")}
-                  onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && switchTab(group.name, "conversations")}
-                >
-                  Conversations
-                </button>
-              </div>
-              <div class="tab-content">
-                {#if activeTab === "activity"}
-                  <ActivityLog
-                    data={metrics.filter((m: MetricData) => m.provider === group.name)}
-                    onRowClick={onRowClickCallback}
-                  />
-                {:else}
-                  <Conversations
-                    data={conversations.filter((c: ConversationData) => c.provider === group.name)}
-                  />
-                {/if}
-              </div>
+              <ActivityLog
+                data={metrics.filter((m: MetricData) => m.provider === group.name)}
+                onRowClick={onRowClickCallback}
+              />
             </div>
           {/if}
         </div>
@@ -487,33 +423,6 @@ function switchTab(name: string, tab: "activity" | "conversations") {
   margin-top: 0.5rem;
   border: 1px solid var(--border);
   background: var(--bg);
-}
-.tab-bar {
-  display: flex;
-  background: var(--card);
-  border-bottom: 1px solid var(--border);
-}
-.tab {
-  font-size: 0.625rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-weight: 700;
-  cursor: pointer;
-  padding: 0.375rem 0.75rem;
-  color: var(--muted);
-  border-right: 1px solid var(--border);
-}
-.tab:hover {
-  color: var(--text);
-}
-.tab.active {
-  color: var(--accent);
-  background: var(--card);
-}
-.tab-content {
-  height: 250px;
-  overflow: hidden;
-  overflow-y: auto;
 }
 
 .badge {

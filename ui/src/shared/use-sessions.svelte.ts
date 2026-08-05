@@ -4,6 +4,7 @@ import type {
   SessionSnapshot,
   SessionState,
 } from "shared/dashboard-types";
+import { isTerminal } from "shared/dashboard-types";
 
 export function createSessionStore() {
   const map = new Map<string, SessionState>();
@@ -14,14 +15,14 @@ export function createSessionStore() {
     const active = all.filter((s) =>
       s.requests.some((r) => {
         const last = r.path[r.path.length - 1];
-        return last !== "complete" && last !== "failed";
+        return !isTerminal(last);
       })
     );
     const completed = all.filter(
       (s) =>
         !s.requests.some((r) => {
           const last = r.path[r.path.length - 1];
-          return last !== "complete" && last !== "failed";
+          return !isTerminal(last);
         })
     );
     active.sort((a, b) => b.lastActivity - a.lastActivity);

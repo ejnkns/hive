@@ -1,16 +1,12 @@
 <script lang="ts">
-import type {
-  ConversationData,
-  MetricData,
-  ProviderPayload,
-} from "shared/dashboard-types";
+import type { MetricData, ProviderPayload } from "shared/dashboard-types";
 import { formatNumber, healthColor } from "../shared/utils";
+import { groupProviders } from "./group-providers";
 import Providers from "./Providers.svelte";
 
 let {
   data = [] as ProviderPayload[],
   metrics = [] as MetricData[],
-  conversations = [] as ConversationData[],
   overrideKey = null as string | null,
   lastProvider = null as string | null,
   lastModel = null as string | null,
@@ -19,7 +15,6 @@ let {
 } = $props<{
   data?: ProviderPayload[];
   metrics?: MetricData[];
-  conversations?: ConversationData[];
   overrideKey?: string | null;
   lastProvider?: string | null;
   lastModel?: string | null;
@@ -29,31 +24,7 @@ let {
 
 let expanded = $state(false);
 
-const groups = $derived.by(() => {
-  const grouped = new Map<string, ProviderPayload[]>();
-  data.forEach((x: ProviderPayload) => {
-    const existing = grouped.get(x.name);
-    if (existing) existing.push(x);
-    else grouped.set(x.name, [x]);
-  });
-  return Array.from(grouped.entries())
-    .map(([name, entries]) => {
-      const maxScore = Math.max(...entries.map((e) => e.stabilityScore));
-      const keyConfigured = entries.some((e) => e.keyConfigured);
-      return {
-        name,
-        displayName: entries[0].displayName || name,
-        entries,
-        maxScore,
-        keyConfigured,
-      };
-    })
-    .sort((a, b) => {
-      if (a.keyConfigured && !b.keyConfigured) return -1;
-      if (!a.keyConfigured && b.keyConfigured) return 1;
-      return b.maxScore - a.maxScore;
-    });
-});
+const groups = $derived(groupProviders(data));
 
 const currentEntry = $derived(
   lastProvider && lastModel
@@ -120,7 +91,6 @@ const isPinned = $derived(
     <Providers
       {data}
       {metrics}
-      {conversations}
       {overrideKey}
       onRowClick={onRowClickCallback}
       {onToggleProvider}

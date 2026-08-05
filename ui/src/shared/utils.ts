@@ -50,11 +50,6 @@ export function formatNumber(v: number | null, suf?: string): string {
   return v.toFixed(2) + (suf ? ` ${suf}` : "");
 }
 
-export function esc(input: unknown): string {
-  const s = typeof input === "string" ? input : String(input);
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
 export function normalizeContent(content: unknown): string {
   if (typeof content === "string") return content;
   if (Array.isArray(content)) {
@@ -72,10 +67,6 @@ export function normalizeContent(content: unknown): string {
       .join("\n");
   }
   return String(content);
-}
-
-export function safeId(name: string): string {
-  return name.replace(/[^a-zA-Z0-9-_]/g, "-");
 }
 
 export function resolveToolName(

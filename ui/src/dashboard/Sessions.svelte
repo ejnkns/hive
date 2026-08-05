@@ -1,15 +1,16 @@
 <script lang="ts">
 import type { SessionState } from "shared/dashboard-types";
-import SessionCard from "./SessionCard.svelte";
 import Button from "../shared/ui/Button.svelte";
 import Skeleton from "../shared/ui/Skeleton.svelte";
+import SessionCard from "./SessionCard.svelte";
+import { isTerminal } from "./stage-utils";
 
 let { sessions = [] as SessionState[] } = $props();
 
 function hasActiveRequest(s: SessionState): boolean {
   return s.requests.some((r) => {
     const last = r.path[r.path.length - 1];
-    return last !== "complete" && last !== "failed";
+    return !isTerminal(last);
   });
 }
 
