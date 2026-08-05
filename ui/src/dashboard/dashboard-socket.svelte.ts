@@ -1,12 +1,11 @@
 import type {
   AvailableProvider,
-  FlowEvent,
+  InitMessage,
   MetricData,
   ModelPriority,
   OverrideState,
   PipelineStateMessage,
   ProviderPayload,
-  SessionSnapshot,
   WsServerMessage,
 } from "shared/dashboard-types";
 import { type LogEntry, logger } from "shared/logger";
@@ -26,7 +25,7 @@ let override = $state<OverrideState>({
 let providers = $state<ProviderPayload[]>([]);
 let availableProviders = $state<AvailableProvider[]>([]);
 let metrics = $state<MetricData[]>([]);
-let flowEvents = $state<(FlowEvent | PipelineStateMessage)[]>([]);
+let flowEvents = $state<PipelineStateMessage[]>([]);
 let logEntries = $state<LogEntry[]>([]);
 let serverHost = $state("");
 let serverPort = $state("");
@@ -85,24 +84,8 @@ function handleMessage(msg: WsServerMessage) {
     sessionStore.replaceAll(msg.sessions);
     return;
   }
-  if (msg.type === "session_state") {
-    sessionStore.applyPatch(msg.data);
-    return;
-  }
-  if (msg.type === "session_init") {
-    sessionStore.initSessions(msg.data);
-    return;
-  }
-  if (msg.type === "session_detail") {
-    return;
-  }
   if (msg.type === "pipeline_state") {
     flowEvents.push(msg);
-    if (flowEvents.length > 100) flowEvents.shift();
-    return;
-  }
-  if (msg.type === "flow") {
-    flowEvents.push(msg.data);
     if (flowEvents.length > 100) flowEvents.shift();
     return;
   }
@@ -131,51 +114,24 @@ function handleMessage(msg: WsServerMessage) {
     modelPriorityConfig = msg.config;
     return;
   }
-  // New init format (check first — discriminated by "sessions" vs "data")
-  if (msg.type === "init" && "sessions" in msg) {
-    const m = msg as unknown as {
-      providers: ProviderPayload[];
-      availableProviders: AvailableProvider[];
-      metrics: MetricData[];
-      override: OverrideState;
-      sessions: SessionSnapshot;
-      serverHost: string;
-      serverPort: string;
-      routingStrategy: string;
-      contextWindowWeight: number;
-      pending: number;
-      modelPriorityConfig: ModelPriority | null;
-    };
-    providers = m.providers;
-    availableProviders = m.availableProviders;
-    metrics = m.metrics;
-    override = m.override;
-    serverHost = m.serverHost;
-    serverPort = m.serverPort;
-    routingStrategy = m.routingStrategy;
-    contextWindowWeight = m.contextWindowWeight;
-    pendingCount = m.pending;
-    modelPriorityConfig = m.modelPriorityConfig;
-    sessionStore.replaceAll(m.sessions);
-    return;
+  if (msg.type === "init") {
+    applyInit(msg);
   }
-  // Legacy init/update with data wrapper
-  if ("data" in msg) {
-    const d = msg.data;
-    providers = d.providers;
-    availableProviders = d.availableProviders;
-    metrics = d.metrics;
-    override = {
-      active: d.overrideActive,
-      provider: d.overrideProvider,
-      model: d.overrideModel,
-    };
-    serverHost = d.serverHost;
-    serverPort = d.serverPort;
-    routingStrategy = d.routingStrategy;
-    contextWindowWeight = d.contextWindowWeight;
-    pendingCount = d.pending;
-  }
+}
+
+function applyInit(msg: InitMessage) {
+  providers = msg.providers;
+  availableProviders = msg.availableProviders;
+  metrics = msg.metrics;
+  override = msg.override;
+  serverHost = msg.serverHost;
+  serverPort = msg.serverPort;
+  routingStrategy = msg.routingStrategy;
+  contextWindowWeight = msg.contextWindowWeight;
+  pendingCount = msg.pending;
+  modelPriorityConfig = msg.modelPriorityConfig;
+  sessionStore.replaceAll(msg.sessions);
+  logEntries = msg.logs;
 }
 
 function closeSocket() {
@@ -204,10 +160,6 @@ export function clearOverride(provider: string, model: string) {
 
 export function toggleProvider(provider: string, disabled: boolean) {
   send({ type: "toggle_provider", provider, disabled });
-}
-
-export function requestSessionDetail(sessionId: string, requestId: string) {
-  send({ type: "session_detail", sessionId, requestId });
 }
 
 export function updateModelPriority(config: ModelPriority) {
@@ -261,7 +213,6 @@ export const dashboardSocket = {
   setOverride,
   clearOverride,
   toggleProvider,
-  requestSessionDetail,
   updateModelPriority,
   disconnect: closeSocket,
 };

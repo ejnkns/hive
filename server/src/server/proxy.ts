@@ -1,6 +1,5 @@
 /** @public — proxy module API. Import from here, not from proxy/ directly. */
 
-export type { FlowEvent } from "shared/dashboard-types";
 export { shutdown, start } from "./proxy/application-lifecycle";
 export type { ProviderState } from "./proxy/get-provider-states";
 export { getProviderStates } from "./proxy/get-provider-states";

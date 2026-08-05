@@ -1,12 +1,11 @@
 <script lang="ts">
 import type {
-  FlowEvent,
   PipelineStateMessage,
   ProviderPayload,
 } from "shared/dashboard-types";
 
 let {
-  events = [] as (FlowEvent | PipelineStateMessage)[],
+  events = [] as PipelineStateMessage[],
   providers = [] as ProviderPayload[],
 } = $props();
 
@@ -28,7 +27,6 @@ type PipelineSession = {
     | "failed";
   provider: string | null;
   model: string | null;
-  affinity: boolean;
   timestamp: number;
 };
 
@@ -48,49 +46,20 @@ const sessions = $derived.by(() => {
   const now = Date.now();
 
   for (const event of events) {
-    const evtTs = "timestamp" in event ? event.timestamp : now;
-    if (now - evtTs > SESSION_TTL_MS) continue;
+    if (now - event.timestamp > SESSION_TTL_MS) continue;
 
-    let session = map.get(event.requestId);
-    if (!session) {
-      session = {
-        requestId: event.requestId,
-        phase: "scoring",
-        provider: null,
-        model: null,
-        affinity: false,
-        timestamp: evtTs,
-      };
-    }
-
-    switch (event.type) {
-      case "request_received":
-        session.timestamp = event.timestamp;
-        break;
-      case "selection_round":
-        session.affinity = event.candidates.some((c) => c.affinity);
-        break;
-      case "node_dispatched":
-        session.provider = event.provider;
-        session.model = event.model;
-        session.phase = "dispatched";
-        break;
-      case "thinking_started":
-        session.phase = "thinking";
-        break;
-      case "streaming_started":
-        session.phase = "streaming";
-        break;
-      case "response_complete":
-        session.phase = event.success ? "complete" : "failed";
-        break;
-      case "pipeline_state":
-        session.provider = event.provider;
-        session.model = event.model;
-        session.timestamp = event.timestamp;
-        session.phase = PIPELINE_PHASE[event.stage] ?? "scoring";
-        break;
-    }
+    const existing = map.get(event.requestId);
+    const session: PipelineSession = existing ?? {
+      requestId: event.requestId,
+      phase: "scoring",
+      provider: null,
+      model: null,
+      timestamp: event.timestamp,
+    };
+    session.provider = event.provider;
+    session.model = event.model;
+    session.timestamp = event.timestamp;
+    session.phase = PIPELINE_PHASE[event.stage] ?? "scoring";
 
     map.set(event.requestId, session);
   }
@@ -266,13 +235,6 @@ function getPathClass(session: PipelineSession): string {
         class={getPathClass(session)}
         style="opacity:{opacity.toFixed(2)}"
       />
-
-      {#if !isDone && session.affinity}
-        <polygon
-          points="{INGRESS_X - 8},{ingressY - 4} {INGRESS_X - 2},{ingressY} {INGRESS_X - 8},{ingressY + 4}"
-          fill="var(--accent)"
-        />
-      {/if}
     {/if}
   {/each}
 </svg>

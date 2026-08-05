@@ -128,24 +128,6 @@ paths:
                     type: integer
                     description: Unflushed metrics in memory
 
-  /api/conversations:
-    get:
-      summary: Conversation history
-      description: Returns stored conversation records for completed requests.
-      operationId: getConversations
-      responses:
-        "200":
-          description: Conversation list
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  conversations:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Conversation"
-
 components:
   schemas:
     Message:
@@ -278,44 +260,6 @@ components:
           type: string
           enum: [user]
 
-    Conversation:
-      type: object
-      properties:
-        requestId:
-          type: string
-        provider:
-          type: string
-        model:
-          type: string
-        timestamp:
-          type: number
-        ttft:
-          type: number
-          nullable: true
-        totalLatency:
-          type: number
-          nullable: true
-        statusCode:
-          type: integer
-        success:
-          type: boolean
-        prompt:
-          type: array
-          items:
-            type: object
-            properties:
-              role:
-                type: string
-              content:
-                type: string
-        responseText:
-          type: string
-        outputTokens:
-          type: integer
-          nullable: true
-        finishReason:
-          type: string
-          nullable: true
         refused:
           type: boolean
 
@@ -379,10 +323,6 @@ components:
             $ref: "#/components/schemas/RequestMetric"
         pending:
           type: integer
-        conversations:
-          type: array
-          items:
-            $ref: "#/components/schemas/Conversation"
         bestProvider:
           type: string
           nullable: true

@@ -133,10 +133,6 @@ export type MetricData = {
   errorBody?: string;
   success: boolean;
   source: string;
-  /** Conversation data for completed requests. Present when a request has finished. */
-  prompt?: ConversationMessage[];
-  /** Raw response text for completed requests. Present when a request has finished. */
-  responseText?: string;
 };
 
 export type OverrideState = {
@@ -206,34 +202,6 @@ export type SessionState = {
 };
 
 /**
- * Incremental session state patch. Used by the current protocol; replaced
- * by `session_snapshot` messages in the consolidated protocol.
- */
-export type SessionPatch = {
-  sessionId: string;
-  initial?: { fingerprint?: string; timestamp: number };
-  lastActivity?: number;
-  requestId?: string;
-  requestInitial?: { timestamp: number; prompt?: string };
-  path?: SessionStage[];
-  toolLoopDetected?: boolean;
-  provider?: string;
-  model?: string;
-  candidates?: CandidateInfo[];
-  selected?: string;
-  strategy?: string;
-  poolSize?: number;
-  outputChars?: number;
-  thinkingChars?: number;
-  tokensPerSecond?: number;
-  failover?: { provider: string; model: string; errorType: string };
-  overrideError?: RequestState["overrideError"];
-  conversationPrompt?: ConversationMessage[];
-  responseText?: string;
-  response?: RequestState["response"];
-};
-
-/**
  * Full session state snapshot — server pre-sorted into active and completed
  * lists. The consumer renders directly with zero client-side filtering.
  */
@@ -242,192 +210,26 @@ export type SessionSnapshot = {
   completed: SessionState[];
 };
 
-/**
- * Raw proxy pipeline event. Used by the current protocol; replaced by
- * `pipeline_state` messages in the consolidated protocol.
- */
-export type FlowEvent =
-  | {
-      type: "request_received";
-      requestId: string;
-      sessionId: string;
-      timestamp: number;
-      promptPreview: string;
-      toolLoopDetected?: boolean;
-    }
-  | {
-      type: "selection_round";
-      requestId: string;
-      strategy: string;
-      candidates: CandidateInfo[];
-      selected: string | null;
-      poolSize: number;
-    }
-  | {
-      type: "node_dispatched";
-      requestId: string;
-      provider: string;
-      model: string;
-      attempt: number;
-    }
-  | {
-      type: "response_complete";
-      requestId: string;
-      provider: string;
-      model: string;
-      statusCode: number;
-      success: boolean;
-      ttft: number;
-      totalLatency: number;
-      outputTokens: number | null;
-      finishReason: string | null;
-      toolCallFailed: boolean;
-      errorType: string | null;
-    }
-  | {
-      type: "failover_attempt";
-      requestId: string;
-      failedProvider: string;
-      failedModel: string;
-      errorType: string;
-      attempt: number;
-    }
-  | {
-      type: "thinking_started";
-      requestId: string;
-      provider: string;
-      model: string;
-    }
-  | {
-      type: "streaming_started";
-      requestId: string;
-      provider: string;
-      model: string;
-    }
-  | {
-      type: "token_tick";
-      requestId: string;
-      provider: string;
-      model: string;
-      outputChars: number;
-      thinkingChars: number;
-      tokensPerSecond: number;
-    }
-  | {
-      type: "tool_accumulating";
-      requestId: string;
-      provider: string;
-      model: string;
-      toolIndex: number;
-    }
-  | {
-      type: "circuit_break";
-      requestId: string;
-      provider: string;
-      model: string;
-      cooldownDurationSec: number;
-    }
-  | {
-      type: "override_failed";
-      requestId: string;
-      provider: string;
-      model: string;
-      statusCode: number;
-      errorType: string;
-      errorBody: string;
-    };
-
-// ---------------------------------------------------------------------------
-// Legacy protocol types (current, replaced in Phase 2)
-// ---------------------------------------------------------------------------
-
-/**
- * Conversation log entry for a completed request. Used in the current
- * telemetry payload; replaced by conversation fields on MetricData in the
- * consolidated protocol.
- */
-export type ConversationData = {
-  requestId: string;
-  provider: string;
-  model: string;
-  timestamp: number;
-  ttft: number | null;
-  totalLatency: number | null;
-  statusCode: number;
-  success: boolean;
-  prompt: ConversationMessage[];
-  responseText: string;
-  outputTokens: number | null;
-  finishReason: FinishReason;
-  refused: boolean;
-};
-
-/**
- * Full telemetry snapshot sent as the data payload of current `init` and
- * `update` messages. Replaced by focused per-concern messages in the
- * consolidated protocol.
- */
-export type TelemetryData = {
-  providers: ProviderPayload[];
-  serverHost: string;
-  serverPort: string;
-  lastProvider: string | null;
-  lastModel: string | null;
-  overrideActive: boolean;
-  overrideProvider: string | null;
-  overrideModel: string | null;
-  availableProviders: AvailableProvider[];
-  metrics: MetricData[];
-  pending: number;
-  conversations: ConversationData[];
-  bestProvider: string | null;
-  bestModel: string | null;
-  bestScore: number | null;
-  routingStrategy: string;
-  contextWindowWeight: number;
-};
-
 // ---------------------------------------------------------------------------
 // Protocol messages — Server → Client
 // ---------------------------------------------------------------------------
 
 /**
- * Currently active message types. `WsServerMessage` is the union consumers
- * switch on. Includes both legacy and consolidated protocol messages; legacy
- * variants are removed when the consolidated protocol replaces them entirely.
+ * The union of every message the server may send over the dashboard WebSocket.
+ * The consumer switches on `type` and applies each message directly (replace
+ * local state, never patch-incrementally).
  */
 export type WsServerMessage =
-  | { type: "init" | "update"; data: TelemetryData }
-  | { type: "log"; data: LogEntry }
-  | { type: "flow"; data: FlowEvent }
-  | { type: "session_state"; data: SessionPatch }
-  | { type: "session_init"; data: SessionState[] }
-  | { type: "session_snapshot"; sessions: SessionSnapshot }
-  | {
-      type: "pipeline_state";
-      requestId: string;
-      sessionId: string;
-      stage: SessionStage;
-      provider: string | null;
-      model: string | null;
-      timestamp: number;
-    }
-  | {
-      type: "session_detail";
-      requestId: string;
-      conversationPrompt: ConversationMessage[];
-      responseText: string;
-    }
-  | { type: "provider_update"; providers: ProviderPayload[] }
-  | { type: "metrics_update"; metrics: MetricData[] }
-  | { type: "stats_update"; stats: StatsData }
-  | { type: "override_update"; override: OverrideState }
-  | {
-      type: "available_providers_update";
-      availableProviders: AvailableProvider[];
-    }
-  | { type: "model_priority_update"; config: ModelPriority | null }
-  | InitMessage;
+  | InitMessage
+  | SessionSnapshotMessage
+  | PipelineStateMessage
+  | ProviderUpdateMessage
+  | MetricsUpdateMessage
+  | StatsUpdateMessage
+  | OverrideUpdateMessage
+  | AvailableProvidersUpdateMessage
+  | ModelPriorityUpdateMessage
+  | LogMessage;
 
 /**
  * Consolidated protocol: sent once on WebSocket connect. Contains the
@@ -448,6 +250,7 @@ export type InitMessage = {
   contextWindowWeight: number;
   pending: number;
   stats: StatsData;
+  modelPriorityConfig: ModelPriority | null;
 };
 
 /**
@@ -458,18 +261,6 @@ export type InitMessage = {
 export type SessionSnapshotMessage = {
   type: "session_snapshot";
   sessions: SessionSnapshot;
-};
-
-/**
- * Sent in response to a client `session_detail` command. Returns conversation
- * data for a single request so consumers fetch detail on demand rather than
- * receiving full conversation content in every snapshot.
- */
-export type SessionDetailMessage = {
-  type: "session_detail";
-  requestId: string;
-  conversationPrompt: ConversationMessage[];
-  responseText: string;
 };
 
 /**
@@ -499,10 +290,9 @@ export type ProviderUpdateMessage = {
 };
 
 /**
- * Sent when a new request completes. Carries the complete metrics array
- * including conversation data (prompt and responseText) on entries where
- * the request has finished. The consumer replaces its local metrics array
- * directly.
+ * Sent when a new request completes. Carries the complete metrics array. The
+ * consumer replaces its local metrics array directly. Conversation content is
+ * not pushed here — it lives on the session tree (session_snapshot).
  */
 export type MetricsUpdateMessage = {
   type: "metrics_update";
@@ -537,7 +327,7 @@ export type AvailableProvidersUpdateMessage = {
 };
 
 /**
- * Sent for each new server log entry. Unchanged from the existing protocol.
+ * Sent for each new server log entry.
  */
 export type LogMessage = {
   type: "log";
@@ -545,20 +335,12 @@ export type LogMessage = {
 };
 
 /**
- * Consolidated protocol message union. Replaces the current WsServerMessage
- * union in Phase 2.
+ * Sent when the model priority configuration changes.
  */
-export type WsServerMessageV2 =
-  | InitMessage
-  | SessionSnapshotMessage
-  | SessionDetailMessage
-  | PipelineStateMessage
-  | ProviderUpdateMessage
-  | MetricsUpdateMessage
-  | StatsUpdateMessage
-  | OverrideUpdateMessage
-  | AvailableProvidersUpdateMessage
-  | LogMessage;
+export type ModelPriorityUpdateMessage = {
+  type: "model_priority_update";
+  config: ModelPriority | null;
+};
 
 // ---------------------------------------------------------------------------
 // Protocol messages — Client → Server
@@ -587,16 +369,6 @@ export type ToggleProviderCommand = {
   disabled: boolean;
 };
 
-/**
- * Request conversation data for a specific request within a session.
- * The server responds with a single `session_detail` message.
- */
-export type SessionDetailCommand = {
-  type: "session_detail";
-  sessionId: string;
-  requestId: string;
-};
-
 export type UpdateModelPriorityCommand = {
   type: "update_model_priority";
   config: ModelPriority;
@@ -606,5 +378,4 @@ export type UpdateModelPriorityCommand = {
 export type WsClientMessage =
   | OverrideCommand
   | ToggleProviderCommand
-  | SessionDetailCommand
   | UpdateModelPriorityCommand;

@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { addLogListener, getRecentLogs, logger } from "shared/logger";
 import { getServerConfig } from "shared/server-config";
-import { conversationStore, loadCache, telemetryRecorder } from "telemetry";
+import { loadCache, telemetryRecorder } from "telemetry";
 import type { WebSocket } from "ws";
 import type { FastifyServer } from "../create-server";
 import {
@@ -102,7 +102,6 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
     const configProviders = deps.getProviders();
     const providers = await buildProvidersPayload();
     const cache = await loadCache();
-    const conversations = conversationStore.getConversations();
 
     const overrideState = getOverride();
 
@@ -142,10 +141,7 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
     return {
       providers,
       availableProviders,
-      metrics: cache.metrics.map((m) => {
-        const conv = conversations.find((c) => c.requestId === m.requestId);
-        return { ...m, prompt: conv?.prompt, responseText: conv?.responseText };
-      }),
+      metrics: cache.metrics,
       override: {
         active: overrideState !== null,
         provider: overrideState ? overrideState.provider : null,
@@ -217,13 +213,9 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
 
   async function broadcastMetricsUpdate() {
     const cache = await loadCache();
-    const conversations = conversationStore.getConversations();
     broadcast({
       type: "metrics_update",
-      metrics: cache.metrics.map((m) => {
-        const conv = conversations.find((c) => c.requestId === m.requestId);
-        return { ...m, prompt: conv?.prompt, responseText: conv?.responseText };
-      }),
+      metrics: cache.metrics,
     });
   }
 
@@ -337,33 +329,6 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
             }
             void broadcastProviderUpdate();
             void broadcastAvailableProvidersUpdate();
-          }
-        }
-        if (parsed?.type === "session_detail") {
-          if (
-            typeof parsed.sessionId === "string" &&
-            typeof parsed.requestId === "string"
-          ) {
-            const sessions = getSessionSnapshot();
-            const allSessions = [...sessions.active, ...sessions.completed];
-            const session = allSessions.find(
-              (s) => s.sessionId === parsed.sessionId
-            );
-            if (session) {
-              const request = session.requests.find(
-                (r) => r.requestId === parsed.requestId
-              );
-              if (request) {
-                socket.send(
-                  JSON.stringify({
-                    type: "session_detail",
-                    requestId: request.requestId,
-                    conversationPrompt: request.conversationPrompt ?? [],
-                    responseText: request.responseText ?? "",
-                  })
-                );
-              }
-            }
           }
         }
         if (parsed?.type === "update_model_priority") {
@@ -487,12 +452,6 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
     reply.send({
       metrics: cache.metrics,
       pending: telemetryRecorder.getPendingCount(),
-    });
-  });
-
-  server.get("/api/conversations", async (_request, reply) => {
-    reply.send({
-      conversations: conversationStore.getConversations(),
     });
   });
 
