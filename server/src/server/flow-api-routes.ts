@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { slugify } from "shared/slugify";
 import {
   DefinitionAlreadyExistsError,
   deleteUserDefinition,
@@ -6,7 +7,6 @@ import {
   getRegisteredFlowDefinition,
   listRegisteredDefinitions,
   registerUserDefinition,
-  slugify,
   updateUserDefinition,
 } from "./flow-definitions";
 import {
@@ -34,6 +34,10 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
     const cfg = runtime.getFlowConfig();
     const workflows = runtime.getWorkflowDefinitions();
     const instances = runtime.getWorkflowInstanceEntries();
+    // The raw definition TS source is internal (the server re-transpiles it on
+    // rehydrate); it is not part of the client contract and must not ship to
+    // every flow snapshot.
+    const { definitionSource: _definitionSource, ...clientConfig } = cfg;
     // Flow-level rendering declarations come from the flow's definition (the
     // runtime carries only the resolved workflow configs). The UI uses them to
     // validate and fall back on custom render kinds.
@@ -46,7 +50,7 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
       id: flowId,
       label: (cfg.name as string) ?? flowId,
       status: computeInstanceStatus(workflows, instances),
-      config: cfg,
+      config: clientConfig,
       workflows,
       instances,
       ui: { kinds: definition?.ui?.kinds ?? [] },

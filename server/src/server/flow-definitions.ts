@@ -11,6 +11,8 @@ import {
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { HIVE_DIR } from "shared/hive-dir";
+import { logger } from "shared/logger";
+import { slugify } from "shared/slugify";
 import type {
   ConfigField,
   FlowDefinition,
@@ -181,7 +183,7 @@ export async function loadUserDefinitionsFromDisk(): Promise<void> {
         source,
       });
     } catch (err) {
-      console.warn(
+      logger.warn(
         `Skipping flow definition "${slug}": ${
           err instanceof Error ? err.message : String(err)
         }`
@@ -316,12 +318,4 @@ function findServerPackageRoot(): string {
     }
     dir = parent;
   }
-}
-
-export function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 50);
 }
