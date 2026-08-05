@@ -82,15 +82,26 @@ export function loadModelPriority(): void {
       `model priority loaded: modelPriority=[${modelPriority.modelPriority.join(", ")}]${modelPriority.providerPriority ? ` providerPriority=[${modelPriority.providerPriority.join(", ")}]` : ""}`
     );
   } catch (e: unknown) {
-    if ((e as NodeJS.ErrnoException).code === "ENOENT") {
+    if (isErrorWithCode(e, "ENOENT")) {
       modelPriority = null;
       return;
     }
     logger.warn(
-      `model-priority.json: failed to parse, ignoring: ${(e as Error).message}`
+      `model-priority.json: failed to parse, ignoring: ${
+        e instanceof Error ? e.message : String(e)
+      }`
     );
     modelPriority = null;
   }
+}
+
+function isErrorWithCode(err: unknown, code: string): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: unknown }).code === code
+  );
 }
 
 export function getModelPriority(): ModelPriority | null {

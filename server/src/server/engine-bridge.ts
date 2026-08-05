@@ -69,6 +69,8 @@ function wrapPrepareWorktree(
     worktreePath: result.path,
     branchName: result.branchName,
   });
+  // IsolatedWorkspaceResult is a plain data record; the operation runner
+  // treats every operation output as Record<string, unknown>.
   return result as unknown as OperationResult;
 }
 
