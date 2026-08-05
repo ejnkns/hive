@@ -2,7 +2,7 @@
 import { Button as BitsButton } from "bits-ui";
 import type { Snippet } from "svelte";
 
-type Variant = "mint" | "rose" | "platinum" | "amber" | "azure";
+type Variant = "mint" | "rose" | "platinum" | "azure";
 
 let {
   variant = "platinum",
@@ -39,7 +39,9 @@ let {
   cursor: pointer;
   font-family: monospace;
   font-weight: 600;
-  transition: opacity 0.15s, background 0.15s;
+  transition:
+    opacity 0.15s,
+    background 0.15s;
   white-space: nowrap;
 }
 :global(.hive-btn:active) {
@@ -93,12 +95,6 @@ let {
 }
 :global(.hive-btn-platinum:hover) {
   background: var(--border);
-}
-
-:global(.hive-btn-amber) {
-  background: var(--warning);
-  color: var(--bg);
-  border-color: var(--warning);
 }
 
 :global(.hive-btn-azure) {

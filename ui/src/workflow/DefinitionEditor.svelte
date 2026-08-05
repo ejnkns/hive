@@ -1,4 +1,5 @@
 <script lang="ts">
+import { slugify } from "shared/slugify";
 import { onMount } from "svelte";
 import Button from "../shared/ui/Button.svelte";
 import Dialog from "../shared/ui/Dialog.svelte";
@@ -9,7 +10,6 @@ import {
   deleteFlowDefinition,
   fetchFlowDefinition,
   generateFlowDefinition,
-  slugify,
   updateFlowDefinition,
 } from "./flow-api";
 

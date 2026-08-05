@@ -2,6 +2,7 @@
 import { onMount } from "svelte";
 import Button from "../shared/ui/Button.svelte";
 import Dialog from "../shared/ui/Dialog.svelte";
+import ConfigFieldInput from "./ConfigFieldInput.svelte";
 import type { FlowLevelAction } from "./flow-api";
 import {
   deleteFlow,
@@ -227,34 +228,13 @@ function submitFlowActionForm() {
     <h2 class="dialog-title">{activeFlowAction.label}</h2>
     <div class="action-form">
       {#each activeFlowAction.createInstance.fields as field (field.key)}
-        <label class="field">
-          <span class="label">{field.label}{field.required ? " *" : ""}</span>
-          {#if field.type === "boolean"}
-            <input
-              type="checkbox"
-              checked={actionValues[field.key] === true}
-              onchange={(event) => {
-                actionValues[field.key] = event.currentTarget.checked;
-              }}
-            >
-          {:else}
-            <input
-              class="text-input text-input-small"
-              type={field.type === "number" ? "number" : "text"}
-              value={String(actionValues[field.key] ?? "")}
-              oninput={(event) => {
-                if (field.type === "number") {
-                  actionValues[field.key] = Number(event.currentTarget.value);
-                } else {
-                  actionValues[field.key] = event.currentTarget.value;
-                }
-              }}
-            >
-          {/if}
-          {#if field.hint}
-            <span class="hint">{field.hint}</span>
-          {/if}
-        </label>
+        <ConfigFieldInput
+          {field}
+          value={actionValues[field.key]}
+          onChange={(value) => {
+            actionValues[field.key] = value;
+          }}
+        />
       {/each}
     </div>
     <div class="dialog-actions">
@@ -388,34 +368,6 @@ h1 {
   flex-direction: column;
   gap: 0.75rem;
   margin-bottom: 1rem;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-}
-
-.label {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.hint {
-  font-size: 0.6875rem;
-  color: var(--muted);
-}
-
-.text-input-small {
-  padding: 0.375rem 0.5rem;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--surface);
-  color: var(--text);
-  font-size: 0.75rem;
 }
 
 .flow-sections {

@@ -1,9 +1,11 @@
 <script lang="ts">
+import { slugify } from "shared/slugify";
 import { onMount } from "svelte";
 import Button from "../shared/ui/Button.svelte";
 import TextInput from "../shared/ui/TextInput.svelte";
+import ConfigFieldInput from "./ConfigFieldInput.svelte";
 import type { FlowDefinitionDetail } from "./flow-api";
-import { createFlow, fetchFlowDefinition, slugify } from "./flow-api";
+import { createFlow, fetchFlowDefinition } from "./flow-api";
 
 let { definitionId }: { definitionId: string } = $props();
 
@@ -114,36 +116,14 @@ async function submit() {
       </label>
 
       {#each definition.configSchema as field (field.key)}
-        <label class="field">
-          <span class="label">{field.label}{field.required ? " *" : ""}</span>
-          {#if field.type === "boolean"}
-            <input
-              type="checkbox"
-              checked={values[field.key] === true}
-              onchange={(event) => {
-                values[field.key] = event.currentTarget.checked;
-              }}
-              disabled={submitting}
-            >
-          {:else}
-            <input
-              class="text-input text-input-small"
-              type={field.type === "number" ? "number" : "text"}
-              value={String(values[field.key] ?? "")}
-              oninput={(event) => {
-                if (field.type === "number") {
-                  values[field.key] = Number(event.currentTarget.value);
-                } else {
-                  values[field.key] = event.currentTarget.value;
-                }
-              }}
-              disabled={submitting}
-            >
-          {/if}
-          {#if field.hint}
-            <span class="hint">{field.hint}</span>
-          {/if}
-        </label>
+        <ConfigFieldInput
+          {field}
+          value={values[field.key]}
+          disabled={submitting}
+          onChange={(value) => {
+            values[field.key] = value;
+          }}
+        />
       {/each}
 
       <div class="actions">
@@ -211,25 +191,6 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-}
-
-.label {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.hint {
-  font-size: 0.6875rem;
-  color: var(--muted);
 }
 
 .actions {

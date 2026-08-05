@@ -77,14 +77,6 @@ export type FlowWsMessage =
   | { type: "flow_snapshot"; flow: FlowResponse }
   | { type: "flow_deleted"; flowId: string };
 
-export function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 50);
-}
-
 export async function fetchFlows(options?: {
   definitionId?: string;
   name?: string;

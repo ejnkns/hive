@@ -56,7 +56,7 @@
 @property --error {
   syntax: "<color>";
   inherits: true;
-  initial-value: #d4451a;
+  initial-value: #a44022;
 }
 @property --error-rgb {
   syntax: "<number>#";
@@ -66,7 +66,7 @@
 @property --warning {
   syntax: "<color>";
   inherits: true;
-  initial-value: #d4a017;
+  initial-value: #6a603b;
 }
 @property --logo-text {
   syntax: "<color>";

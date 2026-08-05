@@ -1,6 +1,7 @@
 <script lang="ts">
+import { slugify } from "shared/slugify";
 import type { FlowResponse } from "./flow-api";
-import { deleteFlow, slugify } from "./flow-api";
+import { deleteFlow } from "./flow-api";
 import StatusDot from "./StatusDot.svelte";
 
 let {
