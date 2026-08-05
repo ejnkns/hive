@@ -137,10 +137,7 @@ export type AutoTransition<
 > = {
   to: TToStateId;
   gate: (ctx: GateContext<TTaskOutputs, TItemState>) => boolean;
-  effect?: () => void | Promise<void>;
 };
-
-export type RuntimeAutoTransition = AutoTransition;
 
 // ManualAction: a button the user can click to trigger a state change.
 // gate controls visibility; transitionTo is the target state.
@@ -167,8 +164,6 @@ export type ManualAction<
   completesRunningTask?: boolean;
   transitionTo: TStateId;
 };
-
-export type RuntimeManualAction = ManualAction;
 
 // --- Render hints ---
 //

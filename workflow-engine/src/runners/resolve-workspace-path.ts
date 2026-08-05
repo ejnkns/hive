@@ -1,5 +1,7 @@
 /** @private — only imported by the ai runners */
 
+import { resolveDottedPath } from "./resolve-dotted-path";
+
 const INSTANCE_REF_PREFIX = "@instance:";
 
 // A task declares its workspace with either a literal path or an @instance: ref
@@ -13,7 +15,7 @@ export function resolveWorkspacePath(
   basePath?: string
 ): string {
   if (declared?.startsWith(INSTANCE_REF_PREFIX)) {
-    const resolved = readDottedPath(
+    const resolved = resolveDottedPath(
       instanceState ?? {},
       declared.slice(INSTANCE_REF_PREFIX.length)
     );
@@ -21,16 +23,4 @@ export function resolveWorkspacePath(
     return basePath ?? process.cwd();
   }
   return declared ?? basePath ?? process.cwd();
-}
-
-function readDottedPath(
-  state: Record<string, unknown>,
-  dottedPath: string
-): unknown {
-  let current: unknown = state;
-  for (const segment of dottedPath.split(".")) {
-    if (current === null || typeof current !== "object") return undefined;
-    current = (current as Record<string, unknown>)[segment];
-  }
-  return current;
 }

@@ -11,6 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readFlowSettings } from "../../read-flow-settings";
+import { readWorkflowAttempt } from "../../shared/read-workflow-attempt";
 import type { TaskDefinition } from "../../task-runner";
 import type { OperationContext } from "../create-operation-runner";
 
@@ -266,7 +267,7 @@ export function mergeBranch(
       "Flow config integrationBranch and branchPrefix are required"
     );
   }
-  const attempt = readAttempt(ctx.workflowInstanceState());
+  const attempt = readWorkflowAttempt(ctx.workflowInstanceState());
   const branchName =
     typeof params.branchName === "string" && params.branchName !== ""
       ? params.branchName
@@ -332,9 +333,13 @@ function branchWorktreePath(basePath: string, branch: string): string | null {
   return null;
 }
 
-function readAttempt(instanceState: Record<string, unknown>): number {
-  const raw = instanceState.attempt;
-  return typeof raw === "number" && Number.isFinite(raw) ? raw : 1;
+function git(cwd: string, args: string[]): string {
+  return execFileSync("git", args, {
+    cwd,
+    encoding: "utf-8",
+    timeout: 30_000,
+    maxBuffer: 10 * 1024 * 1024,
+  }).trim();
 }
 
 // The card's worktree was recorded as an absolute path by prepare_worktree;
@@ -344,15 +349,6 @@ function discardCardWorktree(ctx: OperationContext, basePath: string): void {
   const raw = ctx.workflowInstanceState().worktreePath;
   if (typeof raw !== "string" || raw === "") return;
   gitSucceeds(basePath, ["worktree", "remove", raw, "--force"]);
-}
-
-function git(cwd: string, args: string[]): string {
-  return execFileSync("git", args, {
-    cwd,
-    encoding: "utf-8",
-    timeout: 30_000,
-    maxBuffer: 10 * 1024 * 1024,
-  }).trim();
 }
 
 function gitSucceeds(cwd: string, args: string[]): boolean {

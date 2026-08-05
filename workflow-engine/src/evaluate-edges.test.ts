@@ -27,9 +27,7 @@ describe("evaluateEdges", () => {
     });
 
     assert.equal(effects.length, 1);
-    assert.equal(effects[0]!.fromWorkflow, "source");
     assert.equal(effects[0]!.toWorkflow, "target");
-    assert.equal(effects[0]!.fromState, "done");
   });
 
   it("passes task outputs to transform function", () => {

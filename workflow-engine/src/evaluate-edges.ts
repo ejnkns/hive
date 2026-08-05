@@ -1,10 +1,8 @@
 import type { RuntimeFlowEdge } from "./workflow-types";
 
 export type EdgeEffect = {
-  fromWorkflow: string;
   toWorkflow?: string;
   toFlowState?: boolean;
-  fromState: string;
   transformedData: Record<string, unknown>;
 };
 
@@ -36,10 +34,8 @@ export function evaluateEdges(
     const items = Array.isArray(transformed) ? transformed : [transformed];
     for (const item of items) {
       effects.push({
-        fromWorkflow: edge.fromWorkflow,
         toWorkflow: edge.toWorkflow,
         toFlowState: edge.toFlowState,
-        fromState: newState,
         transformedData: item,
       });
     }

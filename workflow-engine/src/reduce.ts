@@ -48,7 +48,7 @@ export type WorkflowEvent =
 
 // === Commands emitted to the controller ===
 
-export type WorkflowCommand = { type: "noop" } | { type: "start_auto_tasks" };
+export type WorkflowCommand = { type: "start_auto_tasks" };
 
 // === Reduce result ===
 

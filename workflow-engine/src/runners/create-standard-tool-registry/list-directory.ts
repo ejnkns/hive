@@ -70,6 +70,6 @@ export const execute: ToolExecutor = async (call, ctx) => {
 };
 
 function normalizePrefix(path: string): string {
-  const n = path.replace(/^\.\//, "").replace(/\/$/, "") || ".";
-  return n === "." ? "" : `${n}/`;
+  const normalized = path.replace(/^\.\//, "").replace(/\/$/, "") || ".";
+  return normalized === "." ? "" : `${normalized}/`;
 }

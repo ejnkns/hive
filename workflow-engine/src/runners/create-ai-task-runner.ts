@@ -1,6 +1,7 @@
 /** @private — only imported by runners.ts */
 import type { TaskDefinition, TaskRunner } from "../task-runner";
 import type { ChatMessage } from "../workflow-types";
+import { resolveDottedPath } from "./resolve-dotted-path";
 import { resolveWorkspacePath } from "./resolve-workspace-path";
 import type {
   ToolCall,
@@ -15,6 +16,10 @@ export type AiTaskModelCaller = (
   tools: ToolDefinition[],
   signal: AbortSignal
 ) => Promise<{ content: string; toolCalls?: ToolCall[] }>;
+
+// A one-shot task is expected to reach its completion tool in a few iterations;
+// the budget guards against an agent stuck in a tool loop.
+const MAX_ITERATIONS = 50;
 
 export type AiTaskRunnerConfig = {
   modelCaller: AiTaskModelCaller;
@@ -64,7 +69,7 @@ export function createAiTaskRunner(config: AiTaskRunnerConfig): TaskRunner {
         });
       }
 
-      for (let iteration = 0; iteration < 50; iteration++) {
+      for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
         abortController.signal.throwIfAborted();
 
         const response = await config.modelCaller(
@@ -147,17 +152,4 @@ export function createAiTaskRunner(config: AiTaskRunnerConfig): TaskRunner {
       abortController.abort();
     },
   };
-}
-
-function resolveDottedPath(
-  state: Record<string, unknown>,
-  dottedPath: string | undefined
-): unknown {
-  if (!dottedPath) return undefined;
-  let current: unknown = state;
-  for (const segment of dottedPath.split(".")) {
-    if (current === null || typeof current !== "object") return undefined;
-    current = (current as Record<string, unknown>)[segment];
-  }
-  return current;
 }

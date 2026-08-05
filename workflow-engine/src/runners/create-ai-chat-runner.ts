@@ -1,6 +1,7 @@
 /** @private — only imported by runners.ts */
 import type { TaskDefinition, TaskRunner } from "../task-runner";
 import type { ChatMessage } from "../workflow-types";
+import { resolveDottedPath } from "./resolve-dotted-path";
 import { resolveWorkspacePath } from "./resolve-workspace-path";
 import type {
   ToolCall,
@@ -15,6 +16,10 @@ export type AiChatModelCaller = (
   tools: ToolDefinition[],
   signal: AbortSignal
 ) => Promise<{ content: string; toolCalls?: ToolCall[] }>;
+
+// A chat session is a long multi-turn exchange; the budget guards against an
+// agent that never signals completion.
+const MAX_TURNS = 200;
 
 export type AiChatRunnerConfig = {
   modelCaller: AiChatModelCaller;
@@ -76,7 +81,7 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
       .map((name) => config.toolDefinitions[name])
       .filter(Boolean);
 
-    for (let iteration = 0; iteration < 200; iteration++) {
+    for (let iteration = 0; iteration < MAX_TURNS; iteration++) {
       abortController.signal.throwIfAborted();
 
       const response = await config.modelCaller(
@@ -202,17 +207,4 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
       turnResolve = null;
     },
   };
-}
-
-function resolveDottedPath(
-  state: Record<string, unknown>,
-  dottedPath: string | undefined
-): unknown {
-  if (!dottedPath) return undefined;
-  let current: unknown = state;
-  for (const segment of dottedPath.split(".")) {
-    if (current === null || typeof current !== "object") return undefined;
-    current = (current as Record<string, unknown>)[segment];
-  }
-  return current;
 }

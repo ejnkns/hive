@@ -92,9 +92,13 @@ function isWithinWorkspace(workspacePath: string, targetPath: string): boolean {
 }
 
 function normalizePath(path: string): string {
-  const n = path.replace(/^\.\//, "").replace(/\/$/, "") || ".";
-  if (n === ".." || n.startsWith("../") || n.includes("/../")) {
+  const normalized = path.replace(/^\.\//, "").replace(/\/$/, "") || ".";
+  if (
+    normalized === ".." ||
+    normalized.startsWith("../") ||
+    normalized.includes("/../")
+  ) {
     throw new Error("Path escapes workspace directory");
   }
-  return n;
+  return normalized;
 }

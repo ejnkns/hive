@@ -2,6 +2,7 @@ import { getAvailableActions } from "./get-available-actions";
 import { readFlowSettings } from "./read-flow-settings";
 import { reduce, type WorkflowEvent } from "./reduce";
 import { persistOutput } from "./runners/persist-output";
+import { readWorkflowAttempt } from "./shared/read-workflow-attempt";
 import type { RuntimeWorkflowInstanceState } from "./shared/workflow-instance-state";
 import type {
   TaskDefinition,
@@ -15,13 +16,6 @@ import type {
   RuntimeWorkflowConfig,
   VisibleAction,
 } from "./workflow-types";
-
-export class UnknownRoleError extends Error {
-  constructor(role: string) {
-    super(`No runner registered for role "${role}"`);
-    this.name = "UnknownRoleError";
-  }
-}
 
 export type WorkflowInstanceEvent =
   | {
@@ -208,7 +202,7 @@ export function createWorkflowInstanceController(
       basePath: settings.basePath,
       domainDir: settings.domainDir,
       instanceId: taskContext.instanceId,
-      attempt: readAttempt(state.workflowInstanceState),
+      attempt: readWorkflowAttempt(state.workflowInstanceState),
     });
   }
 
@@ -397,12 +391,4 @@ function readDependsOn(itemState: Record<string, unknown>): string[] {
   const raw = itemState.dependsOn;
   if (!Array.isArray(raw)) return [];
   return raw.filter((id): id is string => typeof id === "string");
-}
-
-// The {attempt} placeholder in a persist path is per-workflow-attempt; items
-// that track attempts (e.g. cards) carry it in workflowInstanceState, others
-// default to attempt 1.
-function readAttempt(itemState: Record<string, unknown>): number {
-  const raw = itemState.attempt;
-  return typeof raw === "number" && Number.isFinite(raw) ? raw : 1;
 }
