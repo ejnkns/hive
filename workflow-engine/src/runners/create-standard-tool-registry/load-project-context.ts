@@ -1,31 +1,31 @@
 /** @private — only imported by create-standard-tool-registry.ts */
 
-import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { TaskDefinition } from "../../task-runner";
-
-export type LoadProjectContextParams = {
-  basePath: string;
-  manifestPaths?: string[];
-  cacheRoot?: string;
-};
+import { runGit } from "../git-command";
 
 export function loadProjectContext(
   _task: TaskDefinition,
   params: Record<string, unknown>
 ): Record<string, unknown> {
-  const { basePath, manifestPaths, cacheRoot } =
-    params as unknown as LoadProjectContextParams;
+  // Operation inputs arrive as an erased record; read the known fields with
+  // runtime narrowing instead of asserting the whole params shape.
+  const basePath = typeof params.basePath === "string" ? params.basePath : "";
+  const manifestPaths = Array.isArray(params.manifestPaths)
+    ? params.manifestPaths.filter((p): p is string => typeof p === "string")
+    : undefined;
+  const cacheRoot =
+    typeof params.cacheRoot === "string" ? params.cacheRoot : undefined;
 
   if (!basePath) {
     return { ok: false, error: "Missing required param: basePath" };
   }
 
   try {
-    const revision = git(basePath, ["rev-parse", "HEAD"]);
+    const revision = runGit(basePath, ["rev-parse", "HEAD"]);
     // Content-addressed cache keyed by revision, outside the repo so it never
     // pollutes or is committed with the project.
     const cacheDir = cacheRoot ?? join(tmpdir(), "hive-project-context");
@@ -51,7 +51,7 @@ export function loadProjectContext(
     const manifests: Record<string, string> = {};
     for (const manifestPath of manifestPaths ?? ["package.json", "README.md"]) {
       try {
-        manifests[manifestPath] = git(basePath, [
+        manifests[manifestPath] = runGit(basePath, [
           "show",
           `${revision}:${manifestPath}`,
         ]);
@@ -88,15 +88,6 @@ function randomHex(): string {
     .slice(0, 12);
 }
 
-function git(cwd: string, args: string[]): string {
-  return execFileSync("git", args, {
-    cwd,
-    encoding: "utf-8",
-    timeout: 10_000,
-    maxBuffer: 10 * 1024 * 1024,
-  }).trim();
-}
-
 function gitLines(cwd: string, args: string[]): string[] {
-  return git(cwd, args).split("\n").filter(Boolean);
+  return runGit(cwd, args, 10_000).split("\n").filter(Boolean);
 }

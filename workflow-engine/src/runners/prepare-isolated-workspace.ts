@@ -1,7 +1,7 @@
 /** @private — only imported by runners.ts */
-import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { gitSucceeds, runGit } from "./git-command";
 
 export type IsolatedWorkspaceResult = {
   ok: boolean;
@@ -70,31 +70,23 @@ export function prepareIsolatedWorkspace(
 
   try {
     const branchName = `${branchPrefix}${cardId}/attempt-${attempt}`;
-    const baseCommit = execFileSync("git", ["rev-parse", integrationBranch], {
-      cwd: basePath,
-      encoding: "utf-8",
-      timeout: 10_000,
-    }).trim();
+    const baseCommit = runGit(
+      basePath,
+      ["rev-parse", integrationBranch],
+      10_000
+    );
 
     if (!existsSync(workspacePath)) {
       mkdirSync(workspacePath, { recursive: true });
-      execFileSync(
-        "git",
+      runGit(
+        basePath,
         ["worktree", "add", workspacePath, integrationBranch],
-        {
-          cwd: basePath,
-          encoding: "utf-8",
-          timeout: 15_000,
-        }
+        15_000
       );
     }
 
     try {
-      execFileSync("git", ["checkout", integrationBranch], {
-        cwd: workspacePath,
-        encoding: "utf-8",
-        timeout: 10_000,
-      });
+      runGit(workspacePath, ["checkout", integrationBranch], 10_000);
     } catch {
       // worktree may already be on the integration branch
     }
@@ -106,17 +98,9 @@ export function prepareIsolatedWorkspace(
       `refs/heads/${branchName}`,
     ]);
     if (!branchExists) {
-      execFileSync("git", ["checkout", "-b", branchName], {
-        cwd: workspacePath,
-        encoding: "utf-8",
-        timeout: 10_000,
-      });
+      runGit(workspacePath, ["checkout", "-b", branchName], 10_000);
     } else {
-      execFileSync("git", ["checkout", branchName], {
-        cwd: workspacePath,
-        encoding: "utf-8",
-        timeout: 10_000,
-      });
+      runGit(workspacePath, ["checkout", branchName], 10_000);
     }
 
     return { ok: true, path: workspacePath, branchName, baseCommit };
@@ -126,19 +110,5 @@ export function prepareIsolatedWorkspace(
       message:
         err instanceof Error ? err.message : "Failed to prepare worktree",
     };
-  }
-}
-
-function gitSucceeds(cwd: string, args: string[]): boolean {
-  try {
-    execFileSync("git", args, {
-      cwd,
-      encoding: "utf-8",
-      timeout: 5_000,
-      stdio: "pipe",
-    });
-    return true;
-  } catch {
-    return false;
   }
 }

@@ -1,6 +1,5 @@
 /** @private — only imported by create-standard-tool-registry.ts */
 
-import { execFileSync } from "node:child_process";
 import {
   cpSync,
   existsSync,
@@ -14,6 +13,7 @@ import { readFlowSettings } from "../../read-flow-settings";
 import { readWorkflowAttempt } from "../../shared/read-workflow-attempt";
 import type { TaskDefinition } from "../../task-runner";
 import type { OperationContext } from "../create-operation-runner";
+import { gitSucceeds, runGit } from "../git-command";
 
 // Branch names and the domain root come from flow config, never hardcoded.
 // integrationBranch/branchPrefix/domainDir have no engine defaults — a flow
@@ -34,12 +34,12 @@ export function ensureIntegrationBranch(
     throw new Error("Flow config integrationBranch is not set");
   }
   if (!hasBranch(basePath, integrationBranch)) {
-    git(basePath, ["branch", integrationBranch, "HEAD"]);
+    runGit(basePath, ["branch", integrationBranch, "HEAD"]);
   }
   return {
     ok: true,
     branchName: integrationBranch,
-    revision: git(basePath, ["rev-parse", integrationBranch]),
+    revision: runGit(basePath, ["rev-parse", integrationBranch]),
   };
 }
 
@@ -54,17 +54,17 @@ export function checkIntegrationReadiness(
   if (!integrationBranch) {
     throw new Error("Flow config integrationBranch is not set");
   }
-  const integration = git(basePath, ["rev-parse", integrationBranch]);
-  const targetRev = git(basePath, ["rev-parse", targetBranch]);
+  const integration = runGit(basePath, ["rev-parse", integrationBranch]);
+  const targetRev = runGit(basePath, ["rev-parse", targetBranch]);
   const ahead = Number(
-    git(basePath, [
+    runGit(basePath, [
       "rev-list",
       "--count",
       `${targetBranch}..${integrationBranch}`,
     ])
   );
   const behind = Number(
-    git(basePath, [
+    runGit(basePath, [
       "rev-list",
       "--count",
       `${integrationBranch}..${targetBranch}`,
@@ -117,19 +117,19 @@ export function fastForwardTargetBranch(
 
   const checkedOutPath = branchWorktreePath(basePath, targetBranch);
   if (checkedOutPath) {
-    if (git(checkedOutPath, ["status", "--porcelain"])) {
+    if (runGit(checkedOutPath, ["status", "--porcelain"])) {
       throw new Error(`${targetBranch} has uncommitted changes`);
     }
-    git(checkedOutPath, ["merge", "--ff-only", integrationBranch]);
+    runGit(checkedOutPath, ["merge", "--ff-only", integrationBranch]);
   } else {
-    git(basePath, [
+    runGit(basePath, [
       "update-ref",
       `refs/heads/${targetBranch}`,
       result.integrationRevision as string,
       result.targetRevision as string,
     ]);
   }
-  return { ok: true, revision: git(basePath, ["rev-parse", targetBranch]) };
+  return { ok: true, revision: runGit(basePath, ["rev-parse", targetBranch]) };
 }
 
 export function writeFlowArtifacts(
@@ -146,13 +146,13 @@ export function writeFlowArtifacts(
       mkdirSync(join(fullPath, ".."), { recursive: true });
       writeFileSync(fullPath, content, "utf-8");
     }
-    git(basePath, ["add", ...Object.keys(files)]);
-    git(basePath, [
+    runGit(basePath, ["add", ...Object.keys(files)]);
+    runGit(basePath, [
       "commit",
       "-m",
       (params.message as string) ?? "hive: update flow artifacts",
     ]);
-    return { ok: true, revision: git(basePath, ["rev-parse", "HEAD"]) };
+    return { ok: true, revision: runGit(basePath, ["rev-parse", "HEAD"]) };
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
   }
@@ -184,40 +184,40 @@ export function commitFlowState(
     return {
       ok: true,
       unchanged: true,
-      revision: git(basePath, ["rev-parse", integrationBranch]),
+      revision: runGit(basePath, ["rev-parse", integrationBranch]),
     };
   }
   if (!hasBranch(basePath, integrationBranch)) {
-    git(basePath, ["branch", integrationBranch, "HEAD"]);
+    runGit(basePath, ["branch", integrationBranch, "HEAD"]);
   }
 
-  if (git(basePath, ["branch", "--show-current"]) === integrationBranch) {
-    git(basePath, ["add", "-A", "--", domainDir]);
+  if (runGit(basePath, ["branch", "--show-current"]) === integrationBranch) {
+    runGit(basePath, ["add", "-A", "--", domainDir]);
     if (!gitSucceeds(basePath, ["diff", "--cached", "--quiet"])) {
-      git(basePath, ["commit", "-m", message]);
+      runGit(basePath, ["commit", "-m", message]);
     }
     return {
       ok: true,
-      revision: git(basePath, ["rev-parse", integrationBranch]),
+      revision: runGit(basePath, ["rev-parse", integrationBranch]),
     };
   }
 
   const worktreePath = mkdtempSync(join(tmpdir(), "hive-commit-"));
-  git(basePath, ["worktree", "add", worktreePath, integrationBranch]);
+  runGit(basePath, ["worktree", "add", worktreePath, integrationBranch]);
   try {
     const targetDir = join(worktreePath, domainDir);
     mkdirSync(targetDir, { recursive: true });
     cpSync(sourceDir, targetDir, { recursive: true });
-    git(worktreePath, ["add", "-A", "--", domainDir]);
+    runGit(worktreePath, ["add", "-A", "--", domainDir]);
     if (!gitSucceeds(worktreePath, ["diff", "--cached", "--quiet"])) {
-      git(worktreePath, ["commit", "-m", message]);
+      runGit(worktreePath, ["commit", "-m", message]);
     }
     return {
       ok: true,
-      revision: git(basePath, ["rev-parse", integrationBranch]),
+      revision: runGit(basePath, ["rev-parse", integrationBranch]),
     };
   } finally {
-    git(basePath, ["worktree", "remove", worktreePath, "--force"]);
+    runGit(basePath, ["worktree", "remove", worktreePath, "--force"]);
   }
 }
 
@@ -241,8 +241,8 @@ export function validateRepo(
   if (!existsSync(basePath)) {
     throw new Error(`Path does not exist: ${basePath}`);
   }
-  git(basePath, ["rev-parse", "--is-inside-work-tree"]);
-  git(basePath, ["rev-parse", "HEAD"]);
+  runGit(basePath, ["rev-parse", "--is-inside-work-tree"]);
+  runGit(basePath, ["rev-parse", "HEAD"]);
   return { ok: true, basePath };
 }
 
@@ -274,16 +274,16 @@ export function mergeBranch(
       : `${branchPrefix}${ctx.instanceId}/attempt-${attempt}`;
 
   if (!hasBranch(basePath, integrationBranch)) {
-    git(basePath, ["branch", integrationBranch, "HEAD"]);
+    runGit(basePath, ["branch", integrationBranch, "HEAD"]);
   }
   if (!hasBranch(basePath, branchName)) {
     throw new Error(`No work branch ${branchName} found`);
   }
 
   const worktreePath = mkdtempSync(join(tmpdir(), "hive-merge-"));
-  git(basePath, ["worktree", "add", worktreePath, integrationBranch]);
+  runGit(basePath, ["worktree", "add", worktreePath, integrationBranch]);
   try {
-    git(worktreePath, [
+    runGit(worktreePath, [
       "merge",
       "--no-ff",
       "-m",
@@ -291,15 +291,15 @@ export function mergeBranch(
       branchName,
     ]);
   } finally {
-    git(basePath, ["worktree", "remove", worktreePath, "--force"]);
+    runGit(basePath, ["worktree", "remove", worktreePath, "--force"]);
   }
 
   discardCardWorktree(ctx, basePath);
-  git(basePath, ["branch", "-D", branchName]);
+  runGit(basePath, ["branch", "-D", branchName]);
 
   return {
     ok: true,
-    revision: git(basePath, ["rev-parse", integrationBranch]),
+    revision: runGit(basePath, ["rev-parse", integrationBranch]),
     merged: branchName,
   };
 }
@@ -315,7 +315,12 @@ function readIntegrationBranch(
 
 function hasBranch(basePath: string, branch: string): boolean {
   try {
-    git(basePath, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]);
+    runGit(basePath, [
+      "show-ref",
+      "--verify",
+      "--quiet",
+      `refs/heads/${branch}`,
+    ]);
     return true;
   } catch {
     return false;
@@ -323,7 +328,9 @@ function hasBranch(basePath: string, branch: string): boolean {
 }
 
 function branchWorktreePath(basePath: string, branch: string): string | null {
-  const recs = git(basePath, ["worktree", "list", "--porcelain"]).split("\n\n");
+  const recs = runGit(basePath, ["worktree", "list", "--porcelain"]).split(
+    "\n\n"
+  );
   const ref = `branch refs/heads/${branch}`;
   for (const rec of recs) {
     if (!rec.includes(ref)) continue;
@@ -333,15 +340,6 @@ function branchWorktreePath(basePath: string, branch: string): string | null {
   return null;
 }
 
-function git(cwd: string, args: string[]): string {
-  return execFileSync("git", args, {
-    cwd,
-    encoding: "utf-8",
-    timeout: 30_000,
-    maxBuffer: 10 * 1024 * 1024,
-  }).trim();
-}
-
 // The card's worktree was recorded as an absolute path by prepare_worktree;
 // discard it best-effort so a stale or already-removed path cannot fail the
 // merge. The feature branch is only deleted after this succeeds.
@@ -349,15 +347,6 @@ function discardCardWorktree(ctx: OperationContext, basePath: string): void {
   const raw = ctx.workflowInstanceState().worktreePath;
   if (typeof raw !== "string" || raw === "") return;
   gitSucceeds(basePath, ["worktree", "remove", raw, "--force"]);
-}
-
-function gitSucceeds(cwd: string, args: string[]): boolean {
-  try {
-    git(cwd, args);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function errorMessage(err: unknown): string {

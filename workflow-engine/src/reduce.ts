@@ -166,130 +166,25 @@ export function reduce(
       };
     }
 
-    case "task_completed": {
-      const newOutputs = {
-        ...state.taskOutputs,
-        [event.taskId]: {
-          status: "success" as const,
-          output: event.output,
-        },
-      };
-
-      const history = state.history.map((h) => {
-        if (
-          h.type === "task_execution" &&
-          h.taskId === event.taskId &&
-          h.status === "running"
-        ) {
-          return {
-            ...h,
-            status: "success" as const,
-            output: event.output,
-            finishedAt: new Date().toISOString(),
-          };
-        }
-        return h;
-      });
-
-      const newState: RuntimeWorkflowInstanceState = {
-        ...state,
-        taskOutputs: newOutputs,
-        hasRunningTask: false,
-        runningTaskId: null,
-        runningTaskContext: null,
-        history,
-      };
-
-      const transition = evaluateAutoTransitions(
+    case "task_completed":
+      return applyTaskOutcome(
+        state,
+        { status: "success", output: event.output },
+        event.taskId,
         states,
-        newState.currentState,
-        newState,
         flowState,
         workflowInstancesInState
       );
-      if (transition) {
-        const transitionEntry: WorkflowHistoryEntry = {
-          type: "state_transition",
-          fromState: newState.currentState,
-          toState: transition,
-          timestamp: new Date().toISOString(),
-        };
-        const nextState = {
-          ...newState,
-          currentState: transition,
-          history: [...newState.history, transitionEntry],
-        };
-        return {
-          state: nextState,
-          commands: [{ type: "start_auto_tasks" }],
-        };
-      }
 
-      return { state: newState, commands: [] };
-    }
-
-    case "task_errored": {
-      const newOutputs = {
-        ...state.taskOutputs,
-        [event.taskId]: {
-          status: "error" as const,
-          error: event.error,
-          output: undefined,
-        },
-      };
-
-      const history = state.history.map((h) => {
-        if (
-          h.type === "task_execution" &&
-          h.taskId === event.taskId &&
-          h.status === "running"
-        ) {
-          return {
-            ...h,
-            status: "error" as const,
-            error: event.error,
-            finishedAt: new Date().toISOString(),
-          };
-        }
-        return h;
-      });
-
-      const newState: RuntimeWorkflowInstanceState = {
-        ...state,
-        taskOutputs: newOutputs,
-        hasRunningTask: false,
-        runningTaskId: null,
-        runningTaskContext: null,
-        history,
-      };
-
-      const transition = evaluateAutoTransitions(
+    case "task_errored":
+      return applyTaskOutcome(
+        state,
+        { status: "error", error: event.error },
+        event.taskId,
         states,
-        newState.currentState,
-        newState,
         flowState,
         workflowInstancesInState
       );
-      if (transition) {
-        const transitionEntry: WorkflowHistoryEntry = {
-          type: "state_transition",
-          fromState: newState.currentState,
-          toState: transition,
-          timestamp: new Date().toISOString(),
-        };
-        const nextState = {
-          ...newState,
-          currentState: transition,
-          history: [...newState.history, transitionEntry],
-        };
-        return {
-          state: nextState,
-          commands: [{ type: "start_auto_tasks" }],
-        };
-      }
-
-      return { state: newState, commands: [] };
-    }
 
     case "task_cancelled": {
       const history = state.history.map((h) => {
@@ -322,6 +217,90 @@ export function reduce(
 }
 
 // === Helpers ===
+
+type TaskEndedOutcome =
+  | { status: "success"; output: unknown }
+  | { status: "error"; error: string };
+
+// task_completed and task_errored are the same transition — record the task
+// outcome, clear the running task, and evaluate auto-transitions — differing
+// only in the outcome shape.
+function applyTaskOutcome(
+  state: RuntimeWorkflowInstanceState,
+  outcome: TaskEndedOutcome,
+  taskId: string,
+  states: readonly RuntimeStateDef[],
+  flowState?: Record<string, unknown>,
+  workflowInstancesInState?: (
+    stateId?: string
+  ) => { currentState: string; id: string }[]
+): ReduceResult {
+  const newOutputs = {
+    ...state.taskOutputs,
+    [taskId]:
+      outcome.status === "success"
+        ? { status: "success" as const, output: outcome.output }
+        : { status: "error" as const, error: outcome.error, output: undefined },
+  };
+
+  const history = state.history.map((h) => {
+    if (
+      h.type === "task_execution" &&
+      h.taskId === taskId &&
+      h.status === "running"
+    ) {
+      return outcome.status === "success"
+        ? {
+            ...h,
+            status: "success" as const,
+            output: outcome.output,
+            finishedAt: new Date().toISOString(),
+          }
+        : {
+            ...h,
+            status: "error" as const,
+            error: outcome.error,
+            finishedAt: new Date().toISOString(),
+          };
+    }
+    return h;
+  });
+
+  const newState: RuntimeWorkflowInstanceState = {
+    ...state,
+    taskOutputs: newOutputs,
+    hasRunningTask: false,
+    runningTaskId: null,
+    runningTaskContext: null,
+    history,
+  };
+
+  const transition = evaluateAutoTransitions(
+    states,
+    newState.currentState,
+    newState,
+    flowState,
+    workflowInstancesInState
+  );
+  if (transition) {
+    const transitionEntry: WorkflowHistoryEntry = {
+      type: "state_transition",
+      fromState: newState.currentState,
+      toState: transition,
+      timestamp: new Date().toISOString(),
+    };
+    return {
+      state: {
+        ...newState,
+        currentState: transition,
+        history: [...newState.history, transitionEntry],
+      },
+      commands: [{ type: "start_auto_tasks" }],
+    };
+  }
+
+  return { state: newState, commands: [] };
+}
 
 function evaluateAutoTransitions(
   states: readonly RuntimeStateDef[],
