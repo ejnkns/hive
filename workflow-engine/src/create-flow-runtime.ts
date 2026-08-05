@@ -1,3 +1,15 @@
+/** @public — the flow runtime factory and its API surface. Import from here, not from create-flow-runtime/ directly. */
+
+import type { FlowPersistence } from "./create-flow-runtime/flow-persistence";
+import type { FlowRuntimeAPI } from "./create-flow-runtime/flow-runtime-api";
+import type {
+  FlowEventHandler,
+  FlowRuntimeEvent,
+} from "./create-flow-runtime/flow-runtime-events";
+import type {
+  WorkflowDefResponse,
+  WorkflowInstanceEntry,
+} from "./create-flow-runtime/response-types";
 import {
   createWorkflowInstanceController,
   type WorkflowInstanceControllerAPI,
@@ -5,134 +17,15 @@ import {
 import { evaluateEdges } from "./evaluate-edges";
 import type { RuntimeWorkflowInstanceState } from "./shared/workflow-instance-state";
 import type { TaskRunnerFactory } from "./task-runner";
-import type {
-  ActionVariant,
-  DisplayHint,
-  RuntimeFlowEdge,
-  RuntimeRenderHint,
-  RuntimeWorkflowConfig,
-  StateCategory,
-  VisibleAction,
-} from "./workflow-types";
+import type { RuntimeFlowEdge, RuntimeWorkflowConfig } from "./workflow-types";
 
-// ── API response types ──
-
-export type WorkflowDefResponse = {
-  id: string;
-  label: string;
-  description?: string;
-  // The workflow-instance header hint (dotted paths into instance state).
-  instance?: { title: string; subtitle?: string };
-  // The workflow-instance body hint (curated workflowInstanceState fields).
-  display?: DisplayHint;
-  // Per-workflow rendering hooks (e.g. a custom instance component id).
-  ui?: { instanceComponent?: string };
-  states: Array<{
-    id: string;
-    label: string;
-    description?: string;
-    category?: StateCategory;
-    actions: Array<{ id: string; label: string; variant: ActionVariant }>;
-    // Serialized task entries: the UI correlates completed task outputs by id
-    // and applies the per-task render hint.
-    tasks?: Array<{ id: string; label: string; render?: RuntimeRenderHint }>;
-  }>;
-  initial: string;
-  terminalStates: string[];
-};
-
-export type WorkflowInstanceEntry = {
-  id: string;
-  workflowId: string;
-  state: RuntimeWorkflowInstanceState;
-  availableActions: VisibleAction[];
-};
-
-// ── Persistence interface ──
-
-export type FlowPersistence = {
-  saveFlow(flowId: string, config: unknown, state: unknown): void;
-  saveInstance(
-    flowId: string,
-    instanceId: string,
-    workflowId: string,
-    state: RuntimeWorkflowInstanceState
-  ): void;
-  saveRunningTaskContext(
-    flowId: string,
-    instanceId: string,
-    context: unknown
-  ): void;
-  deleteFlow(flowId: string): void;
-  loadFlow(flowId: string): {
-    config: unknown;
-    state: unknown;
-    instances: Array<{
-      instanceId: string;
-      workflowId: string;
-      state: RuntimeWorkflowInstanceState;
-    }>;
-  } | null;
-  loadAllFlows(): Array<{
-    flowId: string;
-    config: unknown;
-    state: unknown;
-    instances: Array<{
-      instanceId: string;
-      workflowId: string;
-      state: RuntimeWorkflowInstanceState;
-    }>;
-  }>;
-};
-
-// ── Flow-level events ──
-
-export type FlowRuntimeEvent =
-  | { type: "flow_state_changed"; state: Record<string, unknown> }
-  | { type: "instance_created"; instanceId: string; workflowId: string }
-  | {
-      type: "instance_state_changed";
-      instanceId: string;
-      workflowId: string;
-      state: RuntimeWorkflowInstanceState;
-    }
-  | {
-      type: "instance_terminated";
-      instanceId: string;
-      workflowId: string;
-      state: RuntimeWorkflowInstanceState;
-    };
-
-export type FlowEventHandler = (event: FlowRuntimeEvent) => void;
-
-// ── Public API ──
-
-export type FlowRuntimeAPI<TFlowConfig, TFlowState> = {
-  getFlowConfig(): TFlowConfig;
-  getFlowState(): TFlowState;
-  patchFlowConfig(patch: Partial<TFlowConfig>): void;
-  patchFlowState(patch: Partial<TFlowState>): void;
-  addWorkflowInstance(
-    workflowId: string,
-    instanceState?: Partial<RuntimeWorkflowInstanceState>,
-    // When restoring a persisted instance, reuse its original id so the
-    // persistence layer overwrites the same file instead of orphaning a new
-    // one per restart (which compounded into unbounded instance growth).
-    restoreId?: string
-  ): WorkflowInstanceControllerAPI;
-  getWorkflowInstance(
-    instanceId: string
-  ): WorkflowInstanceControllerAPI | undefined;
-  workflowInstances: RuntimeWorkflowInstanceState[];
-  // Gate-context projection: each workflow instance's id + current state,
-  // filterable by state. Gates reference instances by id (dependsOn checks),
-  // so this carries the id the raw states omit.
-  workflowInstancesInState(
-    stateId?: string
-  ): { currentState: string; id: string }[];
-  on(handler: FlowEventHandler): () => void;
-  getWorkflowDefinitions(): WorkflowDefResponse[];
-  getWorkflowInstanceEntries(): WorkflowInstanceEntry[];
+export type {
+  FlowEventHandler,
+  FlowPersistence,
+  FlowRuntimeAPI,
+  FlowRuntimeEvent,
+  WorkflowDefResponse,
+  WorkflowInstanceEntry,
 };
 
 // ── Factory ──
