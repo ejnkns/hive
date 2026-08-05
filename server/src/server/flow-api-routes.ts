@@ -22,6 +22,7 @@ import {
   validateInstanceConfig,
 } from "./flow-registry";
 import { generateFlowDefinitionSource } from "./generate-flow-definition";
+import { HttpError } from "./http-error";
 import { computeInstanceStatus } from "./instance-status";
 
 export function registerFlowApiRoutes(server: FastifyInstance): void {
@@ -123,14 +124,11 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
         const result = dispatchFlowLevelAction(flowId, actionId, body ?? {});
         return reply.send({ ok: true, ...result });
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        if (message === "Flow not found" || message.includes("not found")) {
-          return reply.status(404).send({ error: message });
+        // Errors carry their HTTP status; anything else is an internal bug.
+        if (err instanceof HttpError) {
+          return reply.status(err.statusCode).send({ error: err.message });
         }
-        if (message.includes("not available")) {
-          return reply.status(409).send({ error: message });
-        }
-        return reply.status(400).send({ error: message });
+        return reply.status(500).send({ error: "Internal error" });
       }
     }
   );

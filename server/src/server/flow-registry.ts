@@ -27,6 +27,7 @@ import {
   getRegisteredFlowDefinition,
   loadDefinitionFromSource,
 } from "./flow-definitions";
+import { HttpError } from "./http-error";
 
 const runtimes = new Map<
   string,
@@ -197,22 +198,26 @@ export function getAvailableFlowActions(flowId: string): FlowLevelActionView[] {
     }));
 }
 
-// Executes a flow-level action. Throws Error for a missing flow/action (404),
-// a failing gate (409), or an invalid form payload (400).
+// Executes a flow-level action. Throws HttpError for a missing flow/action
+// (404), a failing gate (409), or an invalid form payload (400).
 export function dispatchFlowLevelAction(
   flowId: string,
   actionId: string,
   payload: Record<string, unknown>
 ): FlowLevelActionDispatchResult {
   const runtime = runtimes.get(flowId);
-  if (!runtime) throw new Error("Flow not found");
+  if (!runtime) throw new HttpError(404, "Flow not found");
 
   const action = readFlowLevelActions(runtime).find((a) => a.id === actionId);
-  if (!action) throw new Error(`Flow-level action "${actionId}" not found`);
+  if (!action)
+    throw new HttpError(404, `Flow-level action "${actionId}" not found`);
 
   const ctx = buildFlowGateContext(runtime);
   if (action.gate !== undefined && !action.gate(ctx)) {
-    throw new Error(`Flow-level action "${actionId}" is not available`);
+    throw new HttpError(
+      409,
+      `Flow-level action "${actionId}" is not available`
+    );
   }
 
   if (action.createInstance) {
@@ -230,7 +235,7 @@ export function dispatchFlowLevelAction(
         (entry) => entry.workflowId === workflowId && !before.has(entry.id)
       );
     if (!instance)
-      throw new Error("Flow-level action did not create an instance");
+      throw new HttpError(400, "Flow-level action did not create an instance");
     return { kind: "create_instance", workflowId, instance };
   }
 
@@ -247,7 +252,10 @@ export function dispatchFlowLevelAction(
     return { kind: "dispatch_to_all", workflowId, dispatched };
   }
 
-  throw new Error(`Flow-level action "${actionId}" declares no behavior`);
+  throw new HttpError(
+    400,
+    `Flow-level action "${actionId}" declares no behavior`
+  );
 }
 
 function readFlowLevelActions(
@@ -286,7 +294,7 @@ function collectActionFields(
   const declared = new Set((fields ?? []).map((field) => field.key));
   for (const key of Object.keys(payload)) {
     if (!declared.has(key)) {
-      throw new Error(`Unknown field "${key}"`);
+      throw new HttpError(400, `Unknown field "${key}"`);
     }
   }
 
@@ -295,12 +303,12 @@ function collectActionFields(
     const value = payload[field.key];
     if (value === undefined) {
       if (field.required) {
-        throw new Error(`Missing required field "${field.key}"`);
+        throw new HttpError(400, `Missing required field "${field.key}"`);
       }
       continue;
     }
     if (!configValueMatchesType(field, value)) {
-      throw new Error(`Field "${field.key}" must be a ${field.type}`);
+      throw new HttpError(400, `Field "${field.key}" must be a ${field.type}`);
     }
     collected[field.key] = value;
   }
@@ -382,7 +390,10 @@ export function createFlow(
 ): FlowRuntimeAPI<Record<string, unknown>, Record<string, unknown>> {
   const definition = getFlowDefinition(definitionId);
   if (!definition) {
-    throw new Error(`Flow definition "${definitionId}" not registered`);
+    throw new HttpError(
+      404,
+      `Flow definition "${definitionId}" not registered`
+    );
   }
 
   const flowConfig: Record<string, unknown> = {
