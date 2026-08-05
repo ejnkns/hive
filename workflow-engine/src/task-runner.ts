@@ -8,6 +8,9 @@ export type TaskDefinition = {
   operations?: string[];
   operationInputs?: Record<string, unknown>;
   systemPrompt?: string;
+  // See the completion contract on StateTaskDef (workflow-types.ts): the
+  // completionTool is honored by ai-task and ai-chat; the completionSignal is
+  // ai-chat only.
   completionTool?: string;
   completionSignal?: string;
   workspacePath?: string;

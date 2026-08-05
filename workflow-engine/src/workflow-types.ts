@@ -351,6 +351,17 @@ export type StateTaskDef<
     operations?: string[];
     operationInputs?: Record<string, unknown>;
     systemPrompt?: string;
+    // The completion contract (how a task ends and what becomes its output):
+    //   completionTool   — the agent calls this tool to end the task; the
+    //                      parsed tool arguments become the task output.
+    //                      Available to ai-task and ai-chat.
+    //   completionSignal — the ai-chat agent ends the session by writing this
+    //                      marker as the last line of its response; the
+    //                      transcript becomes the task output. ai-chat only;
+    //                      ignored by ai-task (which ends via completionTool).
+    //   completesRunningTask (ManualAction) — the HUMAN ends a running ai-chat
+    //                      session via a "Done" action; the transcript becomes
+    //                      the task output.
     completionTool?: string;
     completionSignal?: string;
     startOnUserInput?: boolean;
