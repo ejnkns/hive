@@ -1,4 +1,3 @@
-import type { SubScores } from "telemetry";
 import { cerebras } from "./registry/cerebras";
 import { deepseek } from "./registry/deepseek";
 import { githubModels } from "./registry/github-models";
@@ -35,14 +34,6 @@ export type Provider = {
   modelPreferences?: string[];
 };
 
-export type ProviderState = {
-  provider: string;
-  model: string;
-  enabled: boolean;
-  stabilityScore: number;
-  subscores: SubScores;
-};
-
 export const allProviders: Provider[] = [
   deepseek,
   groq,
@@ -67,4 +58,3 @@ export const allProviders: Provider[] = [
   chatEndpoint: p.chatEndpoint.replace(/\/+$/, ""),
   modelsEndpoint: p.modelsEndpoint.replace(/\/+$/, ""),
 }));
-

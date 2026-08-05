@@ -71,15 +71,12 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
 
   listen(server, config);
 
-  process.on("SIGINT", () => {
-    shutdown();
-    server.close(() => process.exit(0));
-  });
-
-  process.on("SIGTERM", () => {
-    shutdown();
-    server.close(() => process.exit(0));
-  });
+  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+    process.on(signal, () => {
+      shutdown();
+      server.close(() => process.exit(0));
+    });
+  }
 
   return { server };
 }

@@ -6,7 +6,7 @@ import {
 } from "../providers";
 import { validateProvidersOnStartup } from "./application-lifecycle/validate-providers-on-startup";
 import { setLastUsed } from "./last-used-state";
-import { getProviders } from "./providers-state";
+import { applyDiscoveredModels } from "./providers-state";
 
 let discoveryTimer: NodeJS.Timeout | null = null;
 
@@ -51,13 +51,7 @@ async function loadLastUsed(): Promise<void> {
 async function triggerBackgroundDiscovery(): Promise<void> {
   try {
     const cache = await discoverAndCacheModels(staticProviders);
-    for (const p of getProviders()) {
-      const cached = cache.providers.find((cp) => cp.name === p.name);
-      if (cached) {
-        p.models = [...cached.models];
-        p.defaultModel = cached.defaultModel;
-      }
-    }
+    applyDiscoveredModels(cache);
   } catch (err: unknown) {
     logger.debug(
       `triggerBackgroundDiscovery: ${err instanceof Error ? err.message : String(err)}`

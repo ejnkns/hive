@@ -2,6 +2,7 @@
 
 import { rmSync } from "node:fs";
 import { join } from "node:path";
+import { logger } from "shared/logger";
 import {
   createFlowRuntime,
   type FlowPersistence,
@@ -482,7 +483,7 @@ export async function rehydrateFlow(
         operations: snapshotFlow.operations,
       };
     } catch (err) {
-      console.warn(
+      logger.warn(
         `Flow "${flowId}" snapshot failed to load, falling back to live definition: ${
           err instanceof Error ? err.message : String(err)
         }`

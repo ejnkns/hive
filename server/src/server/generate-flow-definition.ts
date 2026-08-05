@@ -3,6 +3,7 @@
 import type { Readable } from "node:stream";
 import { loadDefinitionFromSource } from "./flow-definitions";
 import { handleChatCompletion } from "./proxy/handle-chat-completion";
+import { consumeSseStream } from "./sse-consume";
 
 const SYSTEM_PROMPT = `You write TypeScript flow definitions for the Hive workflow engine.
 
@@ -92,37 +93,10 @@ export async function generateFlowDefinitionSource(
 
 function consumeStream(stream: Readable): Promise<string> {
   let content = "";
-  let buffer = "";
-
-  return new Promise((resolve, reject) => {
-    stream.on("data", (chunk: Buffer) => {
-      buffer += chunk.toString();
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-      for (const line of lines) {
-        if (!line.startsWith("data: ")) continue;
-        const data = line.slice(6);
-        if (data === "[DONE]") continue;
-        try {
-          const parsed = JSON.parse(data) as Record<string, unknown>;
-          const choices = parsed.choices as
-            | Array<Record<string, unknown>>
-            | undefined;
-          const delta = choices?.[0]?.delta as
-            | Record<string, unknown>
-            | undefined;
-          if (delta?.content && typeof delta.content === "string") {
-            content += delta.content;
-          }
-        } catch {
-          // skip malformed chunks
-        }
-      }
-    });
-
-    stream.on("end", () => resolve(content));
-    stream.on("error", reject);
-  });
+  return consumeSseStream(stream, (delta) => {
+    if (delta.content && typeof delta.content === "string")
+      content += delta.content;
+  }).then(() => content);
 }
 
 function extractTsModule(content: string): string | undefined {

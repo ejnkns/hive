@@ -400,7 +400,7 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
   });
 
   server.get("/", async (_request, reply) => {
-    console.log(`Serving UI from: ${indexHtmlPath}`);
+    logger.info(`Serving UI from: ${indexHtmlPath}`);
     if (existsSync(indexHtmlPath)) {
       const html = readFileSync(indexHtmlPath, "utf-8");
       reply.type("text/html");
@@ -410,7 +410,7 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
   });
 
   server.get("/api-spec", async (_request, reply) => {
-    console.log(`Serving API spec from: ${specHtmlPath}`);
+    logger.info(`Serving API spec from: ${specHtmlPath}`);
     if (!existsSync(specHtmlPath)) {
       return reply
         .status(404)

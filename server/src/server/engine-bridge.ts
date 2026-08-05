@@ -28,6 +28,7 @@ import {
 import type { TaskDefinition } from "workflow-engine/task-runner";
 import type { ChatMessage } from "workflow-engine/workflow-types";
 import { handleChatCompletion } from "./proxy/handle-chat-completion";
+import { consumeSseStream } from "./sse-consume";
 
 // ─── Infrastructure operation wiring ─────────────────────────────────────
 
@@ -123,85 +124,48 @@ function consumeStream(
   signal?: AbortSignal
 ): Promise<{ content: string; toolCalls: ToolCall[] }> {
   let content = "";
-  let buffer = "";
   const toolCallsMap = new Map<
     number,
     { id: string; name: string; arguments: string }
   >();
 
-  return new Promise((resolve, reject) => {
-    function onAbort(): void {
-      stream.destroy(new Error("Cancelled"));
-      reject(signal?.reason ?? new Error("Cancelled"));
-    }
-    if (signal?.aborted) {
-      onAbort();
-      return;
-    }
-    signal?.addEventListener("abort", onAbort, { once: true });
-
-    stream.on("data", (chunk: Buffer) => {
-      buffer += chunk.toString();
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-      for (const line of lines) {
-        if (!line.startsWith("data: ")) continue;
-        const data = line.slice(6);
-        if (data === "[DONE]") continue;
-        try {
-          const parsed = JSON.parse(data) as Record<string, unknown>;
-          const choices = parsed.choices as
-            | Array<Record<string, unknown>>
-            | undefined;
-          if (!choices?.[0]) continue;
-          const delta = choices[0].delta as Record<string, unknown> | undefined;
-          if (delta?.content && typeof delta.content === "string")
-            content += delta.content;
-          if (delta?.tool_calls && Array.isArray(delta.tool_calls)) {
-            for (const tc of delta.tool_calls) {
-              const tcr = tc as Record<string, unknown>;
-              const index =
-                typeof tcr.index === "number" ? tcr.index : undefined;
-              if (index === undefined) continue;
-              const existing = toolCallsMap.get(index);
-              if (existing) {
-                if (tcr.id && typeof tcr.id === "string") existing.id = tcr.id;
-                const fn = tcr.function as Record<string, unknown> | undefined;
-                if (fn?.name && typeof fn.name === "string")
-                  existing.name = fn.name;
-                if (fn?.arguments && typeof fn.arguments === "string")
-                  existing.arguments += fn.arguments;
-              } else {
-                const fn = (tcr.function ?? {}) as Record<string, unknown>;
-                toolCallsMap.set(index, {
-                  id: typeof tcr.id === "string" ? tcr.id : "",
-                  name: typeof fn.name === "string" ? fn.name : "",
-                  arguments:
-                    typeof fn.arguments === "string" ? fn.arguments : "",
-                });
-              }
-            }
+  return consumeSseStream(
+    stream,
+    (delta) => {
+      if (delta.content && typeof delta.content === "string")
+        content += delta.content;
+      if (delta.tool_calls && Array.isArray(delta.tool_calls)) {
+        for (const tc of delta.tool_calls) {
+          const tcr = tc as Record<string, unknown>;
+          const index = typeof tcr.index === "number" ? tcr.index : undefined;
+          if (index === undefined) continue;
+          const existing = toolCallsMap.get(index);
+          if (existing) {
+            if (tcr.id && typeof tcr.id === "string") existing.id = tcr.id;
+            const fn = tcr.function as Record<string, unknown> | undefined;
+            if (fn?.name && typeof fn.name === "string")
+              existing.name = fn.name;
+            if (fn?.arguments && typeof fn.arguments === "string")
+              existing.arguments += fn.arguments;
+          } else {
+            const fn = (tcr.function ?? {}) as Record<string, unknown>;
+            toolCallsMap.set(index, {
+              id: typeof tcr.id === "string" ? tcr.id : "",
+              name: typeof fn.name === "string" ? fn.name : "",
+              arguments: typeof fn.arguments === "string" ? fn.arguments : "",
+            });
           }
-        } catch {
-          /* skip malformed chunks */
         }
       }
-    });
-
-    stream.on("end", () => {
-      signal?.removeEventListener("abort", onAbort);
-      const toolCalls = Array.from(toolCallsMap.values()).map(
-        (tc) =>
-          ({ id: tc.id, name: tc.name, arguments: tc.arguments }) as ToolCall
-      );
-      resolve({ content, toolCalls });
-    });
-
-    stream.on("error", (err) => {
-      signal?.removeEventListener("abort", onAbort);
-      reject(err);
-    });
-  });
+    },
+    signal
+  ).then(() => ({
+    content,
+    toolCalls: Array.from(toolCallsMap.values()).map(
+      (tc) =>
+        ({ id: tc.id, name: tc.name, arguments: tc.arguments }) as ToolCall
+    ),
+  }));
 }
 
 function createModelCaller(_engineTools: ToolDefinition[]) {

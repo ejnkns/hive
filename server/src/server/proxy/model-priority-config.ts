@@ -41,7 +41,7 @@ export function loadModelPriority(): void {
     const parsed = JSON.parse(raw) as unknown;
 
     if (typeof parsed !== "object" || parsed === null) {
-      console.warn("model-priority.json: must be a JSON object, ignoring");
+      logger.warn("model-priority.json: must be a JSON object, ignoring");
       modelPriority = null;
       return;
     }
@@ -49,7 +49,7 @@ export function loadModelPriority(): void {
     const config = parsed as Record<string, unknown>;
 
     if (!Array.isArray(config.modelPriority)) {
-      console.warn(
+      logger.warn(
         "model-priority.json: modelPriority must be a non-empty array, ignoring"
       );
       modelPriority = null;
@@ -57,7 +57,7 @@ export function loadModelPriority(): void {
     }
 
     if (config.modelPriority.length === 0) {
-      console.warn("model-priority.json: modelPriority is empty, ignoring");
+      logger.warn("model-priority.json: modelPriority is empty, ignoring");
       modelPriority = null;
       return;
     }
@@ -66,7 +66,7 @@ export function loadModelPriority(): void {
       config.providerPriority !== undefined &&
       !Array.isArray(config.providerPriority)
     ) {
-      console.warn(
+      logger.warn(
         "model-priority.json: providerPriority must be an array if present, ignoring"
       );
       modelPriority = null;
@@ -86,9 +86,8 @@ export function loadModelPriority(): void {
       modelPriority = null;
       return;
     }
-    console.warn(
-      "model-priority.json: failed to parse, ignoring:",
-      (e as Error).message
+    logger.warn(
+      `model-priority.json: failed to parse, ignoring: ${(e as Error).message}`
     );
     modelPriority = null;
   }
