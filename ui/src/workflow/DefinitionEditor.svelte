@@ -5,6 +5,7 @@ import Button from "../shared/ui/Button.svelte";
 import Dialog from "../shared/ui/Dialog.svelte";
 import Textarea from "../shared/ui/Textarea.svelte";
 import TextInput from "../shared/ui/TextInput.svelte";
+import { highlightTypeScript } from "./DefinitionEditor/highlight";
 import {
   createFlowDefinition,
   deleteFlowDefinition,
@@ -65,8 +66,50 @@ let nameWarning = $derived.by(() => {
   return null;
 });
 
-onMount(async () => {
-  if (isNew || !definitionId) return;
+// Baseline captured when the definition loads; editing any field past it marks
+// the editor dirty for the navigation guard.
+let loadedName = $state("");
+let loadedDescription = $state("");
+let loadedSource = $state(defaultTemplate);
+let overlay = $state<HTMLPreElement | null>(null);
+
+const dirty = $derived(
+  name !== loadedName ||
+    description !== loadedDescription ||
+    source !== loadedSource
+);
+
+onMount(() => {
+  const guardHash = (event: HashChangeEvent) => {
+    if (!dirty || window.confirm("You have unsaved changes. Leave anyway?")) {
+      return;
+    }
+    // The navigation was declined — revert the hash to where we were.
+    const previous = new URL(event.oldURL).hash;
+    window.location.hash = previous;
+  };
+  const guardUnload = (event: BeforeUnloadEvent) => {
+    if (!dirty) return;
+    event.preventDefault();
+    event.returnValue = "";
+  };
+  window.addEventListener("hashchange", guardHash);
+  window.addEventListener("beforeunload", guardUnload);
+
+  void load();
+  return () => {
+    window.removeEventListener("hashchange", guardHash);
+    window.removeEventListener("beforeunload", guardUnload);
+  };
+});
+
+async function load() {
+  if (isNew || !definitionId) {
+    loadedName = "";
+    loadedDescription = "";
+    loadedSource = defaultTemplate;
+    return;
+  }
   loading = true;
   error = null;
   try {
@@ -75,12 +118,23 @@ onMount(async () => {
     name = detail.name;
     description = detail.description ?? "";
     source = detail.source ?? defaultTemplate;
+    loadedName = detail.name;
+    loadedDescription = detail.description ?? "";
+    loadedSource = detail.source ?? defaultTemplate;
   } catch (err) {
     error = err instanceof Error ? err.message : "Failed to load definition";
   } finally {
     loading = false;
   }
-});
+}
+
+function syncScroll(event: Event) {
+  const textarea = event.currentTarget as HTMLTextAreaElement;
+  if (overlay !== null) {
+    overlay.scrollTop = textarea.scrollTop;
+    overlay.scrollLeft = textarea.scrollLeft;
+  }
+}
 
 async function save() {
   if (!name.trim()) {
@@ -233,8 +287,20 @@ async function remove() {
           <span class="pane-title">Definition source (.ts)</span>
         </div>
         <div class="code-editor">
-          <Textarea bind:value={source} rows={30} />
+          <pre
+            class="code-overlay"
+            bind:this={overlay}
+            aria-hidden="true"
+          >{@html highlightTypeScript(source)}</pre>
+          <Textarea
+            bind:value={source}
+            rows={30}
+            restProps={{ spellcheck: false, onscroll: syncScroll }}
+          />
         </div>
+        {#if error}
+          <div class="editor-error">{error}</div>
+        {/if}
       </div>
     </div>
 
@@ -370,11 +436,66 @@ h1 {
   margin: 0;
 }
 
+.code-editor {
+  position: relative;
+}
+
 .code-editor :global(textarea) {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--text);
   font-family: var(--font-mono, monospace);
   font-size: 0.75rem;
   line-height: 1.5;
   tab-size: 2;
+}
+
+.code-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: var(--surface);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.code-overlay :global(.tok-keyword) {
+  color: var(--accent);
+}
+
+.code-overlay :global(.tok-string) {
+  color: var(--success);
+}
+
+.code-overlay :global(.tok-number) {
+  color: var(--warning);
+}
+
+.code-overlay :global(.tok-comment) {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.editor-error {
+  background: rgba(220, 60, 60, 0.1);
+  border: 1px solid rgba(220, 60, 60, 0.3);
+  color: #dc3c3c;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  margin-top: 0.5rem;
+  white-space: pre-wrap;
 }
 
 .footer {
