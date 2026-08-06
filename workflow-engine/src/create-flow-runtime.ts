@@ -66,11 +66,17 @@ export function createFlowRuntime<
   // the gate-context projection: id + currentState, so callers (gate contexts,
   // depends-on checks) can reference specific instances. The full runtime
   // states are available via the workflowInstances getter.
-  function workflowInstancesInState(
-    stateId?: string
-  ): { currentState: string; id: string }[] {
+  function workflowInstancesInState(stateId?: string): {
+    currentState: string;
+    id: string;
+    workflowInstanceState: Record<string, unknown>;
+  }[] {
     return Array.from(controllers.entries())
-      .map(([id, ctrl]) => ({ id, currentState: ctrl.getState().currentState }))
+      .map(([id, ctrl]) => ({
+        id,
+        currentState: ctrl.getState().currentState,
+        workflowInstanceState: ctrl.getState().workflowInstanceState,
+      }))
       .filter((s) => stateId === undefined || s.currentState === stateId);
   }
 
@@ -99,17 +105,100 @@ export function createFlowRuntime<
       instanceState.taskOutputs
     );
 
+    // Collect newly created instance IDs per target workflow so we can
+    // resolve name-based dependencies after all fan-out instances exist.
+    const newInstances = new Map<string, string[]>();
+
     for (const effect of effects) {
       if (effect.toFlowState) {
         // Edge transform output is expected to be flow-state-shaped
         patchFlowState(effect.transformedData as Partial<TFlowState>);
       }
       if (effect.toWorkflow) {
+        const beforeIds = new Set(
+          Array.from(controllers.keys()).filter(
+            (id) => instanceWorkflowIds.get(id) === effect.toWorkflow
+          )
+        );
         addWorkflowInstance(effect.toWorkflow, {
           workflowInstanceState: effect.transformedData,
         });
+        for (const [id, wfId] of instanceWorkflowIds) {
+          if (wfId === effect.toWorkflow && !beforeIds.has(id)) {
+            const list = newInstances.get(effect.toWorkflow) ?? [];
+            list.push(id);
+            newInstances.set(effect.toWorkflow, list);
+          }
+        }
       }
     }
+
+    // Resolve name-based dependencies after all fan-out instances exist.
+    for (const [wfId, ids] of newInstances) {
+      for (const id of ids) {
+        resolveDependsOnNames(id, wfId);
+      }
+    }
+  }
+
+  // After an edge creates a workflow instance, resolves any name-based
+  // `dependsOn` entries to instance IDs so the engine's `dependsOnState`
+  // gate (which compares against IDs) works correctly. The workflow's
+  // `instance.title` path defines the name each instance is known by.
+  function resolveDependsOnNames(instanceId: string, workflowId: string): void {
+    const controller = controllers.get(instanceId);
+    if (!controller) return;
+    const state = controller.getState();
+    const deps = readDependsOn(state.workflowInstanceState);
+    if (deps.length === 0) return;
+
+    const workflow = workflowMap.get(workflowId);
+    if (!workflow?.instance?.title) return;
+    const titlePath = workflow.instance.title;
+
+    // Build a title→id map from all instances of this workflow.
+    const titleToId = new Map<string, string>();
+    for (const [id, ctrl] of controllers) {
+      if (instanceWorkflowIds.get(id) !== workflowId) continue;
+      const title = resolvePath(
+        ctrl.getState().workflowInstanceState,
+        titlePath
+      );
+      if (typeof title === "string" && title !== "") {
+        titleToId.set(title, id);
+      }
+    }
+
+    // Resolve each dependency name to its instance ID. Unmatched names are
+    // dropped — they reference something that doesn't exist (yet).
+    const resolved = deps
+      .map((name) => titleToId.get(name))
+      .filter((id): id is string => id !== undefined);
+
+    // Only patch if something changed (avoid unnecessary persistence writes).
+    const current = readDependsOn(state.workflowInstanceState);
+    if (
+      resolved.length !== current.length ||
+      !resolved.every((id, i) => id === current[i])
+    ) {
+      controller.patchWorkflowInstanceState({
+        ...state.workflowInstanceState,
+        dependsOn: resolved,
+      });
+    }
+  }
+
+  // Resolves a dotted path into an object, returning undefined for missing
+  // segments. Mirrors the UI-side resolvePath for engine-side use.
+  function resolvePath(obj: Record<string, unknown>, path: string): unknown {
+    if (path === "") return obj;
+    const segments = path.split(".");
+    let current: unknown = obj;
+    for (const segment of segments) {
+      if (current === null || typeof current !== "object") return undefined;
+      current = (current as Record<string, unknown>)[segment];
+    }
+    return current;
   }
 
   // ── public methods ──
@@ -259,4 +348,13 @@ export function createFlowRuntime<
     getWorkflowDefinitions,
     getWorkflowInstanceEntries,
   };
+}
+
+// Reads `dependsOn` from a workflow instance's domain state. Returns an array
+// of strings (names or IDs). Used by the dependency-resolution step after edge
+// fan-out and by the `dependsOnState` gate in dispatchAction.
+function readDependsOn(instanceState: Record<string, unknown>): string[] {
+  const raw = instanceState.dependsOn;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((id): id is string => typeof id === "string");
 }

@@ -841,6 +841,7 @@ describe("FlowRuntime", () => {
                 workflowInstanceState: () => ({}),
                 taskOutputs: () => ({}),
                 patchWorkflowInstanceState: () => {},
+                workflowInstancesInState: () => [],
               }),
               operations: {
                 save_output: () => ({ hello: "world" }),
@@ -948,6 +949,7 @@ describe("FlowRuntime", () => {
                 workflowInstanceState: () => ({}),
                 taskOutputs: () => ({}),
                 patchWorkflowInstanceState: () => {},
+                workflowInstancesInState: () => [],
               }),
               operations: {
                 save_output: () => ({ hello: "world" }),

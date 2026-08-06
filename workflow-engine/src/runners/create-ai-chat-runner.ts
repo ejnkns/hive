@@ -117,7 +117,22 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
       }
 
       if (!response.toolCalls?.length) {
-        await waitForInput();
+        // Interactive sessions (startOnUserInput) wait for the user when the
+        // model has no tool calls. Automated agents auto-reprompt so the
+        // session never stalls waiting for human input.
+        if (task.startOnUserInput) {
+          await waitForInput();
+        } else {
+          const completionHint =
+            task.completionTool !== undefined
+              ? ` Call \`${task.completionTool}\` when the work is complete.`
+              : "";
+          messages.push({
+            role: "user",
+            content: `Continue working toward completion.${completionHint}`,
+          });
+          config.patchRunningTaskMessages?.(messages);
+        }
         continue;
       }
 

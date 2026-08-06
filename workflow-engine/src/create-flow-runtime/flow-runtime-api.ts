@@ -30,9 +30,11 @@ export type FlowRuntimeAPI<TFlowConfig, TFlowState> = {
   // Gate-context projection: each workflow instance's id + current state,
   // filterable by state. Gates reference instances by id (dependsOn checks),
   // so this carries the id the raw states omit.
-  workflowInstancesInState(
-    stateId?: string
-  ): { currentState: string; id: string }[];
+  workflowInstancesInState(stateId?: string): {
+    currentState: string;
+    id: string;
+    workflowInstanceState: Record<string, unknown>;
+  }[];
   on(handler: FlowEventHandler): () => void;
   getWorkflowDefinitions(): WorkflowDefResponse[];
   getWorkflowInstanceEntries(): WorkflowInstanceEntry[];

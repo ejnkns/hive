@@ -107,6 +107,7 @@ describe("createOperationRunner", () => {
       workflowInstanceState: () => ({ attempt: 2 }),
       taskOutputs: () => ({}),
       patchWorkflowInstanceState: () => {},
+      workflowInstancesInState: () => [],
     };
     const runner = createOperationRunner({
       getContext: () => context,

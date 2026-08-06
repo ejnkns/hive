@@ -21,6 +21,14 @@ export type OperationContext = {
   // per-instance state (e.g. the worktree a card's worker operates in);
   // the engine persists it as part of the instance.
   patchWorkflowInstanceState(patch: Record<string, unknown>): void;
+  // Queries all workflow instances in a given state, or all instances when
+  // stateId is undefined. Each result carries the instance id, current state,
+  // and domain data so operations can resolve title-based references to IDs.
+  workflowInstancesInState(stateId?: string): {
+    currentState: string;
+    id: string;
+    workflowInstanceState: Record<string, unknown>;
+  }[];
 };
 
 export type OperationFn = (
@@ -43,6 +51,7 @@ const NOOP_CONTEXT: OperationContext = {
   workflowInstanceState: () => ({}),
   taskOutputs: () => ({}),
   patchWorkflowInstanceState: () => {},
+  workflowInstancesInState: () => [],
 };
 
 export function createOperationRunner(

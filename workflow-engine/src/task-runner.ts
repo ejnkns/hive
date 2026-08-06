@@ -66,6 +66,13 @@ export type TaskRunnerContext = {
     workflowId: string,
     instanceState?: Record<string, unknown>
   ): { id: string };
+  // Cross-instance query so operations can resolve title-based dependencies
+  // to instance IDs and gates can reference specific instances.
+  workflowInstancesInState(stateId?: string): {
+    currentState: string;
+    id: string;
+    workflowInstanceState: Record<string, unknown>;
+  }[];
 };
 
 export type TaskRunnerFactory = (ctx: TaskRunnerContext) => TaskRunner;

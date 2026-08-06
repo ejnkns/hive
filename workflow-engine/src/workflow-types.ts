@@ -95,9 +95,11 @@ export type GateContext<
   runningTaskContext: RunningTaskContext | null;
   workflowInstanceState: TWorkflowInstanceState;
   flowState: TFlowState;
-  workflowInstancesInState?: (
-    stateId?: string
-  ) => { currentState: string; id: string }[];
+  workflowInstancesInState?: (stateId?: string) => {
+    currentState: string;
+    id: string;
+    workflowInstanceState: Record<string, unknown>;
+  }[];
 };
 
 export type RuntimeGateContext = GateContext;

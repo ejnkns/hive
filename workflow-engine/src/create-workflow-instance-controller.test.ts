@@ -689,8 +689,8 @@ describe("workflowInstancesInState", () => {
       {},
       undefined,
       () => [
-        { currentState: "active", id: "a" },
-        { currentState: "active", id: "b" },
+        { currentState: "active", id: "a", workflowInstanceState: {} },
+        { currentState: "active", id: "b", workflowInstanceState: {} },
       ]
     );
     const actions = controller.getAvailableActions();
@@ -760,7 +760,9 @@ describe("dependsOnState gating", () => {
         workflowInstanceState: { dependsOn: ["target-1"] },
         history: [],
       },
-      () => [{ currentState: "done", id: "target-1" }]
+      () => [
+        { currentState: "done", id: "target-1", workflowInstanceState: {} },
+      ]
     );
 
     controller.dispatchAction("proceed");
@@ -780,7 +782,9 @@ describe("dependsOnState gating", () => {
         workflowInstanceState: { dependsOn: ["target-1", "target-2"] },
         history: [],
       },
-      () => [{ currentState: "done", id: "target-1" }]
+      () => [
+        { currentState: "done", id: "target-1", workflowInstanceState: {} },
+      ]
     );
 
     controller.dispatchAction("proceed");

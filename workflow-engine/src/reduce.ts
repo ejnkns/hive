@@ -64,9 +64,11 @@ export function reduce(
   event: WorkflowEvent,
   states: readonly RuntimeStateDef[],
   flowState?: Record<string, unknown>,
-  workflowInstancesInState?: (
-    stateId?: string
-  ) => { currentState: string; id: string }[]
+  workflowInstancesInState?: (stateId?: string) => {
+    currentState: string;
+    id: string;
+    workflowInstanceState: Record<string, unknown>;
+  }[]
 ): ReduceResult {
   switch (event.type) {
     case "action_triggered": {
@@ -231,9 +233,11 @@ function applyTaskOutcome(
   taskId: string,
   states: readonly RuntimeStateDef[],
   flowState?: Record<string, unknown>,
-  workflowInstancesInState?: (
-    stateId?: string
-  ) => { currentState: string; id: string }[]
+  workflowInstancesInState?: (stateId?: string) => {
+    currentState: string;
+    id: string;
+    workflowInstanceState: Record<string, unknown>;
+  }[]
 ): ReduceResult {
   const newOutputs = {
     ...state.taskOutputs,
@@ -307,9 +311,11 @@ function evaluateAutoTransitions(
   currentState: string,
   state: RuntimeWorkflowInstanceState,
   flowState?: Record<string, unknown>,
-  workflowInstancesInState?: (
-    stateId?: string
-  ) => { currentState: string; id: string }[]
+  workflowInstancesInState?: (stateId?: string) => {
+    currentState: string;
+    id: string;
+    workflowInstanceState: Record<string, unknown>;
+  }[]
 ): string | undefined {
   const stateDef = states.find((s) => s.id === currentState);
   if (!stateDef?.autoTransitions) return undefined;

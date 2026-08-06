@@ -65,9 +65,11 @@ export function createWorkflowInstanceController(
   workflow: RuntimeWorkflowConfig,
   runners: Record<string, TaskRunnerFactory>,
   initialState?: RuntimeWorkflowInstanceState,
-  workflowInstancesInState?: (
-    stateId?: string
-  ) => { currentState: string; id: string }[],
+  workflowInstancesInState?: (stateId?: string) => {
+    currentState: string;
+    id: string;
+    workflowInstanceState: Record<string, unknown>;
+  }[],
   flowState?: Record<string, unknown>,
   runtimeContext?: ControllerRuntimeContext
 ): WorkflowInstanceControllerAPI {
@@ -295,6 +297,8 @@ export function createWorkflowInstanceController(
       taskOutputs: state.taskOutputs,
       patchRunningTaskMessages,
       createWorkflowInstance: taskContext.createWorkflowInstance,
+      workflowInstancesInState: (stateId) =>
+        workflowInstancesInState?.(stateId) ?? [],
     };
   }
 
