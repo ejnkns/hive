@@ -32,3 +32,13 @@ export function getComponentRenderer(
   if (componentId === undefined) return undefined;
   return componentRenderers.get(componentId);
 }
+
+// Removes a registered entry (used by the served-component loader's cleanup to
+// undo a flow's registrations and restore the prior registry state).
+export function unregisterKindRenderer(kind: string): void {
+  kindRenderers.delete(kind);
+}
+
+export function unregisterComponentRenderer(componentId: string): void {
+  componentRenderers.delete(componentId);
+}

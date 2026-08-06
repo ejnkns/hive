@@ -30,7 +30,11 @@ export type FlowResponse = {
   config?: Record<string, unknown>;
   workflows: WorkflowDefResponse[];
   instances: WorkflowInstanceEntry[];
-  ui?: { kinds?: CustomRenderKind[] };
+  ui?: {
+    kinds?: CustomRenderKind[];
+    // Declared served component ids → fetch path (transpiled module source).
+    components?: Record<string, string>;
+  };
   availableFlowActions: FlowLevelAction[];
 };
 

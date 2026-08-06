@@ -242,6 +242,7 @@ function submitFlowActionForm() {
         workflowDefs={flow.workflows}
         instances={flow.instances}
         customKinds={flow.ui?.kinds ?? []}
+        components={flow.ui?.components ?? {}}
         onAction={handleAction}
         onSendMessage={handleSendMessage}
       />

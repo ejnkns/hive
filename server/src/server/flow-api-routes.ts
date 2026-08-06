@@ -3,6 +3,7 @@ import { slugify } from "shared/slugify";
 import {
   DefinitionAlreadyExistsError,
   deleteUserDefinition,
+  getDefinitionComponentSource,
   getFlowDefinition,
   getRegisteredFlowDefinition,
   listRegisteredDefinitions,
@@ -47,6 +48,21 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
       typeof definitionId === "string"
         ? getFlowDefinition(definitionId)
         : undefined;
+    // Declared component ids mapped to their serve paths. The UI fetches each
+    // module from this path, evaluates it, and registers the returned
+    // components/kinds. A definition that no longer exists degrades to no
+    // components (unknown instanceComponents fall back to the default card).
+    const declaredComponents =
+      typeof definitionId === "string"
+        ? (definition?.ui?.components ?? {})
+        : {};
+    const definitionSlug = typeof definitionId === "string" ? definitionId : "";
+    const components = Object.fromEntries(
+      Object.keys(declaredComponents).map((componentId) => [
+        componentId,
+        `/api/flows/definitions/${encodeURIComponent(definitionSlug)}/components/${encodeURIComponent(componentId)}`,
+      ])
+    );
     return {
       id: flowId,
       label: (cfg.name as string) ?? flowId,
@@ -54,7 +70,10 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
       config: clientConfig,
       workflows,
       instances,
-      ui: { kinds: definition?.ui?.kinds ?? [] },
+      ui: {
+        kinds: definition?.ui?.kinds ?? [],
+        components,
+      },
       availableFlowActions: getAvailableFlowActions(flowId),
     };
   }
@@ -265,6 +284,28 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
       source: record.source,
     });
   });
+
+  // Served component module: the transpiled ESM source of a definition-declared
+  // Lit component (FlowDefinition.ui.components). Consumed by the rendering
+  // surface via fetch + dynamic import; 404 when the definition or component id
+  // is unknown so the client degrades to the generic defaults.
+  server.get(
+    "/api/flows/definitions/:id/components/:componentId",
+    async (request, reply) => {
+      const { id, componentId } = request.params as {
+        id: string;
+        componentId: string;
+      };
+      const source = getDefinitionComponentSource(id, componentId);
+      if (source === undefined) {
+        return reply.status(404).send({ error: "Component not found" });
+      }
+      return reply
+        .header("Content-Type", "text/javascript; charset=utf-8")
+        .header("Cache-Control", "no-store")
+        .send(source);
+    }
+  );
 
   server.delete("/api/flows/definitions/:id", async (request, reply) => {
     // Fastify params type is erased; shape guaranteed by route pattern

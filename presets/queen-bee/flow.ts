@@ -9,6 +9,7 @@ import type {
 } from "workflow-engine/workflow-types";
 import type { CardSpec } from "./cards-workflow";
 import { cardsOperations, cardsWorkflow } from "./cards-workflow";
+import { ideaCardComponentSource } from "./ideas-card";
 import { ideasWorkflow } from "./ideas-workflow";
 import {
   integrationOperations,
@@ -90,6 +91,15 @@ export const queenBeeFlow = {
   ],
   tools: queenBeeTools,
   operations: queenBeeOperations,
+  // Served-at-runtime component modules: the ideas card replaces the default
+  // workflow-instance card for the ideas workflow (ui.instanceComponent). The
+  // server transpiles and serves each source; the rendering surface fetches,
+  // evaluates, and registers it — proving the mechanism with a real flow.
+  ui: {
+    components: {
+      "idea-card": ideaCardComponentSource,
+    },
+  },
   actions: [
     {
       id: "add_idea",

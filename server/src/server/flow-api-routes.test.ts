@@ -23,7 +23,9 @@ import { queenBeeFlow } from "../../../presets/queen-bee/flow";
 import { registerFlowApiRoutes } from "./flow-api-routes";
 import {
   registerFlowDefinition,
+  registerUserDefinition,
   resetFlowDefinitionsForTest,
+  setDefinitionsBasePathForTest,
 } from "./flow-definitions";
 import {
   registerFlowForTest,
@@ -152,6 +154,37 @@ export const flow = {
   label: "Custom Flow",
   workflows: [wf],
   edges: [],
+};
+`;
+
+// A definition declaring a served-at-runtime component (FlowDefinition.ui.components):
+// the component source is authored as erasable-syntax TS inside the definition
+// source, transpiled by the server, and fetched by the rendering surface.
+const componentFlowSource = `
+import { defineWorkflow } from "workflow-engine/workflow-types";
+
+const wf = defineWorkflow({
+  id: "custom",
+  label: "Custom",
+  taskOutputs: {} as Record<string, never>,
+  states: [
+    { id: "pending", label: "Pending", category: "initial" },
+    { id: "done", label: "Done", category: "terminal" },
+  ],
+  initial: "pending",
+  terminalStates: ["done"],
+});
+
+export const flow = {
+  id: "component-flow",
+  label: "Component Flow",
+  workflows: [wf],
+  edges: [],
+  ui: {
+    components: {
+      "demo-card": "export default function (lit: any) { const { LitElement } = lit; return { components: { 'demo-card': class Demo extends LitElement {} } }; }",
+    },
+  },
 };
 `;
 
@@ -527,6 +560,7 @@ describe("flow API routes", () => {
           },
         },
       ],
+      components: {},
     });
   });
 
@@ -806,6 +840,83 @@ describe("flow API routes", () => {
       body,
     });
     assert.equal(second.statusCode, 409);
+  });
+
+  it("serves a definition's declared component as transpiled JS", async () => {
+    setFlowPersistence(noopPersistence);
+    const definitionsDir = mkdtempSync(join(tmpdir(), "hive-defs-"));
+    setDefinitionsBasePathForTest(definitionsDir);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions",
+      body: { name: "Component Flow", source: componentFlowSource },
+    });
+
+    const response = await server.inject({
+      method: "GET",
+      url: "/api/flows/definitions/component-flow/components/demo-card",
+    });
+    assert.equal(response.statusCode, 200);
+    assert.match(response.headers["content-type"] ?? "", /text\/javascript/);
+    assert.ok(response.body.includes("demo-card"));
+    assert.ok(
+      !response.body.includes(": any"),
+      "served source has type annotations stripped"
+    );
+
+    const missing = await server.inject({
+      method: "GET",
+      url: "/api/flows/definitions/component-flow/components/unknown",
+    });
+    assert.equal(missing.statusCode, 404);
+
+    rmSync(definitionsDir, { recursive: true, force: true });
+  });
+
+  it("flow payloads list the definition's declared components with serve paths", async () => {
+    setFlowPersistence(noopPersistence);
+    const definitionsDir = mkdtempSync(join(tmpdir(), "hive-defs-"));
+    setDefinitionsBasePathForTest(definitionsDir);
+
+    await registerUserDefinition({
+      name: "Component Flow",
+      source: componentFlowSource,
+    });
+
+    const runtime = createFlowRuntime(
+      "component-flow-run",
+      [testWorkflow],
+      [],
+      {},
+      { name: "Component Run", definitionId: "component-flow" },
+      {},
+      noopPersistence
+    );
+    runtime.addWorkflowInstance("test-wf");
+    registerFlowForTest("component-flow-run", runtime);
+
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const response = await server.inject({
+      method: "GET",
+      url: "/api/flows",
+    });
+    assert.equal(response.statusCode, 200);
+    const flow = response
+      .json()
+      .flows.find((entry: { id: string }) => entry.id === "component-flow-run");
+    assert.ok(flow);
+    assert.deepEqual(flow.ui.components, {
+      "demo-card": "/api/flows/definitions/component-flow/components/demo-card",
+    });
+
+    rmSync(definitionsDir, { recursive: true, force: true });
   });
 
   it("PUT /api/flows/definitions/:id edits an existing user definition", async () => {

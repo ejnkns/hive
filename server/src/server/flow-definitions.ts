@@ -8,6 +8,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { stripTypeScriptTypes } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { HIVE_DIR } from "shared/hive-dir";
@@ -150,6 +151,31 @@ export function deleteUserDefinition(id: string): void {
   const manifest = readManifest();
   delete manifest[id];
   writeManifest(manifest);
+}
+
+// ── Served component transpilation ──
+//
+// Definition-declared components (FlowDefinition.ui.components) are authored
+// as erasable-syntax TypeScript modules in the definition source and served to
+// the browser as plain ESM JS. Node's type stripping erases type annotations
+// and type-only imports without a transpiler dependency; the served module
+// must not use value imports (the rendering surface injects its lit runtime
+// through the factory argument).
+
+export function transpileComponentSource(source: string): string {
+  return stripTypeScriptTypes(source);
+}
+
+// The transpiled ESM source for a definition's declared component, or
+// undefined when the definition (or the component id) is unknown.
+export function getDefinitionComponentSource(
+  definitionId: string,
+  componentId: string
+): string | undefined {
+  const definition = getFlowDefinition(definitionId);
+  const source = definition?.ui?.components?.[componentId];
+  if (source === undefined) return undefined;
+  return transpileComponentSource(source);
 }
 
 // ── Boot loading ──

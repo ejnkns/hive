@@ -17,7 +17,13 @@ export const ideasWorkflow = defineWorkflow({
   id: "ideas",
   label: "Ideas",
   instance: { title: "title" },
-  ui: { view: "list" },
+  ui: {
+    view: "list",
+    // The served-at-runtime idea card (queen-bee/ui.components "idea-card")
+    // replaces the default instance card for ideas; it implements the same
+    // InstanceComponentProps contract, including the elaborating chat.
+    instanceComponent: "idea-card",
+  },
   taskOutputs: {
     elaborate: {} as { ideaBrief: string; elaboratedSpec: string },
   },
