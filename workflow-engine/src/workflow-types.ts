@@ -491,6 +491,10 @@ export type ConfigField = {
   type: "string" | "boolean" | "number";
   required?: boolean;
   hint?: string;
+  // For string fields: a closed set of allowed values. The server still
+  // validates the value as a string; the UI renders a select instead of a free
+  // text input. Optional and additive — absent means free text.
+  options?: string[];
 };
 
 // A project-level action rendered on the flow instance header. Unlike a

@@ -124,7 +124,8 @@ export const wayfinderFlow = {
             label: "Type",
             type: "string",
             required: true,
-            hint: "research, prototype, grilling, or task",
+            hint: "How the ticket resolves: research (AFK), prototype, grilling, or task.",
+            options: ["research", "prototype", "grilling", "task"],
           },
           {
             key: "dependsOn",

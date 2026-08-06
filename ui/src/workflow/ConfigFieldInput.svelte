@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { ConfigField } from "workflow-engine/workflow-types";
+import Select from "../shared/ui/Select.svelte";
 
 let {
   field,
@@ -25,6 +26,15 @@ let {
         onChange(event.currentTarget.checked);
       }}
     >
+  {:else if field.options && field.options.length > 0}
+    <Select
+      items={field.options.map((option) => ({ value: option, label: option }))}
+      value={typeof value === "string" ? value : ""}
+      onValueChange={(next) => onChange(next)}
+      {disabled}
+      placeholder="Select..."
+      size="small"
+    />
   {:else}
     <input
       class="text-input text-input-small"
