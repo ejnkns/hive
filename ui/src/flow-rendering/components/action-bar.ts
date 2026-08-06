@@ -4,6 +4,9 @@ import type { VisibleAction } from "workflow-engine/workflow-types";
 export class ActionBar extends LitElement {
   static properties = {
     actions: { attribute: false },
+    // Reactive so the confirm step re-renders when a destructive action is
+    // clicked (a plain field would update state with no render).
+    pendingConfirm: { attribute: false },
   };
 
   static styles = css`
@@ -71,7 +74,7 @@ export class ActionBar extends LitElement {
 
   actions: VisibleAction[] = [];
 
-  private pendingConfirm: string | null = null;
+  pendingConfirm: string | null = null;
 
   render() {
     return html`<div class="actions">
@@ -110,7 +113,6 @@ export class ActionBar extends LitElement {
     this.pendingConfirm = null;
     this.emitAction(actionId);
   }
-
   private emitAction(actionId: string): void {
     this.dispatchEvent(
       new CustomEvent("hive-action", {
