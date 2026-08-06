@@ -987,7 +987,21 @@ describe("getWorkflowDefinitions serializes rendering hints", () => {
           },
         ],
       },
-      ui: { instanceComponent: "CustomCard" },
+      ui: {
+        instanceComponent: "CustomCard",
+        columns: [
+          {
+            id: "ready",
+            label: "Ready",
+            states: ["ready"],
+          },
+          {
+            id: "done",
+            label: "Done",
+            states: ["ready"],
+          },
+        ],
+      },
       taskOutputs: {
         plan: {} as { cards: Array<{ title: string }> },
       },
@@ -1026,7 +1040,13 @@ describe("getWorkflowDefinitions serializes rendering hints", () => {
         },
       ],
     });
-    assert.deepEqual(def.ui, { instanceComponent: "CustomCard" });
+    assert.deepEqual(def.ui, {
+      instanceComponent: "CustomCard",
+      columns: [
+        { id: "ready", label: "Ready", states: ["ready"] },
+        { id: "done", label: "Done", states: ["ready"] },
+      ],
+    });
   });
 
   it("serializes per-task render hints alongside task id and label", () => {

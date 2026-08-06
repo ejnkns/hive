@@ -88,7 +88,31 @@ export const cardsWorkflow = defineWorkflow({
   description:
     "Per-card workflow: worktree, worker agent, completion gate, reviewer, coordinator.",
   instance: { title: "cardSpec.title" },
-  ui: { view: "board" },
+  ui: {
+    view: "board",
+    // Canonical board: transient states fold into their parent lane so the
+    // cards render Ready / In Progress / Reviewing / Done / Unfulfillable
+    // instead of every intermediate state as a thin column.
+    columns: [
+      { id: "ready", label: "Ready", states: ["ready"] },
+      {
+        id: "in_progress",
+        label: "In Progress",
+        states: ["in_progress", "running_agent", "validating"],
+      },
+      {
+        id: "reviewing",
+        label: "Reviewing",
+        states: ["reviewing", "running_review", "reviewed", "accepting"],
+      },
+      { id: "done", label: "Done", states: ["done"] },
+      {
+        id: "unfulfillable",
+        label: "Unfulfillable",
+        states: ["unfulfillable"],
+      },
+    ],
+  },
   display: {
     fields: [
       {

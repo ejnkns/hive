@@ -1,7 +1,7 @@
 /** @private — only imported by workflow-instances.ts */
 
 export type StateColumn<TEntry> = {
-  stateId: string;
+  id: string;
   label: string;
   category: string;
   entries: TEntry[];
@@ -23,7 +23,7 @@ export function groupInstancesByState<
     entriesByState.set(entry.state.currentState, list);
   }
   return states.map((state) => ({
-    stateId: state.id,
+    id: state.id,
     label: state.label,
     category: state.category ?? "active",
     entries: entriesByState.get(state.id) ?? [],

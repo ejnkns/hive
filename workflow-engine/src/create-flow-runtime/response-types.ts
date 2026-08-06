@@ -3,6 +3,7 @@
 import type { RuntimeWorkflowInstanceState } from "../shared/workflow-instance-state";
 import type {
   ActionVariant,
+  BoardColumn,
   DisplayHint,
   RuntimeRenderHint,
   StateCategory,
@@ -20,8 +21,13 @@ export type WorkflowDefResponse = {
   instance?: { title: string; subtitle?: string };
   // The workflow-instance body hint (curated workflowInstanceState fields).
   display?: DisplayHint;
-  // Per-workflow rendering hooks (e.g. a custom instance component id).
-  ui?: { instanceComponent?: string; view?: WorkflowView };
+  // Per-workflow rendering hooks (e.g. a custom instance component id, the
+  // layout view, and optional curated board columns).
+  ui?: {
+    instanceComponent?: string;
+    view?: WorkflowView;
+    columns?: readonly BoardColumn[];
+  };
   states: Array<{
     id: string;
     label: string;

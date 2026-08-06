@@ -23,7 +23,7 @@ describe("groupInstancesByState", () => {
       entry("r", "ready"),
     ]);
     assert.deepEqual(
-      columns.map((column) => column.stateId),
+      columns.map((column) => column.id),
       ["fog", "ready", "resolving", "closed"]
     );
   });

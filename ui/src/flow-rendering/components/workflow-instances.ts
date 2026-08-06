@@ -8,12 +8,13 @@ import type { CustomRenderKind } from "workflow-engine/workflow-types";
 import { getComponentRenderer } from "../renderer-registry";
 import "./dynamic-element-host";
 import { WorkflowInstanceCard } from "./workflow-instance-card";
+import { groupInstancesByColumns } from "./workflow-instances/group-by-columns";
 import { groupInstancesByState } from "./workflow-instances/group-by-state";
 
-// The structural column shape groupInstancesByState returns; declared locally
-// so the renderer does not import a type from the private grouping module.
+// The structural column shape the grouping modules return; declared locally
+// so the renderer does not import a type from a private grouping module.
 type Column = {
-  stateId: string;
+  id: string;
   label: string;
   category: string;
   entries: WorkflowInstanceEntry[];
@@ -228,8 +229,8 @@ export class WorkflowInstances extends LitElement {
                       )}
                     </div>`
                   : html`<div class="flow-board">
-                      ${groupInstancesByState(def.states, entries).map(
-                        (column) => this.renderColumn(def, column)
+                      ${this.groupBoard(def, entries).map((column) =>
+                        this.renderColumn(def, column)
                       )}
                     </div>`
             }
@@ -259,6 +260,20 @@ export class WorkflowInstances extends LitElement {
       localStorage.setItem(key, "1");
     }
     this.requestUpdate();
+  }
+
+  // Board grouping: curated columns when the definition declares them (the
+  // definition renders its canonical lanes), otherwise the default derived
+  // board — one column per state.
+  private groupBoard(
+    def: WorkflowDefResponse,
+    entries: WorkflowInstanceEntry[]
+  ): Column[] {
+    const columns = def.ui?.columns;
+    if (columns !== undefined && columns.length > 0) {
+      return groupInstancesByColumns(def.states, columns, entries);
+    }
+    return groupInstancesByState(def.states, entries);
   }
 
   private renderColumn(def: WorkflowDefResponse, column: Column) {

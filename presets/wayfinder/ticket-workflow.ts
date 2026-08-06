@@ -104,7 +104,29 @@ export const ticketWorkflow = defineWorkflow({
   description:
     "A decision ticket: graduated from fog, claimed by type, resolved to a recorded decision.",
   instance: { title: "title" },
-  ui: { view: "board" },
+  ui: {
+    view: "board",
+    // Canonical board: fog → frontier (claimable) → resolving (all resolution
+    // modes + recording) → closed. out_of_scope shares the closed lane; both
+    // are terminal decisions.
+    columns: [
+      { id: "fog", label: "Fog", states: ["fog"] },
+      { id: "frontier", label: "Frontier", states: ["ready"] },
+      {
+        id: "resolving",
+        label: "Resolving",
+        states: [
+          "resolving_research",
+          "resolving_prototype",
+          "resolving_grilling",
+          "resolving_task",
+          "resolving_task_hitl",
+          "recording",
+        ],
+      },
+      { id: "closed", label: "Closed", states: ["closed", "out_of_scope"] },
+    ],
+  },
   display: {
     fields: [
       { path: "title", label: "Title" },

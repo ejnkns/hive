@@ -133,6 +133,20 @@ export type StateCategory = "initial" | "active" | "terminal" | "error";
 // render as a flat stacked list. Pure data; the surface may fall back.
 export type WorkflowView = "board" | "list" | "document" | "chat";
 
+// One curated board column: a named lane a definition folds states into. Board
+// rendering honors WorkflowConfig.ui.columns (when declared) instead of the
+// default one-column-per-state derived board, so a definition renders its
+// canonical columns (e.g. queen-bee's Ready / In Progress / Reviewing / Done /
+// Unfulfillable) rather than every transient state. Pure data; board-only.
+export type BoardColumn = {
+  id: string;
+  label: string;
+  // State ids folded into this column, in display order. A state may appear in
+  // at most one column; states no column lists fall into a trailing "Other"
+  // column so no instance disappears from the board.
+  states: readonly string[];
+};
+
 // --- Transitions ---
 
 // AutoTransition: evaluated automatically when a state's tasks complete.
@@ -436,6 +450,9 @@ export type WorkflowConfig<
     // How the workflow's instances lay out in the generic surface; board (the
     // default) groups by state, list/document/chat render flat.
     view?: WorkflowView;
+    // Optional board curation: ordered lanes folding states into columns.
+    // Absent → the default derived board (one column per state).
+    columns?: readonly BoardColumn[];
   };
   taskOutputs: TTaskOutputs;
   states: readonly StateDef<TTaskOutputs, TStateId, TWorkflowInstanceState>[];
