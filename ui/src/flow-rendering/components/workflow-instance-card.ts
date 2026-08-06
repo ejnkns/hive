@@ -387,10 +387,15 @@ export class WorkflowInstanceCard extends LitElement {
   }
 
   private handleAction = (event: CustomEvent<{ actionId: string }>) => {
+    // The action-bar's event carries no flow/instance ids; stop it so the
+    // re-emitted event (with ids) is the only one that reaches the host.
+    event.stopPropagation();
     this.emitAction(event.detail.actionId);
   };
 
   private handleSendMessage = (event: CustomEvent<{ content: string }>) => {
+    // Same as handleAction: the chat-session event carries no ids.
+    event.stopPropagation();
     this.emitSendMessage(event.detail.content);
   };
 

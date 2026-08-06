@@ -48,6 +48,9 @@ function handleAction(
     actionId: string;
   }>
 ) {
+  // Ignore id-less events that bubble up un-stopped from a child component
+  // (defense in depth on top of the components' stopPropagation).
+  if (!event.detail.flowId || !event.detail.instanceId) return;
   onAction?.(
     event.detail.flowId,
     event.detail.instanceId,
@@ -62,6 +65,7 @@ function handleSendMessage(
     content: string;
   }>
 ) {
+  if (!event.detail.flowId || !event.detail.instanceId) return;
   void onSendMessage?.(
     event.detail.flowId,
     event.detail.instanceId,
