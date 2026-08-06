@@ -1,16 +1,6 @@
 import { css, html, LitElement } from "lit";
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
-import { Marked } from "marked";
-
-// AI-authored markdown is rendered, never executed: raw HTML tokens in the
-// source are dropped so a model cannot inject markup.
-const markdown = new Marked({
-  renderer: {
-    html() {
-      return "";
-    },
-  },
-});
+import { sanitizeMarkdown } from "./markdown-view/sanitize";
 
 export class MarkdownView extends LitElement {
   static properties = {
@@ -83,10 +73,7 @@ export class MarkdownView extends LitElement {
   content = "";
 
   render() {
-    // The Marked instance runs synchronously (async defaults to false); the
-    // union return type is a marked API artifact, so the string cast is safe.
-    const htmlResult = markdown.parse(this.content) as string;
-    return html`<div class="markdown">${unsafeHTML(htmlResult)}</div>`;
+    return html`<div class="markdown">${unsafeHTML(sanitizeMarkdown(this.content))}</div>`;
   }
 }
 
