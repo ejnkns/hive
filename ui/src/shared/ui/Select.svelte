@@ -39,10 +39,7 @@ let {
   {items}
   {...restProps}
 >
-  <BitsSelect.Trigger
-    class="hive-select-trigger hive-select-{size}"
-    {disabled}
-  >
+  <BitsSelect.Trigger class="hive-select-trigger hive-select-{size}" {disabled}>
     <BitsSelect.Value {placeholder} />
     <svg
       width="10"
@@ -142,7 +139,7 @@ let {
   max-height: 240px;
   overflow-y: auto;
   padding: 4px;
-  z-index: 999;
+  z-index: 1001;
   min-width: var(--bits-select-anchor-width);
 }
 

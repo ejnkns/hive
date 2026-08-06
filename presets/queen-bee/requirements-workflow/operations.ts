@@ -5,6 +5,7 @@ import type { TaskDefinition } from "workflow-engine/task-runner";
 
 export const requirementsOperations: Record<string, OperationFn> = {
   finalize_requirements: finalizeRequirementsOp,
+  clear_requirements_state: clearRequirementsStateOp,
 };
 
 // The requirements draft is the requirements session's running output, recorded
@@ -66,4 +67,16 @@ function extractRequirementsFromToolCalls(
     }
   }
   return found;
+}
+
+// Clears the requirements draft and task outputs from the instance so a reset
+// returns the workflow to a truly clean slate. Without this, an old draft
+// would survive a reset and auto-approve on the next session.
+function clearRequirementsStateOp(
+  _task: TaskDefinition,
+  _params: Record<string, unknown>,
+  ctx: OperationContext
+): { ok: boolean } {
+  ctx.patchWorkflowInstanceState({ requirementsDraft: undefined });
+  return { ok: true };
 }

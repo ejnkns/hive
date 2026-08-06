@@ -31,12 +31,13 @@ describe("wayfinder flow-level actions", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it("add_ticket creates a ticket in fog with normalized dependsOn", () => {
+  it("add_ticket creates a ticket in fog with normalized dependsOn", async () => {
     const runtime = makeWayfinderRuntime({
-      aiChatCaller: idleModelCaller(),
+      aiChatCaller: chartingCaller(),
       aiTaskCaller: idleModelCaller(),
     });
     registerFlowForTest("wf-flow-a", runtime);
+    await chartToCharted(runtime);
 
     const result = dispatchFlowLevelAction("wf-flow-a", "add_ticket", {
       title: "Choose the store",
@@ -58,12 +59,13 @@ describe("wayfinder flow-level actions", () => {
     assert.equal(state.state.workflowInstanceState.type, "research");
   });
 
-  it("add_fog_entry creates a fog ticket whose title derives from the brief", () => {
+  it("add_fog_entry creates a fog ticket whose title derives from the brief", async () => {
     const runtime = makeWayfinderRuntime({
-      aiChatCaller: idleModelCaller(),
+      aiChatCaller: chartingCaller(),
       aiTaskCaller: idleModelCaller(),
     });
     registerFlowForTest("wf-flow-b", runtime);
+    await chartToCharted(runtime);
 
     const result = dispatchFlowLevelAction("wf-flow-b", "add_fog_entry", {
       brief: "Something about caching is murky",
@@ -83,12 +85,13 @@ describe("wayfinder flow-level actions", () => {
     assert.deepEqual(state.state.workflowInstanceState.dependsOn, []);
   });
 
-  it("add_ticket rejects unknown and missing required fields", () => {
+  it("add_ticket rejects unknown and missing required fields", async () => {
     const runtime = makeWayfinderRuntime({
-      aiChatCaller: idleModelCaller(),
+      aiChatCaller: chartingCaller(),
       aiTaskCaller: idleModelCaller(),
     });
     registerFlowForTest("wf-flow-c", runtime);
+    await chartToCharted(runtime);
 
     assert.throws(
       () =>
@@ -121,8 +124,8 @@ describe("wayfinder flow-level actions", () => {
       "start_build is hidden before the map is charted"
     );
     assert.ok(
-      hiddenBefore.some((action) => action.id === "add_ticket"),
-      "add_ticket is always available"
+      !hiddenBefore.some((action) => action.id === "add_ticket"),
+      "add_ticket is hidden before the map is charted"
     );
 
     await chartToCharted(runtime);
@@ -131,6 +134,10 @@ describe("wayfinder flow-level actions", () => {
     assert.ok(
       available.some((action) => action.id === "start_build"),
       "start_build appears once the map is charted and the frontier is clear"
+    );
+    assert.ok(
+      available.some((action) => action.id === "add_ticket"),
+      "add_ticket appears once the map is charted"
     );
 
     const result = dispatchFlowLevelAction("wf-flow-d", "start_build", {});

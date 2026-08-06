@@ -7,7 +7,7 @@
   "scripts": {
     "dev:ui": "pnpm --filter ui dev",
     "dev:server": "pnpm --filter server dev",
-    "dev": "pnpm run dev:server & pnpm run dev:ui",
+    "dev": "pnpm --filter server --filter ui --parallel dev",
     "build": "pnpm --filter telemetry build && pnpm --filter ui build && pnpm --filter server build",
     "start": "node server/dist/main.mjs start",
     "test:build": "pnpm build && node scripts/built-server-smoke.mjs",

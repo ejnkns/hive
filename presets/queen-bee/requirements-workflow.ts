@@ -30,6 +30,7 @@ export type RequirementsTaskOutputs = {
   plan: PlanProposal;
   finalizeRequirements: string;
   commitState: { ok: boolean; revision?: string };
+  clearRequirements: { ok: boolean };
 };
 
 export type RequirementsStateId =
@@ -39,7 +40,8 @@ export type RequirementsStateId =
   | "planning"
   | "planned"
   | "finalizing"
-  | "accepted";
+  | "accepted"
+  | "clearing";
 
 export const requirementsWorkflow = defineWorkflow({
   id: "requirements",
@@ -51,6 +53,7 @@ export const requirementsWorkflow = defineWorkflow({
     plan: {} as PlanProposal,
     finalizeRequirements: {} as string,
     commitState: {} as { ok: boolean; revision?: string },
+    clearRequirements: {} as { ok: boolean },
   },
   states: [
     {
@@ -107,7 +110,7 @@ export const requirementsWorkflow = defineWorkflow({
           id: "reset",
           label: "Reset",
           variant: "secondary",
-          transitionTo: "no_session",
+          transitionTo: "clearing",
         },
       ],
     },
@@ -133,7 +136,7 @@ export const requirementsWorkflow = defineWorkflow({
           id: "reset",
           label: "Reset",
           variant: "secondary",
-          transitionTo: "no_session",
+          transitionTo: "clearing",
         },
       ],
     },
@@ -187,6 +190,12 @@ export const requirementsWorkflow = defineWorkflow({
             ctx.taskOutputs.plan?.output.kind === "feedback",
           transitionTo: "drafting",
         },
+        {
+          id: "reset",
+          label: "Reset",
+          variant: "secondary",
+          transitionTo: "clearing",
+        },
       ],
     },
     {
@@ -205,6 +214,12 @@ export const requirementsWorkflow = defineWorkflow({
           label: "Request replanning",
           variant: "secondary",
           transitionTo: "complete",
+        },
+        {
+          id: "reset",
+          label: "Reset",
+          variant: "secondary",
+          transitionTo: "clearing",
         },
       ],
     },
@@ -246,11 +261,48 @@ export const requirementsWorkflow = defineWorkflow({
             ctx.taskOutputs.commitState?.status === "error",
         },
       ],
+      actions: [
+        {
+          id: "reset",
+          label: "Reset",
+          variant: "secondary",
+          transitionTo: "clearing",
+        },
+      ],
     },
     {
       id: "accepted",
       label: "Accepted",
       category: "terminal",
+      actions: [
+        {
+          id: "reset",
+          label: "Reset",
+          variant: "secondary",
+          transitionTo: "clearing",
+        },
+      ],
+    },
+    {
+      id: "clearing",
+      label: "Clearing",
+      category: "active",
+      tasks: [
+        {
+          id: "clearRequirements",
+          label: "Clear requirements state",
+          trigger: "auto",
+          role: "operation",
+          operations: ["clear_requirements_state"],
+        },
+      ],
+      autoTransitions: [
+        {
+          to: "no_session",
+          gate: (ctx) =>
+            ctx.taskOutputs.clearRequirements?.status === "success",
+        },
+      ],
     },
   ],
   initial: "no_session",

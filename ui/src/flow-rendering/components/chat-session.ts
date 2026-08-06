@@ -70,8 +70,8 @@ export class ChatSession extends LitElement {
   messages: ChatMessage[] = [];
   sessionId = "";
 
-  private input = "";
-  private sending = false;
+  private _input = "";
+  private _sending = false;
   private scrollRef: Ref<HTMLElement> = createRef();
 
   render() {
@@ -84,10 +84,11 @@ export class ChatSession extends LitElement {
           <input
             type="text"
             placeholder="Type a message..."
-            .value=${this.input}
+            .value=${this._input}
             @input=${(event: Event) => {
               // The input element is the event target; the cast reads its value.
-              this.input = (event.target as HTMLInputElement).value;
+              this._input = (event.target as HTMLInputElement).value;
+              this.requestUpdate();
             }}
             @keydown=${(event: KeyboardEvent) => {
               if (event.key === "Enter" && !event.shiftKey) {
@@ -95,10 +96,10 @@ export class ChatSession extends LitElement {
                 void this.handleSend();
               }
             }}
-            ?disabled=${this.sending}
+            ?disabled=${this._sending}
           >
           <button
-            ?disabled=${!this.input.trim() || this.sending}
+            ?disabled=${!this._input.trim() || this._sending}
             @click=${() => void this.handleSend()}
           >
             Send
@@ -117,10 +118,11 @@ export class ChatSession extends LitElement {
     if (el !== undefined) el.scrollTop = el.scrollHeight;
   }
   private async handleSend(): Promise<void> {
-    const text = this.input.trim();
-    if (!text || this.sending) return;
-    this.sending = true;
-    this.input = "";
+    const text = this._input.trim();
+    if (!text || this._sending) return;
+    this._sending = true;
+    this._input = "";
+    this.requestUpdate();
     this.dispatchEvent(
       new CustomEvent("hive-send-message", {
         detail: { content: text },
@@ -128,7 +130,8 @@ export class ChatSession extends LitElement {
         composed: true,
       })
     );
-    this.sending = false;
+    this._sending = false;
+    this.requestUpdate();
   }
 }
 

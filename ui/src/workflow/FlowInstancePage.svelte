@@ -226,7 +226,7 @@ function submitFlowActionForm() {
       {/if}
       {#if workflowCounts.length > 0}
         <div class="workflow-summary">
-          {#each workflowCounts as entry}
+          {#each workflowCounts.filter((entry) => entry.count > 1) as entry}
             <span class="summary-item">
               <span class="summary-label">{entry.label}</span>
               <span class="summary-count">{entry.count}</span>

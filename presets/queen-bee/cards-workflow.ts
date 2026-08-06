@@ -103,6 +103,10 @@ export const cardsWorkflow = defineWorkflow({
           },
         },
       },
+      {
+        path: "cardSpec.dependsOn",
+        label: "Depends on",
+      },
     ],
   },
   taskOutputs: {

@@ -254,6 +254,7 @@ export function createEngineRunners(
       workflowInstanceState: () => ctx.workflowInstanceState,
       taskOutputs: () => ctx.taskOutputs,
       patchWorkflowInstanceState: ctx.patchWorkflowInstanceState,
+      workflowInstancesInState: ctx.workflowInstancesInState,
     };
   }
 

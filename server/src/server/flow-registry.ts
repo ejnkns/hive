@@ -536,9 +536,12 @@ export async function rehydrateFlow(
   for (const instance of instances) {
     const restoredState = {
       ...instance.state,
+      // Running tasks cannot survive a server restart — the in-memory
+      // runner is gone. Clear the running flag but preserve the
+      // runningTaskContext (chat messages, session transcript) so the
+      // session history is not lost.
       hasRunningTask: false,
       runningTaskId: null,
-      runningTaskContext: null,
     };
     const controller = runtime.addWorkflowInstance(
       instance.workflowId,

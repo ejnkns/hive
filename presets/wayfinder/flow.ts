@@ -105,6 +105,8 @@ export const wayfinderFlow = {
       id: "add_ticket",
       label: "Add ticket",
       variant: "primary",
+      gate: (ctx) =>
+        (ctx.workflowInstancesInState?.("charted").length ?? 0) > 0,
       createInstance: {
         workflowId: "ticket",
         fields: [
@@ -146,6 +148,8 @@ export const wayfinderFlow = {
       id: "add_fog_entry",
       label: "Add fog entry",
       variant: "secondary",
+      gate: (ctx) =>
+        (ctx.workflowInstancesInState?.("charted").length ?? 0) > 0,
       createInstance: {
         workflowId: "ticket",
         fields: [

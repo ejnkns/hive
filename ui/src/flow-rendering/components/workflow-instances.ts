@@ -213,10 +213,7 @@ export class WorkflowInstances extends LitElement {
                 data-collapsed=${collapsed ? "true" : "false"}
               ></span>
               <span class="flow-label">${def.label}</span>
-              <span class="flow-count"
-                >${entries.length}
-                workflow instance${entries.length !== 1 ? "s" : ""}</span
-              >
+              ${entries.length > 1 ? html`<span class="flow-count">${entries.length} workflow instances</span>` : nothing}
               ${running ? html`<span class="running-pulse"></span>` : nothing}
             </button>
             ${
