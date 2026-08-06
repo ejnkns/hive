@@ -14,7 +14,13 @@ DoD pass.
 
 Working branch: `engine`. The wayfinder preset is merged in.
 
-## Status: plan approved, not yet implemented
+## Status: plan approved, implemented
+
+Implemented on the `engine` branch (August 2026): Phases A–D1 shipped as scoped
+commits. The D2 manual browser pass is the remaining item (boot `pnpm dev` and
+interact with both flows). Automated verification is green: `pnpm -r typecheck`,
+the UI test suite (40 tests), the server suite (195 tests), `pnpm --filter ui
+build`, and biome on all changed files.
 
 Scope locked before writing this plan:
 
