@@ -1,6 +1,11 @@
-import { css, html, LitElement } from "lit";
+import { css, html, LitElement, type PropertyValues } from "lit";
+import { createRef, type Ref, ref } from "lit/directives/ref.js";
 import type { ChatMessage } from "workflow-engine/workflow-types";
+import "./message-list";
 
+// The live ai-chat exchange for a running session: a scrollable transcript
+// (markdown bodies + tool chips via message-list) and an input row that
+// forwards hive-send-message with the composed content.
 export class ChatSession extends LitElement {
   static properties = {
     messages: { attribute: false },
@@ -8,40 +13,15 @@ export class ChatSession extends LitElement {
   };
 
   static styles = css`
-    .messages {
+    .chat {
       display: flex;
       flex-direction: column;
       gap: 0.375rem;
-      margin-bottom: 0.5rem;
     }
 
-    .msg {
-      display: flex;
-      gap: 0.5rem;
-      font-size: 0.6875rem;
-      line-height: 1.45;
-    }
-
-    .label {
-      color: var(--muted);
-      background: var(--border);
-      border-radius: 3px;
-      font-weight: 700;
-      flex-shrink: 0;
-      min-width: 3.75rem;
-      padding: 0 0.375rem;
-      height: 1.25rem;
-      display: inline-flex;
-      align-items: center;
-      text-transform: uppercase;
-      font-size: 0.5625rem;
-      letter-spacing: 0.04em;
-    }
-
-    .text {
-      color: var(--text);
-      word-break: break-word;
-      white-space: pre-wrap;
+    .scroll {
+      max-height: 240px;
+      overflow-y: auto;
     }
 
     .input-row {
@@ -92,46 +72,50 @@ export class ChatSession extends LitElement {
 
   private input = "";
   private sending = false;
+  private scrollRef: Ref<HTMLElement> = createRef();
 
   render() {
     return html`
-      <div class="messages">
-        ${this.messages.map(
-          (msg) => html`
-            <div class="msg">
-              <span class="label">${msg.role}</span>
-              <span class="text">${msg.content}</span>
-            </div>
-          `
-        )}
-      </div>
-      <div class="input-row">
-        <input
-          type="text"
-          placeholder="Type a message..."
-          .value=${this.input}
-          @input=${(event: Event) => {
-            // The input element is the event target; the cast reads its value.
-            this.input = (event.target as HTMLInputElement).value;
-          }}
-          @keydown=${(event: KeyboardEvent) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              void this.handleSend();
-            }
-          }}
-          ?disabled=${this.sending}
-        >
-        <button
-          ?disabled=${!this.input.trim() || this.sending}
-          @click=${() => void this.handleSend()}
-        >
-          Send
-        </button>
+      <div class="chat">
+        <div class="scroll" ${ref(this.scrollRef)}>
+          <message-list .messages=${this.messages}></message-list>
+        </div>
+        <div class="input-row">
+          <input
+            type="text"
+            placeholder="Type a message..."
+            .value=${this.input}
+            @input=${(event: Event) => {
+              // The input element is the event target; the cast reads its value.
+              this.input = (event.target as HTMLInputElement).value;
+            }}
+            @keydown=${(event: KeyboardEvent) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                void this.handleSend();
+              }
+            }}
+            ?disabled=${this.sending}
+          >
+          <button
+            ?disabled=${!this.input.trim() || this.sending}
+            @click=${() => void this.handleSend()}
+          >
+            Send
+          </button>
+        </div>
       </div>
     `;
   }
 
+  protected override updated(changed: PropertyValues<this>): void {
+    if (changed.has("messages")) this.scrollToBottom();
+  }
+
+  private scrollToBottom(): void {
+    const el = this.scrollRef.value;
+    if (el !== undefined) el.scrollTop = el.scrollHeight;
+  }
   private async handleSend(): Promise<void> {
     const text = this.input.trim();
     if (!text || this.sending) return;
