@@ -13,6 +13,7 @@ import { getKindRenderer } from "../renderer-registry";
 import { resolvePath } from "../resolve-path";
 import "./dynamic-element-host";
 import type { CardsViewItem } from "./cards-view";
+import { statePath } from "./workflow-instance-card/state-path";
 
 type TaskOutcomeShape = {
   status?: string;
@@ -70,6 +71,37 @@ export class WorkflowInstanceCard extends LitElement {
       flex-direction: column;
       gap: 0.75rem;
       margin-bottom: 0.75rem;
+    }
+
+    .state-path {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-bottom: 0.5rem;
+    }
+
+    .state-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--border);
+    }
+
+    .state-dot-active {
+      background: var(--accent);
+    }
+
+    .state-dot-terminal {
+      background: var(--success);
+    }
+
+    .state-dot-error {
+      background: var(--error);
+    }
+
+    .state-dot[data-current="true"] {
+      outline: 1px solid var(--text);
+      outline-offset: 1px;
     }
 
     .task-panel {
@@ -203,10 +235,35 @@ export class WorkflowInstanceCard extends LitElement {
           .description=${stateDef?.description ?? ""}
           .compact=${this.compact}
         ></item-header>
+        ${this.renderStatePath()}
         ${this.compact ? nothing : this.renderBody()}
         ${this.renderActions()}
       </div>
     `;
+  }
+
+  private renderStatePath() {
+    const path = statePath(
+      this.instanceEntry.state.history,
+      this.instanceEntry.state.currentState
+    );
+    if (path.length <= 1) return nothing;
+    const categoryByState = new Map(
+      this.workflowDef.states.map((state) => [
+        state.id,
+        state.category ?? "active",
+      ])
+    );
+    return html`<div class="state-path">
+      ${path.map((stateId) => {
+        const current = stateId === this.instanceEntry.state.currentState;
+        return html`<span
+          class="state-dot state-dot-${categoryByState.get(stateId) ?? "active"}"
+          data-current=${current ? "true" : "false"}
+          title=${stateId}
+        ></span>`;
+      })}
+    </div>`;
   }
 
   private renderBody() {
@@ -293,6 +350,10 @@ export class WorkflowInstanceCard extends LitElement {
     if (cards !== null && cards.length > 0) {
       return html`<cards-view .items=${toCardsViewItems(cards)}></cards-view>`;
     }
+    const markdown = markdownSource(output);
+    if (markdown !== null) {
+      return html`<markdown-view .content=${markdown}></markdown-view>`;
+    }
     const summary = summarizeOutput(output);
     if (summary === null) return nothing;
     return html`<text-view .content=${summary}></text-view>`;
@@ -351,7 +412,9 @@ export class WorkflowInstanceCard extends LitElement {
   }
 
   private renderActions() {
-    const actions = this.instanceEntry.availableActions;
+    const actions = [...this.instanceEntry.availableActions].sort(
+      byVariantPriority
+    );
     if (actions.length === 0) return nothing;
     return html`<div class="card-actions">
       <action-bar
@@ -451,6 +514,34 @@ function outputCards(output: unknown): unknown[] | null {
   if (output === null || typeof output !== "object") return null;
   const cards = (output as Record<string, unknown>).cards;
   return Array.isArray(cards) ? cards : null;
+}
+
+// The no-hint fallback for task outputs that read as prose: a string output (or
+// an output with a string content) renders as markdown rather than truncated
+// text, so agent-written documents keep their structure.
+function markdownSource(output: unknown): string | null {
+  if (typeof output === "string" && output !== "") return output;
+  if (output === null || typeof output !== "object") return null;
+  const content = (output as Record<string, unknown>).content;
+  return typeof content === "string" && content !== "" ? content : null;
+}
+
+// Available actions order by variant so the primary call-to-action leads.
+const ACTION_VARIANT_PRIORITY: Record<string, number> = {
+  primary: 0,
+  secondary: 1,
+  default: 2,
+  destructive: 3,
+};
+
+function byVariantPriority(
+  a: { variant: string },
+  b: { variant: string }
+): number {
+  return (
+    (ACTION_VARIANT_PRIORITY[a.variant] ?? 4) -
+    (ACTION_VARIANT_PRIORITY[b.variant] ?? 4)
+  );
 }
 
 function summarizeOutput(output: unknown): string | null {
