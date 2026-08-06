@@ -8,10 +8,21 @@ import type { CustomRenderKind } from "workflow-engine/workflow-types";
 import { getComponentRenderer } from "../renderer-registry";
 import "./dynamic-element-host";
 import { WorkflowInstanceCard } from "./workflow-instance-card";
+import { groupInstancesByState } from "./workflow-instances/group-by-state";
 
-// The grouped per-workflow render: one section per workflow definition, with
-// its workflow instances as cards (or a flow-declared custom instance
-// component when one is registered, defaulting to WorkflowInstanceCard).
+// The structural column shape groupInstancesByState returns; declared locally
+// so the renderer does not import a type from the private grouping module.
+type Column = {
+  stateId: string;
+  label: string;
+  category: string;
+  entries: WorkflowInstanceEntry[];
+};
+
+// The grouped per-workflow render: one section per workflow definition, each a
+// state-column board (a derived view — instances grouped by currentState in the
+// workflow's declared state order), with flow-declared custom instance
+// components replacing the default card where one is registered.
 export class WorkflowInstances extends LitElement {
   static properties = {
     flowId: { type: String },
@@ -51,11 +62,66 @@ export class WorkflowInstances extends LitElement {
       font-family: monospace;
     }
 
-    .flow-instances {
+    .flow-board {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.625rem;
+      overflow-x: auto;
+      padding-top: 0.625rem;
+    }
+
+    .board-column {
+      flex: 1 1 0;
+      min-width: 200px;
+      max-width: 300px;
       display: flex;
       flex-direction: column;
-      gap: 0.625rem;
-      padding-top: 0.625rem;
+      gap: 0.5rem;
+    }
+
+    .board-column[data-empty="true"] {
+      min-width: 150px;
+      opacity: 0.45;
+    }
+
+    .column-header {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.375rem 0.5rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      font-size: 0.5625rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .column-header[data-category="initial"] {
+      color: var(--muted);
+    }
+
+    .column-header[data-category="terminal"] {
+      color: var(--success);
+      border-color: var(--success);
+    }
+
+    .column-header[data-category="error"] {
+      color: var(--error);
+      border-color: var(--error);
+    }
+
+    .column-count {
+      margin-left: auto;
+      color: var(--muted);
+      font-family: monospace;
+    }
+
+    .column-body {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
     }
   `;
 
@@ -88,17 +154,39 @@ export class WorkflowInstances extends LitElement {
                 workflow instance${entries.length !== 1 ? "s" : ""}</span
               >
             </div>
-            <div class="flow-instances">
-              ${repeat(
-                entries,
-                (entry) => entry.id,
-                (entry) => this.renderInstance(def, entry)
+            <div class="flow-board">
+              ${groupInstancesByState(def.states, entries).map((column) =>
+                this.renderColumn(def, column)
               )}
             </div>
           </div>`;
         }
       )}
     `;
+  }
+
+  private renderColumn(def: WorkflowDefResponse, column: Column) {
+    return html`<div
+      class="board-column"
+      data-category=${column.category}
+      data-empty=${column.entries.length === 0 ? "true" : "false"}
+    >
+      <div class="column-header" data-category=${column.category}>
+        <span class="column-label">${column.label}</span>
+        <span class="column-count">${column.entries.length}</span>
+      </div>
+      ${
+        column.entries.length > 0
+          ? html`<div class="column-body">
+            ${repeat(
+              column.entries,
+              (entry) => entry.id,
+              (entry) => this.renderInstance(def, entry)
+            )}
+          </div>`
+          : nothing
+      }
+    </div>`;
   }
 
   private renderInstance(
