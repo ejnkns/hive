@@ -2,6 +2,8 @@
 import { onMount } from "svelte";
 import Badge from "../shared/ui/Badge.svelte";
 import Button from "../shared/ui/Button.svelte";
+import Skeleton from "../shared/ui/Skeleton.svelte";
+import TextInput from "../shared/ui/TextInput.svelte";
 import type { FlowDefinitionSummary } from "./flow-api";
 import { fetchFlowDefinitions } from "./flow-api";
 import { flowStore } from "./flow-store.svelte";
@@ -10,7 +12,24 @@ import InstanceRoster from "./InstanceRoster.svelte";
 let definitions = $state<FlowDefinitionSummary[]>([]);
 let loading = $state(true);
 let error = $state<string | null>(null);
+let search = $state("");
+let filter = $state<"all" | "builtin" | "user">("all");
 let flows = $derived(flowStore.flows);
+
+const visibleDefinitions = $derived(
+  definitions.filter((definition) => {
+    const query = search.trim().toLowerCase();
+    const matchesSearch =
+      query === "" ||
+      definition.name.toLowerCase().includes(query) ||
+      (definition.description ?? "").toLowerCase().includes(query);
+    const matchesFilter =
+      filter === "all" ||
+      (filter === "builtin" && definition.builtIn) ||
+      (filter === "user" && !definition.builtIn);
+    return matchesSearch && matchesFilter;
+  })
+);
 
 onMount(() => {
   void load();
@@ -56,16 +75,58 @@ function definitionHref(id: string): string {
     <span class="legend-item"><i class="dot dot-complete"></i>complete</span>
   </div>
 
+  <div class="toolbar">
+    <TextInput
+      bind:value={search}
+      placeholder="Search definitions..."
+      size="small"
+    />
+    <div class="filter-group" role="group" aria-label="Filter definitions">
+      <button
+        type="button"
+        class:active={filter === "all"}
+        onclick={() => (filter = "all")}
+      >
+        All
+      </button>
+      <button
+        type="button"
+        class:active={filter === "builtin"}
+        onclick={() => (filter = "builtin")}
+      >
+        Built-in
+      </button>
+      <button
+        type="button"
+        class:active={filter === "user"}
+        onclick={() => (filter = "user")}
+      >
+        User
+      </button>
+    </div>
+  </div>
+
   {#if loading}
-    <div class="loading">Loading flows...</div>
+    <div class="definition-list">
+      {#each [1, 2] as n (n)}
+        <div class="definition-card">
+          <Skeleton shape="line" style="width: 40%" />
+          <Skeleton shape="line" style="width: 70%" />
+        </div>
+      {/each}
+    </div>
   {:else if definitions.length === 0}
     <div class="empty">
       <p>No flow definitions yet.</p>
       <p>Author a definition to get started.</p>
     </div>
+  {:else if visibleDefinitions.length === 0}
+    <div class="empty">
+      <p>No definitions match your search.</p>
+    </div>
   {:else}
     <div class="definition-list">
-      {#each definitions as definition (definition.id)}
+      {#each visibleDefinitions as definition (definition.id)}
         <div class="definition-card">
           <div class="definition-head">
             <a class="definition-name" href={definitionHref(definition.id)}>
@@ -149,7 +210,6 @@ h1 {
   margin-bottom: 1rem;
 }
 
-.loading,
 .empty {
   text-align: center;
   padding: 3rem 1rem;
@@ -219,9 +279,48 @@ h1 {
   display: flex;
   align-items: center;
   gap: 1rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
   font-size: 0.625rem;
   color: var(--muted);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.toolbar :global(.text-input-small) {
+  max-width: 320px;
+}
+
+.filter-group {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.filter-group button {
+  font-family: monospace;
+  font-size: 0.625rem;
+  height: 28px;
+  padding: 0 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.filter-group button:hover {
+  border-color: var(--accent);
+}
+
+.filter-group button.active {
+  color: var(--bg);
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 .legend-title {
