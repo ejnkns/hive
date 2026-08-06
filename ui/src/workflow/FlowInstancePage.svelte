@@ -33,10 +33,28 @@ let actionDialogOpen = $state(false);
 let activeFlowAction = $state<FlowLevelAction | null>(null);
 let actionValues = $state<Record<string, string | boolean | number>>({});
 let actionBusy = $state(false);
+let activeDispatchId = $state<string | null>(null);
 
 // The flow renders from the store so every snapshot pushes live. Commands keep
 // their REST calls; the resulting snapshot arrives over WS (no refetch).
 const flow = $derived(flowId ? flowStore.getFlow(flowId) : null);
+
+// A compact per-workflow instance count for the header, derived from the flow
+// snapshot (label from the workflow definitions, counts from its instances).
+const workflowCounts = $derived.by(() => {
+  if (!flow) return [];
+  const labelById = new Map(
+    flow.workflows.map((workflow) => [workflow.id, workflow.label])
+  );
+  const counts = new Map<string, number>();
+  for (const instance of flow.instances) {
+    counts.set(instance.workflowId, (counts.get(instance.workflowId) ?? 0) + 1);
+  }
+  return [...counts.entries()].map(([workflowId, count]) => ({
+    label: labelById.get(workflowId) ?? workflowId,
+    count,
+  }));
+});
 
 onMount(() => {
   void resolveFlowId();
@@ -132,6 +150,7 @@ async function executeFlowAction(
 ) {
   if (!flow) return;
   actionBusy = true;
+  activeDispatchId = action.id;
   error = null;
   try {
     await dispatchFlowAction(flow.id, action.id, payload);
@@ -139,6 +158,7 @@ async function executeFlowAction(
     error = err instanceof Error ? err.message : "Flow action failed";
   } finally {
     actionBusy = false;
+    activeDispatchId = null;
   }
 }
 
@@ -199,8 +219,18 @@ function submitFlowActionForm() {
               disabled={actionBusy}
               onclick={() => runFlowAction(action)}
             >
-              {action.label}
+              {activeDispatchId === action.id ? "Running..." : action.label}
             </Button>
+          {/each}
+        </div>
+      {/if}
+      {#if workflowCounts.length > 0}
+        <div class="workflow-summary">
+          {#each workflowCounts as entry}
+            <span class="summary-item">
+              <span class="summary-label">{entry.label}</span>
+              <span class="summary-count">{entry.count}</span>
+            </span>
           {/each}
         </div>
       {/if}
@@ -341,6 +371,37 @@ h1 {
   flex-wrap: wrap;
   gap: 0.375rem;
   margin-top: 0.75rem;
+}
+
+.workflow-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-top: 0.75rem;
+}
+
+.summary-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+}
+
+.summary-label {
+  font-size: 0.5625rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.summary-count {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.625rem;
+  color: var(--text);
 }
 
 .dialog-title {
