@@ -104,6 +104,7 @@ export const ticketWorkflow = defineWorkflow({
   description:
     "A decision ticket: graduated from fog, claimed by type, resolved to a recorded decision.",
   instance: { title: "title" },
+  ui: { view: "board" },
   display: {
     fields: [
       { path: "title", label: "Title" },

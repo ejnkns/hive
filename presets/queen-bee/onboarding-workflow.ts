@@ -40,6 +40,7 @@ export const onboardingWorkflow = defineWorkflow({
   description:
     "Bind a repository to a flow: configure the git identity, validate, ensure the integration branch, write project metadata, patch flow config.",
   instance: { title: "Onboarding" },
+  ui: { view: "list" },
   taskOutputs: {
     configureFlow: {} as Record<string, unknown>,
     validateRepo: {} as { ok: boolean; basePath?: string },

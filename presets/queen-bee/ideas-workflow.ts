@@ -17,6 +17,7 @@ export const ideasWorkflow = defineWorkflow({
   id: "ideas",
   label: "Ideas",
   instance: { title: "title" },
+  ui: { view: "list" },
   taskOutputs: {
     elaborate: {} as { ideaBrief: string; elaboratedSpec: string },
   },

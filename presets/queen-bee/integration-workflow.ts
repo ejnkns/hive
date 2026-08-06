@@ -21,6 +21,7 @@ export const integrationWorkflow = defineWorkflow({
   description:
     "Fast-forward the target branch to the integration branch on demand.",
   instance: { title: "Integration" },
+  ui: { view: "list" },
   taskOutputs: {
     integrate: {} as Record<string, unknown>,
   },

@@ -126,6 +126,11 @@ export type VisibleAction = {
 // "error" — a state representing failure/unfulfillable
 export type StateCategory = "initial" | "active" | "terminal" | "error";
 
+// How a workflow's instances lay out in the generic rendering surface. board
+// groups instances into state columns (the default when unset); the others
+// render as a flat stacked list. Pure data; the surface may fall back.
+export type WorkflowView = "board" | "list" | "document" | "chat";
+
 // --- Transitions ---
 
 // AutoTransition: evaluated automatically when a state's tasks complete.
@@ -426,6 +431,9 @@ export type WorkflowConfig<
     // Registry-resolved custom instance renderer; falls back to the default
     // WorkflowInstanceCard when unknown.
     instanceComponent?: string;
+    // How the workflow's instances lay out in the generic surface; board (the
+    // default) groups by state, list/document/chat render flat.
+    view?: WorkflowView;
   };
   taskOutputs: TTaskOutputs;
   states: readonly StateDef<TTaskOutputs, TStateId, TWorkflowInstanceState>[];

@@ -45,6 +45,7 @@ export const requirementsWorkflow = defineWorkflow({
   id: "requirements",
   label: "Requirements",
   instance: { title: "Requirements" },
+  ui: { view: "document" },
   taskOutputs: {
     draft: {} as { content: string; revision: string },
     plan: {} as PlanProposal,

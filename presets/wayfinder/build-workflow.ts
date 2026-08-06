@@ -72,6 +72,7 @@ export const buildWorkflow = defineWorkflow({
   description:
     "The implementation phase: spec the collapsed decisions, plan tracer-bullet tickets, quiz the breakdown, then fan out build items.",
   instance: { title: "Build" },
+  ui: { view: "list" },
   taskOutputs: {
     specSession: {} as SessionTranscript,
     finalizeSpec: {} as string,
@@ -271,6 +272,7 @@ export const buildItemWorkflow = defineWorkflow({
   description:
     "One build ticket: worker implements in an isolated workspace, reviewer audits on two axes.",
   instance: { title: "ticket.title" },
+  ui: { view: "board" },
   display: {
     fields: [
       {

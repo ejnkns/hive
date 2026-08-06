@@ -27,6 +27,7 @@ export const chartingWorkflow = defineWorkflow({
   description:
     "Name the destination, surface the decision frontier, then chart the map.",
   instance: { title: "Charting" },
+  ui: { view: "list" },
   taskOutputs: {
     nameSession: {} as SessionTranscript,
     settleChart: {} as string,

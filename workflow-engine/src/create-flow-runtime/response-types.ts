@@ -7,6 +7,7 @@ import type {
   RuntimeRenderHint,
   StateCategory,
   VisibleAction,
+  WorkflowView,
 } from "../workflow-types";
 
 // The serialized workflow-definition shape the UI receives: states with their
@@ -20,7 +21,7 @@ export type WorkflowDefResponse = {
   // The workflow-instance body hint (curated workflowInstanceState fields).
   display?: DisplayHint;
   // Per-workflow rendering hooks (e.g. a custom instance component id).
-  ui?: { instanceComponent?: string };
+  ui?: { instanceComponent?: string; view?: WorkflowView };
   states: Array<{
     id: string;
     label: string;

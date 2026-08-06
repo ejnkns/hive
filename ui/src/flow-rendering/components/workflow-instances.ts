@@ -110,6 +110,13 @@ export class WorkflowInstances extends LitElement {
       padding-top: 0.625rem;
     }
 
+    .flow-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.625rem;
+      padding-top: 0.625rem;
+    }
+
     .board-column {
       flex: 1 1 0;
       min-width: 200px;
@@ -192,6 +199,8 @@ export class WorkflowInstances extends LitElement {
           if (def === undefined) return nothing;
           const collapsed = this.isCollapsed(workflowId);
           const running = entries.some((entry) => entry.state.hasRunningTask);
+          const flatView =
+            def.ui?.view !== undefined && def.ui.view !== "board";
           return html`<div class="flow">
             <button
               class="flow-header"
@@ -213,11 +222,19 @@ export class WorkflowInstances extends LitElement {
             ${
               collapsed
                 ? nothing
-                : html`<div class="flow-board">
-                    ${groupInstancesByState(def.states, entries).map((column) =>
-                      this.renderColumn(def, column)
-                    )}
-                  </div>`
+                : flatView
+                  ? html`<div class="flow-list">
+                      ${repeat(
+                        entries,
+                        (entry) => entry.id,
+                        (entry) => this.renderInstance(def, entry)
+                      )}
+                    </div>`
+                  : html`<div class="flow-board">
+                      ${groupInstancesByState(def.states, entries).map(
+                        (column) => this.renderColumn(def, column)
+                      )}
+                    </div>`
             }
           </div>`;
         }
