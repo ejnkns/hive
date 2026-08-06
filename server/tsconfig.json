@@ -1,22 +1,14 @@
 {
+  "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "types": ["node"],
-    "strict": true,
-    "skipLibCheck": true,
-    "declaration": true,
-    "sourceMap": true,
-    "noEmit": true,
+    // Resolve workspace packages by source path. The bare "workflow-engine"
+    // specifier cannot be resolved through node_modules from here: there is no
+    // symlink at the repo root, and the exports map ("./*": "./src/*.ts") is
+    // only honored by node16/nodenext/bundler resolution.
     "paths": {
       "workflow-engine": ["../workflow-engine/src"],
       "workflow-engine/*": ["../workflow-engine/src/*"]
     }
   },
-  "include": [
-    "src/**/*.ts",
-    "../presets/queen-bee/**/*.ts",
-    "../presets/wayfinder/**/*.ts"
-  ]
+  "include": ["src/**/*.ts"]
 }

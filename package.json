@@ -15,7 +15,8 @@
     "test:e2e:built": "node --test e2e/*.test.mjs",
     "test:e2e": "pnpm build && pnpm run test:e2e:built",
     "test": "pnpm run test:dev-proxy && pnpm -r test && pnpm run test:build && pnpm run test:e2e:built",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "pnpm -r typecheck && pnpm run typecheck:presets",
+    "typecheck:presets": "tsc -p presets/tsconfig.json",
     "lint": "biome lint .",
     "format": "biome format --write .",
     "check:biome": "biome check --write --no-errors-on-unmatched",
@@ -24,6 +25,7 @@
   "devDependencies": {
     "@biomejs/biome": "2.5.1",
     "lefthook": "^2.1.9",
-    "playwright-core": "^1.61.1"
+    "playwright-core": "^1.61.1",
+    "typescript": "^5.9.3"
   }
 }
