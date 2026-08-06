@@ -18,8 +18,8 @@ importers:
         specifier: ^1.61.1
         version: 1.61.1
       typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
+        specifier: ^6.0.3
+        version: 6.0.3
 
   server:
     dependencies:
@@ -59,13 +59,13 @@ importers:
         version: 8.18.1
       tsdown:
         specifier: ^0.22.14
-        version: 0.22.14(tsx@4.23.9)(typescript@5.9.3)
+        version: 0.22.14(tsx@4.23.9)(typescript@6.0.3)
       tsx:
         specifier: ^4.23.9
         version: 4.23.9
       typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
+        specifier: ^6.0.3
+        version: 6.0.3
 
   shared:
     devDependencies:
@@ -73,8 +73,8 @@ importers:
         specifier: ^26.1.0
         version: 26.1.1
       typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
+        specifier: ^6.0.3
+        version: 6.0.3
 
   telemetry:
     dependencies:
@@ -87,13 +87,13 @@ importers:
         version: 26.1.1
       tsdown:
         specifier: ^0.22.14
-        version: 0.22.14(tsx@4.23.9)(typescript@5.9.3)
+        version: 0.22.14(tsx@4.23.9)(typescript@6.0.3)
       tsx:
         specifier: ^4.23.9
         version: 4.23.9
       typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
+        specifier: ^6.0.3
+        version: 6.0.3
 
   ui:
     dependencies:
@@ -130,13 +130,13 @@ importers:
         version: 26.1.1
       svelte-check:
         specifier: ^4.7.4
-        version: 4.7.4(picomatch@4.0.5)(svelte@5.56.4)(typescript@5.9.3)
+        version: 4.7.4(picomatch@4.0.5)(svelte@5.56.4)(typescript@6.0.3)
       tsx:
         specifier: ^4.23.9
         version: 4.23.9
       typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
+        specifier: ^6.0.3
+        version: 6.0.3
       vite:
         specifier: ^8.1.0
         version: 8.1.4(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.9)
@@ -150,8 +150,8 @@ importers:
         specifier: ^4.23.9
         version: 4.23.9
       typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
+        specifier: ^6.0.3
+        version: 6.0.3
 
 packages:
 
@@ -1431,8 +1431,8 @@ packages:
     engines: {node: '>=18.0.0'}
     hasBin: true
 
-  typescript@5.9.3:
-    resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
+  typescript@6.0.3:
+    resolution: {integrity: sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==}
     engines: {node: '>=14.17'}
     hasBin: true
 
@@ -2353,7 +2353,7 @@ snapshots:
 
   rfdc@1.4.1: {}
 
-  rolldown-plugin-dts@0.27.14(rolldown@1.2.2)(typescript@5.9.3):
+  rolldown-plugin-dts@0.27.14(rolldown@1.2.2)(typescript@6.0.3):
     dependencies:
       dts-resolver: 3.0.0
       get-tsconfig: 5.0.0-beta.5
@@ -2363,7 +2363,7 @@ snapshots:
       yuku-codegen: 0.8.3
       yuku-parser: 0.8.3
     optionalDependencies:
-      typescript: 5.9.3
+      typescript: 6.0.3
     transitivePeerDependencies:
       - oxc-resolver
 
@@ -2451,7 +2451,7 @@ snapshots:
     dependencies:
       inline-style-parser: 0.2.7
 
-  svelte-check@4.7.4(picomatch@4.0.5)(svelte@5.56.4)(typescript@5.9.3):
+  svelte-check@4.7.4(picomatch@4.0.5)(svelte@5.56.4)(typescript@6.0.3):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       '@sveltejs/load-config': 0.2.1
@@ -2460,7 +2460,7 @@ snapshots:
       picocolors: 1.1.1
       sade: 1.8.1
       svelte: 5.56.4
-      typescript: 5.9.3
+      typescript: 6.0.3
     transitivePeerDependencies:
       - picomatch
 
@@ -2511,7 +2511,7 @@ snapshots:
 
   tree-kill@1.2.2: {}
 
-  tsdown@0.22.14(tsx@4.23.9)(typescript@5.9.3):
+  tsdown@0.22.14(tsx@4.23.9)(typescript@6.0.3):
     dependencies:
       ansis: 4.3.1
       cac: 7.0.0
@@ -2522,7 +2522,7 @@ snapshots:
       obug: 2.1.4
       picomatch: 4.0.5
       rolldown: 1.2.2
-      rolldown-plugin-dts: 0.27.14(rolldown@1.2.2)(typescript@5.9.3)
+      rolldown-plugin-dts: 0.27.14(rolldown@1.2.2)(typescript@6.0.3)
       tinyexec: 1.2.4
       tinyglobby: 0.2.17
       tree-kill: 1.2.2
@@ -2530,7 +2530,7 @@ snapshots:
       verkit: 0.3.2
     optionalDependencies:
       tsx: 4.23.9
-      typescript: 5.9.3
+      typescript: 6.0.3
     transitivePeerDependencies:
       - '@typescript/native-preview'
       - '@volar/typescript'
@@ -2545,7 +2545,7 @@ snapshots:
     optionalDependencies:
       fsevents: 2.3.3
 
-  typescript@5.9.3: {}
+  typescript@6.0.3: {}
 
   unconfig-core@7.5.0:
     dependencies:

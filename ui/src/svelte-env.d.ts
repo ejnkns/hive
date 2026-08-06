@@ -1,4 +1,5 @@
 /// <reference types="svelte" />
+/// <reference types="vite/client" />
 
 // Typing for the custom events the Lit rendering surface dispatches; Svelte
 // forwards them through on: handlers on the workflow-instances element. The
