@@ -42,10 +42,32 @@ export class WorkflowInstances extends LitElement {
 
     .flow-header {
       display: flex;
-      align-items: baseline;
+      align-items: center;
       gap: 0.5rem;
       padding: 0.375rem 0 0.5rem;
       border-bottom: 1px solid var(--border);
+      background: transparent;
+      border-top: none;
+      border-left: none;
+      border-right: none;
+      width: 100%;
+      text-align: left;
+      cursor: pointer;
+      font: inherit;
+    }
+
+    .flow-chevron {
+      display: inline-block;
+      width: 0;
+      height: 0;
+      border-left: 4px solid transparent;
+      border-right: 4px solid transparent;
+      border-top: 5px solid var(--muted);
+      transition: transform 0.15s;
+    }
+
+    .flow-chevron[data-collapsed="true"] {
+      transform: rotate(-90deg);
     }
 
     .flow-label {
@@ -60,6 +82,24 @@ export class WorkflowInstances extends LitElement {
       font-size: 0.5625rem;
       color: var(--muted);
       font-family: monospace;
+    }
+
+    .running-pulse {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--warning);
+      animation: live-pulse 1.6s ease-in-out infinite;
+    }
+
+    @keyframes live-pulse {
+      0%,
+      100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.3;
+      }
     }
 
     .flow-board {
@@ -130,6 +170,10 @@ export class WorkflowInstances extends LitElement {
   instances: WorkflowInstanceEntry[] = [];
   customKinds: readonly CustomRenderKind[] = [];
 
+  // Collapsed workflow sections, persisted to localStorage per flow. Lazy-loaded
+  // so the set reflects each flow's stored state without a separate pass.
+  private collapsedIds = new Set<string>();
+
   render() {
     const defById = new Map(this.workflowDefs.map((def) => [def.id, def]));
     const entriesByWorkflow = new Map<string, WorkflowInstanceEntry[]>();
@@ -146,23 +190,61 @@ export class WorkflowInstances extends LitElement {
         ([workflowId, entries]) => {
           const def = defById.get(workflowId);
           if (def === undefined) return nothing;
+          const collapsed = this.isCollapsed(workflowId);
+          const running = entries.some((entry) => entry.state.hasRunningTask);
           return html`<div class="flow">
-            <div class="flow-header">
+            <button
+              class="flow-header"
+              type="button"
+              aria-expanded=${!collapsed}
+              @click=${() => this.toggle(workflowId)}
+            >
+              <span
+                class="flow-chevron"
+                data-collapsed=${collapsed ? "true" : "false"}
+              ></span>
               <span class="flow-label">${def.label}</span>
               <span class="flow-count"
                 >${entries.length}
                 workflow instance${entries.length !== 1 ? "s" : ""}</span
               >
-            </div>
-            <div class="flow-board">
-              ${groupInstancesByState(def.states, entries).map((column) =>
-                this.renderColumn(def, column)
-              )}
-            </div>
+              ${running ? html`<span class="running-pulse"></span>` : nothing}
+            </button>
+            ${
+              collapsed
+                ? nothing
+                : html`<div class="flow-board">
+                    ${groupInstancesByState(def.states, entries).map((column) =>
+                      this.renderColumn(def, column)
+                    )}
+                  </div>`
+            }
           </div>`;
         }
       )}
     `;
+  }
+
+  private isCollapsed(workflowId: string): boolean {
+    if (!this.collapsedIds.has(workflowId)) {
+      const stored = localStorage.getItem(
+        `hive:collapse:${this.flowId}:${workflowId}`
+      );
+      if (stored === "1") this.collapsedIds.add(workflowId);
+    }
+    return this.collapsedIds.has(workflowId);
+  }
+
+  private toggle(workflowId: string): void {
+    const key = `hive:collapse:${this.flowId}:${workflowId}`;
+    if (this.collapsedIds.has(workflowId)) {
+      this.collapsedIds.delete(workflowId);
+      localStorage.setItem(key, "0");
+    } else {
+      this.collapsedIds.add(workflowId);
+      localStorage.setItem(key, "1");
+    }
+    this.requestUpdate();
   }
 
   private renderColumn(def: WorkflowDefResponse, column: Column) {
