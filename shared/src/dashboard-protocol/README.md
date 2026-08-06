@@ -14,11 +14,12 @@ On connect the server sends a single `init` message containing the full current 
 
 - `providers` — all configured provider:model pairs with stability scores
 - `availableProviders` — flat list of provider names and models for dropdowns
-- `metrics` — completed request records with conversation data where available
+- `metrics` — completed request records (latency, status, scores; no conversation content)
 - `override` — current pinned provider:model (if any)
 - `sessions` — active and completed session trees pre-sorted by the server
 - `logs` — recent buffered log entries
 - `stats` — derived dashboard statistics (traffic, success rate, latency, etc.)
+- `modelPriorityConfig` — the model-priority configuration (if any)
 - `serverHost`, `serverPort`, `routingStrategy`, `contextWindowWeight`, `pending`
 
 ### 3. Updates
@@ -33,9 +34,9 @@ After hydration the consumer receives targeted update messages. Each message car
 | `stats_update` | `stats` |
 | `override_update` | `override` |
 | `available_providers_update` | `availableProviders` |
+| `model_priority_update` | model priority config |
 | `pipeline_state` | Append to pipeline event list |
 | `log` | Append to log entries |
-| `session_detail` | Response to client `session_detail` command |
 
 ### 4. Commands
 
@@ -43,13 +44,17 @@ The client may send three command types:
 
 - `override` — pin or unpin a provider:model
 - `toggle_provider` — enable or disable a provider
-- `session_detail` — fetch conversation data for a specific request (on-demand)
+- `update_model_priority` — save a new model-priority configuration
+
+## Conversation data
+
+Conversation content (prompt and response text) is delivered **only** on the session tree: `session_snapshot` requests carry `conversationPrompt`/`responseText`. It is not embedded on `MetricData` and there is no separate `session_detail` command or `/api/conversations` endpoint — the session tree is the single channel.
 
 ## Message Semantics
 
 ### `session_snapshot`
 
-Fires on every session state change: new request received, stage advanced, request completed, or request failed. The snapshot carries `active` and `completed` arrays pre-sorted by `lastActivity` descending. Active sessions are those with at least one request whose final stage is not `complete` or `failed`.
+Fires on every session state change: new request received, stage advanced, request completed, or request failed. The snapshot carries `active` and `completed` arrays pre-sorted by `lastActivity` descending. Active sessions are those with at least one request whose final stage is not `complete` or `failed`. Completed requests within each session carry their conversation (`conversationPrompt`/`responseText`).
 
 ### `pipeline_state`
 
@@ -61,15 +66,11 @@ Fires when provider scoring changes (typically after a request completes). The s
 
 ### `metrics_update`
 
-Fires when a new request completes. The array carries the full metrics history including conversation data (`prompt` and `responseText`) on entries where the request has completed. Consumers replace their local metrics array directly.
+Fires when a new request completes. The array carries the full metrics history (latency, status, scores). Consumers replace their local metrics array directly.
 
 ### `stats_update`
 
 Fires when any statistic-affecting change occurs. All stats are server-computed — the consumer renders the values with zero derivation logic.
-
-### `session_detail` (command → response)
-
-The client sends `{ type: "session_detail", sessionId, requestId }` to fetch full conversation data for a specific request. The server responds with a single `session_detail` message carrying `conversationPrompt` and `responseText`. Request-scoped to avoid large payloads on sessions with many requests.
 
 ## Type Contract
 
