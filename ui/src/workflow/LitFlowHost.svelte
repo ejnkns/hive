@@ -66,6 +66,7 @@ $effect(() => {
     if (host) {
       host.workflowDefs = workflowDefs;
       host.instances = instances;
+      host.requestUpdate();
     }
   });
   return () => {

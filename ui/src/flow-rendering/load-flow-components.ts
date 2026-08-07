@@ -97,11 +97,18 @@ function registerAll(
 ): void {
   if (registrations === undefined) return;
   for (const [key, element] of Object.entries(registrations)) {
+    // Browser registration is a hard requirement, not an implementation
+    // detail: constructing an unregistered HTMLElement subclass throws
+    // "Illegal constructor". The default components are defined at module
+    // import; served classes must be defined here or dynamic-element-host's
+    // `new elementClass()` would fail at mount time.
+    const tag = defineServedElement(element);
     const prior =
       kind === "components" ? getComponentRenderer(key) : getKindRenderer(key);
     if (kind === "components") registerComponentRenderer(key, element);
     else registerKindRenderer(key, element);
     restores.push(() => {
+      undefineServedElement(tag);
       if (prior === undefined) {
         if (kind === "components") unregisterComponentRenderer(key);
         else unregisterKindRenderer(key);
@@ -112,4 +119,29 @@ function registerAll(
       }
     });
   }
+}
+
+// The tag is only a registration key — served elements are instantiated via
+// `new`, never parsed from HTML — so a sequence suffix keeps tags unique
+// across flows and class replacements.
+const definedTags = new WeakMap<ElementConstructor, string>();
+let servedElementSequence = 0;
+
+function defineServedElement(element: ElementConstructor): string {
+  const existing = definedTags.get(element);
+  if (existing !== undefined) return existing;
+  const tag = `hive-served-${servedElementSequence}`;
+  servedElementSequence += 1;
+  customElements.define(tag, element as CustomElementConstructor);
+  definedTags.set(element, tag);
+  return tag;
+}
+
+function undefineServedElement(tag: string): void {
+  // undoDefine is not available in older browsers; without it the tag stays
+  // registered (harmless — each registration defines a distinct class).
+  const registry = customElements as CustomElementRegistry & {
+    undoDefine?: (name: string) => void;
+  };
+  registry.undoDefine?.(tag);
 }

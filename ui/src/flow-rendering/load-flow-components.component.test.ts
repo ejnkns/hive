@@ -26,7 +26,6 @@ class DemoCard extends LitElement {
     return html`<div class="demo-card">demo ${this.instanceEntry.id}</div>`;
   }
 }
-customElements.define("demo-card-element", DemoCard);
 
 const evaluate: FlowComponentEvaluator = async () => ({
   default: () => ({ components: { "demo-card": DemoCard } }),
