@@ -5,6 +5,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -117,9 +118,15 @@ export function fastForwardTargetBranch(
 
   const checkedOutPath = branchWorktreePath(basePath, targetBranch);
   if (checkedOutPath) {
-    if (runGit(checkedOutPath, ["status", "--porcelain"])) {
-      throw new Error(`${targetBranch} has uncommitted changes`);
-    }
+    // The flow writes its domain state into this checkout, and commit_flow_state
+    // records it on the integration branch — leaving identical untracked copies
+    // that a fast-forward bringing those files in would refuse to overwrite
+    // ("untracked working tree files would be overwritten by merge"). The flow
+    // must not block itself: clear the untracked domain files that are
+    // byte-identical to the integration branch (lossless — the merge restores
+    // them). Anything else stays, and git's own merge safety refuses to
+    // overwrite real local changes.
+    clearFlowDomainState(checkedOutPath, ctx);
     runGit(checkedOutPath, ["merge", "--ff-only", integrationBranch]);
   } else {
     runGit(basePath, [
@@ -311,6 +318,45 @@ function readIntegrationBranch(
 ): string | undefined {
   if (!ctx) return undefined;
   return readFlowSettings(ctx.flowConfig()).integrationBranch;
+}
+
+// Removes the flow's own domain-state artifacts from a target-branch checkout
+// before a fast-forward: untracked files under flowConfig.domainDir whose
+// content is byte-identical to the integration branch's committed version are
+// safe to drop (the merge restores them). Files that differ — or that the
+// integration branch does not have — stay, and git's merge safety refuses to
+// overwrite them, surfacing as the task error.
+function clearFlowDomainState(
+  checkedOutPath: string,
+  ctx: OperationContext | undefined
+): void {
+  const domainDir = ctx
+    ? readFlowSettings(ctx.flowConfig()).domainDir
+    : undefined;
+  const integrationBranch = readIntegrationBranch(ctx);
+  if (!domainDir || !integrationBranch) return;
+
+  const untracked = runGit(checkedOutPath, [
+    "ls-files",
+    "--others",
+    "--exclude-standard",
+    "--",
+    domainDir,
+  ])
+    .split("\n")
+    .filter(Boolean);
+
+  for (const rel of untracked) {
+    const identical = gitSucceeds(checkedOutPath, [
+      "diff",
+      "--quiet",
+      `${integrationBranch}:${rel}`,
+      rel,
+    ]);
+    if (identical) {
+      rmSync(join(checkedOutPath, rel), { force: true });
+    }
+  }
 }
 
 function hasBranch(basePath: string, branch: string): boolean {

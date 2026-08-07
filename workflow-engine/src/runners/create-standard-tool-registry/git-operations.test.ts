@@ -15,6 +15,7 @@ import type { OperationContext } from "../create-operation-runner";
 import {
   commitFlowState,
   ensureIntegrationBranch,
+  fastForwardTargetBranch,
   mergeBranch,
   validateRepo,
 } from "./git-operations";
@@ -171,6 +172,121 @@ describe("git operations (config-driven)", () => {
       assert.throws(
         () => ensureIntegrationBranch(dummyTask, { basePath }),
         /integrationBranch/
+      );
+    });
+  });
+
+  describe("fastForwardTargetBranch", () => {
+    it("fast-forwards even when the flow's domain state is untracked in the target checkout", () => {
+      root = mkdtempSync(join(tmpdir(), "hive-ff-"));
+      basePath = join(root, "repo");
+      mkdirSync(basePath);
+      execSync("git init -b main", { cwd: basePath, encoding: "utf-8" });
+      execSync("git config user.email test@example.com", {
+        cwd: basePath,
+        encoding: "utf-8",
+      });
+      execSync("git config user.name Test", {
+        cwd: basePath,
+        encoding: "utf-8",
+      });
+      execSync("git commit --allow-empty -m initial", {
+        cwd: basePath,
+        encoding: "utf-8",
+      });
+      writeFileSync(join(basePath, "legacy.txt"), "legacy tracked file\n");
+      execSync("git add -A && git commit -m legacy", {
+        cwd: basePath,
+        encoding: "utf-8",
+      });
+
+      // Integration branch: the feature + committed domain state.
+      execSync("git checkout -b integ", { cwd: basePath, encoding: "utf-8" });
+      writeFileSync(join(basePath, "main.py"), "feature\n");
+      mkdirSync(join(basePath, ".hive-state"));
+      writeFileSync(join(basePath, ".hive-state", "requirements.md"), "spec\n");
+      execSync("git add -A && git commit -m feature", {
+        cwd: basePath,
+        encoding: "utf-8",
+      });
+      execSync("git checkout main", { cwd: basePath, encoding: "utf-8" });
+
+      // Simulate the flow's artifacts in the target checkout: the domain dir
+      // is untracked but identical to the integration branch's committed
+      // version, and a legacy tracked file sits deleted (uncommitted) — the
+      // merge touches neither, so integration must proceed.
+      mkdirSync(join(basePath, ".hive-state"));
+      writeFileSync(join(basePath, ".hive-state", "requirements.md"), "spec\n");
+      rmSync(join(basePath, "legacy.txt"));
+
+      const ctx = ctxFor({
+        basePath,
+        integrationBranch: "integ",
+        branchPrefix: "hive/",
+        domainDir: ".hive-state",
+      });
+      const result = fastForwardTargetBranch(
+        dummyTask,
+        { basePath, targetBranch: "main" },
+        ctx
+      );
+
+      assert.equal(result.ok, true);
+      assert.equal(
+        git(basePath, ["rev-parse", "main"]),
+        git(basePath, ["rev-parse", "integ"]),
+        "main fast-forwarded to the integration head"
+      );
+      assert.ok(
+        existsSync(join(basePath, ".hive-state", "requirements.md")),
+        "the committed domain state arrived via the merge"
+      );
+    });
+
+    it("refuses when a real local change would be overwritten by the merge", () => {
+      root = mkdtempSync(join(tmpdir(), "hive-ff-"));
+      basePath = join(root, "repo");
+      mkdirSync(basePath);
+      execSync("git init -b main", { cwd: basePath, encoding: "utf-8" });
+      execSync("git config user.email test@example.com", {
+        cwd: basePath,
+        encoding: "utf-8",
+      });
+      execSync("git config user.name Test", {
+        cwd: basePath,
+        encoding: "utf-8",
+      });
+      writeFileSync(join(basePath, "main.py"), "base\n");
+      execSync("git add -A && git commit -m initial", {
+        cwd: basePath,
+        encoding: "utf-8",
+      });
+
+      execSync("git checkout -b integ", { cwd: basePath, encoding: "utf-8" });
+      writeFileSync(join(basePath, "main.py"), "feature\n");
+      execSync("git add -A && git commit -m feature", {
+        cwd: basePath,
+        encoding: "utf-8",
+      });
+      execSync("git checkout main", { cwd: basePath, encoding: "utf-8" });
+
+      // A real local edit to a file the merge will change must still block.
+      writeFileSync(join(basePath, "main.py"), "local uncommitted edit\n");
+
+      const ctx = ctxFor({
+        basePath,
+        integrationBranch: "integ",
+        branchPrefix: "hive/",
+        domainDir: ".hive-state",
+      });
+      assert.throws(
+        () =>
+          fastForwardTargetBranch(
+            dummyTask,
+            { basePath, targetBranch: "main" },
+            ctx
+          ),
+        /overwritten|local changes/i
       );
     });
   });
