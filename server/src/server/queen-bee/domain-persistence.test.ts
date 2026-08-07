@@ -226,6 +226,51 @@ describe("queen-bee domain persistence", () => {
     );
   });
 
+  it("validate_completion records a failure strike when no work is committed", async () => {
+    const instanceState: Record<string, unknown> = { attempt: 1 };
+    const runner = makeRunner({ ...queenBeeConfig, basePath }, instanceState);
+
+    await assert.rejects(
+      runner.run({ ...dummyTask, operations: ["validate_completion"] }),
+      /No work branch/
+    );
+    assert.equal(instanceState.validationFailures, 1);
+
+    // A second failure accumulates — the cards workflow's retry guard reads
+    // this counter and stops retrying after 3 (card → unfulfillable).
+    await assert.rejects(
+      runner.run({ ...dummyTask, operations: ["validate_completion"] }),
+      /No work branch/
+    );
+    assert.equal(instanceState.validationFailures, 2);
+  });
+
+  it("validate_completion clears failure strikes on success", async () => {
+    execSync("git checkout -b queen-bee/card-1/attempt-1", {
+      cwd: basePath,
+      encoding: "utf-8",
+    });
+    writeFileSync(join(basePath, "x.txt"), "work\n");
+    execSync("git add -A && git commit -m work", {
+      cwd: basePath,
+      encoding: "utf-8",
+    });
+
+    const instanceState: Record<string, unknown> = {
+      attempt: 1,
+      validationFailures: 4,
+    };
+    const runner = makeRunner({ ...queenBeeConfig, basePath }, instanceState);
+    const result = await runner.run({
+      ...dummyTask,
+      operations: ["validate_completion"],
+    });
+
+    const output = result.output as { ok: boolean; commitCount: number };
+    assert.equal(output.ok, true);
+    assert.equal(instanceState.validationFailures, 0);
+  });
+
   it("validate_completion accepts committed work ahead of the integration branch", async () => {
     execSync("git checkout -b queen-bee/card-1/attempt-1", {
       cwd: basePath,
@@ -424,6 +469,75 @@ describe("queen-bee domain persistence", () => {
     // The worker session would call the model — not available in tests. Cancel
     // so the runner aborts and the process drains.
     controller.cancel();
+  });
+
+  it("sends a card to unfulfillable after repeated validation failures instead of looping", async () => {
+    const workspacesBasePath = join(root, "workspaces");
+    // A worker that submits without committing — the "work already done on the
+    // shared base" scenario — must not loop forever: each validation failure
+    // records a strike and the retry guard trips at 3, sending the card to
+    // unfulfillable for coordinator analysis + human remediation.
+    const lazyWorker = (): AiChatModelCaller => async () => ({
+      content: "Nothing to change",
+      toolCalls: [
+        {
+          id: "s1",
+          name: "submit_work",
+          arguments: JSON.stringify({ outcome: "implemented" }),
+        },
+      ],
+    });
+    const calmReviewer = (): AiTaskModelCaller => async () => ({
+      content: "ok",
+      toolCalls: [],
+    });
+
+    const runtime = makeCardRuntime({
+      basePath,
+      workspacesBasePath,
+      workerCaller: lazyWorker(),
+      reviewerCaller: calmReviewer(),
+    });
+
+    const controller = runtime.addWorkflowInstance("cards", {
+      workflowInstanceState: {
+        attempt: 1,
+        cardSpec: {
+          title: "Already implemented",
+          description: "",
+          acceptanceCriteria: ["works"],
+          dependsOn: [],
+        },
+      },
+    });
+    controller.dispatchAction("run");
+
+    try {
+      await waitFor(() => {
+        const card = runtime
+          .getWorkflowInstanceEntries()
+          .find((entry) => entry.workflowId === "cards");
+        return card?.state.currentState === "unfulfillable";
+      }, 15_000);
+    } finally {
+      // On regression (the retry guard missing) the card loops forever; cancel
+      // the running worker so the test fails cleanly instead of hanging.
+      controller.cancel();
+    }
+
+    const card = runtime
+      .getWorkflowInstanceEntries()
+      .find((entry) => entry.workflowId === "cards");
+    assert.equal(card?.state.currentState, "unfulfillable");
+    assert.ok(
+      (card?.state.workflowInstanceState.validationFailures as number) >= 3,
+      "the retry guard accumulated at least three validation failure strikes"
+    );
+    const actions = card?.availableActions.map((action) => action.id);
+    assert.ok(
+      actions?.includes("archive_card"),
+      "unfulfillable exposes the archive (and remediate) actions"
+    );
   });
 
   it("worker edits land in the worktree and accept merges into the integration branch", async () => {
