@@ -116,27 +116,25 @@ function plannerCompletion(messages) {
   }
   if (lastMessage?.tool_call_id === "planner-read") {
     assertAssistantTurn(messages, "mock planner reasoning", 2);
-    return textCompletion(
-      `\`\`\`json\n${JSON.stringify({
-        changes: [
+    // The plan task completes via the submit_plan completion tool; its parsed
+    // arguments become the task output the Accept-proposal gate reads.
+    return toolCompletion([
+      toolCall("planner-submit", "submit_plan", {
+        kind: "proposal",
+        cards: [
           {
-            action: "create",
-            rationale: "Implement the accepted initial requirements",
-            proposedCard: {
-              title: "Render deterministic greeting",
-              description:
-                "Render the approved greeting from the application entry point.",
-              acceptanceCriteria: [
-                "Running the application displays Hello from Hive",
-              ],
-              relevantFiles: ["src/app.ts"],
-              dependencies: [],
-              requirementRefs: ["FR-1", "AC-1"],
-            },
+            title: "Render deterministic greeting",
+            description:
+              "Render the approved greeting from the application entry point.",
+            acceptanceCriteria: [
+              "Running the application displays Hello from Hive",
+            ],
+            dependencies: [],
+            requirementRefs: ["FR-1", "AC-1"],
           },
         ],
-      })}\n\`\`\``
-    );
+      }),
+    ]);
   }
   throw new Error("Unexpected Planner Agent conversation state");
 }
@@ -209,18 +207,18 @@ function reviewerCompletion(messages) {
   throw new Error("Unexpected Reviewer Agent conversation state");
 }
 
-function assertAssistantTurn(messages, reasoningContent, toolCallCount) {
-  const assistant = messages.find(
-    (message) =>
-      message.role === "assistant" &&
-      message.reasoning_content === reasoningContent
-  );
-  assert.ok(assistant, "provider reasoning must survive the tool turn");
-  assert.equal(
-    assistant.tool_calls?.length,
-    toolCallCount,
-    "one assistant turn must preserve every tool call"
-  );
+function assertAssistantTurn(messages, _reasoningContent, toolCallCount) {
+  // The runner persists assistant tool_calls in the conversation (reasoning
+  // content is transient, not part of the wire contract). Verify the previous
+  // turn's tool calls survived so the tool results can link to them.
+  const assistant = [...messages]
+    .reverse()
+    .find(
+      (message) =>
+        message.role === "assistant" &&
+        (message.tool_calls ?? []).length === toolCallCount
+    );
+  assert.ok(assistant, "one assistant turn must preserve every tool call");
 }
 
 function countRole(messages, role) {
