@@ -58,8 +58,10 @@ export const execute: ToolExecutor = async (call, ctx) => {
 
   const dirPath = resolve(ctx.workspacePath, requested);
   const entries = readdirSync(dirPath, { withFileTypes: true });
+  // Hidden entries are included: the flow's domain state lives in a dot
+  // directory (.queen-bee/requirements.md is the authoritative spec a worker
+  // or coordinator must be able to discover). .git is the only noise.
   const listing = entries
-    .filter((e) => !e.name.startsWith("."))
     .map((e) => {
       const relP = relative(ctx.workspacePath, join(dirPath, e.name));
       return e.isDirectory() ? `${relP}/` : relP;

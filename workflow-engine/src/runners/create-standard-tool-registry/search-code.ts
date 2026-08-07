@@ -55,7 +55,16 @@ export const execute: ToolExecutor = async (call, ctx) => {
 
     const result = execFileSync(
       "rg",
-      ["-n", "--no-heading", "-e", args.pattern, "."],
+      [
+        "-n",
+        "--no-heading",
+        "--hidden",
+        "--glob",
+        "!.git/**",
+        "-e",
+        args.pattern,
+        ".",
+      ],
       {
         cwd: ctx.workspacePath,
         encoding: "utf-8",
