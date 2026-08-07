@@ -99,6 +99,10 @@ export type GateContext<
   runningTaskContext: RunningTaskContext | null;
   workflowInstanceState: TWorkflowInstanceState;
   flowState: TFlowState;
+  // Consecutive error counts per task id (see WorkflowInstanceState). Gates
+  // use this to bound retry loops: a task that keeps failing escalates instead
+  // of looping forever, without per-preset bookkeeping.
+  taskErrorCounts: Readonly<Record<string, number>>;
   workflowInstancesInState?: (stateId?: string) => {
     currentState: string;
     id: string;

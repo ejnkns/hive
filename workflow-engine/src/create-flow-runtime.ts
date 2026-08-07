@@ -261,6 +261,7 @@ export function createFlowRuntime<
       runningTaskContext: instanceState?.runningTaskContext ?? null,
       workflowInstanceState: instanceState?.workflowInstanceState ?? {},
       history: instanceState?.history ?? [],
+      taskErrorCounts: instanceState?.taskErrorCounts ?? {},
     };
 
     const controller = createWorkflowInstanceController(

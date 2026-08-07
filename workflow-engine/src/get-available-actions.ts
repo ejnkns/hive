@@ -27,6 +27,7 @@ export function getAvailableActions(
     runningTaskContext: state.runningTaskContext,
     workflowInstanceState: state.workflowInstanceState,
     flowState: flowState ?? {},
+    taskErrorCounts: state.taskErrorCounts ?? {},
     workflowInstancesInState,
   };
 

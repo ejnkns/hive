@@ -19,6 +19,11 @@ export type WorkflowInstanceState<
   runningTaskContext: RunningTaskContext | null;
   workflowInstanceState: TWorkflowInstanceState;
   history: WorkflowHistoryEntry<TTaskOutputs, TStateId>[];
+  // Consecutive error count per task id: incremented when a task errors,
+  // reset when that task succeeds. Exposed to gates as ctx.taskErrorCounts so
+  // definitions can bound retry loops declaratively (e.g. "escalate after 3
+  // failed validations") without the engine knowing what a task does.
+  taskErrorCounts?: Record<string, number>;
 };
 
 // Erased instantiation used inside the engine for heterogeneous instances.

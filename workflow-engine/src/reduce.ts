@@ -277,6 +277,15 @@ function applyTaskOutcome(
     runningTaskId: null,
     runningTaskContext: null,
     history,
+    // Consecutive error bookkeeping: a task that errors accumulates strikes;
+    // its success clears them. Gates read this to bound retry loops.
+    taskErrorCounts: {
+      ...state.taskErrorCounts,
+      [taskId]:
+        outcome.status === "success"
+          ? 0
+          : (state.taskErrorCounts?.[taskId] ?? 0) + 1,
+    },
   };
 
   const transition = evaluateAutoTransitions(
@@ -326,6 +335,7 @@ function evaluateAutoTransitions(
     runningTaskContext: state.runningTaskContext,
     workflowInstanceState: state.workflowInstanceState,
     flowState: flowState ?? {},
+    taskErrorCounts: state.taskErrorCounts ?? {},
     workflowInstancesInState,
   };
 

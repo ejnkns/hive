@@ -279,6 +279,7 @@ function buildFlowGateContext(
     runningTaskContext: null,
     workflowInstanceState: {},
     flowState: runtime.getFlowState(),
+    taskErrorCounts: {},
     workflowInstancesInState: (stateId) =>
       runtime.workflowInstancesInState(stateId),
   };

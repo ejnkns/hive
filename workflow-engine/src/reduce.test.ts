@@ -263,6 +263,56 @@ describe("cards workflow", () => {
     assert.equal(result.state.taskOutputs.implement?.status, "error");
   });
 
+  // 5b. task_errored accumulates a consecutive error count per task
+  it("task errors accumulate a per-task consecutive count", () => {
+    const base = {
+      currentState: "in_progress",
+      taskOutputs: {},
+      hasRunningTask: true,
+      runningTaskId: "implement",
+      runningTaskContext: { role: "ai-task" as const, messages: [] },
+      workflowInstanceState: {},
+      history: [],
+    };
+
+    const first = apply(base, {
+      type: "task_errored",
+      taskId: "implement",
+      error: "nope",
+    });
+    assert.equal(first.state.taskErrorCounts?.implement, 1);
+
+    const second = apply(first.state, {
+      type: "task_errored",
+      taskId: "implement",
+      error: "nope again",
+    });
+    assert.equal(second.state.taskErrorCounts?.implement, 2);
+  });
+
+  // 5c. A task success clears its own error count (other tasks' counts stay)
+  it("task success clears its own error count", () => {
+    const state = {
+      currentState: "in_progress",
+      taskOutputs: {},
+      hasRunningTask: true,
+      runningTaskId: "implement",
+      runningTaskContext: { role: "ai-task" as const, messages: [] },
+      workflowInstanceState: {},
+      history: [],
+      taskErrorCounts: { implement: 2, other: 1 },
+    };
+
+    const result = apply(state, {
+      type: "task_completed",
+      taskId: "implement",
+      output: {},
+    });
+
+    assert.equal(result.state.taskErrorCounts?.implement, 0);
+    assert.equal(result.state.taskErrorCounts?.other, 1);
+  });
+
   // 6. While task is running, cancel action is available
   it("cancel action visible while task running", () => {
     const state = {

@@ -21,9 +21,10 @@ type OperationResult = Record<string, unknown>;
 
 // Deterministic: the worker's feature branch exists and is ahead of the
 // integration branch (committed work). The worker commits with commit_work
-// before submit_work. Each failure records a consecutive-validation-failure
-// strike (the cards workflow's retry guard trips at 3 and sends the card to
-// unfulfillable instead of looping forever); a success clears the counter.
+// before submit_work. A failure here surfaces as a task error; the engine's
+// per-task consecutive-error counter (ctx.taskErrorCounts) bounds the
+// validating → running_agent retry loop — three failures escalate the card to
+// unfulfillable. The op itself records nothing.
 function validateCompletionOp(
   _task: TaskDefinition,
   _params: Record<string, unknown>,
@@ -48,7 +49,6 @@ function validateCompletionOp(
     `refs/heads/${branchName}`,
   ]);
   if (!branchExists) {
-    recordValidationFailure(ctx);
     throw new Error(`No work branch ${branchName} found`);
   }
   const aheadRaw = gitOptional(basePath, [
@@ -58,17 +58,9 @@ function validateCompletionOp(
   ]);
   const commitCount = aheadRaw === "" ? 0 : Number(aheadRaw);
   if (commitCount < 1) {
-    recordValidationFailure(ctx);
     throw new Error(`No committed work on ${branchName}`);
   }
-  ctx.patchWorkflowInstanceState({ validationFailures: 0 });
   return { ok: true, commitCount, branchName };
-}
-
-function recordValidationFailure(ctx: OperationContext): void {
-  const failures =
-    readNumber(ctx.workflowInstanceState().validationFailures) ?? 0;
-  ctx.patchWorkflowInstanceState({ validationFailures: failures + 1 });
 }
 
 function buildReviewPackageOp(

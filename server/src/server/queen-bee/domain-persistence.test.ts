@@ -226,7 +226,11 @@ describe("queen-bee domain persistence", () => {
     );
   });
 
-  it("validate_completion records a failure strike when no work is committed", async () => {
+  it("validate_completion failure surfaces as a task error the engine counts", async () => {
+    // The op records nothing itself: the engine's per-task consecutive-error
+    // counter (exposed to gates as ctx.taskErrorCounts) bounds the retry loop,
+    // so the definition stays declarative (see the flow-level escalation test
+    // below and reduce.test.ts for the counter).
     const instanceState: Record<string, unknown> = { attempt: 1 };
     const runner = makeRunner({ ...queenBeeConfig, basePath }, instanceState);
 
@@ -234,41 +238,7 @@ describe("queen-bee domain persistence", () => {
       runner.run({ ...dummyTask, operations: ["validate_completion"] }),
       /No work branch/
     );
-    assert.equal(instanceState.validationFailures, 1);
-
-    // A second failure accumulates — the cards workflow's retry guard reads
-    // this counter and stops retrying after 3 (card → unfulfillable).
-    await assert.rejects(
-      runner.run({ ...dummyTask, operations: ["validate_completion"] }),
-      /No work branch/
-    );
-    assert.equal(instanceState.validationFailures, 2);
-  });
-
-  it("validate_completion clears failure strikes on success", async () => {
-    execSync("git checkout -b queen-bee/card-1/attempt-1", {
-      cwd: basePath,
-      encoding: "utf-8",
-    });
-    writeFileSync(join(basePath, "x.txt"), "work\n");
-    execSync("git add -A && git commit -m work", {
-      cwd: basePath,
-      encoding: "utf-8",
-    });
-
-    const instanceState: Record<string, unknown> = {
-      attempt: 1,
-      validationFailures: 4,
-    };
-    const runner = makeRunner({ ...queenBeeConfig, basePath }, instanceState);
-    const result = await runner.run({
-      ...dummyTask,
-      operations: ["validate_completion"],
-    });
-
-    const output = result.output as { ok: boolean; commitCount: number };
-    assert.equal(output.ok, true);
-    assert.equal(instanceState.validationFailures, 0);
+    assert.equal(instanceState.validationFailures, undefined);
   });
 
   it("validate_completion accepts committed work ahead of the integration branch", async () => {
@@ -530,8 +500,8 @@ describe("queen-bee domain persistence", () => {
       .find((entry) => entry.workflowId === "cards");
     assert.equal(card?.state.currentState, "unfulfillable");
     assert.ok(
-      (card?.state.workflowInstanceState.validationFailures as number) >= 3,
-      "the retry guard accumulated at least three validation failure strikes"
+      (card?.state.taskErrorCounts?.validateCompletion ?? 0) >= 3,
+      "the engine's per-task error counter accumulated at least three strikes"
     );
     const actions = card?.availableActions.map((action) => action.id);
     assert.ok(

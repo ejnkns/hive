@@ -58,7 +58,6 @@ export type CardsTaskOutputs = {
 export type CardsItemState = {
   projectId: string;
   attempt: number;
-  validationFailures: number;
   reviewIsStale?: boolean;
   worktreePath?: string;
   branchName?: string;
@@ -267,15 +266,17 @@ export const cardsWorkflow = defineWorkflow({
             ctx.taskOutputs.validateCompletion?.status === "success",
         },
         {
+          // The engine tracks consecutive per-task errors; three failed
+          // validations escalate to unfulfillable (coordinator analysis +
+          // human remediation) instead of retrying the worker forever.
           to: "unfulfillable",
-          gate: (ctx) =>
-            (ctx.workflowInstanceState.validationFailures ?? 0) >= 3,
+          gate: (ctx) => (ctx.taskErrorCounts.validateCompletion ?? 0) >= 3,
         },
         {
           to: "running_agent",
           gate: (ctx) =>
             ctx.taskOutputs.validateCompletion?.status === "error" &&
-            (ctx.workflowInstanceState.validationFailures ?? 0) < 3,
+            (ctx.taskErrorCounts.validateCompletion ?? 0) < 3,
         },
       ],
     },
