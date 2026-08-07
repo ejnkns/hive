@@ -1,4 +1,4 @@
-import { getAvailableActions } from "./get-available-actions";
+import { dependsOnMet, getAvailableActions } from "./get-available-actions";
 import { readFlowSettings } from "./read-flow-settings";
 import { reduce, type WorkflowEvent } from "./reduce";
 import { persistOutput } from "./runners/persist-output";
@@ -137,7 +137,8 @@ export function createWorkflowInstanceController(
       state.currentState,
       state,
       workflowInstancesInState,
-      flowState
+      flowState,
+      workflow.instance?.title
     );
   }
 
@@ -332,14 +333,14 @@ export function createWorkflowInstanceController(
 
       if (action.dependsOnState !== undefined && workflowInstancesInState) {
         const dependees = readDependsOn(state.workflowInstanceState);
-        if (dependees.length > 0) {
-          const inStateIds = new Set(
-            workflowInstancesInState(action.dependsOnState).map(
-              (instance) => instance.id
-            )
-          );
-          const allMet = dependees.every((d) => inStateIds.has(d));
-          if (!allMet) return;
+        if (
+          !dependsOnMet(
+            dependees,
+            workflowInstancesInState(action.dependsOnState),
+            workflow.instance?.title
+          )
+        ) {
+          return;
         }
       }
 

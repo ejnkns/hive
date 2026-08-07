@@ -726,6 +726,34 @@ const dependencyWorkflow = defineWorkflow({
   terminalStates: ["running"],
 });
 
+// A workflow whose instances are known by a title hint (like queen-bee cards):
+// the dependsOnState gate must also match name-based dependencies against the
+// titles of instances already in the target state (resolution to IDs runs only
+// on edge fan-out, so rehydrated or directly-created instances carry names).
+const titledDependencyWorkflow = defineWorkflow({
+  id: "titled-dependency",
+  label: "Titled Dependency",
+  instance: { title: "name" },
+  taskOutputs: {} as Record<string, never>,
+  states: [
+    {
+      id: "blocked",
+      label: "Blocked",
+      actions: [
+        {
+          id: "proceed",
+          label: "Proceed",
+          dependsOnState: "done",
+          transitionTo: "running",
+        },
+      ],
+    },
+    { id: "running", label: "Running" },
+  ],
+  initial: "blocked",
+  terminalStates: ["running"],
+});
+
 describe("dependsOnState gating", () => {
   it("blocks dispatch until every dependee is in the target state", () => {
     const controller = createWorkflowInstanceController(
@@ -789,5 +817,93 @@ describe("dependsOnState gating", () => {
 
     controller.dispatchAction("proceed");
     assert.equal(controller.getState().currentState, "blocked");
+  });
+
+  it("matches a name-based dependee against the title of an instance in the target state", () => {
+    const controller = createWorkflowInstanceController(
+      titledDependencyWorkflow,
+      {},
+      {
+        currentState: "blocked",
+        taskOutputs: {},
+        hasRunningTask: false,
+        runningTaskId: null,
+        runningTaskContext: null,
+        // The dependency is still recorded by name (resolution never ran).
+        workflowInstanceState: {
+          dependsOn: [
+            "Shape state and rendering for square, triangle, and diamond",
+          ],
+        },
+        history: [],
+      },
+      () => [
+        {
+          currentState: "done",
+          id: "target-1",
+          workflowInstanceState: {
+            name: "Shape state and rendering for square, triangle, and diamond",
+          },
+        },
+      ]
+    );
+
+    controller.dispatchAction("proceed");
+    assert.equal(controller.getState().currentState, "running");
+  });
+
+  it("blocks a name-based dependee whose title is not in the target state", () => {
+    const controller = createWorkflowInstanceController(
+      titledDependencyWorkflow,
+      {},
+      {
+        currentState: "blocked",
+        taskOutputs: {},
+        hasRunningTask: false,
+        runningTaskId: null,
+        runningTaskContext: null,
+        workflowInstanceState: { dependsOn: ["Missing title"] },
+        history: [],
+      },
+      () => [
+        {
+          currentState: "done",
+          id: "target-1",
+          workflowInstanceState: { name: "Some other card" },
+        },
+      ]
+    );
+
+    controller.dispatchAction("proceed");
+    assert.equal(controller.getState().currentState, "blocked");
+  });
+
+  it("exposes the run action when a name-based dependee's title is in the target state", () => {
+    const controller = createWorkflowInstanceController(
+      titledDependencyWorkflow,
+      {},
+      {
+        currentState: "blocked",
+        taskOutputs: {},
+        hasRunningTask: false,
+        runningTaskId: null,
+        runningTaskContext: null,
+        workflowInstanceState: { dependsOn: ["Done card title"] },
+        history: [],
+      },
+      () => [
+        {
+          currentState: "done",
+          id: "target-1",
+          workflowInstanceState: { name: "Done card title" },
+        },
+      ]
+    );
+
+    const actions = controller.getAvailableActions();
+    assert.ok(
+      actions.some((action) => action.id === "proceed"),
+      "run action should be visible once its named dependency is done"
+    );
   });
 });
