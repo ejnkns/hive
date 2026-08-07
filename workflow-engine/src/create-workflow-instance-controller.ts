@@ -164,7 +164,7 @@ export function createWorkflowInstanceController(
     dispatcher({
       type: "task_started",
       taskId: task.id,
-      context: buildRunningContext(task.role),
+      context: buildRunningContext(task),
       metadata,
     });
 
@@ -281,11 +281,20 @@ export function createWorkflowInstanceController(
     emit({ type: "state_changed", state });
   }
 
-  function buildRunningContext(role: string): RunningTaskContext | null {
-    if (role === "ai-task") return { role: "ai-task", messages: [] };
-    if (role === "ai-chat")
-      return { role: "ai-chat", messages: [], sessionId: crypto.randomUUID() };
-    if (role === "operation") return { role: "operation" };
+  function buildRunningContext(
+    task: TaskDefinition
+  ): RunningTaskContext | null {
+    if (task.role === "ai-task") return { role: "ai-task", messages: [] };
+    if (task.role === "ai-chat")
+      return {
+        role: "ai-chat",
+        messages: [],
+        sessionId: crypto.randomUUID(),
+        // HITL sessions (startOnUserInput) accept user messages; one-shot
+        // agents (cards worker, research) are read-only in the UI.
+        interactive: task.startOnUserInput === true,
+      };
+    if (task.role === "operation") return { role: "operation" };
     return null;
   }
 

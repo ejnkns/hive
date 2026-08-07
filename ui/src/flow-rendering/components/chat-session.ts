@@ -1,4 +1,4 @@
-import { css, html, LitElement, type PropertyValues } from "lit";
+import { css, html, LitElement, nothing, type PropertyValues } from "lit";
 import { createRef, type Ref, ref } from "lit/directives/ref.js";
 import type { ChatMessage } from "workflow-engine/workflow-types";
 import "./message-list";
@@ -10,6 +10,9 @@ export class ChatSession extends LitElement {
   static properties = {
     messages: { attribute: false },
     sessionId: { type: String },
+    // Read-only sessions (one-shot agents) hide the input row: the user
+    // cannot send messages to a session that is not waiting for input.
+    interactive: { type: Boolean },
   };
 
   static styles = css`
@@ -69,6 +72,7 @@ export class ChatSession extends LitElement {
 
   messages: ChatMessage[] = [];
   sessionId = "";
+  interactive = false;
 
   private _input = "";
   private _sending = false;
@@ -80,31 +84,35 @@ export class ChatSession extends LitElement {
         <div class="scroll" ${ref(this.scrollRef)}>
           <message-list .messages=${this.messages}></message-list>
         </div>
-        <div class="input-row">
-          <input
-            type="text"
-            placeholder="Type a message..."
-            .value=${this._input}
-            @input=${(event: Event) => {
-              // The input element is the event target; the cast reads its value.
-              this._input = (event.target as HTMLInputElement).value;
-              this.requestUpdate();
-            }}
-            @keydown=${(event: KeyboardEvent) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                void this.handleSend();
-              }
-            }}
-            ?disabled=${this._sending}
-          >
-          <button
-            ?disabled=${!this._input.trim() || this._sending}
-            @click=${() => void this.handleSend()}
-          >
-            Send
-          </button>
-        </div>
+        ${
+          this.interactive
+            ? html`<div class="input-row">
+                <input
+                  type="text"
+                  placeholder="Type a message..."
+                  .value=${this._input}
+                  @input=${(event: Event) => {
+                    // The input element is the event target; the cast reads its value.
+                    this._input = (event.target as HTMLInputElement).value;
+                    this.requestUpdate();
+                  }}
+                  @keydown=${(event: KeyboardEvent) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      void this.handleSend();
+                    }
+                  }}
+                  ?disabled=${this._sending}
+                >
+                <button
+                  ?disabled=${!this._input.trim() || this._sending}
+                  @click=${() => void this.handleSend()}
+                >
+                  Send
+                </button>
+              </div>`
+            : nothing
+        }
       </div>
     `;
   }

@@ -35,7 +35,12 @@ function entry(
       runningTaskId: role !== undefined ? "task-1" : null,
       runningTaskContext:
         role === "ai-chat"
-          ? { role: "ai-chat", messages: [], sessionId: "s1" }
+          ? {
+              role: "ai-chat",
+              messages: [],
+              sessionId: "s1",
+              interactive: true,
+            }
           : role === "ai-task"
             ? { role: "ai-task", messages: [] }
             : role === "operation"

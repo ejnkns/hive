@@ -56,6 +56,10 @@ export type RunningTaskContext =
       role: "ai-chat";
       messages: ChatMessage[];
       sessionId: string;
+      // Whether the session accepts user messages: true only for tasks
+      // declared startOnUserInput (HITL sessions). One-shot agents (e.g. the
+      // cards worker) are read-only — the UI hides the input row.
+      interactive: boolean;
     }
   | {
       role: "operation";

@@ -39,14 +39,34 @@ describe("ChatSession", () => {
   });
 
   it("disables Send while the input is empty", async () => {
-    const el = await mount(Object.assign(new ChatSession(), { messages: [] }));
+    const el = await mount(
+      Object.assign(new ChatSession(), { messages: [], interactive: true })
+    );
     await settle(shadowRootOf(el));
     const button = mustQuery(shadowRootOf(el), "button") as HTMLButtonElement;
     expect(button.disabled).toBe(true);
   });
 
+  it("hides the input row for read-only (one-shot) sessions", async () => {
+    const interactive = await mount(
+      Object.assign(new ChatSession(), { messages: [], interactive: true })
+    );
+    await settle(shadowRootOf(interactive));
+    expect(
+      shadowRootOf(interactive).querySelector(".input-row")
+    ).not.toBeNull();
+
+    const readOnly = await mount(
+      Object.assign(new ChatSession(), { messages: [], interactive: false })
+    );
+    await settle(shadowRootOf(readOnly));
+    expect(shadowRootOf(readOnly).querySelector(".input-row")).toBeNull();
+  });
+
   it("emits hive-send-message with the composed text on Enter", async () => {
-    const el = await mount(Object.assign(new ChatSession(), { messages: [] }));
+    const el = await mount(
+      Object.assign(new ChatSession(), { messages: [], interactive: true })
+    );
     await settle(shadowRootOf(el));
     const emitted = new Promise<CustomEvent>((resolve) =>
       el.addEventListener("hive-send-message", resolve as EventListener, {
