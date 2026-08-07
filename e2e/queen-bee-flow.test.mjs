@@ -5,8 +5,8 @@
 // guards the browser/WS/schema seams that unit and component tests cannot.
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
-import { startMockProvider } from "./support/mock-provider.mjs";
 import { startHiveTestApp } from "./support/hive-test-app.mjs";
+import { startMockProvider } from "./support/mock-provider.mjs";
 
 let mock;
 let app;
@@ -24,17 +24,6 @@ after(async () => {
   await app.close();
   await mock.close();
 });
-
-// Runs fn(root) for every element (including nested shadow roots) reachable
-// from the workflow-instances host.
-async function inDom(fn) {
-  return page.evaluate((fnSource) => {
-    // fnSource is serialized; rebuild it by invoking with a fresh body is not
-    // possible, so the caller passes a plain function string.
-    // eslint-disable-next-line no-new-func
-    return new Function(`return (${fnSource})(document)`)(document);
-  }, String(fn));
-}
 
 // The live DOM state of one workflow section: card titles + every visible
 // button text, across nested shadow roots.
@@ -59,11 +48,11 @@ async function sectionState(label) {
     if (!flow) return null;
     const titleOf = (el) => {
       const itemHeader = el?.shadowRoot?.querySelector("item-header");
-      return itemHeader?.shadowRoot?.querySelector(".title")?.textContent ?? null;
+      return (
+        itemHeader?.shadowRoot?.querySelector(".title")?.textContent ?? null
+      );
     };
-    const cards = Array.from(
-      flow.querySelectorAll("dynamic-element-host")
-    ).map(
+    const cards = Array.from(flow.querySelectorAll("dynamic-element-host")).map(
       (hostEl) =>
         titleOf(hostEl.shadowRoot?.querySelector(".mount > *")) ?? null
     );
@@ -71,11 +60,7 @@ async function sectionState(label) {
   }, label);
 }
 
-async function waitForSection(
-  label,
-  predicate,
-  timeoutMs = 40_000
-) {
+async function waitForSection(label, predicate, timeoutMs = 40_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const state = await sectionState(label);
@@ -177,10 +162,7 @@ test("queen-bee card lifecycle: onboarding → requirements → plan → card �
   await page.waitForSelector("input", { timeout: 15_000 });
   await page.locator("input").first().fill("e2e-project");
   await page.locator("input").nth(1).fill(app.projectPath);
-  await page
-    .locator("button", { hasText: "Create instance" })
-    .first()
-    .click();
+  await page.locator("button", { hasText: "Create instance" }).first().click();
   await page.waitForSelector(".flow-header", { timeout: 20_000 });
 
   // Onboarding completes on its own (operations only).
@@ -229,7 +211,7 @@ test("queen-bee card lifecycle: onboarding → requirements → plan → card �
     const host = document.querySelector("workflow-instances");
     const walk = (root) => {
       let inputs = 0;
-      for (const el of root.querySelectorAll("chat-session input")) inputs += 1;
+      inputs += root.querySelectorAll("chat-session input").length;
       for (const el of root.querySelectorAll("*")) {
         if (el.shadowRoot) inputs += walk(el.shadowRoot);
       }
@@ -246,13 +228,39 @@ test("queen-bee card lifecycle: onboarding → requirements → plan → card �
     await waitAndClick("Accept work", 60_000),
     "reviewer approved and accept became available"
   );
-  await waitForSection("Cards", (s) => s.cards.length === 1 && s.buttons.length > 0, 30_000);
+  await waitForSection(
+    "Cards",
+    (s) => s.cards.length === 1 && s.buttons.length > 0,
+    30_000
+  );
   await page.waitForTimeout(3_000);
+
+  // Add an idea: the served idea-card (a served-at-runtime custom component)
+  // must load, register, and render live — the end-to-end guard for the
+  // browser custom-element + re-render bugs that component tests could not
+  // catch (the demo card vanished until the loader registered classes and the
+  // host re-rendered after the async load).
+  await page.locator("button", { hasText: "Add idea" }).first().click();
+  await page.waitForSelector(".action-form input", { timeout: 10_000 });
+  await page.locator(".action-form input").first().fill("A great idea");
+  await page
+    .locator(".dialog-actions button", { hasText: "Run" })
+    .first()
+    .click();
+  await page.waitForSelector(".idea-title", { timeout: 15_000 });
+  const ideaTitle = await page.locator(".idea-title").first().textContent();
+  assert.equal(
+    ideaTitle?.trim(),
+    "A great idea",
+    "the served idea card renders the idea title"
+  );
 
   // The done card carries the plan's title.
   const done = await sectionState("Cards");
   assert.ok(
-    done.cards.some((title) => (title ?? "").includes("deterministic greeting")),
+    done.cards.some((title) =>
+      (title ?? "").includes("deterministic greeting")
+    ),
     `done card title present (${JSON.stringify(done.cards)})`
   );
 });
