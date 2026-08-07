@@ -12,56 +12,11 @@ import type { TaskDefinition } from "workflow-engine/task-runner";
 import type { CardSpec, ReviewPackage } from "../cards-workflow";
 
 export const cardsOperations: Record<string, OperationFn> = {
-  validate_completion: validateCompletionOp,
   build_review_package: buildReviewPackageOp,
   check_review_freshness: checkReviewFreshnessOp,
 };
 
 type OperationResult = Record<string, unknown>;
-
-// Deterministic: the worker's feature branch exists and is ahead of the
-// integration branch (committed work). The worker commits with commit_work
-// before submit_work. A failure here surfaces as a task error; the engine's
-// per-task consecutive-error counter (ctx.taskErrorCounts) bounds the
-// validating → running_agent retry loop — three failures escalate the card to
-// unfulfillable. The op itself records nothing.
-function validateCompletionOp(
-  _task: TaskDefinition,
-  _params: Record<string, unknown>,
-  ctx: OperationContext
-): OperationResult {
-  const basePath = resolveBasePath(ctx.flowConfig());
-  const cardId = ctx.instanceId;
-  const attempt = readNumber(ctx.workflowInstanceState().attempt) ?? 1;
-  const { branchPrefix, integrationBranch } = readFlowSettings(
-    ctx.flowConfig()
-  );
-  if (!branchPrefix || !integrationBranch) {
-    throw new Error(
-      "Flow config branchPrefix and integrationBranch are required"
-    );
-  }
-  const branchName = `${branchPrefix}${cardId}/attempt-${attempt}`;
-  const branchExists = gitOptional(basePath, [
-    "rev-parse",
-    "--verify",
-    "--quiet",
-    `refs/heads/${branchName}`,
-  ]);
-  if (!branchExists) {
-    throw new Error(`No work branch ${branchName} found`);
-  }
-  const aheadRaw = gitOptional(basePath, [
-    "rev-list",
-    "--count",
-    `${integrationBranch}..${branchName}`,
-  ]);
-  const commitCount = aheadRaw === "" ? 0 : Number(aheadRaw);
-  if (commitCount < 1) {
-    throw new Error(`No committed work on ${branchName}`);
-  }
-  return { ok: true, commitCount, branchName };
-}
 
 function buildReviewPackageOp(
   _task: TaskDefinition,

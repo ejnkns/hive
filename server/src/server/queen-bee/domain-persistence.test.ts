@@ -48,6 +48,25 @@ const queenBeeConfig = {
   domainDir: ".queen-bee",
 };
 
+function makeEngineRunner(
+  flowConfig: Record<string, unknown>,
+  instanceState: Record<string, unknown> = {}
+) {
+  const baseRunners = createEngineRunners({ tools: [], operations: {} });
+  return baseRunners.operationRunner({
+    flowConfig,
+    patchFlowConfig: () => {},
+    instanceId: "card-1",
+    workflowId: "cards",
+    currentState: "ready",
+    workflowInstanceState: instanceState,
+    taskOutputs: {},
+    patchWorkflowInstanceState: (patch: Record<string, unknown>) =>
+      Object.assign(instanceState, patch),
+    workflowInstancesInState: () => [],
+  } as unknown as TaskRunnerContext);
+}
+
 function makeRunner(
   flowConfig: Record<string, unknown>,
   instanceState: Record<string, unknown> = {},
@@ -217,31 +236,27 @@ describe("queen-bee domain persistence", () => {
     );
   });
 
-  it("validate_completion throws for a card with no committed work", async () => {
-    const runner = makeRunner({ ...queenBeeConfig, basePath }, { attempt: 1 });
+  it("verify_workspace (committed) throws when the branch has no work", async () => {
+    execSync("git checkout -b queen-bee/card-1/attempt-1", {
+      cwd: basePath,
+      encoding: "utf-8",
+    });
+    const runner = makeEngineRunner(
+      { ...queenBeeConfig, basePath },
+      { worktreePath: basePath, branchName: "queen-bee/card-1/attempt-1" }
+    );
 
     await assert.rejects(
-      runner.run({ ...dummyTask, operations: ["validate_completion"] }),
-      /No work branch/
+      runner.run({
+        ...dummyTask,
+        operations: ["verify_workspace"],
+        operationInputs: { require: "committed" },
+      }),
+      /No committed work/
     );
   });
 
-  it("validate_completion failure surfaces as a task error the engine counts", async () => {
-    // The op records nothing itself: the engine's per-task consecutive-error
-    // counter (exposed to gates as ctx.taskErrorCounts) bounds the retry loop,
-    // so the definition stays declarative (see the flow-level escalation test
-    // below and reduce.test.ts for the counter).
-    const instanceState: Record<string, unknown> = { attempt: 1 };
-    const runner = makeRunner({ ...queenBeeConfig, basePath }, instanceState);
-
-    await assert.rejects(
-      runner.run({ ...dummyTask, operations: ["validate_completion"] }),
-      /No work branch/
-    );
-    assert.equal(instanceState.validationFailures, undefined);
-  });
-
-  it("validate_completion accepts committed work ahead of the integration branch", async () => {
+  it("verify_workspace (committed) accepts committed work ahead of the integration branch", async () => {
     execSync("git checkout -b queen-bee/card-1/attempt-1", {
       cwd: basePath,
       encoding: "utf-8",
@@ -251,17 +266,62 @@ describe("queen-bee domain persistence", () => {
       cwd: basePath,
       encoding: "utf-8",
     });
+    const runner = makeEngineRunner(
+      { ...queenBeeConfig, basePath },
+      { worktreePath: basePath, branchName: "queen-bee/card-1/attempt-1" }
+    );
 
-    const runner = makeRunner({ ...queenBeeConfig, basePath }, { attempt: 1 });
     const result = await runner.run({
       ...dummyTask,
-      operations: ["validate_completion"],
+      operations: ["verify_workspace"],
+      operationInputs: { require: "committed" },
     });
 
     const output = result.output as { ok: boolean; commitCount: number };
     assert.equal(output.ok, true);
     assert.ok(output.commitCount >= 1);
-    assert.equal(existsSync(join(basePath, ".queen-bee", "cards")), false);
+  });
+
+  it("verify_workspace (changes) accepts uncommitted work and rejects a clean workspace", async () => {
+    execSync("git checkout -b queen-bee/card-1/attempt-1", {
+      cwd: basePath,
+      encoding: "utf-8",
+    });
+    const clean = makeEngineRunner(
+      { ...queenBeeConfig, basePath },
+      { worktreePath: basePath, branchName: "queen-bee/card-1/attempt-1" }
+    );
+    await assert.rejects(
+      clean.run({
+        ...dummyTask,
+        operations: ["verify_workspace"],
+        operationInputs: { require: "changes" },
+      }),
+      /No changes/
+    );
+
+    writeFileSync(join(basePath, "dirty.txt"), "wip\n");
+    const dirty = makeEngineRunner(
+      { ...queenBeeConfig, basePath },
+      { worktreePath: basePath, branchName: "queen-bee/card-1/attempt-1" }
+    );
+    const result = await dirty.run({
+      ...dummyTask,
+      operations: ["verify_workspace"],
+      operationInputs: { require: "changes" },
+    });
+    const output = result.output as { ok: boolean };
+    assert.equal(output.ok, true);
+  });
+
+  it("verify_workspace (none) passes without any workspace", async () => {
+    const runner = makeEngineRunner({ ...queenBeeConfig, basePath }, {});
+    const result = await runner.run({
+      ...dummyTask,
+      operations: ["verify_workspace"],
+      operationInputs: { require: "none" },
+    });
+    assert.equal((result.output as { ok: boolean }).ok, true);
   });
 
   it("submit_work acknowledges the signal without writing card events", async () => {
@@ -507,6 +567,81 @@ describe("queen-bee domain persistence", () => {
     assert.ok(
       actions?.includes("archive_card"),
       "unfulfillable exposes the archive (and remediate) actions"
+    );
+  });
+
+  it("routes an already_satisfied worker to review and done without requiring commits", async () => {
+    const workspacesBasePath = join(root, "workspaces");
+    // The worker reports the requested behavior already present (no commit
+    // created); the card must skip the commit validation, go to review, and
+    // the reviewer's approval lands it in done.
+    const satisfiedWorker = (): AiChatModelCaller => async () => ({
+      content: "Already implemented by the merged dependency",
+      toolCalls: [
+        {
+          id: "s1",
+          name: "submit_work",
+          arguments: JSON.stringify({
+            outcome: "already_satisfied",
+            noChangeRationale:
+              "Behavior already present on the integration branch",
+          }),
+        },
+      ],
+    });
+
+    const runtime = makeCardRuntime({
+      basePath,
+      workspacesBasePath,
+      workerCaller: satisfiedWorker(),
+      reviewerCaller: approvingReviewerCaller(),
+    });
+
+    const controller = runtime.addWorkflowInstance("cards", {
+      workflowInstanceState: {
+        attempt: 1,
+        cardSpec: {
+          title: "Already done",
+          description: "",
+          acceptanceCriteria: ["works"],
+          dependsOn: [],
+        },
+      },
+    });
+    controller.dispatchAction("run");
+
+    await waitFor(() => {
+      const card = runtime
+        .getWorkflowInstanceEntries()
+        .find((entry) => entry.workflowId === "cards");
+      return card?.state.currentState === "reviewed";
+    }, 15_000);
+
+    const reviewedCard = runtime
+      .getWorkflowInstanceEntries()
+      .find((entry) => entry.workflowId === "cards");
+    assert.ok(
+      reviewedCard?.availableActions.some((action) => action.id === "accept"),
+      "an already_satisfied card reaches review and exposes accept"
+    );
+    reviewedCard &&
+      runtime.getWorkflowInstance(reviewedCard.id)?.dispatchAction("accept");
+
+    await waitFor(() => {
+      const card = runtime
+        .getWorkflowInstanceEntries()
+        .find((entry) => entry.workflowId === "cards");
+      return card?.state.currentState === "done";
+    }, 15_000);
+
+    const card = runtime
+      .getWorkflowInstanceEntries()
+      .find((entry) => entry.workflowId === "cards");
+    assert.equal(card?.state.currentState, "done");
+    assert.equal(
+      card?.state.taskOutputs.validateCompletion?.status,
+      undefined,
+      "already_satisfied submissions skip the committed-work validation"
     );
   });
 

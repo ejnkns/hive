@@ -19,6 +19,7 @@ import {
   createOperationRunner,
   createStandardToolDefinitions,
   createStandardToolRegistry,
+  gitOptional,
   mergeBranch,
   prepareIsolatedWorkspace,
   readFlowSettings,
@@ -72,6 +73,75 @@ function wrapPrepareWorktree(
   // IsolatedWorkspaceResult is a plain data record; the operation runner
   // treats every operation output as Record<string, unknown>.
   return result as unknown as OperationResult;
+}
+
+// The engine's generic completion verification — the sibling of
+// prepare_worktree. It checks that the isolated workspace (whose path and
+// feature branch prepare_worktree recorded in workflowInstanceState) actually
+// accumulated the kind of work the flow requires, so a flow declares its
+// success contract instead of writing a git operation:
+//   require: "committed" (default) — the feature branch is ahead of the
+//     integration branch (real committed work).
+//   require: "changes"            — any workspace delta, committed or not.
+//   require: "none"               — always passes (the agent's word is the
+//     contract; e.g. already_satisfied submissions the reviewer will verify).
+// Throws on failure so the task errors and the flow's gates can react (bounded
+// retry, escalation). Returns the evidence on success.
+function wrapVerifyWorkspace(
+  _task: TaskDefinition,
+  params: Record<string, unknown>,
+  ctx: OperationContext
+): OperationResult {
+  const settings = readFlowSettings(ctx.flowConfig());
+  const instanceState = ctx.workflowInstanceState();
+  const workspacePath = readString(instanceState.worktreePath);
+  const branchName = readString(instanceState.branchName);
+  const require =
+    readString(params.require) === "changes"
+      ? "changes"
+      : readString(params.require) === "none"
+        ? "none"
+        : "committed";
+
+  if (require === "none") return { ok: true };
+  if (!settings.integrationBranch) {
+    throw new Error(
+      "Flow config integrationBranch is required to verify workspace work"
+    );
+  }
+  if (!workspacePath || !branchName) {
+    throw new Error(
+      "No prepared workspace recorded — run prepare_worktree before verify_workspace"
+    );
+  }
+  if (!gitRepoAvailable(workspacePath)) {
+    throw new Error(
+      "Workspace is not a git repository — verify_workspace requires a repo-bound flow"
+    );
+  }
+
+  const commitCount = Number(
+    gitOptional(workspacePath, [
+      "rev-list",
+      "--count",
+      `${settings.integrationBranch}..${branchName}`,
+    ]) || 0
+  );
+  if (require === "committed" && commitCount < 1) {
+    throw new Error(`No committed work on ${branchName}`);
+  }
+  if (require === "changes") {
+    const dirty = gitOptional(workspacePath, ["status", "--porcelain"]) !== "";
+    if (commitCount < 1 && !dirty) {
+      throw new Error(`No changes in the workspace on ${branchName}`);
+    }
+  }
+  return { ok: true, commitCount };
+}
+
+function gitRepoAvailable(workspacePath: string): boolean {
+  // gitOptional returns "" on failure; a git-dir path is non-empty.
+  return gitOptional(workspacePath, ["rev-parse", "--git-dir"]) !== "";
 }
 
 const DEFAULT_WORKSPACES_BASE_PATH = join(homedir(), ".hive", "workspaces");
@@ -275,6 +345,7 @@ export function createEngineRunners(
         getContext: () => buildOperationContext(ctx),
         operations: {
           prepare_worktree: wrapPrepareWorktree,
+          verify_workspace: wrapVerifyWorkspace,
           patch_flow_config: resolveAndPatchFlowConfig,
           commit_flow_state: commitFlowState,
           merge_branch: mergeBranch,

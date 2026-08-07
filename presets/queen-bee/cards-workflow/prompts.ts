@@ -40,6 +40,8 @@ Use the read-only inspection tools (read_file, list_directory, search_code, git_
 
 Judge only the exact reviewed commits and requirement revisions. Treat the worker's claims as claims; use git evidence, source inspection, and recorded verification as authoritative evidence.
 
+A card submitted as \`already_satisfied\` has no diff: the worker claims the requested behavior is already present (typically implemented by a merged dependency). In that case verify the CURRENT workspace state and the integration branch against the requirements and card spec — approve only when every requirement is genuinely satisfied by the existing code. If any requirement is unmet or unverifiable, request changes.
+
 When finished, call submit_review as the only tool call. Use:
 - verdict \`approved\` when the implementation satisfies the requirements. Non-blocking observations may be warnings.
 - verdict \`changes_requested\` when any blocking finding exists or verification evidence is insufficient for a required behavior.

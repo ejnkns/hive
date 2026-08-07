@@ -37,7 +37,16 @@ export type CardsTaskOutputs = {
     worktreePath: string;
     baseCommit: string;
   };
-  runAgent: { content: string };
+  runAgent: {
+    content: string;
+    // The ai-chat transcript plus the submit_work completion arguments the
+    // runner surfaces as `completion`: the worker declares whether it
+    // implemented the card or found the behavior already present.
+    completion?: {
+      outcome?: "implemented" | "already_satisfied";
+      noChangeRationale?: string;
+    };
+  };
   validateCompletion: {
     ok: boolean;
     commitCount?: number;
@@ -138,7 +147,13 @@ export const cardsWorkflow = defineWorkflow({
       worktreePath: string;
       baseCommit: string;
     },
-    runAgent: {} as { content: string },
+    runAgent: {} as {
+      content: string;
+      completion?: {
+        outcome?: "implemented" | "already_satisfied";
+        noChangeRationale?: string;
+      };
+    },
     validateCompletion: {} as {
       ok: boolean;
       commitCount?: number;
@@ -237,6 +252,15 @@ export const cardsWorkflow = defineWorkflow({
       ],
       autoTransitions: [
         {
+          // The worker reports the requested behavior already present (no
+          // commit created — nothing to validate); the reviewer verifies the
+          // claim against the requirements and the integration branch.
+          to: "reviewing",
+          gate: (ctx) =>
+            ctx.taskOutputs.runAgent?.output?.completion?.outcome ===
+            "already_satisfied",
+        },
+        {
           to: "validating",
           gate: (ctx) => ctx.taskOutputs.runAgent?.status === "success",
         },
@@ -256,7 +280,10 @@ export const cardsWorkflow = defineWorkflow({
           label: "Validate completion",
           trigger: "auto",
           role: "operation",
-          operations: ["validate_completion"],
+          // Engine-owned verification: the feature branch must be ahead of the
+          // integration branch (committed work). Declared, not coded.
+          operations: ["verify_workspace"],
+          operationInputs: { require: "committed" },
         },
       ],
       autoTransitions: [
