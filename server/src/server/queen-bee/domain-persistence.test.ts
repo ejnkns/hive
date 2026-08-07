@@ -11,7 +11,10 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { createFlowRuntime } from "workflow-engine/create-flow-runtime";
+import {
+  createFlowRuntime,
+  type FlowPersistence,
+} from "workflow-engine/create-flow-runtime";
 import {
   type AiChatModelCaller,
   type AiTaskModelCaller,
@@ -37,6 +40,7 @@ import {
   createFlow,
   getFlowPersistence,
   getFlowRuntime,
+  rehydrateFlow,
   setFlowPersistence,
 } from "../flow-registry";
 
@@ -570,6 +574,101 @@ describe("queen-bee domain persistence", () => {
     );
   });
 
+  it("persists card decisions and rehydrates them identically after a restart", async () => {
+    // The restart contract: a card driven to a real mid-lifecycle decision
+    // with the real operations is persisted, then rebuilt from disk exactly as
+    // a server restart would (rehydrateFlow). The decisions must hold — the
+    // escalation state, the engine's error counter, and the human actions.
+    // This guards the class of bugs where persisted data meets gates that
+    // assumed a different shape (name-based dependsOn, counters that were
+    // declared but never written, decisions lost on rehydrate).
+    const workspacesBasePath = join(root, "workspaces");
+    registerFlowDefinition(queenBeeFlow);
+    const persistence = createFlowPersistence(join(root, "hive"));
+
+    const lazyWorker = (): AiChatModelCaller => async () => ({
+      content: "Nothing to change",
+      toolCalls: [
+        {
+          id: "s1",
+          name: "submit_work",
+          arguments: JSON.stringify({ outcome: "implemented" }),
+        },
+      ],
+    });
+    const calmReviewer = (): AiTaskModelCaller => async () => ({
+      content: "ok",
+      toolCalls: [],
+    });
+
+    const runtime = makeCardRuntime({
+      basePath,
+      workspacesBasePath,
+      workerCaller: lazyWorker(),
+      reviewerCaller: calmReviewer(),
+      persistence,
+    });
+    // The runtime only saves flow.json on config/state patches; persist the
+    // config up front so the restart can rebuild the flow.
+    persistence.saveFlow(
+      "project",
+      {
+        definitionId: "queen-bee",
+        name: "Project",
+        basePath,
+        integrationBranch: "queen-bee-main",
+        branchPrefix: "queen-bee/",
+        domainDir: ".queen-bee",
+        workspacesBasePath,
+      },
+      {}
+    );
+
+    const controller = runtime.addWorkflowInstance("cards", {
+      workflowInstanceState: {
+        attempt: 1,
+        cardSpec: {
+          title: "Stuck card",
+          description: "",
+          acceptanceCriteria: ["works"],
+          dependsOn: [],
+        },
+      },
+    });
+    controller.dispatchAction("run");
+
+    await waitFor(() => {
+      const card = runtime
+        .getWorkflowInstanceEntries()
+        .find((entry) => entry.workflowId === "cards");
+      return card?.state.currentState === "unfulfillable";
+    }, 15_000);
+
+    const persisted = persistence.loadFlow("project");
+    assert.ok(persisted, "the driven card is on disk");
+    const rehydrated = await rehydrateFlow(
+      persistence,
+      "project",
+      persisted.config,
+      persisted.state,
+      persisted.instances
+    );
+    assert.ok(rehydrated);
+
+    const card = rehydrated
+      .getWorkflowInstanceEntries()
+      .find((entry) => entry.workflowId === "cards");
+    assert.equal(card?.state.currentState, "unfulfillable");
+    assert.ok(
+      (card?.state.taskErrorCounts?.validateCompletion ?? 0) >= 3,
+      "the engine's error counter survived persistence"
+    );
+    assert.ok(
+      card?.availableActions.some((action) => action.id === "archive_card"),
+      "the human escalation actions survived rehydration"
+    );
+  });
+
   it("routes an already_satisfied worker to review and done without requiring commits", async () => {
     const workspacesBasePath = join(root, "workspaces");
     // The worker reports the requested behavior already present (no commit
@@ -853,6 +952,7 @@ function makeCardRuntime(options: {
   workspacesBasePath: string;
   workerCaller: AiChatModelCaller;
   reviewerCaller: AiTaskModelCaller;
+  persistence?: FlowPersistence;
 }): ReturnType<typeof createFlowRuntime> {
   const flowConfig = {
     definitionId: "queen-bee",
@@ -894,7 +994,9 @@ function makeCardRuntime(options: {
           workflowInstanceState: ctx.workflowInstanceState,
         }),
     },
-    flowConfig
+    flowConfig,
+    {},
+    options.persistence
   );
 }
 
