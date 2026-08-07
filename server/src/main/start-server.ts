@@ -1,4 +1,5 @@
 import { printBanner } from "shared/ascii-banner";
+import { logger } from "shared/logger";
 import { getServerConfig, type ServerConfig } from "shared/server-config";
 import {
   createServer,
@@ -74,9 +75,30 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.on(signal, () => {
       shutdown();
+      // Bound the graceful close: Fastify's close() waits for open
+      // connections, and in the dev loop a browser WS/SSE would keep the
+      // dying process alive and wedge the port for the rebuilt server.
+      const deadline = setTimeout(() => process.exit(0), 3_000);
+      deadline.unref();
       server.close(() => process.exit(0));
+      server.server.closeIdleConnections();
     });
   }
+
+  // A dev server that dies silently is undiagnosable. Log async failures
+  // instead of letting Node's default crash-and-print-nothing behavior take
+  // over: unhandled rejections are logged and the server keeps running;
+  // uncaught exceptions are logged before the process exits.
+  process.on("unhandledRejection", (reason) => {
+    logger.error(
+      "Unhandled promise rejection — server continues",
+      reason instanceof Error ? reason : new Error(String(reason))
+    );
+  });
+  process.on("uncaughtException", (err) => {
+    logger.error("Uncaught exception — server exiting", err);
+    process.exit(1);
+  });
 
   return { server };
 }

@@ -171,6 +171,12 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
 
       const passThrough = new PassThrough();
       downstreamStream = passThrough;
+      // The downstream stream is handed to consumers that may destroy it
+      // mid-stream (a client disconnect aborts the request and destroys the
+      // pipe). A write to a destroyed stream emits an 'error' — with no
+      // listener that event is unhandled and kills the process. Swallow it:
+      // the abort path already resolves/rejects the caller.
+
       let ttft = timeoutMs;
       let initialByteReceived = false;
       let streamErrored = false;
@@ -220,6 +226,9 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
         initialByteReceived = true;
 
         const { transform } = counter;
+        // Same hygiene as the passThrough: if the downstream is destroyed
+        // mid-stream (client abort), the transform must not surface an
+        // unhandled 'error' from the broken pipe.
         transform.write(chunk);
         res.pipe(transform);
         transform.pipe(passThrough);
