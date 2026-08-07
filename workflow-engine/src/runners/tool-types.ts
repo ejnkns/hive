@@ -76,7 +76,8 @@ export type InfrastructureToolName =
   | "git_log"
   | "git_show"
   | "commit_work"
-  | "create_instance";
+  | "create_instance"
+  | "complete_task";
 
 // A self-contained tool: the schema the model is offered plus the executor
 // that implements it. The engine never interprets a Tool's meaning — it

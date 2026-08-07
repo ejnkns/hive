@@ -101,6 +101,57 @@ describe("createAiChatRunner", () => {
     assert.equal((result.output as { content: string }).content, "Submitting");
   });
 
+  it("surfaces the completion tool arguments for gates", async () => {
+    const runner = createAiChatRunner({
+      modelCaller: mockCaller([
+        {
+          content: "Already there",
+          toolCalls: [
+            {
+              id: "c1",
+              name: "complete_task",
+              arguments: JSON.stringify({
+                outcome: "already_satisfied",
+                rationale: "nothing to do",
+              }),
+            },
+          ],
+        },
+      ]),
+      toolDefinitions: {},
+      toolExecutors: {},
+    });
+
+    const result = await runner.run({
+      ...dummyTask,
+      completionTool: "complete_task",
+    });
+    const output = result.output as {
+      completion?: { outcome?: string };
+    };
+    assert.equal(output.completion?.outcome, "already_satisfied");
+  });
+
+  it("degrades to the transcript when completion arguments are malformed", async () => {
+    const runner = createAiChatRunner({
+      modelCaller: mockCaller([
+        {
+          content: "Submitting",
+          toolCalls: [{ id: "c1", name: "submit_work", arguments: "not json" }],
+        },
+      ]),
+      toolDefinitions: {},
+      toolExecutors: {},
+    });
+
+    const result = await runner.run({
+      ...dummyTask,
+      completionTool: "submit_work",
+    });
+    const output = result.output as { completion?: Record<string, unknown> };
+    assert.equal(output.completion?.outcome, undefined);
+  });
+
   it("resolves an @instance workspacePath ref so tools operate in the instance workspace", async () => {
     const worktree = tempDir();
     const toolDefs = createStandardToolDefinitions();

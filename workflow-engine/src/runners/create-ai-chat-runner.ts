@@ -107,11 +107,21 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
       config.patchRunningTaskMessages?.(messages);
 
       if (isComplete(task, response.content, response.toolCalls)) {
+        const completionCall = response.toolCalls?.find(
+          (call) => call.name === (task.completionTool ?? config.completionTool)
+        );
         return {
           output: {
             content: response.content,
             messages,
             toolCalls: response.toolCalls,
+            // The completion tool's parsed arguments, surfaced for gates (e.g.
+            // outcome: "already_satisfied" routes a card to review instead of
+            // requiring committed work). Malformed arguments degrade to the
+            // plain transcript rather than failing the session.
+            ...(completionCall
+              ? { completion: safeParseArguments(completionCall.arguments) }
+              : {}),
           },
         };
       }
@@ -222,4 +232,18 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
       turnResolve = null;
     },
   };
+}
+
+// Parses a completion tool's arguments into a plain record; returns {} when
+// the arguments are not valid JSON so a malformed completion never fails the
+// session (the transcript still carries the completion).
+function safeParseArguments(argumentsText: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(argumentsText) as unknown;
+    return parsed !== null && typeof parsed === "object"
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
 }

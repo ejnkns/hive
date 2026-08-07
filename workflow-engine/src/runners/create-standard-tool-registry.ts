@@ -5,6 +5,10 @@ import {
   execute as commitWorkExec,
 } from "./create-standard-tool-registry/commit-work";
 import {
+  definition as completeTaskDef,
+  execute as completeTaskExec,
+} from "./create-standard-tool-registry/complete-task";
+import {
   definition as createInstanceDef,
   execute as createInstanceExec,
 } from "./create-standard-tool-registry/create-instance";
@@ -66,6 +70,7 @@ export function createStandardToolDefinitions(): Record<
     git_show: gitShowDef,
     commit_work: commitWorkDef,
     create_instance: createInstanceDef,
+    complete_task: completeTaskDef,
   };
 }
 
@@ -85,5 +90,6 @@ export function createStandardToolRegistry(): Record<
     git_show: gitShowExec,
     commit_work: commitWorkExec,
     create_instance: createInstanceExec,
+    complete_task: completeTaskExec,
   };
 }
