@@ -2,15 +2,15 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { wayfinderFlow } from "../../../../presets/wayfinder/flow";
-import { registerFlowDefinition } from "../flow-definitions";
+import { wayfinderFlow } from "../../../../../presets/wayfinder/flow";
+import { registerFlowDefinition } from "../../flow-definitions";
 import {
   dispatchFlowLevelAction,
   type FlowLevelActionDispatchResult,
   getAvailableFlowActions,
   registerFlowForTest,
   resetFlowRuntimesForTest,
-} from "../flow-registry";
+} from "../../flow-registry";
 import {
   chartingCaller,
   idleModelCaller,

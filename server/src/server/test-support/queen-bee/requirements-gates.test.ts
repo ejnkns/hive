@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { getAvailableActions } from "workflow-engine/get-available-actions";
 import type { RuntimeWorkflowInstanceState } from "workflow-engine/shared/workflow-instance-state";
-import { requirementsWorkflow } from "../../../../presets/queen-bee/requirements-workflow";
+import { requirementsWorkflow } from "../../../../../presets/queen-bee/requirements-workflow";
 
 function planningState(
   overrides: Partial<RuntimeWorkflowInstanceState>

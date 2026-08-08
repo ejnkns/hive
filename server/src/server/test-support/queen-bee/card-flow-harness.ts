@@ -19,8 +19,8 @@ import {
 import {
   queenBeeFlow,
   queenBeeOperations,
-} from "../../../../presets/queen-bee/flow";
-import { createEngineRunners } from "../engine-bridge";
+} from "../../../../../presets/queen-bee/flow";
+import { createEngineRunners } from "../../engine-bridge";
 
 export type CardFlowOptions = {
   basePath: string;

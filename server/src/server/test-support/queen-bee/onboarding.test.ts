@@ -11,14 +11,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import type { FlowPersistence } from "workflow-engine/create-flow-runtime";
-import { queenBeeFlow } from "../../../../presets/queen-bee/flow";
-import { registerFlowDefinition } from "../flow-definitions";
-import { createFlowPersistence } from "../flow-persistence";
+import { queenBeeFlow } from "../../../../../presets/queen-bee/flow";
+import { registerFlowDefinition } from "../../flow-definitions";
+import { createFlowPersistence } from "../../flow-persistence";
 import {
   createFlow,
   getFlowRuntime,
   setFlowPersistence,
-} from "../flow-registry";
+} from "../../flow-registry";
 
 describe("queen-bee onboarding workflow", () => {
   let root: string;
