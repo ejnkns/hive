@@ -61,10 +61,11 @@ const scenarios: Scenario[] = [
     requiredAction: "archive_card",
   },
   {
-    name: "a rejected claim returns to the worker (reviewed → changes requested)",
+    name: "a rejected claim waits for the human in reviewed (changes requested)",
     worker: honestWorker(),
     reviewer: rejectingReviewer(),
-    terminal: "in_progress",
+    terminal: "reviewed",
+    requiredAction: "new_changes",
   },
 ];
 
