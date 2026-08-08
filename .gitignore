@@ -8,9 +8,6 @@ contexts/
 *.md
 !README.md
 !CONTRIBUTING.md
-!ARCHITECTURE.md
-!implementation-gaps.md
-!HANDOFF.md
 repomix-output.xml
 vault
 docs/
