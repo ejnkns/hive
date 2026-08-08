@@ -48,6 +48,20 @@ export type FlowDefinitionSummary = {
   description?: string;
   builtIn: boolean;
   configSchema: ConfigField[];
+  // Schema-consistency findings from the save path (non-blocking; the
+  // definition is saved regardless — these annotate it for the author).
+  checkWarnings?: string[];
+  checkErrors?: string[];
+};
+
+// The AI generation loop's outcome: whether the rendered definition passed
+// the gate (transpile + schema-consistency + typecheck), how many attempts it
+// took, and the final findings. `errors` are non-empty only when !passed.
+export type GenerationReport = {
+  passed: boolean;
+  attempts: number;
+  errors: string[];
+  warnings: string[];
 };
 
 export type FlowDefinitionDetail = FlowDefinitionSummary & {
@@ -224,7 +238,7 @@ export async function deleteFlowDefinition(id: string): Promise<void> {
 
 export async function generateFlowDefinition(
   prompt: string
-): Promise<{ source: string }> {
+): Promise<{ source: string; report: GenerationReport }> {
   const res = await fetch("/api/flows/definitions/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -238,7 +252,7 @@ export async function generateFlowDefinition(
     );
   }
   // Success response shape is guaranteed by the server endpoint
-  return (await res.json()) as { source: string };
+  return (await res.json()) as { source: string; report: GenerationReport };
 }
 
 export async function fetchFlowInstances(

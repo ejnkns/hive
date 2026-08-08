@@ -25,6 +25,7 @@ import {
 import { generateFlowDefinitionSource } from "./generate-flow-definition";
 import { HttpError } from "./http-error";
 import { computeInstanceStatus } from "./instance-status";
+import { checkDefinitionSources } from "./schema-consistency";
 
 export function registerFlowApiRoutes(server: FastifyInstance): void {
   // ── REST endpoints ──
@@ -332,8 +333,10 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
     }
 
     try {
-      const source = await generateFlowDefinitionSource(prompt.trim());
-      return reply.send({ source });
+      const { source, report } = await generateFlowDefinitionSource(
+        prompt.trim()
+      );
+      return reply.send({ source, report });
     } catch (err) {
       return reply.status(400).send({
         error: err instanceof Error ? err.message : "Generation failed",
@@ -361,12 +364,20 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
         description,
         source,
       });
+      const check = checkDefinitionSources([
+        { path: `${record.id}.ts`, source },
+      ]);
       return reply.status(201).send({
         ok: true,
         id: record.id,
         name: record.name,
         builtIn: record.builtIn,
         configSchema: record.configSchema,
+        // Non-blocking: the definition loads and runs; these are the
+        // schema-consistency findings (e.g. a gate reading a never-written
+        // field) the editor surfaces for the author to fix.
+        checkWarnings: check.warnings,
+        checkErrors: check.errors,
       });
     } catch (err) {
       if (err instanceof DefinitionAlreadyExistsError) {
@@ -400,12 +411,17 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
         description,
         source,
       });
+      const check = checkDefinitionSources([
+        { path: `${record.id}.ts`, source },
+      ]);
       return reply.send({
         ok: true,
         id: record.id,
         name: record.name,
         builtIn: record.builtIn,
         configSchema: record.configSchema,
+        checkWarnings: check.warnings,
+        checkErrors: check.errors,
       });
     } catch (err) {
       if (err instanceof Error && err.message.includes("not found")) {

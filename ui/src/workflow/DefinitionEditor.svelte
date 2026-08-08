@@ -10,6 +10,7 @@ import {
   createFlowDefinition,
   deleteFlowDefinition,
   fetchFlowDefinition,
+  type GenerationReport,
   generateFlowDefinition,
   updateFlowDefinition,
 } from "./flow-api";
@@ -58,6 +59,13 @@ let error = $state<string | null>(null);
 let aiOpen = $state(true);
 let aiPrompt = $state("");
 let deleteOpen = $state(false);
+// The last generation's gate outcome (errors = why the definition still
+// fails the schema/typecheck gate; the source is still loaded for editing).
+let generationReport = $state<GenerationReport | null>(null);
+// Schema-consistency findings from the save path (non-blocking annotation).
+let checkFindings = $state<{ errors: string[]; warnings: string[] } | null>(
+  null
+);
 
 let nameWarning = $derived.by(() => {
   if (name.trim() !== "" && slugify(name.trim()) === "new") {
@@ -151,7 +159,16 @@ async function save() {
     const result = isNew
       ? await createFlowDefinition({ name: name.trim(), description, source })
       : await updateDefinition(definitionId);
-    window.location.hash = `#/flows/${encodeURIComponent(result.id)}`;
+    // The definition IS saved. Consistency errors/warnings annotate it —
+    // stay in the editor so the author sees them; navigate when clean.
+    const errors = result.checkErrors ?? [];
+    const warnings = result.checkWarnings ?? [];
+    if (errors.length > 0 || warnings.length > 0) {
+      checkFindings = { errors, warnings };
+    } else {
+      checkFindings = null;
+      window.location.hash = `#/flows/${encodeURIComponent(result.id)}`;
+    }
   } catch (err) {
     error = err instanceof Error ? err.message : "Failed to save definition";
   } finally {
@@ -174,9 +191,11 @@ async function generate() {
   if (!aiPrompt.trim()) return;
   generating = true;
   error = null;
+  generationReport = null;
   try {
     const result = await generateFlowDefinition(aiPrompt.trim());
     source = result.source;
+    generationReport = result.report;
   } catch (err) {
     error =
       err instanceof Error ? err.message : "Failed to generate definition";
@@ -278,6 +297,40 @@ async function remove() {
             >
               {generating ? "Generating..." : "Generate"}
             </Button>
+            {#if generationReport}
+              <div class="report">
+                {#if generationReport.passed}
+                  <p class="report-ok">
+                    Definition passed the gate ({generationReport.attempts}
+                    attempt
+                    {#if generationReport.attempts !== 1}
+                      s
+                    {/if}
+                    ) — typecheck and schema-consistency are clean.
+                  </p>
+                {:else}
+                  <p class="report-bad">
+                    Definition failed the gate after
+                    {generationReport.attempts}
+                    attempts. It was loaded for editing, but these issues
+                    remain:
+                  </p>
+                  <ul class="report-list">
+                    {#each generationReport.errors as err}
+                      <li>{err}</li>
+                    {/each}
+                  </ul>
+                {/if}
+                {#if generationReport.warnings.length > 0}
+                  <p class="report-warn-head">Warnings:</p>
+                  <ul class="report-list">
+                    {#each generationReport.warnings as w}
+                      <li>{w}</li>
+                    {/each}
+                  </ul>
+                {/if}
+              </div>
+            {/if}
           </div>
         {/if}
       </div>
@@ -303,6 +356,32 @@ async function remove() {
         {/if}
       </div>
     </div>
+
+    {#if checkFindings}
+      <div class="report save-findings">
+        <p class="report-bad">Definition saved. Schema-consistency findings:</p>
+        {#if checkFindings.errors.length > 0}
+          <p class="report-warn-head">Errors:</p>
+          <ul class="report-list">
+            {#each checkFindings.errors as e}
+              <li>{e}</li>
+            {/each}
+          </ul>
+        {/if}
+        {#if checkFindings.warnings.length > 0}
+          <p class="report-warn-head">Warnings:</p>
+          <ul class="report-list">
+            {#each checkFindings.warnings as w}
+              <li>{w}</li>
+            {/each}
+          </ul>
+        {/if}
+        <p class="report-note">
+          The definition is saved and usable; fix the findings to keep the
+          schema contract clean, then save again to continue.
+        </p>
+      </div>
+    {/if}
 
     <div class="footer">
       <div class="footer-actions">
@@ -496,6 +575,48 @@ h1 {
   font-size: 0.75rem;
   margin-top: 0.5rem;
   white-space: pre-wrap;
+}
+
+.report {
+  background: rgba(250, 200, 60, 0.06);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.625rem 0.75rem;
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.report-ok {
+  color: var(--success);
+  margin: 0;
+}
+
+.report-bad {
+  color: var(--warning);
+  margin: 0 0 0.25rem 0;
+  font-weight: 600;
+}
+
+.report-warn-head {
+  margin: 0.5rem 0 0.125rem 0;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.report-list {
+  margin: 0;
+  padding-left: 1.125rem;
+}
+
+.report-note {
+  margin: 0.5rem 0 0 0;
+  font-style: italic;
+}
+
+.save-findings {
+  margin-top: 1rem;
 }
 
 .footer {

@@ -319,8 +319,10 @@ function nextImportNonce(): string {
 }
 
 // Resolves server/.runtime/ relative to the server package root so it works
-// both from source (dev/tests) and from the bundled dist.
-function runtimeDefinitionsDir(): string {
+// both from source (dev/tests) and from the bundled dist. Exported so the
+// per-definition typechecker materializes the same working copies the loader
+// imports.
+export function runtimeDefinitionsDir(): string {
   return join(findServerPackageRoot(), ".runtime", "definitions");
 }
 

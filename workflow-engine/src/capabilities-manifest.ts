@@ -144,3 +144,96 @@ export const engineCapabilities = {
 } as const;
 
 export type EngineCapabilities = typeof engineCapabilities;
+
+// ─── authoring guide ──────────────────────────────────────────────────
+//
+// The manifest serialized for model prompts: the free surface an AI (or
+// human) reads to author a flow definition without reading the engine source.
+// Derived from the manifest itself so the prompt cannot drift from the
+// implementation — a guard test asserts every op name, state field, and
+// infrastructure tool name appears in the output.
+
+export function authoringGuide(): string {
+  const lines: string[] = [];
+  const push = (text = "") => lines.push(text);
+
+  push("HIVE WORKFLOW ENGINE — CAPABILITIES A FLOW GETS FOR FREE");
+  push(
+    "A flow definition declares only its domain. Everything listed here is generic engine machinery a flow uses by name. Engine-provided state fields need no flow writer; engine-read state fields must be declared and written by the flow."
+  );
+  push();
+
+  push("## Task roles (a task's `role`)");
+  for (const role of engineCapabilities.taskRoles) {
+    push(`- ${role}`);
+  }
+  push();
+
+  push("## How a task ends (completion contracts)");
+  for (const contract of engineCapabilities.completionContracts) {
+    push(`- ${contract.name} — ${contract.description}`);
+  }
+  push();
+
+  push("## Declarative output persistence (task `persist: { path }`)");
+  push(
+    `- path templates: ${engineCapabilities.persistence.pathTemplates.join(", ")}`
+  );
+  push(`- format inference: ${engineCapabilities.persistence.formatInference}`);
+  push();
+
+  push("## Error bookkeeping (gates read `ctx.taskErrorCounts`)");
+  push(
+    `- ${engineCapabilities.errorBookkeeping.name} — ${engineCapabilities.errorBookkeeping.description}`
+  );
+  push();
+
+  push("## Cross-instance capabilities (gates and ops)");
+  for (const item of engineCapabilities.crossInstance) push(`- ${item}`);
+  push();
+
+  push("## Engine-provided state fields (no flow writer needed)");
+  for (const [name, description] of Object.entries(
+    engineCapabilities.stateFields.engineProvided
+  )) {
+    push(`- ${name} — ${description}`);
+  }
+  push();
+
+  push(
+    "## Engine-read state fields (must be declared and written by the flow)"
+  );
+  for (const [name, description] of Object.entries(
+    engineCapabilities.stateFields.engineRead
+  )) {
+    push(`- ${name} — ${description}`);
+  }
+  push();
+
+  push(
+    "## Infrastructure tools (offered to every flow's agents; a task's `tools` lists the names)"
+  );
+  for (const tool of engineCapabilities.infrastructureTools) {
+    push(`- ${tool.name} — ${tool.description}`);
+  }
+  push();
+
+  push(
+    "## Engine operations (resolved by name; a task's `operations` lists the names)"
+  );
+  for (const op of engineCapabilities.engineOperations) {
+    const reads =
+      op.reads.length > 0 ? ` reads: ${op.reads.join(", ")}` : " reads: none";
+    const writes =
+      op.writes.length > 0
+        ? `; writes: ${op.writes.join(", ")}`
+        : "; writes: none";
+    push(`- ${op.name} — ${op.description}${reads}${writes}`);
+  }
+  push();
+
+  push("## Render kinds (a task's `render` hint)");
+  push(`- ${engineCapabilities.renderKinds.join(", ")}`);
+
+  return lines.join("\n");
+}

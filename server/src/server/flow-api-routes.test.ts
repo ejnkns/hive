@@ -800,6 +800,66 @@ describe("flow API routes", () => {
     assert.equal(listed.name, "Custom Flow");
   });
 
+  it("POST /api/flows/definitions annotates (does not block) schema-consistency findings", async () => {
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    // A definition that loads fine but has a gate reading a field nothing
+    // ever writes — the check's motivating error class.
+    const inconsistentSource = `
+import { defineWorkflow } from "workflow-engine/workflow-types";
+
+type BadState = {
+  verdict?: string;
+};
+
+const wf = defineWorkflow({
+  id: "bad",
+  label: "Bad",
+  taskOutputs: {} as Record<string, never>,
+  workflowInstanceState: {} as BadState,
+  states: [
+    {
+      id: "pending",
+      label: "Pending",
+      category: "initial",
+      autoTransitions: [
+        {
+          to: "done",
+          gate: (ctx) => ctx.workflowInstanceState.missingField === "x",
+        },
+      ],
+    },
+    { id: "done", label: "Done", category: "terminal" },
+  ],
+  initial: "pending",
+  terminalStates: ["done"],
+});
+
+export const flow = {
+  id: "inconsistent-flow",
+  label: "Inconsistent Flow",
+  workflows: [wf],
+  edges: [],
+};
+`;
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions",
+      body: { name: "Inconsistent Flow", source: inconsistentSource },
+    });
+
+    // Saved despite the findings — the annotation is non-blocking.
+    assert.equal(response.statusCode, 201);
+    const json = response.json() as { checkErrors?: string[] };
+    assert.ok(
+      (json.checkErrors ?? []).some((e) => e.includes("reads with no writer")),
+      `expected a read-with-no-writer annotation, got: ${json.checkErrors?.join("; ")}`
+    );
+  });
+
   it("POST /api/flows/definitions returns 400 for invalid TS source", async () => {
     const server = Fastify();
     servers.push(server);
