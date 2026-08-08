@@ -16,10 +16,23 @@
 // produce. A third preset or a saved user flow cannot silently escape.
 
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import {
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { describe, it } from "node:test";
+import { afterEach, beforeEach, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
+import {
+  listRegisteredDefinitions,
+  registerUserDefinition,
+  resetFlowDefinitionsForTest,
+  setDefinitionsBasePathForTest,
+} from "./flow-definitions";
 import { checkDefinitionSources } from "./schema-consistency";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -256,6 +269,119 @@ export const flow = {
           e.includes("missing workflowInstanceState anchor")
         ),
         `expected an anchor error, got: ${report.errors.join("; ")}`
+      );
+    });
+  });
+
+  describe("registered user definitions", () => {
+    // The registry path: a saved user definition's source is checked when it
+    // is registered — the same sources the save route annotates. A user flow
+    // cannot silently escape the check.
+    let baseDir: string;
+
+    // A minimal clean single-file definition (one workflow, no state).
+    const REGISTERED_GOOD = `
+import { defineWorkflow } from "workflow-engine/workflow-types";
+
+const wf = defineWorkflow({
+  id: "registered",
+  label: "Registered",
+  taskOutputs: {} as Record<string, never>,
+  workflowInstanceState: {} as Record<string, unknown>,
+  states: [
+    { id: "pending", label: "Pending", category: "initial" },
+    { id: "done", label: "Done", category: "terminal" },
+  ],
+  initial: "pending",
+  terminalStates: ["done"],
+});
+
+export const flow = {
+  id: "registered-flow",
+  label: "Registered Flow",
+  workflows: [wf],
+  edges: [],
+};
+`;
+
+    beforeEach(() => {
+      baseDir = mkdtempSync(join(tmpdir(), "hive-defs-check-"));
+      setDefinitionsBasePathForTest(baseDir);
+      resetFlowDefinitionsForTest();
+    });
+
+    afterEach(() => {
+      rmSync(baseDir, { recursive: true, force: true });
+      resetFlowDefinitionsForTest();
+    });
+
+    it("reports findings for every registered user definition source", async () => {
+      await registerUserDefinition({
+        name: "Registered Flow",
+        source: REGISTERED_GOOD,
+      });
+      // A gate reading a field nothing writes — the check's motivating error
+      // class, in the exact shape a saved user definition can take.
+      const inconsistent = `
+import { defineWorkflow } from "workflow-engine/workflow-types";
+
+type BadState = { missingField?: string };
+
+const wf = defineWorkflow({
+  id: "inconsistent",
+  label: "Inconsistent",
+  taskOutputs: {} as Record<string, never>,
+  workflowInstanceState: {} as BadState,
+  states: [
+    {
+      id: "pending",
+      label: "Pending",
+      category: "initial",
+      autoTransitions: [
+        {
+          to: "done",
+          gate: (ctx) => ctx.workflowInstanceState.missingField === "x",
+        },
+      ],
+    },
+    { id: "done", label: "Done", category: "terminal" },
+  ],
+  initial: "pending",
+  terminalStates: ["done"],
+});
+
+export const flow = {
+  id: "inconsistent-flow",
+  label: "Inconsistent Flow",
+  workflows: [wf],
+  edges: [],
+};
+`;
+      await registerUserDefinition({
+        name: "Inconsistent Flow",
+        source: inconsistent,
+      });
+
+      const userDefinitions = listRegisteredDefinitions().filter(
+        (d) => !d.builtIn && d.source !== undefined
+      );
+      assert.equal(userDefinitions.length, 2);
+
+      const report = checkDefinitionSources(
+        userDefinitions.map((d) => ({
+          path: `${d.id}.ts`,
+          source: d.source as string,
+        }))
+      );
+
+      const registeredFlow = report.workflows.find(
+        (w) => w.workflowId === "registered" && w.errors.length === 0
+      );
+      assert.ok(registeredFlow, "the clean definition reports no errors");
+
+      assert.ok(
+        report.errors.some((e) => e.includes("reads with no writer")),
+        `expected the inconsistent flow's finding, got: ${report.errors.join("; ")}`
       );
     });
   });

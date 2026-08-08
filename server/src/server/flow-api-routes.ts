@@ -7,6 +7,7 @@ import {
   getFlowDefinition,
   getRegisteredFlowDefinition,
   listRegisteredDefinitions,
+  loadDefinitionFromSource,
   registerUserDefinition,
   updateUserDefinition,
 } from "./flow-definitions";
@@ -26,6 +27,7 @@ import { generateFlowDefinitionSource } from "./generate-flow-definition";
 import { HttpError } from "./http-error";
 import { computeInstanceStatus } from "./instance-status";
 import { checkDefinitionSources } from "./schema-consistency";
+import { typecheckDefinitionSource } from "./typecheck-definition";
 
 export function registerFlowApiRoutes(server: FastifyInstance): void {
   // ── REST endpoints ──
@@ -342,6 +344,37 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
         error: err instanceof Error ? err.message : "Generation failed",
       });
     }
+  });
+
+  server.post("/api/flows/definitions/validate", async (request, reply) => {
+    // Fastify body is unknown; validated below
+    const body = request.body as { source?: string } | null;
+    const source = body?.source;
+    if (typeof source !== "string" || source.trim() === "") {
+      return reply.status(400).send({ error: "source is required" });
+    }
+
+    // The same gate generation runs, without registering anything: transpile
+    // + load, the schema-consistency check, and the per-definition typecheck.
+    try {
+      await loadDefinitionFromSource("__validate__", source);
+    } catch (err) {
+      return reply.send({
+        ok: false,
+        loadError: err instanceof Error ? err.message : String(err),
+        checkErrors: [],
+        checkWarnings: [],
+        typeErrors: [],
+      });
+    }
+    const check = checkDefinitionSources([{ path: "validated.ts", source }]);
+    const typeErrors = typecheckDefinitionSource(source, "__validate__");
+    return reply.send({
+      ok: check.errors.length === 0 && typeErrors.length === 0,
+      checkErrors: check.errors,
+      checkWarnings: check.warnings,
+      typeErrors,
+    });
   });
 
   server.post("/api/flows/definitions", async (request, reply) => {

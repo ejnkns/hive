@@ -32,6 +32,7 @@ import {
   resetFlowRuntimesForTest,
   setFlowPersistence,
 } from "./flow-registry";
+import { setGenerationModelCallerForTest } from "./generate-flow-definition";
 
 const testWorkflow = defineWorkflow({
   id: "test-wf",
@@ -217,6 +218,7 @@ describe("flow API routes", () => {
 
   afterEach(async () => {
     await Promise.all(servers.splice(0).map((s) => s.close()));
+    setGenerationModelCallerForTest(undefined);
   });
 
   it("GET /api/flows returns flows with definitions and instances", async () => {
@@ -755,6 +757,67 @@ describe("flow API routes", () => {
     ws.close();
   });
 
+  it("POST /api/flows/definitions/generate returns source + report through the loop", async () => {
+    // A stubbed model: the route reaches the loop through the seam.
+    const validSpec = {
+      id: "routeFlow",
+      label: "Route Flow",
+      configSchema: [],
+      workflows: [
+        {
+          id: "route",
+          label: "Route",
+          instanceState: [],
+          initialState: "idle",
+          terminalStates: ["done"],
+          states: [
+            {
+              id: "idle",
+              label: "Idle",
+              category: "initial",
+              actions: [
+                {
+                  id: "start",
+                  label: "Start",
+                  variant: "primary",
+                  transitionTo: "done",
+                },
+              ],
+            },
+            { id: "done", label: "Done", category: "terminal" },
+          ],
+        },
+      ],
+      edges: [],
+    };
+    setGenerationModelCallerForTest(async () => {
+      return `\`\`\`json\n${JSON.stringify(validSpec)}\n\`\`\``;
+    });
+
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions/generate",
+      body: { prompt: "a simple two-state flow" },
+    });
+
+    assert.equal(response.statusCode, 200);
+    const json = response.json() as {
+      source: string;
+      report: { passed: boolean; attempts: number; errors: string[] };
+    };
+    assert.ok(
+      json.source.includes("defineWorkflow"),
+      "expected a rendered definition source"
+    );
+    assert.equal(json.report.passed, true);
+    assert.equal(json.report.attempts, 1);
+    assert.deepEqual(json.report.errors, []);
+  });
+
   it("POST /api/flows/definitions/generate requires a prompt", async () => {
     const server = Fastify();
     servers.push(server);
@@ -858,6 +921,63 @@ export const flow = {
       (json.checkErrors ?? []).some((e) => e.includes("reads with no writer")),
       `expected a read-with-no-writer annotation, got: ${json.checkErrors?.join("; ")}`
     );
+  });
+
+  it("POST /api/flows/definitions/validate gates without registering", async () => {
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    // A clean single-file definition: loads, typechecks, holds the contract.
+    const cleanSource = `
+import { defineWorkflow } from "workflow-engine/workflow-types";
+
+const wf = defineWorkflow({
+  id: "clean",
+  label: "Clean",
+  taskOutputs: {} as Record<string, never>,
+  workflowInstanceState: {} as Record<string, unknown>,
+  states: [
+    { id: "pending", label: "Pending", category: "initial" },
+    { id: "done", label: "Done", category: "terminal" },
+  ],
+  initial: "pending",
+  terminalStates: ["done"],
+});
+
+export const flow = {
+  id: "clean-flow",
+  label: "Clean Flow",
+  workflows: [wf],
+  edges: [],
+};
+`;
+
+    const good = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions/validate",
+      body: { source: cleanSource },
+    });
+    assert.equal(good.statusCode, 200);
+    const goodJson = good.json() as {
+      ok: boolean;
+      checkErrors: string[];
+      typeErrors: unknown[];
+    };
+    assert.equal(goodJson.ok, true);
+    assert.deepEqual(goodJson.checkErrors, []);
+    assert.deepEqual(goodJson.typeErrors, []);
+
+    // A source that fails to transpile reports a load error, not a crash.
+    const broken = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions/validate",
+      body: { source: "export const flow = {" },
+    });
+    assert.equal(broken.statusCode, 200);
+    const brokenJson = broken.json() as { ok: boolean; loadError?: string };
+    assert.equal(brokenJson.ok, false);
+    assert.ok(typeof brokenJson.loadError === "string");
   });
 
   it("POST /api/flows/definitions returns 400 for invalid TS source", async () => {

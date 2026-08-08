@@ -13,6 +13,7 @@ import {
   type GenerationReport,
   generateFlowDefinition,
   updateFlowDefinition,
+  validateFlowDefinition,
 } from "./flow-api";
 
 let {
@@ -54,6 +55,7 @@ let source = $state(defaultTemplate);
 let isBuiltIn = $state(false);
 let loading = $state(false);
 let saving = $state(false);
+let validating = $state(false);
 let generating = $state(false);
 let error = $state<string | null>(null);
 let aiOpen = $state(true);
@@ -62,10 +64,19 @@ let deleteOpen = $state(false);
 // The last generation's gate outcome (errors = why the definition still
 // fails the schema/typecheck gate; the source is still loaded for editing).
 let generationReport = $state<GenerationReport | null>(null);
-// Schema-consistency findings from the save path (non-blocking annotation).
-let checkFindings = $state<{ errors: string[]; warnings: string[] } | null>(
-  null
-);
+// Findings from the save path or the validate button (non-blocking).
+type CheckFindings = {
+  errors: string[];
+  warnings: string[];
+  typeErrors?: {
+    code: number;
+    message: string;
+    line: number;
+    column: number;
+  }[];
+  loadError?: string;
+};
+let checkFindings = $state<CheckFindings | null>(null);
 
 let nameWarning = $derived.by(() => {
   if (name.trim() !== "" && slugify(name.trim()) === "new") {
@@ -141,6 +152,25 @@ function syncScroll(event: Event) {
   if (overlay !== null) {
     overlay.scrollTop = textarea.scrollTop;
     overlay.scrollLeft = textarea.scrollLeft;
+  }
+}
+
+async function validate() {
+  validating = true;
+  error = null;
+  try {
+    const result = await validateFlowDefinition(source);
+    checkFindings = {
+      errors: result.checkErrors,
+      warnings: result.checkWarnings,
+      typeErrors: result.typeErrors,
+      loadError: result.loadError,
+    };
+  } catch (err) {
+    error =
+      err instanceof Error ? err.message : "Failed to validate definition";
+  } finally {
+    validating = false;
   }
 }
 
@@ -359,14 +389,35 @@ async function remove() {
 
     {#if checkFindings}
       <div class="report save-findings">
-        <p class="report-bad">Definition saved. Schema-consistency findings:</p>
-        {#if checkFindings.errors.length > 0}
-          <p class="report-warn-head">Errors:</p>
+        {#if checkFindings.loadError}
+          <p class="report-bad">Definition failed to load:</p>
           <ul class="report-list">
-            {#each checkFindings.errors as e}
-              <li>{e}</li>
-            {/each}
+            <li>{checkFindings.loadError}</li>
           </ul>
+        {/if}
+        {#if checkFindings.errors.length > 0 || (checkFindings.typeErrors?.length ?? 0) > 0}
+          <p class="report-bad">
+            {#if checkFindings.loadError}
+              Consistency findings:
+            {:else}
+              Findings:
+            {/if}
+          </p>
+          {#if checkFindings.errors.length > 0}
+            <ul class="report-list">
+              {#each checkFindings.errors as e}
+                <li>{e}</li>
+              {/each}
+            </ul>
+          {/if}
+          {#if (checkFindings.typeErrors?.length ?? 0) > 0}
+            <p class="report-warn-head">Type errors:</p>
+            <ul class="report-list">
+              {#each checkFindings.typeErrors ?? [] as t}
+                <li>{t.line}:{t.column} — {t.message}</li>
+              {/each}
+            </ul>
+          {/if}
         {/if}
         {#if checkFindings.warnings.length > 0}
           <p class="report-warn-head">Warnings:</p>
@@ -376,15 +427,25 @@ async function remove() {
             {/each}
           </ul>
         {/if}
-        <p class="report-note">
-          The definition is saved and usable; fix the findings to keep the
-          schema contract clean, then save again to continue.
-        </p>
+        {#if !checkFindings.loadError && checkFindings.errors.length === 0 && (checkFindings.typeErrors?.length ?? 0) === 0}
+          <p class="report-ok">
+            Definition loads, typechecks, and holds the schema contract.
+          </p>
+        {/if}
+        {#if checkFindings.errors.length > 0 || (checkFindings.typeErrors?.length ?? 0) > 0}
+          <p class="report-note">
+            The definition is saved and usable; fix the findings to keep the
+            schema contract clean, then validate again.
+          </p>
+        {/if}
       </div>
     {/if}
 
     <div class="footer">
       <div class="footer-actions">
+        <Button variant="platinum" disabled={validating} onclick={validate}>
+          {validating ? "Validating..." : "Validate"}
+        </Button>
         <Button variant="mint" disabled={saving || !name.trim()} onclick={save}>
           {saving ? "Saving..." : "Save definition"}
         </Button>

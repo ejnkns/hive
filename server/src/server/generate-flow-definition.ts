@@ -287,8 +287,19 @@ export type GenerationResult = {
 export async function generateFlowDefinitionSource(
   prompt: string
 ): Promise<GenerationResult> {
-  return runGenerationLoop(prompt, defaultModelCaller);
+  return runGenerationLoop(prompt, modelCaller);
 }
+
+// Test seam: replaces the model caller the route reaches through
+// generateFlowDefinitionSource (the loop itself takes the caller as a
+// parameter). Pass undefined to restore the default proxy path.
+export function setGenerationModelCallerForTest(
+  caller: ModelCaller | undefined
+): void {
+  modelCaller = caller ?? defaultModelCaller;
+}
+
+let modelCaller: ModelCaller = defaultModelCaller;
 
 export async function runGenerationLoop(
   prompt: string,

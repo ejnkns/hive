@@ -255,6 +255,35 @@ export async function generateFlowDefinition(
   return (await res.json()) as { source: string; report: GenerationReport };
 }
 
+// The validate-without-save gate: transpile+load, schema-consistency, and the
+// per-definition typecheck, reported without registering anything.
+export type ValidateResult = {
+  ok: boolean;
+  loadError?: string;
+  checkErrors: string[];
+  checkWarnings: string[];
+  typeErrors: { code: number; message: string; line: number; column: number }[];
+};
+
+export async function validateFlowDefinition(
+  source: string
+): Promise<ValidateResult> {
+  const res = await fetch("/api/flows/definitions/validate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ source }),
+  });
+  if (!res.ok) {
+    // Error response shape is guaranteed by the server endpoint
+    const err = (await res.json()) as { error?: string };
+    throw new Error(
+      err.error ?? `Failed to validate definition: ${res.statusText}`
+    );
+  }
+  // Success response shape is guaranteed by the server endpoint
+  return (await res.json()) as ValidateResult;
+}
+
 export async function fetchFlowInstances(
   flowId: string
 ): Promise<WorkflowInstanceEntry[]> {
