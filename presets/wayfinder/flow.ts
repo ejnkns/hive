@@ -1,24 +1,40 @@
+import { defineOperations } from "workflow-engine/runners";
 import type {
   ConfigField,
   FlowDefinition,
+  FlowEdge,
   RuntimeGateContext,
 } from "workflow-engine/workflow-types";
 import {
+  type BuildItemWorkflowInstanceState,
   type BuildPlan,
+  type BuildTaskOutputs,
+  type BuildWorkflowInstanceState,
   buildItemWorkflow,
-  buildOperations,
   buildWorkflow,
 } from "./build-workflow";
-import { chartingOperations, chartingWorkflow } from "./charting-workflow";
-import { ticketOperations, ticketWorkflow } from "./ticket-workflow";
+import {
+  buildItemOperations,
+  buildOperations,
+} from "./build-workflow/operations";
+import type { ChartingItemState } from "./charting-workflow";
+import { chartingWorkflow } from "./charting-workflow";
+import { chartingOperations } from "./charting-workflow/operations";
+import type { TicketItemState } from "./ticket-workflow";
+import { ticketWorkflow } from "./ticket-workflow";
+import { ticketOperations } from "./ticket-workflow/operations";
 import { wayfinderTools } from "./tools";
 
 // The merged domain operations across all workflows, keyed by the names the
-// workflow tasks reference. Exported so tests can run them directly.
+// workflow tasks reference. Each group's state type is bound here — the
+// assembly point where the workflows and their operations meet — then erased
+// for the shared name-resolved registry. Exported so tests can run them
+// directly.
 export const wayfinderOperations = {
-  ...chartingOperations,
-  ...ticketOperations,
-  ...buildOperations,
+  ...defineOperations<ChartingItemState>(chartingOperations),
+  ...defineOperations<TicketItemState>(ticketOperations),
+  ...defineOperations<BuildWorkflowInstanceState>(buildOperations),
+  ...defineOperations<BuildItemWorkflowInstanceState>(buildItemOperations),
 };
 
 // === WAYFINDER FLOW ===
@@ -178,7 +194,9 @@ export const wayfinderFlow = {
       toWorkflow: "build-item",
       // Fan out: one build-item instance per planned ticket. The transform runs
       // with the erased runtime output map; the plan task's structured output
-      // is the parsed submit_build_plan completion arguments.
+      // is the parsed submit_build_plan completion arguments. Typed against
+      // BuildItemWorkflowInstanceState so a misspelled or undeclared field
+      // fails to compile.
       transform: (source) => {
         const plan = source.plan?.output as BuildPlan | undefined;
         if (plan === undefined || !Array.isArray(plan.tickets)) return [];
@@ -191,6 +209,6 @@ export const wayfinderFlow = {
           dependsOn: ticket.dependsOn,
         }));
       },
-    },
+    } satisfies FlowEdge<BuildTaskOutputs, BuildItemWorkflowInstanceState>,
   ],
 } satisfies FlowDefinition;

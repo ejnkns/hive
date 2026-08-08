@@ -6,6 +6,14 @@ export type IdeasTaskOutputs = {
   elaborate: { ideaBrief: string; elaboratedSpec: string };
 };
 
+// The domain data an ideas instance carries. title/brief are the creation-time
+// inputs from the Add idea form; the instance hint and the served idea card
+// read title.
+export type IdeasItemState = {
+  title?: string;
+  brief?: string;
+};
+
 export type IdeasStateId =
   | "backlog"
   | "elaborating"
@@ -27,6 +35,7 @@ export const ideasWorkflow = defineWorkflow({
   taskOutputs: {
     elaborate: {} as { ideaBrief: string; elaboratedSpec: string },
   },
+  workflowInstanceState: {} as IdeasItemState,
   states: [
     {
       id: "backlog",
@@ -60,6 +69,9 @@ export const ideasWorkflow = defineWorkflow({
           role: "ai-chat",
           tools: ["list_directory", "read_file", "search_code"],
           startOnUserInput: true,
+          // The idea brief from the Add idea form seeds the session as the
+          // first message, so the agent starts from the provisional statement.
+          inputFromInstanceState: "brief",
           systemPrompt: IDEA_ELABORATION_SYSTEM_PROMPT,
           // The session completes when the agent emits IDEA_COMPLETE, so an
           // idea leaves elaborating and the auto-transition to refined fires.

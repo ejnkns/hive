@@ -1,15 +1,16 @@
 // Onboarding workflow internals; import via onboarding-workflow.ts.
 
-import type { OperationContext, OperationFn } from "workflow-engine/runners";
 import {
   ensureIntegrationBranch,
   gitOptional,
+  type OperationContext,
   readFlowSettings,
   resolveBasePath,
 } from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
+import type { OnboardingItemState } from "../onboarding-workflow";
 
-export const onboardingOperations: Record<string, OperationFn> = {
+export const onboardingOperations = {
   ensure_integration_branch: ensureIntegrationBranchOp,
   write_project_metadata: writeProjectMetadata,
 };
@@ -19,7 +20,7 @@ type OperationResult = Record<string, unknown>;
 function ensureIntegrationBranchOp(
   task: TaskDefinition,
   _params: Record<string, unknown>,
-  ctx: OperationContext
+  ctx: OperationContext<OnboardingItemState>
 ): OperationResult {
   const basePath = resolveBasePath(ctx.flowConfig());
   const { integrationBranch, branchPrefix } = readFlowSettings(
@@ -43,7 +44,7 @@ function ensureIntegrationBranchOp(
 function writeProjectMetadata(
   _task: TaskDefinition,
   _params: Record<string, unknown>,
-  ctx: OperationContext
+  ctx: OperationContext<OnboardingItemState>
 ): OperationResult {
   const config = ctx.flowConfig();
   const basePath = resolveBasePath(ctx.flowConfig());

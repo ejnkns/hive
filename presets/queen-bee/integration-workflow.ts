@@ -1,8 +1,6 @@
 /** @public — the integration workflow module. */
 import { defineWorkflow } from "workflow-engine/workflow-types";
 
-export { integrationOperations } from "./integration-workflow/operations";
-
 // === INTEGRATION WORKFLOW ===
 //
 // Per-project workflow exposing integration as a workflow action: the user
@@ -13,6 +11,11 @@ export type IntegrationTaskOutputs = {
   commitState: { ok: boolean; skipped?: boolean; revision?: string };
   integrate: Record<string, unknown>;
 };
+
+// The integration workflow carries no workflow-instance domain data — it only
+// drives flow config and git. Declared empty so every workflow declares its
+// state contract (the schema-consistency check requires an anchor).
+export type IntegrationItemState = Record<string, never>;
 
 export type IntegrationStateId = "ready" | "integrating" | "integrated";
 
@@ -27,6 +30,7 @@ export const integrationWorkflow = defineWorkflow({
     commitState: {} as { ok: boolean; skipped?: boolean; revision?: string },
     integrate: {} as Record<string, unknown>,
   },
+  workflowInstanceState: {} as IntegrationItemState,
   states: [
     {
       id: "ready",

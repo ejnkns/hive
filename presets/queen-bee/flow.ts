@@ -1,3 +1,4 @@
+import { defineOperations } from "workflow-engine/runners";
 import type {
   AutoTransition,
   ConfigField,
@@ -7,32 +8,41 @@ import type {
   NoOutput,
   StateDef,
 } from "workflow-engine/workflow-types";
-import type { CardSpec } from "./cards-workflow";
-import { cardsOperations, cardsWorkflow } from "./cards-workflow";
+import type { CardSpec, CardsItemState } from "./cards-workflow";
+import { cardsWorkflow } from "./cards-workflow";
+import { cardsOperations } from "./cards-workflow/operations";
 import { ideaCardComponentSource } from "./ideas-card";
+import type { IdeasTaskOutputs } from "./ideas-workflow";
 import { ideasWorkflow } from "./ideas-workflow";
-import {
-  integrationOperations,
-  integrationWorkflow,
-} from "./integration-workflow";
-import {
-  onboardingOperations,
-  onboardingWorkflow,
+import type { IntegrationItemState } from "./integration-workflow";
+import { integrationWorkflow } from "./integration-workflow";
+import { integrationOperations } from "./integration-workflow/operations";
+import type {
+  OnboardingItemState,
+  OnboardingTaskOutputs,
 } from "./onboarding-workflow";
-import type { PlanCard, PlanProposal } from "./requirements-workflow";
-import {
-  requirementsOperations,
-  requirementsWorkflow,
+import { onboardingWorkflow } from "./onboarding-workflow";
+import { onboardingOperations } from "./onboarding-workflow/operations";
+import type {
+  PlanCard,
+  PlanProposal,
+  RequirementsItemState,
+  RequirementsTaskOutputs,
 } from "./requirements-workflow";
+import { requirementsWorkflow } from "./requirements-workflow";
+import { requirementsOperations } from "./requirements-workflow/operations";
 import { queenBeeTools } from "./tools";
 
 // The merged domain operations across all workflows, keyed by the names the
-// workflow tasks reference. Exported so tests can run them directly.
+// workflow tasks reference. Each group's state type is bound here — the
+// assembly point where the workflows and their operations meet — then erased
+// for the shared name-resolved registry. Exported so tests can run them
+// directly.
 export const queenBeeOperations = {
-  ...onboardingOperations,
-  ...requirementsOperations,
-  ...cardsOperations,
-  ...integrationOperations,
+  ...defineOperations<OnboardingItemState>(onboardingOperations),
+  ...defineOperations<RequirementsItemState>(requirementsOperations),
+  ...defineOperations<CardsItemState>(cardsOperations),
+  ...defineOperations<IntegrationItemState>(integrationOperations),
 };
 
 // === QUEEN BEE FLOW ===
@@ -138,29 +148,27 @@ export const queenBeeFlow = {
       fromStates: ["complete"],
       toWorkflow: "requirements",
       transform: () => ({}),
-    },
+    } satisfies FlowEdge<OnboardingTaskOutputs, RequirementsItemState>,
     {
       fromWorkflow: "onboarding",
       fromStates: ["complete"],
       toWorkflow: "integration",
       transform: () => ({}),
-    },
+    } satisfies FlowEdge<OnboardingTaskOutputs, IntegrationItemState>,
     {
       fromWorkflow: "ideas",
       fromStates: ["submitted"],
       toWorkflow: "requirements",
-      transform: (source) => ({
-        mergeDraft: source.elaborate?.output,
-        triggerPlanning: true,
-      }),
-    },
+      transform: () => ({}),
+    } satisfies FlowEdge<IdeasTaskOutputs, RequirementsItemState>,
     {
       fromWorkflow: "requirements",
       fromStates: ["accepted"],
       toWorkflow: "cards",
       // Fan out: one cards instance per planned card. The transform runs with
       // the erased runtime output map; the plan task's structured output is
-      // parsed by the planner's submit_plan completion tool.
+      // parsed by the planner's submit_plan completion tool. Typed against
+      // CardsItemState so a misspelled or undeclared field fails to compile.
       transform: (source) => {
         const plan = source.plan?.output as PlanProposal | undefined;
         if (plan?.kind !== "proposal") return [];
@@ -174,7 +182,7 @@ export const queenBeeFlow = {
           dependsOn: card.dependencies,
         }));
       },
-    },
+    } satisfies FlowEdge<RequirementsTaskOutputs, CardsItemState>,
   ],
 } satisfies FlowDefinition;
 

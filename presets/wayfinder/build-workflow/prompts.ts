@@ -26,7 +26,7 @@ Before drafting, walk the human through the seams the spec will target: the modu
 
 ## Recording
 
-When the spec and seams are agreed, call submit_spec as your only tool call: spec is the full markdown spec, seams lists the agreed module seams. The human presses Done when they are satisfied.`;
+When the spec and seams are agreed, call submit_spec as your only tool call: spec is the full markdown spec including the seams section. The human presses Done when they are satisfied.`;
 
 // to-tickets: turn the spec into tracer-bullet tickets with blocking edges,
 // ordered prefactoring-first and blockers-first. The human quizzes the

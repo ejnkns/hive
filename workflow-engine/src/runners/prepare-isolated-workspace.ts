@@ -1,5 +1,5 @@
 /** @private — only imported by runners.ts */
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { gitSucceeds, runGit } from "./git-command";
 
@@ -11,9 +11,26 @@ export type IsolatedWorkspaceResult = {
   message?: string;
 };
 
-// basePath is optional: with a bound repo the workspace is a git worktree on a
-// feature branch; without one it is a plain sandbox directory. Both use the
-// same directory layout under workspacesBasePath.
+// Discards an abandoned isolated workspace (the engine's side of the
+// newAttempt action flag). With a bound repo the workspace is a git worktree
+// and is removed via the main repo (a worktree cannot remove itself); without
+// one it is a plain sandbox directory created by prepare_worktree and is
+// removed directly. Best-effort — a stale or already-removed path must never
+// fail the action that starts the new attempt.
+export function discardIsolatedWorkspace(
+  workspacePath: string,
+  basePath?: string
+): void {
+  if (typeof basePath === "string" && basePath !== "") {
+    gitSucceeds(basePath, ["worktree", "remove", workspacePath, "--force"]);
+    return;
+  }
+  try {
+    rmSync(workspacePath, { recursive: true, force: true });
+  } catch {
+    // best-effort
+  }
+}
 export type PrepareIsolatedWorkspaceParams = {
   basePath?: string;
   workspacesBasePath: string;

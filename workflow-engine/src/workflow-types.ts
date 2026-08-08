@@ -20,7 +20,13 @@
 // defineWorkflow is the single boundary where the erasure happens.
 
 import type { OperationFn } from "./runners/create-operation-runner";
-import type { Tool, ToolName } from "./runners/tool-types";
+import type { TaskBase } from "./runners/task-types";
+import type { Tool } from "./runners/tool-types";
+import type { ChatMessage } from "./shared/chat-message";
+
+// Re-exported so existing consumers (engine-bridge, presets) can keep
+// importing the message shape from the schema module.
+export type { ChatMessage } from "./shared/chat-message";
 
 // --- Convenience aliases ---
 
@@ -64,20 +70,6 @@ export type RunningTaskContext =
   | {
       role: "operation";
     };
-
-export type ChatMessage = {
-  role: "user" | "assistant" | "system" | "tool";
-  content: string;
-  // OpenAI-compatible tool call state: assistant messages carry the tool_calls
-  // they issued, and the matching tool messages reference them by id. Required
-  // for providers to accept a conversation that used tools.
-  tool_call_id?: string;
-  tool_calls?: Array<{
-    id: string;
-    type: "function";
-    function: { name: string; arguments: string };
-  }>;
-};
 
 // --- Gate context ---
 
@@ -191,6 +183,14 @@ export type ManualAction<
   // sessions (grilling, wayfinder decision tickets) end this way — the
   // conversation is the result. Ignored unless an ai-chat task is running.
   completesRunningTask?: boolean;
+  // When true, dispatching this action starts a NEW attempt: the engine bumps
+  // the instance's `attempt` counter (engine-provided state) and discards the
+  // abandoned workspace recorded in `worktreePath`, so the next run builds a
+  // fresh branch/worktree and persists under {attempt}-scoped paths. The old
+  // attempt stays identifiable in history and its branch is left in place.
+  // This is how a flow declares "restart from a clean slate" (queen-bee's
+  // new_changes) without owning any attempt bookkeeping.
+  newAttempt?: boolean;
   transitionTo: TStateId;
 };
 
@@ -368,45 +368,14 @@ export type DisplayHint<
 
 // One task inside a StateDef. Mapped over TTaskOutputs so each task's `render`
 // hint is typed against that specific task's output (id anchors the member).
+// Built from TaskBase (runners/task-types.ts) — the single source of the task
+// shape — so the authoring side and the runtime side can never drift; only the
+// typed `id` and the authoring-only `render` hint are added here.
 export type StateTaskDef<
   TTaskOutputs extends Record<string, unknown> = Record<string, unknown>,
 > = {
-  [K in keyof TTaskOutputs & string]: {
+  [K in keyof TTaskOutputs & string]: TaskBase & {
     id: K;
-    label: string;
-    trigger: "auto" | "manual";
-    role: "ai-task" | "ai-chat" | "operation";
-    tools?: ToolName[];
-    operations?: string[];
-    operationInputs?: Record<string, unknown>;
-    systemPrompt?: string;
-    // The completion contract (how a task ends and what becomes its output):
-    //   completionTool   — the agent calls this tool to end the task; the
-    //                      parsed tool arguments become the task output.
-    //                      Available to ai-task and ai-chat.
-    //   completionSignal — the ai-chat agent ends the session by writing this
-    //                      marker as the last line of its response; the
-    //                      transcript becomes the task output. ai-chat only;
-    //                      ignored by ai-task (which ends via completionTool).
-    //   completesRunningTask (ManualAction) — the HUMAN ends a running ai-chat
-    //                      session via a "Done" action; the transcript becomes
-    //                      the task output.
-    completionTool?: string;
-    completionSignal?: string;
-    startOnUserInput?: boolean;
-    // A dotted path into the instance's workflowInstanceState resolved at task
-    // start and injected as the first user message (e.g. the requirements
-    // document for the planner). Mirrors TaskDefinition.inputFromInstanceState.
-    inputFromInstanceState?: string;
-    // A literal workspace directory or an "@instance:<field>" ref into the
-    // workflow instance state (e.g. "@instance:worktreePath") that the ai
-    // runners resolve before building the tool context.
-    workspacePath?: string;
-    // Written on successful completion to basePath/<domainDir>/<path>.
-    // {instanceId} and {attempt} in path are substituted per workflow
-    // instance. Format is inferred from the output: string becomes a text
-    // file, object/array becomes JSON.
-    persist?: { path: string };
     // How the task's completed output renders in the generic UI. Pure data.
     render?: RenderHint<TTaskOutputs[K]>;
   };
@@ -500,10 +469,13 @@ export function defineWorkflow<
 // task outputs and produces context for the target workflow. It returns either
 // one instance-state object or an array of them — an array creates one target
 // workflow instance per element (fan-out, e.g. one cards instance per planned
-// card). When toFlowState is true, the transformed output updates FlowState
-// instead of creating new instances. Omit or set toWorkflow for instance creation.
+// card). The returned object is checked against the target workflow's state
+// type (TTargetState) so misspellings and undeclared fields fail to compile.
+// When toFlowState is true, the transformed output updates FlowState instead
+// of creating new instances. Omit or set toWorkflow for instance creation.
 export type FlowEdge<
   TSourceOutputs extends Record<string, unknown> = Record<string, unknown>,
+  TTargetState extends Record<string, unknown> = Record<string, unknown>,
 > = {
   fromWorkflow: string;
   fromStates: string[];
@@ -511,7 +483,7 @@ export type FlowEdge<
   toFlowState?: boolean;
   transform?: (
     source: Partial<TaskOutputMap<TSourceOutputs>>
-  ) => Record<string, unknown> | Record<string, unknown>[];
+  ) => Partial<TTargetState> | Partial<TTargetState>[];
 };
 
 export type RuntimeFlowEdge = FlowEdge;

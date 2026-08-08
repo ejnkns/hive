@@ -2,6 +2,7 @@ import { dependsOnMet, getAvailableActions } from "./get-available-actions";
 import { readFlowSettings } from "./read-flow-settings";
 import { reduce, type WorkflowEvent } from "./reduce";
 import { persistOutput } from "./runners/persist-output";
+import { discardIsolatedWorkspace } from "./runners/prepare-isolated-workspace";
 import { readWorkflowAttempt } from "./shared/read-workflow-attempt";
 import type { RuntimeWorkflowInstanceState } from "./shared/workflow-instance-state";
 import type {
@@ -254,6 +255,23 @@ export function createWorkflowInstanceController(
     });
   }
 
+  // The engine-provided attempt bookkeeping behind ManualAction.newAttempt:
+  // increment the counter (readWorkflowAttempt defaults an unwritten counter
+  // to 1, so the first declared attempt starts at 2) and discard the
+  // abandoned workspace. The old attempt's branch and persisted artifacts
+  // stay — attempts remain identifiable.
+  function advanceAttempt(): void {
+    const nextAttempt = readWorkflowAttempt(state.workflowInstanceState) + 1;
+    const oldWorktree = state.workflowInstanceState.worktreePath;
+    patchWorkflowInstanceState({ attempt: nextAttempt });
+    if (typeof oldWorktree === "string" && oldWorktree !== "") {
+      discardIsolatedWorkspace(
+        oldWorktree,
+        readFlowSettings(taskContext.flowConfig).basePath
+      );
+    }
+  }
+
   function sendTaskInput(taskId: string, content: string, role: string): void {
     if (!state.hasRunningTask || state.runningTaskId !== taskId) return;
     runningRunner?.sendMessage?.(content, role);
@@ -351,6 +369,14 @@ export function createWorkflowInstanceController(
         ) {
           return;
         }
+      }
+
+      // newAttempt: this action starts a fresh attempt — the engine bumps the
+      // instance's attempt counter (so the next prepare_worktree/persist-path
+      // runs under attempt-N) and discards the abandoned workspace recorded in
+      // worktreePath. Declared on the action, owned by the engine.
+      if (action.newAttempt === true) {
+        advanceAttempt();
       }
 
       if (

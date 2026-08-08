@@ -1,38 +1,15 @@
-import type { ChatMessage } from "./workflow-types";
+import type { TaskDefinition } from "./runners/task-types";
+import type { ChatMessage } from "./shared/chat-message";
 
-export type TaskDefinition = {
-  id: string;
-  label: string;
-  role: string;
-  tools?: string[];
-  operations?: string[];
-  operationInputs?: Record<string, unknown>;
-  systemPrompt?: string;
-  // See the completion contract on StateTaskDef (workflow-types.ts): the
-  // completionTool is honored by ai-task and ai-chat; the completionSignal is
-  // ai-chat only.
-  completionTool?: string;
-  completionSignal?: string;
-  workspacePath?: string;
-  // For ai-chat sessions: wait for the user's first message before the first
-  // model call, instead of calling the model on start. Suits conversational
-  // sessions (requirements/ideas) where the agent should react to the user,
-  // not open the conversation itself.
-  startOnUserInput?: boolean;
-  // A dotted path into the instance's workflowInstanceState (e.g.
-  // "requirementsDraft"). Resolved at task start and injected as the first
-  // user message, so an agent receives runtime context (the requirements
-  // document, a proposal) without reading files or calling a tool.
-  inputFromInstanceState?: string;
-  // Written on successful completion to basePath/<domainDir>/<path>.
-  // {instanceId} and {attempt} in path are substituted per workflow instance.
-  // Format is inferred from the output: string becomes a text file,
-  // object/array becomes JSON.
-  persist?: { path: string };
-};
+// The runtime task shape lives in runners/task-types.ts (the single source);
+// the authoring-side StateTaskDef in workflow-types.ts is built from the same
+// TaskBase, so the two can never drift.
+export type { TaskDefinition, TaskRole } from "./runners/task-types";
 
 export type TaskRunner = {
-  run(task: TaskDefinition): Promise<{ output: unknown }>;
+  run(task: TaskDefinition): Promise<{
+    output: unknown;
+  }>;
   cancel(): void;
   sendMessage?(content: string, role: string): Promise<void>;
 };

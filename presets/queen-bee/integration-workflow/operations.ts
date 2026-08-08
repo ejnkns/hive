@@ -1,17 +1,20 @@
 // Integration workflow internals; import via integration-workflow.ts.
 
-import type { OperationContext, OperationFn } from "workflow-engine/runners";
-import { fastForwardTargetBranch } from "workflow-engine/runners";
+import {
+  fastForwardTargetBranch,
+  type OperationContext,
+} from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
+import type { IntegrationItemState } from "../integration-workflow";
 
-export const integrationOperations: Record<string, OperationFn> = {
+export const integrationOperations = {
   fast_forward_target_branch: fastForwardTargetBranchOp,
 };
 
 function fastForwardTargetBranchOp(
   task: TaskDefinition,
   _params: Record<string, unknown>,
-  ctx: OperationContext
+  ctx: OperationContext<IntegrationItemState>
 ): Record<string, unknown> {
   const config = ctx.flowConfig();
   const basePath = typeof config.basePath === "string" ? config.basePath : "";

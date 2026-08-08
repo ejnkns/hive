@@ -115,7 +115,7 @@ describe("createEngineRunners", () => {
     );
   });
 
-  it("prepare_worktree derives card and attempt from instance state", async () => {
+  it("prepare_worktree derives the workspace path from the workflow id", async () => {
     const workspacesBasePath = tempDir();
     const runners = createEngineRunners();
 
@@ -130,15 +130,17 @@ describe("createEngineRunners", () => {
         makeContext({
           flowConfig: { workspacesBasePath },
           workflowId: "cards",
-          workflowInstanceState: { projectId: "proj-1", attempt: 2 },
+          workflowInstanceState: { attempt: 2 },
         })
       )
       .run(task);
 
     const output = result.output as Record<string, unknown>;
     assert.equal(output.ok, true);
+    // The project/workspace namespace comes from the engine (ctx.workflowId) —
+    // the former projectId instance-state fallback was removed as a dead field.
     assert.ok(
-      existsSync(join(workspacesBasePath, "proj-1", "instance-1", "attempt-2"))
+      existsSync(join(workspacesBasePath, "cards", "instance-1", "attempt-2"))
     );
   });
 

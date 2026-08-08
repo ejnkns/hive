@@ -7,20 +7,30 @@ import type { TaskDefinition, TaskRunner } from "../task-runner";
 // card id and attempt from the instance). The context is built by the runner
 // factory from the per-task TaskRunnerContext; a no-op default keeps direct
 // runner construction safe.
-export type OperationContext = {
+//
+// TState is the workflow's declared state type. At the engine boundary it is
+// erased to Record<string, unknown> (the wire model); a preset author binds
+// the type once per operations group via defineOperations<TState> — the
+// single, hidden erasure point — so every op body is type-checked against the
+// workflow's state. Engine infrastructure ops (prepare_worktree, ...) serve
+// any workflow and use the erased context directly.
+export type OperationContext<
+  TState extends Record<string, unknown> = Record<string, unknown>,
+> = {
   flowConfig(): Record<string, unknown>;
   patchFlowConfig(patch: Record<string, unknown>): void;
   instanceId: string;
   workflowId: string;
   currentState: string;
-  workflowInstanceState(): Record<string, unknown>;
+  workflowInstanceState(): TState;
   // Completed task outputs on the instance (read-only), so operations can read
   // sibling tasks' results.
   taskOutputs(): Record<string, unknown>;
   // Patches the workflow instance's domain data. Ops use this to record
   // per-instance state (e.g. the worktree a card's worker operates in);
-  // the engine persists it as part of the instance.
-  patchWorkflowInstanceState(patch: Record<string, unknown>): void;
+  // the engine persists it as part of the instance. Typed as Partial<TState>
+  // so a patch can only write declared fields.
+  patchWorkflowInstanceState(patch: Partial<TState>): void;
   // Queries all workflow instances in a given state, or all instances when
   // stateId is undefined. Each result carries the instance id, current state,
   // and domain data so operations can resolve title-based references to IDs.
@@ -31,16 +41,32 @@ export type OperationContext = {
   }[];
 };
 
-export type OperationFn = (
+export type OperationFn<
+  TState extends Record<string, unknown> = Record<string, unknown>,
+> = (
   task: TaskDefinition,
   params: Record<string, unknown>,
-  ctx: OperationContext
+  ctx: OperationContext<TState>
 ) => unknown | Promise<unknown>;
 
 export type OperationRunnerConfig = {
   operations: Record<string, OperationFn>;
   getContext?: () => OperationContext;
 };
+
+// The consumer-facing factory for a workflow's operations. Binds the workflow's
+// state type once per group — `defineOperations<CardsItemState>({ ... })` with
+// the type imported from the workflow module — so every op body is
+// type-checked against it (typed reads and Partial<TState> patches, no casts),
+// then erases for the shared name-resolved registry in one hidden cast here.
+export function defineOperations<TState extends Record<string, unknown>>(
+  operations: Record<string, OperationFn<TState>>
+): Record<string, OperationFn> {
+  // The engine resolves operations by name across all workflows and can't
+  // know each group's state type; the author bound it above, so this is the
+  // group's single erasure point.
+  return operations as unknown as Record<string, OperationFn>;
+}
 
 const NOOP_CONTEXT: OperationContext = {
   flowConfig: () => ({}),

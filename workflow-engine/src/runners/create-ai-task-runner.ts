@@ -1,6 +1,7 @@
 /** @private — only imported by runners.ts */
+
+import type { ChatMessage } from "../shared/chat-message";
 import type { TaskDefinition, TaskRunner } from "../task-runner";
-import type { ChatMessage } from "../workflow-types";
 import { resolveDottedPath } from "./resolve-dotted-path";
 import { resolveWorkspacePath } from "./resolve-workspace-path";
 import type {

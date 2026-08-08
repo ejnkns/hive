@@ -6,8 +6,6 @@ import {
   WORKER_SYSTEM_PROMPT,
 } from "./cards-workflow/prompts";
 
-export { cardsOperations } from "./cards-workflow/operations";
-
 // The domain data a card instance carries (workflowInstanceState.cardSpec),
 // authored by the requirements→cards edge from the accepted plan.
 export type CardSpec = {
@@ -65,8 +63,10 @@ export type CardsTaskOutputs = {
 };
 
 export type CardsItemState = {
-  projectId: string;
-  attempt: number;
+  // Engine-provided: written by the newAttempt action flag; read by
+  // prepare_worktree / merge_branch / {attempt} persist paths. Unwritten
+  // counters default to attempt 1 (readWorkflowAttempt).
+  attempt?: number;
   reviewIsStale?: boolean;
   worktreePath?: string;
   branchName?: string;
@@ -76,6 +76,9 @@ export type CardsItemState = {
     acceptanceCriteria: string[];
     dependsOn: string[];
   };
+  // Engine-read (the dependsOnState backstop resolves instance ids against
+  // this); written by the requirements→cards edge from the accepted plan.
+  dependsOn?: string[];
 };
 
 export type CardsStateId =
@@ -405,6 +408,11 @@ export const cardsWorkflow = defineWorkflow({
           variant: "secondary",
           gate: (ctx) =>
             ctx.taskOutputs.review?.output?.verdict === "changes_requested",
+          // The engine starts a fresh attempt: it bumps the instance's attempt
+          // counter (the next prepare_worktree and review-package persist run
+          // under attempt-2, attempt-3, ...) and discards the abandoned
+          // worktree. The old attempt's branch stays identifiable.
+          newAttempt: true,
           transitionTo: "ready",
         },
         {

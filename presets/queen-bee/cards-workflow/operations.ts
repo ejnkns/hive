@@ -1,17 +1,24 @@
 // Cards workflow internals; import via cards-workflow.ts.
 
 import { randomUUID } from "node:crypto";
-import type { OperationContext, OperationFn } from "workflow-engine/runners";
 import {
   gitOptional,
+  type OperationContext,
   readFlowSettings,
   readPersistedOutput,
   resolveBasePath,
 } from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
-import type { CardSpec, ReviewPackage } from "../cards-workflow";
+import type {
+  CardSpec,
+  CardsItemState,
+  ReviewPackage,
+} from "../cards-workflow";
 
-export const cardsOperations: Record<string, OperationFn> = {
+// The cards workflow's operations, keyed by the names its tasks reference.
+// flow.ts binds the state type (defineOperations<CardsItemState>) and merges
+// this into the preset's registry.
+export const cardsOperations = {
   build_review_package: buildReviewPackageOp,
   check_review_freshness: checkReviewFreshnessOp,
 };
@@ -21,7 +28,7 @@ type OperationResult = Record<string, unknown>;
 function buildReviewPackageOp(
   _task: TaskDefinition,
   _params: Record<string, unknown>,
-  ctx: OperationContext
+  ctx: OperationContext<CardsItemState>
 ): ReviewPackage {
   const basePath = resolveBasePath(ctx.flowConfig());
   const cardId = ctx.instanceId;
@@ -39,7 +46,7 @@ function buildReviewPackageOp(
     packageId: randomUUID(),
     cardId,
     attempt,
-    spec: readCardSpec(ctx),
+    spec: readCardSpec(ctx.workflowInstanceState(), cardId),
     requirements: readPersistedOutput(ctx.flowConfig(), "requirements.md"),
     baseCommit: gitOptional(basePath, ["rev-parse", integrationBranch]),
     workerHead: gitOptional(basePath, ["rev-parse", branchName]),
@@ -61,7 +68,7 @@ function buildReviewPackageOp(
 function checkReviewFreshnessOp(
   _task: TaskDefinition,
   _params: Record<string, unknown>,
-  ctx: OperationContext
+  ctx: OperationContext<CardsItemState>
 ): OperationResult {
   const basePath = resolveBasePath(ctx.flowConfig());
   const cardId = ctx.instanceId;
@@ -94,19 +101,18 @@ function checkReviewFreshnessOp(
   return { ok: true, reviewIsStale };
 }
 
-function readCardSpec(ctx: OperationContext): CardSpec {
-  const raw = ctx.workflowInstanceState().cardSpec;
+function readCardSpec(state: CardsItemState, fallbackTitle: string): CardSpec {
+  const raw = state.cardSpec;
   if (raw !== null && typeof raw === "object") {
-    const spec = raw as Partial<CardSpec>;
     return {
-      title: typeof spec.title === "string" ? spec.title : ctx.instanceId,
-      description: typeof spec.description === "string" ? spec.description : "",
-      acceptanceCriteria: readStringArray(spec.acceptanceCriteria),
-      dependsOn: readStringArray(spec.dependsOn),
+      title: typeof raw.title === "string" ? raw.title : fallbackTitle,
+      description: typeof raw.description === "string" ? raw.description : "",
+      acceptanceCriteria: readStringArray(raw.acceptanceCriteria),
+      dependsOn: readStringArray(raw.dependsOn),
     };
   }
   return {
-    title: ctx.instanceId,
+    title: fallbackTitle,
     description: "",
     acceptanceCriteria: [],
     dependsOn: [],

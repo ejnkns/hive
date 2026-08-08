@@ -1,8 +1,6 @@
 /** @public — the onboarding workflow module. */
 import { defineWorkflow } from "workflow-engine/workflow-types";
 
-export { onboardingOperations } from "./onboarding-workflow/operations";
-
 // === ONBOARDING WORKFLOW ===
 //
 // Turns a plain queen-bee flow into a Project: patches the flow config with the
@@ -24,6 +22,11 @@ export type OnboardingTaskOutputs = {
   commitState: { ok: boolean; revision?: string };
   bindFlow: { ok: boolean; config?: Record<string, unknown> };
 };
+
+// Onboarding carries no workflow-instance domain data — it drives flow config
+// and git only. Declared empty so every workflow declares its state contract
+// (the schema-consistency check requires an anchor).
+export type OnboardingItemState = Record<string, never>;
 
 export type OnboardingStateId =
   | "configuring"
@@ -53,6 +56,7 @@ export const onboardingWorkflow = defineWorkflow({
     commitState: {} as { ok: boolean; revision?: string },
     bindFlow: {} as { ok: boolean; config?: Record<string, unknown> },
   },
+  workflowInstanceState: {} as OnboardingItemState,
   states: [
     {
       id: "configuring",

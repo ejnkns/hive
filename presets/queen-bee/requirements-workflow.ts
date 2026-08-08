@@ -5,8 +5,6 @@ import {
   REQUIREMENTS_DRAFT_SYSTEM_PROMPT,
 } from "./requirements-workflow/prompts";
 
-export { requirementsOperations } from "./requirements-workflow/operations";
-
 // A card proposed by the planning agent. Dependencies reference other card
 // titles; the engine's dependsOnState gates reference card instance ids, so
 // the queen-bee flow keeps them as titles at plan time and the worker
@@ -33,6 +31,14 @@ export type RequirementsTaskOutputs = {
   clearRequirements: { ok: boolean };
 };
 
+// The domain data a requirements instance carries. requirementsDraft is the
+// session's running output — written by the update_requirements_draft tool
+// (and cleared by clear_requirements_state), read by the approve gate and
+// injected into the planner via inputFromInstanceState.
+export type RequirementsItemState = {
+  requirementsDraft?: string;
+};
+
 export type RequirementsStateId =
   | "no_session"
   | "drafting"
@@ -55,6 +61,7 @@ export const requirementsWorkflow = defineWorkflow({
     commitState: {} as { ok: boolean; revision?: string },
     clearRequirements: {} as { ok: boolean },
   },
+  workflowInstanceState: {} as RequirementsItemState,
   states: [
     {
       id: "no_session",

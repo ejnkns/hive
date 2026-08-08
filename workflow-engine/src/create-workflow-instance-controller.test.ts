@@ -66,6 +66,30 @@ const testWorkflow = defineWorkflow({
   terminalStates: ["done"],
 });
 
+const attemptWorkflow = defineWorkflow({
+  id: "attempt-test",
+  label: "Attempt Test",
+  taskOutputs: {},
+  workflowInstanceState: {} as { attempt?: number; worktreePath?: string },
+  states: [
+    {
+      id: "idle",
+      label: "Idle",
+      actions: [
+        {
+          id: "retry",
+          label: "New attempt",
+          newAttempt: true,
+          transitionTo: "done",
+        },
+      ],
+    },
+    { id: "done", label: "Done" },
+  ],
+  initial: "idle",
+  terminalStates: ["done"],
+});
+
 // --- Mock runner ---
 
 class MockRunner implements TaskRunner {
@@ -106,6 +130,32 @@ class MockRunner implements TaskRunner {
 // --- Tests ---
 
 describe("createWorkflowInstanceController", () => {
+  it("newAttempt bumps the attempt counter (engine-provided bookkeeping)", () => {
+    const controller = createWorkflowInstanceController(attemptWorkflow, {});
+    controller.dispatchAction("retry");
+    // Unwritten counters default to 1 (readWorkflowAttempt), so the first
+    // declared new attempt is 2.
+    assert.equal(controller.getState().workflowInstanceState.attempt, 2);
+  });
+
+  it("newAttempt increments from an existing attempt counter", () => {
+    const controller = createWorkflowInstanceController(
+      attemptWorkflow,
+      {},
+      {
+        currentState: "idle",
+        taskOutputs: {},
+        hasRunningTask: false,
+        runningTaskId: null,
+        runningTaskContext: null,
+        workflowInstanceState: { attempt: 3 },
+        history: [],
+      }
+    );
+    controller.dispatchAction("retry");
+    assert.equal(controller.getState().workflowInstanceState.attempt, 4);
+  });
+
   it("starts in initial state", () => {
     const controller = createWorkflowInstanceController(testWorkflow, {});
     assert.equal(controller.getState().currentState, "idle");

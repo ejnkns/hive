@@ -52,10 +52,7 @@ function wrapPrepareWorktree(
     workspacesBasePath: readWorkspacesBasePath(ctx.flowConfig()),
     integrationBranch: settings.integrationBranch,
     branchPrefix: settings.branchPrefix,
-    projectId:
-      readString(params.projectId) ??
-      readString(instanceState.projectId) ??
-      ctx.workflowId,
+    projectId: readString(params.projectId) ?? ctx.workflowId,
     cardId: readString(params.cardId) ?? ctx.instanceId,
     attempt:
       readNumber(params.attempt) ?? readNumber(instanceState.attempt) ?? 1,

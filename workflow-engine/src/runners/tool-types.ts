@@ -33,7 +33,9 @@ export type ToolResult = {
   isError: boolean;
 };
 
-export type ToolContext = {
+export type ToolContext<
+  TState extends Record<string, unknown> = Record<string, unknown>,
+> = {
   workspacePath: string;
   // The flow's base directory (e.g. the bound repo root) when the runner
   // knows it. Tools that persist flow-level state (a requirements draft, a
@@ -43,8 +45,10 @@ export type ToolContext = {
   instanceId?: string;
   // Patches the workflow instance's domain data. Tools use this to record
   // session running state (e.g. the requirements draft) instead of writing
-  // files; the engine persists it as part of the instance.
-  patchWorkflowInstanceState?: (patch: Record<string, unknown>) => void;
+  // files; the engine persists it as part of the instance. Typed as
+  // Partial<TState> — a tool binds TState via defineTool<TState>, so a patch
+  // can only write declared fields.
+  patchWorkflowInstanceState?: (patch: Partial<TState>) => void;
   // Creates a new workflow instance in this flow (the capability behind the
   // create_instance tool). Absent when the task does not declare it.
   createWorkflowInstance?: (

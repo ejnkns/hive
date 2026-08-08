@@ -2,8 +2,8 @@
 
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { OperationContext, OperationFn } from "workflow-engine/runners";
 import {
+  type OperationContext,
   prepareIsolatedWorkspace,
   readFlowSettings,
 } from "workflow-engine/runners";
@@ -15,7 +15,8 @@ import {
   type TicketType,
 } from "../ticket-workflow";
 
-export const ticketOperations: Record<string, OperationFn> = {
+// flow.ts binds the state type and merges this into the preset's registry.
+export const ticketOperations = {
   normalize_ticket: normalizeTicketOp,
   prepare_prototype_workspace: preparePrototypeWorkspaceOp,
   assemble_resolution: assembleResolutionOp,
@@ -38,9 +39,9 @@ const TICKET_TYPES: readonly TicketType[] = [
 function normalizeTicketOp(
   _task: TaskDefinition,
   _params: Record<string, unknown>,
-  ctx: OperationContext
+  ctx: OperationContext<TicketItemState>
 ): Record<string, unknown> {
-  const state = ctx.workflowInstanceState() as Partial<TicketItemState>;
+  const state = ctx.workflowInstanceState();
   const rawType = readString(state.type)?.toLowerCase().trim();
   // TICKET_TYPES.some narrows rawType to one of the four literals, so the cast
   // only ever narrows a string already proven to be a TicketType.
@@ -69,7 +70,7 @@ function normalizeTicketOp(
 function preparePrototypeWorkspaceOp(
   _task: TaskDefinition,
   _params: Record<string, unknown>,
-  ctx: OperationContext
+  ctx: OperationContext<TicketItemState>
 ): Record<string, unknown> {
   const result = prepareWorkspace(ctx);
   if (result.ok !== true) {
@@ -96,9 +97,9 @@ function preparePrototypeWorkspaceOp(
 function assembleResolutionOp(
   _task: TaskDefinition,
   _params: Record<string, unknown>,
-  ctx: OperationContext
+  ctx: OperationContext<TicketItemState>
 ): string {
-  const state = ctx.workflowInstanceState() as Partial<TicketItemState>;
+  const state = ctx.workflowInstanceState();
   const title = readString(state.title) ?? ctx.instanceId;
   const question = readString(state.question) ?? "";
   const resolution = readResolution(ctx);
@@ -160,11 +161,13 @@ function persistResearchFindingsOp(
 // completion-ended task carries the parsed arguments as its output; a
 // Done-ended transcript may carry a submit_resolution call; a research ticket's
 // findings serve as the decision.
-function readResolution(ctx: OperationContext): ResolutionOutput {
-  const state = ctx.workflowInstanceState() as Record<string, unknown>;
+function readResolution(
+  ctx: OperationContext<TicketItemState>
+): ResolutionOutput {
+  const state = ctx.workflowInstanceState();
   const recorded = state.resolution;
   if (recorded !== null && typeof recorded === "object") {
-    const record = recorded as Partial<ResolutionOutput>;
+    const record = recorded;
     if (typeof record.decision === "string" && record.decision !== "") {
       return {
         decision: record.decision,
@@ -267,7 +270,10 @@ function recoverFromTranscript(
   return found;
 }
 
-function prepareWorkspace(ctx: OperationContext) {
+// Reads only flow config, so it accepts any workflow's typed context.
+function prepareWorkspace<TState extends Record<string, unknown>>(
+  ctx: OperationContext<TState>
+) {
   const settings = readFlowSettings(ctx.flowConfig());
   const workspacesBasePath =
     readString(ctx.flowConfig().workspacesBasePath) ??

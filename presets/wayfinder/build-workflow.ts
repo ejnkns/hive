@@ -8,8 +8,6 @@ import {
 } from "./build-workflow/prompts";
 import type { SessionTranscript } from "./ticket-workflow";
 
-export { buildOperations } from "./build-workflow/operations";
-
 // The worker's submit_work completion is an ai-chat session, so its task output
 // is the transcript; the outcome lives in the submit_work tool call arguments.
 function workerOutcome(output: unknown): "implemented" | "blocked" | undefined {
@@ -59,6 +57,14 @@ export type BuildTaskOutputs = {
   persistPlan: string;
 };
 
+// The domain data a build instance carries: the spec and seams recorded by the
+// submit_spec tool during the specing session. The spec is injected into the
+// planner via inputFromInstanceState and persisted by finalize_spec. (Seams
+// live inside the spec markdown, not as a separate state field.)
+export type BuildWorkflowInstanceState = {
+  spec?: string;
+};
+
 export type BuildStateId =
   | "specing"
   | "planned"
@@ -79,10 +85,7 @@ export const buildWorkflow = defineWorkflow({
     plan: {} as BuildPlan,
     persistPlan: {} as string,
   },
-  workflowInstanceState: {} as {
-    spec?: string;
-    seams?: string[];
-  },
+  workflowInstanceState: {} as BuildWorkflowInstanceState,
   states: [
     {
       id: "specing",

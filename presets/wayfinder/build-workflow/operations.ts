@@ -2,18 +2,27 @@
 
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { OperationContext, OperationFn } from "workflow-engine/runners";
 import {
   mergeBranch,
+  type OperationContext,
   prepareIsolatedWorkspace,
   readFlowSettings,
 } from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
-import type { BuildPlan, BuildTicket } from "../build-workflow";
+import type {
+  BuildItemWorkflowInstanceState,
+  BuildPlan,
+  BuildTicket,
+  BuildWorkflowInstanceState,
+} from "../build-workflow";
 
-export const buildOperations: Record<string, OperationFn> = {
+// The build-phase ops serve two workflows with different state types, so they
+// split into two groups; flow.ts binds each state type and merges both.
+export const buildOperations = {
   finalize_spec: finalizeSpecOp,
   persist_build_plan: persistBuildPlanOp,
+};
+export const buildItemOperations = {
   prepare_build_workspace: prepareBuildWorkspaceOp,
   merge_build_work: mergeBuildWorkOp,
 };
@@ -26,7 +35,7 @@ export const buildOperations: Record<string, OperationFn> = {
 function finalizeSpecOp(
   _task: TaskDefinition,
   _params: Record<string, unknown>,
-  ctx: OperationContext
+  ctx: OperationContext<BuildWorkflowInstanceState>
 ): string {
   const raw = ctx.workflowInstanceState().spec;
   const spec = typeof raw === "string" ? raw : "";
@@ -119,7 +128,7 @@ function buildTicketSection(ticket: BuildTicket): string[] {
 function prepareBuildWorkspaceOp(
   _task: TaskDefinition,
   _params: Record<string, unknown>,
-  ctx: OperationContext
+  ctx: OperationContext<BuildItemWorkflowInstanceState>
 ): Record<string, unknown> {
   const result = prepareWorkspace(ctx);
   if (result.ok !== true) {
@@ -143,7 +152,7 @@ function prepareBuildWorkspaceOp(
 function mergeBuildWorkOp(
   task: TaskDefinition,
   params: Record<string, unknown>,
-  ctx: OperationContext
+  ctx: OperationContext<BuildItemWorkflowInstanceState>
 ): Record<string, unknown> {
   const settings = readFlowSettings(ctx.flowConfig());
   if (
@@ -156,7 +165,10 @@ function mergeBuildWorkOp(
   return mergeBranch(task, params, ctx);
 }
 
-function prepareWorkspace(ctx: OperationContext) {
+// Reads only flow config, so it accepts any workflow's typed context.
+function prepareWorkspace<TState extends Record<string, unknown>>(
+  ctx: OperationContext<TState>
+) {
   const settings = readFlowSettings(ctx.flowConfig());
   const workspacesBasePath =
     readString(ctx.flowConfig().workspacesBasePath) ??

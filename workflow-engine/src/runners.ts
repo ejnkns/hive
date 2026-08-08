@@ -13,6 +13,7 @@ export {
 } from "./runners/create-ai-task-runner";
 export {
   createOperationRunner,
+  defineOperations,
   type OperationContext,
   type OperationFn,
   type OperationRunnerConfig,
@@ -28,6 +29,7 @@ export {
   mergeBranch,
   validateRepo,
 } from "./runners/create-standard-tool-registry/git-operations";
+export { defineTool, type ToolAuthoring } from "./runners/define-tool";
 export {
   gitOptional,
   resolveBasePath,
@@ -38,7 +40,10 @@ export {
   readPersistedOutput,
   resolvePersistedPath,
 } from "./runners/persist-output";
-export { prepareIsolatedWorkspace } from "./runners/prepare-isolated-workspace";
+export {
+  discardIsolatedWorkspace,
+  prepareIsolatedWorkspace,
+} from "./runners/prepare-isolated-workspace";
 export { toToolMaps } from "./runners/to-tool-maps";
 export type {
   InfrastructureToolName,

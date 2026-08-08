@@ -6,8 +6,6 @@ import {
 } from "./charting-workflow/prompts";
 import type { SessionTranscript } from "./ticket-workflow";
 
-export { chartingOperations } from "./charting-workflow/operations";
-
 export type ChartingItemState = {
   destination?: string;
   notes?: string;

@@ -1,9 +1,11 @@
 // Charting workflow internals; import via charting-workflow.ts.
 
-import type { OperationContext, OperationFn } from "workflow-engine/runners";
+import type { OperationContext } from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
+import type { ChartingItemState } from "../charting-workflow";
 
-export const chartingOperations: Record<string, OperationFn> = {
+// flow.ts binds the state type and merges this into the preset's registry.
+export const chartingOperations = {
   settle_chart: settleChartOp,
 };
 
@@ -14,10 +16,10 @@ export const chartingOperations: Record<string, OperationFn> = {
 function settleChartOp(
   _task: TaskDefinition,
   _params: Record<string, unknown>,
-  ctx: OperationContext
+  ctx: OperationContext<ChartingItemState>
 ): string {
   const config = ctx.flowConfig();
-  const state = ctx.workflowInstanceState() as Record<string, unknown>;
+  const state = ctx.workflowInstanceState();
   const destination =
     readString(state.destination) ?? readString(config.destination) ?? "";
   const notes = readString(state.notes) ?? readString(config.notes) ?? "";

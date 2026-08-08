@@ -1,9 +1,12 @@
 // Requirements workflow internals; import via requirements-workflow.ts.
 
-import type { OperationContext, OperationFn } from "workflow-engine/runners";
+import type { OperationContext } from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
+import type { RequirementsItemState } from "../requirements-workflow";
 
-export const requirementsOperations: Record<string, OperationFn> = {
+// The requirements workflow's operations, keyed by the names its tasks
+// reference. flow.ts binds the state type and merges this into the registry.
+export const requirementsOperations = {
   finalize_requirements: finalizeRequirementsOp,
   clear_requirements_state: clearRequirementsStateOp,
 };
@@ -17,7 +20,7 @@ export const requirementsOperations: Record<string, OperationFn> = {
 function finalizeRequirementsOp(
   _task: TaskDefinition,
   _params: Record<string, unknown>,
-  ctx: OperationContext
+  ctx: OperationContext<RequirementsItemState>
 ): string {
   const raw = ctx.workflowInstanceState().requirementsDraft;
   const draft = typeof raw === "string" ? raw : "";
@@ -75,7 +78,7 @@ function extractRequirementsFromToolCalls(
 function clearRequirementsStateOp(
   _task: TaskDefinition,
   _params: Record<string, unknown>,
-  ctx: OperationContext
+  ctx: OperationContext<RequirementsItemState>
 ): { ok: boolean } {
   ctx.patchWorkflowInstanceState({ requirementsDraft: undefined });
   return { ok: true };

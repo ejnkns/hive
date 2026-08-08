@@ -10,14 +10,22 @@ import {
   TASK_HITL_SYSTEM_PROMPT,
 } from "./ticket-workflow/prompts";
 
-export { ticketOperations } from "./ticket-workflow/operations";
-
 export type TicketType = "research" | "prototype" | "grilling" | "task";
+
+// The parsed arguments of a submit_resolution completion call. When a session
+// ends via the human's Done action instead, the output is the transcript.
+export type ResolutionOutput = {
+  decision: string;
+  gist: string;
+  artifactPath?: string;
+};
 
 // The domain data a ticket instance carries. dependsOn references other ticket
 // instance ids (the flow's create-then-wire blocking edges); normalize_ticket
 // normalizes a comma-separated form string into the array the engine's
-// dependsOnState backstop reads.
+// dependsOnState backstop reads. resolution is the settled decision — written
+// by the submit_resolution tool, read by assemble_resolution to build the
+// decision record.
 export type TicketItemState = {
   title: string;
   question: string;
@@ -31,14 +39,7 @@ export type TicketItemState = {
   hitl?: boolean;
   worktreePath?: string;
   branchName?: string;
-};
-
-// The parsed arguments of a submit_resolution completion call. When a session
-// ends via the human's Done action instead, the output is the transcript.
-export type ResolutionOutput = {
-  decision: string;
-  gist: string;
-  artifactPath?: string;
+  resolution?: ResolutionOutput;
 };
 
 export type SessionTranscript = {
