@@ -167,7 +167,19 @@ const cardsWf = defineWorkflow({
   taskOutputs: {} as Record<string, never>,
   workflowInstanceState: {} as CardsItemState,
   states: [
-    { id: "ready", label: "Ready", category: "initial" },
+    {
+      id: "ready",
+      label: "Ready",
+      category: "initial",
+      actions: [
+        {
+          id: "archive",
+          label: "Archive",
+          variant: "secondary",
+          transitionTo: "done",
+        },
+      ],
+    },
     { id: "done", label: "Done", category: "terminal" },
   ],
   initial: "ready",
@@ -383,6 +395,124 @@ export const flow = {
         report.errors.some((e) => e.includes("reads with no writer")),
         `expected the inconsistent flow's finding, got: ${report.errors.join("; ")}`
       );
+    });
+  });
+
+  describe("structural soundness", () => {
+    // Small single-file definitions with clean state contracts (no reads/
+    // writes), isolating the state-machine findings. The anchor is
+    // `Record<string, unknown>` so only structural warnings can appear.
+    const HEADER = `
+import { defineWorkflow } from "workflow-engine/workflow-types";
+
+const wf = defineWorkflow({
+  id: "w",
+  label: "W",
+  taskOutputs: {} as Record<string, never>,
+  workflowInstanceState: {} as Record<string, unknown>,
+`;
+    const FOOTER = `
+  initial: "idle",
+  terminalStates: ["done"],
+});
+
+export const flow = {
+  id: "structural-flow",
+  label: "Structural Flow",
+  workflows: [wf],
+  edges: [],
+};
+`;
+
+    function check(source: string) {
+      return checkDefinitionSources([{ path: "structural.ts", source }])
+        .warnings;
+    }
+
+    it("flags a state nothing can transition into", () => {
+      const warnings = check(
+        HEADER +
+          `
+  states: [
+    { id: "idle", label: "Idle", category: "initial", actions: [{ id: "go", label: "Go", variant: "primary", transitionTo: "done" }] },
+    { id: "orphan", label: "Orphan", category: "active", actions: [{ id: "x", label: "X", variant: "secondary", transitionTo: "done" }] },
+    { id: "done", label: "Done", category: "terminal" },
+  ],
+` +
+          FOOTER
+      );
+      assert.ok(
+        warnings.some((w) => w.includes('state "orphan" is unreachable')),
+        `expected an unreachable-state warning, got: ${warnings.join("; ")}`
+      );
+    });
+
+    it("flags a non-terminal state with no way out", () => {
+      const warnings = check(
+        HEADER +
+          `
+  states: [
+    { id: "idle", label: "Idle", category: "initial", actions: [{ id: "go", label: "Go", variant: "primary", transitionTo: "limbo" }] },
+    { id: "limbo", label: "Limbo", category: "active" },
+    { id: "done", label: "Done", category: "terminal" },
+  ],
+` +
+          FOOTER
+      );
+      assert.ok(
+        warnings.some((w) => w.includes('state "limbo" has no way out')),
+        `expected a stuck-state warning, got: ${warnings.join("; ")}`
+      );
+    });
+
+    it("flags a never-gated transition", () => {
+      const warnings = check(
+        HEADER +
+          `
+  states: [
+    { id: "idle", label: "Idle", category: "initial", actions: [{ id: "go", label: "Go", variant: "primary", transitionTo: "in_progress" }] },
+    { id: "in_progress", label: "In Progress", category: "active", autoTransitions: [{ to: "done", gate: () => false }] },
+    { id: "done", label: "Done", category: "terminal" },
+  ],
+` +
+          FOOTER
+      );
+      assert.ok(
+        warnings.some((w) => w.includes("gated never")),
+        `expected a never-gated-transition warning, got: ${warnings.join("; ")}`
+      );
+    });
+
+    it("flags a transition targeting an unknown state", () => {
+      const warnings = check(
+        HEADER +
+          `
+  states: [
+    { id: "idle", label: "Idle", category: "initial", actions: [{ id: "go", label: "Go", variant: "primary", transitionTo: "done" }], autoTransitions: [{ to: "nowhere", gate: () => true }] },
+    { id: "done", label: "Done", category: "terminal" },
+  ],
+` +
+          FOOTER
+      );
+      assert.ok(
+        warnings.some((w) => w.includes('targets unknown state "nowhere"')),
+        `expected an unknown-target warning, got: ${warnings.join("; ")}`
+      );
+    });
+
+    it("reports no structural warnings for a sound workflow", () => {
+      const warnings = check(
+        HEADER +
+          `
+  states: [
+    { id: "idle", label: "Idle", category: "initial", actions: [{ id: "go", label: "Go", variant: "primary", transitionTo: "running" }] },
+    { id: "running", label: "Running", category: "active", autoTransitions: [{ to: "done", gate: () => true }] },
+    { id: "done", label: "Done", category: "terminal" },
+  ],
+` +
+          FOOTER
+      );
+      assert.deepEqual(warnings, []);
     });
   });
 });
