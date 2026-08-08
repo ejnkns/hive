@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import type { FlowPersistence } from "workflow-engine/create-flow-runtime";
 import {
   defineWorkflow,
   type FlowDefinition,
@@ -15,7 +14,7 @@ import {
   setDefinitionsBasePathForTest,
   updateUserDefinition,
 } from "./flow-definitions";
-import { createFlowPersistence } from "./flow-persistence";
+import { createFlowPersistence, type FlowStore } from "./flow-persistence";
 import type { FlowEventBusEvent } from "./flow-registry";
 import {
   createFlow,
@@ -371,7 +370,7 @@ const actionDefinition = {
 describe("flow-level actions", () => {
   let dir: string;
   let definitionsDir: string;
-  let persistence: FlowPersistence;
+  let persistence: FlowStore;
 
   beforeEach(() => {
     dir = mkdtempSync(join("/tmp", "flow-actions-test-"));

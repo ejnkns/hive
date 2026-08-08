@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { logger } from "shared/logger";
 import {
   createFlowRuntime,
-  type FlowPersistence,
   type FlowRuntimeAPI,
   type FlowRuntimeEvent,
   type WorkflowInstanceEntry,
@@ -27,13 +26,14 @@ import {
   getRegisteredFlowDefinition,
   loadDefinitionFromSource,
 } from "./flow-definitions";
+import type { FlowStore } from "./flow-persistence";
 import { HttpError } from "./http-error";
 
 const runtimes = new Map<
   string,
   FlowRuntimeAPI<Record<string, unknown>, Record<string, unknown>>
 >();
-let _persistence: FlowPersistence | null = null;
+let _persistence: FlowStore | null = null;
 
 // ── Flow event hub ──
 //
@@ -318,11 +318,11 @@ function collectActionFields(
 
 // ── Persistence accessors ──
 
-export function setFlowPersistence(persistence: FlowPersistence): void {
+export function setFlowPersistence(persistence: FlowStore): void {
   _persistence = persistence;
 }
 
-export function getFlowPersistence(): FlowPersistence | null {
+export function getFlowPersistence(): FlowStore | null {
   return _persistence;
 }
 
@@ -386,7 +386,7 @@ export function purgeFlow(flowId: string): void {
 export function createFlow(
   flowId: string,
   definitionId: string,
-  persistence: FlowPersistence,
+  persistence: FlowStore,
   config?: Record<string, unknown>
 ): FlowRuntimeAPI<Record<string, unknown>, Record<string, unknown>> {
   const definition = getFlowDefinition(definitionId);
@@ -450,7 +450,7 @@ export function createFlow(
 }
 
 export async function rehydrateFlow(
-  persistence: FlowPersistence,
+  persistence: FlowStore,
   flowId: string,
   flowConfig: unknown,
   flowState: unknown,

@@ -10,10 +10,9 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import type { FlowPersistence } from "workflow-engine/create-flow-runtime";
 import { queenBeeFlow } from "../../../../../presets/queen-bee/flow";
 import { registerFlowDefinition } from "../../flow-definitions";
-import { createFlowPersistence } from "../../flow-persistence";
+import { createFlowPersistence, type FlowStore } from "../../flow-persistence";
 import {
   createFlow,
   getFlowRuntime,
@@ -23,7 +22,7 @@ import {
 describe("queen-bee onboarding workflow", () => {
   let root: string;
   let basePath: string;
-  let persistence: FlowPersistence;
+  let persistence: FlowStore;
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), "hive-onboarding-"));

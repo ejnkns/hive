@@ -1,4 +1,4 @@
-/** @public — filesystem-backed FlowPersistence using ~/.hive/flows/ */
+/** @public — filesystem-backed flow store using ~/.hive/flows/ */
 
 import { randomUUID } from "node:crypto";
 import {
@@ -12,9 +12,41 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { HIVE_DIR } from "shared/hive-dir";
-import type { FlowPersistence } from "workflow-engine/create-flow-runtime";
 import type { RuntimeWorkflowInstanceState } from "workflow-engine/shared/workflow-instance-state";
-import type { RunningTaskContext } from "workflow-engine/workflow-types";
+
+// The full store surface the server uses: the engine's write-only
+// FlowPersistence (saveFlow/saveInstance — what the flow runtime calls) plus
+// the read/recovery/delete surface that lives server-side (rehydrate at boot,
+// unlink/purge). The runtime never sees these; the server does.
+export type FlowStore = {
+  saveFlow(flowId: string, config: unknown, state: unknown): void;
+  saveInstance(
+    flowId: string,
+    instanceId: string,
+    workflowId: string,
+    state: RuntimeWorkflowInstanceState
+  ): void;
+  deleteFlow(flowId: string): void;
+  loadFlow(flowId: string): {
+    config: unknown;
+    state: unknown;
+    instances: Array<{
+      instanceId: string;
+      workflowId: string;
+      state: RuntimeWorkflowInstanceState;
+    }>;
+  } | null;
+  loadAllFlows(): Array<{
+    flowId: string;
+    config: unknown;
+    state: unknown;
+    instances: Array<{
+      instanceId: string;
+      workflowId: string;
+      state: RuntimeWorkflowInstanceState;
+    }>;
+  }>;
+};
 
 const DEFAULT_FLOWS_DIR = join(HIVE_DIR, "flows");
 
@@ -52,7 +84,7 @@ type PersistedInstance = {
 
 export function createFlowPersistence(
   flowsDir: string = DEFAULT_FLOWS_DIR
-): FlowPersistence {
+): FlowStore {
   function flowDir(flowId: string): string {
     return join(flowsDir, encodeURIComponent(flowId));
   }
@@ -69,21 +101,14 @@ export function createFlowPersistence(
     return join(instancesDir(flowId), `${encodeURIComponent(instanceId)}.json`);
   }
 
-  function contextFilePath(flowId: string, instanceId: string): string {
-    return join(
-      instancesDir(flowId),
-      `${encodeURIComponent(instanceId)}.ctx.json`
-    );
-  }
-
   function listInstanceIds(flowId: string): string[] {
     const dir = instancesDir(flowId);
     try {
       const entries = readdirSync(dir);
       const seen = new Set<string>();
       for (const name of entries) {
-        const match = name.match(/^(.+?)\.(?:json|ctx\.json)$/);
-        if (match) seen.add(match[1]!);
+        const match = name.match(/^(.+?)\.json$/);
+        if (match) seen.add(match[1]);
       }
       return Array.from(seen);
     } catch {
@@ -108,14 +133,6 @@ export function createFlowPersistence(
       workflowId,
       state,
     } satisfies PersistedInstance);
-  }
-
-  function saveRunningTaskContext(
-    flowId: string,
-    instanceId: string,
-    context: unknown
-  ): void {
-    atomicWrite(contextFilePath(flowId, instanceId), context);
   }
 
   function loadFlow(flowId: string): {
@@ -143,25 +160,12 @@ export function createFlowPersistence(
       );
       if (!persisted) continue;
 
-      const ctx = readJson<Record<string, unknown>>(
-        contextFilePath(flowId, id)
-      );
-
       instances.push({
         instanceId: id,
         workflowId: persisted.workflowId,
-        state: {
-          ...persisted.state,
-          runningTaskContext: ctx
-            ? // ctx is the full saved running-task context (messages, role,
-              // sessionId); merging overrides any stale embedded copy. The
-              // shape is guaranteed by saveRunningTaskContext.
-              ({
-                ...persisted.state.runningTaskContext,
-                ...ctx,
-              } as RunningTaskContext)
-            : persisted.state.runningTaskContext,
-        },
+        // Running-task context persists embedded in the instance state
+        // (saveInstance writes it); rehydrate clears running tasks anyway.
+        state: persisted.state,
       });
     }
 
@@ -188,10 +192,12 @@ export function createFlowPersistence(
             return false;
           }
         })
-        .map((name) => ({
-          flowId: decodeURIComponent(name),
-          ...loadFlow(decodeURIComponent(name))!,
-        }));
+        .map((name) => {
+          const flow = loadFlow(decodeURIComponent(name));
+          if (!flow) return null;
+          return { flowId: decodeURIComponent(name), ...flow };
+        })
+        .filter((flow): flow is NonNullable<typeof flow> => flow !== null);
     } catch {
       return [];
     }
@@ -204,7 +210,6 @@ export function createFlowPersistence(
   return {
     saveFlow,
     saveInstance,
-    saveRunningTaskContext,
     deleteFlow,
     loadFlow,
     loadAllFlows,

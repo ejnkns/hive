@@ -118,46 +118,6 @@ describe("FlowPersistence", () => {
     });
   });
 
-  describe("saveRunningTaskContext", () => {
-    it("persists running task context separately", () => {
-      const dir = tempDir("save-context");
-      const p = createFlowPersistence(dir);
-
-      p.saveFlow("test-flow", {}, {});
-      p.saveInstance("test-flow", "inst-1", "cards", {
-        currentState: "running_agent",
-        taskOutputs: {},
-        hasRunningTask: true,
-        runningTaskId: "run_agent",
-        runningTaskContext: {
-          role: "ai-task",
-          messages: [{ role: "user", content: "hello" }],
-        },
-        workflowInstanceState: {},
-        history: [],
-      });
-
-      // Update context (e.g., new message)
-      p.saveRunningTaskContext("test-flow", "inst-1", {
-        role: "ai-task",
-        messages: [
-          { role: "user", content: "hello" },
-          { role: "assistant", content: "hi there" },
-        ],
-      });
-
-      const result = p.loadFlow("test-flow");
-      assert.ok(result);
-      assert.equal(result.instances.length, 1);
-      const runningCtx = result.instances[0]!.state.runningTaskContext;
-      assert.ok(runningCtx !== null);
-      if (runningCtx.role !== "ai-task" && runningCtx.role !== "ai-chat") {
-        assert.fail("expected a message-carrying running task context");
-      }
-      assert.equal(runningCtx.messages.length, 2);
-    });
-  });
-
   describe("loadAllFlows", () => {
     it("returns empty array when flows dir is empty", () => {
       const dir = tempDir("empty");

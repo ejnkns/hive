@@ -11,10 +11,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import fastifyWebsocket from "@fastify/websocket";
 import Fastify, { type FastifyInstance } from "fastify";
-import {
-  createFlowRuntime,
-  type FlowPersistence,
-} from "workflow-engine/create-flow-runtime";
+import { createFlowRuntime } from "workflow-engine/create-flow-runtime";
 import {
   defineWorkflow,
   type FlowDefinition,
@@ -27,6 +24,7 @@ import {
   resetFlowDefinitionsForTest,
   setDefinitionsBasePathForTest,
 } from "./flow-definitions";
+import type { FlowStore } from "./flow-persistence";
 import {
   registerFlowForTest,
   resetFlowRuntimesForTest,
@@ -82,10 +80,9 @@ const testWorkflow = defineWorkflow({
   terminalStates: ["done"],
 });
 
-const noopPersistence: FlowPersistence = {
+const noopPersistence: FlowStore = {
   saveFlow: () => {},
   saveInstance: () => {},
-  saveRunningTaskContext: () => {},
   deleteFlow: () => {},
   loadFlow: () => null,
   loadAllFlows: () => [],

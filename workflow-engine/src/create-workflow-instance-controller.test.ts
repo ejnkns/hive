@@ -156,6 +156,36 @@ describe("createWorkflowInstanceController", () => {
     assert.equal(controller.getState().workflowInstanceState.attempt, 4);
   });
 
+  it("dispatchAction refuses an action whose gate is false (direct callers cannot bypass)", () => {
+    // cancel's gate is ctx.hasRunningTask; with no task running the action is
+    // not available, and a direct dispatch must not fire it anyway.
+    const controller = createWorkflowInstanceController(testWorkflow, {});
+    controller.dispatchAction("cancel");
+    assert.equal(controller.getState().currentState, "idle");
+    assert.equal(controller.getState().hasRunningTask, false);
+  });
+
+  it("dispatchAction honors a satisfied gate on direct callers", async () => {
+    // Start the auto task (gate-less action), then dispatch cancel while a
+    // task IS running — its gate (hasRunningTask) is satisfied, so the
+    // dispatch goes through and the running task is cancelled back to idle.
+    const runner = new MockRunner();
+    const controller = createWorkflowInstanceController(testWorkflow, {
+      "ai-task": () => runner,
+    });
+
+    controller.dispatchAction("start");
+    assert.equal(controller.getState().hasRunningTask, true);
+
+    controller.dispatchAction("cancel");
+    assert.equal(controller.getState().currentState, "idle");
+    assert.equal(controller.getState().hasRunningTask, false);
+    // The cancelled runner was released (its run() rejection is swallowed by
+    // executeTask's early return once hasRunningTask is false).
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(runner.cancelled, true);
+  });
+
   it("starts in initial state", () => {
     const controller = createWorkflowInstanceController(testWorkflow, {});
     assert.equal(controller.getState().currentState, "idle");

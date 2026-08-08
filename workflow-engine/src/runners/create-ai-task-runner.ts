@@ -2,14 +2,12 @@
 
 import type { ChatMessage } from "../shared/chat-message";
 import type { TaskDefinition, TaskRunner } from "../task-runner";
-import { resolveDottedPath } from "./resolve-dotted-path";
-import { resolveWorkspacePath } from "./resolve-workspace-path";
-import type {
-  ToolCall,
-  ToolDefinition,
-  ToolExecutor,
-  ToolResult,
-} from "./tool-types";
+import {
+  type AgentTurnBehavior,
+  runAgentLoop,
+  seedTaskInput,
+} from "./agent-loop";
+import type { ToolCall, ToolDefinition, ToolExecutor } from "./tool-types";
 
 export type AiTaskModelCaller = (
   systemPrompt: string,
@@ -46,107 +44,45 @@ export function createAiTaskRunner(config: AiTaskRunnerConfig): TaskRunner {
 
   return {
     async run(task: TaskDefinition) {
-      const workspacePath = resolveWorkspacePath(
-        task.workspacePath,
-        config.workflowInstanceState,
-        config.basePath
-      );
-      const toolDefs = (task.tools ?? [])
-        .map((name) => config.toolDefinitions[name])
-        .filter(Boolean);
-
       const messages: ChatMessage[] = [];
-      const injectedInput = resolveDottedPath(
-        config.workflowInstanceState ?? {},
+      seedTaskInput(
+        messages,
+        config.workflowInstanceState,
         task.inputFromInstanceState
       );
-      if (injectedInput !== undefined) {
-        messages.push({
-          role: "user",
-          content:
-            typeof injectedInput === "string"
-              ? injectedInput
-              : JSON.stringify(injectedInput),
-        });
-      }
 
-      for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
-        abortController.signal.throwIfAborted();
-
-        const response = await config.modelCaller(
-          task.systemPrompt ?? "",
-          messages,
-          toolDefs,
-          abortController.signal
-        );
-
-        messages.push({
-          role: "assistant",
-          content: response.content,
-          ...(response.toolCalls?.length
-            ? {
-                tool_calls: response.toolCalls.map((call) => ({
-                  id: call.id,
-                  type: "function" as const,
-                  function: { name: call.name, arguments: call.arguments },
-                })),
-              }
-            : {}),
-        });
-
-        const completionTool = task.completionTool ?? config.completionTool;
-        const completionCall = response.toolCalls?.find(
-          (c) => c.name === completionTool
-        );
-        if (completionCall) {
-          return { output: JSON.parse(completionCall.arguments) };
-        }
-
-        if (!response.toolCalls?.length) {
-          return { output: { content: response.content, messages } };
-        }
-
-        for (const call of response.toolCalls) {
-          abortController.signal.throwIfAborted();
-          const executor = config.toolExecutors[call.name];
-          if (!executor) {
-            messages.push({
-              role: "tool",
-              content: `Unknown tool: ${call.name}`,
-              tool_call_id: call.id,
-            });
-            continue;
+      // The one-shot contract: the completion tool's raw arguments are the
+      // output; a no-tool-call response means the agent finished and the
+      // transcript is the output.
+      const behavior: AgentTurnBehavior = {
+        onComplete: (_response, completionCall) => {
+          if (completionCall === undefined) {
+            throw new Error("ai-task completed without a completion tool call");
           }
+          return JSON.parse(completionCall.arguments);
+        },
+        onNoToolCalls: async (response) => ({
+          action: "return",
+          output: { content: response.content, messages },
+        }),
+      };
 
-          let result: ToolResult;
-          try {
-            result = await executor(call, {
-              workspacePath,
-              basePath: config.basePath,
-              instanceId: config.instanceId,
-              patchWorkflowInstanceState: config.patchWorkflowInstanceState,
-              createWorkflowInstance: config.createWorkflowInstance,
-              signal: abortController.signal,
-            });
-          } catch (err) {
-            messages.push({
-              role: "tool",
-              content: `Tool "${call.name}" failed: ${
-                err instanceof Error ? err.message : String(err)
-              }`,
-              tool_call_id: call.id,
-            });
-            continue;
-          }
-          messages.push({
-            role: "tool",
-            content: result.content,
-            tool_call_id: call.id,
-          });
-        }
-      }
-
-      throw new Error("Iteration budget exhausted");
+      return {
+        output: await runAgentLoop(task, messages, {
+          signal: abortController.signal,
+          modelCaller: config.modelCaller,
+          toolDefinitions: config.toolDefinitions,
+          toolExecutors: config.toolExecutors,
+          behavior,
+          maxIterations: MAX_ITERATIONS,
+          completionTool: config.completionTool,
+          basePath: config.basePath,
+          instanceId: config.instanceId,
+          patchWorkflowInstanceState: config.patchWorkflowInstanceState,
+          workflowInstanceState: config.workflowInstanceState,
+          createWorkflowInstance: config.createWorkflowInstance,
+        }),
+      };
     },
 
     cancel() {

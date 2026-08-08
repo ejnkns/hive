@@ -708,14 +708,6 @@ describe("FlowRuntime", () => {
           saved.push({ flowId, config, state });
         },
         saveInstance() {},
-        saveRunningTaskContext() {},
-        deleteFlow() {},
-        loadFlow() {
-          return null;
-        },
-        loadAllFlows() {
-          return [];
-        },
       };
 
       const runtime = createFlowRuntime(
@@ -750,14 +742,6 @@ describe("FlowRuntime", () => {
         saveFlow() {},
         saveInstance(flowId, instanceId, _workflowId, state) {
           saved.push({ flowId, instanceId, state });
-        },
-        saveRunningTaskContext() {},
-        deleteFlow() {},
-        loadFlow() {
-          return null;
-        },
-        loadAllFlows() {
-          return [];
         },
       };
 

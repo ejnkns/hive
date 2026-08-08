@@ -22,6 +22,17 @@ describe("wayfinder ticket workflow", () => {
     return dir;
   }
 
+  // Graduate honors the gate contract: the ticket's fog state runs an auto
+  // normalize task on entry, so graduate (gated on !hasRunningTask) only
+  // dispatches once that task has finished — as a UI user would click it.
+  async function graduate(controller: {
+    getState(): { hasRunningTask: boolean };
+    dispatchAction(actionId: string): void;
+  }): Promise<void> {
+    await waitFor(() => !controller.getState().hasRunningTask);
+    controller.dispatchAction("graduate");
+  }
+
   afterEach(() => {
     for (const dir of tempDirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true });
@@ -51,7 +62,7 @@ describe("wayfinder ticket workflow", () => {
     });
     const ticketId = controller.id;
 
-    controller.dispatchAction("graduate");
+    await graduate(controller);
     assert.equal(controller.getState().currentState, "ready");
 
     const readyActions = controller.getAvailableActions().map((a) => a.id);
@@ -89,7 +100,7 @@ describe("wayfinder ticket workflow", () => {
         dependsOn: [],
       },
     });
-    controller.dispatchAction("graduate");
+    await graduate(controller);
     assert.equal(controller.getState().currentState, "ready");
 
     const actionIds = controller.getAvailableActions().map((a) => a.id);
@@ -113,7 +124,7 @@ describe("wayfinder ticket workflow", () => {
         dependsOn: [],
       },
     });
-    afk.dispatchAction("graduate");
+    await graduate(afk);
     assert.ok(afk.getAvailableActions().some((a) => a.id === "claim_task"));
     assert.ok(
       !afk.getAvailableActions().some((a) => a.id === "claim_task_hitl")
@@ -127,7 +138,7 @@ describe("wayfinder ticket workflow", () => {
         dependsOn: [],
       },
     });
-    hitl.dispatchAction("graduate");
+    await graduate(hitl);
     assert.ok(
       hitl.getAvailableActions().some((a) => a.id === "claim_task_hitl")
     );
@@ -151,7 +162,7 @@ describe("wayfinder ticket workflow", () => {
         dependsOn: [],
       },
     });
-    blocker.dispatchAction("graduate");
+    await graduate(blocker);
 
     const dependent = runtime.addWorkflowInstance("ticket", {
       workflowInstanceState: {
@@ -160,7 +171,7 @@ describe("wayfinder ticket workflow", () => {
         dependsOn: [blocker.id],
       },
     });
-    dependent.dispatchAction("graduate");
+    await graduate(dependent);
 
     assert.equal(dependent.getState().currentState, "ready");
     const blockedActions = dependent.getAvailableActions().map((a) => a.id);
@@ -210,7 +221,7 @@ describe("wayfinder ticket workflow", () => {
         dependsOn: [],
       },
     });
-    controller.dispatchAction("graduate");
+    await graduate(controller);
     controller.dispatchAction("claim_grilling");
     assert.equal(controller.getState().currentState, "resolving_grilling");
 
@@ -269,7 +280,7 @@ describe("wayfinder ticket workflow", () => {
         dependsOn: [],
       },
     });
-    controller.dispatchAction("graduate");
+    await graduate(controller);
     controller.dispatchAction("claim_prototype");
 
     // prepare_prototype_workspace records the sandbox before the session starts.

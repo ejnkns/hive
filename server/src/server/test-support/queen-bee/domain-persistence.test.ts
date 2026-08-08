@@ -11,10 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import {
-  createFlowRuntime,
-  type FlowPersistence,
-} from "workflow-engine/create-flow-runtime";
+import { createFlowRuntime } from "workflow-engine/create-flow-runtime";
 import {
   type AiChatModelCaller,
   type AiTaskModelCaller,
@@ -35,7 +32,7 @@ import {
 import { queenBeeTools } from "../../../../../presets/queen-bee/tools";
 import { createEngineRunners } from "../../engine-bridge";
 import { registerFlowDefinition } from "../../flow-definitions";
-import { createFlowPersistence } from "../../flow-persistence";
+import { createFlowPersistence, type FlowStore } from "../../flow-persistence";
 import {
   createFlow,
   getFlowPersistence,
@@ -952,7 +949,7 @@ function makeCardRuntime(options: {
   workspacesBasePath: string;
   workerCaller: AiChatModelCaller;
   reviewerCaller: AiTaskModelCaller;
-  persistence?: FlowPersistence;
+  persistence?: FlowStore;
 }): ReturnType<typeof createFlowRuntime> {
   const flowConfig = {
     definitionId: "queen-bee",

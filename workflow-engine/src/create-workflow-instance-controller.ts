@@ -1,4 +1,4 @@
-import { dependsOnMet, getAvailableActions } from "./get-available-actions";
+import { getAvailableActions } from "./get-available-actions";
 import { readFlowSettings } from "./read-flow-settings";
 import { reduce, type WorkflowEvent } from "./reduce";
 import { persistOutput } from "./runners/persist-output";
@@ -344,10 +344,17 @@ export function createWorkflowInstanceController(
       };
     },
     dispatchAction: (actionId: string) => {
-      const stateDef = workflow.states.find((s) => s.id === state.currentState);
-      if (!stateDef) return;
+      // The gate is part of the availability contract: a directly-dispatched
+      // action must be one the UI would show right now (gate + dependsOnState
+      // evaluated through the same getVisibleActions path). Programmatic
+      // dispatch must not bypass what the user sees — the engine's
+      // flow-level dispatchToAll already filters through availableActions,
+      // and this closes the same hole for direct callers.
+      const visible = getVisibleActions();
+      if (!visible.some((action) => action.id === actionId)) return;
 
-      const action = stateDef.actions?.find((a) => a.id === actionId);
+      const stateDef = workflow.states.find((s) => s.id === state.currentState);
+      const action = stateDef?.actions?.find((a) => a.id === actionId);
       if (!action) return;
 
       if (
@@ -356,19 +363,6 @@ export function createWorkflowInstanceController(
       ) {
         const count = workflowInstancesInState(action.transitionTo).length;
         if (count >= action.maxWorkflowInstancesInTarget) return;
-      }
-
-      if (action.dependsOnState !== undefined && workflowInstancesInState) {
-        const dependees = readDependsOn(state.workflowInstanceState);
-        if (
-          !dependsOnMet(
-            dependees,
-            workflowInstancesInState(action.dependsOnState),
-            workflow.instance?.title
-          )
-        ) {
-          return;
-        }
       }
 
       // newAttempt: this action starts a fresh attempt — the engine bumps the
@@ -424,11 +418,3 @@ export function createWorkflowInstanceController(
 }
 
 // === Helpers ===
-
-// dependsOn is written into workflowInstanceState by the flow edges /
-// callers as a string[]; it is not part of the domain type contract.
-function readDependsOn(itemState: Record<string, unknown>): string[] {
-  const raw = itemState.dependsOn;
-  if (!Array.isArray(raw)) return [];
-  return raw.filter((id): id is string => typeof id === "string");
-}
