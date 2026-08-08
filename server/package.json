@@ -16,10 +16,11 @@
     "dotenv": "^16.5.0",
     "fastify": "^5.9.0",
     "httpxy": "^0.5.3",
+    "lru-cache": "^11.5.1",
     "shared": "workspace:*",
     "telemetry": "workspace:*",
-    "workflow-engine": "workspace:*",
-    "lru-cache": "^11.5.1"
+    "typescript": "^6.0.3",
+    "workflow-engine": "workspace:*"
   },
   "scripts": {
     "build": "tsdown && node scripts/package-assets.mjs",
@@ -31,7 +32,6 @@
     "@types/node": "^26.1.0",
     "@types/ws": "^8.18.1",
     "tsdown": "^0.22.14",
-    "tsx": "^4.23.9",
-    "typescript": "^6.0.3"
+    "tsx": "^4.23.9"
   }
 }

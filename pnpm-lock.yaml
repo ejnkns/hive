@@ -47,6 +47,9 @@ importers:
       telemetry:
         specifier: workspace:*
         version: link:../telemetry
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
       workflow-engine:
         specifier: workspace:*
         version: link:../workflow-engine
@@ -63,9 +66,6 @@ importers:
       tsx:
         specifier: ^4.23.9
         version: 4.23.9
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
 
   shared:
     devDependencies:

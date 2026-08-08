@@ -17,10 +17,12 @@
  * for inline underlines. */
 
 import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import ts from "typescript";
-import { runtimeDefinitionsDir } from "./flow-definitions";
+import {
+  findServerPackageRoot,
+  runtimeDefinitionsDir,
+} from "./flow-definitions";
 
 export type TypecheckIssue = {
   code: number;
@@ -37,7 +39,9 @@ let tsconfigCache: ts.CompilerOptions | undefined;
 // within a process.
 function serverCompilerOptions(): ts.CompilerOptions {
   if (tsconfigCache) return tsconfigCache;
-  const serverRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
+  // The server package root (same resolution the loader uses, working from
+  // source and from the bundled dist) — the tsconfig lives there.
+  const serverRoot = findServerPackageRoot();
   const tsconfigPath = join(serverRoot, "tsconfig.json");
   const configFile = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
   if (configFile.error) {

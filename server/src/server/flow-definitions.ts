@@ -326,7 +326,11 @@ export function runtimeDefinitionsDir(): string {
   return join(findServerPackageRoot(), ".runtime", "definitions");
 }
 
-function findServerPackageRoot(): string {
+// Walks up from the caller to the server package root (package.json name
+// "server"), working from source (dev/tests) and from the bundled dist.
+// Exported so the per-definition typechecker resolves the server tsconfig
+// the same way in both.
+export function findServerPackageRoot(): string {
   let dir = dirname(fileURLToPath(import.meta.url));
   while (true) {
     const packagePath = join(dir, "package.json");
