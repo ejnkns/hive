@@ -3,8 +3,10 @@ import type { Provider } from "../registry";
 export const googleAi = {
   name: "google-ai",
   displayName: "Google AI",
-  chatEndpoint: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-  modelsEndpoint: "https://generativelanguage.googleapis.com/v1beta/openai/models",
+  chatEndpoint:
+    "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+  modelsEndpoint:
+    "https://generativelanguage.googleapis.com/v1beta/openai/models",
   apiKeyEnvVar: "GOOGLE_API_KEY",
   models: [
     { id: "gemini-1.5-pro", contextLength: 2_097_152 },

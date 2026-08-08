@@ -16,7 +16,10 @@ export const openrouter = {
     { id: "tencent/hy3:free", contextLength: 262_000 },
     { id: "qwen/qwen3-coder:free", contextLength: 1_000_000 },
     { id: "nvidia/nemotron-3-super-120b-a12b:free", contextLength: 1_000_000 },
-    { id: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", contextLength: 256_000 },
+    {
+      id: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+      contextLength: 256_000,
+    },
     { id: "openai/gpt-oss-20b:free", contextLength: 131_000 },
     { id: "nvidia/nemotron-3-nano-30b-a3b:free", contextLength: 256_000 },
     { id: "google/gemma-4-31b-it:free", contextLength: 262_000 },

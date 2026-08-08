@@ -3,7 +3,8 @@ import type { Provider } from "../registry";
 export const ovhcloud = {
   name: "ovhcloud",
   displayName: "OVHcloud AI",
-  chatEndpoint: "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions",
+  chatEndpoint:
+    "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions",
   modelsEndpoint: "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/models",
   apiKeyEnvVar: "OVH_AI_ENDPOINTS_ACCESS_TOKEN",
   models: [
