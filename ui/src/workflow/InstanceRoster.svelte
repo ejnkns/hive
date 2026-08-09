@@ -1,5 +1,7 @@
 <script lang="ts">
 import { slugify } from "shared/slugify";
+import Button from "../shared/ui/Button.svelte";
+import Dialog from "../shared/ui/Dialog.svelte";
 import type { FlowResponse } from "./flow-api";
 import { deleteFlow } from "./flow-api";
 import StatusDot from "./StatusDot.svelte";
@@ -16,18 +18,33 @@ let {
   onError: (err: string) => void;
 } = $props();
 
+let deleteOpen = $state(false);
+let deleteTarget = $state<FlowResponse | null>(null);
+let deleting = $state(false);
+
 function instanceHref(flow: FlowResponse): string {
   return `#/flows/${encodeURIComponent(definitionId)}/${encodeURIComponent(
     slugify(String(flow.config?.name ?? flow.id))
   )}`;
 }
 
-async function remove(flow: FlowResponse) {
+function askDelete(flow: FlowResponse) {
+  deleteTarget = flow;
+  deleteOpen = true;
+}
+
+async function confirmDelete() {
+  if (!deleteTarget) return;
+  deleting = true;
   try {
-    await deleteFlow(flow.id);
+    await deleteFlow(deleteTarget.id);
+    deleteOpen = false;
+    deleteTarget = null;
     onDeleted();
   } catch (err) {
     onError(err instanceof Error ? err.message : "Failed to delete instance");
+  } finally {
+    deleting = false;
   }
 }
 </script>
@@ -46,7 +63,7 @@ async function remove(flow: FlowResponse) {
           type="button"
           class="roster-delete"
           aria-label={`Delete ${flow.config?.name ?? flow.id}`}
-          onclick={() => remove(flow)}
+          onclick={() => askDelete(flow)}
         >
           Delete
         </button>
@@ -54,6 +71,24 @@ async function remove(flow: FlowResponse) {
     {/each}
   </div>
 {/if}
+
+<Dialog bind:open={deleteOpen} label="Delete instance" contentMaxWidth="420px">
+  {#if deleteTarget}
+    <h2 class="dialog-title">Delete instance</h2>
+    <p class="dialog-text">
+      Delete "{deleteTarget.config?.name ?? deleteTarget.id}"? This removes the
+      flow instance's operational state and cannot be undone.
+    </p>
+    <div class="dialog-actions">
+      <Button variant="rose" disabled={deleting} onclick={confirmDelete}>
+        {deleting ? "Deleting..." : "Delete instance"}
+      </Button>
+      <Button variant="platinum" onclick={() => (deleteOpen = false)}>
+        Cancel
+      </Button>
+    </div>
+  {/if}
+</Dialog>
 
 <style>
 .roster {
@@ -112,5 +147,25 @@ async function remove(flow: FlowResponse) {
 
 .roster-delete:hover {
   color: var(--error);
+}
+
+.dialog-title {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.dialog-text {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0 0 1rem 0;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 </style>
