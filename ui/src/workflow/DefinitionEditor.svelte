@@ -165,18 +165,30 @@ async function closeAuthoring() {
 }
 
 async function resumeAuthoring(): Promise<void> {
+  // A new definition always starts fresh: the previous new-definition session
+  // (keyed "new") must not leak in — its source and "done" state are stale.
+  if (isNew) {
+    localStorage.removeItem(authorStorageKey());
+    return;
+  }
   const stored = localStorage.getItem(authorStorageKey());
   if (!stored) return;
   try {
     const flow = await fetchFlow(stored);
+    const instance = flow.instances[0];
+    // Only resume an in-progress session. A finished session on a fresh editor
+    // visit would re-apply its stale source over whatever is loaded now.
+    if (
+      !instance ||
+      instance.state.currentState === "done" ||
+      instance.state.currentState === "failed"
+    ) {
+      localStorage.removeItem(authorStorageKey());
+      return;
+    }
     flowStore.upsert(flow);
     authorFlowId = flow.id;
-    // The session is the single instance of the authoring flow.
-    authorInstanceId = flow.instances[0]?.id ?? null;
-    if (authorInstanceId === null) {
-      authorFlowId = null;
-      localStorage.removeItem(authorStorageKey());
-    }
+    authorInstanceId = instance.id;
   } catch {
     // The stored session is gone (deleted server-side); forget it.
     localStorage.removeItem(authorStorageKey());
