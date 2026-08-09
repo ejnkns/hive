@@ -396,11 +396,16 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
 
   server.post("/api/flows/definitions/author", async (request, reply) => {
     // Creates a flow-authoring session: a hidden flow instance whose ai-chat
-    // agent converges on a spec with the user. The mode picks the drafting
-    // task shape (interactive chat vs autonomous one-shot); the prompt is
-    // recorded in instance state and, for conversational sessions, sent as the
-    // first chat message.
-    const body = request.body as { prompt?: string; lucky?: boolean } | null;
+    // agent converges on a spec with the user. The session is interactive and
+    // stays alive until the user closes it or leaves; the prompt (and optional
+    // context, e.g. an existing definition to revise) is recorded in instance
+    // state and sent as the first chat message — wrapped in the "no questions"
+    // instruction for the I'm-feeling-lucky path.
+    const body = request.body as {
+      prompt?: string;
+      lucky?: boolean;
+      context?: string;
+    } | null;
     const prompt = body?.prompt;
     if (typeof prompt !== "string" || prompt.trim() === "") {
       return reply.status(400).send({ error: "prompt is required" });
@@ -415,35 +420,26 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
 
     const lucky = body?.lucky === true;
     const flowId = `author-${randomUUID()}`;
-    const runtime = createFlow(flowId, AUTHORING_DEFINITION_ID, persistence, {
+    const runtime = createFlow(flowId, AUTHORING_DEFINITION_ID, persistence);
+    const instance = runtime.getWorkflowInstanceEntries()[0];
+    if (!instance) {
+      return reply
+        .status(500)
+        .send({ error: "No authoring session instance created" });
+    }
+
+    const controller = runtime.getWorkflowInstance(instance.id);
+    controller?.patchWorkflowInstanceState({
+      prompt: prompt.trim(),
       mode: lucky ? "lucky" : "conversational",
     });
-
-    const seeded = runtime.getWorkflowInstanceEntries()[0];
-    let instance: { id: string };
-    if (seeded) {
-      // Conversational: the seeded drafting session waits for input. Record
-      // the prompt and send it as the first chat message.
-      instance = seeded;
-      const controller = runtime.getWorkflowInstance(instance.id);
-      controller?.patchWorkflowInstanceState({
-        prompt: prompt.trim(),
-        mode: "conversational",
-      });
-      const taskId = controller?.getState().runningTaskId;
-      if (taskId) controller?.sendTaskInput(taskId, prompt.trim(), "user");
-    } else {
-      // Lucky: the seed heuristic skips input-driven initial ai-tasks, so add
-      // the session with its input; the autonomous drafting task drives itself
-      // from the seeded luckyInput message and finalizes on its own.
-      const created = runtime.addWorkflowInstance("session", {
-        workflowInstanceState: {
-          prompt: prompt.trim(),
-          mode: "lucky",
-          luckyInput: `Produce the complete flow spec now. Do not ask clarifying questions — make reasonable assumptions, call set_flow_spec, then finish_authoring.\n\nRequest: ${prompt.trim()}`,
-        },
-      });
-      instance = { id: created.id };
+    const taskId = controller?.getState().runningTaskId;
+    if (taskId) {
+      const context = typeof body?.context === "string" ? body.context : "";
+      const firstMessage = lucky
+        ? `Produce the complete flow spec now. Do not ask clarifying questions — make reasonable assumptions, call set_flow_spec, then call generate_definition.\n\nRequest: ${prompt.trim()}${context ? `\n\n${context}` : ""}`
+        : `${prompt.trim()}${context ? `\n\n${context}` : ""}`;
+      controller.sendTaskInput(taskId, firstMessage, "user");
     }
 
     return reply.status(201).send({

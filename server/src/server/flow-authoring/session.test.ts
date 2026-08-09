@@ -1,8 +1,9 @@
-// The flow-authoring session: a hidden flow whose ai-chat agent converges on a
-// spec, finalizes through the full generation gate, and bounces gate failures
-// back to a bounded revising round. The engine's model caller is stubbed (the
-// runner seam), while the tools, operations, and the gate run for real — so
-// this proves the session lifecycle end to end without a provider call.
+// The flow-authoring session: a single interactive drafting state whose ai-chat
+// agent maintains the spec via set_flow_spec and runs the generation gate via
+// the generate_definition TOOL — so gate failures return to the agent in the
+// same conversation (nothing is lost) and the session never ends on its own.
+// The engine's model caller is stubbed (the runner seam); the tools and the
+// gate run for real, proving the lifecycle without a provider call.
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
@@ -18,7 +19,6 @@ import type { TaskRunnerContext } from "workflow-engine/task-runner";
 import { STRUCTURED_INTAKE_EXEMPLAR } from "./index";
 import {
   type AuthoringItemState,
-  authoringOperations,
   authoringSessionFlow,
   authoringTools,
 } from "./session";
@@ -43,25 +43,23 @@ function operationContext(
   };
 }
 
-// A stateful model stub: each call returns the next scripted tool call, so a
-// test can drive the drafting session and any revising rounds.
-function scriptedModel(script: ToolCall[]) {
+// A stateful model stub: each call returns the next scripted tool call or a
+// plain text reply, so a test can drive the conversation end to end.
+function scriptedModel(script: Array<ToolCall | string>) {
   let i = 0;
   return async (): Promise<{ content: string; toolCalls?: ToolCall[] }> => {
-    const call = script[i];
+    const entry = script[i];
     i++;
-    assert.ok(call, `model stub exhausted after ${i} calls`);
-    return { content: "", toolCalls: [call] };
+    assert.ok(entry !== undefined, `model stub exhausted after ${i} calls`);
+    if (typeof entry === "string") return { content: entry };
+    return { content: "", toolCalls: [entry] };
   };
 }
 
-function buildRuntime(
-  model: ReturnType<typeof scriptedModel>,
-  mode: "conversational" | "lucky" = "conversational"
-) {
+function buildRuntime(model: ReturnType<typeof scriptedModel>) {
   return createFlowRuntime(
     "author-test",
-    authoringSessionFlow.buildWorkflows({ mode }),
+    authoringSessionFlow.workflows,
     [],
     {
       "ai-chat": (ctx) =>
@@ -77,7 +75,7 @@ function buildRuntime(
       operation: (ctx) =>
         createOperationRunner({
           getContext: () => operationContext(ctx),
-          operations: authoringOperations,
+          operations: {},
         }),
     },
     { definitionId: "flow-authoring", name: "author-test" }
@@ -92,153 +90,115 @@ function setSpecCall(spec: unknown): ToolCall {
   };
 }
 
-const finishCall: ToolCall = {
-  id: "c2",
-  name: "finish_authoring",
-  arguments: "{}",
+function genCall(spec: unknown): ToolCall {
+  return {
+    id: "c2",
+    name: "generate_definition",
+    arguments: JSON.stringify({ spec: JSON.stringify(spec) }),
+  };
+}
+
+// A spec that fails validation (a gate referencing an unknown task).
+const BAD_SPEC = {
+  ...STRUCTURED_INTAKE_EXEMPLAR,
+  workflows: [
+    {
+      ...STRUCTURED_INTAKE_EXEMPLAR.workflows[0],
+      states: STRUCTURED_INTAKE_EXEMPLAR.workflows[0].states.map((s) =>
+        s.id === "inbox"
+          ? {
+              ...s,
+              autoTransitions: [
+                {
+                  to: "needs_review",
+                  gate: { kind: "taskSuccess", task: "nonexistent" },
+                },
+              ],
+            }
+          : s
+      ),
+    },
+  ],
 };
 
 async function settle(): Promise<void> {
-  // Let the engine's auto task chains (model turns, tool execution, the gate)
-  // run to completion.
+  // Let the engine's async chains (model turns, tool execution, the gate) run.
   await new Promise((resolve) => setTimeout(resolve, 50));
 }
 
+async function runConversation(script: Array<ToolCall | string>) {
+  const model = scriptedModel(script);
+  const runtime = buildRuntime(model);
+  const controller = runtime.addWorkflowInstance("session");
+  await settle();
+  assert.equal(controller.getState().currentState, "drafting");
+  assert.equal(controller.getState().hasRunningTask, true);
+  controller.sendTaskInput("assistant", "Build a triage flow", "user");
+  for (let i = 0; i < 8; i++) await settle();
+  return controller;
+}
+
 describe("flow-authoring session", () => {
-  it("converges on a spec, finalizes, and produces gate-clean source", async () => {
-    const model = scriptedModel([
+  it("converges on a spec and generates gate-clean source in the same conversation", async () => {
+    const controller = await runConversation([
       setSpecCall(STRUCTURED_INTAKE_EXEMPLAR),
-      finishCall,
+      genCall(STRUCTURED_INTAKE_EXEMPLAR),
+      "Done!",
     ]);
-    const runtime = buildRuntime(model);
-    const controller = runtime.addWorkflowInstance("session");
-    await settle();
-    // The drafting session is running and waiting for the first message.
-    assert.equal(controller.getState().currentState, "drafting");
-    assert.equal(controller.getState().hasRunningTask, true);
 
-    controller.sendTaskInput("assistant", "Build a triage flow", "user");
-    await settle();
-    await settle();
-
+    const state = controller.getState();
     assert.equal(
-      controller.getState().currentState,
-      "done",
-      `expected done, got ${controller.getState().currentState}`
+      state.currentState,
+      "drafting",
+      "the session must never leave drafting"
     );
-    const state = controller.getState()
-      .workflowInstanceState as AuthoringItemState;
+    assert.equal(
+      state.history.filter((h) => h.type === "state_transition").length,
+      0,
+      "generation must not transition the instance"
+    );
+    const itemState = state.workflowInstanceState as AuthoringItemState;
     assert.ok(
-      typeof state.source === "string" &&
-        state.source.includes("defineWorkflow"),
+      typeof itemState.source === "string" &&
+        itemState.source.includes("defineWorkflow"),
       "the gate-passed source must be written into instance state"
     );
-    assert.equal(state.report?.passed, true);
+    assert.equal(itemState.report?.passed, true);
     assert.equal(
-      state.suggestedName,
+      itemState.suggestedName,
       "Item Intake",
       "the spec's label must be suggested as the definition name"
     );
-    assert.deepEqual(state.gateErrors ?? [], []);
+    assert.deepEqual(itemState.gateErrors ?? [], []);
   });
 
-  it("bounces gate failures back to a revising round that fixes the spec", async () => {
-    // Draft with a spec that fails validation (unknown task in a gate), then
-    // finish; the gate rejects → revising → the agent submits the corrected
-    // spec and finishes → done.
-    const badSpec = {
-      ...STRUCTURED_INTAKE_EXEMPLAR,
-      workflows: [
-        {
-          ...STRUCTURED_INTAKE_EXEMPLAR.workflows[0],
-          states: STRUCTURED_INTAKE_EXEMPLAR.workflows[0].states.map((s) =>
-            s.id === "inbox"
-              ? {
-                  ...s,
-                  autoTransitions: [
-                    {
-                      to: "needs_review",
-                      gate: { kind: "taskSuccess", task: "nonexistent" },
-                    },
-                  ],
-                }
-              : s
-          ),
-        },
-      ],
-    };
-    const model = scriptedModel([
-      setSpecCall(badSpec),
-      finishCall,
+  it("returns gate failures to the agent in-conversation, which fixes and regenerates", async () => {
+    const controller = await runConversation([
+      setSpecCall(BAD_SPEC),
+      genCall(BAD_SPEC),
       setSpecCall(STRUCTURED_INTAKE_EXEMPLAR),
-      finishCall,
+      genCall(STRUCTURED_INTAKE_EXEMPLAR),
+      "Done!",
     ]);
-    const runtime = buildRuntime(model);
-    const controller = runtime.addWorkflowInstance("session");
-    await settle();
-    controller.sendTaskInput("assistant", "Build a triage flow", "user");
-    await settle();
-    await settle();
-    await settle();
 
-    assert.equal(controller.getState().currentState, "done");
-    const state = controller.getState()
-      .workflowInstanceState as AuthoringItemState;
-    assert.equal(state.report?.passed, true);
-    // The lifecycle passed through revising on the way to done.
-    const states = controller
-      .getState()
-      .history.filter((h) => h.type === "state_transition")
-      .map((h) => (h.type === "state_transition" ? h.toState : ""));
-    assert.ok(
-      states.includes("revising"),
-      `expected a revising round in the history, got: ${states.join(" → ")}`
-    );
-  });
-
-  it("gives up after three failed finalize runs", async () => {
-    // Draft + finish with a perpetually bad spec: three finalize failures
-    // escalate to the failed terminal instead of revising forever.
-    const badSpec = {
-      ...STRUCTURED_INTAKE_EXEMPLAR,
-      workflows: [
-        {
-          ...STRUCTURED_INTAKE_EXEMPLAR.workflows[0],
-          states: STRUCTURED_INTAKE_EXEMPLAR.workflows[0].states.map((s) =>
-            s.id === "inbox"
-              ? {
-                  ...s,
-                  autoTransitions: [
-                    {
-                      to: "needs_review",
-                      gate: { kind: "taskSuccess", task: "nonexistent" },
-                    },
-                  ],
-                }
-              : s
-          ),
-        },
-      ],
-    };
-    const model = scriptedModel([
-      setSpecCall(badSpec),
-      finishCall,
-      setSpecCall(badSpec),
-      finishCall,
-      setSpecCall(badSpec),
-      finishCall,
-    ]);
-    const runtime = buildRuntime(model);
-    const controller = runtime.addWorkflowInstance("session");
-    await settle();
-    controller.sendTaskInput("assistant", "Build a triage flow", "user");
-    for (let i = 0; i < 8; i++) await settle();
-
+    const state = controller.getState();
     assert.equal(
-      controller.getState().currentState,
-      "failed",
-      `expected failed after three finalize runs, got ${controller.getState().currentState}`
+      state.currentState,
+      "drafting",
+      "a failed gate must not transition the instance — the conversation continues"
     );
+    assert.equal(
+      state.history.filter((h) => h.type === "state_transition").length,
+      0,
+      "the whole fix-and-retry cycle must stay in one session"
+    );
+    const itemState = state.workflowInstanceState as AuthoringItemState;
+    assert.equal(itemState.report?.passed, true);
+    assert.ok(
+      typeof itemState.source === "string" && itemState.source !== "",
+      "the corrected spec must produce a source"
+    );
+    assert.deepEqual(itemState.gateErrors ?? [], []);
   });
 
   it("set_flow_spec rejects invalid JSON and reports validation findings", async () => {
@@ -279,40 +239,56 @@ describe("flow-authoring session", () => {
     );
   });
 
-  it("lucky mode drives the session autonomously (no user input, no finalize action)", async () => {
-    const model = scriptedModel([
-      setSpecCall(STRUCTURED_INTAKE_EXEMPLAR),
-      finishCall,
-    ]);
-    const runtime = buildRuntime(model, "lucky");
-    // The lucky workflow's drafting task declares its input and has no
-    // finalize action — the agent is seeded and drives itself.
-    const controller = runtime.addWorkflowInstance("session", {
-      workflowInstanceState: {
-        prompt: "Build a triage flow",
-        mode: "lucky",
-        luckyInput:
-          "Produce the complete flow spec now. Do not ask clarifying questions — call set_flow_spec, then finish_authoring.\n\nRequest: Build a triage flow",
+  it("generate_definition writes the source on success and gateErrors on failure", async () => {
+    const tool = authoringTools[1];
+    assert.equal(tool.definition.function.name, "generate_definition");
+
+    // Success: the exemplar passes the full gate.
+    const okCaptured: { patched?: Partial<AuthoringItemState> } = {};
+    const ok = await tool.executor(
+      {
+        id: "g1",
+        name: "generate_definition",
+        arguments: JSON.stringify({
+          spec: JSON.stringify(STRUCTURED_INTAKE_EXEMPLAR),
+        }),
       },
-    });
-    const available = controller.getAvailableActions();
-    assert.equal(
-      available.some((a) => a.id === "finalize"),
-      false,
-      "lucky mode must not offer the finalize action"
+      {
+        patchWorkflowInstanceState: (patch: Partial<AuthoringItemState>) => {
+          okCaptured.patched = patch;
+        },
+      } as never
     );
-
-    // No sendTaskInput — the agent runs from its seeded input to done.
-    for (let i = 0; i < 6; i++) await settle();
-
-    assert.equal(
-      controller.getState().currentState,
-      "done",
-      `lucky session should reach done autonomously, got ${controller.getState().currentState}`
+    assert.equal(ok.isError, false);
+    assert.match(ok.content, /generated successfully/);
+    assert.ok(
+      typeof okCaptured.patched?.source === "string" &&
+        okCaptured.patched.source.includes("defineWorkflow")
     );
-    const state = controller.getState()
-      .workflowInstanceState as AuthoringItemState;
-    assert.equal(state.report?.passed, true);
-    assert.equal(state.mode, "lucky");
+    assert.equal(okCaptured.patched?.report?.passed, true);
+    assert.deepEqual(okCaptured.patched?.gateErrors ?? [], []);
+
+    // Failure: a spec that fails validation records the findings.
+    const badCaptured: { patched?: Partial<AuthoringItemState> } = {};
+    const bad = await tool.executor(
+      {
+        id: "g2",
+        name: "generate_definition",
+        arguments: JSON.stringify({ spec: JSON.stringify(BAD_SPEC) }),
+      },
+      {
+        patchWorkflowInstanceState: (patch: Partial<AuthoringItemState>) => {
+          badCaptured.patched = patch;
+        },
+      } as never
+    );
+    assert.equal(bad.isError, false);
+    assert.match(bad.content, /failed/);
+    assert.equal(badCaptured.patched?.report?.passed, false);
+    assert.ok(
+      (badCaptured.patched?.gateErrors?.length ?? 0) > 0,
+      "gate failures must record gateErrors"
+    );
+    assert.equal(badCaptured.patched?.source, undefined);
   });
 });

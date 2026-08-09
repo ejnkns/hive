@@ -907,21 +907,27 @@ describe("flow API routes", () => {
       controller?.getState().workflowInstanceState.prompt,
       "Build a triage flow"
     );
-    // Conversational mode: the drafting session is interactive, so the human
-    // drives it and the finalize action is available.
+    // Conversational mode: the drafting session is interactive — the human
+    // drives it, and there are no workflow actions (generation is a tool the
+    // agent calls, triggered from the editor).
     assert.equal(
       controller?.getState().workflowInstanceState.mode,
       "conversational"
     );
-    assert.ok(
-      controller
-        ?.getAvailableActions()
-        .some((action) => action.id === "finalize"),
-      "conversational sessions must offer the generate action"
+    const ctx = controller?.getState().runningTaskContext;
+    if (ctx?.role === "ai-chat") {
+      assert.equal(ctx.interactive, true, "drafting must be interactive");
+    } else {
+      assert.fail("drafting must run an ai-chat session");
+    }
+    assert.equal(
+      controller?.getAvailableActions().length,
+      0,
+      "the session has no workflow actions — generation is editor-driven"
     );
   });
 
-  it("POST /api/flows/definitions/author creates an autonomous lucky session", async () => {
+  it("POST /api/flows/definitions/author seeds a lucky session with the no-questions instruction", async () => {
     setFlowPersistence(noopPersistence);
     registerFlowDefinition(authoringSessionFlow, { hidden: true });
     const server = Fastify();
@@ -942,30 +948,20 @@ describe("flow API routes", () => {
     const runtime = getFlowRuntime(flowId);
     const controller = runtime?.getWorkflowInstance(instanceId);
     assert.equal(controller?.getState().workflowInstanceState.mode, "lucky");
-    // Lucky sessions are autonomous: no interactive chat, no generate action.
+    // Lucky sessions are interactive too — the first message carries the
+    // no-questions instruction, and the conversation stays open to refine.
     const ctx = controller?.getState().runningTaskContext;
-    assert.ok(ctx !== null && ctx !== undefined);
     if (ctx?.role === "ai-chat") {
-      assert.equal(
-        ctx.interactive,
-        false,
-        "lucky drafting must not be interactive"
+      assert.equal(ctx.interactive, true);
+      const last = ctx.messages[ctx.messages.length - 1];
+      assert.ok(
+        last?.role === "user" &&
+          last.content.includes("Do not ask clarifying questions"),
+        `expected the lucky instruction as the user message, got: ${last?.content.slice(0, 80)}`
       );
     } else {
       assert.fail("lucky drafting must run an ai-chat session");
     }
-    assert.equal(
-      controller
-        ?.getAvailableActions()
-        .some((action) => action.id === "finalize"),
-      false,
-      "lucky sessions must not offer the generate action"
-    );
-    assert.ok(
-      typeof controller?.getState().workflowInstanceState.luckyInput ===
-        "string",
-      "the lucky seed message must be recorded"
-    );
   });
 
   it("POST /api/flows/definitions/author requires a prompt", async () => {

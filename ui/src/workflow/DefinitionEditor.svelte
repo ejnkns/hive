@@ -98,11 +98,10 @@ const authorPreviewErrors = $derived(
     : []
 );
 
-// When the session finishes, drop the gate-passed source into the editor.
+// When the agent's generate_definition tool succeeds, its source lands in
+// instance state — drop it into the editor and fill the suggested name.
 $effect(() => {
-  const session = authorSession;
-  if (session?.state.currentState !== "done") return;
-  const generatedSource = session.state.workflowInstanceState.source;
+  const generatedSource = authorSession?.state.workflowInstanceState.source;
   if (
     typeof generatedSource !== "string" ||
     generatedSource === "" ||
@@ -114,11 +113,11 @@ $effect(() => {
   source = generatedSource;
   // A new definition needs a name before Save is enabled; the spec's label is
   // the natural one.
-  const suggested = session.state.workflowInstanceState.suggestedName;
+  const suggested = authorSession?.state.workflowInstanceState.suggestedName;
   if (name.trim() === "" && typeof suggested === "string" && suggested !== "") {
     name = suggested;
   }
-  generationReport = session.state.workflowInstanceState
+  generationReport = authorSession?.state.workflowInstanceState
     .report as GenerationReport | null;
 });
 
@@ -133,9 +132,15 @@ async function startAuthoring(lucky: boolean) {
   authoring = true;
   error = null;
   try {
+    // When revising an existing definition, hand the agent its current source
+    // so it can propose changes rather than designing from scratch.
+    const context = isNew
+      ? undefined
+      : `The user wants changes to this existing definition source:\n\n\`\`\`ts\n${source}\n\`\`\``;
     const { flowId, instanceId } = await authorFlowDefinition({
       prompt: aiPrompt.trim(),
       lucky,
+      context,
     });
     authorFlowId = flowId;
     authorInstanceId = instanceId;
@@ -148,6 +153,23 @@ async function startAuthoring(lucky: boolean) {
   } finally {
     authoring = false;
   }
+}
+
+// The editor's Generate button asks the agent to run the gate on the current
+// draft; it stays disabled until a spec draft exists.
+const canGenerate = $derived(
+  authorSession !== null &&
+    typeof authorSession.state.workflowInstanceState.spec === "string" &&
+    authorSession.state.workflowInstanceState.spec !== ""
+);
+
+async function requestGenerate() {
+  if (!authorFlowId || !authorInstanceId || !canGenerate) return;
+  await sendTaskInput(
+    authorFlowId,
+    authorInstanceId,
+    "Generate the definition from the current spec draft."
+  );
 }
 
 async function closeAuthoring() {
@@ -216,23 +238,13 @@ async function handleAuthorSend(
 }
 
 function authorStateLabel(): string {
-  const mode = authorSession?.state.workflowInstanceState.mode;
-  switch (authorSession?.state.currentState) {
-    case "drafting":
-      return mode === "lucky"
-        ? "Generating the definition…"
-        : "Drafting — chat with the agent";
-    case "finalizing":
-      return "Running the generation gate…";
-    case "revising":
-      return "Agent is fixing gate findings…";
-    case "done":
-      return "Done — the source is in the editor";
-    case "failed":
-      return "Failed after three attempts";
-    default:
-      return "";
+  if (typeof authorSession?.state.workflowInstanceState.source === "string") {
+    return "Definition generated — refine or save";
   }
+  const mode = authorSession?.state.workflowInstanceState.mode;
+  return mode === "lucky"
+    ? "Generating the definition…"
+    : "Drafting — chat with the agent";
 }
 // The last generation's gate outcome (errors = why the definition still
 // fails the schema/typecheck gate; the source is still loaded for editing).
@@ -371,6 +383,11 @@ async function save() {
       checkFindings = { errors, warnings };
     } else {
       checkFindings = null;
+      // The definition IS saved — mark the editor clean so the navigation
+      // guard does not ask about "unsaved changes" that are already saved.
+      loadedName = name;
+      loadedDescription = description;
+      loadedSource = source;
       window.location.hash = `#/flows/${encodeURIComponent(result.id)}`;
     }
   } catch (err) {
@@ -472,13 +489,23 @@ async function remove() {
               <div class="author-session">
                 <div class="author-header">
                   <span class="author-state">{authorStateLabel()}</span>
-                  <button
-                    type="button"
-                    class="author-close"
-                    onclick={closeAuthoring}
-                  >
-                    Close session
-                  </button>
+                  <span class="author-actions">
+                    <Button
+                      variant="mint"
+                      size="small"
+                      disabled={!canGenerate}
+                      onclick={requestGenerate}
+                    >
+                      Generate definition
+                    </Button>
+                    <button
+                      type="button"
+                      class="author-close"
+                      onclick={closeAuthoring}
+                    >
+                      Close session
+                    </button>
+                  </span>
                 </div>
                 {#if authorSession?.state.workflowInstanceState.mode === "conversational"}
                   <p class="author-hint">
@@ -897,6 +924,13 @@ h1 {
   justify-content: space-between;
   gap: 0.5rem;
   font-size: 0.6875rem;
+}
+
+.author-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: none;
 }
 
 .author-state {

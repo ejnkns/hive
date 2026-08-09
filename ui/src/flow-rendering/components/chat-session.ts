@@ -13,6 +13,9 @@ export class ChatSession extends LitElement {
     // Read-only sessions (one-shot agents) hide the input row: the user
     // cannot send messages to a session that is not waiting for input.
     interactive: { type: Boolean },
+    // The agent is composing its next reply (mid-turn or mid-tool-loop) —
+    // show a thinking indicator where the reply will land.
+    thinking: { type: Boolean },
   };
 
   static styles = css`
@@ -26,6 +29,46 @@ export class ChatSession extends LitElement {
       max-height: 240px;
       overflow-y: auto;
     }
+
+    .thinking {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      color: var(--muted);
+      font-size: 0.625rem;
+    }
+
+    .thinking-dots {
+      display: inline-flex;
+      gap: 2px;
+    }
+
+    .thinking-dots span {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: thinking-pulse 1.2s ease-in-out infinite;
+    }
+
+    .thinking-dots span:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+
+    .thinking-dots span:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+
+    @keyframes thinking-pulse {
+      0%,
+      100% {
+        opacity: 0.3;
+      }
+      50% {
+        opacity: 1;
+      }
+    }
+
 
     .input-row {
       display: flex;
@@ -73,6 +116,7 @@ export class ChatSession extends LitElement {
   messages: ChatMessage[] = [];
   sessionId = "";
   interactive = false;
+  thinking = false;
 
   private _input = "";
   private _sending = false;
@@ -84,6 +128,16 @@ export class ChatSession extends LitElement {
         <div class="scroll" ${ref(this.scrollRef)}>
           <message-list .messages=${this.messages}></message-list>
         </div>
+        ${
+          this.thinking
+            ? html`<div class="thinking">
+                <span class="thinking-dots"
+                  ><span></span><span></span><span></span></span
+                >
+                Agent is thinking…
+              </div>`
+            : nothing
+        }
         ${
           this.interactive
             ? html`<div class="input-row">

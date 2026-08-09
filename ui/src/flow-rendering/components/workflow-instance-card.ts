@@ -5,6 +5,7 @@ import type {
   WorkflowInstanceEntry,
 } from "workflow-engine/create-flow-runtime";
 import type {
+  ChatMessage,
   CustomRenderKind,
   RuntimeRenderHint,
 } from "workflow-engine/workflow-types";
@@ -291,6 +292,7 @@ export class WorkflowInstanceCard extends LitElement {
             .messages=${ctx.messages}
             .sessionId=${ctx.sessionId}
             .interactive=${ctx.interactive}
+            .thinking=${this.agentIsThinking(ctx.messages)}
             @hive-send-message=${this.handleSendMessage}
           ></chat-session>`
           : ctx.role === "ai-task"
@@ -298,6 +300,15 @@ export class WorkflowInstanceCard extends LitElement {
             : html`<operation-status></operation-status>`
       }
     </div>`;
+  }
+
+  // The agent is composing its next reply when the task is running and the
+  // transcript ends on anything but an assistant message (a user message it
+  // hasn't answered yet, or a tool result mid-loop).
+  private agentIsThinking(messages: ChatMessage[]): boolean {
+    if (!this.instanceEntry.state.hasRunningTask) return false;
+    const last = messages[messages.length - 1];
+    return last !== undefined && last.role !== "assistant";
   }
 
   private renderTaskOutputs() {

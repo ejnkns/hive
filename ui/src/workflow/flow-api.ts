@@ -173,6 +173,9 @@ export async function createFlow(input: {
 export async function authorFlowDefinition(input: {
   prompt: string;
   lucky?: boolean;
+  // Optional extra context for the first message (e.g. an existing definition
+  // source the agent should revise).
+  context?: string;
 }): Promise<{ flowId: string; instanceId: string }> {
   const res = await fetch("/api/flows/definitions/author", {
     method: "POST",
