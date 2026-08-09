@@ -156,9 +156,12 @@ async function startAuthoring(lucky: boolean) {
 }
 
 // The editor's Generate button asks the agent to run the gate on the current
-// draft; it stays disabled until a spec draft exists.
+// draft. It needs a spec draft, and it is only actionable when the agent is
+// idle — clicking it while the agent is mid-turn would queue a message for
+// later, which reads as broken.
 const canGenerate = $derived(
   authorSession !== null &&
+    !authorSession.state.hasRunningTask &&
     typeof authorSession.state.workflowInstanceState.spec === "string" &&
     authorSession.state.workflowInstanceState.spec !== ""
 );
@@ -507,13 +510,12 @@ async function remove() {
                     </button>
                   </span>
                 </div>
-                {#if authorSession?.state.workflowInstanceState.mode === "conversational"}
-                  <p class="author-hint">
-                    The agent keeps the spec draft up to date as you talk;
-                    "Generate definition" runs the engine gate on the current
-                    draft and places the TypeScript in the editor.
-                  </p>
-                {/if}
+                <p class="author-hint">
+                  The agent keeps the spec draft up to date as you talk.
+                  "Generate definition" asks the agent to run the engine gate on
+                  the current draft and place the TypeScript in the editor; it
+                  is enabled once a draft exists and the agent is idle.
+                </p>
                 <LitFlowHost
                   flowId={authorFlow.id}
                   workflowDefs={authorFlow.workflows}
