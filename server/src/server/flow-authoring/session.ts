@@ -10,6 +10,7 @@
  * lost), the agent fixes and retries, and the session never ends on its own:
  * it stays alive until the user closes it or leaves the page. */
 
+import { authoringGuide } from "workflow-engine/capabilities-manifest";
 import { defineTool } from "workflow-engine/runners";
 import {
   defineWorkflow,
@@ -20,7 +21,10 @@ import { analyzeFlowSpec, type FlowSpec, validateFlowSpec } from "../flow-spec";
 import { renderFlowDefinition } from "../render-flow-definition";
 import { checkDefinitionSources } from "../schema-consistency";
 import { typecheckDefinitionSource } from "../typecheck-definition";
+import { renderPatternsPrompt } from "./patterns";
+import { AUTHORING_RULES } from "./rules";
 import { buildAuthoringSessionPrompt } from "./session-prompt";
+import { FLOW_SPEC_SHAPE } from "./vocabulary";
 
 export const AUTHORING_DEFINITION_ID = "flow-authoring";
 
@@ -131,9 +135,44 @@ async function runGenerationGate(
   };
 }
 
+// The knowledge reference the session agent consults on demand (progressive
+// disclosure): each topic returns the relevant module so the system prompt can
+// stay compact and the agent reads only what it needs when drafting.
+const KNOWLEDGE_TOPICS: Record<string, string> = {
+  vocabulary: FLOW_SPEC_SHAPE,
+  patterns: renderPatternsPrompt(),
+  capabilities: authoringGuide(),
+  rules: AUTHORING_RULES,
+};
+
 // ─── tools ────────────────────────────────────────────────────────────
 
 export const authoringTools = [
+  defineTool<AuthoringItemState>({
+    name: "read_authoring_knowledge",
+    description:
+      "Read a section of the flow-authoring reference before writing or extending a spec. Topics: 'vocabulary' (the FlowSpec JSON shape and constraints), 'patterns' (tested lifecycle exemplars), 'capabilities' (engine operations, infrastructure tools, state fields), or 'rules' (failure-mode guardrails).",
+    parameters: {
+      properties: {
+        topic: {
+          type: "string",
+          enum: ["vocabulary", "patterns", "capabilities", "rules"],
+        },
+      },
+      required: ["topic"],
+    },
+    executor: async (call) => {
+      const args = JSON.parse(call.arguments) as { topic?: string };
+      const content = args.topic ? KNOWLEDGE_TOPICS[args.topic] : undefined;
+      return content === undefined
+        ? {
+            toolCallId: call.id,
+            content: `Unknown topic "${args.topic}". Topics: ${Object.keys(KNOWLEDGE_TOPICS).join(", ")}`,
+            isError: true,
+          }
+        : { toolCallId: call.id, content, isError: false };
+    },
+  }),
   defineTool<AuthoringItemState>({
     name: "set_flow_spec",
     description:
@@ -319,7 +358,11 @@ const sessionWorkflow = defineWorkflow({
           // chatting; it ends only when the user closes it or leaves.
           startOnUserInput: true,
           systemPrompt: buildAuthoringSessionPrompt(),
-          tools: ["set_flow_spec", "generate_definition"],
+          tools: [
+            "read_authoring_knowledge",
+            "set_flow_spec",
+            "generate_definition",
+          ],
         },
       ],
     },

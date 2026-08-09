@@ -534,6 +534,7 @@ async function remove() {
                       spec preview
                     </button>
                     {#if authorPreviewErrors.length > 0}
+                      <p class="author-preview-notes-head">Draft notes</p>
                       <ul class="author-preview-errors">
                         {#each authorPreviewErrors as err}
                           <li>{err}</li>
@@ -967,11 +968,20 @@ h1 {
 }
 
 .author-preview-errors {
-  margin: 0.375rem 0 0 0;
+  margin: 0.25rem 0 0 0;
   padding-left: 1.125rem;
-  color: var(--error);
+  color: var(--warning);
   font-size: 0.6875rem;
   line-height: 1.5;
+}
+
+.author-preview-notes-head {
+  margin: 0.375rem 0 0 0;
+  color: var(--muted);
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .author-preview-source {

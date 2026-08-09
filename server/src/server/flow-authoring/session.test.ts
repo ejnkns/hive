@@ -16,12 +16,14 @@ import {
 } from "workflow-engine/runners";
 import type { ToolCall } from "workflow-engine/runners/tool-types";
 import type { TaskRunnerContext } from "workflow-engine/task-runner";
+import { validateFlowSpec } from "../flow-spec";
 import { STRUCTURED_INTAKE_EXEMPLAR } from "./index";
 import {
   type AuthoringItemState,
   authoringSessionFlow,
   authoringTools,
 } from "./session";
+import { STARTER_SKELETON } from "./session-prompt";
 
 const toolMaps = toToolMaps(authoringTools);
 
@@ -202,8 +204,10 @@ describe("flow-authoring session", () => {
   });
 
   it("set_flow_spec rejects invalid JSON and reports validation findings", async () => {
-    const tool = authoringTools[0];
-    assert.equal(tool.definition.function.name, "set_flow_spec");
+    const tool = authoringTools.find(
+      (t) => t.definition.function.name === "set_flow_spec"
+    );
+    assert.ok(tool, "set_flow_spec tool must be defined");
 
     const badJson = await tool.executor(
       {
@@ -240,8 +244,10 @@ describe("flow-authoring session", () => {
   });
 
   it("generate_definition writes the source on success and gateErrors on failure", async () => {
-    const tool = authoringTools[1];
-    assert.equal(tool.definition.function.name, "generate_definition");
+    const tool = authoringTools.find(
+      (t) => t.definition.function.name === "generate_definition"
+    );
+    assert.ok(tool, "generate_definition tool must be defined");
 
     // Success: the exemplar passes the full gate.
     const okCaptured: { patched?: Partial<AuthoringItemState> } = {};
@@ -290,5 +296,43 @@ describe("flow-authoring session", () => {
       "gate failures must record gateErrors"
     );
     assert.equal(badCaptured.patched?.source, undefined);
+  });
+
+  it("read_authoring_knowledge serves the reference modules on demand", async () => {
+    const tool = authoringTools.find(
+      (t) => t.definition.function.name === "read_authoring_knowledge"
+    );
+    assert.ok(tool, "read_authoring_knowledge tool must be defined");
+
+    for (const topic of ["vocabulary", "patterns", "capabilities", "rules"]) {
+      const result = await tool.executor(
+        {
+          id: `k-${topic}`,
+          name: "read_authoring_knowledge",
+          arguments: JSON.stringify({ topic }),
+        },
+        {} as never
+      );
+      assert.equal(result.isError, false, topic);
+      assert.ok(
+        result.content.length > 200,
+        `${topic} module must be substantive`
+      );
+    }
+
+    const unknown = await tool.executor(
+      {
+        id: "k-x",
+        name: "read_authoring_knowledge",
+        arguments: JSON.stringify({ topic: "nonsense" }),
+      },
+      {} as never
+    );
+    assert.equal(unknown.isError, true);
+    assert.match(unknown.content, /Unknown topic/);
+  });
+
+  it("the starter skeleton is a valid spec the agent begins from", () => {
+    assert.deepEqual(validateFlowSpec(JSON.parse(STARTER_SKELETON)), []);
   });
 });

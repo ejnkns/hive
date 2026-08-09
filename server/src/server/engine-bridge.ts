@@ -378,6 +378,7 @@ export function createEngineRunners(
         instanceId: ctx.instanceId,
         patchWorkflowInstanceState: ctx.patchWorkflowInstanceState,
         workflowInstanceState: ctx.workflowInstanceState,
+        patchRunningTaskStatus: ctx.patchRunningTaskStatus,
         createWorkflowInstance: ctx.createWorkflowInstance,
       }),
     aiChatRunner: (ctx) =>
@@ -390,6 +391,7 @@ export function createEngineRunners(
         patchWorkflowInstanceState: ctx.patchWorkflowInstanceState,
         workflowInstanceState: ctx.workflowInstanceState,
         patchRunningTaskMessages: ctx.patchRunningTaskMessages,
+        patchRunningTaskStatus: ctx.patchRunningTaskStatus,
         createWorkflowInstance: ctx.createWorkflowInstance,
       }),
     toolDefinitions,
