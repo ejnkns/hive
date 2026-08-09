@@ -7,6 +7,7 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { STRUCTURED_INTAKE_EXEMPLAR } from "./flow-authoring";
 import { loadDefinitionFromSource } from "./flow-definitions";
 import type { FlowSpec } from "./flow-spec";
 import { validateFlowSpec } from "./flow-spec";
@@ -483,5 +484,164 @@ describe("render flow definition", () => {
       !source.includes("readPath"),
       "no readPath for a task-less workflow"
     );
+  });
+
+  it("renders a structured-completion flow (completionOutput tool, patch guard, needs-review retry)", async () => {
+    // The AI-generation failure mode this fixes: an ai-task that must return
+    // domain data (category/tags) had no way to carry it, so the recording op
+    // silently wrote nothing and the idea was marked organized anyway. With
+    // completionOutput the renderer generates a per-task completion tool, the
+    // parsed arguments become the output, and the patch op fails when the
+    // model skipped the contract (routing to needs_review via taskError).
+    const spec: FlowSpec = {
+      id: "ideaOrganizer",
+      label: "Idea Organizer",
+      configSchema: [],
+      workflows: [
+        {
+          id: "ideas",
+          label: "Ideas",
+          instance: { title: "idea" },
+          display: {
+            fields: [
+              { path: "idea", label: "Idea" },
+              { path: "category", label: "Category" },
+              { path: "tags", label: "Tags" },
+            ],
+          },
+          instanceState: [
+            { field: "idea", type: "string" },
+            { field: "category", type: "string" },
+            { field: "tags", type: "string[]" },
+          ],
+          initialState: "inbox",
+          terminalStates: ["organized", "discarded"],
+          states: [
+            {
+              id: "inbox",
+              label: "Inbox",
+              category: "initial",
+              tasks: [
+                {
+                  id: "organizer",
+                  label: "Organize idea",
+                  role: "ai-task",
+                  systemPrompt:
+                    "Classify the idea into a category and tags, then call the completion tool.",
+                  inputFromInstanceState: "idea",
+                  completionOutput: [
+                    { field: "category", type: "string" },
+                    { field: "tags", type: "string[]" },
+                  ],
+                },
+                {
+                  id: "record",
+                  label: "Record organization",
+                  role: "operation",
+                  patch: {
+                    category: {
+                      kind: "taskOutput",
+                      task: "organizer",
+                      path: "output.category",
+                    },
+                    tags: {
+                      kind: "taskOutput",
+                      task: "organizer",
+                      path: "output.tags",
+                    },
+                  },
+                },
+              ],
+              autoTransitions: [
+                {
+                  to: "needs_review",
+                  gate: { kind: "taskError", task: "organizer" },
+                },
+                {
+                  to: "needs_review",
+                  gate: { kind: "taskError", task: "record" },
+                },
+                {
+                  to: "organized",
+                  gate: { kind: "taskSuccess", task: "record" },
+                },
+              ],
+            },
+            {
+              id: "needs_review",
+              label: "Needs review",
+              category: "active",
+              actions: [
+                {
+                  id: "retry",
+                  label: "Retry organization",
+                  variant: "primary",
+                  transitionTo: "inbox",
+                },
+                {
+                  id: "discard",
+                  label: "Discard idea",
+                  variant: "destructive",
+                  transitionTo: "discarded",
+                },
+              ],
+            },
+            { id: "organized", label: "Organized", category: "terminal" },
+            { id: "discarded", label: "Discarded", category: "terminal" },
+          ],
+        },
+      ],
+      actions: [
+        {
+          id: "add_idea",
+          label: "Add an idea",
+          variant: "primary",
+          createInstance: {
+            workflowId: "ideas",
+            fields: [
+              {
+                key: "idea",
+                label: "What are you thinking about?",
+                type: "string",
+                required: true,
+              },
+            ],
+          },
+        },
+      ],
+      edges: [],
+    };
+
+    const source = await assertRenderedPassesGate(spec, "idea-organizer");
+    // The completion tool is generated, offered to the model, and wired as
+    // the task's completion tool.
+    assert.match(source, /export const ideasCompletionTools = \[/);
+    assert.match(source, /name: "ideas_organizer_complete"/);
+    assert.match(source, /completionTool: "ideas_organizer_complete"/);
+    assert.match(source, /tools: \["ideas_organizer_complete"\],/);
+    // The task output type comes from the declared schema, and the patch op
+    // verifies its sources instead of recording empty writes.
+    assert.match(source, /category\?: string;/);
+    assert.match(source, /tags\?: string\[\];/);
+    assert.match(
+      source,
+      /if \(category === undefined \|\| tags === undefined\)/
+    );
+    assert.match(
+      source,
+      /organizer did not produce the declared output \(category, tags\)/
+    );
+  });
+
+  it("keeps the structured-intake pattern exemplar gate-clean (the flow-authoring reference)", async () => {
+    // The exemplar embedded in the generation prompt is the shape the model
+    // copies — if it stops validating/rendering/typechecking cleanly, every
+    // generation that copies it inherits the breakage. Guard it here.
+    const source = await assertRenderedPassesGate(
+      STRUCTURED_INTAKE_EXEMPLAR,
+      "pattern-structured-intake"
+    );
+    assert.match(source, /completionTool: "items_classify_complete"/);
+    assert.match(source, /tools: \["items_classify_complete"\],/);
   });
 });

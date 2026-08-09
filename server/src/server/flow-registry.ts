@@ -308,6 +308,12 @@ function collectActionFields(
       }
       continue;
     }
+    if (field.required && typeof value === "string" && value.trim() === "") {
+      // Mirrors the UI's required-field check: an empty string is a missing
+      // required value, and an instance created without its payload field
+      // would auto-run its ai-task on an empty prompt.
+      throw new HttpError(400, `Required field "${field.key}" cannot be empty`);
+    }
     if (!configValueMatchesType(field, value)) {
       throw new HttpError(400, `Field "${field.key}" must be a ${field.type}`);
     }
@@ -439,9 +445,23 @@ export function createFlow(
 
   // Seed one instance of the first workflow so the flow is immediately
   // renderable (queen-bee: the onboarding workflow; custom defs: the
-  // single workflow). Fresh instances auto-run their initial-state tasks.
+  // single workflow). Fresh instances auto-run their initial-state tasks —
+  // but only seed when doing so cannot start a pointless AI run: an empty
+  // seed in a workflow whose initial state auto-runs an AI task that declares
+  // instance input would run the agent with nothing to work on (a phantom
+  // instance that burns a model call). Auto operation tasks are fine —
+  // queen-bee's onboarding configures the flow from nothing.
   const seedWorkflow = workflows[0];
-  if (seedWorkflow) {
+  const seedInitial = seedWorkflow?.states.find(
+    (state) => state.id === seedWorkflow.initial
+  );
+  const seedStartsInputlessAi = (seedInitial?.tasks ?? []).some(
+    (task) =>
+      task.trigger === "auto" &&
+      (task.role === "ai-task" || task.role === "ai-chat") &&
+      task.inputFromInstanceState !== undefined
+  );
+  if (seedWorkflow && !seedStartsInputlessAi) {
     runtime.addWorkflowInstance(seedWorkflow.id);
   }
 

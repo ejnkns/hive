@@ -1,0 +1,30 @@
+/** The decisions rung of the flow-authoring knowledge: how to design a flow,
+ * in order. This is what the model reads FIRST — pattern selection before
+ * vocabulary. Compact and decision-oriented: each rule answers "when you need
+ * X, use Y" rather than describing syntax (that lives in vocabulary.ts). */
+
+export const DESIGN_DECISIONS = `## How to design a flow (decisions, in order)
+
+1. **Entities.** One workflow per entity the flow tracks — an item, a request, a record, a session, an order — whatever the domain's unit of work is. Each workflow is a lifecycle: an initial state where instances are born, active states where work happens, terminal states where instances finish. Per-instance data lives in \`instanceState\`; cross-entity data lives in flow-level state (\`flowState\`), never duplicated on instances.
+
+2. **Who does the work.** A state's tasks run on entry:
+   - \`operation\` — deterministic work: an engine op (\`prepare_worktree\`, \`verify_workspace\`, \`merge_branch\`, \`patch_flow_config\`, \`commit_flow_state\`, \`validate_repo\`) or a patch op that records another task's output into instanceState.
+   - \`ai-task\` — one-shot AI work that RETURNS DATA. Give it a \`systemPrompt\` naming the job and the completion tool, seed it with \`inputFromInstanceState\`, and declare \`completionOutput\` with exactly the fields it must return. Record those fields with a sibling operation \`patch\` task.
+   - \`ai-chat\` — a multi-turn AI session. Use \`startOnUserInput: true\` when a human talks with the agent (HITL); the session ends when the human clicks an action with \`completesRunningTask: true\`, or the agent calls its completion tool.
+
+3. **How an ai-task returns data.**
+   - \`completionOutput: [{ field, type }]\` — the agent must return exactly these fields; the renderer generates the completion tool; patches and gates read \`output.<field>\`. Use this whenever the flow must RECORD structured data (a category, a verdict, tags, a spec).
+   - \`completionTool: "complete_task"\` — the agent returns \`{ outcome, summary, rationale }\`. Use only for "did you do the work" outcomes, never for domain data.
+   - Neither — the transcript becomes the output. Use only for advice or prose that nobody records.
+
+4. **How a human drives the flow.** \`ManualAction\` buttons on states; flow-level actions for creating instances (\`createInstance\`) or bulk dispatch (\`dispatchToAll\`). Variants: \`primary\` = the call to action, \`destructive\` = irreversible (discard/delete), \`secondary\`/default = neutral. Every instance needs a way to be created and a way to finish.
+
+5. **How work flows between workflows.** Edges: when an instance of one workflow reaches a state you list, its task output transforms into a new instance of another workflow (\`fields\`) — or one instance per array item (\`fanOut\`). Use edges to build pipelines, never to duplicate data.
+
+6. **Error handling — every flow needs an escape hatch.** Any ai-task or operation can fail. For every state with fallible tasks, add a needs-review/error state, gate \`taskError\` autoTransitions into it, and give it a retry action (transition back to the work state) and a discard action (transition to a terminal). The engine fails fast on ai-tasks with no system prompt and no input, so a state with no escape hatch becomes a stuck instance.
+
+7. **UI.** Every workflow declares \`instance: { title }\` (and optionally \`subtitle\`) plus \`display: { fields }\` so instances show meaningful content — declare display fields ONLY for fields something actually writes. Choose \`ui.view\`: \`board\` (default, one column per state or per declared column), \`list\`, \`document\`, \`chat\`.
+
+8. **Documents.** When a task produces a document (a specification, a review package, a report), declare \`persist: { path }\` so the output lands in the flow's domain root; the path supports \`{instanceId}\` and \`{attempt}\` substitution.
+
+9. **Pick the pattern, don't improvise.** Match the request to one of the patterns below and copy its shape: structured intake, human review, pipeline/fan-out, or git-backed work. The patterns are the tested shapes; the vocabulary is their language. Use whatever nouns fit the request's domain — the patterns and vocabulary are domain-agnostic.`;

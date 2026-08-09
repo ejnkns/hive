@@ -107,17 +107,14 @@ export function createStreamCounter(
           }
 
           if (parsed.usage) {
+            // Providers emit usage on every chunk; logging it per chunk floods
+            // the console (and the dashboard WS) with ~2 lines per chunk. The
+            // final values are reported once in the end-of-stream stats line.
             if (typeof parsed.usage.prompt_tokens === "number") {
               inputTokens = parsed.usage.prompt_tokens;
-              logger.debug(
-                `parse-stream: prompt_tokens: ${String(inputTokens)}`
-              );
             }
             if (typeof parsed.usage.completion_tokens === "number") {
               outputTokensFromUsage = parsed.usage.completion_tokens;
-              logger.debug(
-                `parse-stream: completion_tokens: ${String(outputTokensFromUsage)}`
-              );
             }
           }
 
@@ -218,6 +215,12 @@ export function createStreamCounter(
       `parse-stream: stats — outputChars: ${String(outputChars)}, thinkingChars: ${String(thinkingChars)}, ` +
         `thinkingTime: ${String(thinkingTime ?? "N/A")}, finishReason: ${finishReason ?? "N/A"}, ` +
         `responseText length: ${String(responseText.length)}, isAbruptDisconnect: ${String(isAbruptDisconnect)}` +
+        (inputTokens !== null
+          ? `, prompt_tokens: ${String(inputTokens)}`
+          : "") +
+        (outputTokensFromUsage !== null
+          ? `, completion_tokens: ${String(outputTokensFromUsage)}`
+          : "") +
         (toolCallFailed ? `, toolCallFailed: true` : "")
     );
 

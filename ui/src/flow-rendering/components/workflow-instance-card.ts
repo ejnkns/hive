@@ -573,8 +573,13 @@ function toCardsViewItems(cards: unknown[]): CardsViewItem[] {
 }
 
 function stringifyValue(value: unknown): string {
+  if (value === undefined || value === null) return "";
   if (typeof value === "string") return value;
-  return truncate(JSON.stringify(value, null, 2), 2000);
+  // JSON.stringify returns undefined for undefined/function/symbol; those are
+  // handled above (or are non-wire values), but the empty fallback keeps a
+  // missing display field from crashing the card render.
+  const serialized = JSON.stringify(value, null, 2);
+  return truncate(serialized ?? "", 2000);
 }
 
 function truncate(value: string, maxLength: number): string {

@@ -37,7 +37,12 @@ export async function dispatchRequest(
   const result = await routeRequest({
     upstreamUrl: provider.chatEndpoint,
     mutated,
-    timeoutMs: 10000,
+    // Node's request timeout is an INACTIVITY timeout (fires after this many
+    // ms with no bytes). 10s is fatal to reasoning models, which can pause for
+    // tens of seconds between emitted tokens mid-thought — and flow generation
+    // is the longest model call in the system. 60s keeps failures bounded
+    // while tolerating long reasoning bursts.
+    timeoutMs: 60000,
     providerName: node.providerName,
     modelName: node.modelName,
     requestId,

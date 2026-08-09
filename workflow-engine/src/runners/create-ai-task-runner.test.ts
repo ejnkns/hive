@@ -239,11 +239,11 @@ describe("createAiTaskRunner", () => {
     assert.equal(seenMessages[0]?.content, "# The requirements");
   });
 
-  it("omits the injected message when the state field is missing", async () => {
-    let seenMessages: ChatMessage[] = [];
+  it("rejects a declared input missing from instance state before calling the model", async () => {
+    let calls = 0;
     const runner = createAiTaskRunner({
-      modelCaller: async (_prompt, msgs, _tools, _signal) => {
-        seenMessages = [...msgs];
+      modelCaller: async () => {
+        calls++;
         return { content: "Done!" };
       },
       toolDefinitions: {},
@@ -251,11 +251,86 @@ describe("createAiTaskRunner", () => {
       workflowInstanceState: {},
     });
 
-    await runner.run({
-      ...dummyTask,
-      inputFromInstanceState: "requirementsDraft",
+    await assert.rejects(
+      () =>
+        runner.run({
+          ...dummyTask,
+          inputFromInstanceState: "requirementsDraft",
+        }),
+      /declares inputFromInstanceState/
+    );
+    assert.equal(calls, 0, "no model call for a missing declared input");
+  });
+
+  it("fails fast without calling the model when the task has no prompt and no input", async () => {
+    let calls = 0;
+    const runner = createAiTaskRunner({
+      modelCaller: async () => {
+        calls++;
+        return { content: "Hello!" };
+      },
+      toolDefinitions: {},
+      toolExecutors: {},
+      workflowInstanceState: {},
     });
 
-    assert.equal(seenMessages.length, 0);
+    await assert.rejects(
+      () =>
+        runner.run({
+          id: "zombie",
+          label: "Zombie",
+          role: "ai-task",
+        }),
+      /no system prompt and no input/
+    );
+    assert.equal(
+      calls,
+      0,
+      "the model must never be called with an empty prompt"
+    );
+  });
+
+  it("fails fast without calling the model when a declared input is missing", async () => {
+    let calls = 0;
+    const runner = createAiTaskRunner({
+      modelCaller: async () => {
+        calls++;
+        return { content: "Hello!" };
+      },
+      toolDefinitions: {},
+      toolExecutors: {},
+      workflowInstanceState: {},
+    });
+
+    await assert.rejects(
+      () =>
+        runner.run({
+          id: "triage",
+          label: "Triage",
+          role: "ai-task",
+          systemPrompt: "Triage the ticket.",
+          inputFromInstanceState: "description",
+        }),
+      /declares inputFromInstanceState .description. but the instance was created without it/
+    );
+    assert.equal(
+      calls,
+      0,
+      "a declared-but-missing input must not spend a model call"
+    );
+  });
+
+  it("runs with only a system prompt (no input message)", async () => {
+    const runner = createAiTaskRunner({
+      modelCaller: mockCaller([{ content: "Hello!" }]),
+      toolDefinitions: {},
+      toolExecutors: {},
+      workflowInstanceState: {},
+    });
+
+    const result = await runner.run({
+      ...dummyTask,
+    });
+    assert.equal((result.output as { content: string }).content, "Hello!");
   });
 });

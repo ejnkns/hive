@@ -14,7 +14,7 @@ let loading = $state(true);
 let error = $state<string | null>(null);
 let search = $state("");
 let filter = $state<"all" | "builtin" | "user">("all");
-let flows = $derived(flowStore.flows);
+let flows = $derived(flowStore.flows.filter((flow) => !flow.hidden));
 
 const visibleDefinitions = $derived(
   definitions.filter((definition) => {

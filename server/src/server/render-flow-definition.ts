@@ -55,8 +55,29 @@ function fieldType(type: FieldType): string {
       return "boolean[]";
     case "object":
       return "Record<string, unknown>";
+    case "object[]":
+      return "Array<Record<string, unknown>>";
     default:
       return "unknown";
+  }
+}
+
+// The JSON-schema type a completion tool parameter derives from a FieldType
+// (array kinds carry their item type in `items`).
+function schemaType(type: FieldType): string {
+  switch (type) {
+    case "string":
+    case "number":
+    case "boolean":
+    case "object":
+      return type;
+    case "string[]":
+    case "number[]":
+    case "boolean[]":
+    case "object[]":
+      return "array";
+    default:
+      return "string";
   }
 }
 
@@ -262,6 +283,11 @@ export function renderFlowDefinition(spec: FlowSpec): string {
   const hasPatchOps = spec.workflows.some((wf) =>
     wf.states.some((s) => (s.tasks ?? []).some((t) => t.patch !== undefined))
   );
+  const hasCompletionOutput = spec.workflows.some((wf) =>
+    wf.states.some((s) =>
+      (s.tasks ?? []).some((t) => t.completionOutput !== undefined)
+    )
+  );
   const needsReadPath = (() => {
     for (const wf of spec.workflows) {
       for (const state of wf.states) {
@@ -291,8 +317,16 @@ export function renderFlowDefinition(spec: FlowSpec): string {
     0,
     `import { defineWorkflow, type FlowDefinition, type FlowEdge } from "workflow-engine/workflow-types";`
   );
-  if (hasPatchOps)
-    emit(0, `import { defineOperations } from "workflow-engine/runners";`);
+  if (hasPatchOps || hasCompletionOutput)
+    emit(
+      0,
+      `import { ${[
+        hasPatchOps && "defineOperations",
+        hasCompletionOutput && "defineTool",
+      ]
+        .filter(Boolean)
+        .join(", ")} } from "workflow-engine/runners";`
+    );
   emit(0, "");
   if (needsReadPath) {
     emit(0, "function readPath(value: unknown, path: string): unknown {");
@@ -346,9 +380,16 @@ export function renderFlowDefinition(spec: FlowSpec): string {
     if (tasks.length > 0) {
       emit(0, `type ${p}TaskOutputs = {`);
       for (const task of tasks) {
-        const paths = taskOutputPaths.get(task.id) ?? [];
-        const node = buildOutputNode(paths);
-        const outputType = renderOutputNode(node);
+        // A structured completion contract types the task's output from the
+        // declared fields (the parsed completion arguments ARE the output of
+        // an ai-task); otherwise the type is derived from gate paths.
+        const outputType = task.completionOutput
+          ? `{ ${task.completionOutput
+              .map((f) => `${f.field}?: ${fieldType(f.type)};`)
+              .join(" ")} }`
+          : renderOutputNode(
+              buildOutputNode(taskOutputPaths.get(task.id) ?? [])
+            );
         emit(1, `${task.id}?: ${outputType};`);
       }
       emit(0, "};");
@@ -366,18 +407,99 @@ export function renderFlowDefinition(spec: FlowSpec): string {
       );
       for (const task of patchTasks) {
         const patch = task.patch ?? {};
+        // A sourced write that resolves to undefined is a contract failure —
+        // the source task did not produce the declared output. The op throws
+        // so taskError gates route the instance to a retry/needs-review state
+        // instead of silently recording an empty write as success.
+        const sourcedFields = Object.entries(patch).filter(
+          ([, value]) => value.kind === "taskOutput"
+        );
         emit(1, `${wf.id}_${task.id}_patch: (task, params, ctx) => {`);
+        if (sourcedFields.length > 0) {
+          for (const [field, value] of sourcedFields) {
+            const fieldDecl = wf.instanceState.find((f) => f.field === field);
+            const type: FieldType = fieldDecl?.type ?? "object";
+            emit(2, `const ${field} = ${renderPatchValue(value, type)};`);
+          }
+          emit(
+            2,
+            `if (${sourcedFields
+              .map(([field]) => `${field} === undefined`)
+              .join(" || ")}) {`
+          );
+          emit(
+            3,
+            `throw new Error("${[
+              ...new Set(
+                sourcedFields.map(
+                  ([, value]) => (value as { task?: string }).task ?? ""
+                )
+              ),
+            ].join(", ")} did not produce the declared output (${sourcedFields
+              .map(([field]) => field)
+              .join(", ")})");`
+          );
+          emit(2, "}");
+        }
         emit(2, "ctx.patchWorkflowInstanceState({");
         for (const [field, value] of Object.entries(patch)) {
           const fieldDecl = wf.instanceState.find((f) => f.field === field);
           const type: FieldType = fieldDecl?.type ?? "object";
-          emit(3, `${field}: ${renderPatchValue(value, type)},`);
+          // Sourced values reference the hoisted consts; literal/instanceId
+          // values are emitted inline.
+          const expr =
+            value.kind === "taskOutput" ? field : renderPatchValue(value, type);
+          emit(3, `${field}: ${expr},`);
         }
         emit(2, "});");
         emit(2, "return { ok: true };");
         emit(1, "},");
       }
       emit(0, "});");
+      emit(0, "");
+    }
+
+    // ── structured completion tools (only when completionOutput is declared) ──
+    const completionTasks = tasks.filter(
+      (t) => t.completionOutput !== undefined
+    );
+    if (completionTasks.length > 0) {
+      emit(0, `export const ${wf.id}CompletionTools = [`);
+      for (const task of completionTasks) {
+        const fields = task.completionOutput ?? [];
+        const toolName = `${wf.id}_${task.id}_complete`;
+        const properties = fields
+          .map((f) => {
+            const parts = [`type: ${json(schemaType(f.type))}`];
+            if (f.type.endsWith("[]")) {
+              parts.push(`items: { type: ${json(f.type.slice(0, -2))} }`);
+            }
+            if (f.description)
+              parts.push(`description: ${json(f.description)}`);
+            return `${f.field}: { ${parts.join(", ")} }`;
+          })
+          .join(", ");
+        emit(1, "defineTool({");
+        emit(2, `name: ${json(toolName)},`);
+        emit(
+          2,
+          `description: ${json(
+            `Complete the ${task.label ?? task.id} task, returning the declared fields: ${fields
+              .map((f) => `${f.field} (${f.type})`)
+              .join(", ")}.`
+          )},`
+        );
+        emit(2, "parameters: {");
+        emit(3, `properties: { ${properties} },`);
+        emit(3, `required: [${fields.map((f) => json(f.field)).join(", ")}],`);
+        emit(2, "},");
+        emit(
+          2,
+          'executor: (call) => ({ toolCallId: call.id, content: "Task completed", isError: false }),'
+        );
+        emit(1, "}),");
+      }
+      emit(0, "];");
       emit(0, "");
     }
 
@@ -457,11 +579,22 @@ export function renderFlowDefinition(spec: FlowSpec): string {
               `operationInputs: ${JSON.stringify(task.operationInputs)},`
             );
           }
-          if (task.tools && task.tools.length > 0) {
-            emit(5, `tools: [${task.tools.map(json).join(", ")}],`);
+          // The completion tool (declared or generated from completionOutput)
+          // is always offered to the model: a task that declares a completion
+          // contract but never lists the tool cannot call it, so the agent
+          // silently falls back to a transcript output.
+          const completionToolName = task.completionOutput
+            ? `${wf.id}_${task.id}_complete`
+            : task.completionTool;
+          const tools = [...(task.tools ?? [])];
+          if (completionToolName && !tools.includes(completionToolName)) {
+            tools.push(completionToolName);
           }
-          if (task.completionTool)
-            emit(5, `completionTool: ${json(task.completionTool)},`);
+          if (tools.length > 0) {
+            emit(5, `tools: [${tools.map(json).join(", ")}],`);
+          }
+          if (completionToolName)
+            emit(5, `completionTool: ${json(completionToolName)},`);
           if (task.completionSignal)
             emit(5, `completionSignal: ${json(task.completionSignal)},`);
           if (task.systemPrompt)
@@ -547,6 +680,19 @@ export function renderFlowDefinition(spec: FlowSpec): string {
     .map((wf) => `${wf.id}Operations`);
   if (opMapNames.length > 0) {
     emit(1, `operations: { ${opMapNames.map((n) => `...${n}`).join(", ")} },`);
+  }
+  const completionToolMapNames = spec.workflows
+    .filter((wf) =>
+      wf.states.some((s) =>
+        (s.tasks ?? []).some((t) => t.completionOutput !== undefined)
+      )
+    )
+    .map((wf) => `${wf.id}CompletionTools`);
+  if (completionToolMapNames.length > 0) {
+    emit(
+      1,
+      `tools: [${completionToolMapNames.map((n) => `...${n}`).join(", ")}],`
+    );
   }
   if (spec.actions && spec.actions.length > 0) {
     emit(1, "actions: [");

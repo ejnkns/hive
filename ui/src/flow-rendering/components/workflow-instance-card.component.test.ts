@@ -46,6 +46,42 @@ describe("WorkflowInstanceCard", () => {
     expect(values[0]?.textContent).toBe("Card c1");
   });
 
+  it("renders empty values for display fields missing from instance state", async () => {
+    // A generated flow may declare display fields (category, tags) that the
+    // instance state never populated — the card must render them empty
+    // instead of crashing the whole card render.
+    const def = cardDef({
+      instance: { title: "idea" },
+      display: {
+        fields: [
+          { path: "idea", label: "Idea" },
+          { path: "category", label: "Category" },
+          { path: "tags", label: "Tags" },
+        ],
+      },
+    });
+    const instance = entry("c1", "ready", {
+      workflowInstanceState: { idea: "improve default UI components" },
+    });
+    const el = await mount(card(def, instance));
+    await settle(shadowRootOf(el));
+    const keys = [...shadowRootOf(el).querySelectorAll(".domain-data-key")];
+    expect(keys.map((k) => k.textContent)).toEqual([
+      "Idea",
+      "Category",
+      "Tags",
+    ]);
+    const values = [...shadowRootOf(el).querySelectorAll(".domain-data-value")];
+    expect(values.map((v) => v.textContent)).toEqual([
+      "improve default UI components",
+      "",
+      "",
+    ]);
+    expect(mustFind(el, ".title").textContent).toBe(
+      "improve default UI components"
+    );
+  });
+
   it("renders a successful task output through its markdown render hint", async () => {
     const def = cardDef({
       states: [

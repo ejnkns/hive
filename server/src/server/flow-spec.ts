@@ -38,9 +38,20 @@ export type FieldType =
   | "string[]"
   | "number[]"
   | "boolean[]"
-  | "object";
+  | "object"
+  | "object[]";
 
 export type InstanceStateField = { field: string; type: FieldType };
+
+// A structured completion contract on an ai-task/ai-chat: the renderer
+// generates a completion tool with exactly these fields (all required); the
+// agent calls it to end the task; the parsed arguments become the task output
+// (so patch ops read output.<field> and gates compare output.<field>).
+export type CompletionOutputField = {
+  field: string;
+  type: FieldType;
+  description?: string;
+};
 
 // Where a write's value comes from. `taskOutput` paths are dot-paths relative
 // to the referenced task's outcome (e.g. "output", "output.completion.verdict").
@@ -97,6 +108,11 @@ export type TaskSpec = {
   // (appended to this task's operations) that copies the value sources into
   // the instance state via ctx.patchWorkflowInstanceState.
   patch?: Record<string, ValueSpec>;
+  // Declares a structured completion contract: the renderer generates a
+  // completion tool with these fields (all required), the agent calls it to
+  // end the task, and the parsed arguments become the task output. Only on
+  // ai-task/ai-chat; mutually exclusive with an explicit completionTool.
+  completionOutput?: CompletionOutputField[];
 };
 
 export type AutoTransitionSpec = {
@@ -201,6 +217,7 @@ const FIELD_TYPES: Record<FieldType, string> = {
   "number[]": "number[]",
   "boolean[]": "boolean[]",
   object: "object",
+  "object[]": "Array<Record<string, unknown>>",
 };
 
 function isFieldType(value: unknown): value is FieldType {
@@ -255,6 +272,13 @@ export function validateFlowSpec(spec: FlowSpec): SpecError[] {
   const stateIdsByWorkflow = new Map<string, Set<string>>();
   const taskIdsByWorkflow = new Map<string, Set<string>>();
   const instanceStateById = new Map<string, Map<string, FieldType>>();
+  // Per-workflow: task id → declared structured completion fields. Used to
+  // check that taskOutput reads (patch/edge values, taskOutputEquals gates)
+  // resolve to fields the source task actually returns.
+  const completionOutputById = new Map<
+    string,
+    Map<string, CompletionOutputField[]>
+  >();
 
   // ── workflows ──
   for (const [wfIndex, wf] of spec.workflows.entries()) {
@@ -283,6 +307,8 @@ export function validateFlowSpec(spec: FlowSpec): SpecError[] {
     taskIdsByWorkflow.set(wf.id, taskIds);
     const stateTypes = new Map<string, FieldType>();
     instanceStateById.set(wf.id, stateTypes);
+    const completionOutputs = new Map<string, CompletionOutputField[]>();
+    completionOutputById.set(wf.id, completionOutputs);
 
     if (Array.isArray(wf.instanceState)) {
       wf.instanceState.forEach((field, i) => {
@@ -392,6 +418,51 @@ export function validateFlowSpec(spec: FlowSpec): SpecError[] {
             }
           }
         }
+        if (task.completionOutput !== undefined) {
+          if (task.role !== "ai-task") {
+            error(
+              `${tPath}.completionOutput`,
+              `completionOutput declares a structured completion contract and requires an ai-task role; ${task.id} is ${task.role}`
+            );
+          }
+          if (task.completionTool !== undefined) {
+            error(
+              `${tPath}.completionOutput`,
+              `completionOutput generates the task's completion tool; do not also set completionTool (${task.id} declares both)`
+            );
+          }
+          const seen = new Set<string>();
+          task.completionOutput.forEach((field, i) => {
+            if (!field || !IDENTIFIER.test(field.field)) {
+              error(
+                `${tPath}.completionOutput[${i}]`,
+                `completionOutput field name must be a valid identifier (got ${JSON.stringify(field?.field)})`
+              );
+              return;
+            }
+            if (!isFieldType(field.type)) {
+              error(
+                `${tPath}.completionOutput[${i}].type`,
+                `invalid completionOutput field type ${JSON.stringify(field.type)} (valid: ${Object.keys(FIELD_TYPES).join(", ")})`
+              );
+              return;
+            }
+            if (seen.has(field.field)) {
+              error(
+                `${tPath}.completionOutput[${i}]`,
+                `duplicate completionOutput field "${field.field}"`
+              );
+            }
+            seen.add(field.field);
+          });
+          if (completionOutputs.has(task.id)) {
+            error(
+              `${tPath}.completionOutput`,
+              `duplicate completionOutput on task "${task.id}"`
+            );
+          }
+          completionOutputs.set(task.id, task.completionOutput);
+        }
       }
     }
 
@@ -448,7 +519,8 @@ export function validateFlowSpec(spec: FlowSpec): SpecError[] {
           for (const e of validateValueSpec(
             value,
             taskIds,
-            `${tPath}.patch.${field}`
+            `${tPath}.patch.${field}`,
+            completionOutputs
           )) {
             error(e.path, e.message);
           }
@@ -607,6 +679,29 @@ export function validateFlowSpec(spec: FlowSpec): SpecError[] {
           pathsForTask(gate.task).add("");
         } else if (gate.path.startsWith("output.")) {
           pathsForTask(gate.task).add(gate.path.slice("output.".length));
+          // A task with a structured completion contract returns exactly its
+          // declared fields; gate reads must address one of them and match
+          // its type.
+          const fields = completionOutputs.get(gate.task);
+          if (fields !== undefined) {
+            const fieldName = gate.path.slice("output.".length).split(".")[0];
+            const declared = fields.find((f) => f.field === fieldName);
+            if (declared === undefined) {
+              error(
+                `${wfPath}`,
+                `taskOutputEquals reads output field "${fieldName}" which task "${gate.task}" does not declare in completionOutput (declared: ${fields.map((f) => f.field).join(", ")})`
+              );
+            } else if (
+              !declared.type.endsWith("[]") &&
+              declared.type !== "object" &&
+              declared.type !== typeof gate.value
+            ) {
+              error(
+                `${wfPath}`,
+                `taskOutputEquals compares completionOutput field "${fieldName}" (type ${declared.type}) with a ${typeof gate.value} value`
+              );
+            }
+          }
         } else {
           error(
             `${wfPath}`,
@@ -729,7 +824,8 @@ export function validateFlowSpec(spec: FlowSpec): SpecError[] {
       for (const e of validateValueSpec(
         value,
         fromTaskIds,
-        `${ePath}.fields.${field}`
+        `${ePath}.fields.${field}`,
+        completionOutputById.get(from.id)
       )) {
         error(e.path, e.message);
       }
@@ -902,12 +998,119 @@ export function validateFlowSpec(spec: FlowSpec): SpecError[] {
   return errors;
 }
 
+// ── advisory analysis ─────────────────────────────────────────────────
+
+// Anti-pattern findings that do NOT reject a spec (they validate and render)
+// but that the model should fix — fed back to the generation loop alongside
+// the structural-soundness warnings from the schema check. Every finding is
+// tied to a real failure mode observed in generated flows.
+export function analyzeFlowSpec(spec: FlowSpec): string[] {
+  const findings: string[] = [];
+
+  // 1. A prompt-less ai-task/ai-chat has no instructions: the agent produces
+  //    prose instead of completing, or the ai-task runner fails fast when
+  //    there is also no input.
+  for (const wf of spec.workflows) {
+    for (const state of wf.states) {
+      for (const task of state.tasks ?? []) {
+        if (
+          (task.role === "ai-task" || task.role === "ai-chat") &&
+          (task.systemPrompt ?? "").trim() === ""
+        ) {
+          findings.push(
+            `workflow "${wf.id}" task "${task.id}" has no systemPrompt — the agent has no instructions; declare one naming the job and the completion tool to call`
+          );
+        }
+      }
+    }
+  }
+
+  // 2. A completionOutput task whose output nobody reads records nothing: the
+  //    structured fields are discarded.
+  const readTaskIds = new Set<string>();
+  for (const wf of spec.workflows) {
+    for (const state of wf.states) {
+      for (const task of state.tasks ?? []) {
+        for (const value of Object.values(task.patch ?? {})) {
+          if (value.kind === "taskOutput") readTaskIds.add(value.task);
+        }
+        for (const transition of state.autoTransitions ?? []) {
+          collectGateTaskReads(transition.gate, readTaskIds);
+        }
+        for (const action of state.actions ?? []) {
+          if (action.gate) collectGateTaskReads(action.gate, readTaskIds);
+        }
+      }
+    }
+  }
+  for (const edge of spec.edges ?? []) {
+    for (const value of Object.values(edge.fields ?? {})) {
+      if (value.kind === "taskOutput") readTaskIds.add(value.task);
+    }
+    if (edge.fanOut) readTaskIds.add(edge.fanOut.task);
+  }
+  for (const wf of spec.workflows) {
+    for (const state of wf.states) {
+      for (const task of state.tasks ?? []) {
+        if (
+          task.completionOutput !== undefined &&
+          task.completionOutput.length > 0 &&
+          !readTaskIds.has(task.id)
+        ) {
+          findings.push(
+            `workflow "${wf.id}" task "${task.id}" declares completionOutput but nothing reads its output — record it with a sibling patch op or an edge, or drop the declaration`
+          );
+        }
+      }
+    }
+  }
+
+  // 3. A flow with no creation path anywhere can never run.
+  const hasCreateInstance =
+    (spec.actions ?? []).some((a) => a.createInstance !== undefined) ||
+    spec.workflows.some((wf) =>
+      wf.states.some((s) =>
+        (s.actions ?? []).some((a) => a.createInstance !== undefined)
+      )
+    );
+  if (!hasCreateInstance && (spec.edges ?? []).length === 0) {
+    findings.push(
+      "nothing ever creates an instance — add a flow-level or state-level createInstance action, or an edge feeding a workflow"
+    );
+  }
+
+  return findings;
+}
+
+function collectGateTaskReads(gate: GateSpec, reads: Set<string>): void {
+  switch (gate.kind) {
+    // Only gates that compare the task's OUTPUT count as output reads; status
+    // gates (taskSuccess/taskError) read the outcome envelope, not the data.
+    case "taskOutputEquals":
+      reads.add(gate.task);
+      break;
+    case "not":
+      collectGateTaskReads(gate.gate, reads);
+      break;
+    case "and":
+    case "or":
+      for (const g of gate.gates) collectGateTaskReads(g, reads);
+      break;
+    default:
+      break;
+  }
+}
+
 // ── helper validators ─────────────────────────────────────────────────
 
 function validateValueSpec(
   value: ValueSpec,
   taskIds: Set<string>,
-  path: string
+  path: string,
+  // The source workflow's task id → completionOutput map; when present, reads
+  // from a task with a structured completion contract must address a declared
+  // field (the parsed completion arguments ARE the ai-task output).
+  completionOutputByTask?: Map<string, CompletionOutputField[]>
 ): SpecError[] {
   const errors: SpecError[] = [];
   if (value.kind === "literal") return errors;
@@ -924,6 +1127,25 @@ function validateValueSpec(
         path,
         message: `taskOutput path must be a dotted path (got ${JSON.stringify(value.path)})`,
       });
+      return errors;
+    }
+    const fields = completionOutputByTask?.get(value.task);
+    if (fields !== undefined) {
+      const segments = value.path.split(".");
+      if (segments[0] !== "output") {
+        errors.push({
+          path,
+          message: `taskOutput path must start with "output" (the task's outcome), got ${JSON.stringify(value.path)}`,
+        });
+      } else if (
+        value.path !== "output" &&
+        !fields.some((f) => f.field === segments[1])
+      ) {
+        errors.push({
+          path,
+          message: `taskOutput path ${JSON.stringify(value.path)} reads field "${segments[1]}" which task "${value.task}" does not declare in completionOutput (declared: ${fields.map((f) => f.field).join(", ")})`,
+        });
+      }
     }
   }
   return errors;

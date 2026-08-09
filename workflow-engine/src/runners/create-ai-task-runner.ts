@@ -51,6 +51,37 @@ export function createAiTaskRunner(config: AiTaskRunnerConfig): TaskRunner {
         task.inputFromInstanceState
       );
 
+      // A one-shot ai-task with neither a system prompt nor any seeded input
+      // has nothing to work on. Calling the model anyway spends provider
+      // calls on an effectively empty prompt (`[{role:"system",content:""}]`)
+      // and can wedge the instance forever on a stream that never completes —
+      // e.g. an auto-run task on an instance created with an empty payload,
+      // restarted on every server boot. Fail fast so taskError gates route
+      // the instance to an error/needs-review state instead of a zombie task.
+      //
+      // A declared input is the same contract one level up: an ai-task that
+      // says inputFromInstanceState must actually receive it. An instance
+      // created without it (an empty seed, an edge that forgot a field) has
+      // nothing to work on, so fail fast there too instead of spending a
+      // model call on an empty prompt.
+      const declaredInputMissing =
+        task.inputFromInstanceState !== undefined &&
+        !messages.some((message) => message.role === "user");
+      if (declaredInputMissing) {
+        throw new Error(
+          `ai-task "${task.id}" declares inputFromInstanceState "${task.inputFromInstanceState}" but the instance was created without it — seed the instance with that field`
+        );
+      }
+      const hasPrompt = (task.systemPrompt ?? "").trim() !== "";
+      const hasInput = messages.some(
+        (message) => message.content.trim() !== ""
+      );
+      if (!hasPrompt && !hasInput) {
+        throw new Error(
+          `ai-task "${task.id}" has no system prompt and no input to work on — declare a systemPrompt or inputFromInstanceState`
+        );
+      }
+
       // The one-shot contract: the completion tool's raw arguments are the
       // output; a no-tool-call response means the agent finished and the
       // transcript is the output.

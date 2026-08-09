@@ -7,14 +7,20 @@ import Textarea from "../shared/ui/Textarea.svelte";
 import TextInput from "../shared/ui/TextInput.svelte";
 import { highlightTypeScript } from "./DefinitionEditor/highlight";
 import {
+  authorFlowDefinition,
   createFlowDefinition,
+  deleteFlow,
   deleteFlowDefinition,
+  dispatchAction,
+  fetchFlow,
   fetchFlowDefinition,
   type GenerationReport,
-  generateFlowDefinition,
+  sendTaskInput,
   updateFlowDefinition,
   validateFlowDefinition,
 } from "./flow-api";
+import { flowStore } from "./flow-store.svelte";
+import LitFlowHost from "./LitFlowHost.svelte";
 
 let {
   definitionId,
@@ -56,11 +62,163 @@ let isBuiltIn = $state(false);
 let loading = $state(false);
 let saving = $state(false);
 let validating = $state(false);
-let generating = $state(false);
 let error = $state<string | null>(null);
 let aiOpen = $state(true);
 let aiPrompt = $state("");
 let deleteOpen = $state(false);
+// Live generation progress: the current stage, the spec attempt counter, the
+// streamed model content, and any rejected attempts so far.
+// The flow-authoring session: a hidden flow instance whose ai-chat agent
+// converges on a spec with the user. The generic rendering surface shows the
+// conversation + Finalize action; the preview panel shows the live rendered TS.
+let authorFlowId = $state<string | null>(null);
+let authorInstanceId = $state<string | null>(null);
+let authoring = $state(false);
+let previewOpen = $state(true);
+let lastAppliedSource = $state<string | null>(null);
+
+// The session flow, live from the store (WS snapshots keep it current).
+const authorFlow = $derived(
+  authorFlowId ? flowStore.getFlow(authorFlowId) : null
+);
+const authorSession = $derived(
+  authorFlow?.instances.find((instance) => instance.id === authorInstanceId) ??
+    null
+);
+
+// The agent's latest spec draft, rendered as TypeScript for the live preview.
+const authorPreviewSource = $derived(
+  typeof authorSession?.state.workflowInstanceState.previewSource === "string"
+    ? authorSession.state.workflowInstanceState.previewSource
+    : ""
+);
+const authorPreviewErrors = $derived(
+  Array.isArray(authorSession?.state.workflowInstanceState.previewErrors)
+    ? authorSession.state.workflowInstanceState.previewErrors
+    : []
+);
+
+// When the session finishes, drop the gate-passed source into the editor.
+$effect(() => {
+  const session = authorSession;
+  if (session?.state.currentState !== "done") return;
+  const generatedSource = session.state.workflowInstanceState.source;
+  if (
+    typeof generatedSource !== "string" ||
+    generatedSource === "" ||
+    generatedSource === lastAppliedSource
+  ) {
+    return;
+  }
+  lastAppliedSource = generatedSource;
+  source = generatedSource;
+  // A new definition needs a name before Save is enabled; the spec's label is
+  // the natural one.
+  const suggested = session.state.workflowInstanceState.suggestedName;
+  if (name.trim() === "" && typeof suggested === "string" && suggested !== "") {
+    name = suggested;
+  }
+  generationReport = session.state.workflowInstanceState
+    .report as GenerationReport | null;
+});
+
+// Resume a session after a reload: the session flow persists server-side; the
+// editor remembers its id per definition.
+function authorStorageKey(): string {
+  return `hive:author:${definitionId ?? "new"}`;
+}
+
+async function startAuthoring(lucky: boolean) {
+  if (!aiPrompt.trim()) return;
+  authoring = true;
+  error = null;
+  try {
+    const { flowId, instanceId } = await authorFlowDefinition({
+      prompt: aiPrompt.trim(),
+      lucky,
+    });
+    authorFlowId = flowId;
+    authorInstanceId = instanceId;
+    lastAppliedSource = null;
+    // Seed the store so the session renders immediately; the WS keeps it live.
+    flowStore.upsert(await fetchFlow(flowId));
+    localStorage.setItem(authorStorageKey(), flowId);
+  } catch (err) {
+    error = err instanceof Error ? err.message : "Failed to start authoring";
+  } finally {
+    authoring = false;
+  }
+}
+
+async function closeAuthoring() {
+  if (!authorFlowId) return;
+  try {
+    await deleteFlow(authorFlowId, true);
+  } catch {
+    // The session is disposable; a failed delete is not an error.
+  }
+  flowStore.removeFlow(authorFlowId);
+  localStorage.removeItem(authorStorageKey());
+  authorFlowId = null;
+  authorInstanceId = null;
+  lastAppliedSource = null;
+}
+
+async function resumeAuthoring(): Promise<void> {
+  const stored = localStorage.getItem(authorStorageKey());
+  if (!stored) return;
+  try {
+    const flow = await fetchFlow(stored);
+    flowStore.upsert(flow);
+    authorFlowId = flow.id;
+    // The session is the single instance of the authoring flow.
+    authorInstanceId = flow.instances[0]?.id ?? null;
+    if (authorInstanceId === null) {
+      authorFlowId = null;
+      localStorage.removeItem(authorStorageKey());
+    }
+  } catch {
+    // The stored session is gone (deleted server-side); forget it.
+    localStorage.removeItem(authorStorageKey());
+  }
+}
+
+async function handleAuthorAction(
+  flowId: string,
+  instanceId: string,
+  actionId: string
+) {
+  try {
+    await dispatchAction(flowId, instanceId, actionId);
+  } catch (err) {
+    error = err instanceof Error ? err.message : "Action failed";
+  }
+}
+
+async function handleAuthorSend(
+  flowId: string,
+  instanceId: string,
+  content: string
+) {
+  await sendTaskInput(flowId, instanceId, content);
+}
+
+function authorStateLabel(): string {
+  switch (authorSession?.state.currentState) {
+    case "drafting":
+      return "Drafting — chat with the agent";
+    case "finalizing":
+      return "Running the generation gate…";
+    case "revising":
+      return "Agent is fixing gate findings…";
+    case "done":
+      return "Done — the source is in the editor";
+    case "failed":
+      return "Failed after three attempts";
+    default:
+      return "";
+  }
+}
 // The last generation's gate outcome (errors = why the definition still
 // fails the schema/typecheck gate; the source is still loaded for editing).
 let generationReport = $state<GenerationReport | null>(null);
@@ -116,6 +274,7 @@ onMount(() => {
   window.addEventListener("beforeunload", guardUnload);
 
   void load();
+  void resumeAuthoring();
   return () => {
     window.removeEventListener("hashchange", guardHash);
     window.removeEventListener("beforeunload", guardUnload);
@@ -217,23 +376,6 @@ async function updateDefinition(id: string | undefined) {
   });
 }
 
-async function generate() {
-  if (!aiPrompt.trim()) return;
-  generating = true;
-  error = null;
-  generationReport = null;
-  try {
-    const result = await generateFlowDefinition(aiPrompt.trim());
-    source = result.source;
-    generationReport = result.report;
-  } catch (err) {
-    error =
-      err instanceof Error ? err.message : "Failed to generate definition";
-  } finally {
-    generating = false;
-  }
-}
-
 async function remove() {
   if (!definitionId) return;
   try {
@@ -311,55 +453,94 @@ async function remove() {
         </div>
         {#if aiOpen}
           <div class="ai-body">
-            <p class="ai-hint">
-              Describe the flow you want; the model returns a TypeScript
-              definition matching the engine schema.
-            </p>
-            <Textarea
-              bind:value={aiPrompt}
-              placeholder="A review flow: a ready state with an approve/reject action..."
-            />
-            <Button
-              variant="azure"
-              block
-              disabled={generating || !aiPrompt.trim()}
-              onclick={generate}
-            >
-              {generating ? "Generating..." : "Generate"}
-            </Button>
-            {#if generationReport}
-              <div class="report">
-                {#if generationReport.passed}
-                  <p class="report-ok">
-                    Definition passed the gate ({generationReport.attempts}
-                    attempt
-                    {#if generationReport.attempts !== 1}
-                      s
+            {#if authorFlowId && authorFlow}
+              <div class="author-session">
+                <div class="author-header">
+                  <span class="author-state">{authorStateLabel()}</span>
+                  <button
+                    type="button"
+                    class="author-close"
+                    onclick={closeAuthoring}
+                  >
+                    Close session
+                  </button>
+                </div>
+                <LitFlowHost
+                  flowId={authorFlow.id}
+                  workflowDefs={authorFlow.workflows}
+                  instances={authorFlow.instances}
+                  customKinds={authorFlow.ui?.kinds ?? []}
+                  components={authorFlow.ui?.components ?? {}}
+                  onAction={handleAuthorAction}
+                  onSendMessage={handleAuthorSend}
+                />
+                {#if authorPreviewSource || authorPreviewErrors.length > 0}
+                  <div class="author-preview">
+                    <button
+                      type="button"
+                      class="pane-toggle"
+                      onclick={() => (previewOpen = !previewOpen)}
+                    >
+                      {previewOpen ? "Hide" : "Show"}
+                      spec preview
+                    </button>
+                    {#if authorPreviewErrors.length > 0}
+                      <ul class="author-preview-errors">
+                        {#each authorPreviewErrors as err}
+                          <li>{err}</li>
+                        {/each}
+                      </ul>
                     {/if}
-                    ) — typecheck and schema-consistency are clean.
-                  </p>
-                {:else}
-                  <p class="report-bad">
-                    Definition failed the gate after
-                    {generationReport.attempts}
-                    attempts. It was loaded for editing, but these issues
-                    remain:
-                  </p>
-                  <ul class="report-list">
-                    {#each generationReport.errors as err}
-                      <li>{err}</li>
-                    {/each}
-                  </ul>
+                    {#if previewOpen && authorPreviewSource}
+                      <pre
+                        class="author-preview-source"
+                      >{authorPreviewSource}</pre>
+                    {/if}
+                  </div>
                 {/if}
-                {#if generationReport.warnings.length > 0}
-                  <p class="report-warn-head">Warnings:</p>
-                  <ul class="report-list">
-                    {#each generationReport.warnings as w}
-                      <li>{w}</li>
-                    {/each}
-                  </ul>
+                {#if generationReport}
+                  <div class="report">
+                    {#if generationReport.passed}
+                      <p class="report-ok">
+                        Definition passed the gate — the source is in the
+                        editor. (Warnings:
+                        {generationReport.warnings.length})
+                      </p>
+                    {:else}
+                      <p class="report-bad">
+                        Definition failed the gate; the agent is fixing the
+                        findings.
+                      </p>
+                    {/if}
+                  </div>
                 {/if}
               </div>
+            {:else}
+              <p class="ai-hint">
+                Describe the flow you want. The agent will ask what is unclear,
+                then draft the definition with you — or try "I'm feeling lucky"
+                for a one-shot attempt.
+              </p>
+              <Textarea
+                bind:value={aiPrompt}
+                placeholder="A review flow: a ready state with an approve/reject action..."
+              />
+              <Button
+                variant="azure"
+                block
+                disabled={authoring || !aiPrompt.trim()}
+                onclick={() => startAuthoring(false)}
+              >
+                {authoring ? "Starting session..." : "Start conversation"}
+              </Button>
+              <Button
+                variant="platinum"
+                block
+                disabled={authoring || !aiPrompt.trim()}
+                onclick={() => startAuthoring(true)}
+              >
+                I'm feeling lucky
+              </Button>
             {/if}
           </div>
         {/if}
@@ -674,6 +855,70 @@ h1 {
 .report-note {
   margin: 0.5rem 0 0 0;
   font-style: italic;
+}
+
+.author-session {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.author-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.6875rem;
+}
+
+.author-state {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.author-close {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--muted);
+  font-size: 0.625rem;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+}
+
+.author-close:hover {
+  color: var(--error);
+  border-color: var(--error);
+}
+
+.author-preview {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.375rem 0.5rem;
+}
+
+.author-preview-errors {
+  margin: 0.375rem 0 0 0;
+  padding-left: 1.125rem;
+  color: var(--error);
+  font-size: 0.6875rem;
+  line-height: 1.5;
+}
+
+.author-preview-source {
+  margin: 0.375rem 0 0 0;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 0.375rem 0.5rem;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.625rem;
+  line-height: 1.45;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .save-findings {

@@ -23,12 +23,14 @@ import type {
 
 // A registered definition pairs the engine FlowDefinition with the library
 // metadata the UI needs. `builtIn` marks definitions shipped by the server
-// (not persisted, not deletable); user definitions carry their TS `source`.
+// (not persisted, not deletable); `hidden` keeps a definition out of the flow
+// library list while remaining instantiable (e.g. the flow-authoring session).
 export type RegisteredFlowDefinition = {
   id: string;
   name: string;
   description?: string;
   builtIn: boolean;
+  hidden: boolean;
   configSchema: ConfigField[];
   flow: FlowDefinition;
   source?: string;
@@ -45,13 +47,14 @@ const definitions = new Map<string, RegisteredFlowDefinition>();
 
 export function registerFlowDefinition(
   definition: FlowDefinition,
-  options: { builtIn?: boolean } = {}
+  options: { builtIn?: boolean; hidden?: boolean } = {}
 ): void {
   definitions.set(definition.id, {
     id: definition.id,
     name: definition.label,
     description: definition.description,
     builtIn: options.builtIn ?? false,
+    hidden: options.hidden ?? false,
     configSchema: definition.configSchema ?? [],
     flow: definition,
   });
@@ -69,7 +72,7 @@ export function getFlowDefinition(id: string): FlowDefinition | undefined {
 }
 
 export function listRegisteredDefinitions(): RegisteredFlowDefinition[] {
-  return Array.from(definitions.values());
+  return Array.from(definitions.values()).filter((d) => !d.hidden);
 }
 
 // ── User-definition registration ──
@@ -102,6 +105,7 @@ export async function registerUserDefinition(input: {
     name: input.name,
     description: input.description,
     builtIn: false,
+    hidden: false,
     configSchema: flow.configSchema ?? [],
     flow,
     source: input.source,
@@ -131,6 +135,7 @@ export async function updateUserDefinition(
     name: input.name,
     description: input.description,
     builtIn: false,
+    hidden: false,
     configSchema: flow.configSchema ?? [],
     flow,
     source: input.source,
@@ -204,6 +209,7 @@ export async function loadUserDefinitionsFromDisk(): Promise<void> {
         name: meta?.name ?? flow.label ?? slug,
         description: meta?.description ?? flow.description,
         builtIn: false,
+        hidden: false,
         configSchema: flow.configSchema ?? [],
         flow,
         source,

@@ -1150,6 +1150,10 @@ const resolverWorkflow = defineWorkflow({
           label: "Resolve",
           trigger: "manual",
           role: "ai-task",
+          // Real flows always give their agents a prompt; the ai-task runner
+          // fails fast otherwise, so the tool-driven pattern is exercised
+          // with the same authoring discipline.
+          systemPrompt: "Graduate the ticket via the create_instance tool.",
           tools: ["create_instance"],
         },
       ],

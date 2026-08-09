@@ -76,6 +76,57 @@ describe("flow-registry", () => {
     assert.equal(persisted.instances[0].state.currentState, "idle");
   });
 
+  it("createFlow does not seed a workflow whose initial state auto-runs an input-driven ai-task", () => {
+    // A generated flow like ticket triage: the initial state's auto ai-task
+    // declares inputFromInstanceState, and an empty seed would run the agent
+    // with nothing to work on (a phantom ticket + a wasted model call). The
+    // seed must be skipped; the user creates instances explicitly.
+    const inputDriven = defineWorkflow({
+      id: "tickets",
+      label: "Tickets",
+      taskOutputs: {} as Record<string, never>,
+      states: [
+        {
+          id: "inbox",
+          label: "Inbox",
+          category: "initial",
+          tasks: [
+            {
+              id: "triage",
+              label: "Triage",
+              trigger: "auto",
+              role: "ai-task",
+              systemPrompt: "Triage the ticket.",
+              inputFromInstanceState: "description",
+            },
+          ],
+        },
+        { id: "triaged", label: "Triaged", category: "terminal" },
+      ],
+      initial: "inbox",
+      terminalStates: ["triaged"],
+    });
+    const definition = {
+      id: "tickets-def",
+      label: "Tickets Def",
+      workflows: [inputDriven],
+      edges: [],
+    } satisfies FlowDefinition;
+    registerFlowDefinition(definition);
+
+    const persistence = getFlowPersistence();
+    assert.ok(persistence);
+    createFlow("flow-tickets", "tickets-def", persistence);
+
+    const persisted = persistence.loadFlow("flow-tickets");
+    assert.ok(persisted);
+    assert.equal(
+      persisted.instances.length,
+      0,
+      "an input-driven initial ai-task must not be seeded empty"
+    );
+  });
+
   it("rehydrateFlow rebuilds a runtime from its registered definition", async () => {
     const persistence = getFlowPersistence();
     assert.ok(persistence);
@@ -440,6 +491,18 @@ describe("flow-level actions", () => {
           count: "two",
         }),
       /must be a number/
+    );
+  });
+
+  it("createInstance rejects an empty string for a required field", () => {
+    createFlow("flow-a", "action-def", persistence);
+    assert.throws(
+      () => dispatchFlowLevelAction("flow-a", "add_item", { title: "" }),
+      /cannot be empty/
+    );
+    assert.throws(
+      () => dispatchFlowLevelAction("flow-a", "add_item", { title: "   " }),
+      /cannot be empty/
     );
   });
 

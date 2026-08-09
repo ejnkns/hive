@@ -18,6 +18,7 @@ import {
 } from "workflow-engine/workflow-types";
 import { queenBeeFlow } from "../../../presets/queen-bee/flow";
 import { registerFlowApiRoutes } from "./flow-api-routes";
+import { authoringSessionFlow } from "./flow-authoring";
 import {
   registerFlowDefinition,
   registerUserDefinition,
@@ -26,11 +27,30 @@ import {
 } from "./flow-definitions";
 import type { FlowStore } from "./flow-persistence";
 import {
+  getFlowRuntime,
   registerFlowForTest,
   resetFlowRuntimesForTest,
   setFlowPersistence,
 } from "./flow-registry";
 import { setGenerationModelCallerForTest } from "./generate-flow-definition";
+
+// Parses the SSE body the generate route streams: one `data: {json}\n\n`
+// event per line.
+function parseSseEvents(body: string): Array<Record<string, unknown>> {
+  const events: Array<Record<string, unknown>> = [];
+  for (const block of body.split("\n\n")) {
+    const line = block.trim();
+    if (!line.startsWith("data: ")) continue;
+    try {
+      events.push(
+        JSON.parse(line.slice("data: ".length)) as Record<string, unknown>
+      );
+    } catch {
+      // skip malformed frames
+    }
+  }
+  return events;
+}
 
 const testWorkflow = defineWorkflow({
   id: "test-wf",
@@ -754,7 +774,7 @@ describe("flow API routes", () => {
     ws.close();
   });
 
-  it("POST /api/flows/definitions/generate returns source + report through the loop", async () => {
+  it("POST /api/flows/definitions/generate streams progress and returns source + report", async () => {
     // A stubbed model: the route reaches the loop through the seam.
     const validSpec = {
       id: "routeFlow",
@@ -764,7 +784,8 @@ describe("flow API routes", () => {
         {
           id: "route",
           label: "Route",
-          instanceState: [],
+          instance: { title: "title" },
+          instanceState: [{ field: "title", type: "string" }],
           initialState: "idle",
           terminalStates: ["done"],
           states: [
@@ -785,9 +806,21 @@ describe("flow API routes", () => {
           ],
         },
       ],
+      actions: [
+        {
+          id: "add",
+          label: "Add item",
+          variant: "primary",
+          createInstance: {
+            workflowId: "route",
+            fields: [{ key: "title", label: "Title", type: "string" }],
+          },
+        },
+      ],
       edges: [],
     };
-    setGenerationModelCallerForTest(async () => {
+    setGenerationModelCallerForTest(async (_messages, callbacks) => {
+      callbacks?.onDelta?.("designing the flow...");
       return `\`\`\`json\n${JSON.stringify(validSpec)}\n\`\`\``;
     });
 
@@ -802,17 +835,31 @@ describe("flow API routes", () => {
     });
 
     assert.equal(response.statusCode, 200);
-    const json = response.json() as {
+    assert.ok(
+      response.headers["content-type"]?.startsWith("text/event-stream"),
+      "generation must stream SSE"
+    );
+
+    // Parse the SSE body: stage/delta events followed by a done event.
+    const events = parseSseEvents(response.body);
+    const types = events.map((e) => e.type);
+    assert.ok(
+      types.includes("stage") &&
+        types.includes("delta") &&
+        types.includes("done"),
+      `expected stage/delta/done events, got: ${types.join(", ")}`
+    );
+    const done = events.find((e) => e.type === "done") as {
       source: string;
       report: { passed: boolean; attempts: number; errors: string[] };
     };
     assert.ok(
-      json.source.includes("defineWorkflow"),
+      done.source.includes("defineWorkflow"),
       "expected a rendered definition source"
     );
-    assert.equal(json.report.passed, true);
-    assert.equal(json.report.attempts, 1);
-    assert.deepEqual(json.report.errors, []);
+    assert.equal(done.report.passed, true);
+    assert.equal(done.report.attempts, 1);
+    assert.deepEqual(done.report.errors, []);
   });
 
   it("POST /api/flows/definitions/generate requires a prompt", async () => {
@@ -823,6 +870,55 @@ describe("flow API routes", () => {
     const response = await server.inject({
       method: "POST",
       url: "/api/flows/definitions/generate",
+      body: {},
+    });
+
+    assert.equal(response.statusCode, 400);
+    assert.equal(response.json().error, "prompt is required");
+  });
+
+  it("POST /api/flows/definitions/author creates an authoring session", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition(authoringSessionFlow, { hidden: true });
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions/author",
+      body: { prompt: "Build a triage flow" },
+    });
+
+    assert.equal(response.statusCode, 201);
+    const { flowId, instanceId } = response.json() as {
+      flowId: string;
+      instanceId: string;
+    };
+    assert.ok(flowId.startsWith("author-"), `unexpected flow id ${flowId}`);
+    assert.ok(instanceId.length > 0);
+
+    const runtime = getFlowRuntime(flowId);
+    assert.ok(runtime, "the authoring flow must be registered as a runtime");
+    const controller = runtime?.getWorkflowInstance(instanceId);
+    assert.equal(controller?.getState().currentState, "drafting");
+    // The user's request is recorded as the session card's title.
+    assert.equal(
+      controller?.getState().workflowInstanceState.prompt,
+      "Build a triage flow"
+    );
+  });
+
+  it("POST /api/flows/definitions/author requires a prompt", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition(authoringSessionFlow, { hidden: true });
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions/author",
       body: {},
     });
 

@@ -1,10 +1,12 @@
+import { randomUUID } from "node:crypto";
+import { PassThrough } from "node:stream";
 import type { FastifyInstance } from "fastify";
 import { slugify } from "shared/slugify";
+import { AUTHORING_DEFINITION_ID } from "./flow-authoring";
 import {
   DefinitionAlreadyExistsError,
   deleteUserDefinition,
   getDefinitionComponentSource,
-  getFlowDefinition,
   getRegisteredFlowDefinition,
   listRegisteredDefinitions,
   loadDefinitionFromSource,
@@ -49,7 +51,7 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
     const definitionId = cfg.definitionId;
     const definition =
       typeof definitionId === "string"
-        ? getFlowDefinition(definitionId)
+        ? getRegisteredFlowDefinition(definitionId)
         : undefined;
     // Declared component ids mapped to their serve paths. The UI fetches each
     // module from this path, evaluates it, and registers the returned
@@ -57,7 +59,7 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
     // components (unknown instanceComponents fall back to the default card).
     const declaredComponents =
       typeof definitionId === "string"
-        ? (definition?.ui?.components ?? {})
+        ? (definition?.flow.ui?.components ?? {})
         : {};
     const definitionSlug = typeof definitionId === "string" ? definitionId : "";
     const components = Object.fromEntries(
@@ -73,8 +75,11 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
       config: clientConfig,
       workflows,
       instances,
+      // Hidden definitions (the flow-authoring session) are driven by the
+      // editor, not the flow library — the client hides their instances.
+      hidden: definition?.hidden ?? false,
       ui: {
-        kinds: definition?.ui?.kinds ?? [],
+        kinds: definition?.flow.ui?.kinds ?? [],
         components,
       },
       availableFlowActions: getAvailableFlowActions(flowId),
@@ -84,9 +89,18 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
   server.get("/api/flows", async (request, reply) => {
     // Fastify query types are erased; shape guaranteed by route usage
     const query = request.query as { definitionId?: string; name?: string };
-    let flows = Array.from(getFlowRuntimes()).map(([flowId, runtime]) =>
-      flowPayload(flowId, runtime)
-    );
+    let flows = Array.from(getFlowRuntimes())
+      // Hidden definitions (the flow-authoring session) are driven by the
+      // editor, not the library — their flow instances must not appear here.
+      .filter(([, runtime]) => {
+        const cfg = runtime.getFlowConfig() as Record<string, unknown>;
+        const def =
+          typeof cfg.definitionId === "string"
+            ? getRegisteredFlowDefinition(cfg.definitionId)
+            : undefined;
+        return def === undefined || !def.hidden;
+      })
+      .map(([flowId, runtime]) => flowPayload(flowId, runtime));
 
     if (query.definitionId !== undefined || query.name !== undefined) {
       flows = flows.filter((flow) => {
@@ -334,16 +348,93 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
       return reply.status(400).send({ error: "prompt is required" });
     }
 
-    try {
-      const { source, report } = await generateFlowDefinitionSource(
-        prompt.trim()
-      );
-      return reply.send({ source, report });
-    } catch (err) {
-      return reply.status(400).send({
-        error: err instanceof Error ? err.message : "Generation failed",
-      });
+    // Stream generation progress as SSE: the loop runs server-side while
+    // stage/delta/attempt events are piped to the client, ending with `done`
+    // (the full result) or `error`. The client disconnect aborts the loop.
+    reply.header("Content-Type", "text/event-stream; charset=utf-8");
+    reply.header("Cache-Control", "no-cache, no-transform");
+    reply.header("Connection", "keep-alive");
+    reply.header("X-Accel-Buffering", "no");
+
+    const stream = new PassThrough();
+    let finished = false;
+    const send = (event: Record<string, unknown>): void => {
+      if (finished || stream.destroyed) return;
+      stream.write(`data: ${JSON.stringify(event)}\n\n`);
+    };
+    const abort = new AbortController();
+    // A client disconnect mid-write surfaces as a stream error; the abort
+    // below is the response, and an unhandled error event would crash the
+    // process, so swallow it here.
+    stream.on("error", () => {});
+    stream.on("close", () => {
+      // The reply flushed and ended normally (finished) or the client
+      // disconnected mid-generation — abort the loop either way.
+      if (!finished) abort.abort();
+    });
+
+    void (async () => {
+      try {
+        const { source, report } = await generateFlowDefinitionSource(
+          prompt.trim(),
+          { onProgress: (event) => send(event), signal: abort.signal }
+        );
+        send({ type: "done", source, report });
+      } catch (err) {
+        send({
+          type: "error",
+          error: err instanceof Error ? err.message : "Generation failed",
+        });
+      } finally {
+        finished = true;
+        stream.end();
+      }
+    })();
+
+    return reply.send(stream);
+  });
+
+  server.post("/api/flows/definitions/author", async (request, reply) => {
+    // Creates a flow-authoring session: a hidden flow instance whose ai-chat
+    // agent converges on a spec with the user. The initial prompt is recorded
+    // in instance state and sent as the first chat message (wrapped in the
+    // "no questions" instruction for the I'm-feeling-lucky path).
+    const body = request.body as { prompt?: string; lucky?: boolean } | null;
+    const prompt = body?.prompt;
+    if (typeof prompt !== "string" || prompt.trim() === "") {
+      return reply.status(400).send({ error: "prompt is required" });
     }
+
+    const persistence = getFlowPersistence();
+    if (!persistence) {
+      return reply
+        .status(500)
+        .send({ error: "Flow persistence not available" });
+    }
+
+    const flowId = `author-${randomUUID()}`;
+    const runtime = createFlow(flowId, AUTHORING_DEFINITION_ID, persistence);
+    const instance = runtime.getWorkflowInstanceEntries()[0];
+    if (!instance) {
+      return reply
+        .status(500)
+        .send({ error: "No authoring session instance created" });
+    }
+
+    const controller = runtime.getWorkflowInstance(instance.id);
+    controller?.patchWorkflowInstanceState({ prompt: prompt.trim() });
+    const taskId = controller?.getState().runningTaskId;
+    if (taskId) {
+      const firstMessage = body?.lucky
+        ? `Produce the complete flow spec now. Do not ask clarifying questions — make reasonable assumptions, call set_flow_spec, then finish_authoring.\n\nRequest: ${prompt.trim()}`
+        : prompt.trim();
+      controller.sendTaskInput(taskId, firstMessage, "user");
+    }
+
+    return reply.status(201).send({
+      flowId,
+      instanceId: instance.id,
+    });
   });
 
   server.post("/api/flows/definitions/validate", async (request, reply) => {

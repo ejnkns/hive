@@ -35,6 +35,11 @@ export const engineCapabilities = {
         "A ManualAction flag: the human ends a running ai-chat session via a Done action; the transcript becomes the task output.",
     },
     {
+      name: "completionOutput",
+      description:
+        "An ai-task declares the structured fields it must return; the renderer generates a completion tool with those parameters, the agent calls it to end the task, and the parsed arguments become the task output (patch ops read output.<field>, gates compare output.<field>).",
+    },
+    {
       name: "newAttempt",
       description:
         "A ManualAction flag: the action starts a fresh attempt — the engine bumps the instance's `attempt` counter and discards the abandoned workspace in `worktreePath`. Engine-owned bookkeeping; a flow just declares the flag.",

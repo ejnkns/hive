@@ -27,6 +27,9 @@ export type FlowResponse = {
   id: string;
   label: string;
   status: FlowStatus;
+  // Hidden definitions (the flow-authoring session) are driven by the
+  // definition editor, not the flow library.
+  hidden?: boolean;
   config?: Record<string, unknown>;
   workflows: WorkflowDefResponse[];
   instances: WorkflowInstanceEntry[];
@@ -63,6 +66,28 @@ export type GenerationReport = {
   errors: string[];
   warnings: string[];
 };
+
+// Live progress events the generate route streams over SSE, mirrored from the
+// server's GenerationProgressEvent so the editor can render what is actually
+// happening: the model's streamed design/spec, the gate stages, and any
+// rejected attempts.
+export type GenerationProgressEvent =
+  | {
+      type: "stage";
+      stage: "design" | "spec" | "validating" | "rendering" | "checking";
+      attempt?: number;
+      maxAttempts?: number;
+    }
+  | { type: "delta"; text: string }
+  | {
+      type: "attempt_failed";
+      attempt: number;
+      maxAttempts: number;
+      errors: string[];
+    }
+  | { type: "warnings"; findings: string[] }
+  | { type: "done"; source: string; report: GenerationReport }
+  | { type: "error"; error: string };
 
 export type FlowDefinitionDetail = FlowDefinitionSummary & {
   source: string;
@@ -140,6 +165,29 @@ export async function createFlow(input: {
   // Success response shape is guaranteed by the server endpoint
   const data = (await res.json()) as { ok: boolean; flowId: string };
   return { flowId: data.flowId };
+}
+
+// Creates a flow-authoring session (a hidden flow instance whose ai-chat
+// agent converges on a spec with the user) and returns the session ids. When
+// `lucky` is true the agent is told to produce the spec without questions.
+export async function authorFlowDefinition(input: {
+  prompt: string;
+  lucky?: boolean;
+}): Promise<{ flowId: string; instanceId: string }> {
+  const res = await fetch("/api/flows/definitions/author", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    // Error response shape is guaranteed by the server endpoint
+    const err = (await res.json()) as { error?: string };
+    throw new Error(
+      err.error ?? `Failed to start authoring: ${res.statusText}`
+    );
+  }
+  // Success response shape is guaranteed by the server endpoint
+  return (await res.json()) as { flowId: string; instanceId: string };
 }
 
 export async function deleteFlow(flowId: string, purge = false): Promise<void> {
@@ -237,22 +285,51 @@ export async function deleteFlowDefinition(id: string): Promise<void> {
 }
 
 export async function generateFlowDefinition(
-  prompt: string
+  prompt: string,
+  onEvent: (event: GenerationProgressEvent) => void = () => {}
 ): Promise<{ source: string; report: GenerationReport }> {
   const res = await fetch("/api/flows/definitions/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ prompt }),
   });
-  if (!res.ok) {
+  if (!res.ok || !res.body) {
     // Error response shape is guaranteed by the server endpoint
-    const err = (await res.json()) as { error?: string };
+    const err = (await res.json().catch(() => null)) as {
+      error?: string;
+    } | null;
     throw new Error(
-      err.error ?? `Failed to generate definition: ${res.statusText}`
+      err?.error ?? `Failed to generate definition: ${res.statusText}`
     );
   }
-  // Success response shape is guaranteed by the server endpoint
-  return (await res.json()) as { source: string; report: GenerationReport };
+
+  // Parse the SSE stream: one `data: {json}\n\n` frame per event. The stream
+  // ends with a `done` (full result) or `error` event.
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let frameEnd = buffer.indexOf("\n\n");
+    while (frameEnd !== -1) {
+      const frame = buffer.slice(0, frameEnd);
+      buffer = buffer.slice(frameEnd + 2);
+      frameEnd = buffer.indexOf("\n\n");
+      const line = frame.trim();
+      if (!line.startsWith("data: ")) continue;
+      const event = JSON.parse(
+        line.slice("data: ".length)
+      ) as GenerationProgressEvent;
+      onEvent(event);
+      if (event.type === "done") {
+        return { source: event.source, report: event.report };
+      }
+      if (event.type === "error") throw new Error(event.error);
+    }
+  }
+  throw new Error("Generation stream ended without a result");
 }
 
 // The validate-without-save gate: transpile+load, schema-consistency, and the

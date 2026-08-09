@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { FlowSpec } from "./flow-spec";
-import { validateFlowSpec } from "./flow-spec";
+import { analyzeFlowSpec, validateFlowSpec } from "./flow-spec";
 
 // A small valid spec: one workflow, one ai-task, gates on its output, a
 // createInstance action writing the only instance-state field.
@@ -479,6 +479,348 @@ describe("validateFlowSpec", () => {
       `expected the dependsOn contract rule, got: ${errorsFor(bad)
         .map((e) => e.message)
         .join("; ")}`
+    );
+  });
+
+  it("accepts a structured completion contract (completionOutput on an ai-task)", () => {
+    const spec: FlowSpec = {
+      ...VALID,
+      workflows: [
+        {
+          ...VALID.workflows[0],
+          instanceState: [
+            { field: "title", type: "string" },
+            { field: "category", type: "string" },
+            { field: "tags", type: "string[]" },
+          ],
+          states: VALID.workflows[0].states.map((s) =>
+            s.id === "running"
+              ? {
+                  ...s,
+                  tasks: [
+                    {
+                      id: "run",
+                      label: "Run",
+                      role: "ai-task",
+                      completionOutput: [
+                        { field: "category", type: "string" },
+                        { field: "tags", type: "string[]" },
+                      ],
+                    },
+                    {
+                      id: "record",
+                      label: "Record",
+                      role: "operation",
+                      patch: {
+                        category: {
+                          kind: "taskOutput",
+                          task: "run",
+                          path: "output.category",
+                        },
+                        tags: {
+                          kind: "taskOutput",
+                          task: "run",
+                          path: "output.tags",
+                        },
+                      },
+                    },
+                  ],
+                }
+              : s
+          ),
+        },
+      ],
+    };
+    assert.deepEqual(errorsFor(spec), []);
+  });
+
+  it("rejects completionOutput on a non-ai-task role", () => {
+    const bad: FlowSpec = {
+      ...VALID,
+      workflows: [
+        {
+          ...VALID.workflows[0],
+          states: VALID.workflows[0].states.map((s) =>
+            s.id === "running"
+              ? {
+                  ...s,
+                  tasks: [
+                    {
+                      id: "run",
+                      label: "Run",
+                      role: "operation",
+                      completionOutput: [{ field: "category", type: "string" }],
+                    },
+                  ],
+                }
+              : s
+          ),
+        },
+      ],
+    };
+    const message = messageFor(bad, "requires an ai-task role");
+    assert.ok(
+      message,
+      `expected a role error, got: ${errorsFor(bad)
+        .map((e) => e.message)
+        .join("; ")}`
+    );
+  });
+
+  it("rejects completionOutput combined with an explicit completionTool", () => {
+    const bad: FlowSpec = {
+      ...VALID,
+      workflows: [
+        {
+          ...VALID.workflows[0],
+          states: VALID.workflows[0].states.map((s) =>
+            s.id === "running"
+              ? {
+                  ...s,
+                  tasks: [
+                    {
+                      id: "run",
+                      label: "Run",
+                      role: "ai-task",
+                      completionTool: "complete_task",
+                      completionOutput: [{ field: "category", type: "string" }],
+                    },
+                  ],
+                }
+              : s
+          ),
+        },
+      ],
+    };
+    const message = messageFor(bad, "do not also set completionTool");
+    assert.ok(
+      message,
+      `expected a mutual-exclusion error, got: ${errorsFor(bad)
+        .map((e) => e.message)
+        .join("; ")}`
+    );
+  });
+
+  it("rejects a taskOutput read of a field the source task does not declare", () => {
+    const bad: FlowSpec = {
+      ...VALID,
+      workflows: [
+        {
+          ...VALID.workflows[0],
+          instanceState: [
+            { field: "title", type: "string" },
+            { field: "category", type: "string" },
+          ],
+          states: VALID.workflows[0].states.map((s) =>
+            s.id === "running"
+              ? {
+                  ...s,
+                  tasks: [
+                    {
+                      id: "run",
+                      label: "Run",
+                      role: "ai-task",
+                      completionOutput: [{ field: "category", type: "string" }],
+                    },
+                    {
+                      id: "record",
+                      label: "Record",
+                      role: "operation",
+                      patch: {
+                        category: {
+                          kind: "taskOutput",
+                          task: "run",
+                          path: "output.nonexistent",
+                        },
+                      },
+                    },
+                  ],
+                }
+              : s
+          ),
+        },
+      ],
+    };
+    const message = messageFor(bad, "does not declare in completionOutput");
+    assert.ok(
+      message,
+      `expected a field-resolution error, got: ${errorsFor(bad)
+        .map((e) => e.message)
+        .join("; ")}`
+    );
+  });
+
+  it("rejects a taskOutputEquals gate on an undeclared completionOutput field", () => {
+    const bad: FlowSpec = {
+      ...VALID,
+      workflows: [
+        {
+          ...VALID.workflows[0],
+          states: VALID.workflows[0].states.map((s) =>
+            s.id === "running"
+              ? {
+                  ...s,
+                  tasks: [
+                    {
+                      id: "run",
+                      label: "Run",
+                      role: "ai-task",
+                      completionOutput: [{ field: "category", type: "string" }],
+                    },
+                  ],
+                  autoTransitions: [
+                    {
+                      to: "approved",
+                      gate: {
+                        kind: "taskOutputEquals",
+                        task: "run",
+                        path: "output.verdict",
+                        value: "approved",
+                      },
+                    },
+                  ],
+                }
+              : s
+          ),
+        },
+      ],
+    };
+    const message = messageFor(bad, "does not declare in completionOutput");
+    assert.ok(
+      message,
+      `expected a field-resolution error, got: ${errorsFor(bad)
+        .map((e) => e.message)
+        .join("; ")}`
+    );
+  });
+});
+
+describe("analyzeFlowSpec", () => {
+  it("flags an ai-task with no systemPrompt", () => {
+    const spec: FlowSpec = {
+      ...VALID,
+      workflows: [
+        {
+          ...VALID.workflows[0],
+          states: VALID.workflows[0].states.map((s) =>
+            s.id === "running"
+              ? {
+                  ...s,
+                  tasks: [
+                    {
+                      id: "run",
+                      label: "Run",
+                      role: "ai-task",
+                      completionTool: "complete_task",
+                    },
+                  ],
+                }
+              : s
+          ),
+        },
+      ],
+    };
+    const findings = analyzeFlowSpec(spec);
+    assert.ok(
+      findings.some((f) => f.includes("no systemPrompt")),
+      `expected a prompt finding, got: ${findings.join("; ")}`
+    );
+  });
+
+  it("flags completionOutput that nothing reads", () => {
+    const spec: FlowSpec = {
+      ...VALID,
+      workflows: [
+        {
+          ...VALID.workflows[0],
+          instanceState: [
+            { field: "title", type: "string" },
+            { field: "category", type: "string" },
+          ],
+          states: VALID.workflows[0].states.map((s) =>
+            s.id === "running"
+              ? {
+                  ...s,
+                  tasks: [
+                    {
+                      id: "run",
+                      label: "Run",
+                      role: "ai-task",
+                      systemPrompt: "Return a category.",
+                      completionOutput: [{ field: "category", type: "string" }],
+                    },
+                  ],
+                }
+              : s
+          ),
+        },
+      ],
+    };
+    const findings = analyzeFlowSpec(spec);
+    assert.ok(
+      findings.some((f) => f.includes("nothing reads its output")),
+      `expected an unconsumed-output finding, got: ${findings.join("; ")}`
+    );
+  });
+
+  it("does not flag completionOutput that a patch reads", () => {
+    const spec: FlowSpec = {
+      ...VALID,
+      workflows: [
+        {
+          ...VALID.workflows[0],
+          instanceState: [
+            { field: "title", type: "string" },
+            { field: "category", type: "string" },
+          ],
+          states: VALID.workflows[0].states.map((s) =>
+            s.id === "running"
+              ? {
+                  ...s,
+                  tasks: [
+                    {
+                      id: "run",
+                      label: "Run",
+                      role: "ai-task",
+                      systemPrompt: "Return a category.",
+                      completionOutput: [{ field: "category", type: "string" }],
+                    },
+                    {
+                      id: "record",
+                      label: "Record",
+                      role: "operation",
+                      patch: {
+                        category: {
+                          kind: "taskOutput",
+                          task: "run",
+                          path: "output.category",
+                        },
+                      },
+                    },
+                  ],
+                }
+              : s
+          ),
+        },
+      ],
+    };
+    const findings = analyzeFlowSpec(spec);
+    assert.ok(
+      !findings.some((f) => f.includes("nothing reads its output")),
+      `unexpected unconsumed-output finding: ${findings.join("; ")}`
+    );
+  });
+
+  it("flags a flow with no creation path", () => {
+    const spec: FlowSpec = {
+      ...VALID,
+      actions: [],
+      edges: [],
+    };
+    const findings = analyzeFlowSpec(spec);
+    assert.ok(
+      findings.some((f) => f.includes("nothing ever creates an instance")),
+      `expected a creation-path finding, got: ${findings.join("; ")}`
     );
   });
 });
