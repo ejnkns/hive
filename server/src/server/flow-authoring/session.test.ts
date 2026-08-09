@@ -55,10 +55,13 @@ function scriptedModel(script: ToolCall[]) {
   };
 }
 
-function buildRuntime(model: ReturnType<typeof scriptedModel>) {
+function buildRuntime(
+  model: ReturnType<typeof scriptedModel>,
+  mode: "conversational" | "lucky" = "conversational"
+) {
   return createFlowRuntime(
     "author-test",
-    authoringSessionFlow.workflows,
+    authoringSessionFlow.buildWorkflows({ mode }),
     [],
     {
       "ai-chat": (ctx) =>
@@ -274,5 +277,42 @@ describe("flow-authoring session", () => {
       (captured.patched?.previewErrors?.length ?? 0) > 0,
       "validation findings must land in previewErrors"
     );
+  });
+
+  it("lucky mode drives the session autonomously (no user input, no finalize action)", async () => {
+    const model = scriptedModel([
+      setSpecCall(STRUCTURED_INTAKE_EXEMPLAR),
+      finishCall,
+    ]);
+    const runtime = buildRuntime(model, "lucky");
+    // The lucky workflow's drafting task declares its input and has no
+    // finalize action — the agent is seeded and drives itself.
+    const controller = runtime.addWorkflowInstance("session", {
+      workflowInstanceState: {
+        prompt: "Build a triage flow",
+        mode: "lucky",
+        luckyInput:
+          "Produce the complete flow spec now. Do not ask clarifying questions — call set_flow_spec, then finish_authoring.\n\nRequest: Build a triage flow",
+      },
+    });
+    const available = controller.getAvailableActions();
+    assert.equal(
+      available.some((a) => a.id === "finalize"),
+      false,
+      "lucky mode must not offer the finalize action"
+    );
+
+    // No sendTaskInput — the agent runs from its seeded input to done.
+    for (let i = 0; i < 6; i++) await settle();
+
+    assert.equal(
+      controller.getState().currentState,
+      "done",
+      `lucky session should reach done autonomously, got ${controller.getState().currentState}`
+    );
+    const state = controller.getState()
+      .workflowInstanceState as AuthoringItemState;
+    assert.equal(state.report?.passed, true);
+    assert.equal(state.mode, "lucky");
   });
 });

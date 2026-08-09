@@ -37,6 +37,11 @@ export const AUTHORING_DEFINITION_ID = "flow-authoring";
 export type AuthoringItemState = {
   // The user's original request (the session card's title).
   prompt?: string;
+  // How this session was started: conversational asks clarifying questions and
+  // drafts interactively; lucky produces the spec autonomously.
+  mode?: "conversational" | "lucky";
+  // The lucky path's first-message seed: the no-questions instruction + prompt.
+  luckyInput?: string;
   // The current FlowSpec draft, maintained by the agent via set_flow_spec.
   spec?: string;
   // The rendered TypeScript of the current draft (live preview in the editor).
@@ -283,111 +288,127 @@ export const authoringOperations = defineOperations<AuthoringItemState>({
 
 // ─── the workflow ─────────────────────────────────────────────────────
 
-const sessionWorkflow = defineWorkflow({
-  id: "session",
-  label: "Authoring session",
-  instance: { title: "prompt" },
-  display: {
-    fields: [{ path: "prompt", label: "Request" }],
-  },
-  taskOutputs: {} as Record<string, never>,
-  workflowInstanceState: {} as AuthoringItemState,
-  states: [
-    {
-      id: "drafting",
-      label: "Drafting",
-      category: "initial",
-      tasks: [
-        {
-          id: "assistant",
-          label: "Authoring assistant",
-          role: "ai-chat",
-          trigger: "auto",
-          startOnUserInput: true,
-          systemPrompt: buildAuthoringSessionPrompt(),
-          tools: ["set_flow_spec", "finish_authoring"],
-          completionTool: "finish_authoring",
-        },
-      ],
-      actions: [
-        {
-          id: "finalize",
-          label: "Finalize and generate",
-          variant: "primary",
-          completesRunningTask: true,
-          transitionTo: "finalizing",
-        },
-      ],
-      autoTransitions: [
-        {
-          // The agent called finish_authoring — the session completed.
-          to: "finalizing",
-          gate: (ctx) => ctx.taskOutputs.assistant?.status === "success",
-        },
-      ],
+// The session workflow, parameterized by how the session was started. The two
+// modes differ only in the drafting task: conversational is an interactive
+// ai-chat (the human drives it, and a "Generate definition" action runs the
+// gate on the current draft); lucky is an autonomous ai-chat seeded with the
+// no-questions instruction, which writes the spec and finalizes on its own.
+// Everything downstream (finalizing, revising, done/failed) is shared.
+function buildSessionWorkflow(
+  mode: "conversational" | "lucky"
+): ReturnType<typeof defineWorkflow> {
+  const interactive = mode === "conversational";
+  return defineWorkflow({
+    id: "session",
+    label: "Authoring session",
+    instance: { title: "prompt" },
+    display: {
+      fields: [{ path: "prompt", label: "Request" }],
     },
-    {
-      id: "finalizing",
-      label: "Finalizing",
-      category: "active",
-      tasks: [
-        {
-          id: "runFinalize",
-          label: "Run the generation gate",
-          role: "operation",
-          trigger: "auto",
-          operations: ["finalize_spec"],
-        },
-      ],
-      autoTransitions: [
-        {
-          // Bounded retries: after three failed finalize runs the session
-          // gives up instead of bouncing between drafting and revising forever.
-          to: "failed",
-          gate: (ctx) => (ctx.taskErrorCounts.runFinalize ?? 0) >= 3,
-        },
-        {
-          to: "revising",
-          gate: (ctx) => ctx.taskOutputs.runFinalize?.status === "error",
-        },
-        {
-          to: "done",
-          gate: (ctx) => ctx.taskOutputs.runFinalize?.status === "success",
-        },
-      ],
-    },
-    {
-      id: "revising",
-      label: "Revising",
-      category: "active",
-      tasks: [
-        {
-          id: "revise",
-          label: "Revise from gate findings",
-          role: "ai-chat",
-          trigger: "auto",
-          // Auto-driven (not interactive): the seeded revisionInput carries
-          // the errors and the current spec; the agent fixes, then completes.
-          startOnUserInput: false,
-          systemPrompt: buildAuthoringSessionPrompt(),
-          inputFromInstanceState: "revisionInput",
-          tools: ["set_flow_spec", "finish_authoring"],
-          completionTool: "finish_authoring",
-        },
-      ],
-      autoTransitions: [
-        {
-          to: "finalizing",
-          gate: (ctx) => ctx.taskOutputs.revise?.status === "success",
-        },
-      ],
-    },
-    { id: "done", label: "Done", category: "terminal" },
-    { id: "failed", label: "Failed", category: "terminal" },
-  ],
-  initial: "drafting",
-  terminalStates: ["done", "failed"],
-});
+    taskOutputs: {} as Record<string, never>,
+    workflowInstanceState: {} as AuthoringItemState,
+    states: [
+      {
+        id: "drafting",
+        label: "Drafting",
+        category: "initial",
+        tasks: [
+          {
+            id: "assistant",
+            label: "Authoring assistant",
+            role: "ai-chat",
+            trigger: "auto",
+            // Conversational sessions wait for the user's messages; lucky
+            // sessions drive themselves from the seeded luckyInput message.
+            startOnUserInput: interactive,
+            ...(interactive ? {} : { inputFromInstanceState: "luckyInput" }),
+            systemPrompt: buildAuthoringSessionPrompt(),
+            tools: ["set_flow_spec", "finish_authoring"],
+            completionTool: "finish_authoring",
+          },
+        ],
+        actions: interactive
+          ? [
+              {
+                id: "finalize",
+                label: "Generate definition",
+                variant: "primary",
+                completesRunningTask: true,
+                transitionTo: "finalizing",
+              },
+            ]
+          : [],
+        autoTransitions: [
+          {
+            // The agent called finish_authoring — the session completed.
+            to: "finalizing",
+            gate: (ctx) => ctx.taskOutputs.assistant?.status === "success",
+          },
+        ],
+      },
+      {
+        id: "finalizing",
+        label: "Finalizing",
+        category: "active",
+        tasks: [
+          {
+            id: "runFinalize",
+            label: "Run the generation gate",
+            role: "operation",
+            trigger: "auto",
+            operations: ["finalize_spec"],
+          },
+        ],
+        autoTransitions: [
+          {
+            // Bounded retries: after three failed finalize runs the session
+            // gives up instead of bouncing between drafting and revising forever.
+            to: "failed",
+            gate: (ctx) => (ctx.taskErrorCounts.runFinalize ?? 0) >= 3,
+          },
+          {
+            to: "revising",
+            gate: (ctx) => ctx.taskOutputs.runFinalize?.status === "error",
+          },
+          {
+            to: "done",
+            gate: (ctx) => ctx.taskOutputs.runFinalize?.status === "success",
+          },
+        ],
+      },
+      {
+        id: "revising",
+        label: "Revising",
+        category: "active",
+        tasks: [
+          {
+            id: "revise",
+            label: "Revise from gate findings",
+            role: "ai-chat",
+            trigger: "auto",
+            // Auto-driven (not interactive): the seeded revisionInput carries
+            // the errors and the current spec; the agent fixes, then completes.
+            startOnUserInput: false,
+            systemPrompt: buildAuthoringSessionPrompt(),
+            inputFromInstanceState: "revisionInput",
+            tools: ["set_flow_spec", "finish_authoring"],
+            completionTool: "finish_authoring",
+          },
+        ],
+        autoTransitions: [
+          {
+            to: "finalizing",
+            gate: (ctx) => ctx.taskOutputs.revise?.status === "success",
+          },
+        ],
+      },
+      { id: "done", label: "Done", category: "terminal" },
+      { id: "failed", label: "Failed", category: "terminal" },
+    ],
+    initial: "drafting",
+    terminalStates: ["done", "failed"],
+  });
+}
 
 export const authoringSessionFlow = {
   id: AUTHORING_DEFINITION_ID,
@@ -395,7 +416,9 @@ export const authoringSessionFlow = {
   description:
     "A live conversation that designs a Hive flow definition, maintaining the spec draft as decisions are made.",
   configSchema: [],
-  workflows: [sessionWorkflow],
+  buildWorkflows: (config: Record<string, unknown>) => [
+    buildSessionWorkflow(config.mode === "lucky" ? "lucky" : "conversational"),
+  ],
   operations: { ...authoringOperations },
   tools: authoringTools,
   actions: [],

@@ -216,9 +216,12 @@ async function handleAuthorSend(
 }
 
 function authorStateLabel(): string {
+  const mode = authorSession?.state.workflowInstanceState.mode;
   switch (authorSession?.state.currentState) {
     case "drafting":
-      return "Drafting — chat with the agent";
+      return mode === "lucky"
+        ? "Generating the definition…"
+        : "Drafting — chat with the agent";
     case "finalizing":
       return "Running the generation gate…";
     case "revising":
@@ -477,6 +480,13 @@ async function remove() {
                     Close session
                   </button>
                 </div>
+                {#if authorSession?.state.workflowInstanceState.mode === "conversational"}
+                  <p class="author-hint">
+                    The agent keeps the spec draft up to date as you talk;
+                    "Generate definition" runs the engine gate on the current
+                    draft and places the TypeScript in the editor.
+                  </p>
+                {/if}
                 <LitFlowHost
                   flowId={authorFlow.id}
                   workflowDefs={authorFlow.workflows}
@@ -901,6 +911,13 @@ h1 {
 .author-close:hover {
   color: var(--error);
   border-color: var(--error);
+}
+
+.author-hint {
+  margin: 0;
+  font-size: 0.6875rem;
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 .author-preview {

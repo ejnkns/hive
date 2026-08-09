@@ -907,6 +907,65 @@ describe("flow API routes", () => {
       controller?.getState().workflowInstanceState.prompt,
       "Build a triage flow"
     );
+    // Conversational mode: the drafting session is interactive, so the human
+    // drives it and the finalize action is available.
+    assert.equal(
+      controller?.getState().workflowInstanceState.mode,
+      "conversational"
+    );
+    assert.ok(
+      controller
+        ?.getAvailableActions()
+        .some((action) => action.id === "finalize"),
+      "conversational sessions must offer the generate action"
+    );
+  });
+
+  it("POST /api/flows/definitions/author creates an autonomous lucky session", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition(authoringSessionFlow, { hidden: true });
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions/author",
+      body: { prompt: "Build a triage flow", lucky: true },
+    });
+
+    assert.equal(response.statusCode, 201);
+    const { flowId, instanceId } = response.json() as {
+      flowId: string;
+      instanceId: string;
+    };
+    const runtime = getFlowRuntime(flowId);
+    const controller = runtime?.getWorkflowInstance(instanceId);
+    assert.equal(controller?.getState().workflowInstanceState.mode, "lucky");
+    // Lucky sessions are autonomous: no interactive chat, no generate action.
+    const ctx = controller?.getState().runningTaskContext;
+    assert.ok(ctx !== null && ctx !== undefined);
+    if (ctx?.role === "ai-chat") {
+      assert.equal(
+        ctx.interactive,
+        false,
+        "lucky drafting must not be interactive"
+      );
+    } else {
+      assert.fail("lucky drafting must run an ai-chat session");
+    }
+    assert.equal(
+      controller
+        ?.getAvailableActions()
+        .some((action) => action.id === "finalize"),
+      false,
+      "lucky sessions must not offer the generate action"
+    );
+    assert.ok(
+      typeof controller?.getState().workflowInstanceState.luckyInput ===
+        "string",
+      "the lucky seed message must be recorded"
+    );
   });
 
   it("POST /api/flows/definitions/author requires a prompt", async () => {
