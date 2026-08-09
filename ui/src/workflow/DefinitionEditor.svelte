@@ -454,7 +454,7 @@ async function remove() {
       </label>
     </div>
 
-    <div class="panes">
+    <div class="panes" data-session={authorFlowId ? "true" : "false"}>
       <div class="ai-pane">
         <div class="pane-header">
           <button
@@ -740,6 +740,12 @@ h1 {
   display: grid;
   grid-template-columns: 300px 1fr;
   gap: 1rem;
+}
+
+/* With an authoring session active the AI pane is the focus — the chat and
+   spec preview need width; the TS editor stays visible alongside it. */
+.panes[data-session="true"] {
+  grid-template-columns: minmax(440px, 3fr) minmax(320px, 2fr);
 }
 
 .pane-header {

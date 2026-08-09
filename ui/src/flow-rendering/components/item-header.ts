@@ -23,12 +23,23 @@ export class ItemHeader extends LitElement {
     }
 
     .title {
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
       font-size: 0.875rem;
       font-weight: 700;
       color: var(--text);
     }
 
     .subtitle {
+      flex: none;
+      min-width: 0;
+      max-width: 45%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
       font-size: 0.625rem;
       color: var(--muted);
     }
@@ -110,10 +121,12 @@ export class ItemHeader extends LitElement {
     return html`
       <div class="header">
         <div class="title-row">
-          <span class="title">${this.title}</span>
+          <span class="title" title=${this.title}>${this.title}</span>
           ${
             this.subtitle
-              ? html`<span class="subtitle">${this.subtitle}</span>`
+              ? html`<span class="subtitle" title=${this.subtitle}
+                >${this.subtitle}</span
+              >`
               : nothing
           }
           ${this.renderBadges()}

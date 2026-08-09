@@ -109,7 +109,9 @@ export class WorkflowInstanceCard extends LitElement {
       border: 1px solid var(--border);
       border-radius: 6px;
       padding: 0.5rem;
-      max-height: 220px;
+      // A chat-heavy card (an authoring session, a requirements session) needs
+      // room for a real conversation; cap by viewport so it never dominates.
+      max-height: min(50vh, 420px);
       overflow-y: auto;
     }
 

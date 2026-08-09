@@ -302,6 +302,10 @@ function buildSessionWorkflow(
     id: "session",
     label: "Authoring session",
     instance: { title: "prompt" },
+    // There is only ever one session instance — a board with 300px columns
+    // would cramp the chat and preview. A flat list renders one full-width
+    // card carrying its state.
+    ui: { view: "list" },
     display: {
       fields: [{ path: "prompt", label: "Request" }],
     },
