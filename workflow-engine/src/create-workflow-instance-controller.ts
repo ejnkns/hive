@@ -13,6 +13,7 @@ import type {
 } from "./task-runner";
 import type {
   ChatMessage,
+  ModelCallStatus,
   RunningTaskContext,
   RuntimeWorkflowConfig,
   VisibleAction,
@@ -299,6 +300,16 @@ export function createWorkflowInstanceController(
     emit({ type: "state_changed", state });
   }
 
+  function patchRunningTaskStatus(status: ModelCallStatus): void {
+    if (!state.hasRunningTask || !state.runningTaskContext) return;
+    if (state.runningTaskContext.role === "operation") return;
+    state = {
+      ...state,
+      runningTaskContext: { ...state.runningTaskContext, modelStatus: status },
+    };
+    emit({ type: "state_changed", state });
+  }
+
   function buildRunningContext(
     task: TaskDefinition
   ): RunningTaskContext | null {
@@ -324,6 +335,7 @@ export function createWorkflowInstanceController(
       patchWorkflowInstanceState: patchWorkflowInstanceState,
       taskOutputs: state.taskOutputs,
       patchRunningTaskMessages,
+      patchRunningTaskStatus,
       createWorkflowInstance: taskContext.createWorkflowInstance,
       workflowInstancesInState: (stateId) =>
         workflowInstancesInState?.(stateId) ?? [],

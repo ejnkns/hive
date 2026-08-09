@@ -53,10 +53,23 @@ export type TaskOutputMap<
 
 // Per-role runtime state exposed to the UI and gate functions while a
 // task is actively executing.
+// Live progress of the current model call backing an agent task: routing
+// (before a node is chosen) → dispatched (the node the request went to) →
+// thinking (reasoning tokens) → streaming (output tokens) → complete. Surfaced
+// in the running task context so the chat UI can show what the agent is doing.
+export type ModelCallStatus =
+  | { stage: "routing" }
+  | { stage: "dispatched"; provider: string; model: string }
+  | { stage: "thinking" }
+  | { stage: "streaming" }
+  | { stage: "complete" }
+  | { stage: "error"; message: string };
+
 export type RunningTaskContext =
   | {
       role: "ai-task";
       messages: ChatMessage[];
+      modelStatus?: ModelCallStatus;
     }
   | {
       role: "ai-chat";
@@ -66,6 +79,7 @@ export type RunningTaskContext =
       // declared startOnUserInput (HITL sessions). One-shot agents (e.g. the
       // cards worker) are read-only — the UI hides the input row.
       interactive: boolean;
+      modelStatus?: ModelCallStatus;
     }
   | {
       role: "operation";

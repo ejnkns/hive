@@ -1,6 +1,9 @@
 import { css, html, LitElement, nothing, type PropertyValues } from "lit";
 import { createRef, type Ref, ref } from "lit/directives/ref.js";
-import type { ChatMessage } from "workflow-engine/workflow-types";
+import type {
+  ChatMessage,
+  ModelCallStatus,
+} from "workflow-engine/workflow-types";
 import "./message-list";
 
 // The live ai-chat exchange for a running session: a scrollable transcript
@@ -16,6 +19,9 @@ export class ChatSession extends LitElement {
     // The agent is composing its next reply (mid-turn or mid-tool-loop) —
     // show a thinking indicator where the reply will land.
     thinking: { type: Boolean },
+    // Live progress of the agent's current model call (routing → dispatched →
+    // thinking → streaming), reported by the proxy path.
+    modelStatus: { attribute: false },
   };
 
   static styles = css`
@@ -117,27 +123,20 @@ export class ChatSession extends LitElement {
   sessionId = "";
   interactive = false;
   thinking = false;
+  modelStatus: ModelCallStatus | undefined = undefined;
 
   private _input = "";
   private _sending = false;
   private scrollRef: Ref<HTMLElement> = createRef();
 
   render() {
+    const statusLine = this.renderStatus();
     return html`
       <div class="chat">
         <div class="scroll" ${ref(this.scrollRef)}>
           <message-list .messages=${this.messages}></message-list>
         </div>
-        ${
-          this.thinking
-            ? html`<div class="thinking">
-                <span class="thinking-dots"
-                  ><span></span><span></span><span></span></span
-                >
-                Agent is thinking…
-              </div>`
-            : nothing
-        }
+        ${statusLine}
         ${
           this.interactive
             ? html`<div class="input-row">
@@ -178,6 +177,40 @@ export class ChatSession extends LitElement {
   private scrollToBottom(): void {
     const el = this.scrollRef.value;
     if (el !== undefined) el.scrollTop = el.scrollHeight;
+  }
+
+  // The status row above the input: the live model-call progress when the
+  // proxy reports it (routing → dispatched → thinking → streaming), else the
+  // generic thinking indicator. A completed call leaves the row empty.
+  private renderStatus() {
+    const status = this.modelStatus;
+    if (status !== undefined && status.stage !== "complete") {
+      const label =
+        status.stage === "routing"
+          ? "Routing to a model…"
+          : status.stage === "dispatched"
+            ? `→ ${status.provider}:${status.model}`
+            : status.stage === "thinking"
+              ? "Thinking…"
+              : status.stage === "streaming"
+                ? "Streaming…"
+                : `Model call failed: ${status.message}`;
+      return html`<div class="thinking">
+        <span class="thinking-dots"
+          ><span></span><span></span><span></span></span
+        >
+        ${label}
+      </div>`;
+    }
+    if (this.thinking) {
+      return html`<div class="thinking">
+        <span class="thinking-dots"
+          ><span></span><span></span><span></span></span
+        >
+        Agent is thinking…
+      </div>`;
+    }
+    return nothing;
   }
   private async handleSend(): Promise<void> {
     const text = this._input.trim();

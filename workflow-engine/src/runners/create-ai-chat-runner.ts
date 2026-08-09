@@ -2,6 +2,7 @@
 
 import type { ChatMessage } from "../shared/chat-message";
 import type { TaskDefinition, TaskRunner } from "../task-runner";
+import type { ModelCallStatus } from "../workflow-types";
 import {
   type AgentTurnBehavior,
   runAgentLoop,
@@ -14,7 +15,10 @@ export type AiChatModelCaller = (
   systemPrompt: string,
   messages: ChatMessage[],
   tools: ToolDefinition[],
-  signal: AbortSignal
+  signal: AbortSignal,
+  // Live model-call progress (routing → dispatched → thinking → streaming →
+  // complete), reported by the caller into the running task context.
+  onStatus?: (status: ModelCallStatus) => void
 ) => Promise<{ content: string; toolCalls?: ToolCall[] }>;
 
 // A chat session is a long multi-turn exchange; the budget guards against an
@@ -30,6 +34,8 @@ export type AiChatRunnerConfig = {
   basePath?: string;
   instanceId?: string;
   patchWorkflowInstanceState?: (patch: Record<string, unknown>) => void;
+  // Live model-call progress into the running task context (see ModelCallStatus).
+  patchRunningTaskStatus?: (status: ModelCallStatus) => void;
   // The instance's domain data, resolved against by @instance: workspacePath
   // refs (e.g. "@instance:worktreePath").
   workflowInstanceState?: Record<string, unknown>;
@@ -119,6 +125,7 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
           basePath: config.basePath,
           instanceId: config.instanceId,
           patchWorkflowInstanceState: config.patchWorkflowInstanceState,
+          patchRunningTaskStatus: config.patchRunningTaskStatus,
           workflowInstanceState: config.workflowInstanceState,
           createWorkflowInstance: config.createWorkflowInstance,
         }),

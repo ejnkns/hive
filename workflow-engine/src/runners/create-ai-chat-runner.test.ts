@@ -478,4 +478,52 @@ describe("createAiChatRunner", () => {
     assert.equal(seenMessages[1]?.role, "user");
     assert.ok(seenMessages[1]?.content.includes("Build the thing"));
   });
+
+  it("reports live model-call status through patchRunningTaskStatus", async () => {
+    const statuses: string[] = [];
+    const modelCaller: AiChatModelCaller = async (
+      _prompt,
+      _msgs,
+      _tools,
+      _signal,
+      onStatus
+    ) => {
+      onStatus?.({
+        stage: "dispatched",
+        provider: "opencode-zen",
+        model: "deepseek-v4-flash",
+      });
+      onStatus?.({ stage: "thinking" });
+      onStatus?.({ stage: "streaming" });
+      return { content: "Hi! ##DONE##" };
+    };
+    const runner = createAiChatRunner({
+      modelCaller,
+      toolDefinitions: {},
+      toolExecutors: {},
+      patchRunningTaskStatus: (status) => {
+        statuses.push(
+          status.stage === "dispatched"
+            ? `${status.stage}:${status.provider}:${status.model}`
+            : status.stage
+        );
+      },
+    });
+
+    await runner.run({
+      ...dummyTask,
+      startOnUserInput: false,
+      completionSignal: "##DONE##",
+    });
+
+    // The loop reports routing before each call and complete after it; the
+    // caller reports the dispatched node and the stream phases in between.
+    assert.deepEqual(statuses, [
+      "routing",
+      "dispatched:opencode-zen:deepseek-v4-flash",
+      "thinking",
+      "streaming",
+      "complete",
+    ]);
+  });
 });

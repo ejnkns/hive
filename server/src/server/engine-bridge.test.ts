@@ -44,6 +44,7 @@ function makeContext(
     patchWorkflowInstanceState: () => {},
     taskOutputs: {},
     patchRunningTaskMessages: () => {},
+    patchRunningTaskStatus: () => {},
     createWorkflowInstance: () => ({ id: "new-instance" }),
     workflowInstancesInState: () => [],
     ...overrides,

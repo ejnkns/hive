@@ -1,5 +1,6 @@
 import type { TaskDefinition } from "./runners/task-types";
 import type { ChatMessage } from "./shared/chat-message";
+import type { ModelCallStatus } from "./workflow-types";
 
 // The runtime task shape lives in runners/task-types.ts (the single source);
 // the authoring-side StateTaskDef in workflow-types.ts is built from the same
@@ -35,6 +36,10 @@ export type TaskRunnerContext = {
   // ai-chat sessions sync their live transcript into the instance state so
   // observers see messages at each turn boundary.
   patchRunningTaskMessages(messages: ChatMessage[]): void;
+  // Reports the live model-call status (routing → dispatched → thinking →
+  // streaming → complete) into the running task context, so the UI can show
+  // what the agent's current model call is doing.
+  patchRunningTaskStatus(status: ModelCallStatus): void;
   // Creates a new workflow instance in this flow (the capability behind the
   // create_instance infra tool, so an agent can spawn fresh instances — e.g.
   // graduate fog into new decision tickets). The instanceState becomes the new

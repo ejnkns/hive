@@ -293,6 +293,7 @@ export class WorkflowInstanceCard extends LitElement {
             .sessionId=${ctx.sessionId}
             .interactive=${ctx.interactive}
             .thinking=${this.agentIsThinking(ctx.messages)}
+            .modelStatus=${ctx.modelStatus}
             @hive-send-message=${this.handleSendMessage}
           ></chat-session>`
           : ctx.role === "ai-task"

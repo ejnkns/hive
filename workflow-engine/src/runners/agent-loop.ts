@@ -19,6 +19,7 @@
 
 import type { ChatMessage } from "../shared/chat-message";
 import type { TaskDefinition } from "../task-runner";
+import type { ModelCallStatus } from "../workflow-types";
 import { resolveDottedPath } from "./resolve-dotted-path";
 import { resolveWorkspacePath } from "./resolve-workspace-path";
 import type {
@@ -32,7 +33,10 @@ export type AgentModelCaller = (
   systemPrompt: string,
   messages: ChatMessage[],
   tools: ToolDefinition[],
-  signal: AbortSignal
+  signal: AbortSignal,
+  // Live model-call progress (routing → dispatched → thinking → streaming →
+  // complete), reported by the caller into the running task context.
+  onStatus?: (status: ModelCallStatus) => void
 ) => Promise<{ content: string; toolCalls?: ToolCall[] }>;
 
 // The role-specific behavior of a loop turn.
@@ -81,6 +85,8 @@ export type AgentLoopConfig = {
   basePath?: string;
   instanceId?: string;
   patchWorkflowInstanceState?: (patch: Record<string, unknown>) => void;
+  // Live model-call progress into the running task context (see ModelCallStatus).
+  patchRunningTaskStatus?: (status: ModelCallStatus) => void;
   // The instance's domain data, resolved against by @instance: workspacePath
   // refs (e.g. "@instance:worktreePath").
   workflowInstanceState?: Record<string, unknown>;
@@ -116,12 +122,15 @@ export async function runAgentLoop(
   for (let iteration = 0; iteration < config.maxIterations; iteration++) {
     config.signal.throwIfAborted();
 
+    config.patchRunningTaskStatus?.({ stage: "routing" });
     const response = await config.modelCaller(
       task.systemPrompt ?? "",
       messages,
       toolDefs,
-      config.signal
+      config.signal,
+      config.patchRunningTaskStatus
     );
+    config.patchRunningTaskStatus?.({ stage: "complete" });
 
     messages.push({
       role: "assistant",

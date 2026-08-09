@@ -27,7 +27,10 @@ import {
   validateRepo,
 } from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
-import type { ChatMessage } from "workflow-engine/workflow-types";
+import type {
+  ChatMessage,
+  ModelCallStatus,
+} from "workflow-engine/workflow-types";
 import { handleChatCompletion } from "./proxy/handle-chat-completion";
 import { consumeSseStream } from "./sse-consume";
 
@@ -190,7 +193,8 @@ function resolveAndPatchFlowConfig(
 
 function consumeStream(
   stream: Readable,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onDelta?: (delta: Record<string, unknown>) => void
 ): Promise<{ content: string; toolCalls: ToolCall[] }> {
   let content = "";
   const toolCallsMap = new Map<
@@ -201,6 +205,7 @@ function consumeStream(
   return consumeSseStream(
     stream,
     (delta) => {
+      onDelta?.(delta);
       if (delta.content && typeof delta.content === "string")
         content += delta.content;
       if (delta.tool_calls && Array.isArray(delta.tool_calls)) {
@@ -242,7 +247,8 @@ function createModelCaller(_engineTools: ToolDefinition[]) {
     systemPrompt: string,
     messages: ChatMessage[],
     tools: ToolDefinition[],
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onStatus?: (status: ModelCallStatus) => void
   ): Promise<{ content: string; toolCalls?: ToolCall[] }> => {
     const allMessages = [
       { role: "system", content: systemPrompt } as const,
@@ -260,7 +266,20 @@ function createModelCaller(_engineTools: ToolDefinition[]) {
     if (!result.success || !result.stream) {
       throw new Error(result.error ?? "Model call failed");
     }
-    const response = await consumeStream(result.stream, signal);
+    // The request has been routed and the response is streaming: report the
+    // chosen node, then flip to thinking/streaming as the deltas arrive.
+    onStatus?.({
+      stage: "dispatched",
+      provider: result.provider ?? "",
+      model: result.model ?? "",
+    });
+    const response = await consumeStream(result.stream, signal, (delta) => {
+      if (typeof delta.reasoning_content === "string") {
+        onStatus?.({ stage: "thinking" });
+      } else if (typeof delta.content === "string" && delta.content !== "") {
+        onStatus?.({ stage: "streaming" });
+      }
+    });
     return {
       content: response.content,
       toolCalls: response.toolCalls.length > 0 ? response.toolCalls : undefined,
