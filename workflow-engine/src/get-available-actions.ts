@@ -53,6 +53,9 @@ export function getAvailableActions(
       label: action.label,
       variant: action.variant ?? "default",
       fields: action.fields,
+      ...(action.confirmText !== undefined
+        ? { confirmText: action.confirmText }
+        : {}),
     }));
 }
 

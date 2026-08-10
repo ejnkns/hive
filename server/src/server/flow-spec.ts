@@ -130,6 +130,11 @@ export type ActionSpec = {
   dependsOnState?: string;
   newAttempt?: boolean;
   completesRunningTask?: boolean;
+  // Custom wording for the two-click confirm step. Destructive actions confirm
+  // by default; declaring this implies a confirm for any variant and
+  // overrides the wording (the "confirm + reason" pattern pairs it with
+  // `fields`).
+  confirmText?: string;
   createInstance?: { workflowId: string; fields: ConfigField[] };
   // Declared input fields collected from the user when this action is
   // dispatched: the values are written into the acting instance's
@@ -587,6 +592,15 @@ export function validateFlowSpec(spec: FlowSpec): SpecError[] {
           error(
             `${aPath}.dependsOnState`,
             `dependsOnState targets unknown state ${JSON.stringify(action.dependsOnState)}`
+          );
+        }
+        if (
+          action.confirmText !== undefined &&
+          typeof action.confirmText !== "string"
+        ) {
+          error(
+            `${aPath}.confirmText`,
+            `confirmText must be a string (got ${JSON.stringify(action.confirmText)})`
           );
         }
         if (action.gate) {

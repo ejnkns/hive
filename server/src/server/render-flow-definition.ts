@@ -645,6 +645,8 @@ export function renderFlowDefinition(spec: FlowSpec): string {
           emit(5, `id: ${json(action.id)},`);
           emit(5, `label: ${json(action.label)},`);
           if (action.variant) emit(5, `variant: ${json(action.variant)},`);
+          if (action.confirmText)
+            emit(5, `confirmText: ${json(action.confirmText)},`);
           if (action.gate)
             emit(5, `gate: (ctx) => ${renderGate(action.gate)},`);
           if (action.maxWorkflowInstancesInTarget !== undefined) {

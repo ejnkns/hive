@@ -791,4 +791,43 @@ describe("render flow definition", () => {
       /editFields: \[{ key: "title", label: "Title", type: "string", required: true }\],/
     );
   });
+
+  it("renders confirmText on a manual action", async () => {
+    const spec: FlowSpec = {
+      id: "confirmFlow",
+      label: "Confirm Flow",
+      configSchema: [],
+      workflows: [
+        {
+          id: "review",
+          label: "Review",
+          instanceState: [],
+          initialState: "ready",
+          terminalStates: ["done"],
+          states: [
+            {
+              id: "ready",
+              label: "Ready",
+              category: "initial",
+              actions: [
+                {
+                  id: "purge",
+                  label: "Purge",
+                  variant: "destructive",
+                  confirmText: "Delete everything?",
+                  transitionTo: "done",
+                },
+              ],
+            },
+            { id: "done", label: "Done", category: "terminal" },
+          ],
+        },
+      ],
+      actions: [],
+      edges: [],
+    };
+
+    const source = await assertRenderedPassesGate(spec, "corpus-confirm-text");
+    assert.match(source, /confirmText: "Delete everything\?",/);
+  });
 });

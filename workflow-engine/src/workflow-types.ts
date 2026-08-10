@@ -134,6 +134,10 @@ export type VisibleAction = {
   // Declared input fields: the UI renders a small form and dispatch carries
   // the collected values into the instance's workflowInstanceState.
   fields?: ConfigField[];
+  // Custom wording for the two-click confirm step. Absent → the default
+  // "Confirm <label>?" text. Declaring it implies the action requires a
+  // confirm step regardless of variant (destructive always confirms).
+  confirmText?: string;
 };
 
 // --- State category ---
@@ -188,6 +192,12 @@ export type ManualAction<
   id: string;
   label: string;
   variant?: ActionVariant;
+  // Custom wording for the two-click confirm step (destructive actions confirm
+  // by default with "Confirm <label>?"; declaring this implies a confirm step
+  // for any variant, and overrides the wording). A destructive action that
+  // also declares `fields` collects the payload first, then confirms — the
+  // "confirm + reason" pattern.
+  confirmText?: string;
   gate?: (ctx: GateContext<TTaskOutputs, TItemState>) => boolean;
   maxWorkflowInstancesInTarget?: number;
   dependsOnState?: TStateId;

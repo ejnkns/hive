@@ -15,6 +15,10 @@ export class ActionBar extends LitElement {
     // clicked (a plain field would update state with no render).
     pendingConfirm: { attribute: false },
     formAction: { attribute: false },
+    // Payload collected from a fielded action's form, held until the confirm
+    // step completes (the "confirm + reason" pattern: form → confirm →
+    // dispatch with the collected values).
+    pendingPayload: { attribute: false },
   };
 
   static styles = css`
@@ -89,6 +93,7 @@ export class ActionBar extends LitElement {
 
   pendingConfirm: string | null = null;
   formAction: VisibleAction | null = null;
+  pendingPayload: Record<string, unknown> | null = null;
 
   render() {
     const formAction = this.formAction;
@@ -107,7 +112,9 @@ export class ActionBar extends LitElement {
         this.pendingConfirm === action.id
           ? html`<div class="confirm-row">
               <span class="confirm-text"
-                >Confirm ${action.label.toLowerCase()}?</span
+                >${
+                  action.confirmText ?? `Confirm ${action.label.toLowerCase()}?`
+                }</span
               >
               <button
                 class="destructive"
@@ -115,7 +122,7 @@ export class ActionBar extends LitElement {
               >
                 Confirm
               </button>
-              <button @click=${() => (this.pendingConfirm = null)}>
+              <button @click=${() => this.dismissConfirm()}>
                 Cancel
               </button>
             </div>`
@@ -131,19 +138,33 @@ export class ActionBar extends LitElement {
 
   private handleAction(action: VisibleAction): void {
     if (action.fields !== undefined && action.fields.length > 0) {
+      this.pendingPayload = null;
       this.formAction = action;
       return;
     }
-    if (action.variant === "destructive") {
+    if (this.needsConfirm(action)) {
       this.pendingConfirm = action.id;
       return;
     }
     this.emitAction(action.id);
   }
 
+  // An action confirms when it is destructive (default) or when it declares
+  // custom confirm wording — the confirm step is opt-in beyond destructive.
+  private needsConfirm(action: VisibleAction): boolean {
+    return action.variant === "destructive" || action.confirmText !== undefined;
+  }
+
   private confirm(actionId: string): void {
     this.pendingConfirm = null;
-    this.emitAction(actionId);
+    const payload = this.pendingPayload;
+    this.pendingPayload = null;
+    this.emitAction(actionId, payload ?? undefined);
+  }
+
+  private dismissConfirm(): void {
+    this.pendingConfirm = null;
+    this.pendingPayload = null;
   }
 
   private submitForm(
@@ -151,6 +172,13 @@ export class ActionBar extends LitElement {
     values: Record<string, ConfigFieldFormValue>
   ): void {
     this.formAction = null;
+    // A destructive (or confirmText-declaring) fielded action collects the
+    // payload first, then asks for confirmation before dispatching.
+    if (this.needsConfirm(action)) {
+      this.pendingPayload = values;
+      this.pendingConfirm = action.id;
+      return;
+    }
     this.emitAction(action.id, values);
   }
 

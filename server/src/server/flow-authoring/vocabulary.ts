@@ -68,6 +68,7 @@ STATE_ACTION: {
   "newAttempt": true,               // optional: engine bumps the attempt counter and discards the abandoned workspace
   "completesRunningTask": true,     // optional: a human "Done" ends a running ai-chat session; the transcript is the output
   "dependsOnState": "done",         // optional: engine blocks until instances reach this state
+  "confirmText": "Archive permanently?",  // optional: custom wording for the two-click confirm. Destructive variants confirm by default; declaring it adds a confirm step to any variant. Pair with "fields" for the "confirm + reason" pattern (collect a justification, then confirm).
   "createInstance": { "workflowId": "items", "fields": [ { "key": "title", "label": "Title", "type": "string", "required": true } ] }  // optional
 }
 

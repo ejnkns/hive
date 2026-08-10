@@ -170,6 +170,60 @@ describe("validateFlowSpec", () => {
     assert.equal(errors[0].path, "workflows[0].editFields");
   });
 
+  it("accepts confirmText on an action and rejects a non-string value", () => {
+    const withConfirm: FlowSpec = {
+      ...VALID,
+      workflows: [
+        {
+          ...VALID.workflows[0],
+          states: VALID.workflows[0].states.map((s) =>
+            s.id === "ready"
+              ? {
+                  ...s,
+                  actions: (s.actions ?? []).map((a) =>
+                    a.id === "start"
+                      ? { ...a, confirmText: "Start anyway?" }
+                      : a
+                  ),
+                }
+              : s
+          ),
+        },
+      ],
+    };
+    assert.deepEqual(errorsFor(withConfirm), []);
+
+    const bad = {
+      ...VALID,
+      workflows: [
+        {
+          ...VALID.workflows[0],
+          states: VALID.workflows[0].states.map((s) =>
+            s.id === "ready"
+              ? {
+                  ...s,
+                  actions: (s.actions ?? []).map((a) =>
+                    a.id === "start"
+                      ? {
+                          ...a,
+                          confirmText: 42,
+                        }
+                      : a
+                  ),
+                }
+              : s
+          ),
+        },
+      ],
+    } as unknown as FlowSpec;
+    const errors = errorsFor(bad);
+    assert.equal(errors.length, 1);
+    assert.equal(
+      errors[0].path,
+      "workflows[0].states[0].actions[0].confirmText"
+    );
+  });
+
   it("rejects a gate referencing an unknown task", () => {
     const bad: FlowSpec = {
       ...VALID,
