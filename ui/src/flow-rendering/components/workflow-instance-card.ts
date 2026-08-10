@@ -39,7 +39,9 @@ export class WorkflowInstanceCard extends LitElement {
   // Callback props (the InstanceComponentProps contract). When provided they
   // replace event dispatch, so custom instance components and the default card
   // share one interface.
-  onAction: ((actionId: string) => void) | undefined = undefined;
+  onAction:
+    | ((actionId: string, payload?: Record<string, unknown>) => void)
+    | undefined = undefined;
   onSendMessage: ((content: string) => Promise<void>) | undefined = undefined;
 
   static styles = css`
@@ -464,11 +466,13 @@ export class WorkflowInstanceCard extends LitElement {
     return typeof value === "string" ? value : undefined;
   }
 
-  private handleAction = (event: CustomEvent<{ actionId: string }>) => {
+  private handleAction = (
+    event: CustomEvent<{ actionId: string; payload?: Record<string, unknown> }>
+  ) => {
     // The action-bar's event carries no flow/instance ids; stop it so the
     // re-emitted event (with ids) is the only one that reaches the host.
     event.stopPropagation();
-    this.emitAction(event.detail.actionId);
+    this.emitAction(event.detail.actionId, event.detail.payload);
   };
 
   private handleSendMessage = (event: CustomEvent<{ content: string }>) => {
@@ -477,14 +481,21 @@ export class WorkflowInstanceCard extends LitElement {
     this.emitSendMessage(event.detail.content);
   };
 
-  private emitAction(actionId: string): void {
+  private emitAction(
+    actionId: string,
+    payload?: Record<string, unknown>
+  ): void {
     if (this.onAction !== undefined) {
-      this.onAction(actionId);
+      this.onAction(actionId, payload);
       return;
     }
     this.dispatchEvent(
       new CustomEvent("hive-action", {
-        detail: { instanceId: this.instanceEntry.id, actionId },
+        detail: {
+          instanceId: this.instanceEntry.id,
+          actionId,
+          payload,
+        },
         bubbles: true,
         composed: true,
       })

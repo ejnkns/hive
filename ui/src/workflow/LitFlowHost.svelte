@@ -28,7 +28,12 @@ let {
   customKinds: readonly CustomRenderKind[];
   // Served component ids → fetch path, from the flow snapshot's ui.components.
   components: Record<string, string>;
-  onAction?: (flowId: string, instanceId: string, actionId: string) => void;
+  onAction?: (
+    flowId: string,
+    instanceId: string,
+    actionId: string,
+    payload?: Record<string, unknown>
+  ) => void;
   onSendMessage?: (
     flowId: string,
     instanceId: string,
@@ -80,6 +85,7 @@ function handleAction(
     flowId: string;
     instanceId: string;
     actionId: string;
+    payload?: Record<string, unknown>;
   }>
 ) {
   // Ignore id-less events that bubble up un-stopped from a child component
@@ -88,7 +94,8 @@ function handleAction(
   onAction?.(
     event.detail.flowId,
     event.detail.instanceId,
-    event.detail.actionId
+    event.detail.actionId,
+    event.detail.payload
   );
 }
 

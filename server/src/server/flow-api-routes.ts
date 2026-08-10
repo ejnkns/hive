@@ -196,7 +196,20 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
       }
 
       const before = controller.getState().currentState;
-      controller.dispatchAction(actionId);
+      try {
+        controller.dispatchAction(
+          actionId,
+          body?.payload !== null && typeof body?.payload === "object"
+            ? (body.payload as Record<string, unknown>)
+            : undefined
+        );
+      } catch (err) {
+        // A fielded action with an invalid payload (unknown key, missing or
+        // mistyped required field) is a client error, not a server bug.
+        return reply.status(400).send({
+          error: err instanceof Error ? err.message : "Invalid action payload",
+        });
+      }
       const after = controller.getState().currentState;
 
       if (before === after) {

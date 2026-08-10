@@ -650,6 +650,9 @@ export function renderFlowDefinition(spec: FlowSpec): string {
               `createInstance: { workflowId: ${json(action.createInstance.workflowId)}, fields: [${renderConfigFields(action.createInstance.fields)}] },`
             );
           }
+          if (action.fields && action.fields.length > 0) {
+            emit(5, `fields: [${renderConfigFields(action.fields)}],`);
+          }
           if (action.transitionTo)
             emit(5, `transitionTo: ${json(action.transitionTo)},`);
           emit(4, "},");

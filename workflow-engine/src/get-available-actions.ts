@@ -52,6 +52,7 @@ export function getAvailableActions(
       id: action.id,
       label: action.label,
       variant: action.variant ?? "default",
+      fields: action.fields,
     }));
 }
 

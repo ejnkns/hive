@@ -131,6 +131,9 @@ export type VisibleAction = {
   id: string;
   label: string;
   variant: ActionVariant;
+  // Declared input fields: the UI renders a small form and dispatch carries
+  // the collected values into the instance's workflowInstanceState.
+  fields?: ConfigField[];
 };
 
 // --- State category ---
@@ -191,6 +194,11 @@ export type ManualAction<
   // Spawns a new workflow instance. fields render as a form; the collected
   // values become the new instance's workflowInstanceState.
   createInstance?: { workflowId: string; fields?: ConfigField[] };
+  // Declared input fields collected from the user when this action is
+  // dispatched: the values are validated against the fields and written into
+  // the acting instance's workflowInstanceState before the transition (so a
+  // correction note, reject reason, or due date travels with the action).
+  fields?: ConfigField[];
   // When true, dispatching this action completes the running ai-chat task
   // instead of cancelling it: the live transcript becomes the task output,
   // recorded as success, then the state transitions to transitionTo. HITL

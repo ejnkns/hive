@@ -12,6 +12,6 @@ export type InstanceComponentProps = {
   workflowDef: WorkflowDefResponse;
   instanceEntry: WorkflowInstanceEntry;
   customKinds: readonly CustomRenderKind[];
-  onAction(actionId: string): void;
+  onAction(actionId: string, payload?: Record<string, unknown>): void;
   onSendMessage(content: string): Promise<void>;
 };

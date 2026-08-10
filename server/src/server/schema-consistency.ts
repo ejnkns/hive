@@ -727,6 +727,19 @@ function extractWorkflow(
   for (const field of edgeWrites.get(workflowId) ?? []) writes.add(field);
   for (const field of payloadWrites.get(workflowId) ?? []) writes.add(field);
 
+  // Manual-action input fields write the acting instance's state.
+  for (const stateExpr of arrayOf(config, "states") ?? []) {
+    if (!ts.isObjectLiteralExpression(stateExpr)) continue;
+    for (const action of arrayOf(stateExpr, "actions") ?? []) {
+      if (!ts.isObjectLiteralExpression(action)) continue;
+      for (const field of arrayOf(action, "fields") ?? []) {
+        if (!ts.isObjectLiteralExpression(field)) continue;
+        const key = stringValue(propertyOf(field, "key")?.initializer);
+        if (key) writes.add(key);
+      }
+    }
+  }
+
   return {
     workflowId,
     declared,

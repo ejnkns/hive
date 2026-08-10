@@ -223,10 +223,11 @@ async function resumeAuthoring(): Promise<void> {
 async function handleAuthorAction(
   flowId: string,
   instanceId: string,
-  actionId: string
+  actionId: string,
+  payload?: Record<string, unknown>
 ) {
   try {
-    await dispatchAction(flowId, instanceId, actionId);
+    await dispatchAction(flowId, instanceId, actionId, payload);
   } catch (err) {
     error = err instanceof Error ? err.message : "Action failed";
   }

@@ -1,3 +1,4 @@
+import { collectConfigFieldValues } from "./collect-config-field-values";
 import { getAvailableActions } from "./get-available-actions";
 import { readFlowSettings } from "./read-flow-settings";
 import { reduce, type WorkflowEvent } from "./reduce";
@@ -36,7 +37,7 @@ export type WorkflowInstanceControllerAPI = {
   getState(): RuntimeWorkflowInstanceState;
   getAvailableActions(): VisibleAction[];
   on(handler: EventHandler): () => void;
-  dispatchAction(actionId: string): void;
+  dispatchAction(actionId: string, payload?: Record<string, unknown>): void;
   startTask(taskId: string, metadata?: Record<string, unknown>): Promise<void>;
   sendTaskInput(taskId: string, content: string, role: string): void;
   patchRunningTaskMetadata(metadata: Record<string, unknown>): void;
@@ -355,7 +356,7 @@ export function createWorkflowInstanceController(
         if (idx >= 0) handlers.splice(idx, 1);
       };
     },
-    dispatchAction: (actionId: string) => {
+    dispatchAction: (actionId: string, payload?: Record<string, unknown>) => {
       // The gate is part of the availability contract: a directly-dispatched
       // action must be one the UI would show right now (gate + dependsOnState
       // evaluated through the same getVisibleActions path). Programmatic
@@ -368,6 +369,21 @@ export function createWorkflowInstanceController(
       const stateDef = workflow.states.find((s) => s.id === state.currentState);
       const action = stateDef?.actions?.find((a) => a.id === actionId);
       if (!action) return;
+
+      // An action with declared fields collects user input: validate the
+      // payload and write the accepted values into the acting instance's
+      // workflowInstanceState before the transition, so the note/reason/date
+      // travels with the action.
+      if (action.fields !== undefined) {
+        const collected = collectConfigFieldValues(
+          action.fields,
+          payload ?? {}
+        );
+        if (!collected.ok) {
+          throw new Error(collected.error);
+        }
+        patchWorkflowInstanceState(collected.values);
+      }
 
       if (
         action.maxWorkflowInstancesInTarget !== undefined &&

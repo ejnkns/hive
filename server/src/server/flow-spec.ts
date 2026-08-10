@@ -131,6 +131,11 @@ export type ActionSpec = {
   newAttempt?: boolean;
   completesRunningTask?: boolean;
   createInstance?: { workflowId: string; fields: ConfigField[] };
+  // Declared input fields collected from the user when this action is
+  // dispatched: the values are written into the acting instance's
+  // workflowInstanceState before the transition (a correction note, reject
+  // reason, or due date travels with the action).
+  fields?: ConfigField[];
 };
 
 export type StateSpec = {
@@ -594,6 +599,29 @@ export function validateFlowSpec(spec: FlowSpec): SpecError[] {
             error(e.path, e.message);
           }
         }
+        if (action.fields !== undefined) {
+          if (action.fields.length === 0) {
+            error(
+              `${aPath}.fields`,
+              `fields must be empty or omitted — an action with no input fields needs no declaration`
+            );
+          }
+          action.fields.forEach((field, i) => {
+            if (!isConfigField(field)) {
+              error(
+                `${aPath}.fields[${i}]`,
+                `invalid config field: ${JSON.stringify(field)}`
+              );
+              return;
+            }
+            if (!stateTypes.has(field.key)) {
+              error(
+                `${aPath}.fields[${i}].key`,
+                `action field "${field.key}" writes instance state that is not declared in instanceState (declared: ${[...stateTypes.keys()].join(", ")})`
+              );
+            }
+          });
+        }
       }
     }
 
@@ -932,6 +960,8 @@ export function validateFlowSpec(spec: FlowSpec): SpecError[] {
           for (const field of action.createInstance.fields)
             writes.add(field.key);
         }
+        // Manual-action input fields write the acting instance's state.
+        for (const field of action.fields ?? []) writes.add(field.key);
       }
     }
     for (const action of spec.actions ?? []) {

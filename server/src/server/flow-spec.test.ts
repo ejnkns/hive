@@ -824,3 +824,117 @@ describe("analyzeFlowSpec", () => {
     );
   });
 });
+
+describe("manual-action fields", () => {
+  it("accepts an action whose input fields are declared in instanceState", () => {
+    const spec: FlowSpec = {
+      ...VALID,
+      workflows: [
+        {
+          ...VALID.workflows[0],
+          instanceState: [
+            { field: "title", type: "string" },
+            { field: "note", type: "string" },
+          ],
+          states: VALID.workflows[0].states.map((s) =>
+            s.id === "ready"
+              ? {
+                  ...s,
+                  actions: [
+                    ...(s.actions ?? []),
+                    {
+                      id: "request_correction",
+                      label: "Request correction",
+                      variant: "primary",
+                      transitionTo: "approved",
+                      fields: [
+                        {
+                          key: "note",
+                          label: "What to fix",
+                          type: "string",
+                          required: true,
+                        },
+                      ],
+                    },
+                  ],
+                }
+              : s
+          ),
+        },
+      ],
+    };
+    assert.deepEqual(validateFlowSpec(spec), []);
+  });
+
+  it("rejects an action field not declared in instanceState", () => {
+    const spec: FlowSpec = {
+      ...VALID,
+      workflows: [
+        {
+          ...VALID.workflows[0],
+          states: VALID.workflows[0].states.map((s) =>
+            s.id === "ready"
+              ? {
+                  ...s,
+                  actions: [
+                    ...(s.actions ?? []),
+                    {
+                      id: "request_correction",
+                      label: "Request correction",
+                      transitionTo: "approved",
+                      fields: [
+                        {
+                          key: "note",
+                          label: "What to fix",
+                          type: "string",
+                        },
+                      ],
+                    },
+                  ],
+                }
+              : s
+          ),
+        },
+      ],
+    };
+    const message = messageFor(spec, "not declared in instanceState");
+    assert.ok(
+      message,
+      `expected a declared-field error, got: ${errorsFor(spec)
+        .map((e) => e.message)
+        .join("; ")}`
+    );
+  });
+
+  it("counts manual-action fields as writers of instance state", () => {
+    // A field that is only written by an action payload (never by a patch,
+    // edge, or createInstance) must not be flagged as "read with no writer".
+    const spec: FlowSpec = {
+      ...VALID,
+      workflows: [
+        {
+          ...VALID.workflows[0],
+          instance: { title: "note" },
+          instanceState: [{ field: "note", type: "string" }],
+          states: VALID.workflows[0].states.map((s) =>
+            s.id === "ready"
+              ? {
+                  ...s,
+                  actions: [
+                    {
+                      id: "note_it",
+                      label: "Note it",
+                      transitionTo: "approved",
+                      fields: [{ key: "note", label: "Note", type: "string" }],
+                    },
+                  ],
+                }
+              : s
+          ),
+        },
+      ],
+      actions: [],
+    };
+    assert.deepEqual(validateFlowSpec(spec), []);
+  });
+});

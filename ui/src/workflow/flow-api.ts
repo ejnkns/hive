@@ -378,14 +378,15 @@ export async function fetchFlowInstances(
 export async function dispatchAction(
   flowId: string,
   instanceId: string,
-  actionId: string
+  actionId: string,
+  payload?: Record<string, unknown>
 ): Promise<DispatchActionResult> {
   const res = await fetch(
     `/api/flows/${encodeURIComponent(flowId)}/instances/${encodeURIComponent(instanceId)}/action`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ actionId }),
+      body: JSON.stringify({ actionId, payload }),
     }
   );
 

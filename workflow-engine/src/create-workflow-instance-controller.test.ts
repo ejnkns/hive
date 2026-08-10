@@ -224,6 +224,116 @@ describe("createWorkflowInstanceController", () => {
     assert.equal(controller.getState().hasRunningTask, false);
   });
 
+  it("dispatchAction writes collected field payloads into instance state", async () => {
+    const fieldedWorkflow = defineWorkflow({
+      id: "review",
+      label: "Review",
+      taskOutputs: {} as Record<string, never>,
+      workflowInstanceState: {} as {
+        note?: string;
+        approved?: boolean;
+      },
+      states: [
+        {
+          id: "submitted",
+          label: "Submitted",
+          category: "initial",
+          actions: [
+            {
+              id: "request_correction",
+              label: "Request correction",
+              transitionTo: "correction_requested",
+              fields: [
+                {
+                  key: "note",
+                  label: "What to fix",
+                  type: "string",
+                  required: true,
+                },
+                { key: "approved", label: "Approve anyway", type: "boolean" },
+              ],
+            },
+          ],
+        },
+        {
+          id: "correction_requested",
+          label: "Correction requested",
+          category: "active",
+        },
+        { id: "approved", label: "Approved", category: "terminal" },
+      ],
+      initial: "submitted",
+      terminalStates: ["approved"],
+    });
+    const controller = createWorkflowInstanceController(fieldedWorkflow, {});
+
+    controller.dispatchAction("request_correction", {
+      note: "Fix the totals row",
+      approved: true,
+    });
+
+    assert.equal(controller.getState().currentState, "correction_requested");
+    assert.deepEqual(controller.getState().workflowInstanceState, {
+      note: "Fix the totals row",
+      approved: true,
+    });
+  });
+
+  it("dispatchAction rejects an invalid payload for a fielded action", async () => {
+    const fieldedWorkflow = defineWorkflow({
+      id: "review",
+      label: "Review",
+      taskOutputs: {} as Record<string, never>,
+      workflowInstanceState: {} as { note?: string },
+      states: [
+        {
+          id: "submitted",
+          label: "Submitted",
+          category: "initial",
+          actions: [
+            {
+              id: "request_correction",
+              label: "Request correction",
+              transitionTo: "correction_requested",
+              fields: [
+                {
+                  key: "note",
+                  label: "What to fix",
+                  type: "string",
+                  required: true,
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: "correction_requested",
+          label: "Correction requested",
+          category: "active",
+        },
+      ],
+      initial: "submitted",
+      terminalStates: [],
+    });
+    const controller = createWorkflowInstanceController(fieldedWorkflow, {});
+
+    assert.throws(
+      () => controller.dispatchAction("request_correction", {}),
+      /Missing required field "note"/
+    );
+    assert.throws(
+      () =>
+        controller.dispatchAction("request_correction", {
+          note: "ok",
+          bogus: 1,
+        }),
+      /Unknown field "bogus"/
+    );
+    // The failed dispatch must not transition or write state.
+    assert.equal(controller.getState().currentState, "submitted");
+    assert.deepEqual(controller.getState().workflowInstanceState, {});
+  });
+
   it("cancel transitions back to idle", async () => {
     const runner = new MockRunner();
     const controller = createWorkflowInstanceController(testWorkflow, {

@@ -644,4 +644,55 @@ describe("render flow definition", () => {
     assert.match(source, /completionTool: "items_classify_complete"/);
     assert.match(source, /tools: \["items_classify_complete"\],/);
   });
+
+  it("renders manual-action input fields", async () => {
+    const spec: FlowSpec = {
+      id: "reviewFlow",
+      label: "Review Flow",
+      configSchema: [],
+      workflows: [
+        {
+          id: "review",
+          label: "Review",
+          instance: { title: "note" },
+          display: { fields: [{ path: "note", label: "Note" }] },
+          instanceState: [{ field: "note", type: "string" }],
+          initialState: "submitted",
+          terminalStates: ["done"],
+          states: [
+            {
+              id: "submitted",
+              label: "Submitted",
+              category: "initial",
+              actions: [
+                {
+                  id: "request_correction",
+                  label: "Request correction",
+                  variant: "primary",
+                  transitionTo: "done",
+                  fields: [
+                    {
+                      key: "note",
+                      label: "What to fix",
+                      type: "string",
+                      required: true,
+                    },
+                  ],
+                },
+              ],
+            },
+            { id: "done", label: "Done", category: "terminal" },
+          ],
+        },
+      ],
+      actions: [],
+      edges: [],
+    };
+
+    const source = await assertRenderedPassesGate(spec, "corpus-fields");
+    assert.match(
+      source,
+      /fields: \[{ key: "note", label: "What to fix", type: "string", required: true }\],/
+    );
+  });
 });
