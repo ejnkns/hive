@@ -7,7 +7,9 @@ import type {
 import type { CustomRenderKind } from "workflow-engine/workflow-types";
 import { getComponentRenderer } from "../renderer-registry";
 import "./dynamic-element-host";
+import "./flow-overview";
 import { WorkflowInstanceCard } from "./workflow-instance-card";
+import { computeFlowOverview } from "./workflow-instances/flow-overview";
 import { groupInstancesByColumns } from "./workflow-instances/group-by-columns";
 import { groupInstancesByState } from "./workflow-instances/group-by-state";
 
@@ -192,6 +194,7 @@ export class WorkflowInstances extends LitElement {
     }
 
     return html`
+      ${this.renderOverview()}
       ${repeat(
         [...entriesByWorkflow.entries()],
         ([workflowId]) => workflowId,
@@ -202,7 +205,7 @@ export class WorkflowInstances extends LitElement {
           const running = entries.some((entry) => entry.state.hasRunningTask);
           const flatView =
             def.ui?.view !== undefined && def.ui.view !== "board";
-          return html`<div class="flow">
+          return html`<div class="flow" data-workflow-id=${workflowId}>
             <button
               class="flow-header"
               type="button"
@@ -239,6 +242,40 @@ export class WorkflowInstances extends LitElement {
       )}
     `;
   }
+
+  // The flow-level overview bar: shown when the flow has more than one
+  // workflow or more than one instance — a single bare workflow needs no
+  // at-a-glance summary.
+  private renderOverview() {
+    const overview = computeFlowOverview(this.workflowDefs, this.instances);
+    if (overview.byWorkflow.length <= 1 && overview.totals.instances <= 1) {
+      return nothing;
+    }
+    return html`<flow-overview
+      .overview=${overview}
+      @hive-focus-workflow=${this.handleFocusWorkflow}
+    ></flow-overview>`;
+  }
+
+  // Focus a workflow from an overview chip: expand its section (if collapsed)
+  // and scroll it into view. The collapse state is persisted per flow like the
+  // manual toggle; the scroll runs after the re-render settles.
+  private handleFocusWorkflow = (
+    event: CustomEvent<{ workflowId: string }>
+  ) => {
+    const workflowId = event.detail.workflowId;
+    if (this.collapsedIds.has(workflowId)) {
+      this.collapsedIds.delete(workflowId);
+      localStorage.removeItem(`hive:collapse:${this.flowId}:${workflowId}`);
+      this.requestUpdate();
+    }
+    setTimeout(() => {
+      const header = this.renderRoot.querySelector(
+        `[data-workflow-id="${workflowId}"] .flow-header`
+      );
+      header?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+  };
 
   private isCollapsed(workflowId: string): boolean {
     if (!this.collapsedIds.has(workflowId)) {
