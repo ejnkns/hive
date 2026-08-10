@@ -245,11 +245,19 @@ function isFieldType(value: unknown): value is FieldType {
 
 // A derived display field entry: count/progress need a where clause with a
 // string field and a scalar equals value (progress's where is required); sum
-// takes an optional string item field.
+// takes an optional string item field. countAcross/progressAcross aggregate
+// over the workflow's instances: equals must be scalar (progressAcross's is
+// required; countAcross's is optional — absent means all instances).
 function isDerivedDisplay(value: unknown): value is DerivedDisplay {
   if (typeof value !== "object" || value === null) return false;
   const d = value as Record<string, unknown>;
-  if (d.kind !== "count" && d.kind !== "progress" && d.kind !== "sum") {
+  if (
+    d.kind !== "count" &&
+    d.kind !== "progress" &&
+    d.kind !== "sum" &&
+    d.kind !== "countAcross" &&
+    d.kind !== "progressAcross"
+  ) {
     return false;
   }
   const where = d.where as Record<string, unknown> | undefined;
@@ -267,6 +275,16 @@ function isDerivedDisplay(value: unknown): value is DerivedDisplay {
   }
   if (d.kind === "progress" && where === undefined) return false;
   if (d.field !== undefined && typeof d.field !== "string") return false;
+  const equals = d.equals;
+  if (
+    equals !== undefined &&
+    typeof equals !== "string" &&
+    typeof equals !== "number" &&
+    typeof equals !== "boolean"
+  ) {
+    return false;
+  }
+  if (d.kind === "progressAcross" && equals === undefined) return false;
   return true;
 }
 
@@ -724,7 +742,18 @@ export function validateFlowSpec(spec: FlowSpec): SpecError[] {
       if (field.derive !== undefined && !isDerivedDisplay(field.derive)) {
         error(
           `${wfPath}.display.fields[${dIndex}].derive`,
-          `invalid derive: ${JSON.stringify(field.derive)} (count/progress take a where clause with a string field and scalar equals — progress requires one; sum takes an optional string item field)`
+          `invalid derive: ${JSON.stringify(field.derive)} (count/progress take a where clause with a string field and scalar equals — progress requires one; sum takes an optional string item field; countAcross/progressAcross aggregate instances by a scalar equals — progressAcross requires one)`
+        );
+      }
+      if (
+        field.derive !== undefined &&
+        (field.derive.kind === "countAcross" ||
+          field.derive.kind === "progressAcross") &&
+        field.path.includes(".")
+      ) {
+        error(
+          `${wfPath}.display.fields[${dIndex}].derive`,
+          `across-instance derives require a single-segment path (got "${field.path}") — the summary aggregates top-level instance-state fields`
         );
       }
     }

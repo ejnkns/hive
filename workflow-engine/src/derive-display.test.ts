@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { deriveDisplayValue } from "./derive-display";
+import {
+  deriveAcrossDisplayValue,
+  deriveDisplayValue,
+  summarizeWorkflowInstances,
+} from "./derive-display";
 import type { DerivedDisplay } from "./workflow-types";
 
 const items = [
@@ -91,5 +95,96 @@ describe("deriveDisplayValue", () => {
       undefined
     );
     assert.equal(deriveDisplayValue({ kind: "sum" }, ["a", "b"]), undefined);
+  });
+});
+
+describe("summarizeWorkflowInstances", () => {
+  it("counts total instances and per scalar field values", () => {
+    const summary = summarizeWorkflowInstances([
+      { workflowInstanceState: { status: "pending", kind: "bug" } },
+      { workflowInstanceState: { status: "done", kind: "bug" } },
+      { workflowInstanceState: { status: "done", kind: "feat" } },
+      { workflowInstanceState: {} },
+    ]);
+    assert.deepEqual(summary, {
+      total: 4,
+      byField: {
+        status: { pending: 1, done: 2 },
+        kind: { bug: 2, feat: 1 },
+      },
+    });
+  });
+
+  it("skips non-scalar fields (arrays and objects)", () => {
+    const summary = summarizeWorkflowInstances([
+      {
+        workflowInstanceState: {
+          status: "done",
+          items: [1, 2],
+          meta: { a: 1 },
+        },
+      },
+    ]);
+    assert.deepEqual(summary, {
+      total: 1,
+      byField: { status: { done: 1 } },
+    });
+  });
+});
+
+describe("deriveAcrossDisplayValue", () => {
+  const summary = summarizeWorkflowInstances([
+    { workflowInstanceState: { status: "pending" } },
+    { workflowInstanceState: { status: "review" } },
+    { workflowInstanceState: { status: "review" } },
+    { workflowInstanceState: { status: "done" } },
+  ]);
+
+  it("counts matching instances by field value", () => {
+    assert.deepEqual(
+      deriveAcrossDisplayValue(
+        { kind: "countAcross", equals: "review" },
+        "status",
+        summary
+      ),
+      { kind: "count", value: 2 }
+    );
+  });
+
+  it("counts all instances when equals is absent", () => {
+    assert.deepEqual(
+      deriveAcrossDisplayValue({ kind: "countAcross" }, "status", summary),
+      { kind: "count", value: 4 }
+    );
+  });
+
+  it("computes progress over the workflow total", () => {
+    assert.deepEqual(
+      deriveAcrossDisplayValue(
+        { kind: "progressAcross", equals: "review" },
+        "status",
+        summary
+      ),
+      { kind: "progress", count: 2, total: 4 }
+    );
+  });
+
+  it("counts zero for a missing field or value", () => {
+    assert.deepEqual(
+      deriveAcrossDisplayValue(
+        { kind: "countAcross", equals: "nope" },
+        "status",
+        summary
+      ),
+      { kind: "count", value: 0 }
+    );
+    assert.deepEqual(
+      deriveAcrossDisplayValue(
+        { kind: "countAcross", equals: "done" },
+        "missing",
+        summary
+      ),
+      { kind: "count", value: 0 }
+    );
   });
 });

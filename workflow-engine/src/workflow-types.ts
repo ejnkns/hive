@@ -371,6 +371,11 @@ export type CustomRenderKind = {
 // shared pure helper (derive-display.ts) that engine and UI both use, so the
 // rendering is deterministic. `where.field` addresses an item property of the
 // resolved array; `equals` compares with strict equality.
+//
+// The *Across kinds aggregate over the workflow's instances instead of the
+// instance's own value: the display field's `path` names the instance-state
+// field to count, and the server-computed WorkflowSummary rides each
+// WorkflowInstanceEntry. Across derives require a single-segment path.
 export type DerivedDisplay =
   // Array length, optionally counting only items whose declared field equals
   // a value ("N pending").
@@ -384,7 +389,22 @@ export type DerivedDisplay =
       where: { field: string; equals: string | number | boolean };
     }
   // Running total over an array of numbers, or over a numeric item field.
-  | { kind: "sum"; field?: string };
+  | { kind: "sum"; field?: string }
+  // Across instances: count instances whose state[path] equals a value
+  // (absent equals → all instances).
+  | { kind: "countAcross"; equals?: string | number | boolean }
+  // Across instances: matching instances over the workflow total ("2 of 5
+  // instances in review").
+  | { kind: "progressAcross"; equals: string | number | boolean };
+
+// A server-computed aggregate over a workflow's instances, attached to every
+// WorkflowInstanceEntry: the instance total plus per top-level scalar
+// instance-state field value counts. The card evaluates countAcross /
+// progressAcross derives against it.
+export type WorkflowSummary = {
+  total: number;
+  byField: Record<string, Record<string, number>>;
+};
 
 // The instance-state body hint: which workflowInstanceState fields the
 // instance card shows. Each field's render props resolve against that field's

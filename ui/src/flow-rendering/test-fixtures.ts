@@ -69,6 +69,7 @@ export function entry(
     },
     availableActions: [],
     editFields: [],
+    workflowSummary: { total: 0, byField: {} },
   };
 }
 

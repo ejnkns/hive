@@ -14,10 +14,15 @@ import {
   createWorkflowInstanceController,
   type WorkflowInstanceControllerAPI,
 } from "./create-workflow-instance-controller";
+import { summarizeWorkflowInstances } from "./derive-display";
 import { evaluateEdges } from "./evaluate-edges";
 import type { RuntimeWorkflowInstanceState } from "./shared/workflow-instance-state";
 import type { TaskRunnerFactory } from "./task-runner";
-import type { RuntimeFlowEdge, RuntimeWorkflowConfig } from "./workflow-types";
+import type {
+  RuntimeFlowEdge,
+  RuntimeWorkflowConfig,
+  WorkflowSummary,
+} from "./workflow-types";
 
 export type {
   FlowEventHandler,
@@ -26,6 +31,7 @@ export type {
   FlowRuntimeEvent,
   WorkflowDefResponse,
   WorkflowInstanceEntry,
+  WorkflowSummary,
 };
 
 // ── Factory ──
@@ -235,7 +241,7 @@ export function createFlowRuntime<
   }
 
   function getWorkflowInstanceEntries(): WorkflowInstanceEntry[] {
-    return Array.from(controllers.entries()).map(([id, ctrl]) => {
+    const entries = Array.from(controllers.entries()).map(([id, ctrl]) => {
       const workflowId = instanceWorkflowIds.get(id) ?? "";
       return {
         id,
@@ -243,8 +249,30 @@ export function createFlowRuntime<
         state: ctrl.getState(),
         availableActions: ctrl.getAvailableActions(),
         editFields: workflowMap.get(workflowId)?.editFields ?? [],
+        // Filled below once every entry is known.
+        workflowSummary: { total: 0, byField: {} },
       };
     });
+    // Per-workflow aggregates: every entry of a workflow carries the same
+    // summary of that workflow's instances.
+    const byWorkflow = new Map<string, WorkflowSummary>();
+    for (const entry of entries) {
+      const existing = byWorkflow.get(entry.workflowId);
+      if (existing !== undefined) {
+        entry.workflowSummary = existing;
+        continue;
+      }
+      const summary = summarizeWorkflowInstances(
+        entries
+          .filter((e) => e.workflowId === entry.workflowId)
+          .map((e) => ({
+            workflowInstanceState: e.state.workflowInstanceState,
+          }))
+      );
+      byWorkflow.set(entry.workflowId, summary);
+      entry.workflowSummary = summary;
+    }
+    return entries;
   }
 
   function addWorkflowInstance(

@@ -44,6 +44,12 @@ DERIVED DISPLAY (optional "derive" on a display field; computes from the resolve
   // Example: { "path": "items", "label": "Done", "derive": { "kind": "progress", "where": { "field": "status", "equals": "done" } } }
   // A derive that cannot evaluate (non-array, missing item field) falls back to the raw value.
 
+ACROSS-INSTANCE DERIVES (same display field, but the path names an instance-state FIELD to aggregate over ALL instances of the workflow; requires a single-segment path):
+  { "kind": "countAcross" }                                       // total instances
+  { "kind": "countAcross", "equals": "pending" }                  // instances whose state[path] === "pending" ("N pending")
+  { "kind": "progressAcross", "equals": "review" }                // "2 of 5 instances in review" (bar); equals is required
+  // Example: { "path": "status", "label": "In review", "derive": { "kind": "countAcross", "equals": "review" } }
+
 STATE: {
   "id": "running",
   "label": "Running",

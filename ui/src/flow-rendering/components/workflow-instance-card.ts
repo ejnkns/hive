@@ -4,7 +4,10 @@ import type {
   WorkflowDefResponse,
   WorkflowInstanceEntry,
 } from "workflow-engine/create-flow-runtime";
-import { deriveDisplayValue } from "workflow-engine/derive-display";
+import {
+  deriveAcrossDisplayValue,
+  deriveDisplayValue,
+} from "workflow-engine/derive-display";
 import type {
   ChatMessage,
   CustomRenderKind,
@@ -448,7 +451,17 @@ export class WorkflowInstanceCard extends LitElement {
           // (count/progress/sum); when the derive cannot evaluate, the raw
           // value renders instead.
           const derived = field.derive
-            ? deriveDisplayValue(field.derive, value)
+            ? field.derive.kind === "countAcross" ||
+              field.derive.kind === "progressAcross"
+              ? deriveAcrossDisplayValue(
+                  field.derive,
+                  field.path,
+                  this.instanceEntry.workflowSummary ?? {
+                    total: 0,
+                    byField: {},
+                  }
+                )
+              : deriveDisplayValue(field.derive, value)
             : undefined;
           const shown =
             derived !== undefined && derived.kind !== "progress"

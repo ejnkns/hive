@@ -178,6 +178,42 @@ describe("WorkflowInstanceCard", () => {
     expect(values.map((v) => v.textContent)).toEqual(["3"]);
   });
 
+  it("renders across-instance derives from the workflow summary", async () => {
+    const def = cardDef({
+      display: {
+        fields: [
+          {
+            path: "status",
+            label: "In review",
+            derive: { kind: "countAcross", equals: "review" },
+          },
+          {
+            path: "status",
+            label: "Review bar",
+            derive: { kind: "progressAcross", equals: "review" },
+          },
+        ],
+      },
+    });
+    const instance = entry("c1", "ready", {
+      workflowInstanceState: { status: "review" },
+    });
+    instance.workflowSummary = {
+      total: 4,
+      byField: { status: { pending: 1, review: 2, done: 1 } },
+    };
+    const el = await mount(card(def, instance));
+    await settle(shadowRootOf(el));
+
+    const keys = [...shadowRootOf(el).querySelectorAll(".domain-data-key")];
+    expect(keys.map((k) => k.textContent)).toEqual(["In review", "Review bar"]);
+    const values = [...shadowRootOf(el).querySelectorAll(".domain-data-value")];
+    expect(values.map((v) => v.textContent)).toEqual(["2"]);
+    expect(
+      shadowRootOf(el).querySelector(".domain-progress-text")?.textContent
+    ).toBe("2 of 4");
+  });
+
   it("falls back to the raw value when a derive cannot evaluate", async () => {
     const def = cardDef({
       display: {

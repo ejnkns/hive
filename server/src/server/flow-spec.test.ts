@@ -229,6 +229,65 @@ describe("validateFlowSpec", () => {
     assert.match(errors[0].message, /invalid derive/);
   });
 
+  it("accepts across-instance derives and requires single-segment paths", () => {
+    const withAcross: FlowSpec = {
+      ...VALID,
+      workflows: [
+        {
+          ...VALID.workflows[0],
+          instanceState: [
+            { field: "title", type: "string" },
+            { field: "status", type: "string" },
+          ],
+          editFields: [{ key: "status", label: "Status", type: "string" }],
+          display: {
+            fields: [
+              {
+                path: "status",
+                label: "In review",
+                derive: { kind: "countAcross", equals: "review" },
+              },
+              {
+                path: "status",
+                label: "Total",
+                derive: { kind: "countAcross" },
+              },
+            ],
+          },
+        },
+      ],
+    };
+    assert.deepEqual(errorsFor(withAcross), []);
+
+    // A dotted path on an across derive is rejected (the summary aggregates
+    // top-level fields only).
+    const dotted: FlowSpec = {
+      ...VALID,
+      workflows: [
+        {
+          ...VALID.workflows[0],
+          instanceState: [
+            { field: "title", type: "string" },
+            { field: "meta", type: "object" },
+          ],
+          editFields: [{ key: "meta", label: "Meta", type: "string[]" }],
+          display: {
+            fields: [
+              {
+                path: "meta.status",
+                label: "X",
+                derive: { kind: "countAcross", equals: "a" },
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const dottedErrors = errorsFor(dotted);
+    assert.equal(dottedErrors.length, 1);
+    assert.match(dottedErrors[0].message, /single-segment path/);
+  });
+
   it("accepts confirmText on an action and rejects a non-string value", () => {
     const withConfirm: FlowSpec = {
       ...VALID,

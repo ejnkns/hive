@@ -1,4 +1,4 @@
-import type { DerivedDisplay } from "./workflow-types";
+import type { DerivedDisplay, WorkflowSummary } from "./workflow-types";
 
 // Evaluates a DerivedDisplay against a resolved display-field value. Pure and
 // deterministic — the same module runs in the engine tests and the UI card,
@@ -21,6 +21,55 @@ function matches(
 ): boolean {
   if (item === null || typeof item !== "object") return false;
   return (item as Record<string, unknown>)[where.field] === where.equals;
+}
+
+// Computes the per-workflow aggregate attached to every WorkflowInstanceEntry:
+// the instance total plus counts per top-level scalar instance-state field
+// value. Arrays/objects are skipped (they are per-instance data); only
+// string/number/boolean fields aggregate meaningfully across instances.
+export function summarizeWorkflowInstances(
+  instances: Array<{ workflowInstanceState: Record<string, unknown> }>
+): WorkflowSummary {
+  const summary: WorkflowSummary = { total: instances.length, byField: {} };
+  for (const instance of instances) {
+    for (const [key, value] of Object.entries(instance.workflowInstanceState)) {
+      if (
+        typeof value !== "string" &&
+        typeof value !== "number" &&
+        typeof value !== "boolean"
+      ) {
+        continue;
+      }
+      let byValue = summary.byField[key];
+      if (byValue === undefined) {
+        byValue = {};
+        summary.byField[key] = byValue;
+      }
+      byValue[String(value)] = (byValue[String(value)] ?? 0) + 1;
+    }
+  }
+  return summary;
+}
+
+// Evaluates an across-instance derive (countAcross / progressAcross) against
+// a workflow summary. `field` is the display field's path — the single
+// instance-state field being counted. A missing field/value counts zero.
+export function deriveAcrossDisplayValue(
+  derive:
+    | { kind: "countAcross"; equals?: string | number | boolean }
+    | { kind: "progressAcross"; equals: string | number | boolean },
+  field: string,
+  summary: WorkflowSummary
+): DerivedDisplayResult | undefined {
+  if (derive.kind === "countAcross") {
+    if (derive.equals === undefined) {
+      return { kind: "count", value: summary.total };
+    }
+    const count = summary.byField[field]?.[String(derive.equals)] ?? 0;
+    return { kind: "count", value: count };
+  }
+  const count = summary.byField[field]?.[String(derive.equals)] ?? 0;
+  return { kind: "progress", count, total: summary.total };
 }
 
 export function deriveDisplayValue(

@@ -455,6 +455,11 @@ describe("flow API routes", () => {
         .instances[0].editFields.map((f: { key: string }) => f.key),
       ["title", "due", "tags"]
     );
+    // And the workflow summary for across-instance derives.
+    assert.deepEqual(listResponse.json().instances[0].workflowSummary, {
+      total: 1,
+      byField: {},
+    });
 
     const patchResponse = await server.inject({
       method: "PATCH",

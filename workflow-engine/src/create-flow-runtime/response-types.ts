@@ -9,6 +9,7 @@ import type {
   RuntimeRenderHint,
   StateCategory,
   VisibleAction,
+  WorkflowSummary,
   WorkflowView,
 } from "../workflow-types";
 
@@ -52,4 +53,8 @@ export type WorkflowInstanceEntry = {
   // "Edit details" form from these and patches instance state through the
   // state API. Empty/absent when the workflow is not editable.
   editFields: ConfigField[];
+  // Server-computed aggregate over the workflow's instances (total + per
+  // field-value counts); the card evaluates countAcross / progressAcross
+  // derives against it.
+  workflowSummary: WorkflowSummary;
 };
