@@ -25,6 +25,7 @@ import { engineCapabilities } from "workflow-engine/capabilities-manifest";
 import type {
   BoardColumn,
   ConfigField,
+  DerivedDisplay,
   RuntimeRenderHint,
   WorkflowView,
 } from "workflow-engine/workflow-types";
@@ -159,7 +160,12 @@ export type WorkflowSpec = {
   instance?: { title?: string; subtitle?: string };
   ui?: { view?: WorkflowView; columns?: BoardColumn[] };
   display?: {
-    fields: { path: string; label?: string; render?: RuntimeRenderHint }[];
+    fields: {
+      path: string;
+      label?: string;
+      render?: RuntimeRenderHint;
+      derive?: DerivedDisplay;
+    }[];
   };
   // Optional curated set of instance-state fields a user may edit in place via
   // the instance-edit form. Keys must be declared in instanceState (validated).
@@ -235,6 +241,33 @@ const FIELD_TYPES: Record<FieldType, string> = {
 
 function isFieldType(value: unknown): value is FieldType {
   return typeof value === "string" && value in FIELD_TYPES;
+}
+
+// A derived display field entry: count/progress need a where clause with a
+// string field and a scalar equals value (progress's where is required); sum
+// takes an optional string item field.
+function isDerivedDisplay(value: unknown): value is DerivedDisplay {
+  if (typeof value !== "object" || value === null) return false;
+  const d = value as Record<string, unknown>;
+  if (d.kind !== "count" && d.kind !== "progress" && d.kind !== "sum") {
+    return false;
+  }
+  const where = d.where as Record<string, unknown> | undefined;
+  if (where !== undefined) {
+    if (typeof where !== "object" || where === null) return false;
+    if (typeof where.field !== "string") return false;
+    const equals = where.equals;
+    if (
+      typeof equals !== "string" &&
+      typeof equals !== "number" &&
+      typeof equals !== "boolean"
+    ) {
+      return false;
+    }
+  }
+  if (d.kind === "progress" && where === undefined) return false;
+  if (d.field !== undefined && typeof d.field !== "string") return false;
+  return true;
 }
 
 function isConfigField(value: unknown): value is ConfigField {
@@ -686,6 +719,12 @@ export function validateFlowSpec(spec: FlowSpec): SpecError[] {
         error(
           `${wfPath}.display.fields[${dIndex}].path`,
           `display hint references undeclared state field "${first}"`
+        );
+      }
+      if (field.derive !== undefined && !isDerivedDisplay(field.derive)) {
+        error(
+          `${wfPath}.display.fields[${dIndex}].derive`,
+          `invalid derive: ${JSON.stringify(field.derive)} (count/progress take a where clause with a string field and scalar equals — progress requires one; sum takes an optional string item field)`
         );
       }
     }

@@ -366,6 +366,26 @@ export type CustomRenderKind = {
   contract: RenderContract;
 };
 
+// A derived display: compute a value from the resolved field value instead of
+// showing it raw. Structured (no expression language) and evaluated by a
+// shared pure helper (derive-display.ts) that engine and UI both use, so the
+// rendering is deterministic. `where.field` addresses an item property of the
+// resolved array; `equals` compares with strict equality.
+export type DerivedDisplay =
+  // Array length, optionally counting only items whose declared field equals
+  // a value ("N pending").
+  | {
+      kind: "count";
+      where?: { field: string; equals: string | number | boolean };
+    }
+  // "N of M": matching items over the array length ("3 of 5 done").
+  | {
+      kind: "progress";
+      where: { field: string; equals: string | number | boolean };
+    }
+  // Running total over an array of numbers, or over a numeric item field.
+  | { kind: "sum"; field?: string };
+
 // The instance-state body hint: which workflowInstanceState fields the
 // instance card shows. Each field's render props resolve against that field's
 // value. Without a display hint the raw state dump is shown.
@@ -378,6 +398,10 @@ export type DisplayField<
   path: PropPath<TWorkflowInstanceState>;
   label?: string;
   render?: RuntimeRenderHint;
+  // When present, the resolved path value is run through the derived display
+  // (count/progress/sum) before rendering. A derive that cannot evaluate
+  // (non-array source, missing item field) falls back to the raw value.
+  derive?: DerivedDisplay;
 };
 
 export type DisplayHint<

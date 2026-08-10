@@ -545,6 +545,7 @@ export function renderFlowDefinition(spec: FlowSpec): string {
           const parts = [`path: ${json(f.path)}`];
           if (f.label) parts.push(`label: ${json(f.label)}`);
           if (f.render) parts.push(`render: ${JSON.stringify(f.render)}`);
+          if (f.derive) parts.push(`derive: ${JSON.stringify(f.derive)}`);
           return `{ ${parts.join(", ")} }`;
         })
         .join(", ");

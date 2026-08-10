@@ -24,7 +24,7 @@ WORKFLOW: {
   "states": [ STATE, ... ],
   "instance": { "title": "title" },   // optional; dotted path into instanceState
   "ui": { "view": "board", "columns": [ { "id": "ready", "label": "Ready", "states": ["ready"] } ] },  // optional
-  "display": { "fields": [ { "path": "description", "label": "Description" } ] },                          // optional
+  "display": { "fields": [ { "path": "description", "label": "Description" } ] },                          // optional; a field may add "render" (markdown/text/card/cards/json) or "derive" (see DERIVED DISPLAY below)
   "editFields": [ CONFIG FIELD, ... ]  // optional; the instance-state fields a user may edit in place via the "Edit details" form. Keys MUST be declared in instanceState. Each entry is a CONFIG FIELD (below).
 }
 
@@ -34,6 +34,15 @@ CONFIG FIELD (configSchema entries and createInstance "fields"; validated before
   // string[]: multi-select; with "options" a closed set (each chosen value must be in it), without a free tag list.
   // "options": ["a", "b"] on a string field renders a single select; on string[] a multi-select.
   // "placeholder": "…" (input placeholder) and "defaultValue": … (pre-fill) are optional on any field.
+
+DERIVED DISPLAY (optional "derive" on a display field; computes from the resolved path value — an array):
+  { "kind": "count" }                                             // array length ("N pending")
+  { "kind": "count", "where": { "field": "status", "equals": "done" } }  // count of items where item.status === "done"
+  { "kind": "progress", "where": { "field": "status", "equals": "done" } }  // "3 of 5 done" (bar); where is required
+  { "kind": "sum" }                                               // sum of an array of numbers
+  { "kind": "sum", "field": "cost" }                             // sum of item.cost across the array
+  // Example: { "path": "items", "label": "Done", "derive": { "kind": "progress", "where": { "field": "status", "equals": "done" } } }
+  // A derive that cannot evaluate (non-array, missing item field) falls back to the raw value.
 
 STATE: {
   "id": "running",

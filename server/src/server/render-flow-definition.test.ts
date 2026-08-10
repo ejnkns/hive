@@ -830,4 +830,56 @@ describe("render flow definition", () => {
     const source = await assertRenderedPassesGate(spec, "corpus-confirm-text");
     assert.match(source, /confirmText: "Delete everything\?",/);
   });
+
+  it("renders a derived display field", async () => {
+    const spec: FlowSpec = {
+      id: "deriveFlow",
+      label: "Derive Flow",
+      configSchema: [],
+      workflows: [
+        {
+          id: "board",
+          label: "Board",
+          instanceState: [{ field: "items", type: "object[]" }],
+          editFields: [{ key: "items", label: "Items", type: "string[]" }],
+          display: {
+            fields: [
+              {
+                path: "items",
+                label: "Done",
+                derive: {
+                  kind: "progress",
+                  where: { field: "status", equals: "done" },
+                },
+              },
+            ],
+          },
+          initialState: "ready",
+          terminalStates: ["done"],
+          states: [
+            {
+              id: "ready",
+              label: "Ready",
+              category: "initial",
+              actions: [
+                { id: "finish", label: "Finish", transitionTo: "done" },
+              ],
+            },
+            { id: "done", label: "Done", category: "terminal" },
+          ],
+        },
+      ],
+      actions: [],
+      edges: [],
+    };
+
+    const source = await assertRenderedPassesGate(
+      spec,
+      "corpus-derive-display"
+    );
+    assert.match(
+      source,
+      /derive: \{"kind":"progress","where":\{"field":"status","equals":"done"\}\}/
+    );
+  });
 });

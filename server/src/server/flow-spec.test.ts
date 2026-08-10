@@ -170,6 +170,65 @@ describe("validateFlowSpec", () => {
     assert.equal(errors[0].path, "workflows[0].editFields");
   });
 
+  it("accepts derived display fields and rejects malformed derives", () => {
+    const withDerive: FlowSpec = {
+      ...VALID,
+      workflows: [
+        {
+          ...VALID.workflows[0],
+          instanceState: [
+            { field: "title", type: "string" },
+            { field: "items", type: "object[]" },
+          ],
+          editFields: [{ key: "items", label: "Items", type: "string[]" }],
+          display: {
+            fields: [
+              {
+                path: "items",
+                label: "Done",
+                derive: {
+                  kind: "progress",
+                  where: { field: "status", equals: "done" },
+                },
+              },
+              { path: "items", label: "Pending", derive: { kind: "count" } },
+              {
+                path: "items",
+                label: "Cost",
+                derive: { kind: "sum", field: "cost" },
+              },
+            ],
+          },
+        },
+      ],
+    };
+    assert.deepEqual(errorsFor(withDerive), []);
+
+    // progress without where, unknown kind, non-scalar equals.
+    const bad: FlowSpec = {
+      ...VALID,
+      workflows: [
+        {
+          ...VALID.workflows[0],
+          instanceState: [
+            { field: "title", type: "string" },
+            { field: "items", type: "object[]" },
+          ],
+          editFields: [{ key: "items", label: "Items", type: "string[]" }],
+          display: {
+            fields: [
+              { path: "items", label: "A", derive: { kind: "progress" } },
+            ],
+          },
+        },
+      ],
+    } as unknown as FlowSpec;
+    const errors = errorsFor(bad);
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0].path, "workflows[0].display.fields[0].derive");
+    assert.match(errors[0].message, /invalid derive/);
+  });
+
   it("accepts confirmText on an action and rejects a non-string value", () => {
     const withConfirm: FlowSpec = {
       ...VALID,

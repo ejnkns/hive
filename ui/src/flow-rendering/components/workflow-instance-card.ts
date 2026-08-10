@@ -4,6 +4,7 @@ import type {
   WorkflowDefResponse,
   WorkflowInstanceEntry,
 } from "workflow-engine/create-flow-runtime";
+import { deriveDisplayValue } from "workflow-engine/derive-display";
 import type {
   ChatMessage,
   CustomRenderKind,
@@ -215,6 +216,31 @@ export class WorkflowInstanceCard extends LitElement {
       font-family: var(--font-mono, monospace);
     }
 
+    .domain-progress {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .domain-progress-text {
+      font-size: 0.6875rem;
+      color: var(--text);
+    }
+
+    .domain-progress-track {
+      height: 6px;
+      border-radius: 3px;
+      background: var(--border);
+      overflow: hidden;
+    }
+
+    .domain-progress-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: var(--accent);
+      transition: width 0.2s;
+    }
+
     .card-actions {
       margin-top: 0.25rem;
     }
@@ -418,21 +444,33 @@ export class WorkflowInstanceCard extends LitElement {
         ${display.fields.map((field) => {
           const value = resolvePath(instanceState, field.path);
           const label = field.label ?? field.path;
+          // A derived display computes a value from the resolved path
+          // (count/progress/sum); when the derive cannot evaluate, the raw
+          // value renders instead.
+          const derived = field.derive
+            ? deriveDisplayValue(field.derive, value)
+            : undefined;
+          const shown =
+            derived !== undefined && derived.kind !== "progress"
+              ? derived.value
+              : value;
           return html`<div class="domain-data-item">
             <span class="domain-data-key">${label}</span>
             ${
-              field.render
-                ? this.renderResolved(
-                    value,
-                    resolveRender({
-                      output: value,
-                      hint: field.render,
-                      customKinds: this.customKinds,
-                    })
-                  )
-                : html`<pre class="domain-data-value"
-                  >${stringifyValue(value)}</pre
-                >`
+              derived?.kind === "progress"
+                ? this.renderProgress(derived.count, derived.total)
+                : field.render
+                  ? this.renderResolved(
+                      shown,
+                      resolveRender({
+                        output: shown,
+                        hint: field.render,
+                        customKinds: this.customKinds,
+                      })
+                    )
+                  : html`<pre class="domain-data-value"
+                    >${stringifyValue(shown)}</pre
+                  >`
             }
           </div>`;
         })}
@@ -448,6 +486,20 @@ export class WorkflowInstanceCard extends LitElement {
           <pre class="domain-data-value">${stringifyValue(value)}</pre>
         </div>`
       )}
+    </div>`;
+  }
+
+  // A progress derive renders as a small bar with "count of total".
+  private renderProgress(count: number, total: number) {
+    const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+    return html`<div class="domain-progress">
+      <span class="domain-progress-text">${count} of ${total}</span>
+      <div class="domain-progress-track">
+        <div
+          class="domain-progress-fill"
+          style="width: ${pct}%"
+        ></div>
+      </div>
     </div>`;
   }
 

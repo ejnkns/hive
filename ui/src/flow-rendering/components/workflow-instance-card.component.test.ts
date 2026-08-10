@@ -142,6 +142,57 @@ describe("WorkflowInstanceCard", () => {
     expect(el.getAttribute("data-on-action")).toBe("run");
   });
 
+  it("renders derived display values (count and progress bar)", async () => {
+    const def = cardDef({
+      display: {
+        fields: [
+          {
+            path: "items",
+            label: "Done",
+            derive: {
+              kind: "progress",
+              where: { field: "status", equals: "done" },
+            },
+          },
+          { path: "items", label: "Total", derive: { kind: "count" } },
+        ],
+      },
+    });
+    const instance = entry("c1", "ready", {
+      workflowInstanceState: {
+        items: [{ status: "done" }, { status: "done" }, { status: "pending" }],
+      },
+    });
+    const el = await mount(card(def, instance));
+    await settle(shadowRootOf(el));
+
+    const keys = [...shadowRootOf(el).querySelectorAll(".domain-data-key")];
+    expect(keys.map((k) => k.textContent)).toEqual(["Done", "Total"]);
+    expect(
+      shadowRootOf(el).querySelector(".domain-progress-text")?.textContent
+    ).toBe("2 of 3");
+    expect(
+      shadowRootOf(el).querySelector(".domain-progress-fill")
+    ).not.toBeNull();
+    const values = [...shadowRootOf(el).querySelectorAll(".domain-data-value")];
+    expect(values.map((v) => v.textContent)).toEqual(["3"]);
+  });
+
+  it("falls back to the raw value when a derive cannot evaluate", async () => {
+    const def = cardDef({
+      display: {
+        fields: [
+          { path: "cardSpec.title", label: "Title", derive: { kind: "count" } },
+        ],
+      },
+    });
+    const el = await mount(card(def));
+    await settle(shadowRootOf(el));
+
+    const values = [...shadowRootOf(el).querySelectorAll(".domain-data-value")];
+    expect(values.map((v) => v.textContent)).toEqual(["Card c1"]);
+  });
+
   it("hides the edit button when the workflow declares no editFields", async () => {
     const el = await mount(card());
     await settle(shadowRootOf(el));
