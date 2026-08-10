@@ -108,7 +108,7 @@ Configuration is loaded synchronously from `.env` or from exported system variab
 | `OPENCODE_ZEN_API_KEY` | OpenCode Zen     | `https://opencode.ai/zen`                                 |
 | `OLLAMA_API_KEY`\*     | Ollama           | `http://127.0.0.1:11434/v1` or `OLLAMA_HOST` in `.env`    |
 | `OMLX_API_KEY`\*       | oMLX             | `http://127.0.0.1:8000/v1` or `OMLX_HOST` in `.env`       |
-| `LM_STUDIO_API_KEY`\*  | LM Studio        | `http://127.0.0.1:1234/v1` or `OMLX_HOST` in `.env`       |
+| `LM_STUDIO_API_KEY`\*  | LM Studio        | `http://127.0.0.1:1234/v1` or `LM_STUDIO_HOST` in `.env`    |
 
 \* not required unless configured in the provider.
 
