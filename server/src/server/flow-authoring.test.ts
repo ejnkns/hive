@@ -5,7 +5,6 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { validateFlowSpec } from "../flow-spec";
 import {
   AUTHORING_RULES,
   buildFlowAuthoringPrompt,
@@ -14,7 +13,8 @@ import {
   FLOW_SPEC_SHAPE,
   flowAuthoringMarkdown,
   STRUCTURED_INTAKE_EXEMPLAR,
-} from "./index";
+} from "./flow-authoring";
+import { validateFlowSpec } from "./flow-spec";
 
 describe("flow-authoring knowledge", () => {
   it("the generation prompt carries every knowledge rung in order", () => {

@@ -19,14 +19,17 @@ import { resolvePath } from "../resolve-path";
 import "./config-field-form";
 import type { ConfigFieldFormValue } from "./config-field-form";
 import "./dynamic-element-host";
-import type { CardsViewItem } from "./cards-view";
 import { statePath } from "./workflow-instance-card/state-path";
-
-type TaskOutcomeShape = {
-  status?: string;
-  error?: string;
-  output?: unknown;
-};
+import {
+  markdownSource,
+  outcomeError,
+  outcomeStatus,
+  outputCards,
+  stringifyValue,
+  summarizeOutput,
+  type TaskOutcomeShape,
+  toCardsViewItems,
+} from "./workflow-instance-card/task-output";
 
 type SerializedTaskDef = {
   id: string;
@@ -683,39 +686,6 @@ export class WorkflowInstanceCard extends LitElement {
 
 customElements.define("workflow-instance-card", WorkflowInstanceCard);
 
-// ── task-output helpers ──
-//
-// Task outputs arrive from the wire as unknown; the casts below read the few
-// optional fields the default (no-hint) rendering understands. Each reader
-// guards its own null/non-object/typeof checks, so a malformed shape degrades
-// to an empty render rather than a crash.
-
-function outcomeStatus(outcome: unknown): string {
-  const status = (outcome as TaskOutcomeShape | null)?.status;
-  return typeof status === "string" ? status : "unknown";
-}
-
-function outcomeError(outcome: unknown): string | null {
-  const error = (outcome as TaskOutcomeShape | null)?.error;
-  return typeof error === "string" && error !== "" ? error : null;
-}
-
-function outputCards(output: unknown): unknown[] | null {
-  if (output === null || typeof output !== "object") return null;
-  const cards = (output as Record<string, unknown>).cards;
-  return Array.isArray(cards) ? cards : null;
-}
-
-// The no-hint fallback for task outputs that read as prose: a string output (or
-// an output with a string content) renders as markdown rather than truncated
-// text, so agent-written documents keep their structure.
-function markdownSource(output: unknown): string | null {
-  if (typeof output === "string" && output !== "") return output;
-  if (output === null || typeof output !== "object") return null;
-  const content = (output as Record<string, unknown>).content;
-  return typeof content === "string" && content !== "" ? content : null;
-}
-
 // Available actions order by variant so the primary call-to-action leads.
 const ACTION_VARIANT_PRIORITY: Record<string, number> = {
   primary: 0,
@@ -732,45 +702,4 @@ function byVariantPriority(
     (ACTION_VARIANT_PRIORITY[a.variant] ?? 4) -
     (ACTION_VARIANT_PRIORITY[b.variant] ?? 4)
   );
-}
-
-function summarizeOutput(output: unknown): string | null {
-  if (typeof output === "string") return truncate(output, 2000);
-  if (output === null || output === undefined) return null;
-  if (typeof output !== "object") return String(output);
-  const content = (output as Record<string, unknown>).content;
-  if (typeof content === "string") return truncate(content, 2000);
-  return truncate(JSON.stringify(output, null, 2), 2000);
-}
-
-function toCardsViewItems(cards: unknown[]): CardsViewItem[] {
-  return cards.map((card) => {
-    if (card === null || typeof card !== "object") return {};
-    const record = card as Record<string, unknown>;
-    const bullets = Array.isArray(record.bullets)
-      ? record.bullets
-      : Array.isArray(record.acceptanceCriteria)
-        ? record.acceptanceCriteria
-        : [];
-    return {
-      title: typeof record.title === "string" ? record.title : undefined,
-      description:
-        typeof record.description === "string" ? record.description : undefined,
-      bullets: bullets.filter((item) => typeof item === "string"),
-    };
-  });
-}
-
-function stringifyValue(value: unknown): string {
-  if (value === undefined || value === null) return "";
-  if (typeof value === "string") return value;
-  // JSON.stringify returns undefined for undefined/function/symbol; those are
-  // handled above (or are non-wire values), but the empty fallback keeps a
-  // missing display field from crashing the card render.
-  const serialized = JSON.stringify(value, null, 2);
-  return truncate(serialized ?? "", 2000);
-}
-
-function truncate(value: string, maxLength: number): string {
-  return value.length > maxLength ? `${value.slice(0, maxLength)}...` : value;
 }
