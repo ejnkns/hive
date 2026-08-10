@@ -1,9 +1,9 @@
 <script lang="ts">
 import type { AvailableProvider } from "shared/dashboard-types";
-import { runProviderTest } from "./provider-playground/run-provider-test";
 import Button from "../shared/ui/Button.svelte";
 import Select from "../shared/ui/Select.svelte";
 import Textarea from "../shared/ui/Textarea.svelte";
+import { runProviderTest } from "./provider-playground/run-provider-test";
 
 let { providers }: { providers: AvailableProvider[] } = $props();
 

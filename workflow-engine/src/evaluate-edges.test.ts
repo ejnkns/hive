@@ -27,7 +27,8 @@ describe("evaluateEdges", () => {
     });
 
     assert.equal(effects.length, 1);
-    assert.equal(effects[0]!.toWorkflow, "target");
+    assert.ok(effects[0]);
+    assert.equal(effects[0].toWorkflow, "target");
   });
 
   it("passes task outputs to transform function", () => {
@@ -36,7 +37,8 @@ describe("evaluateEdges", () => {
     });
 
     assert.equal(effects.length, 1);
-    assert.deepEqual(readMerged(effects[0]!.transformedData), {
+    assert.ok(effects[0]);
+    assert.deepEqual(readMerged(effects[0].transformedData), {
       result: "ok",
     });
   });
@@ -59,7 +61,8 @@ describe("evaluateEdges", () => {
     const effects = evaluateEdges(testEdges, "source", "errored", {});
 
     assert.equal(effects.length, 1);
-    assert.deepEqual(effects[0]!.transformedData, {});
+    assert.ok(effects[0]);
+    assert.deepEqual(effects[0].transformedData, {});
   });
 
   it("returns multiple effects when multiple edges match", () => {
@@ -78,8 +81,10 @@ describe("evaluateEdges", () => {
 
     const effects = evaluateEdges(edges, "source", "done", {});
     assert.equal(effects.length, 2);
-    assert.equal(effects[0]!.toWorkflow, "target-a");
-    assert.equal(effects[1]!.toWorkflow, "target-b");
+    assert.ok(effects[0]);
+    assert.ok(effects[1]);
+    assert.equal(effects[0].toWorkflow, "target-a");
+    assert.equal(effects[1].toWorkflow, "target-b");
   });
 
   it("activates toFlowState edge when state matches", () => {
@@ -92,8 +97,9 @@ describe("evaluateEdges", () => {
     ];
     const effects = evaluateEdges(edges, "source", "done", { result: "ok" });
     assert.equal(effects.length, 1);
-    assert.equal(effects[0]!.toFlowState, true);
-    assert.equal(effects[0]!.toWorkflow, undefined);
+    assert.ok(effects[0]);
+    assert.equal(effects[0].toFlowState, true);
+    assert.equal(effects[0].toWorkflow, undefined);
   });
 
   it("fans out one effect per element of an array transform", () => {
@@ -126,12 +132,14 @@ describe("evaluateEdges", () => {
     });
 
     assert.equal(effects.length, 2);
-    assert.equal(effects[0]!.toWorkflow, "cards");
-    assert.deepEqual(effects[0]!.transformedData, { cardSpec: { title: "A" } });
-    assert.deepEqual(effects[1]!.transformedData, { cardSpec: { title: "B" } });
+    assert.ok(effects[0]);
+    assert.ok(effects[1]);
+    assert.equal(effects[0].toWorkflow, "cards");
+    assert.deepEqual(effects[0].transformedData, { cardSpec: { title: "A" } });
+    assert.deepEqual(effects[1].transformedData, { cardSpec: { title: "B" } });
   });
 });
 
 function readMerged(data: Record<string, unknown>): unknown {
-  return data["merged"];
+  return data.merged;
 }

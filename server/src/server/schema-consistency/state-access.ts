@@ -5,7 +5,7 @@ import ts from "typescript";
 import type { ObjectLiteral } from "./ast";
 import { findFirst, unwrap, walk } from "./ast";
 
-export function isStateBase(
+function isStateBase(
   expr: ts.Expression,
   aliases: ReadonlySet<string>
 ): boolean {

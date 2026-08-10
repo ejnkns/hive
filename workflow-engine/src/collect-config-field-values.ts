@@ -38,7 +38,7 @@ function isValidCalendarDate(
   );
 }
 
-export function isDateString(value: string): boolean {
+function isDateString(value: string): boolean {
   const match = DATE_RE.exec(value);
   if (!match) return false;
   return isValidCalendarDate(
@@ -48,7 +48,7 @@ export function isDateString(value: string): boolean {
   );
 }
 
-export function isDateTimeString(value: string): boolean {
+function isDateTimeString(value: string): boolean {
   const match = DATETIME_RE.exec(value);
   if (!match) return false;
   if (

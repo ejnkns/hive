@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { StatsData } from "shared/dashboard-types";
-import { formatNumber, sc } from "../shared/utils";
 import Card from "../shared/ui/Card.svelte";
+import { formatNumber, sc } from "../shared/utils";
 
 let { data }: { data: StatsData | null } = $props();
 </script>

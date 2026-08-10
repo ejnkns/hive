@@ -80,10 +80,11 @@ describe("FlowPersistence", () => {
       const result = p.loadFlow("test-flow");
       assert.ok(result);
       assert.equal(result.instances.length, 1);
-      assert.equal(result.instances[0]!.workflowId, "cards");
-      assert.equal(result.instances[0]!.state.currentState, "ready");
+      assert.ok(result.instances[0]);
+      assert.equal(result.instances[0].workflowId, "cards");
+      assert.equal(result.instances[0].state.currentState, "ready");
       assert.equal(
-        result.instances[0]!.state.workflowInstanceState.projectId,
+        result.instances[0].state.workflowInstanceState.projectId,
         "p1"
       );
     });

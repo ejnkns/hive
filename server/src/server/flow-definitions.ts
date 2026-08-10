@@ -167,7 +167,7 @@ export function deleteUserDefinition(id: string): void {
 // must not use value imports (the rendering surface injects its lit runtime
 // through the factory argument).
 
-export function transpileComponentSource(source: string): string {
+function transpileComponentSource(source: string): string {
   return stripTypeScriptTypes(source);
 }
 

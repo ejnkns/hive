@@ -1,7 +1,7 @@
 /** @private — only imported by runners.ts */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+
 import { join } from "node:path";
 
 // Helpers for authoring deterministic operations. The engine provides these so
@@ -31,9 +31,4 @@ export function gitOptional(basePath: string, args: string[]): string {
   } catch {
     return "";
   }
-}
-
-// Reads a file, returning "" when it does not exist.
-export function readFileSafe(path: string): string {
-  return existsSync(path) ? readFileSync(path, "utf-8") : "";
 }

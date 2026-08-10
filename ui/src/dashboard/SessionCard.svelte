@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { RequestState, SessionState } from "shared/dashboard-types";
-import { formatNumber } from "../shared/utils";
 import Card from "../shared/ui/Card.svelte";
+import { formatNumber } from "../shared/utils";
 import StagePathDots from "./StagePathDots.svelte";
 import RequestDetailModal from "./session-card/request-detail-modal.svelte";
 import SessionSummaryModal from "./session-card/session-summary-modal.svelte";

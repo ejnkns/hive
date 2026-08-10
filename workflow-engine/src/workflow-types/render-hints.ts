@@ -1,5 +1,5 @@
-/** @private — the render-hint vocabulary: built-in kinds and contracts, prop
- * paths, and custom kinds. */
+// The render-hint vocabulary: built-in kinds and contracts, prop paths, and
+// custom kinds. Internal to workflow-types/ — import through workflow-types.ts.
 
 // --- Render hints ---
 //

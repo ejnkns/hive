@@ -24,10 +24,7 @@ export function collectEdgeWrites(
   return byTarget;
 }
 
-export function collectReturnedObjectKeys(
-  fn: ts.Expression,
-  out: Set<string>
-): void {
+function collectReturnedObjectKeys(fn: ts.Expression, out: Set<string>): void {
   walk(fn, (n) => {
     if (ts.isReturnStatement(n)) {
       if (n.expression) {

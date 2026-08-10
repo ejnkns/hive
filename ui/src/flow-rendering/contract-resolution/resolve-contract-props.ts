@@ -1,4 +1,5 @@
-/** @private — resolves a render contract's props against an output. */
+// Resolves a render contract's props against an output (imported by
+// contract-resolution.ts only).
 
 import type { RenderContract } from "workflow-engine/workflow-types";
 import { resolvePath } from "../resolve-path";

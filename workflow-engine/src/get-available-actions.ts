@@ -66,7 +66,7 @@ export function getAvailableActions(
 // instance.title hint) of any instance already in the target state, so a card
 // becomes runnable as soon as its named dependency lands, regardless of how
 // the dependency was recorded.
-export function dependsOnMet(
+function dependsOnMet(
   dependees: string[],
   inState: Array<{
     id: string;

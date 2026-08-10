@@ -1,10 +1,10 @@
 <script lang="ts">
 import { getThemeMode, setLightMode } from "./theme-state.svelte";
-import type { HeaderData } from "./utils";
 import Badge from "./ui/Badge.svelte";
 import Button from "./ui/Button.svelte";
 import Select from "./ui/Select.svelte";
 import Switch from "./ui/Switch.svelte";
+import type { HeaderData } from "./utils";
 
 let {
   data = $bindable({

@@ -75,7 +75,7 @@ export function buildOutputNode(
   return root;
 }
 
-export function unionType(a: string, b: string): string {
+function unionType(a: string, b: string): string {
   const parts = [...new Set([a, b].flatMap((t) => t.split(" | ")))];
   return parts.sort().join(" | ");
 }

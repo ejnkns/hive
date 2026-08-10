@@ -184,7 +184,8 @@ describe("cards workflow", () => {
   it("initial state shows run action", () => {
     const actions = visible(initial, "ready");
     assert.equal(actions.length, 1);
-    assert.equal(actions[0]!.id, "run");
+    assert.ok(actions[0]);
+    assert.equal(actions[0].id, "run");
   });
 
   // 2. Dispatching "run" transitions to in_progress
@@ -198,7 +199,8 @@ describe("cards workflow", () => {
     assert.equal(result.state.currentState, "in_progress");
     assert.equal(result.state.hasRunningTask, false);
     assert.equal(result.commands.length, 1);
-    assert.equal(result.commands[0]!.type, "start_auto_tasks");
+    assert.ok(result.commands[0]);
+    assert.equal(result.commands[0].type, "start_auto_tasks");
   });
 
   // 3. After running, controller starts implement task
@@ -237,7 +239,8 @@ describe("cards workflow", () => {
     assert.equal(result.state.runningTaskId, null);
     assert.equal(result.state.runningTaskContext, null);
     assert.equal(result.state.taskOutputs.implement?.status, "success");
-    assert.equal(result.commands[0]!.type, "start_auto_tasks");
+    assert.ok(result.commands[0]);
+    assert.equal(result.commands[0].type, "start_auto_tasks");
   });
 
   // 5. Errored implement → auto-transitions to ready

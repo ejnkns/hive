@@ -2,7 +2,7 @@
 
 import type { WorkflowInstanceControllerAPI } from "../create-workflow-instance-controller";
 import type { RuntimeWorkflowInstanceState } from "../shared/workflow-instance-state";
-import type { FlowEventHandler, FlowRuntimeEvent } from "./flow-runtime-events";
+import type { FlowEventHandler } from "./flow-runtime-events";
 import type {
   WorkflowDefResponse,
   WorkflowInstanceEntry,

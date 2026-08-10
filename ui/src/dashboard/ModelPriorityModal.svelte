@@ -1,11 +1,11 @@
 <script lang="ts">
 import type { ModelPriority } from "shared/dashboard-types";
 import { normalizeModelId } from "shared/model-normalization";
-import { dashboardSocket } from "./dashboard-socket.svelte";
 import Button from "../shared/ui/Button.svelte";
 import Dialog from "../shared/ui/Dialog.svelte";
 import Switch from "../shared/ui/Switch.svelte";
 import TextInput from "../shared/ui/TextInput.svelte";
+import { dashboardSocket } from "./dashboard-socket.svelte";
 
 let {
   open = $bindable(false),

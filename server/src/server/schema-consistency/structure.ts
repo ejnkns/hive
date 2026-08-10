@@ -116,7 +116,7 @@ export function assessWorkflowStructure(
   return warnings;
 }
 
-export function isNeverGate(gate: ts.Expression): boolean {
+function isNeverGate(gate: ts.Expression): boolean {
   const expr = unwrap(gate);
   if (expr.kind === ts.SyntaxKind.FalseKeyword) return true;
   if (ts.isArrowFunction(expr) && !ts.isBlock(expr.body)) {

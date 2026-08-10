@@ -1,13 +1,6 @@
 /** @private — only imported by create-standard-tool-registry.ts */
 
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readFlowSettings } from "../../read-flow-settings";
@@ -44,7 +37,7 @@ export function ensureIntegrationBranch(
   };
 }
 
-export function checkIntegrationReadiness(
+function checkIntegrationReadiness(
   _task: TaskDefinition,
   params: Record<string, unknown>,
   ctx?: OperationContext
@@ -137,32 +130,6 @@ export function fastForwardTargetBranch(
     ]);
   }
   return { ok: true, revision: runGit(basePath, ["rev-parse", targetBranch]) };
-}
-
-export function writeFlowArtifacts(
-  _task: TaskDefinition,
-  params: Record<string, unknown>
-): Record<string, unknown> {
-  try {
-    const basePath = params.basePath as string;
-    const files = params.files as Record<string, string> | undefined;
-    if (!files) return { ok: false, error: "files is required" };
-
-    for (const [relativePath, content] of Object.entries(files)) {
-      const fullPath = join(basePath, relativePath);
-      mkdirSync(join(fullPath, ".."), { recursive: true });
-      writeFileSync(fullPath, content, "utf-8");
-    }
-    runGit(basePath, ["add", ...Object.keys(files)]);
-    runGit(basePath, [
-      "commit",
-      "-m",
-      (params.message as string) ?? "hive: update flow artifacts",
-    ]);
-    return { ok: true, revision: runGit(basePath, ["rev-parse", "HEAD"]) };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
-  }
 }
 
 // Commits the declared domainDir (under basePath) to integrationBranch.
@@ -393,8 +360,4 @@ function discardCardWorktree(ctx: OperationContext, basePath: string): void {
   const raw = ctx.workflowInstanceState().worktreePath;
   if (typeof raw !== "string" || raw === "") return;
   gitSucceeds(basePath, ["worktree", "remove", raw, "--force"]);
-}
-
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
 }

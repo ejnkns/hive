@@ -195,7 +195,8 @@ describe("createWorkflowInstanceController", () => {
     const controller = createWorkflowInstanceController(testWorkflow, {});
     const actions = controller.getAvailableActions();
     assert.equal(actions.length, 1);
-    assert.equal(actions[0]!.id, "start");
+    assert.ok(actions[0]);
+    assert.equal(actions[0].id, "start");
   });
 
   it("dispatchAction transitions state and starts auto tasks", async () => {
@@ -548,8 +549,9 @@ describe("sendTaskInput", () => {
 
     controller.sendTaskInput("chat", "Hello", "user");
     assert.equal(runner.receivedMessages.length, 1);
-    assert.equal(runner.receivedMessages[0]!.content, "Hello");
-    assert.equal(runner.receivedMessages[0]!.role, "user");
+    assert.ok(runner.receivedMessages[0]);
+    assert.equal(runner.receivedMessages[0].content, "Hello");
+    assert.equal(runner.receivedMessages[0].role, "user");
 
     runner.complete("done");
     await new Promise((r) => setTimeout(r, 0));
@@ -606,15 +608,17 @@ describe("sendTaskInput", () => {
     void b.startTask("chat");
 
     assert.equal(created.length, 2);
+    assert.ok(created[0]);
+    assert.ok(created[1]);
     assert.notEqual(created[0], created[1]);
 
     a.sendTaskInput("chat", "hello A", "user");
     b.sendTaskInput("chat", "hello B", "user");
 
-    assert.deepEqual(created[0]!.receivedMessages, [
+    assert.deepEqual(created[0].receivedMessages, [
       { content: "hello A", role: "user" },
     ]);
-    assert.deepEqual(created[1]!.receivedMessages, [
+    assert.deepEqual(created[1].receivedMessages, [
       { content: "hello B", role: "user" },
     ]);
   });

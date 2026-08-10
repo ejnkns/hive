@@ -12,7 +12,3 @@ export function getCanvasState(sessionId: string): CanvasState | undefined {
 export function setCanvasState(sessionId: string, state: CanvasState): void {
   store.set(sessionId, state);
 }
-
-export function clearCanvasState(sessionId: string): void {
-  store.delete(sessionId);
-}

@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { RequestState } from "shared/dashboard-types";
-import { formatNumber, formatTime, sc } from "../../shared/utils";
 import Dialog from "../../shared/ui/Dialog.svelte";
+import { formatNumber, formatTime, sc } from "../../shared/utils";
 import ConversationView from "../ConversationView.svelte";
 import StagePathDots from "../StagePathDots.svelte";
 import { isTerminal } from "../stage-utils";

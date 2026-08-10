@@ -42,7 +42,7 @@ export function resolveRender(input: {
   return { kind: input.hint.kind, props: resolved.props };
 }
 
-export function findRenderContract(
+function findRenderContract(
   kind: string,
   customKinds: readonly CustomRenderKind[]
 ): RenderContract | undefined {
