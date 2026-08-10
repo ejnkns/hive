@@ -740,6 +740,14 @@ function extractWorkflow(
     }
   }
 
+  // editFields declare the instance's editable fields — a user-facing writer:
+  // the instance-edit form patches exactly these keys into instance state.
+  for (const field of arrayOf(config, "editFields") ?? []) {
+    if (!ts.isObjectLiteralExpression(field)) continue;
+    const key = stringValue(propertyOf(field, "key")?.initializer);
+    if (key) writes.add(key);
+  }
+
   return {
     workflowId,
     declared,

@@ -238,6 +238,43 @@ export const flow = {
       );
     });
 
+    it("counts editFields keys as writers for the every-read-has-a-writer rule", () => {
+      // Strip the cards workflow's other writers of `cardSpec` (the add_card
+      // createInstance payload and the edge transform) and declare it in
+      // editFields instead: the instance-edit form is now the writer, so the
+      // `instance: { title: "cardSpec.title" }` read must stay satisfied.
+      const source = KNOWN_GOOD.replace(
+        `      createInstance: {\n        workflowId: "cards",\n        fields: [{ key: "cardSpec", label: "Card spec", type: "string" }],\n      },`,
+        `      createInstance: { workflowId: "cards" },`
+      )
+        .replace(
+          `      transform: (source) => ({ cardSpec: source.runReview?.output }),`,
+          ``
+        )
+        .replace(
+          `  workflowInstanceState: {} as CardsItemState,`,
+          `  workflowInstanceState: {} as CardsItemState,\n  editFields: [{ key: "cardSpec", label: "Card spec", type: "string" }],`
+        );
+      const report = checkDefinitionSources([
+        { path: "edit-fields.ts", source },
+      ]);
+      assert.deepEqual(report.errors, []);
+      // An undeclared editFields key is still an undeclared write.
+      const undeclared = source.replace(
+        'editFields: [{ key: "cardSpec"',
+        'editFields: [{ key: "nope"'
+      );
+      const undeclaredReport = checkDefinitionSources([
+        { path: "bad.ts", source: undeclared },
+      ]);
+      assert.ok(
+        undeclaredReport.errors.some((e) =>
+          e.includes("writes undeclared in the state type")
+        ),
+        `expected an undeclared-write error, got: ${undeclaredReport.errors.join("; ")}`
+      );
+    });
+
     it("flags a write that is never read as a warning, and an undeclared write as an error", () => {
       // The KNOWN_GOOD flow's record_verdict op writes `verdict`, which the
       // approved gate reads — no warning. Remove the gate's read to expose

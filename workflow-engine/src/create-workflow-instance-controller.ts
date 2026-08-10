@@ -14,6 +14,7 @@ import type {
 } from "./task-runner";
 import type {
   ChatMessage,
+  ConfigField,
   ModelCallStatus,
   RunningTaskContext,
   RuntimeWorkflowConfig,
@@ -36,6 +37,10 @@ export type WorkflowInstanceControllerAPI = {
   id: string;
   getState(): RuntimeWorkflowInstanceState;
   getAvailableActions(): VisibleAction[];
+  // The workflow's declared editable instance-state fields (WorkflowConfig
+  // editFields). The server validates instance-edit payloads against these
+  // before patching state; empty when the workflow is not editable.
+  getEditFields(): ConfigField[];
   on(handler: EventHandler): () => void;
   dispatchAction(actionId: string, payload?: Record<string, unknown>): void;
   startTask(taskId: string, metadata?: Record<string, unknown>): Promise<void>;
@@ -349,6 +354,7 @@ export function createWorkflowInstanceController(
     },
     getState: () => state,
     getAvailableActions: getVisibleActions,
+    getEditFields: () => workflow.editFields ?? [],
     on: (handler: EventHandler) => {
       handlers.push(handler);
       return () => {

@@ -24,8 +24,16 @@ WORKFLOW: {
   "states": [ STATE, ... ],
   "instance": { "title": "title" },   // optional; dotted path into instanceState
   "ui": { "view": "board", "columns": [ { "id": "ready", "label": "Ready", "states": ["ready"] } ] },  // optional
-  "display": { "fields": [ { "path": "description", "label": "Description" } ] }                          // optional
+  "display": { "fields": [ { "path": "description", "label": "Description" } ] },                          // optional
+  "editFields": [ CONFIG FIELD, ... ]  // optional; the instance-state fields a user may edit in place via the "Edit details" form. Keys MUST be declared in instanceState. Each entry is a CONFIG FIELD (below).
 }
+
+CONFIG FIELD (configSchema entries and createInstance "fields"; validated before render — type must be one of the list):
+  { "key": "title", "label": "Title", "type": "string", "required": true }   // string | boolean | number | textarea | date | datetime | string[]
+  // textarea: multiline string. date: "YYYY-MM-DD". datetime: "YYYY-MM-DDTHH:mm".
+  // string[]: multi-select; with "options" a closed set (each chosen value must be in it), without a free tag list.
+  // "options": ["a", "b"] on a string field renders a single select; on string[] a multi-select.
+  // "placeholder": "…" (input placeholder) and "defaultValue": … (pre-fill) are optional on any field.
 
 STATE: {
   "id": "running",

@@ -152,6 +152,37 @@ const actionApiDefinition = {
   ],
 } satisfies FlowDefinition;
 
+const editableWorkflow = defineWorkflow({
+  id: "ticket",
+  label: "Ticket",
+  taskOutputs: {} as Record<string, never>,
+  // The curated editable subset: the generic UI renders an "Edit details"
+  // form from these and patches instance state in place.
+  editFields: [
+    { key: "title", label: "Title", type: "string", required: true },
+    { key: "due", label: "Due", type: "date" },
+    {
+      key: "tags",
+      label: "Tags",
+      type: "string[]",
+      options: ["bug", "feat"],
+    },
+  ],
+  states: [
+    { id: "open", label: "Open", category: "initial" },
+    { id: "closed", label: "Closed", category: "terminal" },
+  ],
+  initial: "open",
+  terminalStates: ["closed"],
+});
+
+const editableDefinition = {
+  id: "editable-def",
+  label: "Editable Definition",
+  workflows: [editableWorkflow],
+  edges: [],
+} satisfies FlowDefinition;
+
 const flowDefinitionSource = `
 import { defineWorkflow } from "workflow-engine/workflow-types";
 
@@ -396,6 +427,150 @@ describe("flow API routes", () => {
 
     assert.equal(response.statusCode, 404);
     assert.equal(response.json().error, "Instance not found");
+  });
+
+  it("PATCH state validates against editFields and patches instance state", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition(editableDefinition);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const createResponse = await server.inject({
+      method: "POST",
+      url: "/api/flows",
+      body: { definitionId: "editable-def", config: { name: "Editable Flow" } },
+    });
+    const flowId = createResponse.json().flowId as string;
+
+    const listResponse = await server.inject({
+      method: "GET",
+      url: `/api/flows/${flowId}/instances`,
+    });
+    const instanceId = listResponse.json().instances[0].id as string;
+    // The entry exposes the workflow's editFields for the UI.
+    assert.deepEqual(
+      listResponse
+        .json()
+        .instances[0].editFields.map((f: { key: string }) => f.key),
+      ["title", "due", "tags"]
+    );
+
+    const patchResponse = await server.inject({
+      method: "PATCH",
+      url: `/api/flows/${flowId}/instances/${instanceId}/state`,
+      body: { values: { title: "Renamed", due: "2024-08-10", tags: ["bug"] } },
+    });
+    assert.equal(patchResponse.statusCode, 200);
+    const body = patchResponse.json();
+    assert.equal(body.instanceId, instanceId);
+    assert.deepEqual(body.state.workflowInstanceState, {
+      title: "Renamed",
+      due: "2024-08-10",
+      tags: ["bug"],
+    });
+  });
+
+  it("PATCH state rejects unknown keys, bad types, and unknown options", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition(editableDefinition);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const createResponse = await server.inject({
+      method: "POST",
+      url: "/api/flows",
+      body: { definitionId: "editable-def", config: { name: "Editable Flow" } },
+    });
+    const flowId = createResponse.json().flowId as string;
+
+    const listResponse = await server.inject({
+      method: "GET",
+      url: `/api/flows/${flowId}/instances`,
+    });
+    const instanceId = listResponse.json().instances[0].id as string;
+    const url = `/api/flows/${flowId}/instances/${instanceId}/state`;
+
+    const unknown = await server.inject({
+      method: "PATCH",
+      url,
+      body: { values: { title: "X", bogus: 1 } },
+    });
+    assert.equal(unknown.statusCode, 400);
+    assert.match(unknown.json().error, /Unknown field "bogus"/);
+
+    const missing = await server.inject({
+      method: "PATCH",
+      url,
+      body: { values: {} },
+    });
+    assert.equal(missing.statusCode, 400);
+    assert.match(missing.json().error, /Missing required field "title"/);
+
+    const badType = await server.inject({
+      method: "PATCH",
+      url,
+      body: { values: { title: "X", due: "2024-13-40" } },
+    });
+    assert.equal(badType.statusCode, 400);
+    assert.match(badType.json().error, /must be a date/);
+
+    const badOption = await server.inject({
+      method: "PATCH",
+      url,
+      body: { values: { title: "X", tags: ["bogus"] } },
+    });
+    assert.equal(badOption.statusCode, 400);
+    assert.match(badOption.json().error, /outside the allowed options/);
+  });
+
+  it("PATCH state returns 400 for a workflow with no editFields", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition(actionApiDefinition);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const createResponse = await server.inject({
+      method: "POST",
+      url: "/api/flows",
+      body: { definitionId: "action-def", config: { name: "Action Flow" } },
+    });
+    const flowId = createResponse.json().flowId as string;
+
+    const listResponse = await server.inject({
+      method: "GET",
+      url: `/api/flows/${flowId}/instances`,
+    });
+    const instanceId = listResponse.json().instances[0].id as string;
+
+    const response = await server.inject({
+      method: "PATCH",
+      url: `/api/flows/${flowId}/instances/${instanceId}/state`,
+      body: { values: { title: "X" } },
+    });
+    assert.equal(response.statusCode, 400);
+    assert.equal(response.json().error, "Instance is not editable");
+  });
+
+  it("PATCH state returns 404 for an unknown flow or instance", async () => {
+    const server = fixture();
+    const notFound = await server.inject({
+      method: "PATCH",
+      url: "/api/flows/unknown/instances/some-id/state",
+      body: { values: {} },
+    });
+    assert.equal(notFound.statusCode, 404);
+    assert.equal(notFound.json().error, "Flow not found");
+
+    const missingInstance = await server.inject({
+      method: "PATCH",
+      url: "/api/flows/test-flow/instances/bogus-id/state",
+      body: { values: {} },
+    });
+    assert.equal(missingInstance.statusCode, 404);
+    assert.equal(missingInstance.json().error, "Instance not found");
   });
 
   it("POST flow-level action creates an instance from the form payload", async () => {

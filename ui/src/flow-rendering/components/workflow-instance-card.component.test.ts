@@ -142,6 +142,71 @@ describe("WorkflowInstanceCard", () => {
     expect(el.getAttribute("data-on-action")).toBe("run");
   });
 
+  it("hides the edit button when the workflow declares no editFields", async () => {
+    const el = await mount(card());
+    await settle(shadowRootOf(el));
+    expect(shadowRootOf(el).querySelector(".edit-btn")).toBeNull();
+  });
+
+  it("opens a pre-filled edit form and submits collected values via onPatchState", async () => {
+    const instance = entry("c1", "ready", {
+      workflowInstanceState: {
+        title: "Current title",
+        due: "2024-08-10",
+      },
+    });
+    instance.editFields = [
+      { key: "title", label: "Title", type: "string", required: true },
+      { key: "due", label: "Due", type: "date" },
+    ];
+    const el = await mount(card(undefined, instance));
+    el.onPatchState = (values: Record<string, unknown>) => {
+      el.setAttribute("data-patch", JSON.stringify(values));
+    };
+    await settle(shadowRootOf(el));
+
+    const editButton = mustQuery(
+      shadowRootOf(el),
+      "button.edit-btn"
+    ) as HTMLButtonElement;
+    editButton.dispatchEvent(click());
+    await settle(shadowRootOf(el));
+
+    const form = shadowRootOf(el).querySelector("config-field-form");
+    expect(form).not.toBeNull();
+    const formRoot = (form as HTMLElement).shadowRoot as ShadowRoot;
+    // The form is pre-filled from instance state.
+    const text = formRoot.querySelector(
+      'input[type="text"]'
+    ) as HTMLInputElement;
+    expect(text.value).toBe("Current title");
+    const date = formRoot.querySelector(
+      'input[type="date"]'
+    ) as HTMLInputElement;
+    expect(date.value).toBe("2024-08-10");
+
+    // Change the title and submit.
+    text.value = "Renamed title";
+    text.dispatchEvent(new Event("input", { bubbles: true }));
+    await el.updateComplete;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const submit = queryAllDeep(
+      form as unknown as WorkflowInstanceCard,
+      "button"
+    ).find((b) => b.textContent?.trim() === "Save");
+    expect(submit).toBeDefined();
+    submit?.dispatchEvent(click());
+    await el.updateComplete;
+
+    expect(JSON.parse(el.getAttribute("data-patch") ?? "{}")).toEqual({
+      title: "Renamed title",
+      due: "2024-08-10",
+    });
+    // The form closes after submit.
+    expect(shadowRootOf(el).querySelector("config-field-form")).toBeNull();
+  });
+
   it("renders state-path dots when history has transitions", async () => {
     const instance = entry("c1", "done", {
       history: [

@@ -318,6 +318,9 @@ export class WorkflowInstances extends LitElement {
         onSendMessage: (content: string) => {
           this.emitSendMessage(entry.id, content);
         },
+        onPatchState: (values: Record<string, unknown>) => {
+          this.emitPatchState(entry.id, values);
+        },
       }}
     ></dynamic-element-host>`;
   }
@@ -336,6 +339,19 @@ export class WorkflowInstances extends LitElement {
     this.dispatchEvent(
       new CustomEvent("hive-send-message", {
         detail: { flowId: this.flowId, instanceId, content },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  private emitPatchState(
+    instanceId: string,
+    values: Record<string, unknown>
+  ): void {
+    this.dispatchEvent(
+      new CustomEvent("hive-patch-state", {
+        detail: { flowId: this.flowId, instanceId, values },
         bubbles: true,
         composed: true,
       })

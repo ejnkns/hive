@@ -39,6 +39,10 @@ function json(value: string | number | boolean): string {
   return JSON.stringify(value);
 }
 
+function jsonValue(value: string | number | boolean | string[]): string {
+  return Array.isArray(value) ? `[${value.map(json).join(", ")}]` : json(value);
+}
+
 function fieldType(type: FieldType): string {
   switch (type) {
     case "string":
@@ -96,6 +100,8 @@ function renderConfigField(f: {
   type: string;
   required?: boolean;
   hint?: string;
+  placeholder?: string;
+  defaultValue?: string | boolean | number | string[];
   options?: string[];
 }): string {
   const parts = [
@@ -105,6 +111,9 @@ function renderConfigField(f: {
   ];
   if (f.required !== undefined) parts.push(`required: ${f.required}`);
   if (f.hint) parts.push(`hint: ${json(f.hint)}`);
+  if (f.placeholder) parts.push(`placeholder: ${json(f.placeholder)}`);
+  if (f.defaultValue !== undefined)
+    parts.push(`defaultValue: ${jsonValue(f.defaultValue)}`);
   if (f.options) parts.push(`options: [${f.options.map(json).join(", ")}]`);
   return `{ ${parts.join(", ")} }`;
 }
@@ -116,6 +125,8 @@ function renderConfigFields(
     type: string;
     required?: boolean;
     hint?: string;
+    placeholder?: string;
+    defaultValue?: string | boolean | number | string[];
     options?: string[];
   }[]
 ): string {
@@ -538,6 +549,9 @@ export function renderFlowDefinition(spec: FlowSpec): string {
         })
         .join(", ");
       emit(1, `display: { fields: [${fields}] },`);
+    }
+    if (wf.editFields !== undefined && wf.editFields.length > 0) {
+      emit(1, `editFields: [${renderConfigFields(wf.editFields)}],`);
     }
     if (tasks.length > 0) {
       emit(1, `taskOutputs: {} as ${p}TaskOutputs,`);

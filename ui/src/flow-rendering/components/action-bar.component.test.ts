@@ -84,4 +84,52 @@ describe("ActionBar", () => {
     expect(emitted).toBe(false);
     expect(shadowRootOf(el).querySelector(".confirm-row")).toBeNull();
   });
+
+  it("opens the field form for a fielded action and emits the collected payload", async () => {
+    const fielded = {
+      ...action("correct", "Correct"),
+      fields: [
+        {
+          key: "note",
+          label: "Note",
+          type: "textarea" as const,
+          required: true,
+        },
+      ],
+    };
+    const el = await mount(
+      Object.assign(new ActionBar(), { actions: [fielded] })
+    );
+    await settle(shadowRootOf(el));
+
+    const correct = buttons(el)[0];
+    correct?.dispatchEvent(click());
+    await el.updateComplete;
+
+    const form = shadowRootOf(el).querySelector("config-field-form");
+    expect(form).not.toBeNull();
+
+    // The form's submit is gated until the required textarea is filled.
+    const formRoot = (form as HTMLElement).shadowRoot as ShadowRoot;
+    const textarea = formRoot.querySelector("textarea") as HTMLTextAreaElement;
+    textarea.value = "Fix the totals";
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    await el.updateComplete;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const emitted = new Promise<CustomEvent>((resolve) =>
+      el.addEventListener("hive-action", resolve as EventListener, {
+        once: true,
+      })
+    );
+    const submit = queryAllDeep(form as unknown as ActionBar, "button").find(
+      (b) => b.textContent?.trim() === "Submit"
+    );
+    expect(submit).toBeDefined();
+    submit?.dispatchEvent(click());
+    expect((await emitted).detail).toEqual({
+      actionId: "correct",
+      payload: { note: "Fix the totals" },
+    });
+  });
 });

@@ -68,6 +68,7 @@ export function entry(
       ...overrides,
     },
     availableActions: [],
+    editFields: [],
   };
 }
 

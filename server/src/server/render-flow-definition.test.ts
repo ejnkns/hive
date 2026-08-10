@@ -695,4 +695,100 @@ describe("render flow definition", () => {
       /fields: \[{ key: "note", label: "What to fix", type: "string", required: true }\],/
     );
   });
+
+  it("renders richer configSchema field types with placeholder and defaultValue", async () => {
+    const spec: FlowSpec = {
+      id: "richFlow",
+      label: "Rich Flow",
+      configSchema: [
+        { key: "note", label: "Note", type: "textarea" },
+        {
+          key: "tags",
+          label: "Tags",
+          type: "string[]",
+          options: ["a", "b"],
+          placeholder: "Pick tags",
+          defaultValue: ["a"],
+        },
+        { key: "due", label: "Due", type: "date", required: true },
+      ],
+      workflows: [
+        {
+          id: "rich",
+          label: "Rich",
+          instanceState: [],
+          initialState: "running",
+          terminalStates: ["done"],
+          states: [
+            {
+              id: "running",
+              label: "Running",
+              category: "active",
+              tasks: [
+                {
+                  id: "work",
+                  label: "Work",
+                  role: "ai-task",
+                  completionTool: "complete_task",
+                },
+              ],
+              autoTransitions: [
+                { to: "done", gate: { kind: "taskSuccess", task: "work" } },
+              ],
+            },
+            { id: "done", label: "Done", category: "terminal" },
+          ],
+        },
+      ],
+      actions: [],
+      edges: [],
+    };
+
+    const source = await assertRenderedPassesGate(spec, "corpus-rich-fields");
+    assert.match(source, /type: "textarea"/);
+    assert.match(source, /type: "string\[\]"/);
+    assert.match(source, /type: "date", required: true/);
+    assert.match(source, /placeholder: "Pick tags"/);
+    assert.match(source, /defaultValue: \["a"\]/);
+  });
+
+  it("renders editFields on a workflow", async () => {
+    const spec: FlowSpec = {
+      id: "editFlow",
+      label: "Edit Flow",
+      configSchema: [],
+      workflows: [
+        {
+          id: "ticket",
+          label: "Ticket",
+          instance: { title: "title" },
+          instanceState: [{ field: "title", type: "string" }],
+          editFields: [
+            { key: "title", label: "Title", type: "string", required: true },
+          ],
+          initialState: "open",
+          terminalStates: ["closed"],
+          states: [
+            {
+              id: "open",
+              label: "Open",
+              category: "initial",
+              actions: [
+                { id: "close", label: "Close", transitionTo: "closed" },
+              ],
+            },
+            { id: "closed", label: "Closed", category: "terminal" },
+          ],
+        },
+      ],
+      actions: [],
+      edges: [],
+    };
+
+    const source = await assertRenderedPassesGate(spec, "corpus-edit-fields");
+    assert.match(
+      source,
+      /editFields: \[{ key: "title", label: "Title", type: "string", required: true }\],/
+    );
+  });
 });

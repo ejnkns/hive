@@ -14,4 +14,9 @@ export type InstanceComponentProps = {
   customKinds: readonly CustomRenderKind[];
   onAction(actionId: string, payload?: Record<string, unknown>): void;
   onSendMessage(content: string): Promise<void>;
+  // Optional: invoked with the collected values of the workflow's editFields
+  // when the user submits the "Edit details" form. Absent on custom
+  // components that predate the instance-edit surface — they simply render no
+  // edit affordance (or handle it themselves).
+  onPatchState?(values: Record<string, unknown>): void;
 };

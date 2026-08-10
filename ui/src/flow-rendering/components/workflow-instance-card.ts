@@ -12,6 +12,8 @@ import type {
 import { type ResolvedRender, resolveRender } from "../contract-resolution";
 import { getKindRenderer } from "../renderer-registry";
 import { resolvePath } from "../resolve-path";
+import "./config-field-form";
+import type { ConfigFieldFormValue } from "./config-field-form";
 import "./dynamic-element-host";
 import type { CardsViewItem } from "./cards-view";
 import { statePath } from "./workflow-instance-card/state-path";
@@ -34,6 +36,8 @@ export class WorkflowInstanceCard extends LitElement {
     instanceEntry: { attribute: false },
     customKinds: { attribute: false },
     compact: { type: Boolean },
+    // Reactive so the edit form toggles re-render when opened/closed.
+    editing: { attribute: false },
   };
 
   // Callback props (the InstanceComponentProps contract). When provided they
@@ -43,6 +47,12 @@ export class WorkflowInstanceCard extends LitElement {
     | ((actionId: string, payload?: Record<string, unknown>) => void)
     | undefined = undefined;
   onSendMessage: ((content: string) => Promise<void>) | undefined = undefined;
+  // The instance-edit submit path (optional — see InstanceComponentProps).
+  onPatchState: ((values: Record<string, unknown>) => void) | undefined =
+    undefined;
+
+  // Reactive so the edit form toggles re-render.
+  editing = false;
 
   static styles = css`
     :host {
@@ -207,6 +217,30 @@ export class WorkflowInstanceCard extends LitElement {
 
     .card-actions {
       margin-top: 0.25rem;
+    }
+
+    .edit-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.375rem;
+    }
+
+    button.edit-btn {
+      font-family: inherit;
+      font-size: 0.6875rem;
+      height: 26px;
+      padding: 0 0.625rem;
+      border-radius: 5px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    button.edit-btn:hover {
+      background: var(--border);
     }
   `;
 
@@ -432,13 +466,78 @@ export class WorkflowInstanceCard extends LitElement {
     const actions = [...this.instanceEntry.availableActions].sort(
       byVariantPriority
     );
-    if (actions.length === 0) return nothing;
+    const editFields = this.instanceEntry.editFields ?? [];
+    if (actions.length === 0 && editFields.length === 0) return nothing;
     return html`<div class="card-actions">
-      <action-bar
-        .actions=${actions}
-        @hive-action=${this.handleAction}
-      ></action-bar>
+      ${
+        this.editing
+          ? html`<config-field-form
+              .fields=${editFields}
+              .values=${this.editPrefill()}
+              .submitLabel=${"Save"}
+              @hive-fields-submit=${this.handleEditSubmit}
+              @hive-fields-cancel=${() => (this.editing = false)}
+            ></config-field-form>`
+          : html`<div class="edit-row">
+              <action-bar
+                .actions=${actions}
+                @hive-action=${this.handleAction}
+              ></action-bar>
+              ${
+                editFields.length > 0
+                  ? html`<button
+                      class="edit-btn"
+                      @click=${() => (this.editing = true)}
+                    >
+                      Edit details
+                    </button>`
+                  : nothing
+              }
+            </div>`
+      }
     </div>`;
+  }
+
+  // Pre-fill the edit form from the instance's current state — only for
+  // values shaped like the declared field types (the form's value type is
+  // scalar/array; an object the agent wrote under a listed key is skipped so
+  // the patch cannot echo it back).
+  private editPrefill(): Record<string, ConfigFieldFormValue> {
+    const state = this.instanceEntry.state.workflowInstanceState;
+    const result: Record<string, ConfigFieldFormValue> = {};
+    for (const field of this.instanceEntry.editFields ?? []) {
+      const value = state[field.key];
+      if (
+        typeof value === "string" ||
+        typeof value === "boolean" ||
+        typeof value === "number" ||
+        Array.isArray(value)
+      ) {
+        result[field.key] = value as ConfigFieldFormValue;
+      }
+    }
+    return result;
+  }
+
+  private handleEditSubmit = (
+    event: CustomEvent<{ values: Record<string, ConfigFieldFormValue> }>
+  ) => {
+    this.editing = false;
+    this.emitPatchState(event.detail.values);
+  };
+
+  private emitPatchState(values: Record<string, unknown>): void {
+    if (this.onPatchState !== undefined) {
+      this.onPatchState(values);
+      return;
+    }
+    this.dispatchEvent(
+      new CustomEvent("hive-patch-state", {
+        detail: { instanceId: this.instanceEntry.id, values },
+        bubbles: true,
+        composed: true,
+      })
+    );
   }
 
   private findTaskDef(taskId: string): SerializedTaskDef | undefined {

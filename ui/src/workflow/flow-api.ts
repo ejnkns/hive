@@ -111,6 +111,12 @@ export type TaskInputResult = {
   runningTaskContext: WorkflowInstanceEntry["state"]["runningTaskContext"];
 };
 
+export type PatchInstanceStateResult = {
+  instanceId: string;
+  state: WorkflowInstanceEntry["state"];
+  availableActions: WorkflowInstanceEntry["availableActions"];
+};
+
 // Push-authoritative frames the flow WebSocket sends. The server pushes
 // self-contained whole-flow snapshots; the client replaces its store entry
 // directly instead of refetching over REST. init replaces the whole store on
@@ -422,6 +428,31 @@ export async function dispatchFlowAction(
 
   // Success response shape is guaranteed by the server endpoint
   return (await res.json()) as Record<string, unknown>;
+}
+
+export async function patchInstanceState(
+  flowId: string,
+  instanceId: string,
+  values: Record<string, unknown>
+): Promise<PatchInstanceStateResult> {
+  const res = await fetch(
+    `/api/flows/${encodeURIComponent(flowId)}/instances/${encodeURIComponent(instanceId)}/state`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ values }),
+    }
+  );
+
+  if (!res.ok) {
+    // Error response shape is guaranteed by the server endpoint
+    const err = (await res.json()) as { error?: string };
+    throw new Error(err.error ?? `State patch rejected: ${res.statusText}`);
+  }
+
+  // Success response shape matches PatchInstanceStateResult by contract with
+  // the server endpoint
+  return (await res.json()) as PatchInstanceStateResult;
 }
 
 export async function sendTaskInput(

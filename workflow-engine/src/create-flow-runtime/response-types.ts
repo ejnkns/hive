@@ -4,6 +4,7 @@ import type { RuntimeWorkflowInstanceState } from "../shared/workflow-instance-s
 import type {
   ActionVariant,
   BoardColumn,
+  ConfigField,
   DisplayHint,
   RuntimeRenderHint,
   StateCategory,
@@ -47,4 +48,8 @@ export type WorkflowInstanceEntry = {
   workflowId: string;
   state: RuntimeWorkflowInstanceState;
   availableActions: VisibleAction[];
+  // The workflow's declared editable instance-state fields; the UI renders an
+  // "Edit details" form from these and patches instance state through the
+  // state API. Empty/absent when the workflow is not editable.
+  editFields: ConfigField[];
 };

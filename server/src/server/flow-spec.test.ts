@@ -87,6 +87,89 @@ describe("validateFlowSpec", () => {
     assert.deepEqual(errorsFor(VALID), []);
   });
 
+  it("accepts configSchema fields with the richer types", () => {
+    const spec: FlowSpec = {
+      ...VALID,
+      configSchema: [
+        { key: "note", label: "Note", type: "textarea" },
+        { key: "due", label: "Due", type: "date", required: true },
+        { key: "deadline", label: "Deadline", type: "datetime" },
+        {
+          key: "tags",
+          label: "Tags",
+          type: "string[]",
+          options: ["a", "b"],
+          placeholder: "Pick tags",
+          defaultValue: ["a"],
+        },
+      ],
+    };
+    assert.deepEqual(errorsFor(spec), []);
+  });
+
+  it("rejects a configSchema field with a malformed options list", () => {
+    const spec: FlowSpec = {
+      ...VALID,
+      configSchema: [
+        {
+          key: "kind",
+          label: "Kind",
+          type: "string",
+          options: ["a", 2],
+        } as unknown as FlowSpec["configSchema"][number],
+      ],
+    };
+    const errors = errorsFor(spec);
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0].path, "configSchema[0]");
+  });
+
+  it("accepts editFields whose keys are declared in instanceState", () => {
+    const spec: FlowSpec = {
+      ...VALID,
+      workflows: [
+        {
+          ...VALID.workflows[0],
+          instanceState: [
+            { field: "title", type: "string" },
+            { field: "due", type: "string" },
+          ],
+          editFields: [
+            { key: "title", label: "Title", type: "string", required: true },
+            { key: "due", label: "Due", type: "date" },
+          ],
+        },
+      ],
+    };
+    assert.deepEqual(errorsFor(spec), []);
+  });
+
+  it("rejects an editFields key not declared in instanceState", () => {
+    const spec: FlowSpec = {
+      ...VALID,
+      workflows: [
+        {
+          ...VALID.workflows[0],
+          editFields: [{ key: "bogus", label: "Bogus", type: "string" }],
+        },
+      ],
+    };
+    const errors = errorsFor(spec);
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0].path, "workflows[0].editFields[0].key");
+    assert.match(errors[0].message, /not declared in instanceState/);
+  });
+
+  it("rejects an empty editFields declaration", () => {
+    const spec: FlowSpec = {
+      ...VALID,
+      workflows: [{ ...VALID.workflows[0], editFields: [] }],
+    };
+    const errors = errorsFor(spec);
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0].path, "workflows[0].editFields");
+  });
+
   it("rejects a gate referencing an unknown task", () => {
     const bad: FlowSpec = {
       ...VALID,

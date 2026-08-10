@@ -2,6 +2,7 @@
 
 import "./components/item-header";
 import "./components/action-bar";
+import "./components/config-field-form";
 import "./components/message-list";
 import "./components/chat-session";
 import "./components/agent-progress";

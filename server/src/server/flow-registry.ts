@@ -4,6 +4,11 @@ import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { logger } from "shared/logger";
 import {
+  collectConfigFieldValues,
+  configFieldValueError,
+  isEmptyConfigFieldValue,
+} from "workflow-engine/collect-config-field-values";
+import {
   createFlowRuntime,
   type FlowRuntimeAPI,
   type FlowRuntimeEvent,
@@ -124,6 +129,10 @@ export function validateInstanceConfig(
       if (field.required) errors.push(`Missing required field "${field.key}"`);
       continue;
     }
+    if (field.required && isEmptyConfigFieldValue(value)) {
+      errors.push(`Required field "${field.key}" cannot be empty`);
+      continue;
+    }
     if (!configValueMatchesType(field, value)) {
       errors.push(`Config field "${field.key}" must be a ${field.type}`);
     }
@@ -136,15 +145,11 @@ export function validateInstanceConfig(
   return errors;
 }
 
+// Value type-matching delegated to the shared engine validator so every
+// ConfigField type (string[]/date/datetime/...) is enforced identically here
+// and in the engine. Options membership is part of the shared check too.
 function configValueMatchesType(field: ConfigField, value: unknown): boolean {
-  switch (field.type) {
-    case "string":
-      return typeof value === "string";
-    case "boolean":
-      return typeof value === "boolean";
-    case "number":
-      return typeof value === "number" && Number.isFinite(value);
-  }
+  return configFieldValueError(field, value) === null;
 }
 
 // ── Flow-level actions ──
@@ -287,39 +292,18 @@ function buildFlowGateContext(
 
 // Validates a createInstance form payload against its declared ConfigFields:
 // unknown fields rejected, required fields present, values type-checked. The
-// collected values become the new instance's workflowInstanceState.
+// collected values become the new instance's workflowInstanceState. Delegates
+// to the shared engine validator (collect-config-field-values.ts) so action
+// payloads and createInstance payloads enforce identical rules.
 function collectActionFields(
   fields: ConfigField[] | undefined,
   payload: Record<string, unknown>
 ): Record<string, unknown> {
-  const declared = new Set((fields ?? []).map((field) => field.key));
-  for (const key of Object.keys(payload)) {
-    if (!declared.has(key)) {
-      throw new HttpError(400, `Unknown field "${key}"`);
-    }
+  const collected = collectConfigFieldValues(fields ?? [], payload);
+  if (!collected.ok) {
+    throw new HttpError(400, collected.error);
   }
-
-  const collected: Record<string, unknown> = {};
-  for (const field of fields ?? []) {
-    const value = payload[field.key];
-    if (value === undefined) {
-      if (field.required) {
-        throw new HttpError(400, `Missing required field "${field.key}"`);
-      }
-      continue;
-    }
-    if (field.required && typeof value === "string" && value.trim() === "") {
-      // Mirrors the UI's required-field check: an empty string is a missing
-      // required value, and an instance created without its payload field
-      // would auto-run its ai-task on an empty prompt.
-      throw new HttpError(400, `Required field "${field.key}" cannot be empty`);
-    }
-    if (!configValueMatchesType(field, value)) {
-      throw new HttpError(400, `Field "${field.key}" must be a ${field.type}`);
-    }
-    collected[field.key] = value;
-  }
-  return collected;
+  return collected.values;
 }
 
 // ── Persistence accessors ──

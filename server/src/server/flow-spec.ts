@@ -156,6 +156,9 @@ export type WorkflowSpec = {
   display?: {
     fields: { path: string; label?: string; render?: RuntimeRenderHint }[];
   };
+  // Optional curated set of instance-state fields a user may edit in place via
+  // the instance-edit form. Keys must be declared in instanceState (validated).
+  editFields?: ConfigField[];
   instanceState: InstanceStateField[];
   initialState: string;
   terminalStates: string[];
@@ -237,7 +240,14 @@ function isConfigField(value: unknown): value is ConfigField {
     typeof field.label === "string" &&
     (field.type === "string" ||
       field.type === "boolean" ||
-      field.type === "number")
+      field.type === "number" ||
+      field.type === "textarea" ||
+      field.type === "date" ||
+      field.type === "datetime" ||
+      field.type === "string[]") &&
+    (field.options === undefined ||
+      (Array.isArray(field.options) &&
+        field.options.every((o) => typeof o === "string")))
   );
 }
 
@@ -666,6 +676,33 @@ export function validateFlowSpec(spec: FlowSpec): SpecError[] {
       }
     }
 
+    // editFields: the curated editable subset — every key must be declared in
+    // instanceState and each entry a valid ConfigField. A non-empty array is
+    // required when declared (an empty declaration is a no-op).
+    if (wf.editFields !== undefined) {
+      if (wf.editFields.length === 0) {
+        error(
+          `${wfPath}.editFields`,
+          "editFields must be empty or omitted — a workflow with nothing editable needs no declaration"
+        );
+      }
+      wf.editFields.forEach((field, i) => {
+        if (!isConfigField(field)) {
+          error(
+            `${wfPath}.editFields[${i}]`,
+            `invalid config field: ${JSON.stringify(field)}`
+          );
+          return;
+        }
+        if (!stateTypes.has(field.key)) {
+          error(
+            `${wfPath}.editFields[${i}].key`,
+            `edit field "${field.key}" is not declared in instanceState (declared: ${[...stateTypes.keys()].join(", ")})`
+          );
+        }
+      });
+    }
+
     if (wf.ui) {
       if (
         wf.ui.view !== undefined &&
@@ -969,6 +1006,8 @@ export function validateFlowSpec(spec: FlowSpec): SpecError[] {
         for (const field of action.createInstance.fields) writes.add(field.key);
       }
     }
+    // 5. editFields: the instance-edit form patches exactly these keys.
+    for (const field of wf.editFields ?? []) writes.add(field.key);
 
     const allWrites = new Set([...writes, ...ENGINE_PROVIDED]);
     const reads: Set<string> = new Set();

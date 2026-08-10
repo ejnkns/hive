@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { PassThrough } from "node:stream";
 import type { FastifyInstance } from "fastify";
 import { slugify } from "shared/slugify";
+import { collectConfigFieldValues } from "workflow-engine/collect-config-field-values";
 import { AUTHORING_DEFINITION_ID } from "./flow-authoring";
 import {
   DefinitionAlreadyExistsError,
@@ -223,6 +224,53 @@ export function registerFlowApiRoutes(server: FastifyInstance): void {
         instanceId,
         previousState: before,
         currentState: after,
+        state: controller.getState(),
+        availableActions: controller.getAvailableActions(),
+      });
+    }
+  );
+
+  server.patch(
+    "/api/flows/:flowId/instances/:instanceId/state",
+    async (request, reply) => {
+      // Fastify params type is erased; shape guaranteed by route pattern
+      const { flowId, instanceId } = request.params as {
+        flowId: string;
+        instanceId: string;
+      };
+      const body = request.body as Record<string, unknown> | null;
+
+      const runtime = getFlowRuntime(flowId);
+      if (!runtime) {
+        return reply.status(404).send({ error: "Flow not found" });
+      }
+
+      const controller = runtime.getWorkflowInstance(instanceId);
+      if (!controller) {
+        return reply.status(404).send({ error: "Instance not found" });
+      }
+
+      // The workflow's declared editFields are the exact contract: unknown
+      // keys rejected, required fields present, values type-checked — through
+      // the same shared validator action payloads use.
+      const editFields = controller.getEditFields();
+      if (editFields.length === 0) {
+        return reply.status(400).send({ error: "Instance is not editable" });
+      }
+
+      const payload =
+        body?.values !== null && typeof body?.values === "object"
+          ? (body.values as Record<string, unknown>)
+          : {};
+      const collected = collectConfigFieldValues(editFields, payload);
+      if (!collected.ok) {
+        return reply.status(400).send({ error: collected.error });
+      }
+
+      controller.patchWorkflowInstanceState(collected.values);
+
+      return reply.send({
+        instanceId,
         state: controller.getState(),
         availableActions: controller.getAvailableActions(),
       });

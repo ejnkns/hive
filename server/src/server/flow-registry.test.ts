@@ -405,6 +405,25 @@ const actionDefinition = {
       },
     },
     {
+      id: "add_issue",
+      label: "Add issue",
+      variant: "primary",
+      createInstance: {
+        workflowId: "item",
+        fields: [
+          { key: "title", label: "Title", type: "string", required: true },
+          { key: "due", label: "Due", type: "date" },
+          {
+            key: "tags",
+            label: "Tags",
+            type: "string[]",
+            options: ["bug", "feat"],
+          },
+          { key: "note", label: "Note", type: "textarea" },
+        ],
+      },
+    },
+    {
       id: "approve_all",
       label: "Approve all",
       dispatchToAll: { workflowId: "item", actionId: "finish" },
@@ -447,6 +466,7 @@ describe("flow-level actions", () => {
       actions.map((a) => ({ id: a.id, variant: a.variant })),
       [
         { id: "add_item", variant: "primary" },
+        { id: "add_issue", variant: "primary" },
         { id: "approve_all", variant: "default" },
       ]
     );
@@ -503,6 +523,52 @@ describe("flow-level actions", () => {
     assert.throws(
       () => dispatchFlowLevelAction("flow-a", "add_item", { title: "   " }),
       /cannot be empty/
+    );
+  });
+
+  it("createInstance accepts and validates richer field types", () => {
+    createFlow("flow-a", "action-def", persistence);
+    const result = dispatchFlowLevelAction("flow-a", "add_issue", {
+      title: "Fog on the dashboard",
+      due: "2024-08-10",
+      tags: ["bug", "feat"],
+      note: "Saw it twice",
+    });
+    assert.equal(result.kind, "create_instance");
+    const created = runtimeEntries("flow-a").find(
+      (entry) => entry.id === result.instance.id
+    );
+    assert.ok(created);
+    assert.deepEqual(created.state.workflowInstanceState, {
+      title: "Fog on the dashboard",
+      due: "2024-08-10",
+      tags: ["bug", "feat"],
+      note: "Saw it twice",
+    });
+
+    assert.throws(
+      () =>
+        dispatchFlowLevelAction("flow-a", "add_issue", {
+          title: "X",
+          due: "2024-13-40",
+        }),
+      /must be a date/
+    );
+    assert.throws(
+      () =>
+        dispatchFlowLevelAction("flow-a", "add_issue", {
+          title: "X",
+          tags: ["bogus"],
+        }),
+      /outside the allowed options/
+    );
+    assert.throws(
+      () =>
+        dispatchFlowLevelAction("flow-a", "add_issue", {
+          title: "X",
+          tags: "bug",
+        }),
+      /must be a string\[\]/
     );
   });
 

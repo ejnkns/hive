@@ -1,13 +1,13 @@
-import { css, html, LitElement, nothing } from "lit";
-import type {
-  ConfigField,
-  VisibleAction,
-} from "workflow-engine/workflow-types";
+import { css, html, LitElement } from "lit";
+import type { VisibleAction } from "workflow-engine/workflow-types";
+import "./config-field-form";
+import type { ConfigFieldFormValue } from "./config-field-form";
 
 // The action row on a workflow instance: buttons per available action, with a
 // two-click confirm for destructive variants and an inline form when an action
 // declares input fields (the collected values dispatch with the action and are
-// written into the instance's state).
+// written into the instance's state). The form itself lives in
+// <config-field-form>, shared with the instance-edit affordance.
 export class ActionBar extends LitElement {
   static properties = {
     actions: { attribute: false },
@@ -40,65 +40,6 @@ export class ActionBar extends LitElement {
       color: var(--error);
       font-weight: 600;
       margin-right: auto;
-    }
-
-    .form {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      width: 100%;
-      padding: 0.5rem;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: var(--bg);
-    }
-
-    .form-field {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-    }
-
-    .form-label {
-      font-size: 0.625rem;
-      font-weight: 600;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .form-hint {
-      font-size: 0.625rem;
-      color: var(--muted);
-    }
-
-    .form-row {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    input[type="text"],
-    select {
-      font: inherit;
-      font-size: 0.6875rem;
-      padding: 0.25rem 0.5rem;
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      background: var(--surface);
-      color: var(--text);
-      outline: none;
-    }
-
-    input[type="text"]:focus,
-    select:focus {
-      border-color: var(--accent);
-    }
-
-    .form-actions {
-      display: flex;
-      gap: 0.375rem;
-      justify-content: flex-end;
     }
 
     button {
@@ -148,24 +89,18 @@ export class ActionBar extends LitElement {
 
   pendingConfirm: string | null = null;
   formAction: VisibleAction | null = null;
-  private formValues: Record<string, string | boolean | number> = {};
 
   render() {
     const formAction = this.formAction;
     if (formAction !== null && formAction.fields !== undefined) {
-      return html`<div class="form">
-        ${formAction.fields.map((field) => this.renderField(field))}
-        <div class="form-actions">
-          <button
-            class="primary"
-            ?disabled=${!this.formValid(formAction.fields)}
-            @click=${() => this.submitForm(formAction)}
-          >
-            Submit
-          </button>
-          <button @click=${() => (this.formAction = null)}>Cancel</button>
-        </div>
-      </div>`;
+      return html`<config-field-form
+        .fields=${formAction.fields}
+        .values=${{}}
+        @hive-fields-submit=${(
+          event: CustomEvent<{ values: Record<string, ConfigFieldFormValue> }>
+        ) => this.submitForm(formAction, event.detail.values)}
+        @hive-fields-cancel=${() => (this.formAction = null)}
+      ></config-field-form>`;
     }
     return html`<div class="actions">
       ${this.actions.map((action) =>
@@ -194,80 +129,8 @@ export class ActionBar extends LitElement {
     </div>`;
   }
 
-  private renderField(field: ConfigField) {
-    const value = this.formValues[field.key];
-    if (field.type === "boolean") {
-      return html`<label class="form-field">
-        <span class="form-label">${field.label}</span>
-        <span class="form-row">
-          <input
-            type="checkbox"
-            ?checked=${value === true}
-            @change=${(event: Event) => {
-              this.formValues[field.key] = (
-                event.target as HTMLInputElement
-              ).checked;
-              this.requestUpdate();
-            }}
-          />
-          ${field.hint ? html`<span class="form-hint">${field.hint}</span>` : nothing}
-        </span>
-      </label>`;
-    }
-    if (field.options && field.options.length > 0) {
-      return html`<label class="form-field">
-        <span class="form-label"
-          >${field.label}${field.required ? " *" : ""}</span
-        >
-        <select
-          @change=${(event: Event) => {
-            this.formValues[field.key] = (
-              event.target as HTMLSelectElement
-            ).value;
-            this.requestUpdate();
-          }}
-        >
-          <option value="" ?selected=${value === undefined} disabled>
-            Select...
-          </option>
-          ${field.options.map(
-            (option) => html`<option
-              value=${option}
-              ?selected=${value === option}
-            >
-              ${option}
-            </option>`
-          )}
-        </select>
-      </label>`;
-    }
-    return html`<label class="form-field">
-      <span class="form-label"
-        >${field.label}${field.required ? " *" : ""}</span
-      >
-      <input
-        type="text"
-        .value=${typeof value === "string" ? value : ""}
-        placeholder=${field.hint ?? ""}
-        @input=${(event: Event) => {
-          this.formValues[field.key] = (event.target as HTMLInputElement).value;
-          this.requestUpdate();
-        }}
-      />
-    </label>`;
-  }
-
-  private formValid(fields: ConfigField[]): boolean {
-    return fields.every((field) => {
-      const value = this.formValues[field.key];
-      if (field.type === "boolean") return true;
-      return value !== undefined && String(value).trim() !== "";
-    });
-  }
-
   private handleAction(action: VisibleAction): void {
     if (action.fields !== undefined && action.fields.length > 0) {
-      this.formValues = {};
       this.formAction = action;
       return;
     }
@@ -283,9 +146,12 @@ export class ActionBar extends LitElement {
     this.emitAction(actionId);
   }
 
-  private submitForm(action: VisibleAction): void {
+  private submitForm(
+    action: VisibleAction,
+    values: Record<string, ConfigFieldFormValue>
+  ): void {
     this.formAction = null;
-    this.emitAction(action.id, { ...this.formValues });
+    this.emitAction(action.id, values);
   }
 
   private emitAction(

@@ -441,6 +441,15 @@ export type WorkflowConfig<
   // The workflow-instance body hint: which workflowInstanceState fields to
   // show, each with an optional render hint. Pure data.
   display?: DisplayHint<TWorkflowInstanceState>;
+  // A curated, user-editable subset of workflowInstanceState: when declared,
+  // the generic UI renders an "Edit details" form on each instance of this
+  // workflow (pre-filled from current state) and submits validated values
+  // through the instance-state patch API. The collected values are validated
+  // against these fields (collectConfigFieldValues) — unknown keys rejected,
+  // required enforced — and written into workflowInstanceState in place (no
+  // transition, no attempt bump). Fields the engine or agents write that are
+  // not listed here stay untouched and uneditable in the UI.
+  editFields?: ConfigField[];
   // Per-workflow rendering hooks. Pure data.
   ui?: {
     // Registry-resolved custom instance renderer; falls back to the default
@@ -510,6 +519,24 @@ export type FlowEdge<
 
 export type RuntimeFlowEdge = FlowEdge;
 
+// The value/input type of a ConfigField. `type` drives both validation and
+// rendering (the existing code conflates value type with presentation — e.g.
+// "string" + options renders a single select). Canonical stored formats:
+//   "date"     → "YYYY-MM-DD" (what <input type="date"> emits)
+//   "datetime" → "YYYY-MM-DDTHH:mm" (what <input type="datetime-local"> emits)
+//   "string[]" → array of strings; with `options` a multi-select (every chosen
+//                 value must be in `options`), without a free-form tag list
+// The canonical formats are validated server-side (collectConfigFieldValues)
+// and by the UI renderers, so stored values never drift.
+export type ConfigFieldType =
+  | "string"
+  | "boolean"
+  | "number"
+  | "textarea"
+  | "date"
+  | "datetime"
+  | "string[]";
+
 // A field a definition's instances take as input at instantiation time.
 // Declared by the definition (configSchema) and rendered by the UI as a form;
 // the server validates instance config against it (required fields, types,
@@ -517,12 +544,21 @@ export type RuntimeFlowEdge = FlowEdge;
 export type ConfigField = {
   key: string;
   label: string;
-  type: "string" | "boolean" | "number";
+  type: ConfigFieldType;
   required?: boolean;
   hint?: string;
+  // Placeholder text inside the input. Unlike `hint` (helper text under the
+  // field), this fills the control's empty state.
+  placeholder?: string;
+  // Pre-fill value. Rendered as the control's initial value when the form
+  // opens (createInstance forms, and the gap-2 instance-edit form which passes
+  // the current instance state through this prop).
+  defaultValue?: string | boolean | number | string[];
   // For string fields: a closed set of allowed values. The server still
   // validates the value as a string; the UI renders a select instead of a free
-  // text input. Optional and additive — absent means free text.
+  // text input. Optional and additive — absent means free text. For "string[]"
+  // fields: the closed set a multi-select may choose from; absent means a free
+  // tag list.
   options?: string[];
 };
 

@@ -21,6 +21,7 @@ let {
   components,
   onAction,
   onSendMessage,
+  onPatchState,
 }: {
   flowId: string;
   workflowDefs: WorkflowDefResponse[];
@@ -39,6 +40,11 @@ let {
     instanceId: string,
     content: string
   ) => Promise<void>;
+  onPatchState?: (
+    flowId: string,
+    instanceId: string,
+    values: Record<string, unknown>
+  ) => void;
 } = $props();
 
 let host: WorkflowInstances | null = null;
@@ -113,10 +119,26 @@ function handleSendMessage(
     event.detail.content
   );
 }
+
+function handlePatchState(
+  event: CustomEvent<{
+    flowId: string;
+    instanceId: string;
+    values: Record<string, unknown>;
+  }>
+) {
+  if (!event.detail.flowId || !event.detail.instanceId) return;
+  onPatchState?.(
+    event.detail.flowId,
+    event.detail.instanceId,
+    event.detail.values
+  );
+}
 </script>
 
 <workflow-instances
   bind:this={host}
   onhive-action={handleAction}
   onhive-send-message={handleSendMessage}
+  onhive-patch-state={handlePatchState}
 ></workflow-instances>

@@ -3,7 +3,9 @@ import { slugify } from "shared/slugify";
 import { onMount } from "svelte";
 import Button from "../shared/ui/Button.svelte";
 import TextInput from "../shared/ui/TextInput.svelte";
-import ConfigFieldInput from "./ConfigFieldInput.svelte";
+import ConfigFieldInput, {
+  type ConfigFieldValue,
+} from "./ConfigFieldInput.svelte";
 import type { FlowDefinitionDetail } from "./flow-api";
 import { createFlow, fetchFlowDefinition } from "./flow-api";
 
@@ -11,7 +13,7 @@ let { definitionId }: { definitionId: string } = $props();
 
 let definition = $state<FlowDefinitionDetail | null>(null);
 let name = $state("");
-let values = $state<Record<string, string | boolean | number>>({});
+let values = $state<Record<string, ConfigFieldValue>>({});
 let loading = $state(true);
 let error = $state<string | null>(null);
 let submitting = $state(false);
@@ -41,6 +43,9 @@ function missingRequired(): string | null {
       if (value === undefined || value === "") {
         return `Field "${field.label}" is required`;
       }
+      if (Array.isArray(value) && value.length === 0) {
+        return `Field "${field.label}" is required`;
+      }
     }
   }
   return null;
@@ -65,9 +70,10 @@ async function submit() {
     const config: Record<string, unknown> = { name: name.trim() };
     for (const field of definition.configSchema) {
       const value = values[field.key];
-      if (value !== undefined && value !== "") {
-        config[field.key] = value;
-      }
+      if (value === undefined) continue;
+      if (typeof value === "string" && value === "") continue;
+      if (Array.isArray(value) && value.length === 0) continue;
+      config[field.key] = value;
     }
     await createFlow({ definitionId, config });
     const slug = slugify(name.trim());

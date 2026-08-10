@@ -235,12 +235,16 @@ export function createFlowRuntime<
   }
 
   function getWorkflowInstanceEntries(): WorkflowInstanceEntry[] {
-    return Array.from(controllers.entries()).map(([id, ctrl]) => ({
-      id,
-      workflowId: instanceWorkflowIds.get(id) ?? "",
-      state: ctrl.getState(),
-      availableActions: ctrl.getAvailableActions(),
-    }));
+    return Array.from(controllers.entries()).map(([id, ctrl]) => {
+      const workflowId = instanceWorkflowIds.get(id) ?? "";
+      return {
+        id,
+        workflowId,
+        state: ctrl.getState(),
+        availableActions: ctrl.getAvailableActions(),
+        editFields: workflowMap.get(workflowId)?.editFields ?? [],
+      };
+    });
   }
 
   function addWorkflowInstance(

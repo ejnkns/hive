@@ -2,13 +2,16 @@
 import { onMount } from "svelte";
 import Button from "../shared/ui/Button.svelte";
 import Dialog from "../shared/ui/Dialog.svelte";
-import ConfigFieldInput from "./ConfigFieldInput.svelte";
+import ConfigFieldInput, {
+  type ConfigFieldValue,
+} from "./ConfigFieldInput.svelte";
 import type { FlowLevelAction } from "./flow-api";
 import {
   deleteFlow,
   dispatchAction,
   dispatchFlowAction,
   fetchFlows,
+  patchInstanceState,
   sendTaskInput,
 } from "./flow-api";
 import { flowStore } from "./flow-store.svelte";
@@ -31,7 +34,7 @@ let deleteBusy = $state(false);
 
 let actionDialogOpen = $state(false);
 let activeFlowAction = $state<FlowLevelAction | null>(null);
-let actionValues = $state<Record<string, string | boolean | number>>({});
+let actionValues = $state<Record<string, ConfigFieldValue>>({});
 let actionBusy = $state(false);
 let activeDispatchId = $state<string | null>(null);
 
@@ -108,6 +111,18 @@ async function handleSendMessage(
   await sendTaskInput(flowId, instanceId, content);
 }
 
+async function handlePatchState(
+  flowId: string,
+  instanceId: string,
+  values: Record<string, unknown>
+) {
+  try {
+    await patchInstanceState(flowId, instanceId, values);
+  } catch (err) {
+    error = err instanceof Error ? err.message : "State patch failed";
+  }
+}
+
 async function removeInstance(purge: boolean) {
   if (!flow) return;
   deleteBusy = true;
@@ -168,7 +183,9 @@ function missingRequiredActionField(): boolean {
   return fields.some((field) => {
     if (!field.required) return false;
     const value = actionValues[field.key];
-    return value === undefined || value === "";
+    if (value === undefined || value === "") return true;
+    if (Array.isArray(value) && value.length === 0) return true;
+    return false;
   });
 }
 
@@ -246,6 +263,7 @@ function submitFlowActionForm() {
         components={flow.ui?.components ?? {}}
         onAction={handleAction}
         onSendMessage={handleSendMessage}
+        onPatchState={handlePatchState}
       />
     </div>
   {/if}
