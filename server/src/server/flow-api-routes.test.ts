@@ -1100,10 +1100,11 @@ describe("flow API routes", () => {
     } else {
       assert.fail("drafting must run an ai-chat session");
     }
-    assert.equal(
-      controller?.getAvailableActions().length,
-      0,
-      "the session has no workflow actions — generation is editor-driven"
+    const available = controller?.getAvailableActions();
+    assert.deepEqual(
+      available?.map((action) => action.id),
+      ["validate", "save"],
+      "the drafting state exposes the validate/save actions (executed REST-side by the shell, design Q5)"
     );
   });
 

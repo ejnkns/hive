@@ -1,4 +1,5 @@
-/** @private — only imported by DefinitionEditor.svelte */
+/** @public — the TS highlighter for the rendering surface (DefinitionEditor and
+ * flow-editor share it). */
 
 // A lightweight TypeScript tokenizer for editor highlighting: comments,
 // strings, numbers, and keywords get wrapped in token spans; everything else is

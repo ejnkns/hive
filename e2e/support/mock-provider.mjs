@@ -52,6 +52,9 @@ function completionFor(payload) {
   if (systemText.includes("You are the Requirements Agent")) {
     return requirementsCompletion(messages);
   }
+  if (systemText.includes("You are an AI flow-design assistant")) {
+    return authoringCompletion(messages);
+  }
   if (systemText.includes("You are the Planner Agent")) {
     return plannerCompletion(messages);
   }
@@ -66,6 +69,38 @@ function completionFor(payload) {
     return reviewerCompletion(messages);
   }
   throw new Error("Mock provider received an unknown Agent Role");
+}
+
+// The flow-authoring session (lucky mode): the agent produces the spec and
+// generates the definition in one conversation — set_flow_spec lands the live
+// preview, generate_definition runs the real engine gate and writes the
+// source/suggestedName the editor's save action registers.
+function authoringCompletion(messages) {
+  const toolMessages = messages.filter((message) => message.role === "tool");
+  const lastMessage = messages.at(-1);
+  if (toolMessages.length === 0) {
+    return toolCompletion(
+      [
+        toolCall("author-spec", "set_flow_spec", {
+          spec: JSON.stringify(AUTHORING_SPEC),
+        }),
+      ],
+      "mock authoring reasoning"
+    );
+  }
+  if (lastMessage?.tool_call_id === "author-spec") {
+    return toolCompletion(
+      [
+        toolCall("author-gen", "generate_definition", {
+          spec: JSON.stringify(AUTHORING_SPEC),
+        }),
+      ],
+      "mock authoring reasoning"
+    );
+  }
+  return textCompletion(
+    "The definition is ready — summarize it for the user."
+  );
 }
 
 function requirementsCompletion(messages) {
@@ -315,3 +350,66 @@ Display a deterministic greeting.
 
 - Localized greetings.
 `;
+
+// The gate-clean FlowSpec the mock authoring agent produces: a review flow
+// whose items move from new to done via manual actions, with a createInstance
+// flow-level action writing the title field (the writer the title reads
+// need). The real generate_definition gate runs against it in the e2e.
+const AUTHORING_SPEC = {
+  id: "reviewFlow",
+  label: "Review Flow",
+  description: "A review flow with a ready state and approve/reject actions.",
+  configSchema: [],
+  workflows: [
+    {
+      id: "items",
+      label: "Items",
+      instance: { title: "title" },
+      display: { fields: [{ path: "title", label: "Title" }] },
+      instanceState: [{ field: "title", type: "string" }],
+      initialState: "new",
+      terminalStates: ["done"],
+      states: [
+        {
+          id: "new",
+          label: "New",
+          category: "initial",
+          actions: [
+            {
+              id: "complete",
+              label: "Complete",
+              variant: "primary",
+              transitionTo: "done",
+            },
+            {
+              id: "reject",
+              label: "Reject",
+              variant: "destructive",
+              transitionTo: "done",
+            },
+          ],
+        },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  actions: [
+    {
+      id: "add_item",
+      label: "Add an item",
+      variant: "primary",
+      createInstance: {
+        workflowId: "items",
+        fields: [
+          {
+            key: "title",
+            label: "Title",
+            type: "string",
+            required: true,
+          },
+        ],
+      },
+    },
+  ],
+  edges: [],
+};

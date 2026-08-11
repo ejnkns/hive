@@ -57,6 +57,10 @@ export type AuthoringItemState = {
   source?: string;
   // The spec's label — a suggested name for the saved definition.
   suggestedName?: string;
+  // The registered definition id after a successful save. Written by the
+  // shell-side save path (REST) or a future engine-native definition
+  // registration capability — declared now so the editor can reflect it.
+  savedDefinitionId?: string;
 };
 
 // ─── shared gate machinery ────────────────────────────────────────────
@@ -339,8 +343,9 @@ const sessionWorkflow = defineWorkflow({
   instance: { title: "prompt" },
   // There is only ever one session instance — a board with 300px columns
   // would cramp the chat and preview. A flat list renders one full-width
-  // card carrying its state.
-  ui: { view: "list" },
+  // card carrying its state; the instance component (flow-editor) renders
+  // the session as the editor: header, chat, tokenized preview, actions.
+  ui: { view: "list", instanceComponent: "flow-editor" },
   display: {
     fields: [{ path: "prompt", label: "Request" }],
   },
@@ -351,6 +356,25 @@ const sessionWorkflow = defineWorkflow({
       id: "drafting",
       label: "Drafting",
       category: "initial",
+      // Validate and save render as actions on the session card; the Svelte
+      // shell executes the app-level effect (REST) via handleAuthorAction
+      // (design Q5) — the engine has no definition-registration capability
+      // yet, so these transitions never dispatch. transitionTo targets the
+      // current state so the definition stays schema-valid if ever routed.
+      actions: [
+        {
+          id: "validate",
+          label: "Validate",
+          variant: "secondary",
+          transitionTo: "drafting",
+        },
+        {
+          id: "save",
+          label: "Save definition",
+          variant: "primary",
+          transitionTo: "drafting",
+        },
+      ],
       tasks: [
         {
           id: "assistant",

@@ -4,21 +4,19 @@ import { onMount } from "svelte";
 import {
   authorFlowDefinition,
   createFlowDefinition,
-  deleteFlow,
   deleteFlowDefinition,
   dispatchAction,
   fetchFlow,
   fetchFlowDefinition,
-  type GenerationReport,
   sendTaskInput,
   updateFlowDefinition,
   validateFlowDefinition,
-} from "../flow-api";
+} from "../flow-api.ts";
+import { highlightTypeScript } from "../flow-rendering/ts-highlight.ts";
 import Button from "../shared/ui/Button.svelte";
 import Dialog from "../shared/ui/Dialog.svelte";
 import Textarea from "../shared/ui/Textarea.svelte";
 import TextInput from "../shared/ui/TextInput.svelte";
-import { highlightTypeScript } from "./DefinitionEditor/highlight";
 import { flowStore } from "./flow-store.svelte";
 import LitFlowHost from "./LitFlowHost.svelte";
 
@@ -74,7 +72,6 @@ let deleteOpen = $state(false);
 let authorFlowId = $state<string | null>(null);
 let authorInstanceId = $state<string | null>(null);
 let authoring = $state(false);
-let previewOpen = $state(true);
 let lastAppliedSource = $state<string | null>(null);
 
 // The session flow, live from the store (WS snapshots keep it current).
@@ -84,18 +81,6 @@ const authorFlow = $derived(
 const authorSession = $derived(
   authorFlow?.instances.find((instance) => instance.id === authorInstanceId) ??
     null
-);
-
-// The agent's latest spec draft, rendered as TypeScript for the live preview.
-const authorPreviewSource = $derived(
-  typeof authorSession?.state.workflowInstanceState.previewSource === "string"
-    ? authorSession.state.workflowInstanceState.previewSource
-    : ""
-);
-const authorPreviewErrors = $derived(
-  Array.isArray(authorSession?.state.workflowInstanceState.previewErrors)
-    ? authorSession.state.workflowInstanceState.previewErrors
-    : []
 );
 
 // When the agent's generate_definition tool succeeds, its source lands in
@@ -117,8 +102,6 @@ $effect(() => {
   if (name.trim() === "" && typeof suggested === "string" && suggested !== "") {
     name = suggested;
   }
-  generationReport = authorSession?.state.workflowInstanceState
-    .report as GenerationReport | null;
 });
 
 // Resume a session after a reload: the session flow persists server-side; the
@@ -155,40 +138,6 @@ async function startAuthoring(lucky: boolean) {
   }
 }
 
-// The editor's Generate button asks the agent to run the gate on the current
-// draft. It needs a spec draft, and it is only actionable when the agent is
-// idle — clicking it while the agent is mid-turn would queue a message for
-// later, which reads as broken.
-const canGenerate = $derived(
-  authorSession !== null &&
-    !authorSession.state.hasRunningTask &&
-    typeof authorSession.state.workflowInstanceState.spec === "string" &&
-    authorSession.state.workflowInstanceState.spec !== ""
-);
-
-async function requestGenerate() {
-  if (!authorFlowId || !authorInstanceId || !canGenerate) return;
-  await sendTaskInput(
-    authorFlowId,
-    authorInstanceId,
-    "Generate the definition from the current spec draft."
-  );
-}
-
-async function closeAuthoring() {
-  if (!authorFlowId) return;
-  try {
-    await deleteFlow(authorFlowId, true);
-  } catch {
-    // The session is disposable; a failed delete is not an error.
-  }
-  flowStore.removeFlow(authorFlowId);
-  localStorage.removeItem(authorStorageKey());
-  authorFlowId = null;
-  authorInstanceId = null;
-  lastAppliedSource = null;
-}
-
 async function resumeAuthoring(): Promise<void> {
   // A new definition always starts fresh: the previous new-definition session
   // (keyed "new") must not leak in — its source and "done" state are stale.
@@ -220,12 +169,24 @@ async function resumeAuthoring(): Promise<void> {
   }
 }
 
+// The session card's validate/save actions render in the flow-editor's action
+// row; the shell executes the app-level effect — REST — by design (Q5): the
+// engine has no definition-registration capability yet, so these actions never
+// dispatch through the engine. Any other action falls through to dispatch.
 async function handleAuthorAction(
   flowId: string,
   instanceId: string,
   actionId: string,
   payload?: Record<string, unknown>
 ) {
+  if (actionId === "validate") {
+    await validateSessionSource(flowId, instanceId);
+    return;
+  }
+  if (actionId === "save") {
+    await saveSessionDefinition(flowId, instanceId);
+    return;
+  }
   try {
     await dispatchAction(flowId, instanceId, actionId, payload);
   } catch (err) {
@@ -241,18 +202,115 @@ async function handleAuthorSend(
   await sendTaskInput(flowId, instanceId, content);
 }
 
-function authorStateLabel(): string {
-  if (typeof authorSession?.state.workflowInstanceState.source === "string") {
-    return "Definition generated — refine or save";
+// The live session state the shell executes against — the flow-editor renders
+// the same state, so what the user sees is what save/validate act on.
+async function sessionInstanceState(
+  flowId: string,
+  instanceId: string
+): Promise<Record<string, unknown> | null> {
+  const fromStore = flowStore
+    .getFlow(flowId)
+    ?.instances.find((instance) => instance.id === instanceId);
+  if (fromStore) return fromStore.state.workflowInstanceState;
+  try {
+    const flow = await fetchFlow(flowId);
+    return (
+      flow.instances.find((instance) => instance.id === instanceId)?.state
+        .workflowInstanceState ?? null
+    );
+  } catch {
+    return null;
   }
-  const mode = authorSession?.state.workflowInstanceState.mode;
-  return mode === "lucky"
-    ? "Generating the definition…"
-    : "Drafting — chat with the agent";
 }
-// The last generation's gate outcome (errors = why the definition still
-// fails the schema/typecheck gate; the source is still loaded for editing).
-let generationReport = $state<GenerationReport | null>(null);
+
+// The session's gate-passed source and suggested name — the artifacts save
+// registers. Absent means the agent has not generated a definition yet.
+function sessionSavePayload(
+  state: Record<string, unknown> | null
+): { source: string; name: string } | null {
+  const source = typeof state?.source === "string" ? state.source : "";
+  if (source === "") return null;
+  const suggested =
+    typeof state?.suggestedName === "string" ? state.suggestedName : "";
+  return { source, name: suggested !== "" ? suggested : (definitionId ?? "") };
+}
+
+async function validateSessionSource(flowId: string, instanceId: string) {
+  const state = await sessionInstanceState(flowId, instanceId);
+  const payload = sessionSavePayload(state);
+  if (!payload) {
+    error =
+      "Nothing to validate — ask the agent to generate a definition first.";
+    return;
+  }
+  validating = true;
+  error = null;
+  try {
+    const result = await validateFlowDefinition(payload.source);
+    checkFindings = {
+      errors: result.checkErrors,
+      warnings: result.checkWarnings,
+      typeErrors: result.typeErrors,
+      loadError: result.loadError,
+    };
+  } catch (err) {
+    error =
+      err instanceof Error ? err.message : "Failed to validate definition";
+  } finally {
+    validating = false;
+  }
+}
+
+// The definition id a new-definition session last saved under, so subsequent
+// saves update it instead of registering duplicates.
+let savedDefinitionId = $state<string | null>(null);
+
+// Save registers the session's generated definition: create for a new
+// definition, update for an existing one (or a previously saved one). The
+// definition IS saved; consistency findings annotate it — stay in the editor
+// to show them, navigate when clean.
+async function saveSessionDefinition(flowId: string, instanceId: string) {
+  const state = await sessionInstanceState(flowId, instanceId);
+  const payload = sessionSavePayload(state);
+  if (!payload) {
+    error = "Nothing to save — ask the agent to generate a definition first.";
+    return;
+  }
+  saving = true;
+  error = null;
+  try {
+    const targetId = isNew ? savedDefinitionId : definitionId;
+    const result = targetId
+      ? await updateFlowDefinition(targetId, {
+          name: payload.name,
+          source: payload.source,
+        })
+      : await createFlowDefinition({
+          name: payload.name,
+          source: payload.source,
+        });
+    savedDefinitionId = result.id;
+    const errors = result.checkErrors ?? [];
+    const warnings = result.checkWarnings ?? [];
+    if (errors.length > 0 || warnings.length > 0) {
+      checkFindings = { errors, warnings };
+    } else {
+      checkFindings = null;
+      // Mark the editor clean so the navigation guard does not ask about
+      // "unsaved changes" that are already saved (the $effect copied the
+      // session's source/name into the manual editor).
+      loadedName = payload.name;
+      loadedSource = payload.source;
+      loadedDescription = description;
+      window.location.hash = `#/flows/${encodeURIComponent(result.id)}`;
+    }
+  } catch (err) {
+    error = err instanceof Error ? err.message : "Failed to save definition";
+  } finally {
+    saving = false;
+  }
+}
+
 // Findings from the save path or the validate button (non-blocking).
 type CheckFindings = {
   errors: string[];
@@ -490,84 +548,20 @@ async function remove() {
         {#if aiOpen}
           <div class="ai-body">
             {#if authorFlowId && authorFlow}
-              <div class="author-session">
-                <div class="author-header">
-                  <span class="author-state">{authorStateLabel()}</span>
-                  <span class="author-actions">
-                    <Button
-                      variant="mint"
-                      size="small"
-                      disabled={!canGenerate}
-                      onclick={requestGenerate}
-                    >
-                      Generate definition
-                    </Button>
-                    <button
-                      type="button"
-                      class="author-close"
-                      onclick={closeAuthoring}
-                    >
-                      Close session
-                    </button>
-                  </span>
-                </div>
-                <p class="author-hint">
-                  The agent keeps the spec draft up to date as you talk.
-                  "Generate definition" asks the agent to run the engine gate on
-                  the current draft and place the TypeScript in the editor; it
-                  is enabled once a draft exists and the agent is idle.
-                </p>
-                <LitFlowHost
-                  flowId={authorFlow.id}
-                  workflowDefs={authorFlow.workflows}
-                  instances={authorFlow.instances}
-                  customKinds={authorFlow.ui?.kinds ?? []}
-                  components={authorFlow.ui?.components ?? {}}
-                  onAction={handleAuthorAction}
-                  onSendMessage={handleAuthorSend}
-                />
-                {#if authorPreviewSource || authorPreviewErrors.length > 0}
-                  <div class="author-preview">
-                    <button
-                      type="button"
-                      class="pane-toggle"
-                      onclick={() => (previewOpen = !previewOpen)}
-                    >
-                      {previewOpen ? "Hide" : "Show"}
-                      spec preview
-                    </button>
-                    {#if authorPreviewErrors.length > 0}
-                      <p class="author-preview-notes-head">Draft notes</p>
-                      <ul class="author-preview-errors">
-                        {#each authorPreviewErrors as err}
-                          <li>{err}</li>
-                        {/each}
-                      </ul>
-                    {/if}
-                    {#if previewOpen && authorPreviewSource}
-                      <pre
-                        class="author-preview-source"
-                      >{authorPreviewSource}</pre>
-                    {/if}
-                  </div>
-                {/if}
-                {#if generationReport}
-                  <div class="report">
-                    {#if generationReport.passed}
-                      <p class="report-ok">
-                        Definition passed the gate — the source is in the
-                        editor. (Warnings:
-                        {generationReport.warnings.length})
-                      </p>
-                    {:else}
-                      <p class="report-bad">
-                        Definition failed the gate; the agent is fixing the
-                        findings.
-                      </p>
-                    {/if}
-                  </div>
-                {/if}
-              </div>
+              <!-- The authoring session renders as a flow instance: the
+                   built-in flow-editor composes the session header, the
+                   running chat, the tokenized spec preview, and the
+                   validate/save action row. The shell only mounts the
+                   rendering surface (Q4/Q5). -->
+              <LitFlowHost
+                flowId={authorFlow.id}
+                workflowDefs={authorFlow.workflows}
+                instances={authorFlow.instances}
+                customKinds={authorFlow.ui?.kinds ?? []}
+                components={authorFlow.ui?.components ?? {}}
+                onAction={handleAuthorAction}
+                onSendMessage={handleAuthorSend}
+              />
             {:else}
               <p class="ai-hint">
                 Describe the flow you want. The agent will ask what is unclear,
@@ -914,93 +908,6 @@ h1 {
 .report-note {
   margin: 0.5rem 0 0 0;
   font-style: italic;
-}
-
-.author-session {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.author-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  font-size: 0.6875rem;
-}
-
-.author-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex: none;
-}
-
-.author-state {
-  color: var(--text);
-  font-weight: 600;
-}
-
-.author-close {
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--muted);
-  font-size: 0.625rem;
-  padding: 0.25rem 0.5rem;
-  cursor: pointer;
-}
-
-.author-close:hover {
-  color: var(--error);
-  border-color: var(--error);
-}
-
-.author-hint {
-  margin: 0;
-  font-size: 0.6875rem;
-  color: var(--muted);
-  line-height: 1.5;
-}
-
-.author-preview {
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0.375rem 0.5rem;
-}
-
-.author-preview-errors {
-  margin: 0.25rem 0 0 0;
-  padding-left: 1.125rem;
-  color: var(--warning);
-  font-size: 0.6875rem;
-  line-height: 1.5;
-}
-
-.author-preview-notes-head {
-  margin: 0.375rem 0 0 0;
-  color: var(--muted);
-  font-size: 0.625rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.author-preview-source {
-  margin: 0.375rem 0 0 0;
-  max-height: 260px;
-  overflow-y: auto;
-  padding: 0.375rem 0.5rem;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  font-family: var(--font-mono, monospace);
-  font-size: 0.625rem;
-  line-height: 1.45;
-  color: var(--text);
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 
 .save-findings {
