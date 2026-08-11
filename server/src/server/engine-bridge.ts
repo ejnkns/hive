@@ -337,7 +337,7 @@ export function createEngineRunners(
       instanceId: ctx.instanceId,
       workflowId: ctx.workflowId,
       currentState: ctx.currentState,
-      workflowInstanceState: () => ctx.workflowInstanceState,
+      workflowInstanceState: ctx.workflowInstanceState,
       taskOutputs: () => ctx.taskOutputs,
       patchWorkflowInstanceState: ctx.patchWorkflowInstanceState,
       workflowInstancesInState: ctx.workflowInstancesInState,

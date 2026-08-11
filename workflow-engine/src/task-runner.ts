@@ -28,7 +28,7 @@ export type TaskRunnerContext = {
   instanceId: string;
   workflowId: string;
   currentState: string;
-  workflowInstanceState: Record<string, unknown>;
+  workflowInstanceState: () => Record<string, unknown>;
   patchWorkflowInstanceState(patch: Record<string, unknown>): void;
   // Completed task outputs on the instance, so operations can read sibling
   // tasks' results (e.g. finalize reading the draft session's output).

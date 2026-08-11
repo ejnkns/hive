@@ -63,7 +63,7 @@ function makeEngineRunner(
     instanceId: "card-1",
     workflowId: "cards",
     currentState: "ready",
-    workflowInstanceState: instanceState,
+    workflowInstanceState: () => instanceState,
     taskOutputs: {},
     patchWorkflowInstanceState: (patch: Record<string, unknown>) =>
       Object.assign(instanceState, patch),

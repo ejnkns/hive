@@ -6,6 +6,9 @@
 // gate run for real, proving the lifecycle without a provider call.
 
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 import { createFlowRuntime } from "workflow-engine/create-flow-runtime";
 import {
@@ -17,6 +20,10 @@ import {
 import type { ToolCall } from "workflow-engine/runners/tool-types";
 import type { TaskRunnerContext } from "workflow-engine/task-runner";
 import { STRUCTURED_INTAKE_EXEMPLAR } from "../flow-authoring.ts";
+import {
+  resetFlowDefinitionsForTest,
+  setDefinitionsBasePathForTest,
+} from "../flow-definitions.ts";
 import { validateFlowSpec } from "../flow-spec.ts";
 import {
   type AuthoringItemState,
@@ -24,6 +31,31 @@ import {
   authoringTools,
 } from "./session.ts";
 import { STARTER_SKELETON } from "./session-prompt.ts";
+
+// A gate-clean definition source the save_definition tool registers.
+const saveToolSource = `import { defineWorkflow } from "workflow-engine/workflow-types";
+
+const wf = defineWorkflow({
+  id: "review",
+  label: "Review",
+  taskOutputs: {} as Record<string, never>,
+  workflowInstanceState: {} as Record<string, unknown>,
+  states: [
+    { id: "new", label: "New", category: "initial" },
+    { id: "done", label: "Done", category: "terminal" },
+  ],
+  initial: "new",
+  terminalStates: ["done"],
+});
+
+export const flow = {
+  id: "review-flow",
+  label: "Review Flow",
+  configSchema: [],
+  workflows: [wf],
+  edges: [],
+};
+`;
 
 const toolMaps = toToolMaps(authoringTools);
 
@@ -334,5 +366,66 @@ describe("flow-authoring session", () => {
 
   it("the starter skeleton is a valid spec the agent begins from", () => {
     assert.deepEqual(validateFlowSpec(JSON.parse(STARTER_SKELETON)), []);
+  });
+
+  it("save_definition registers the generated definition and records the save in instance state", async () => {
+    const defsDir = mkdtempSync(join(tmpdir(), "hive-author-save-"));
+    setDefinitionsBasePathForTest(defsDir);
+    resetFlowDefinitionsForTest();
+    try {
+      const tool = authoringTools.find(
+        (t) => t.definition.function.name === "save_definition"
+      );
+      assert.ok(tool, "save_definition tool must be defined");
+
+      let state: AuthoringItemState = {
+        source: saveToolSource,
+        suggestedName: "Review Flow",
+      };
+      const result = await tool.executor(
+        { id: "s1", name: "save_definition", arguments: "{}" },
+        {
+          workflowInstanceState: () => state,
+          patchWorkflowInstanceState: (patch: Partial<AuthoringItemState>) => {
+            state = { ...state, ...patch };
+          },
+        } as never
+      );
+      assert.equal(result.isError, false);
+      assert.match(result.content, /review-flow/);
+      assert.equal(state.savedDefinitionId, "review-flow");
+      assert.ok(Array.isArray(state.saveFindings?.warnings));
+
+      // A second call updates the same definition (no duplicate).
+      const again = await tool.executor(
+        { id: "s2", name: "save_definition", arguments: "{}" },
+        {
+          workflowInstanceState: () => state,
+          patchWorkflowInstanceState: (patch: Partial<AuthoringItemState>) => {
+            state = { ...state, ...patch };
+          },
+        } as never
+      );
+      assert.equal(again.isError, false);
+      assert.equal(state.savedDefinitionId, "review-flow");
+    } finally {
+      rmSync(defsDir, { recursive: true, force: true });
+      resetFlowDefinitionsForTest();
+    }
+  });
+
+  it("save_definition rejects a session with no generated source", async () => {
+    const tool = authoringTools.find(
+      (t) => t.definition.function.name === "save_definition"
+    );
+    assert.ok(tool, "save_definition tool must be defined");
+    const result = await tool.executor(
+      { id: "s3", name: "save_definition", arguments: "{}" },
+      {
+        workflowInstanceState: () => ({}),
+      } as never
+    );
+    assert.equal(result.isError, true);
+    assert.match(result.content, /Nothing to save/);
   });
 });

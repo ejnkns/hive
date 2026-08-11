@@ -205,7 +205,7 @@ describe("createAiTaskRunner", () => {
       ]),
       toolDefinitions: toolDefs,
       toolExecutors: toolExecs,
-      workflowInstanceState: { worktreePath: worktree },
+      workflowInstanceState: () => ({ worktreePath: worktree }),
     });
 
     await runner.run({
@@ -226,7 +226,9 @@ describe("createAiTaskRunner", () => {
       },
       toolDefinitions: {},
       toolExecutors: {},
-      workflowInstanceState: { requirementsDraft: "# The requirements" },
+      workflowInstanceState: () => ({
+        requirementsDraft: "# The requirements",
+      }),
     });
 
     await runner.run({
@@ -248,7 +250,7 @@ describe("createAiTaskRunner", () => {
       },
       toolDefinitions: {},
       toolExecutors: {},
-      workflowInstanceState: {},
+      workflowInstanceState: () => ({}),
     });
 
     await assert.rejects(
@@ -271,7 +273,7 @@ describe("createAiTaskRunner", () => {
       },
       toolDefinitions: {},
       toolExecutors: {},
-      workflowInstanceState: {},
+      workflowInstanceState: () => ({}),
     });
 
     await assert.rejects(
@@ -299,7 +301,7 @@ describe("createAiTaskRunner", () => {
       },
       toolDefinitions: {},
       toolExecutors: {},
-      workflowInstanceState: {},
+      workflowInstanceState: () => ({}),
     });
 
     await assert.rejects(
@@ -325,7 +327,7 @@ describe("createAiTaskRunner", () => {
       modelCaller: mockCaller([{ content: "Hello!" }]),
       toolDefinitions: {},
       toolExecutors: {},
-      workflowInstanceState: {},
+      workflowInstanceState: () => ({}),
     });
 
     const result = await runner.run({

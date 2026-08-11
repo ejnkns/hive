@@ -9,6 +9,7 @@ import {
   dispatchAction,
   fetchFlow,
   fetchFlowDefinition,
+  saveAuthoringDefinition,
   sendTaskInput,
   updateFlowDefinition,
   validateFlowDefinition,
@@ -188,22 +189,19 @@ async function resumeAuthoring(): Promise<void> {
   }
 }
 
-// The session card's validate/save actions render in the flow-editor's action
-// row; the shell executes the app-level effect — REST — because the engine has
-// no definition-registration capability yet, so these actions never dispatch
-// through the engine. Any other action falls through to dispatch.
+// The flow-editor's Save button (in the chat window) emits hive-action
+// "save"; the shell answers it synchronously with the save route, which runs
+// the same saveAuthoringDefinition core as the agent's save_definition tool
+// and writes the result into the session's instance state (the flow-editor
+// renders it). Any other action falls through to dispatch.
 async function handleAuthorAction(
   flowId: string,
   instanceId: string,
   actionId: string,
   payload?: Record<string, unknown>
 ) {
-  if (actionId === "validate") {
-    await validateSessionSource(flowId, instanceId);
-    return;
-  }
   if (actionId === "save") {
-    await saveSessionDefinition(flowId, instanceId);
+    await saveFromSession(flowId);
     return;
   }
   try {
@@ -221,108 +219,13 @@ async function handleAuthorSend(
   await sendTaskInput(flowId, instanceId, content);
 }
 
-// The live session state the shell executes against — the flow-editor renders
-// the same state, so what the user sees is what save/validate act on.
-async function sessionInstanceState(
-  flowId: string,
-  instanceId: string
-): Promise<Record<string, unknown> | null> {
-  const fromStore = flowStore
-    .getFlow(flowId)
-    ?.instances.find((instance) => instance.id === instanceId);
-  if (fromStore) return fromStore.state.workflowInstanceState;
-  try {
-    const flow = await fetchFlow(flowId);
-    return (
-      flow.instances.find((instance) => instance.id === instanceId)?.state
-        .workflowInstanceState ?? null
-    );
-  } catch {
-    return null;
-  }
-}
-
-// The session's gate-passed source and suggested name — the artifacts save
-// registers. Absent means the agent has not generated a definition yet.
-function sessionSavePayload(
-  state: Record<string, unknown> | null
-): { source: string; name: string } | null {
-  const source = typeof state?.source === "string" ? state.source : "";
-  if (source === "") return null;
-  const suggested =
-    typeof state?.suggestedName === "string" ? state.suggestedName : "";
-  return { source, name: suggested !== "" ? suggested : (definitionId ?? "") };
-}
-
-async function validateSessionSource(flowId: string, instanceId: string) {
-  const state = await sessionInstanceState(flowId, instanceId);
-  const payload = sessionSavePayload(state);
-  if (!payload) {
-    error =
-      "Nothing to validate — ask the agent to generate a definition first.";
-    return;
-  }
-  validating = true;
-  error = null;
-  try {
-    const result = await validateFlowDefinition(payload.source);
-    checkFindings = {
-      errors: result.checkErrors,
-      warnings: result.checkWarnings,
-      typeErrors: result.typeErrors,
-      loadError: result.loadError,
-    };
-  } catch (err) {
-    error =
-      err instanceof Error ? err.message : "Failed to validate definition";
-  } finally {
-    validating = false;
-  }
-}
-
-// The definition id a new-definition session last saved under, so subsequent
-// saves update it instead of registering duplicates.
-let savedDefinitionId = $state<string | null>(null);
-
-// Save registers the session's generated definition: create for a new
-// definition, update for an existing one (or a previously saved one). The
-// definition IS saved; consistency findings annotate it — stay in the editor
-// to show them, navigate when clean.
-async function saveSessionDefinition(flowId: string, instanceId: string) {
-  const state = await sessionInstanceState(flowId, instanceId);
-  const payload = sessionSavePayload(state);
-  if (!payload) {
-    error = "Nothing to save — ask the agent to generate a definition first.";
-    return;
-  }
+// The synchronous session save. Findings render in the flow-editor (from the
+// patched instance state); failures surface here.
+async function saveFromSession(flowId: string) {
   saving = true;
   error = null;
   try {
-    const targetId = isNew ? savedDefinitionId : definitionId;
-    const result = targetId
-      ? await updateFlowDefinition(targetId, {
-          name: payload.name,
-          source: payload.source,
-        })
-      : await createFlowDefinition({
-          name: payload.name,
-          source: payload.source,
-        });
-    savedDefinitionId = result.id;
-    const errors = result.checkErrors ?? [];
-    const warnings = result.checkWarnings ?? [];
-    if (errors.length > 0 || warnings.length > 0) {
-      checkFindings = { errors, warnings };
-    } else {
-      checkFindings = null;
-      // Mark the editor clean so the navigation guard does not ask about
-      // "unsaved changes" that are already saved (the $effect copied the
-      // session's source/name into the manual editor).
-      loadedName = payload.name;
-      loadedSource = payload.source;
-      loadedDescription = description;
-      window.location.hash = `#/flows/${encodeURIComponent(result.id)}`;
-    }
+    await saveAuthoringDefinition(flowId);
   } catch (err) {
     error = err instanceof Error ? err.message : "Failed to save definition";
   } finally {

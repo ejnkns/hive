@@ -209,6 +209,32 @@ export const flow = {
 // A definition declaring a served-at-runtime component (FlowDefinition.ui.components):
 // the component source is authored as erasable-syntax TS inside the definition
 // source, transpiled by the server, and fetched by the rendering surface.
+// A gate-clean source the authoring session's save path registers (the e2e's
+// agent produces a review-flow equivalent).
+const authoringSaveSource = `import { defineWorkflow } from "workflow-engine/workflow-types";
+
+const wf = defineWorkflow({
+  id: "review",
+  label: "Review",
+  taskOutputs: {} as Record<string, never>,
+  workflowInstanceState: {} as Record<string, unknown>,
+  states: [
+    { id: "new", label: "New", category: "initial" },
+    { id: "done", label: "Done", category: "terminal" },
+  ],
+  initial: "new",
+  terminalStates: ["done"],
+});
+
+export const flow = {
+  id: "review-flow",
+  label: "Review Flow",
+  configSchema: [],
+  workflows: [wf],
+  edges: [],
+};
+`;
+
 const componentFlowSource = `
 import { defineWorkflow } from "workflow-engine/workflow-types";
 
@@ -1100,11 +1126,14 @@ describe("flow API routes", () => {
     } else {
       assert.fail("drafting must run an ai-chat session");
     }
-    const available = controller?.getAvailableActions();
+    // The session has no ManualActions: saving is a flow capability — the
+    // agent's save_definition tool and the editor's Save button both reach
+    // the same saveAuthoringDefinition core, so the drafting state declares
+    // no transitions.
     assert.deepEqual(
-      available?.map((action) => action.id),
-      ["validate", "save"],
-      "the drafting state exposes the validate/save actions (executed REST-side by the shell, never dispatched through the engine)"
+      controller?.getAvailableActions().map((action) => action.id),
+      [],
+      "drafting declares no manual actions — save is a tool, not a transition"
     );
   });
 
@@ -1143,6 +1172,70 @@ describe("flow API routes", () => {
     } else {
       assert.fail("lucky drafting must run an ai-chat session");
     }
+  });
+
+  it("POST /api/flows/definitions/author/:flowId/save registers the session's generated definition synchronously", async () => {
+    setFlowPersistence(noopPersistence);
+    const definitionsDir = mkdtempSync(join(tmpdir(), "hive-defs-"));
+    setDefinitionsBasePathForTest(definitionsDir);
+    registerFlowDefinition(authoringSessionFlow, { hidden: true });
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const created = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions/author",
+      body: { prompt: "Build a review flow", lucky: true },
+    });
+    assert.equal(created.statusCode, 201);
+    const { flowId, instanceId } = created.json() as {
+      flowId: string;
+      instanceId: string;
+    };
+
+    // Simulate the agent's generate_definition having landed the source.
+    const runtime = getFlowRuntime(flowId);
+    const controller = runtime?.getWorkflowInstance(instanceId);
+    controller?.patchWorkflowInstanceState({
+      source: authoringSaveSource,
+      suggestedName: "Review Flow",
+    });
+
+    const saved = await server.inject({
+      method: "POST",
+      url: `/api/flows/definitions/author/${flowId}/save`,
+      payload: {},
+    });
+    assert.equal(saved.statusCode, 200);
+    const body = saved.json() as {
+      id: string;
+      name: string;
+      checkErrors: string[];
+      checkWarnings: string[];
+    };
+    assert.equal(body.id, "review-flow");
+    assert.equal(body.name, "Review Flow");
+    assert.deepEqual(body.checkErrors, []);
+
+    // The save writes the flow instance state (the flow owns the write).
+    const state = controller?.getState().workflowInstanceState;
+    assert.equal(state?.savedDefinitionId, "review-flow");
+    // The wire state is erased to Record<string, unknown>; the shape is
+    // guaranteed by savePatch.
+    const saveFindings = state?.saveFindings as
+      | { warnings?: unknown[] }
+      | undefined;
+    assert.ok(Array.isArray(saveFindings?.warnings));
+
+    // A second save updates the same definition instead of duplicating.
+    const again = await server.inject({
+      method: "POST",
+      url: `/api/flows/definitions/author/${flowId}/save`,
+      payload: {},
+    });
+    assert.equal(again.statusCode, 200);
+    assert.equal((again.json() as { id: string }).id, "review-flow");
   });
 
   it("POST /api/flows/definitions/author requires a prompt", async () => {

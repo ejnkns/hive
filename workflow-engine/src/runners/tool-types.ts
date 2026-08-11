@@ -49,6 +49,13 @@ export type ToolContext<
   // Partial<TState> — a tool binds TState via defineTool<TState>, so a patch
   // can only write declared fields.
   patchWorkflowInstanceState?: (patch: Partial<TState>) => void;
+  // Reads the workflow instance's current domain data. A live getter (not a
+  // snapshot): patches made earlier in the same session — by the flow, a
+  // prior tool call, or the instance-state API — are visible. Mirrors
+  // OperationContext.workflowInstanceState so tools can decide from state
+  // (e.g. save_definition reading the generated source and the id of a
+  // previous save) instead of requiring every input as a parameter.
+  workflowInstanceState?: () => TState;
   // Creates a new workflow instance in this flow (the capability behind the
   // create_instance tool). Absent when the task does not declare it.
   createWorkflowInstance?: (

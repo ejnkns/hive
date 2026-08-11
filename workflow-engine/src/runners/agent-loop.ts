@@ -89,7 +89,11 @@ export type AgentLoopConfig = {
   patchRunningTaskStatus?: (status: ModelCallStatus) => void;
   // The instance's domain data, resolved against by @instance: workspacePath
   // refs (e.g. "@instance:worktreePath").
-  workflowInstanceState?: Record<string, unknown>;
+  // The instance's domain data, resolved against by @instance: workspacePath
+  // refs (e.g. "@instance:worktreePath"). A live getter, so tool/ref reads
+  // see the current state (patches by earlier turns, the flow, or the
+  // instance-state API).
+  workflowInstanceState?: () => Record<string, unknown>;
   // The create_instance capability, offered to the model when the task
   // declares the tool. Takes domain state and returns the new instance id.
   createWorkflowInstance?: (
@@ -109,7 +113,7 @@ export async function runAgentLoop(
 ): Promise<unknown> {
   const workspacePath = resolveWorkspacePath(
     task.workspacePath,
-    config.workflowInstanceState,
+    config.workflowInstanceState?.(),
     config.basePath
   );
   const toolDefs = (task.tools ?? [])
@@ -192,6 +196,7 @@ export async function runAgentLoop(
           basePath: config.basePath,
           instanceId: config.instanceId,
           patchWorkflowInstanceState: config.patchWorkflowInstanceState,
+          workflowInstanceState: () => config.workflowInstanceState?.() ?? {},
           createWorkflowInstance: config.createWorkflowInstance,
           signal: config.signal,
         });

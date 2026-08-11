@@ -72,6 +72,60 @@ export class FlowEditor extends LitElement {
       border: 1px solid var(--border);
       border-radius: 6px;
       padding: 0.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.375rem;
+    }
+
+    .chat-toolbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+
+    .saved-block {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      min-width: 0;
+    }
+
+    .saved-status {
+      font-size: 0.625rem;
+      color: var(--success);
+      overflow-wrap: anywhere;
+    }
+
+    .saved-findings {
+      margin: 0;
+      padding-left: 1.125rem;
+      color: var(--warning);
+      font-size: 0.625rem;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+    }
+
+    button.save-btn {
+      font-family: inherit;
+      font-size: 0.625rem;
+      height: 24px;
+      padding: 0 0.5rem;
+      border-radius: 4px;
+      border: 1px solid transparent;
+      background: var(--success);
+      color: var(--bg);
+      cursor: pointer;
+      flex: none;
+    }
+
+    button.save-btn:hover:not(:disabled) {
+      filter: brightness(1.1);
+    }
+
+    button.save-btn:disabled {
+      opacity: 0.5;
+      cursor: default;
     }
 
     .pane {
@@ -169,13 +223,14 @@ export class FlowEditor extends LitElement {
     const actions = [...this.instanceEntry.availableActions].sort(
       byVariantPriority
     );
+    const source = typeof state.source === "string" ? state.source : "";
 
     return html`
       <div class="editor">
         <div class="editor-header">
           <span class="editor-title">${this.sessionTitle()}</span>
         </div>
-        ${this.renderChat()}
+        ${this.renderChat(source)}
         ${this.renderPane(previewSource, previewErrors)}
         ${
           actions.length > 0
@@ -211,18 +266,78 @@ export class FlowEditor extends LitElement {
     return typeof value === "string" ? value : undefined;
   }
 
-  private renderChat() {
+  // The chat window with the save affordance: the Save button (enabled once
+  // the agent has generated a source) emits hive-action "save", which the
+  // shell answers with the synchronous save route — the same
+  // saveAuthoringDefinition core the agent's save_definition tool runs. The
+  // saved line reflects the last save from instance state.
+  private renderChat(source: string) {
     const ctx = this.instanceEntry.state.runningTaskContext;
-    if (ctx === null || ctx.role !== "ai-chat") return nothing;
+    const state = this.instanceEntry.state.workflowInstanceState;
+    const savedId =
+      typeof state.savedDefinitionId === "string"
+        ? state.savedDefinitionId
+        : "";
+    const savedName =
+      typeof state.savedName === "string" ? state.savedName : "";
+    const saveFindings = state.saveFindings;
+    const warnings =
+      saveFindings !== null &&
+      typeof saveFindings === "object" &&
+      "warnings" in saveFindings &&
+      Array.isArray(saveFindings.warnings)
+        ? saveFindings.warnings.length
+        : 0;
+    const errors =
+      saveFindings !== null &&
+      typeof saveFindings === "object" &&
+      "errors" in saveFindings &&
+      Array.isArray(saveFindings.errors)
+        ? saveFindings.errors.filter((e): e is string => typeof e === "string")
+        : [];
     return html`<div class="editor-chat">
-      <chat-session
-        .messages=${ctx.messages}
-        .sessionId=${ctx.sessionId}
-        .interactive=${ctx.interactive}
-        .thinking=${this.agentIsThinking(ctx.messages)}
-        .modelStatus=${ctx.modelStatus}
-        @hive-send-message=${this.handleSendMessage}
-      ></chat-session>
+      <div class="chat-toolbar">
+        <div class="saved-block">
+          ${
+            savedId !== ""
+              ? html`<span class="saved-status"
+                  >Saved as ${savedName !== "" ? savedName : savedId}
+                  (${savedId})${warnings > 0 ? ` · ${warnings} warning(s)` : ""}</span
+                >`
+              : nothing
+          }
+          ${
+            errors.length > 0 || warnings > 0
+              ? html`<ul class="saved-findings">
+                  ${[
+                    ...errors,
+                    ...(warnings > 0 ? [`${warnings} warning(s)`] : []),
+                  ].map((finding) => html`<li>${finding}</li>`)}
+                </ul>`
+              : nothing
+          }
+        </div>
+        <button
+          class="save-btn"
+          type="button"
+          ?disabled=${source === ""}
+          @click=${() => this.emitAction("save")}
+        >
+          Save definition
+        </button>
+      </div>
+      ${
+        ctx !== null && ctx.role === "ai-chat"
+          ? html`<chat-session
+              .messages=${ctx.messages}
+              .sessionId=${ctx.sessionId}
+              .interactive=${ctx.interactive}
+              .thinking=${this.agentIsThinking(ctx.messages)}
+              .modelStatus=${ctx.modelStatus}
+              @hive-send-message=${this.handleSendMessage}
+            ></chat-session>`
+          : nothing
+      }
     </div>`;
   }
 

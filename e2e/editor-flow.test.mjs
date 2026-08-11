@@ -46,6 +46,8 @@ async function editorState() {
     const title =
       shadow.querySelector(".editor-title")?.textContent?.trim() ?? null;
     const code = shadow.querySelector(".code")?.textContent ?? "";
+    const saved =
+      shadow.querySelector(".saved-status")?.textContent?.trim() ?? "";
     const buttons = [];
     const walkButtons = (root) => {
       for (const el of root.querySelectorAll("button")) {
@@ -57,7 +59,7 @@ async function editorState() {
       }
     };
     walkButtons(shadow);
-    return { title, code, buttons };
+    return { title, code, saved, buttons };
   });
 }
 
@@ -129,22 +131,21 @@ test("authoring session renders as the flow editor and saves the definition", as
     "the code pane renders the tokenized previewSource"
   );
 
-  // The action row exposes validate/save (declared on the drafting state);
-  // save registers the definition through the shell-side REST path.
+  // The chat-window Save button (the flow-editor's own affordance, not a
+  // ManualAction) runs the synchronous save route — the same
+  // saveAuthoringDefinition core as the agent's save_definition tool — and
+  // the flow-editor reflects the saved definition from instance state.
   assert.ok(
     await clickEditorButton("Save definition"),
-    "the save action is available and clicked"
+    "the save button is available and clicked"
   );
+  await waitForEditor((state) => state.saved.includes("review-flow"));
 
-  // A clean save navigates to the registered definition's page.
-  await page.waitForFunction(
-    () => window.location.hash.startsWith("#/flows/review-flow"),
-    { timeout: 20_000 }
-  );
-  await page.waitForSelector("text=Review Flow", { timeout: 15_000 });
-  assert.ok(
-    await page.locator("button", { hasText: "New instance" }).count(),
-    "the definition page lists the new-instance affordance"
+  // The save keeps the user in the session (iterative re-saves update the
+  // same definition) — no navigation.
+  assert.equal(
+    await page.evaluate(() => window.location.hash),
+    "#/flows/new"
   );
 
   // The registered definition is servable by id with the gate-clean source.

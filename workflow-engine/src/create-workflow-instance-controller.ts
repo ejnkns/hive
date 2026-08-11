@@ -337,7 +337,7 @@ export function createWorkflowInstanceController(
     return {
       ...taskContext,
       currentState: state.currentState,
-      workflowInstanceState: state.workflowInstanceState,
+      workflowInstanceState: () => state.workflowInstanceState,
       patchWorkflowInstanceState: patchWorkflowInstanceState,
       taskOutputs: state.taskOutputs,
       patchRunningTaskMessages,

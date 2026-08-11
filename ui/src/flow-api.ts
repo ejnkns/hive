@@ -201,6 +201,40 @@ export async function authorFlowDefinition(input: {
   return (await res.json()) as { flowId: string; instanceId: string };
 }
 
+// The synchronous save behind the editor's Save button: runs the same
+// saveAuthoringDefinition core as the agent's save_definition tool, patches
+// the session instance state (savedDefinitionId + findings), and returns
+// immediately — no agent turn.
+export async function saveAuthoringDefinition(flowId: string): Promise<{
+  id: string;
+  name: string;
+  checkErrors: string[];
+  checkWarnings: string[];
+}> {
+  const res = await fetch(
+    `/api/flows/definitions/author/${encodeURIComponent(flowId)}/save`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    }
+  );
+  if (!res.ok) {
+    // Error response shape is guaranteed by the server endpoint
+    const err = (await res.json()) as { error?: string };
+    throw new Error(
+      err.error ?? `Failed to save definition: ${res.statusText}`
+    );
+  }
+  // Success response shape is guaranteed by the server endpoint
+  return (await res.json()) as {
+    id: string;
+    name: string;
+    checkErrors: string[];
+    checkWarnings: string[];
+  };
+}
+
 export async function deleteFlow(flowId: string, purge = false): Promise<void> {
   const res = await fetch(`/api/flows/${encodeURIComponent(flowId)}`, {
     method: "DELETE",

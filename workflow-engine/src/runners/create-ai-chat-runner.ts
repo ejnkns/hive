@@ -37,8 +37,10 @@ export type AiChatRunnerConfig = {
   // Live model-call progress into the running task context (see ModelCallStatus).
   patchRunningTaskStatus?: (status: ModelCallStatus) => void;
   // The instance's domain data, resolved against by @instance: workspacePath
-  // refs (e.g. "@instance:worktreePath").
-  workflowInstanceState?: Record<string, unknown>;
+  // refs (e.g. "@instance:worktreePath"). A live getter, so tool/ref reads
+  // see the current state (patches by earlier turns, the flow, or the
+  // instance-state API).
+  workflowInstanceState?: () => Record<string, unknown>;
   // Syncs the live conversation into the instance state at each turn boundary
   // so observers (the flow snapshot push) render the transcript as it grows.
   patchRunningTaskMessages?: (messages: ChatMessage[]) => void;
@@ -66,7 +68,7 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
       messages = [{ role: "system", content: task.systemPrompt ?? "" }];
       seedTaskInput(
         messages,
-        config.workflowInstanceState,
+        config.workflowInstanceState?.(),
         task.inputFromInstanceState
       );
       config.patchRunningTaskMessages?.(messages);

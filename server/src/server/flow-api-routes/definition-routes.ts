@@ -4,6 +4,10 @@
 import { randomUUID } from "node:crypto";
 import { PassThrough } from "node:stream";
 import type { FastifyInstance } from "fastify";
+import {
+  saveAuthoringDefinition,
+  savePatch,
+} from "../flow-authoring/session.ts";
 import { AUTHORING_DEFINITION_ID } from "../flow-authoring.ts";
 import {
   DefinitionAlreadyExistsError,
@@ -15,7 +19,11 @@ import {
   registerUserDefinition,
   updateUserDefinition,
 } from "../flow-definitions.ts";
-import { createFlow, getFlowPersistence } from "../flow-registry.ts";
+import {
+  createFlow,
+  getFlowPersistence,
+  getFlowRuntime,
+} from "../flow-registry.ts";
 import { generateFlowDefinitionSource } from "../generate-flow-definition.ts";
 import { checkDefinitionSources } from "../schema-consistency.ts";
 import { typecheckDefinitionSource } from "../typecheck-definition.ts";
@@ -196,6 +204,56 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
       instanceId: instance.id,
     });
   });
+
+  // The synchronous save path behind the editor's Save button: runs the same
+  // saveAuthoringDefinition core as the agent's save_definition tool (the
+  // flow owns the registration; this route just bridges the button to it),
+  // patches the instance state, and returns the result immediately — no
+  // agent turn. The button lives in the flow-editor's chat area; the agent
+  // can also save from chat via the tool.
+  server.post(
+    "/api/flows/definitions/author/:flowId/save",
+    async (request, reply) => {
+      // Fastify params type is erased; shape guaranteed by route pattern
+      const { flowId } = request.params as { flowId: string };
+      const body = request.body as { name?: string } | null;
+
+      const runtime = getFlowRuntime(flowId);
+      if (!runtime) {
+        return reply.status(404).send({ error: "Flow not found" });
+      }
+      if (runtime.getFlowConfig().definitionId !== AUTHORING_DEFINITION_ID) {
+        return reply.status(404).send({ error: "Flow not found" });
+      }
+      const instance = runtime.getWorkflowInstanceEntries()[0];
+      if (!instance) {
+        return reply.status(404).send({ error: "No authoring session" });
+      }
+      const controller = runtime.getWorkflowInstance(instance.id);
+      const state = instance.state.workflowInstanceState;
+      try {
+        const result = await saveAuthoringDefinition(
+          state,
+          typeof body?.name === "string" ? body.name : undefined
+        );
+        controller?.patchWorkflowInstanceState(savePatch(result));
+        return reply.send({
+          ok: true,
+          id: result.id,
+          name: result.name,
+          checkErrors: result.checkErrors,
+          checkWarnings: result.checkWarnings,
+        });
+      } catch (err) {
+        if (err instanceof DefinitionAlreadyExistsError) {
+          return reply.status(409).send({ error: err.message });
+        }
+        return reply.status(400).send({
+          error: err instanceof Error ? err.message : "Save failed",
+        });
+      }
+    }
+  );
 
   server.post("/api/flows/definitions/validate", async (request, reply) => {
     // Fastify body is unknown; validated below

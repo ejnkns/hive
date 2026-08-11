@@ -40,7 +40,7 @@ function makeContext(
     instanceId: "instance-1",
     workflowId: "test-wf",
     currentState: "ready",
-    workflowInstanceState: {},
+    workflowInstanceState: () => ({}),
     patchWorkflowInstanceState: () => {},
     taskOutputs: {},
     patchRunningTaskMessages: () => {},
@@ -131,7 +131,7 @@ describe("createEngineRunners", () => {
         makeContext({
           flowConfig: { workspacesBasePath },
           workflowId: "cards",
-          workflowInstanceState: { attempt: 2 },
+          workflowInstanceState: () => ({ attempt: 2 }),
         })
       )
       .run(task);

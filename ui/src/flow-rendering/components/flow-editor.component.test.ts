@@ -183,4 +183,75 @@ describe("FlowEditor", () => {
       actionId: "validate",
     });
   });
+
+  it("renders the Save button in the chat window, disabled until a source exists", async () => {
+    const el = await mountEditor(
+      authoringEntry({ workflowInstanceState: { prompt: "No source yet" } })
+    );
+    const button = shadowRootOf(el).querySelector(
+      "button.save-btn"
+    ) as HTMLButtonElement;
+    expect(button).not.toBeNull();
+    expect(button.disabled).toBe(true);
+
+    el.instanceEntry = authoringEntry({
+      workflowInstanceState: {
+        prompt: "Build a flow",
+        source: "export const flow = {};",
+      },
+    });
+    await el.updateComplete;
+    const enabled = shadowRootOf(el).querySelector(
+      "button.save-btn"
+    ) as HTMLButtonElement;
+    expect(enabled.disabled).toBe(false);
+  });
+
+  it("Save button click emits hive-action with actionId save", async () => {
+    const el = await mountEditor();
+    el.instanceEntry = authoringEntry({
+      workflowInstanceState: {
+        prompt: "Build a flow",
+        source: "export const flow = {};",
+      },
+    });
+    await el.updateComplete;
+    const onAction = vi.fn();
+    el.onAction = onAction;
+
+    const button = shadowRootOf(el).querySelector(
+      "button.save-btn"
+    ) as HTMLButtonElement;
+    button.dispatchEvent(click());
+    await el.updateComplete;
+    expect(onAction).toHaveBeenCalledWith("save", undefined);
+  });
+
+  it("renders the saved state and its findings from instance state", async () => {
+    const el = await mountEditor(
+      authoringEntry({
+        workflowInstanceState: {
+          prompt: "Build a flow",
+          source: "export const flow = {};",
+          savedDefinitionId: "review-flow",
+          savedName: "Review Flow",
+          saveFindings: {
+            errors: ["spec.workflows[0]: a gate reads an undeclared field"],
+            warnings: ["state 'new' has no way out"],
+          },
+        },
+      })
+    );
+    const status = shadowRootOf(el).querySelector(".saved-status");
+    expect(status?.textContent).toContain("Saved as Review Flow");
+    expect(status?.textContent).toContain("review-flow");
+    expect(status?.textContent).toContain("1 warning(s)");
+    const findings = [
+      ...shadowRootOf(el).querySelectorAll(".saved-findings li"),
+    ];
+    expect(findings.map((f) => f.textContent)).toEqual([
+      "spec.workflows[0]: a gate reads an undeclared field",
+      "1 warning(s)",
+    ]);
+  });
 });

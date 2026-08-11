@@ -16,7 +16,11 @@ import {
   defineWorkflow,
   type FlowDefinition,
 } from "workflow-engine/workflow-types";
-import { loadDefinitionFromSource } from "../flow-definitions.ts";
+import {
+  loadDefinitionFromSource,
+  registerUserDefinition,
+  updateUserDefinition,
+} from "../flow-definitions.ts";
 import {
   analyzeFlowSpec,
   type FlowSpec,
@@ -58,9 +62,14 @@ export type AuthoringItemState = {
   // The spec's label — a suggested name for the saved definition.
   suggestedName?: string;
   // The registered definition id after a successful save. Written by the
-  // shell-side save path (REST) or a future engine-native definition
-  // registration capability — declared now so the editor can reflect it.
+  // save_definition tool (agent path) and the synchronous save route (the
+  // editor's Save button) — both run the same saveAuthoringDefinition core.
   savedDefinitionId?: string;
+  // The resolved display name of the saved definition (the suggested name or
+  // the agent's explicit override).
+  savedName?: string;
+  // Non-blocking schema-consistency findings from the last save.
+  saveFindings?: { errors: string[]; warnings: string[] };
 };
 
 // ─── shared gate machinery ────────────────────────────────────────────
@@ -152,6 +161,73 @@ const KNOWLEDGE_TOPICS: Record<string, string> = {
   capabilities: authoringGuide(),
   rules: AUTHORING_RULES,
 };
+
+// ─── save ────────────────────────────────────────────────────────────────
+
+// The one save implementation, shared by the save_definition tool (the agent
+// saves from chat) and the synchronous save route (the editor's Save button):
+// register the session's generated source as a definition — create on the
+// first save, update by savedDefinitionId afterwards. Returns the id, the
+// resolved name, and the non-blocking schema-consistency findings (the
+// definition loads and runs regardless; findings annotate it for the author).
+export async function saveAuthoringDefinition(
+  state: AuthoringItemState,
+  nameOverride?: string
+): Promise<{
+  id: string;
+  name: string;
+  checkErrors: string[];
+  checkWarnings: string[];
+}> {
+  const source = typeof state.source === "string" ? state.source : "";
+  if (source === "") {
+    throw new Error(
+      "Nothing to save — ask the agent to generate a definition first."
+    );
+  }
+  const suggested =
+    typeof state.suggestedName === "string" ? state.suggestedName : "";
+  const name =
+    nameOverride !== undefined && nameOverride.trim() !== ""
+      ? nameOverride.trim()
+      : suggested;
+  if (name === "") {
+    throw new Error("Definition name is required");
+  }
+
+  const targetId = state.savedDefinitionId;
+  const record = targetId
+    ? await updateUserDefinition(targetId, { name, source })
+    : await registerUserDefinition({ name, source });
+  const check = checkDefinitionSources([{ path: `${record.id}.ts`, source }]);
+  return {
+    id: record.id,
+    name: record.name,
+    checkErrors: check.errors,
+    checkWarnings: check.warnings,
+  };
+}
+
+// The instance-state patch both save paths apply on success, so the editor
+// reflects the saved definition from the snapshot.
+export function savePatch(result: {
+  id: string;
+  name: string;
+  checkErrors: string[];
+  checkWarnings: string[];
+}): Pick<
+  AuthoringItemState,
+  "savedDefinitionId" | "savedName" | "saveFindings"
+> {
+  return {
+    savedDefinitionId: result.id,
+    savedName: result.name,
+    saveFindings: {
+      errors: result.checkErrors,
+      warnings: result.checkWarnings,
+    },
+  };
+}
 
 // ─── tools ────────────────────────────────────────────────────────────
 
@@ -333,6 +409,46 @@ export const authoringTools = [
       };
     },
   }),
+  defineTool<AuthoringItemState>({
+    name: "save_definition",
+    description:
+      "Register the current generated definition (the source in the editor) as a flow definition. Call this when the user asks to save or says it is ready — the definition registers immediately and the editor shows the saved state. The first save creates the definition (named from the spec's label, or the explicit name); later saves update the same definition.",
+    parameters: {
+      properties: {
+        name: {
+          type: "string",
+          description:
+            "Optional name override. Defaults to the spec's label (suggestedName).",
+        },
+      },
+      required: [],
+    },
+    executor: async (call, ctx) => {
+      const args = JSON.parse(call.arguments) as { name?: string };
+      try {
+        const result = await saveAuthoringDefinition(
+          ctx.workflowInstanceState?.() ?? {},
+          typeof args.name === "string" ? args.name : undefined
+        );
+        ctx.patchWorkflowInstanceState?.(savePatch(result));
+        const findings =
+          result.checkErrors.length > 0 || result.checkWarnings.length > 0
+            ? `\nFindings: ${result.checkErrors.length} error(s), ${result.checkWarnings.length} warning(s).`
+            : "";
+        return {
+          toolCallId: call.id,
+          content: `Definition saved as "${result.name}" (${result.id}).${findings}`,
+          isError: false,
+        };
+      } catch (err) {
+        return {
+          toolCallId: call.id,
+          content: `Save failed: ${err instanceof Error ? err.message : String(err)}`,
+          isError: true,
+        };
+      }
+    },
+  }),
 ];
 
 // ─── the workflow ─────────────────────────────────────────────────────
@@ -356,25 +472,10 @@ const sessionWorkflow = defineWorkflow({
       id: "drafting",
       label: "Drafting",
       category: "initial",
-      // Validate and save render as actions on the session card; the Svelte
-      // shell executes the app-level effect (REST) via handleAuthorAction —
-      // the engine has no definition-registration capability yet, so these
-      // transitions never dispatch. transitionTo targets the current state so
-      // the definition stays schema-valid if ever routed.
-      actions: [
-        {
-          id: "validate",
-          label: "Validate",
-          variant: "secondary",
-          transitionTo: "drafting",
-        },
-        {
-          id: "save",
-          label: "Save definition",
-          variant: "primary",
-          transitionTo: "drafting",
-        },
-      ],
+      // Saving is a flow capability: the agent calls the save_definition tool
+      // on request, and the editor's Save button reaches the same core
+      // synchronously through a thin route. No ManualActions — the session
+      // has no transitions.
       tasks: [
         {
           id: "assistant",
@@ -390,6 +491,7 @@ const sessionWorkflow = defineWorkflow({
             "read_authoring_knowledge",
             "set_flow_spec",
             "generate_definition",
+            "save_definition",
           ],
         },
       ],

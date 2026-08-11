@@ -173,7 +173,7 @@ describe("createAiChatRunner", () => {
       ]),
       toolDefinitions: toolDefs,
       toolExecutors: toolExecs,
-      workflowInstanceState: { worktreePath: worktree },
+      workflowInstanceState: () => ({ worktreePath: worktree }),
       completionSignal: "##COMPLETE##",
     });
 
@@ -467,7 +467,7 @@ describe("createAiChatRunner", () => {
       },
       toolDefinitions: {},
       toolExecutors: {},
-      workflowInstanceState: { ticket: { title: "Build the thing" } },
+      workflowInstanceState: () => ({ ticket: { title: "Build the thing" } }),
       completionSignal: "##COMPLETE##",
     });
 
