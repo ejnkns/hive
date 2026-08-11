@@ -4,6 +4,7 @@ import { onMount } from "svelte";
 import {
   authorFlowDefinition,
   createFlowDefinition,
+  deleteFlow,
   deleteFlowDefinition,
   dispatchAction,
   fetchFlow,
@@ -136,6 +137,24 @@ async function startAuthoring(lucky: boolean) {
   } finally {
     authoring = false;
   }
+}
+
+// Closes (deletes) the authoring session flow and returns the pane to the
+// start-conversation state. The session is disposable — a failed delete is
+// not an error; the stored key is cleared either way.
+async function closeAuthoring() {
+  if (!authorFlowId) return;
+  try {
+    await deleteFlow(authorFlowId, true);
+  } catch {
+    // The session is disposable; a failed delete is not an error.
+  }
+  flowStore.removeFlow(authorFlowId);
+  localStorage.removeItem(authorStorageKey());
+  authorFlowId = null;
+  authorInstanceId = null;
+  lastAppliedSource = null;
+  checkFindings = null;
 }
 
 async function resumeAuthoring(): Promise<void> {
@@ -552,7 +571,16 @@ async function remove() {
                    built-in flow-editor composes the session header, the
                    running chat, the tokenized spec preview, and the
                    validate/save action row. The shell only mounts the
-                   rendering surface. -->
+                   rendering surface and owns the session lifecycle. -->
+              <div class="author-toolbar">
+                <button
+                  type="button"
+                  class="author-close"
+                  onclick={closeAuthoring}
+                >
+                  Close session
+                </button>
+              </div>
               <LitFlowHost
                 flowId={authorFlow.id}
                 workflowDefs={authorFlow.workflows}
@@ -801,6 +829,26 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+.author-toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.author-close {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--muted);
+  font-size: 0.625rem;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+}
+
+.author-close:hover {
+  color: var(--error);
+  border-color: var(--error);
 }
 
 .ai-hint {
