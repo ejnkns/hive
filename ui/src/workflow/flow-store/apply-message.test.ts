@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { FlowResponse } from "../flow-api";
+import type { FlowResponse } from "../../flow-api";
 import { applyMessage } from "./apply-message";
 
 function flow(id: string, name: string): FlowResponse {

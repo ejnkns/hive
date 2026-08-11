@@ -8,9 +8,11 @@ import type {
   CustomRenderKind,
 } from "workflow-engine/workflow-types";
 
-// The flow API envelope types and client functions. Workflow rendering types
-// come from the engine (WorkflowDefResponse, WorkflowInstanceEntry, ...) — this
-// module only holds the wire shapes and the REST calls.
+/** @public — the flow REST client. Shared by the Svelte app shell and the
+ * Lit rendering surface (flow-create-form, flow-editor) at the ui/src fork.
+ * Workflow rendering types come from the engine
+ * (WorkflowDefResponse, WorkflowInstanceEntry, ...) — this module only holds
+ * the wire shapes and the REST calls. */
 
 export type FlowStatus = "error" | "running" | "waiting" | "idle" | "complete";
 

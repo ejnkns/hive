@@ -1,9 +1,9 @@
 <script lang="ts">
 import { slugify } from "shared/slugify";
+import type { FlowResponse } from "../flow-api";
+import { deleteFlow } from "../flow-api";
 import Button from "../shared/ui/Button.svelte";
 import Dialog from "../shared/ui/Dialog.svelte";
-import type { FlowResponse } from "./flow-api";
-import { deleteFlow } from "./flow-api";
 import StatusDot from "./StatusDot.svelte";
 
 let {

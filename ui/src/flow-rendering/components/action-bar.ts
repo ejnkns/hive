@@ -1,7 +1,7 @@
 import { css, html, LitElement } from "lit";
 import type { VisibleAction } from "workflow-engine/workflow-types";
 import "./config-field-form";
-import type { ConfigFieldFormValue } from "./config-field-form";
+import type { ConfigFieldValue } from "./config-field-form";
 
 // The action row on a workflow instance: buttons per available action, with a
 // two-click confirm for destructive variants and an inline form when an action
@@ -102,7 +102,7 @@ export class ActionBar extends LitElement {
         .fields=${formAction.fields}
         .values=${{}}
         @hive-fields-submit=${(
-          event: CustomEvent<{ values: Record<string, ConfigFieldFormValue> }>
+          event: CustomEvent<{ values: Record<string, ConfigFieldValue> }>
         ) => this.submitForm(formAction, event.detail.values)}
         @hive-fields-cancel=${() => (this.formAction = null)}
       ></config-field-form>`;
@@ -171,7 +171,7 @@ export class ActionBar extends LitElement {
 
   private submitForm(
     action: VisibleAction,
-    values: Record<string, ConfigFieldFormValue>
+    values: Record<string, ConfigFieldValue>
   ): void {
     this.formAction = null;
     // A destructive (or confirmText-declaring) fielded action collects the

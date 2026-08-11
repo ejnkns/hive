@@ -1,88 +1,31 @@
 <script lang="ts">
-import { slugify } from "shared/slugify";
-import { onMount } from "svelte";
-import Button from "../shared/ui/Button.svelte";
-import TextInput from "../shared/ui/TextInput.svelte";
-import ConfigFieldInput, {
-  type ConfigFieldValue,
-} from "./ConfigFieldInput.svelte";
-import type { FlowDefinitionDetail } from "./flow-api";
-import { createFlow, fetchFlowDefinition } from "./flow-api";
+import type { FlowCreateForm } from "../flow-rendering/components/flow-create-form";
+
+// The route shell for creating a flow instance: breadcrumb + heading, then
+// the built-in <flow-create-form> (Lit) which owns the definition fetch, the
+// schema form, and the createFlow submit. On success it emits hive-flow-created
+// and this shell navigates to the new instance.
 
 let { definitionId }: { definitionId: string } = $props();
 
-let definition = $state<FlowDefinitionDetail | null>(null);
-let name = $state("");
-let values = $state<Record<string, ConfigFieldValue>>({});
-let loading = $state(true);
-let error = $state<string | null>(null);
-let submitting = $state(false);
+let createForm = $state<FlowCreateForm | null>(null);
 
-let nameWarning = $derived.by(() => {
-  if (name.trim() !== "" && slugify(name.trim()) === "new") {
-    return '"new" is a reserved flow name';
-  }
-  return null;
+// Svelte must not bind props onto custom elements (the LitFlowHost pattern):
+// the element's property is set imperatively.
+$effect(() => {
+  if (!createForm) return;
+  createForm.definitionId = definitionId;
 });
 
-onMount(async () => {
-  try {
-    definition = await fetchFlowDefinition(definitionId);
-  } catch (err) {
-    error = err instanceof Error ? err.message : "Failed to load definition";
-  } finally {
-    loading = false;
-  }
-});
-
-function missingRequired(): string | null {
-  if (!name.trim()) return "Instance name is required";
-  for (const field of definition?.configSchema ?? []) {
-    if (field.required) {
-      const value = values[field.key];
-      if (value === undefined || value === "") {
-        return `Field "${field.label}" is required`;
-      }
-      if (Array.isArray(value) && value.length === 0) {
-        return `Field "${field.label}" is required`;
-      }
-    }
-  }
-  return null;
+function handleCreated(
+  event: CustomEvent<{ definitionId: string; slug: string }>
+) {
+  const { definitionId: id, slug } = event.detail;
+  window.location.hash = `#/flows/${encodeURIComponent(id)}/${encodeURIComponent(slug)}`;
 }
 
-async function submit() {
-  if (!definition) return;
-  const missing = missingRequired();
-  if (missing) {
-    error = missing;
-    return;
-  }
-
-  submitting = true;
-  error = null;
-  if (nameWarning) {
-    error = nameWarning;
-    submitting = false;
-    return;
-  }
-  try {
-    const config: Record<string, unknown> = { name: name.trim() };
-    for (const field of definition.configSchema) {
-      const value = values[field.key];
-      if (value === undefined) continue;
-      if (typeof value === "string" && value === "") continue;
-      if (Array.isArray(value) && value.length === 0) continue;
-      config[field.key] = value;
-    }
-    await createFlow({ definitionId, config });
-    const slug = slugify(name.trim());
-    window.location.hash = `#/flows/${encodeURIComponent(definitionId)}/${encodeURIComponent(slug)}`;
-  } catch (err) {
-    error = err instanceof Error ? err.message : "Failed to create instance";
-  } finally {
-    submitting = false;
-  }
+function handleCancel() {
+  window.location.hash = `#/flows/${encodeURIComponent(definitionId)}`;
 }
 </script>
 
@@ -97,60 +40,11 @@ async function submit() {
 
   <h1>New instance</h1>
 
-  {#if loading}
-    <div class="loading">Loading definition...</div>
-  {:else if error}
-    <div class="error">{error}</div>
-  {:else if definition}
-    <form
-      class="form"
-      onsubmit={(event) => {
-        event.preventDefault();
-        void submit();
-      }}
-    >
-      <label class="field">
-        <span class="label">Instance name</span>
-        <TextInput
-          bind:value={name}
-          placeholder="My instance"
-          disabled={submitting}
-        />
-        <span class="hint"
-          >{nameWarning ?? "Used as the instance's URL slug."}</span
-        >
-      </label>
-
-      {#each definition.configSchema as field (field.key)}
-        <ConfigFieldInput
-          {field}
-          value={values[field.key]}
-          disabled={submitting}
-          onChange={(value) => {
-            values[field.key] = value;
-          }}
-        />
-      {/each}
-
-      <div class="actions">
-        <Button
-          variant="mint"
-          type="submit"
-          disabled={submitting || !name.trim()}
-        >
-          {submitting ? "Creating..." : "Create instance"}
-        </Button>
-        <Button
-          variant="platinum"
-          type="button"
-          disabled={submitting}
-          onclick={() => (window.location.hash = `#/flows/${encodeURIComponent(definitionId)}`)}
-        >
-          Cancel
-        </Button>
-      </div>
-    </form>
-  {/if}
+  <flow-create-form
+    bind:this={createForm}
+    onhive-flow-created={handleCreated}
+    onhive-flow-cancel={handleCancel}
+  ></flow-create-form>
 </div>
 
 <style>
@@ -191,33 +85,5 @@ h1 {
   font-weight: 600;
   color: var(--text);
   margin: 0 0 1.5rem 0;
-}
-
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.loading {
-  text-align: center;
-  padding: 3rem 1rem;
-  color: var(--muted);
-  font-size: 0.875rem;
-}
-
-.error {
-  background: rgba(220, 60, 60, 0.1);
-  border: 1px solid rgba(220, 60, 60, 0.3);
-  color: #dc3c3c;
-  padding: 0.75rem 1rem;
-  border-radius: 6px;
-  font-size: 0.8125rem;
-  margin-bottom: 1rem;
 }
 </style>

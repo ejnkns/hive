@@ -6,7 +6,7 @@
 // missed-events hole during a drop.
 
 import { slugify } from "shared/slugify";
-import type { FlowResponse, FlowWsMessage } from "./flow-api";
+import type { FlowResponse, FlowWsMessage } from "../flow-api";
 import { applyMessage } from "./flow-store/apply-message";
 
 let flows = $state<FlowResponse[]>([]);

@@ -1,11 +1,6 @@
 <script lang="ts">
 import { onMount } from "svelte";
-import Button from "../shared/ui/Button.svelte";
-import Dialog from "../shared/ui/Dialog.svelte";
-import ConfigFieldInput, {
-  type ConfigFieldValue,
-} from "./ConfigFieldInput.svelte";
-import type { FlowLevelAction } from "./flow-api";
+import type { FlowLevelAction } from "../flow-api";
 import {
   deleteFlow,
   dispatchAction,
@@ -13,7 +8,10 @@ import {
   fetchFlows,
   patchInstanceState,
   sendTaskInput,
-} from "./flow-api";
+} from "../flow-api";
+import type { ConfigFieldForm } from "../flow-rendering/components/config-field-form";
+import Button from "../shared/ui/Button.svelte";
+import Dialog from "../shared/ui/Dialog.svelte";
 import { flowStore } from "./flow-store.svelte";
 import LitFlowHost from "./LitFlowHost.svelte";
 import StatusDot from "./StatusDot.svelte";
@@ -34,9 +32,18 @@ let deleteBusy = $state(false);
 
 let actionDialogOpen = $state(false);
 let activeFlowAction = $state<FlowLevelAction | null>(null);
-let actionValues = $state<Record<string, ConfigFieldValue>>({});
 let actionBusy = $state(false);
 let activeDispatchId = $state<string | null>(null);
+let actionForm = $state<ConfigFieldForm | null>(null);
+
+// The dialog body is <config-field-form> (the shared Lit form); the element's
+// props are set imperatively — Svelte must not bind object props onto custom
+// elements (the LitFlowHost pattern).
+$effect(() => {
+  if (!actionForm) return;
+  actionForm.fields = activeFlowAction?.createInstance?.fields ?? [];
+  actionForm.submitLabel = "Run";
+});
 
 // The flow renders from the store so every snapshot pushes live. Commands keep
 // their REST calls; the resulting snapshot arrives over WS (no refetch).
@@ -153,7 +160,6 @@ function actionVariant(action: FlowLevelAction): string {
 function runFlowAction(action: FlowLevelAction) {
   if (action.createInstance) {
     activeFlowAction = action;
-    actionValues = {};
     actionDialogOpen = true;
     return;
   }
@@ -178,23 +184,19 @@ async function executeFlowAction(
   }
 }
 
-function missingRequiredActionField(): boolean {
-  const fields = activeFlowAction?.createInstance?.fields ?? [];
-  return fields.some((field) => {
-    if (!field.required) return false;
-    const value = actionValues[field.key];
-    if (value === undefined || value === "") return true;
-    if (Array.isArray(value) && value.length === 0) return true;
-    return false;
-  });
-}
-
-function submitFlowActionForm() {
+function submitFlowActionForm(
+  event: CustomEvent<{ values: Record<string, unknown> }>
+) {
   const action = activeFlowAction;
   if (!action) return;
   actionDialogOpen = false;
   activeFlowAction = null;
-  void executeFlowAction(action, { ...actionValues });
+  void executeFlowAction(action, event.detail.values);
+}
+
+function closeFlowActionForm() {
+  actionDialogOpen = false;
+  activeFlowAction = null;
 }
 </script>
 
@@ -276,34 +278,16 @@ function submitFlowActionForm() {
 >
   {#if activeFlowAction?.createInstance}
     <h2 class="dialog-title">{activeFlowAction.label}</h2>
-    <div class="action-form">
-      {#each activeFlowAction.createInstance.fields as field (field.key)}
-        <ConfigFieldInput
-          {field}
-          value={actionValues[field.key]}
-          onChange={(value) => {
-            actionValues[field.key] = value;
-          }}
-        />
-      {/each}
-    </div>
+    <!-- The wrapper classes keep the queen-bee e2e's shadow-piercing
+         selectors (.action-form input, .dialog-actions button) working. -->
     <div class="dialog-actions">
-      <Button
-        variant="mint"
-        disabled={missingRequiredActionField()}
-        onclick={submitFlowActionForm}
-      >
-        Run
-      </Button>
-      <Button
-        variant="platinum"
-        onclick={() => {
-          actionDialogOpen = false;
-          activeFlowAction = null;
-        }}
-      >
-        Cancel
-      </Button>
+      <div class="action-form">
+        <config-field-form
+          bind:this={actionForm}
+          onhive-fields-submit={submitFlowActionForm}
+          onhive-fields-cancel={closeFlowActionForm}
+        ></config-field-form>
+      </div>
     </div>
   {/if}
 </Dialog>

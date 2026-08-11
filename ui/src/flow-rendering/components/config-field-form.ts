@@ -1,20 +1,26 @@
-import { css, html, LitElement, nothing, type PropertyValues } from "lit";
+import { css, html, LitElement, type PropertyValues } from "lit";
 import type { ConfigField } from "workflow-engine/workflow-types";
+import "./config-field-control";
+import type { ConfigFieldValue } from "./config-field-control";
 
 // The inline ConfigField form. Shared by the action-bar (action payloads) and
-// the instance-edit form (WorkflowConfig.editFields, gap 2): one control per
-// ConfigField type, pre-filled from `values` (current instance state for the
-// edit form) then each field's defaultValue, local required/emptiness gating,
-// and a hive-fields-submit / hive-fields-cancel contract. The engine's
-// collectConfigFieldValues remains the validation authority — this form only
-// gates submission on required-emptiness so the server error is the exception,
-// not the norm.
+// the instance-edit form (WorkflowConfig.editFields, gap 2): one
+// <config-field-control> per ConfigField type, pre-filled from `values`
+// (current instance state for the edit form) then each field's defaultValue,
+// local required/emptiness gating, and a hive-fields-submit /
+// hive-fields-cancel contract. The engine's collectConfigFieldValues remains
+// the validation authority — this form only gates submission on
+// required-emptiness so the server error is the exception, not the norm.
+//
+// The form owns the submitted values: each control emits hive-field-change
+// with { key, value } and the form tracks the map (re-feeding it back as the
+// controls' `value` prop), so the submit gate sees the latest draft.
 //
 // Submit payload: required/empty values stripped for non-required fields (an
 // untouched optional field stays absent — matching the engine's skip-on-absent
 // semantics); required fields are guaranteed present by the submit gate.
 
-export type ConfigFieldFormValue = string | boolean | number | string[];
+export type { ConfigFieldValue } from "./config-field-control";
 
 export class ConfigFieldForm extends LitElement {
   static properties = {
@@ -33,80 +39,6 @@ export class ConfigFieldForm extends LitElement {
       border: 1px solid var(--border);
       border-radius: 6px;
       background: var(--bg);
-    }
-
-    .form-field {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-    }
-
-    .form-label {
-      font-size: 0.625rem;
-      font-weight: 600;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .form-hint {
-      font-size: 0.625rem;
-      color: var(--muted);
-    }
-
-    .form-row {
-      display: flex;
-      align-items: center;
-      gap: 0.375rem;
-      flex-wrap: wrap;
-    }
-
-    .chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.25rem;
-      font-size: 0.6875rem;
-      padding: 0.125rem 0.5rem;
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      background: var(--surface);
-      cursor: pointer;
-    }
-
-    .chip.checked {
-      border-color: var(--accent);
-      background: rgba(96, 216, 116, 0.12);
-    }
-
-    input[type="text"],
-    input[type="number"],
-    input[type="date"],
-    input[type="datetime-local"],
-    textarea,
-    select {
-      font: inherit;
-      font-size: 0.6875rem;
-      padding: 0.25rem 0.5rem;
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      background: var(--surface);
-      color: var(--text);
-      outline: none;
-    }
-
-    textarea {
-      resize: vertical;
-      min-height: 4rem;
-      line-height: 1.35;
-    }
-
-    input[type="text"]:focus,
-    input[type="number"]:focus,
-    input[type="date"]:focus,
-    input[type="datetime-local"]:focus,
-    textarea:focus,
-    select:focus {
-      border-color: var(--accent);
     }
 
     .form-actions {
@@ -149,10 +81,10 @@ export class ConfigFieldForm extends LitElement {
   `;
 
   fields: ConfigField[] = [];
-  values: Record<string, ConfigFieldFormValue> = {};
+  values: Record<string, ConfigFieldValue> = {};
   submitLabel = "Submit";
 
-  private current: Record<string, ConfigFieldFormValue | undefined> = {};
+  private current: Record<string, ConfigFieldValue | undefined> = {};
 
   protected willUpdate(changed: PropertyValues<this>): void {
     if (changed.has("values") || changed.has("fields")) {
@@ -163,13 +95,13 @@ export class ConfigFieldForm extends LitElement {
   // Each field starts at the provided value (current instance state for the
   // edit form) or its declared defaultValue.
   private reset(): void {
-    const next: Record<string, ConfigFieldFormValue | undefined> = {};
+    const next: Record<string, ConfigFieldValue | undefined> = {};
     for (const field of this.fields) {
       const value = this.values[field.key];
       if (value !== undefined) {
         next[field.key] = value;
       } else if (field.defaultValue !== undefined) {
-        next[field.key] = field.defaultValue as ConfigFieldFormValue;
+        next[field.key] = field.defaultValue as ConfigFieldValue;
       }
     }
     this.current = next;
@@ -177,7 +109,13 @@ export class ConfigFieldForm extends LitElement {
 
   render() {
     return html`<form class="form" @submit=${this.handleSubmit}>
-      ${this.fields.map((field) => this.renderField(field))}
+      ${this.fields.map(
+        (field) => html`<config-field-control
+          .field=${field}
+          .value=${this.current[field.key]}
+          @hive-field-change=${this.handleFieldChange}
+        ></config-field-control>`
+      )}
       <div class="form-actions">
         <button
           class="primary"
@@ -191,209 +129,12 @@ export class ConfigFieldForm extends LitElement {
     </form>`;
   }
 
-  private renderField(field: ConfigField) {
-    const value = this.current[field.key];
-    const required = field.required ? " *" : "";
-    // The field key is a valid TS identifier (spec-enforced), so it makes a
-    // safe control id/name. Prefix to keep ids document-unique across forms.
-    const fieldId = `cf-${field.key}`;
-    if (field.type === "boolean") {
-      return html`<label class="form-field">
-        <span class="form-label">${field.label}</span>
-        <span class="form-row">
-          <input
-            type="checkbox"
-            id=${fieldId}
-            name=${field.key}
-            ?checked=${value === true}
-            @change=${(event: Event) => {
-              this.current[field.key] = (
-                event.target as HTMLInputElement
-              ).checked;
-              this.requestUpdate();
-            }}
-          />
-          ${field.hint ? html`<span class="form-hint">${field.hint}</span>` : nothing}
-        </span>
-      </label>`;
-    }
-    if (field.type === "string[]") {
-      return this.renderMultiSelect(field, value, fieldId);
-    }
-    const label = html`<span class="form-label"
-      >${field.label}${required}</span
-    >`;
-    if (field.options && field.options.length > 0) {
-      return html`<label class="form-field">
-        ${label}
-        <select
-          id=${fieldId}
-          name=${field.key}
-          @change=${(event: Event) => {
-            this.current[field.key] = (event.target as HTMLSelectElement).value;
-            this.requestUpdate();
-          }}
-        >
-          <option value="" ?selected=${value === undefined} disabled>
-            Select...
-          </option>
-          ${field.options.map(
-            (option) => html`<option
-              value=${option}
-              ?selected=${value === option}
-            >
-              ${option}
-            </option>`
-          )}
-        </select>
-        ${field.hint ? html`<span class="form-hint">${field.hint}</span>` : nothing}
-      </label>`;
-    }
-    const placeholder = field.placeholder ?? "";
-    if (field.type === "textarea") {
-      // The value binds via the .value property, never as element content:
-      // template whitespace between the tags would otherwise become the
-      // textarea's value (a stray newline on load, and one per keystroke).
-      return html`<label class="form-field">
-        ${label}
-        <textarea
-          .value=${typeof value === "string" ? value : ""}
-          id=${fieldId}
-          name=${field.key}
-          placeholder=${placeholder}
-          @input=${(event: Event) => {
-            this.current[field.key] = (
-              event.target as HTMLTextAreaElement
-            ).value;
-            this.requestUpdate();
-          }}
-        ></textarea>
-        ${field.hint ? html`<span class="form-hint">${field.hint}</span>` : nothing}
-      </label>`;
-    }
-    if (field.type === "date") {
-      return html`<label class="form-field">
-        ${label}
-        <input
-          type="date"
-          .value=${typeof value === "string" ? value : ""}
-          id=${fieldId}
-          name=${field.key}
-          placeholder=${placeholder}
-          @input=${(event: Event) => {
-            this.current[field.key] = (event.target as HTMLInputElement).value;
-            this.requestUpdate();
-          }}
-        />
-        ${field.hint ? html`<span class="form-hint">${field.hint}</span>` : nothing}
-      </label>`;
-    }
-    if (field.type === "datetime") {
-      return html`<label class="form-field">
-        ${label}
-        <input
-          type="datetime-local"
-          .value=${typeof value === "string" ? value : ""}
-          id=${fieldId}
-          name=${field.key}
-          placeholder=${placeholder}
-          @input=${(event: Event) => {
-            this.current[field.key] = (event.target as HTMLInputElement).value;
-            this.requestUpdate();
-          }}
-        />
-        ${field.hint ? html`<span class="form-hint">${field.hint}</span>` : nothing}
-      </label>`;
-    }
-    const isNumber = field.type === "number";
-    return html`<label class="form-field">
-      ${label}
-      <input
-        type=${isNumber ? "number" : "text"}
-        .value=${
-          typeof value === "string" || typeof value === "number"
-            ? String(value)
-            : ""
-        }
-        id=${fieldId}
-        name=${field.key}
-        placeholder=${placeholder}
-        @input=${(event: Event) => {
-          const input = event.target as HTMLInputElement;
-          this.current[field.key] = isNumber
-            ? input.value === ""
-              ? undefined
-              : Number(input.value)
-            : input.value;
-          this.requestUpdate();
-        }}
-      />
-      ${field.hint ? html`<span class="form-hint">${field.hint}</span>` : nothing}
-    </label>`;
-  }
-
-  // A string[] field: with options a multi-select (chip/checkbox group), each
-  // chosen value must be in the allowed set; without options a free tag list
-  // (comma-separated text input).
-  private renderMultiSelect(
-    field: ConfigField,
-    value: unknown,
-    fieldId: string
-  ) {
-    const options = field.options ?? [];
-    if (options.length > 0) {
-      const selected = Array.isArray(value) ? value : [];
-      return html`<span class="form-field">
-        <span class="form-label"
-          >${field.label}${field.required ? " *" : ""}</span
-        >
-        <span class="form-row">
-          ${options.map((option, index) => {
-            const checked = selected.includes(option);
-            return html`<label class="chip ${checked ? "checked" : ""}">
-              <input
-                type="checkbox"
-                id=${`${fieldId}-${index}`}
-                name=${field.key}
-                ?checked=${checked}
-                @change=${(event: Event) => {
-                  const on = (event.target as HTMLInputElement).checked;
-                  this.current[field.key] = on
-                    ? [...selected, option]
-                    : selected.filter((item) => item !== option);
-                  this.requestUpdate();
-                }}
-              />
-              ${option}
-            </label>`;
-          })}
-        </span>
-        ${field.hint ? html`<span class="form-hint">${field.hint}</span>` : nothing}
-      </span>`;
-    }
-    const joined = Array.isArray(value) ? value.join(", ") : "";
-    return html`<label class="form-field">
-      <span class="form-label"
-        >${field.label}${field.required ? " *" : ""}</span
-      >
-      <input
-        type="text"
-        .value=${joined}
-        id=${fieldId}
-        name=${field.key}
-        placeholder=${field.placeholder ?? "Comma-separated values"}
-        @input=${(event: Event) => {
-          const raw = (event.target as HTMLInputElement).value;
-          this.current[field.key] = raw
-            .split(",")
-            .map((item) => item.trim())
-            .filter((item) => item !== "");
-          this.requestUpdate();
-        }}
-      />
-      ${field.hint ? html`<span class="form-hint">${field.hint}</span>` : nothing}
-    </label>`;
-  }
+  private handleFieldChange = (
+    event: CustomEvent<{ key: string; value: ConfigFieldValue | undefined }>
+  ): void => {
+    this.current[event.detail.key] = event.detail.value;
+    this.requestUpdate();
+  };
 
   private formValid(): boolean {
     return this.fields.every((field) => {
@@ -418,7 +159,7 @@ export class ConfigFieldForm extends LitElement {
     // Required fields are guaranteed present by formValid; strip empty
     // non-required values so an untouched optional field stays absent (the
     // engine's collector skips absent optionals).
-    const values: Record<string, ConfigFieldFormValue> = {};
+    const values: Record<string, ConfigFieldValue> = {};
     for (const field of this.fields) {
       const value = this.current[field.key];
       if (value === undefined) continue;
@@ -440,7 +181,7 @@ export class ConfigFieldForm extends LitElement {
     );
   }
 
-  private isEmpty(value: ConfigFieldFormValue): boolean {
+  private isEmpty(value: ConfigFieldValue): boolean {
     if (typeof value === "string") return value.trim() === "";
     if (Array.isArray(value)) return value.length === 0;
     return false;

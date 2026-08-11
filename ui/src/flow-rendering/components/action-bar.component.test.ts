@@ -108,9 +108,12 @@ describe("ActionBar", () => {
 
     const form = shadowRootOf(el).querySelector("config-field-form");
     expect(form).not.toBeNull();
+    // The form now composes <config-field-control> children (one extra Lit
+    // layer), so its subtree must settle before its inputs are queryable.
+    await settle(shadowRootOf(form as HTMLElement));
 
     // The form's submit is gated until the required textarea is filled.
-    const formRoot = (form as HTMLElement).shadowRoot as ShadowRoot;
+    const formRoot = shadowRootOf(form as HTMLElement);
     const textarea = formRoot.querySelector("textarea") as HTMLTextAreaElement;
     textarea.value = "Fix the totals";
     textarea.dispatchEvent(new Event("input", { bubbles: true }));
@@ -156,11 +159,12 @@ describe("ActionBar", () => {
     const form = shadowRootOf(el).querySelector("config-field-form");
     expect(form).not.toBeNull();
     expect(shadowRootOf(el).querySelector(".confirm-row")).toBeNull();
+    await settle(shadowRootOf(form as HTMLElement));
 
     // Fill the reason and submit → the confirm step appears, nothing emitted.
     let emitted = false;
     el.addEventListener("hive-action", () => (emitted = true));
-    const formRoot = (form as HTMLElement).shadowRoot as ShadowRoot;
+    const formRoot = shadowRootOf(form as HTMLElement);
     const textarea = formRoot.querySelector("textarea") as HTMLTextAreaElement;
     textarea.value = "Out of scope";
     textarea.dispatchEvent(new Event("input", { bubbles: true }));
@@ -219,7 +223,8 @@ describe("ActionBar", () => {
     buttons(el)[0].dispatchEvent(click());
     await el.updateComplete;
     const form = shadowRootOf(el).querySelector("config-field-form");
-    const formRoot = (form as HTMLElement).shadowRoot as ShadowRoot;
+    await settle(shadowRootOf(form as HTMLElement));
+    const formRoot = shadowRootOf(form as HTMLElement);
     const textarea = formRoot.querySelector("textarea") as HTMLTextAreaElement;
     textarea.value = "Reason here";
     textarea.dispatchEvent(new Event("input", { bubbles: true }));

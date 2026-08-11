@@ -1,11 +1,6 @@
 <script lang="ts">
 import { slugify } from "shared/slugify";
 import { onMount } from "svelte";
-import Button from "../shared/ui/Button.svelte";
-import Dialog from "../shared/ui/Dialog.svelte";
-import Textarea from "../shared/ui/Textarea.svelte";
-import TextInput from "../shared/ui/TextInput.svelte";
-import { highlightTypeScript } from "./DefinitionEditor/highlight";
 import {
   authorFlowDefinition,
   createFlowDefinition,
@@ -18,7 +13,12 @@ import {
   sendTaskInput,
   updateFlowDefinition,
   validateFlowDefinition,
-} from "./flow-api";
+} from "../flow-api";
+import Button from "../shared/ui/Button.svelte";
+import Dialog from "../shared/ui/Dialog.svelte";
+import Textarea from "../shared/ui/Textarea.svelte";
+import TextInput from "../shared/ui/TextInput.svelte";
+import { highlightTypeScript } from "./DefinitionEditor/highlight";
 import { flowStore } from "./flow-store.svelte";
 import LitFlowHost from "./LitFlowHost.svelte";
 

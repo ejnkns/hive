@@ -17,7 +17,7 @@ import { type ResolvedRender, resolveRender } from "../contract-resolution";
 import { getKindRenderer } from "../renderer-registry";
 import { resolvePath } from "../resolve-path";
 import "./config-field-form";
-import type { ConfigFieldFormValue } from "./config-field-form";
+import type { ConfigFieldValue } from "./config-field-form";
 import "./dynamic-element-host";
 import { statePath } from "./workflow-instance-card/state-path";
 import {
@@ -571,9 +571,9 @@ export class WorkflowInstanceCard extends LitElement {
   // values shaped like the declared field types (the form's value type is
   // scalar/array; an object the agent wrote under a listed key is skipped so
   // the patch cannot echo it back).
-  private editPrefill(): Record<string, ConfigFieldFormValue> {
+  private editPrefill(): Record<string, ConfigFieldValue> {
     const state = this.instanceEntry.state.workflowInstanceState;
-    const result: Record<string, ConfigFieldFormValue> = {};
+    const result: Record<string, ConfigFieldValue> = {};
     for (const field of this.instanceEntry.editFields ?? []) {
       const value = state[field.key];
       if (
@@ -582,14 +582,14 @@ export class WorkflowInstanceCard extends LitElement {
         typeof value === "number" ||
         Array.isArray(value)
       ) {
-        result[field.key] = value as ConfigFieldFormValue;
+        result[field.key] = value as ConfigFieldValue;
       }
     }
     return result;
   }
 
   private handleEditSubmit = (
-    event: CustomEvent<{ values: Record<string, ConfigFieldFormValue> }>
+    event: CustomEvent<{ values: Record<string, ConfigFieldValue> }>
   ) => {
     this.editing = false;
     this.emitPatchState(event.detail.values);
