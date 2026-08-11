@@ -1,5 +1,11 @@
 # UI Build-Out — Implementation Plan
 
+> Status: historical. The phases shipped across subsequent initiatives
+> (definition-driven rendering, the flow editor as a flow instance — see
+> `CONTEXT.md` and `docs/plan-editor-as-flow-instance.md`). The field renderer
+> is now `<config-field-control>` (one renderer for every form surface);
+> `ConfigFieldInput.svelte` was deleted.
+
 Build out the flows UI. The rendering surface is already cleanly split — the
 app shell (library, definition editor, forms, proxy dashboard) is Svelte; the
 rendering surface (how workflow instances render) is Lit + Web Components
@@ -100,7 +106,7 @@ loading skeletons instead of a bare "Loading flows...".
 - Engine: add optional `options?: string[]` to `ConfigField`
   (`workflow-engine/src/workflow-types.ts`). Server validation unchanged (still a
   string). Serialized to the client via the existing definition payload.
-- UI: `ConfigFieldInput.svelte` renders a `Select` when `field.options` is
+- UI: `config-field-control` (Lit) renders a `Select` when `field.options` is
   present. Seed `options` on wayfinder's ticket `type` field and queen-bee where
   it reads as an enum.
 - Better hint copy for `basePath` (destination repo/scratch dir).
@@ -148,7 +154,7 @@ building the serving/hosting path. Out of scope for this initiative.
 - `flow-store.applyMessage` (init/upsert/remove).
 - `resolve-path`.
 - `markdown-view` sanitization (raw HTML dropped).
-- `ConfigFieldInput` select rendering for `options` fields.
+- `config-field-control` select rendering for `options` fields.
 
 ### D2. End-to-end DoD pass
 
