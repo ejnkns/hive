@@ -70,6 +70,16 @@ export const engineCapabilities = {
     "dependsOnState — engine backstop: resolves workflowInstanceState.dependsOn (ids or titles) against instances already in the target state",
   ] as const,
 
+  // The execution context a flow's own tools and operations receive: the
+  // engine exposes live instance-state reads and writes, so a domain
+  // capability can decide from the current state and record its result
+  // without files or parameter plumbing.
+  stateAccess: {
+    name: "stateAccess",
+    description:
+      "Tools (defineTool executors) and operations (defineOperations) receive a live instance-state getter (ctx.workflowInstanceState()) and patch (ctx.patchWorkflowInstanceState(...)). The getter sees the current state — including patches from earlier turns, the flow, or the instance-state API — so a capability like an authoring session's save_definition can read the generated source and the id of a prior save instead of requiring every input as a parameter. Tools mirror the operation context; the generic engine never reads or writes files.",
+  } as const,
+
   // State fields the engine itself writes and/or reads. engineProvided fields
   // need no preset writer; engineRead fields must be declared and written by
   // the flow. These are part of every workflow's implicit state contract.
@@ -195,6 +205,10 @@ export function authoringGuide(): string {
 
   push("## Cross-instance capabilities (gates and ops)");
   for (const item of engineCapabilities.crossInstance) push(`- ${item}`);
+  push();
+
+  push("## Instance-state access in tools and ops");
+  push(`- ${engineCapabilities.stateAccess.description}`);
   push();
 
   push("## Engine-provided state fields (no flow writer needed)");

@@ -60,4 +60,20 @@ describe("authoring guide", () => {
       );
     }
   });
+
+  it("covers the tool/op instance-state access capability", () => {
+    const guide = authoringGuide();
+    assert.ok(
+      guide.includes("Instance-state access in tools and ops"),
+      "guide missing the instance-state access section"
+    );
+    assert.ok(
+      guide.includes("ctx.workflowInstanceState()"),
+      "guide missing the live state getter"
+    );
+    assert.ok(
+      guide.includes("ctx.patchWorkflowInstanceState(...)"),
+      "guide missing the state patch"
+    );
+  });
 });
