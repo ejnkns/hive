@@ -154,6 +154,7 @@ export class FlowOverviewBar extends LitElement {
   private renderWorkflow(workflow: WorkflowOverview) {
     return html`<button
       class="chip"
+      type="button"
       data-workflow-id=${workflow.workflowId}
       title="${workflow.label} — ${workflow.status}"
       @click=${() => this.focusWorkflow(workflow.workflowId)}

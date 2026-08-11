@@ -176,30 +176,35 @@ export class ConfigFieldForm extends LitElement {
   }
 
   render() {
-    return html`<div class="form">
+    return html`<form class="form" @submit=${this.handleSubmit}>
       ${this.fields.map((field) => this.renderField(field))}
       <div class="form-actions">
         <button
           class="primary"
+          type="submit"
           ?disabled=${!this.formValid()}
-          @click=${() => this.submit()}
         >
           ${this.submitLabel}
         </button>
-        <button @click=${() => this.emitCancel()}>Cancel</button>
+        <button type="button" @click=${() => this.emitCancel()}>Cancel</button>
       </div>
-    </div>`;
+    </form>`;
   }
 
   private renderField(field: ConfigField) {
     const value = this.current[field.key];
     const required = field.required ? " *" : "";
+    // The field key is a valid TS identifier (spec-enforced), so it makes a
+    // safe control id/name. Prefix to keep ids document-unique across forms.
+    const fieldId = `cf-${field.key}`;
     if (field.type === "boolean") {
       return html`<label class="form-field">
         <span class="form-label">${field.label}</span>
         <span class="form-row">
           <input
             type="checkbox"
+            id=${fieldId}
+            name=${field.key}
             ?checked=${value === true}
             @change=${(event: Event) => {
               this.current[field.key] = (
@@ -213,7 +218,7 @@ export class ConfigFieldForm extends LitElement {
       </label>`;
     }
     if (field.type === "string[]") {
-      return this.renderMultiSelect(field, value);
+      return this.renderMultiSelect(field, value, fieldId);
     }
     const label = html`<span class="form-label"
       >${field.label}${required}</span
@@ -222,6 +227,8 @@ export class ConfigFieldForm extends LitElement {
       return html`<label class="form-field">
         ${label}
         <select
+          id=${fieldId}
+          name=${field.key}
           @change=${(event: Event) => {
             this.current[field.key] = (event.target as HTMLSelectElement).value;
             this.requestUpdate();
@@ -244,9 +251,15 @@ export class ConfigFieldForm extends LitElement {
     }
     const placeholder = field.placeholder ?? "";
     if (field.type === "textarea") {
+      // The value binds via the .value property, never as element content:
+      // template whitespace between the tags would otherwise become the
+      // textarea's value (a stray newline on load, and one per keystroke).
       return html`<label class="form-field">
         ${label}
         <textarea
+          .value=${typeof value === "string" ? value : ""}
+          id=${fieldId}
+          name=${field.key}
           placeholder=${placeholder}
           @input=${(event: Event) => {
             this.current[field.key] = (
@@ -254,7 +267,7 @@ export class ConfigFieldForm extends LitElement {
             ).value;
             this.requestUpdate();
           }}
-        >${typeof value === "string" ? value : ""}</textarea>
+        ></textarea>
         ${field.hint ? html`<span class="form-hint">${field.hint}</span>` : nothing}
       </label>`;
     }
@@ -264,6 +277,8 @@ export class ConfigFieldForm extends LitElement {
         <input
           type="date"
           .value=${typeof value === "string" ? value : ""}
+          id=${fieldId}
+          name=${field.key}
           placeholder=${placeholder}
           @input=${(event: Event) => {
             this.current[field.key] = (event.target as HTMLInputElement).value;
@@ -279,6 +294,8 @@ export class ConfigFieldForm extends LitElement {
         <input
           type="datetime-local"
           .value=${typeof value === "string" ? value : ""}
+          id=${fieldId}
+          name=${field.key}
           placeholder=${placeholder}
           @input=${(event: Event) => {
             this.current[field.key] = (event.target as HTMLInputElement).value;
@@ -298,6 +315,8 @@ export class ConfigFieldForm extends LitElement {
             ? String(value)
             : ""
         }
+        id=${fieldId}
+        name=${field.key}
         placeholder=${placeholder}
         @input=${(event: Event) => {
           const input = event.target as HTMLInputElement;
@@ -316,7 +335,11 @@ export class ConfigFieldForm extends LitElement {
   // A string[] field: with options a multi-select (chip/checkbox group), each
   // chosen value must be in the allowed set; without options a free tag list
   // (comma-separated text input).
-  private renderMultiSelect(field: ConfigField, value: unknown) {
+  private renderMultiSelect(
+    field: ConfigField,
+    value: unknown,
+    fieldId: string
+  ) {
     const options = field.options ?? [];
     if (options.length > 0) {
       const selected = Array.isArray(value) ? value : [];
@@ -325,11 +348,13 @@ export class ConfigFieldForm extends LitElement {
           >${field.label}${field.required ? " *" : ""}</span
         >
         <span class="form-row">
-          ${options.map((option) => {
+          ${options.map((option, index) => {
             const checked = selected.includes(option);
             return html`<label class="chip ${checked ? "checked" : ""}">
               <input
                 type="checkbox"
+                id=${`${fieldId}-${index}`}
+                name=${field.key}
                 ?checked=${checked}
                 @change=${(event: Event) => {
                   const on = (event.target as HTMLInputElement).checked;
@@ -354,6 +379,8 @@ export class ConfigFieldForm extends LitElement {
       <input
         type="text"
         .value=${joined}
+        id=${fieldId}
+        name=${field.key}
         placeholder=${field.placeholder ?? "Comma-separated values"}
         @input=${(event: Event) => {
           const raw = (event.target as HTMLInputElement).value;
@@ -379,6 +406,13 @@ export class ConfigFieldForm extends LitElement {
       return true;
     });
   }
+
+  // Real form semantics: Enter submits (preventDefault keeps the page from
+  // reloading), the primary button is type=submit, Cancel is type=button.
+  private handleSubmit = (event: SubmitEvent): void => {
+    event.preventDefault();
+    this.submit();
+  };
 
   private submit(): void {
     // Required fields are guaranteed present by formValid; strip empty

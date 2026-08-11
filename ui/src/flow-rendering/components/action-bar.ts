@@ -118,16 +118,18 @@ export class ActionBar extends LitElement {
               >
               <button
                 class="destructive"
+                type="button"
                 @click=${() => this.confirm(action.id)}
               >
                 Confirm
               </button>
-              <button @click=${() => this.dismissConfirm()}>
+              <button type="button" @click=${() => this.dismissConfirm()}>
                 Cancel
               </button>
             </div>`
           : html`<button
               class=${action.variant}
+              type="button"
               @click=${() => this.handleAction(action)}
             >
               ${action.label}

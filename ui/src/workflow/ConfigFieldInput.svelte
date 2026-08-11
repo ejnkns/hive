@@ -12,8 +12,12 @@ import Select from "../shared/ui/Select.svelte";
 //   datetime  → <input type="datetime-local"> (YYYY-MM-DDTHH:mm)
 //   number    → <input type="number">
 //   string    → single-line text
-// Local validation stays thin (required/emptiness); the server/engine
-// collector (collect-config-field-values.ts) is the format authority.
+// Proper HTML form semantics: every control carries id (cf-<key>) and name
+// (<key>); the field label links to it via `for` (except the chip group,
+// whose chip labels wrap their own checkboxes). The multi-select chips are
+// labels themselves, so the group wrapper is a span, never a label (labels
+// must not nest). Local validation stays thin (required/emptiness); the
+// server/engine collector (collect-config-field-values.ts) is the authority.
 
 export type ConfigFieldValue = string | boolean | number | string[];
 
@@ -28,13 +32,28 @@ let {
   disabled?: boolean;
   onChange: (value: ConfigFieldValue) => void;
 } = $props();
+
+const fieldId = $derived(`cf-${field.key}`);
+const isChipGroup = $derived(
+  field.type === "string[]" &&
+    field.options !== undefined &&
+    field.options.length > 0
+);
 </script>
 
-<label class="field">
-  <span class="label">{field.label}{field.required ? " *" : ""}</span>
+<div class="field">
+  {#if isChipGroup}
+    <span class="label">{field.label}{field.required ? " *" : ""}</span>
+  {:else}
+    <label class="label" for={fieldId}
+      >{field.label}{field.required ? " *" : ""}</label
+    >
+  {/if}
   {#if field.type === "boolean"}
     <input
       type="checkbox"
+      id={fieldId}
+      name={field.key}
       checked={value === true}
       {disabled}
       onchange={(event) => {
@@ -42,13 +61,15 @@ let {
       }}
     >
   {:else if field.type === "string[]"}
-    {#if field.options && field.options.length > 0}
+    {#if isChipGroup}
       <span class="chips">
-        {#each field.options as option (option)}
+        {#each field.options as option, index (option)}
           {@const checked = Array.isArray(value) && value.includes(option)}
           <label class="chip {checked ? "checked" : ""}">
             <input
               type="checkbox"
+              id={`${fieldId}-${index}`}
+              name={field.key}
               {checked}
               {disabled}
               onchange={(event) => {
@@ -68,6 +89,8 @@ let {
       <input
         class="text-input text-input-small"
         type="text"
+        id={fieldId}
+        name={field.key}
         value={Array.isArray(value) ? value.join(", ") : ""}
         placeholder={field.placeholder ?? "Comma-separated values"}
         {disabled}
@@ -91,20 +114,26 @@ let {
       size="small"
     />
   {:else if field.type === "textarea"}
+    <!-- The value binds as a property, never as element content: template
+         whitespace between the tags would otherwise become the textarea's
+         value (a stray newline on load, one per keystroke). -->
     <textarea
       class="text-input text-input-small"
+      id={fieldId}
+      name={field.key}
+      value={typeof value === "string" ? value : ""}
       placeholder={field.placeholder ?? ""}
       {disabled}
       oninput={(event) => {
         onChange(event.currentTarget.value);
       }}
-    >
-      {typeof value === "string" ? value : ""}
-    </textarea>
+    ></textarea>
   {:else if field.type === "date"}
     <input
       class="text-input text-input-small"
       type="date"
+      id={fieldId}
+      name={field.key}
       value={typeof value === "string" ? value : ""}
       placeholder={field.placeholder ?? ""}
       {disabled}
@@ -116,6 +145,8 @@ let {
     <input
       class="text-input text-input-small"
       type="datetime-local"
+      id={fieldId}
+      name={field.key}
       value={typeof value === "string" ? value : ""}
       placeholder={field.placeholder ?? ""}
       {disabled}
@@ -127,6 +158,8 @@ let {
     <input
       class="text-input text-input-small"
       type={field.type === "number" ? "number" : "text"}
+      id={fieldId}
+      name={field.key}
       value={String(value ?? "")}
       placeholder={field.placeholder ?? ""}
       {disabled}
@@ -142,7 +175,7 @@ let {
   {#if field.hint}
     <span class="hint">{field.hint}</span>
   {/if}
-</label>
+</div>
 
 <style>
 .field {

@@ -37,6 +37,53 @@ function submitButton(el: ConfigFieldForm): HTMLButtonElement {
 }
 
 describe("ConfigFieldForm", () => {
+  it("renders a real form element with proper control ids and names", async () => {
+    const fields: ConfigField[] = [
+      field({ key: "title", type: "string", required: true }),
+      field({ key: "note", type: "textarea" }),
+      field({ key: "approved", type: "boolean" }),
+      field({ key: "kind", type: "string", options: ["a", "b"] }),
+      field({ key: "due", type: "date" }),
+    ];
+    const el = await mountForm({ fields });
+    expect(shadowRootOf(el).querySelector("form")).not.toBeNull();
+
+    const controls = [
+      input(el, 'input[name="title"]'),
+      input(el, 'textarea[name="note"]'),
+      input(el, 'input[name="approved"]'),
+      shadowRootOf(el).querySelector('select[name="kind"]'),
+      input(el, 'input[name="due"]'),
+    ];
+    for (const control of controls) {
+      expect(control).toBeDefined();
+      const named = control as HTMLElement;
+      expect(named.id).toBe(`cf-${named.getAttribute("name")}`);
+    }
+  });
+
+  it("renders a textarea with a clean empty value (no template whitespace)", async () => {
+    const el = await mountForm({
+      fields: [field({ key: "note", type: "textarea" })],
+    });
+    const textarea = shadowRootOf(el).querySelector(
+      "textarea"
+    ) as HTMLTextAreaElement;
+    expect(textarea.value).toBe("");
+  });
+
+  it("gives every multiselect chip checkbox an id and name", async () => {
+    const el = await mountForm({
+      fields: [field({ key: "tags", type: "string[]", options: ["x", "y"] })],
+    });
+    const checkboxes = queryAllDeep(
+      el,
+      ".chip input[type=checkbox]"
+    ) as HTMLInputElement[];
+    expect(checkboxes.map((c) => c.id)).toEqual(["cf-tags-0", "cf-tags-1"]);
+    expect(checkboxes.every((c) => c.name === "tags")).toBe(true);
+  });
+
   it("renders one control per field type", async () => {
     const fields: ConfigField[] = [
       field({ key: "title", type: "string" }),

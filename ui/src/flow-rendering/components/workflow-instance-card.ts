@@ -555,6 +555,7 @@ export class WorkflowInstanceCard extends LitElement {
                 editFields.length > 0
                   ? html`<button
                       class="edit-btn"
+                      type="button"
                       @click=${() => (this.editing = true)}
                     >
                       Edit details
