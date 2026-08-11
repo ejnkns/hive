@@ -60,7 +60,10 @@ export function click(): MouseEvent {
   return new MouseEvent("click", { bubbles: true, composed: true });
 }
 
-export function type(input: HTMLInputElement, value: string): void {
+export function type(
+  input: HTMLInputElement | HTMLTextAreaElement,
+  value: string
+): void {
   input.value = value;
   input.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
 }

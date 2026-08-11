@@ -70,6 +70,11 @@ export type AuthoringItemState = {
   savedName?: string;
   // Non-blocking schema-consistency findings from the last save.
   saveFindings?: { errors: string[]; warnings: string[] };
+  // True while the human has edited the definition TS directly (the editor's
+  // write-back). The spec draft is frozen: set_flow_spec/generate_definition
+  // refuse until the human discards (or adopts, via the future reverse
+  // renderer) their edits.
+  specDiverged?: boolean;
 };
 
 // ─── shared gate machinery ────────────────────────────────────────────
@@ -229,6 +234,28 @@ export function savePatch(result: {
   };
 }
 
+// The divergence gate both spec tools enforce: while the human owns the
+// source (specDiverged, set by the editor's write-back), the agent must not
+// overwrite it — it proposes in chat instead.
+function divergedResult(call: { id: string }): {
+  toolCallId: string;
+  content: string;
+  isError: boolean;
+} {
+  return {
+    toolCallId: call.id,
+    content:
+      "The definition has manual edits (the user edited the TypeScript directly), so the spec is frozen. Do not overwrite it. Propose changes in chat — read the current source with read_definition_source — and let the user apply them, discard their edits, or adopt them.",
+    isError: true,
+  };
+}
+
+function isDiverged(ctx: {
+  workflowInstanceState?: () => AuthoringItemState;
+}): boolean {
+  return ctx.workflowInstanceState?.()?.specDiverged === true;
+}
+
 // ─── tools ────────────────────────────────────────────────────────────
 
 export const authoringTools = [
@@ -271,6 +298,7 @@ export const authoringTools = [
       required: ["spec"],
     },
     executor: async (call, ctx) => {
+      if (isDiverged(ctx)) return divergedResult(call);
       const args = JSON.parse(call.arguments) as { spec?: string };
       if (typeof args.spec !== "string" || args.spec.trim() === "") {
         return {
@@ -325,6 +353,7 @@ export const authoringTools = [
       required: ["spec"],
     },
     executor: async (call, ctx) => {
+      if (isDiverged(ctx)) return divergedResult(call);
       const args = JSON.parse(call.arguments) as { spec?: string };
       if (typeof args.spec !== "string" || args.spec.trim() === "") {
         return {
@@ -449,6 +478,26 @@ export const authoringTools = [
       }
     },
   }),
+  defineTool<AuthoringItemState>({
+    name: "read_definition_source",
+    description:
+      "Read the current definition TypeScript — the working artifact, including any manual edits the user made directly in the editor. Use this to reason about the exact current source before proposing changes (especially while the spec is frozen by manual edits).",
+    parameters: {
+      properties: {},
+      required: [],
+    },
+    executor: async (call, ctx) => {
+      const source = ctx.workflowInstanceState?.()?.source;
+      return {
+        toolCallId: call.id,
+        content:
+          typeof source === "string" && source !== ""
+            ? source
+            : "No definition source yet — the agent's last generate_definition output, or a manual edit, will appear here.",
+        isError: false,
+      };
+    },
+  }),
 ];
 
 // ─── the workflow ─────────────────────────────────────────────────────
@@ -492,6 +541,7 @@ const sessionWorkflow = defineWorkflow({
             "set_flow_spec",
             "generate_definition",
             "save_definition",
+            "read_definition_source",
           ],
         },
       ],

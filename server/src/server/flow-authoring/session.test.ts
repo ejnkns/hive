@@ -428,4 +428,54 @@ describe("flow-authoring session", () => {
     assert.equal(result.isError, true);
     assert.match(result.content, /Nothing to save/);
   });
+
+  it("set_flow_spec and generate_definition refuse while the source is diverged", async () => {
+    const divergedCtx = {
+      workflowInstanceState: () => ({
+        source: "export const flow = {}; // hand edit",
+        specDiverged: true,
+      }),
+      patchWorkflowInstanceState: () => {},
+    } as never;
+    for (const name of ["set_flow_spec", "generate_definition"]) {
+      const tool = authoringTools.find(
+        (t) => t.definition.function.name === name
+      );
+      assert.ok(tool, `${name} tool must be defined`);
+      const result = await tool.executor(
+        { id: `d-${name}`, name, arguments: "{}" },
+        divergedCtx
+      );
+      assert.equal(result.isError, true, `${name} must refuse while diverged`);
+      assert.match(result.content, /manual edits/, `${name} gate message`);
+    }
+  });
+
+  it("read_definition_source returns the current source, including manual edits", async () => {
+    const tool = authoringTools.find(
+      (t) => t.definition.function.name === "read_definition_source"
+    );
+    assert.ok(tool, "read_definition_source tool must be defined");
+
+    const withManual = await tool.executor(
+      { id: "r1", name: "read_definition_source", arguments: "{}" },
+      {
+        workflowInstanceState: () => ({
+          source: "export const flow = {}; // hand edit",
+          specDiverged: true,
+        }),
+      } as never
+    );
+    assert.equal(withManual.isError, false);
+    assert.match(withManual.content, /hand edit/);
+
+    const none = await tool.executor(
+      { id: "r2", name: "read_definition_source", arguments: "{}" },
+      {
+        workflowInstanceState: () => ({}),
+      } as never
+    );
+    assert.equal(none.isError, false);
+    assert.match(none.content, /No definition source yet/);
+  });
 });

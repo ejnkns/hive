@@ -71,10 +71,11 @@ function completionFor(payload) {
   throw new Error("Mock provider received an unknown Agent Role");
 }
 
-// The flow-authoring session (lucky mode): the agent produces the spec and
-// generates the definition in one conversation — set_flow_spec lands the live
-// preview, generate_definition runs the real engine gate and writes the
-// source/suggestedName the editor's save action registers.
+// The flow-authoring session: set_flow_spec lands the live preview,
+// generate_definition runs the real engine gate and writes the source. Later
+// turns cover co-editing: the divergence gate refuses set_flow_spec while the
+// source is manual (the agent then proposes in chat), and after the user
+// discards, the next ask regenerates.
 function authoringCompletion(messages) {
   const toolMessages = messages.filter((message) => message.role === "tool");
   const lastMessage = messages.at(-1);
@@ -88,7 +89,11 @@ function authoringCompletion(messages) {
       "mock authoring reasoning"
     );
   }
-  if (lastMessage?.tool_call_id === "author-spec") {
+  if (
+    lastMessage?.tool_call_id?.startsWith("author-spec") &&
+    !lastMessage.content.includes("manual edits")
+  ) {
+    // set_flow_spec succeeded (or the divergence was discarded) — generate.
     return toolCompletion(
       [
         toolCall("author-gen", "generate_definition", {
@@ -98,9 +103,31 @@ function authoringCompletion(messages) {
       "mock authoring reasoning"
     );
   }
-  return textCompletion(
-    "The definition is ready — summarize it for the user."
-  );
+  if (lastMessage?.tool_call_id?.startsWith("author-gen")) {
+    return textCompletion(
+      "The definition is ready — summarize it for the user."
+    );
+  }
+  if (
+    lastMessage?.role === "tool" &&
+    lastMessage.content.includes("manual edits")
+  ) {
+    // The divergence gate refused the spec update — propose in chat instead.
+    return textCompletion(
+      "I see you edited the definition by hand, so the spec is frozen. I'd suggest adding a reject action with a confirm; apply it yourself or discard your edits so I can take over."
+    );
+  }
+  if (lastMessage?.role === "user") {
+    return toolCompletion(
+      [
+        toolCall("author-spec", "set_flow_spec", {
+          spec: JSON.stringify(AUTHORING_SPEC),
+        }),
+      ],
+      "mock authoring reasoning"
+    );
+  }
+  return textCompletion("The definition is ready.");
 }
 
 function requirementsCompletion(messages) {

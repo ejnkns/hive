@@ -1,7 +1,6 @@
 /** @public — the built-in authoring-session instance component. */
 
-import { css, html, LitElement, nothing } from "lit";
-import { unsafeHTML } from "lit/directives/unsafe-html.js";
+import { css, html, LitElement, nothing, type PropertyValues } from "lit";
 import type {
   WorkflowDefResponse,
   WorkflowInstanceEntry,
@@ -11,17 +10,24 @@ import type {
   CustomRenderKind,
 } from "workflow-engine/workflow-types";
 import { resolvePath } from "../resolve-path.ts";
-import { highlightTypeScript } from "../ts-highlight.ts";
 import "./action-bar.ts";
 import "./chat-session.ts";
+import "./code-editor.ts";
 
 // The flow-declared instance component for the flow-authoring workflow
 // (ui.instanceComponent: "flow-editor"): the session header (title from the
-// instance's prompt), the running ai-chat (chat-session), the tokenized code
-// pane bound to previewSource/previewErrors, and the action row (action-bar
-// from availableActions — validate/save execute REST in the Svelte shell via
-// the onAction callback, by design). This is the authoring session rendered
-// as a flow instance: the definition's instance IS the editor.
+// instance's prompt), the chat window (chat-session) with the Save button,
+// and the editable code editor bound to the working definition source. This
+// is the authoring session rendered as a flow instance: the definition's
+// instance IS the editor.
+//
+// The editor is live and bidirectional: the agent's changes (previewSource /
+// source) appear as the session works, and the human's direct edits write
+// back into instance state (throttled, ~800 ms debounce, flushed on send /
+// save / disconnect) marking the spec diverged — while diverged the agent's
+// spec tools refuse and the human can discard their edits to hand back.
+
+const WRITE_BACK_DEBOUNCE_MS = 800;
 
 export class FlowEditor extends LitElement {
   static properties = {
@@ -37,6 +43,15 @@ export class FlowEditor extends LitElement {
     | ((actionId: string, payload?: Record<string, unknown>) => void)
     | undefined = undefined;
   onSendMessage: ((content: string) => Promise<void>) | undefined = undefined;
+  onPatchState: ((values: Record<string, unknown>) => void) | undefined =
+    undefined;
+
+  // The human's in-flight edits, overriding the bound source until the
+  // write-back round-trips (the round-trip guard: a WS snapshot reflecting
+  // the shell's own patch must not clear the user's typing).
+  private editedValue: string | null = null;
+  private pendingWriteBack: string | null = null;
+  private writeBackTimer: number | null = null;
 
   static styles = css`
     :host {
@@ -141,6 +156,7 @@ export class FlowEditor extends LitElement {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 0.5rem;
     }
 
     .pane-title {
@@ -168,37 +184,28 @@ export class FlowEditor extends LitElement {
       overflow-wrap: anywhere;
     }
 
-    .code {
+    .diverged-note {
       margin: 0;
-      max-height: 260px;
-      overflow-y: auto;
-      padding: 0.375rem 0.5rem;
-      background: rgba(0, 0, 0, 0.25);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      font-family: var(--font-mono, monospace);
       font-size: 0.625rem;
-      line-height: 1.45;
-      color: var(--text);
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-
-    .code :global(.tok-keyword) {
-      color: var(--accent);
-    }
-
-    .code :global(.tok-string) {
-      color: var(--success);
-    }
-
-    .code :global(.tok-number) {
       color: var(--warning);
+      line-height: 1.4;
     }
 
-    .code :global(.tok-comment) {
-      color: var(--muted);
-      font-style: italic;
+    button.discard-btn {
+      font-family: inherit;
+      font-size: 0.625rem;
+      height: 22px;
+      padding: 0 0.5rem;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--warning);
+      cursor: pointer;
+      flex: none;
+    }
+
+    button.discard-btn:hover {
+      border-color: var(--warning);
     }
 
     .editor-actions {
@@ -215,6 +222,7 @@ export class FlowEditor extends LitElement {
     const state = this.instanceEntry.state.workflowInstanceState;
     const previewSource =
       typeof state.previewSource === "string" ? state.previewSource : "";
+    const sessionSource = typeof state.source === "string" ? state.source : "";
     const previewErrors = Array.isArray(state.previewErrors)
       ? state.previewErrors.filter(
           (error): error is string => typeof error === "string"
@@ -223,15 +231,20 @@ export class FlowEditor extends LitElement {
     const actions = [...this.instanceEntry.availableActions].sort(
       byVariantPriority
     );
-    const source = typeof state.source === "string" ? state.source : "";
+    const diverged = state.specDiverged === true;
+    // The working artifact: the human's in-flight edits, else the agent's
+    // generated source, else the live spec draft.
+    const editorValue =
+      this.editedValue ??
+      (sessionSource !== "" ? sessionSource : previewSource);
 
     return html`
       <div class="editor">
         <div class="editor-header">
           <span class="editor-title">${this.sessionTitle()}</span>
         </div>
-        ${this.renderChat(source)}
-        ${this.renderPane(previewSource, previewErrors)}
+        ${this.renderChat(sessionSource)}
+        ${this.renderEditorPane(editorValue, previewErrors, diverged)}
         ${
           actions.length > 0
             ? html`<div class="editor-actions">
@@ -244,6 +257,30 @@ export class FlowEditor extends LitElement {
         }
       </div>
     `;
+  }
+
+  protected override willUpdate(changed: PropertyValues<this>): void {
+    // The round-trip guard: once a snapshot carries the exact source the
+    // human typed (their own write-back echoed back), stop overriding the
+    // display — future agent changes then show through normally. The pending
+    // write-back is settled, so its timer is dropped too.
+    if (changed.has("instanceEntry") && this.editedValue !== null) {
+      const source = this.instanceEntry.state.workflowInstanceState.source;
+      if (typeof source === "string" && source === this.editedValue) {
+        this.editedValue = null;
+        this.pendingWriteBack = null;
+        if (this.writeBackTimer !== null) {
+          window.clearTimeout(this.writeBackTimer);
+          this.writeBackTimer = null;
+        }
+      }
+    }
+  }
+
+  public override disconnectedCallback(): void {
+    super.disconnectedCallback();
+    // Flush any pending write-back when the editor unmounts (navigation).
+    void this.flushWriteBack();
   }
 
   // The session header title: the workflow's instance hint (title: "prompt")
@@ -267,10 +304,8 @@ export class FlowEditor extends LitElement {
   }
 
   // The chat window with the save affordance: the Save button (enabled once
-  // the agent has generated a source) emits hive-action "save", which the
-  // shell answers with the synchronous save route — the same
-  // saveAuthoringDefinition core the agent's save_definition tool runs. The
-  // saved line reflects the last save from instance state.
+  // a source exists) emits hive-action "save" (the shell answers with the
+  // synchronous save route); the saved line reflects the last save.
   private renderChat(source: string) {
     const ctx = this.instanceEntry.state.runningTaskContext;
     const state = this.instanceEntry.state.workflowInstanceState;
@@ -321,7 +356,7 @@ export class FlowEditor extends LitElement {
           class="save-btn"
           type="button"
           ?disabled=${source === ""}
-          @click=${() => this.emitAction("save")}
+          @click=${() => void this.handleSaveClick()}
         >
           Save definition
         </button>
@@ -349,13 +384,24 @@ export class FlowEditor extends LitElement {
     return last !== undefined && last.role !== "assistant";
   }
 
-  // The tokenized spec preview: the agent's live draft rendered as TS, plus
-  // its validation/render findings as draft notes.
-  private renderPane(source: string, errors: string[]) {
-    if (source === "" && errors.length === 0) return nothing;
+  // The editable code pane: the working definition source (the human's edits
+  // or the agent's latest), the draft notes from the spec validator, and —
+  // while diverged — the discard handoff.
+  private renderEditorPane(value: string, errors: string[], diverged: boolean) {
     return html`<div class="pane">
       <div class="pane-head">
-        <span class="pane-title">Spec preview (.ts)</span>
+        <span class="pane-title">Definition source (.ts)</span>
+        ${
+          diverged
+            ? html`<button
+                class="discard-btn"
+                type="button"
+                @click=${() => this.emitAction("discard")}
+              >
+                Discard edits
+              </button>`
+            : nothing
+        }
       </div>
       ${
         errors.length > 0
@@ -367,15 +413,71 @@ export class FlowEditor extends LitElement {
           </div>`
           : nothing
       }
+      <code-editor
+        .value=${value}
+        @hive-code-change=${this.handleCodeChange}
+      ></code-editor>
       ${
-        source !== ""
-          ? // The highlighter escapes all non-token content; only its own
-            // fixed-class token spans are injected, so unsafeHTML is safe.
-            html`<pre class="code">${unsafeHTML(highlightTypeScript(source))}</pre>`
+        diverged
+          ? html`<p class="diverged-note"
+              >Manual edits — the agent's spec is frozen. Propose changes in
+              chat or discard your edits to hand the definition back.</p
+            >`
           : nothing
       }
     </div>`;
   }
+
+  // ── write-back (throttled) ──────────────────────────────────────────
+
+  private handleCodeChange = (event: CustomEvent<{ value: string }>): void => {
+    const value = event.detail.value;
+    this.pendingWriteBack = value;
+    this.editedValue = value;
+    if (this.writeBackTimer !== null) {
+      window.clearTimeout(this.writeBackTimer);
+    }
+    this.writeBackTimer = window.setTimeout(
+      () => void this.flushWriteBack(),
+      WRITE_BACK_DEBOUNCE_MS
+    );
+    this.requestUpdate();
+  };
+
+  // Writes the pending snapshot into the session state (marking the spec
+  // diverged). Returns when the patch is in flight; save/send await it so the
+  // definition being saved or reasoned about includes the human's latest text.
+  private async flushWriteBack(): Promise<void> {
+    if (this.writeBackTimer !== null) {
+      window.clearTimeout(this.writeBackTimer);
+      this.writeBackTimer = null;
+    }
+    const value = this.pendingWriteBack;
+    this.pendingWriteBack = null;
+    if (value === null) return;
+    this.emitPatchState({ source: value });
+  }
+
+  private async handleSaveClick(): Promise<void> {
+    await this.flushWriteBack();
+    this.emitAction("save");
+  }
+
+  private emitPatchState(values: Record<string, unknown>): void {
+    if (this.onPatchState !== undefined) {
+      this.onPatchState(values);
+      return;
+    }
+    this.dispatchEvent(
+      new CustomEvent("hive-patch-state", {
+        detail: { instanceId: this.instanceEntry.id, values },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  // ── action / message forwarding ─────────────────────────────────────
 
   private handleAction = (
     event: CustomEvent<{ actionId: string; payload?: Record<string, unknown> }>
@@ -388,7 +490,11 @@ export class FlowEditor extends LitElement {
 
   private handleSendMessage = (event: CustomEvent<{ content: string }>) => {
     event.stopPropagation();
-    this.emitSendMessage(event.detail.content);
+    // Flush the pending write-back before the turn starts so the agent's
+    // tools read the human's latest source.
+    void this.flushWriteBack().then(() => {
+      this.emitSendMessage(event.detail.content);
+    });
   };
 
   private emitAction(

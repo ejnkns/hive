@@ -255,6 +255,47 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
     }
   );
 
+  // The write-back behind the flow-editor's editable code pane: the human's
+  // current definition source, patched into the session state (marking the
+  // spec diverged), or discard — clearing the divergence so the agent's next
+  // generate wins. The editor debounces its patches; this route is the dumb
+  // sync point.
+  server.post(
+    "/api/flows/definitions/author/:flowId/source",
+    async (request, reply) => {
+      // Fastify params type is erased; shape guaranteed by route pattern
+      const { flowId } = request.params as { flowId: string };
+      const body = request.body as {
+        source?: string;
+        discard?: boolean;
+      } | null;
+
+      const runtime = getFlowRuntime(flowId);
+      if (!runtime) {
+        return reply.status(404).send({ error: "Flow not found" });
+      }
+      if (runtime.getFlowConfig().definitionId !== AUTHORING_DEFINITION_ID) {
+        return reply.status(404).send({ error: "Flow not found" });
+      }
+      const instance = runtime.getWorkflowInstanceEntries()[0];
+      if (!instance) {
+        return reply.status(404).send({ error: "No authoring session" });
+      }
+      const controller = runtime.getWorkflowInstance(instance.id);
+
+      if (body?.discard === true) {
+        controller?.patchWorkflowInstanceState({ specDiverged: false });
+        return reply.send({ ok: true, discarded: true });
+      }
+      const source = typeof body?.source === "string" ? body.source : "";
+      if (source === "") {
+        return reply.status(400).send({ error: "source is required" });
+      }
+      controller?.patchWorkflowInstanceState({ source, specDiverged: true });
+      return reply.send({ ok: true });
+    }
+  );
+
   server.post("/api/flows/definitions/validate", async (request, reply) => {
     // Fastify body is unknown; validated below
     const body = request.body as { source?: string } | null;

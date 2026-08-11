@@ -235,6 +235,44 @@ export async function saveAuthoringDefinition(flowId: string): Promise<{
   };
 }
 
+// The write-back behind the flow-editor's editable code pane: patches the
+// human's current definition source into the session (marking the spec
+// diverged), or clears the divergence when the human hands back.
+export async function saveAuthoringSource(
+  flowId: string,
+  source: string
+): Promise<void> {
+  const res = await fetch(
+    `/api/flows/definitions/author/${encodeURIComponent(flowId)}/source`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source }),
+    }
+  );
+  if (!res.ok) {
+    // Error response shape is guaranteed by the server endpoint
+    const err = (await res.json()) as { error?: string };
+    throw new Error(err.error ?? "Failed to save source");
+  }
+}
+
+export async function discardAuthoringSource(flowId: string): Promise<void> {
+  const res = await fetch(
+    `/api/flows/definitions/author/${encodeURIComponent(flowId)}/source`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ discard: true }),
+    }
+  );
+  if (!res.ok) {
+    // Error response shape is guaranteed by the server endpoint
+    const err = (await res.json()) as { error?: string };
+    throw new Error(err.error ?? "Failed to discard edits");
+  }
+}
+
 export async function deleteFlow(flowId: string, purge = false): Promise<void> {
   const res = await fetch(`/api/flows/${encodeURIComponent(flowId)}`, {
     method: "DELETE",

@@ -8,8 +8,10 @@ import {
   click,
   mount,
   queryAllDeep,
+  queryDeep,
   settle,
   shadowRootOf,
+  type,
 } from "../test-utils.ts";
 import { FlowEditor } from "./flow-editor.ts";
 
@@ -110,14 +112,16 @@ describe("FlowEditor", () => {
     ).toBeGreaterThan(0);
   });
 
-  it("renders the tokenized code pane from previewSource", async () => {
+  it("renders the highlighted code editor bound to source ?? previewSource", async () => {
     const el = await mountEditor();
-    const code = shadowRootOf(el).querySelector(".code");
+    const code = queryDeep(el, ".code");
     expect(code).not.toBeNull();
     // The source is tokenized: keywords and strings become spans.
     expect(code?.querySelector(".tok-keyword")?.textContent).toBe("export");
     expect(code?.querySelector(".tok-string")?.textContent).toBe('"demo"');
     expect(code?.textContent).toContain("const flow");
+    // The editor is editable — a textarea over the overlay.
+    expect(queryDeep(el, "textarea")).not.toBeNull();
   });
 
   it("renders draft notes from previewErrors", async () => {
@@ -129,7 +133,7 @@ describe("FlowEditor", () => {
     );
   });
 
-  it("renders no code pane when the draft has neither source nor notes", async () => {
+  it("renders an editable editor even before any source or draft", async () => {
     const el = await mountEditor(
       authoringEntry({
         hasRunningTask: false,
@@ -138,8 +142,25 @@ describe("FlowEditor", () => {
         workflowInstanceState: { prompt: "Nothing yet" },
       })
     );
-    expect(shadowRootOf(el).querySelector(".code")).toBeNull();
+    const textarea = queryDeep(el, "textarea") as HTMLTextAreaElement;
+    expect(textarea).toBeDefined();
+    expect(textarea.value).toBe("");
     expect(shadowRootOf(el).querySelector(".pane-errors")).toBeNull();
+  });
+
+  it("binds the editor to source over previewSource", async () => {
+    const el = await mountEditor(
+      authoringEntry({
+        workflowInstanceState: {
+          prompt: "p",
+          previewSource: "preview text",
+          source: "source text",
+        },
+      })
+    );
+    expect((queryDeep(el, "textarea") as HTMLTextAreaElement).value).toBe(
+      "source text"
+    );
   });
 
   it("renders the action row from availableActions and forwards clicks", async () => {
@@ -253,5 +274,72 @@ describe("FlowEditor", () => {
       "spec.workflows[0]: a gate reads an undeclared field",
       "1 warning(s)",
     ]);
+  });
+
+  it("writes the human's edits back to the session, throttled", async () => {
+    const el = await mountEditor();
+    const onPatchState = vi.fn();
+    el.onPatchState = onPatchState;
+    await el.updateComplete;
+
+    const textarea = queryDeep(el, "textarea") as HTMLTextAreaElement;
+    type(textarea, "export const flow = {};");
+    await el.updateComplete;
+    // Debounced: nothing until the idle window elapses.
+    expect(onPatchState).not.toHaveBeenCalled();
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    expect(onPatchState).toHaveBeenCalledWith({
+      source: "export const flow = {};",
+    });
+  });
+
+  it("keeps the human's typing until the write-back round-trips", async () => {
+    const el = await mountEditor();
+    el.onPatchState = vi.fn();
+    const textarea = () => queryDeep(el, "textarea") as HTMLTextAreaElement;
+
+    type(textarea(), "manual edit");
+    await el.updateComplete;
+
+    // A snapshot carrying the OLD source must not clear the typing.
+    el.instanceEntry = authoringEntry({
+      workflowInstanceState: { prompt: "p", source: "old" },
+    });
+    await el.updateComplete;
+    expect(textarea().value).toBe("manual edit");
+
+    // Once the snapshot carries the typed source (the round-trip), the
+    // override clears and future agent changes show through.
+    el.instanceEntry = authoringEntry({
+      workflowInstanceState: { prompt: "p", source: "manual edit" },
+    });
+    await el.updateComplete;
+    el.instanceEntry = authoringEntry({
+      workflowInstanceState: { prompt: "p", source: "agent new" },
+    });
+    await el.updateComplete;
+    expect(textarea().value).toBe("agent new");
+  });
+
+  it("shows the diverged note and discard handoff while the source is manual", async () => {
+    const el = await mountEditor(
+      authoringEntry({
+        workflowInstanceState: {
+          prompt: "p",
+          source: "const a = 1;",
+          specDiverged: true,
+        },
+      })
+    );
+    expect(shadowRootOf(el).querySelector(".diverged-note")).not.toBeNull();
+    const onAction = vi.fn();
+    el.onAction = onAction;
+    await el.updateComplete;
+    const discard = shadowRootOf(el).querySelector(
+      "button.discard-btn"
+    ) as HTMLButtonElement;
+    discard.dispatchEvent(click());
+    await el.updateComplete;
+    expect(onAction).toHaveBeenCalledWith("discard", undefined);
   });
 });

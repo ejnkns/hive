@@ -1238,6 +1238,63 @@ describe("flow API routes", () => {
     assert.equal((again.json() as { id: string }).id, "review-flow");
   });
 
+  it("POST /api/flows/definitions/author/:flowId/source writes back the human's edits and marks the spec diverged", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition(authoringSessionFlow, { hidden: true });
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const created = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions/author",
+      body: { prompt: "Build a review flow", lucky: true },
+    });
+    const { flowId, instanceId } = created.json() as {
+      flowId: string;
+      instanceId: string;
+    };
+    const runtime = getFlowRuntime(flowId);
+    const controller = runtime?.getWorkflowInstance(instanceId);
+    controller?.patchWorkflowInstanceState({ source: "const a = 1;" });
+
+    const written = await server.inject({
+      method: "POST",
+      url: `/api/flows/definitions/author/${flowId}/source`,
+      payload: { source: "export const flow = {}; // hand edit" },
+    });
+    assert.equal(written.statusCode, 200);
+    const state = controller?.getState().workflowInstanceState;
+    assert.equal(state?.source, "export const flow = {}; // hand edit");
+    assert.equal(state?.specDiverged, true);
+
+    // Discard hands the definition back to the agent.
+    const discarded = await server.inject({
+      method: "POST",
+      url: `/api/flows/definitions/author/${flowId}/source`,
+      payload: { discard: true },
+    });
+    assert.equal(discarded.statusCode, 200);
+    assert.equal(
+      controller?.getState().workflowInstanceState.specDiverged,
+      false
+    );
+  });
+
+  it("POST /api/flows/definitions/author/:flowId/source rejects a non-authoring flow", async () => {
+    setFlowPersistence(noopPersistence);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions/author/unknown-flow/source",
+      payload: { source: "const a = 1;" },
+    });
+    assert.equal(response.statusCode, 404);
+  });
+
   it("POST /api/flows/definitions/author requires a prompt", async () => {
     setFlowPersistence(noopPersistence);
     registerFlowDefinition(authoringSessionFlow, { hidden: true });
