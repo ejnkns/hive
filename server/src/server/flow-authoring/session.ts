@@ -357,10 +357,10 @@ const sessionWorkflow = defineWorkflow({
       label: "Drafting",
       category: "initial",
       // Validate and save render as actions on the session card; the Svelte
-      // shell executes the app-level effect (REST) via handleAuthorAction
-      // (design Q5) — the engine has no definition-registration capability
-      // yet, so these transitions never dispatch. transitionTo targets the
-      // current state so the definition stays schema-valid if ever routed.
+      // shell executes the app-level effect (REST) via handleAuthorAction —
+      // the engine has no definition-registration capability yet, so these
+      // transitions never dispatch. transitionTo targets the current state so
+      // the definition stays schema-valid if ever routed.
       actions: [
         {
           id: "validate",

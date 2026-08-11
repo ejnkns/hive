@@ -170,9 +170,9 @@ async function resumeAuthoring(): Promise<void> {
 }
 
 // The session card's validate/save actions render in the flow-editor's action
-// row; the shell executes the app-level effect — REST — by design (Q5): the
-// engine has no definition-registration capability yet, so these actions never
-// dispatch through the engine. Any other action falls through to dispatch.
+// row; the shell executes the app-level effect — REST — because the engine has
+// no definition-registration capability yet, so these actions never dispatch
+// through the engine. Any other action falls through to dispatch.
 async function handleAuthorAction(
   flowId: string,
   instanceId: string,
@@ -552,7 +552,7 @@ async function remove() {
                    built-in flow-editor composes the session header, the
                    running chat, the tokenized spec preview, and the
                    validate/save action row. The shell only mounts the
-                   rendering surface (Q4/Q5). -->
+                   rendering surface. -->
               <LitFlowHost
                 flowId={authorFlow.id}
                 workflowDefs={authorFlow.workflows}

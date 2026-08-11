@@ -14,11 +14,11 @@
 
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
-const uiSrc = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const uiSrc = dirname(fileURLToPath(import.meta.url));
 
 function walk(dir: string): string[] {
   const files: string[] = [];

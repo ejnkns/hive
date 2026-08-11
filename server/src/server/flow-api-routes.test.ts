@@ -1104,7 +1104,7 @@ describe("flow API routes", () => {
     assert.deepEqual(
       available?.map((action) => action.id),
       ["validate", "save"],
-      "the drafting state exposes the validate/save actions (executed REST-side by the shell, design Q5)"
+      "the drafting state exposes the validate/save actions (executed REST-side by the shell, never dispatched through the engine)"
     );
   });
 
