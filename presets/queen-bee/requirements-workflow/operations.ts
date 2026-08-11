@@ -2,7 +2,7 @@
 
 import type { OperationContext } from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
-import type { RequirementsItemState } from "../requirements-workflow";
+import type { RequirementsItemState } from "../requirements-workflow.ts";
 
 // The requirements workflow's operations, keyed by the names its tasks
 // reference. flow.ts binds the state type and merges this into the registry.

@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { SessionStage } from "shared/dashboard-types";
-import { isTerminal, STAGE_LABELS } from "./stage-utils";
+import { isTerminal, STAGE_LABELS } from "./stage-utils.ts";
 
 let {
   path = [] as SessionStage[],

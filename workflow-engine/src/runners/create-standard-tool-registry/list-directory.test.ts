@@ -3,8 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
-import type { ToolContext } from "../tool-types";
-import { execute } from "./list-directory";
+import type { ToolContext } from "../tool-types.ts";
+import { execute } from "./list-directory.ts";
 
 // The flow's domain state lives in a hidden directory (.queen-bee/); a
 // directory listing that hides dot-entries blinds agents to the authoritative

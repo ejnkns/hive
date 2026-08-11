@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, isAbsolute, join, normalize, sep } from "node:path";
-import { readFlowSettings } from "../read-flow-settings";
+import { readFlowSettings } from "../read-flow-settings.ts";
 
 export type PersistOutputParams = {
   output: unknown;

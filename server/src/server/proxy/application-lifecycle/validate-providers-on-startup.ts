@@ -1,9 +1,9 @@
 import { generateId } from "shared/generate-id";
 import { logger } from "shared/logger";
 import type { TelemetrySink } from "telemetry";
-import { mutateRequest } from "../mutate-request";
-import { getProviders } from "../providers-state";
-import { routeRequest } from "../route-request";
+import { mutateRequest } from "../mutate-request.ts";
+import { getProviders } from "../providers-state.ts";
+import { routeRequest } from "../route-request.ts";
 
 const NOOP_TELEMETRY_SINK: TelemetrySink = {
   recordMetric: () => {},

@@ -1,16 +1,16 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { createWorkflowInstanceController } from "./create-workflow-instance-controller";
+import { createWorkflowInstanceController } from "./create-workflow-instance-controller.ts";
 import type {
   TaskDefinition,
   TaskRunner,
   TaskRunnerContext,
-} from "./task-runner";
+} from "./task-runner.ts";
 import {
   type ChatMessage,
   defineWorkflow,
   type WorkflowHistoryEntry,
-} from "./workflow-types";
+} from "./workflow-types.ts";
 
 const testWorkflow = defineWorkflow({
   id: "test",

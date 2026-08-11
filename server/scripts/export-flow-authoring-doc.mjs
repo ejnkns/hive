@@ -1,6 +1,6 @@
 // Regenerates the human/agent-facing reference document from the flow-authoring
 // knowledge core (single source of truth: server/src/server/flow-authoring/).
-// Run from the server package: `node --import tsx scripts/export-flow-authoring-doc.mjs`
+// Run from the server package: `node scripts/export-flow-authoring-doc.mjs`
 // (or `pnpm --filter server export:flow-authoring`).
 
 import { writeFile } from "node:fs/promises";

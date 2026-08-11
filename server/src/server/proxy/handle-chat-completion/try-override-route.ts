@@ -1,14 +1,14 @@
 import { logger } from "shared/logger";
 import type { Node } from "telemetry";
-import type { ChatCompletionResult } from "../handle-chat-completion";
-import { isProviderRequestCancelledError } from "../provider-request-cancelled-error";
-import type { ProxyResponse } from "../proxy-response";
-import { routingMemory } from "../routing-memory";
+import type { ChatCompletionResult } from "../handle-chat-completion.ts";
+import { isProviderRequestCancelledError } from "../provider-request-cancelled-error.ts";
+import type { ProxyResponse } from "../proxy-response.ts";
+import { routingMemory } from "../routing-memory.ts";
 import {
   recordCircuitBreak,
   recordFailoverAttempt,
   recordOverrideFailed,
-} from "../session-aggregator";
+} from "../session-aggregator.ts";
 
 export async function tryOverrideRoute(params: {
   overrideNode: { providerName: string; modelName: string } | null;

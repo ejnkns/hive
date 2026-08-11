@@ -6,9 +6,9 @@ import { createAiChatRunner } from "workflow-engine/runners";
 import {
   queenBeeFlow,
   queenBeeOperations,
-} from "../../../../../presets/queen-bee/flow";
-import { ideasWorkflow } from "../../../../../presets/queen-bee/ideas-workflow";
-import { createEngineRunners } from "../../engine-bridge";
+} from "../../../../../presets/queen-bee/flow.ts";
+import { ideasWorkflow } from "../../../../../presets/queen-bee/ideas-workflow.ts";
+import { createEngineRunners } from "../../engine-bridge.ts";
 
 describe("ideas workflow completion", () => {
   it("elaborate completes and advances to submitted once the agent signals IDEA_COMPLETE", async () => {

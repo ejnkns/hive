@@ -1,8 +1,8 @@
 /** @private — the spec-level every-read-has-a-writer invariant. */
 
-import { ENGINE_PROVIDED, engineOpWritesByName } from "./spec-constants";
-import type { FlowSpec, SpecValidationContext } from "./spec-types";
-import { collectGateStateReads } from "./validate-gate";
+import { ENGINE_PROVIDED, engineOpWritesByName } from "./spec-constants.ts";
+import type { FlowSpec, SpecValidationContext } from "./spec-types.ts";
+import { collectGateStateReads } from "./validate-gate.ts";
 
 export function validateWriters(
   spec: FlowSpec,

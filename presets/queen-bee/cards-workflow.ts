@@ -4,7 +4,7 @@ import {
   COORDINATOR_SYSTEM_PROMPT,
   REVIEWER_SYSTEM_PROMPT,
   WORKER_SYSTEM_PROMPT,
-} from "./cards-workflow/prompts";
+} from "./cards-workflow/prompts.ts";
 
 // The domain data a card instance carries (workflowInstanceState.cardSpec),
 // authored by the requirements→cards edge from the accepted plan.

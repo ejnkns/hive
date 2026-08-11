@@ -8,30 +8,30 @@ import type {
   NoOutput,
   StateDef,
 } from "workflow-engine/workflow-types";
-import type { CardSpec, CardsItemState } from "./cards-workflow";
-import { cardsWorkflow } from "./cards-workflow";
-import { cardsOperations } from "./cards-workflow/operations";
-import { ideaCardComponentSource } from "./ideas-card";
-import type { IdeasTaskOutputs } from "./ideas-workflow";
-import { ideasWorkflow } from "./ideas-workflow";
-import type { IntegrationItemState } from "./integration-workflow";
-import { integrationWorkflow } from "./integration-workflow";
-import { integrationOperations } from "./integration-workflow/operations";
+import { cardsOperations } from "./cards-workflow/operations.ts";
+import type { CardSpec, CardsItemState } from "./cards-workflow.ts";
+import { cardsWorkflow } from "./cards-workflow.ts";
+import { ideaCardComponentSource } from "./ideas-card.ts";
+import type { IdeasTaskOutputs } from "./ideas-workflow.ts";
+import { ideasWorkflow } from "./ideas-workflow.ts";
+import { integrationOperations } from "./integration-workflow/operations.ts";
+import type { IntegrationItemState } from "./integration-workflow.ts";
+import { integrationWorkflow } from "./integration-workflow.ts";
+import { onboardingOperations } from "./onboarding-workflow/operations.ts";
 import type {
   OnboardingItemState,
   OnboardingTaskOutputs,
-} from "./onboarding-workflow";
-import { onboardingWorkflow } from "./onboarding-workflow";
-import { onboardingOperations } from "./onboarding-workflow/operations";
+} from "./onboarding-workflow.ts";
+import { onboardingWorkflow } from "./onboarding-workflow.ts";
+import { requirementsOperations } from "./requirements-workflow/operations.ts";
 import type {
   PlanCard,
   PlanProposal,
   RequirementsItemState,
   RequirementsTaskOutputs,
-} from "./requirements-workflow";
-import { requirementsWorkflow } from "./requirements-workflow";
-import { requirementsOperations } from "./requirements-workflow/operations";
-import { queenBeeTools } from "./tools";
+} from "./requirements-workflow.ts";
+import { requirementsWorkflow } from "./requirements-workflow.ts";
+import { queenBeeTools } from "./tools.ts";
 
 // The merged domain operations across all workflows, keyed by the names the
 // workflow tasks reference. Each group's state type is bound here — the

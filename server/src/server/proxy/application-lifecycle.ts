@@ -3,10 +3,10 @@ import { loadCache, telemetryRecorder } from "telemetry";
 import {
   discoverAndCacheModels,
   providers as staticProviders,
-} from "../providers";
-import { validateProvidersOnStartup } from "./application-lifecycle/validate-providers-on-startup";
-import { setLastUsed } from "./last-used-state";
-import { applyDiscoveredModels } from "./providers-state";
+} from "../providers.ts";
+import { validateProvidersOnStartup } from "./application-lifecycle/validate-providers-on-startup.ts";
+import { setLastUsed } from "./last-used-state.ts";
+import { applyDiscoveredModels } from "./providers-state.ts";
 
 let discoveryTimer: NodeJS.Timeout | null = null;
 

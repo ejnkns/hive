@@ -16,14 +16,14 @@ import {
 } from "workflow-engine/runners";
 import type { ToolCall } from "workflow-engine/runners/tool-types";
 import type { TaskRunnerContext } from "workflow-engine/task-runner";
-import { STRUCTURED_INTAKE_EXEMPLAR } from "../flow-authoring";
-import { validateFlowSpec } from "../flow-spec";
+import { STRUCTURED_INTAKE_EXEMPLAR } from "../flow-authoring.ts";
+import { validateFlowSpec } from "../flow-spec.ts";
 import {
   type AuthoringItemState,
   authoringSessionFlow,
   authoringTools,
-} from "./session";
-import { STARTER_SKELETON } from "./session-prompt";
+} from "./session.ts";
+import { STARTER_SKELETON } from "./session-prompt.ts";
 
 const toolMaps = toToolMaps(authoringTools);
 

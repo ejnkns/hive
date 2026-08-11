@@ -13,15 +13,15 @@ import {
   createFlowRuntime,
   type FlowPersistence,
   type FlowRuntimeEvent,
-} from "./create-flow-runtime";
-import { createAiTaskRunner } from "./runners/create-ai-task-runner";
-import { createOperationRunner } from "./runners/create-operation-runner";
+} from "./create-flow-runtime.ts";
+import { createAiTaskRunner } from "./runners/create-ai-task-runner.ts";
+import { createOperationRunner } from "./runners/create-operation-runner.ts";
 import {
   createStandardToolDefinitions,
   createStandardToolRegistry,
-} from "./runners/create-standard-tool-registry";
-import type { TaskDefinition, TaskRunner } from "./task-runner";
-import { defineWorkflow, type FlowEdge } from "./workflow-types";
+} from "./runners/create-standard-tool-registry.ts";
+import type { TaskDefinition, TaskRunner } from "./task-runner.ts";
+import { defineWorkflow, type FlowEdge } from "./workflow-types.ts";
 
 // ─── Test workflows ───
 

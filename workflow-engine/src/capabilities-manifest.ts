@@ -10,7 +10,7 @@
  * manifest cannot drift from the implementation. The schema-consistency check
  * consumes engineCapabilities.stateFields for its engine-provided set. */
 
-import { createStandardToolDefinitions } from "./runners/create-standard-tool-registry";
+import { createStandardToolDefinitions } from "./runners/create-standard-tool-registry.ts";
 
 export const engineCapabilities = {
   // Task roles the engine runs. A task on a state declares one; the engine

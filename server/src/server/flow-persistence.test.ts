@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { createFlowPersistence } from "./flow-persistence";
+import { createFlowPersistence } from "./flow-persistence.ts";
 
 const TEST_DIR = join("/tmp", "hive-flow-persistence-test", randomUUID());
 

@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { cac } from "cac";
-import { startServer } from "./main/start-server";
+import { startServer } from "./main/start-server.ts";
 
 const cli = cac("hive");
 

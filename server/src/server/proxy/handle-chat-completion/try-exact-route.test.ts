@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { PassThrough } from "node:stream";
 import { describe, it } from "node:test";
-import { ProviderRequestCancelledError } from "../provider-request-cancelled-error";
-import { ProxyResponse } from "../proxy-response";
-import { tryExactRoute } from "./try-exact-route";
+import { ProviderRequestCancelledError } from "../provider-request-cancelled-error.ts";
+import { ProxyResponse } from "../proxy-response.ts";
+import { tryExactRoute } from "./try-exact-route.ts";
 
 describe("tryExactRoute", () => {
   it("returns null when no exact route was requested", async () => {

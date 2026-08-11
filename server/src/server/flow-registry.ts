@@ -11,17 +11,17 @@
 export type {
   FlowLevelActionDispatchResult,
   FlowLevelActionView,
-} from "./flow-registry/flow-actions";
+} from "./flow-registry/flow-actions.ts";
 export {
   dispatchFlowLevelAction,
   getAvailableFlowActions,
-} from "./flow-registry/flow-actions";
+} from "./flow-registry/flow-actions.ts";
 export {
   createFlow,
   rehydrateFlow,
-} from "./flow-registry/flow-lifecycle";
-export { validateInstanceConfig } from "./flow-registry/instance-config";
-export type { FlowEventBusEvent } from "./flow-registry/registry-state";
+} from "./flow-registry/flow-lifecycle.ts";
+export { validateInstanceConfig } from "./flow-registry/instance-config.ts";
+export type { FlowEventBusEvent } from "./flow-registry/registry-state.ts";
 export {
   getFlowPersistence,
   getFlowRuntime,
@@ -32,4 +32,4 @@ export {
   resetFlowRuntimesForTest,
   setFlowPersistence,
   unlinkFlow,
-} from "./flow-registry/registry-state";
+} from "./flow-registry/registry-state.ts";

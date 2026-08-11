@@ -2,8 +2,11 @@
 import { onMount } from "svelte";
 import Button from "../shared/ui/Button.svelte";
 import TextInput from "../shared/ui/TextInput.svelte";
-import { SYSTEM_PROMPT_INITIAL, SYSTEM_PROMPT_PATCH } from "./canvas-prompts";
-import { setupCanvasRuntime } from "./canvas-runtime";
+import {
+  SYSTEM_PROMPT_INITIAL,
+  SYSTEM_PROMPT_PATCH,
+} from "./canvas-prompts.ts";
+import { setupCanvasRuntime } from "./canvas-runtime.ts";
 
 type ChatMessage = {
   role: "user" | "assistant";

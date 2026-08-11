@@ -1,4 +1,4 @@
-import type { RuntimeFlowEdge } from "./workflow-types";
+import type { RuntimeFlowEdge } from "./workflow-types.ts";
 
 export type EdgeEffect = {
   toWorkflow?: string;

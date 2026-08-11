@@ -1,21 +1,21 @@
 /** @private — the renderer: FlowSpec → TypeScript flow definition module. */
 
-import type { FieldType, FlowSpec } from "../flow-spec";
-import { renderConfigFields } from "./config-field";
+import type { FieldType, FlowSpec } from "../flow-spec.ts";
+import { renderConfigFields } from "./config-field.ts";
 import {
   buildOutputNode,
   collectOutputPaths,
   renderOutputNode,
-} from "./output-type";
-import { renderGate } from "./render-gate";
+} from "./output-type.ts";
+import { renderGate } from "./render-gate.ts";
 import {
   castTo,
   fieldType,
   json,
   pascal,
   schemaType,
-} from "./render-primitives";
-import { renderEdgeValue, renderPatchValue } from "./render-value";
+} from "./render-primitives.ts";
+import { renderEdgeValue, renderPatchValue } from "./render-value.ts";
 
 export function renderFlowDefinition(spec: FlowSpec): string {
   const out: string[] = [];

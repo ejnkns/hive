@@ -1,15 +1,15 @@
 import { html, LitElement } from "lit";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { WorkflowInstances } from "./components/workflow-instances";
-import { defineFlowRenderingComponents } from "./define-components";
+import { WorkflowInstances } from "./components/workflow-instances.ts";
+import { defineFlowRenderingComponents } from "./define-components.ts";
 import {
   type FlowComponentEvaluator,
   type FlowComponentModule,
   loadFlowComponents,
-} from "./load-flow-components";
-import { getComponentRenderer } from "./renderer-registry";
-import { cardDef, entry } from "./test-fixtures";
-import { mount, mustFind, settle, shadowRootOf } from "./test-utils";
+} from "./load-flow-components.ts";
+import { getComponentRenderer } from "./renderer-registry.ts";
+import { cardDef, entry } from "./test-fixtures.ts";
+import { mount, mustFind, settle, shadowRootOf } from "./test-utils.ts";
 
 // The served-module contract: a default factory receiving the app's lit
 // runtime. The fake evaluator below supplies a real class, so the registration

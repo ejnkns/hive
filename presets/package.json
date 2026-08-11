@@ -1,0 +1,15 @@
+{
+  "name": "presets",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "workflow-engine": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0"
+  }
+}

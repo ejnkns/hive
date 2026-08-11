@@ -1,7 +1,7 @@
 import { defineTool } from "workflow-engine/runners";
-import type { BuildWorkflowInstanceState } from "./build-workflow";
-import type { ChartingItemState } from "./charting-workflow";
-import type { TicketItemState } from "./ticket-workflow";
+import type { BuildWorkflowInstanceState } from "./build-workflow.ts";
+import type { ChartingItemState } from "./charting-workflow.ts";
+import type { TicketItemState } from "./ticket-workflow.ts";
 
 // === WAYFINDER DOMAIN TOOLS ===
 //

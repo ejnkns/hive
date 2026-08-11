@@ -1,8 +1,8 @@
 import { promises as fs } from "node:fs";
 import { HIVE_DIR } from "shared/hive-dir";
 import { logger } from "shared/logger";
-import type { ModelCache } from "../model-discovery";
-import { MODELS_CACHE_PATH } from "../model-discovery/shared/paths";
+import { MODELS_CACHE_PATH } from "../model-discovery/shared/paths.ts";
+import type { ModelCache } from "../model-discovery.ts";
 
 export async function saveModelCache(cache: ModelCache): Promise<void> {
   try {

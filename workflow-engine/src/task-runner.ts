@@ -1,11 +1,11 @@
-import type { TaskDefinition } from "./runners/task-types";
-import type { ChatMessage } from "./shared/chat-message";
-import type { ModelCallStatus } from "./workflow-types";
+import type { TaskDefinition } from "./runners/task-types.ts";
+import type { ChatMessage } from "./shared/chat-message.ts";
+import type { ModelCallStatus } from "./workflow-types.ts";
 
 // The runtime task shape lives in runners/task-types.ts (the single source);
 // the authoring-side StateTaskDef in workflow-types.ts is built from the same
 // TaskBase, so the two can never drift.
-export type { TaskDefinition, TaskRole } from "./runners/task-types";
+export type { TaskDefinition, TaskRole } from "./runners/task-types.ts";
 
 export type TaskRunner = {
   run(task: TaskDefinition): Promise<{

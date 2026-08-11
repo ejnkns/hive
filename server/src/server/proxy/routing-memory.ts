@@ -1,8 +1,8 @@
 import { logger } from "shared/logger";
-import type { NormalizedErrorType } from "./proxy-response";
-import { CircuitBreaker } from "./routing-memory/circuit-breaker";
-import { FeatureDiscovery } from "./routing-memory/feature-discovery";
-import { SessionRegistry } from "./routing-memory/session-registry";
+import type { NormalizedErrorType } from "./proxy-response.ts";
+import { CircuitBreaker } from "./routing-memory/circuit-breaker.ts";
+import { FeatureDiscovery } from "./routing-memory/feature-discovery.ts";
+import { SessionRegistry } from "./routing-memory/session-registry.ts";
 
 const CIRCUIT_BREAKER_COOLDOWN_MS = 30_000;
 

@@ -3,7 +3,7 @@ import { defineWorkflow } from "workflow-engine/workflow-types";
 import {
   PLANNER_SYSTEM_PROMPT,
   REQUIREMENTS_DRAFT_SYSTEM_PROMPT,
-} from "./requirements-workflow/prompts";
+} from "./requirements-workflow/prompts.ts";
 
 // A card proposed by the planning agent. Dependencies reference other card
 // titles; the engine's dependsOnState gates reference card instance ids, so

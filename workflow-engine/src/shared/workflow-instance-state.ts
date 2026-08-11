@@ -2,7 +2,7 @@ import type {
   RunningTaskContext,
   TaskOutputMap,
   WorkflowHistoryEntry,
-} from "../workflow-types";
+} from "../workflow-types.ts";
 
 export type WorkflowInstanceState<
   TTaskOutputs extends Record<string, unknown> = Record<string, unknown>,

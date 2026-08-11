@@ -1,17 +1,17 @@
-import { collectConfigFieldValues } from "./collect-config-field-values";
-import { getAvailableActions } from "./get-available-actions";
-import { readFlowSettings } from "./read-flow-settings";
-import { reduce, type WorkflowEvent } from "./reduce";
-import { persistOutput } from "./runners/persist-output";
-import { discardIsolatedWorkspace } from "./runners/prepare-isolated-workspace";
-import { readWorkflowAttempt } from "./shared/read-workflow-attempt";
-import type { RuntimeWorkflowInstanceState } from "./shared/workflow-instance-state";
+import { collectConfigFieldValues } from "./collect-config-field-values.ts";
+import { getAvailableActions } from "./get-available-actions.ts";
+import { readFlowSettings } from "./read-flow-settings.ts";
+import { reduce, type WorkflowEvent } from "./reduce.ts";
+import { persistOutput } from "./runners/persist-output.ts";
+import { discardIsolatedWorkspace } from "./runners/prepare-isolated-workspace.ts";
+import { readWorkflowAttempt } from "./shared/read-workflow-attempt.ts";
+import type { RuntimeWorkflowInstanceState } from "./shared/workflow-instance-state.ts";
 import type {
   TaskDefinition,
   TaskRunner,
   TaskRunnerContext,
   TaskRunnerFactory,
-} from "./task-runner";
+} from "./task-runner.ts";
 import type {
   ChatMessage,
   ConfigField,
@@ -19,7 +19,7 @@ import type {
   RunningTaskContext,
   RuntimeWorkflowConfig,
   VisibleAction,
-} from "./workflow-types";
+} from "./workflow-types.ts";
 
 export type WorkflowInstanceEvent =
   | {

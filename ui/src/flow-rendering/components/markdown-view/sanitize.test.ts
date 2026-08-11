@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { sanitizeMarkdown } from "./sanitize";
+import { sanitizeMarkdown } from "./sanitize.ts";
 
 describe("sanitizeMarkdown", () => {
   it("renders markdown structure", () => {

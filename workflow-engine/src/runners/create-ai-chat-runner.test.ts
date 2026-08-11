@@ -3,17 +3,17 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
-import type { TaskDefinition } from "../task-runner";
-import type { ChatMessage } from "../workflow-types";
+import type { TaskDefinition } from "../task-runner.ts";
+import type { ChatMessage } from "../workflow-types.ts";
 import {
   type AiChatModelCaller,
   createAiChatRunner,
-} from "./create-ai-chat-runner";
+} from "./create-ai-chat-runner.ts";
 import {
   createStandardToolDefinitions,
   createStandardToolRegistry,
-} from "./create-standard-tool-registry";
-import type { ToolCall } from "./tool-types";
+} from "./create-standard-tool-registry.ts";
+import type { ToolCall } from "./tool-types.ts";
 
 function mockCaller(
   responses: { content: string; toolCalls?: ToolCall[] }[]

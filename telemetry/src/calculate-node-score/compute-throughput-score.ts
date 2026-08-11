@@ -1,4 +1,4 @@
-import type { RequestMetric } from "../request-metric";
+import type { RequestMetric } from "../request-metric.ts";
 
 const DEFAULT_MEAN_TPS = 30;
 const TARGET_TPS_STANDARD = 80;

@@ -7,8 +7,8 @@ import {
   settle,
   shadowRootOf,
   type,
-} from "../test-utils";
-import { ChatSession } from "./chat-session";
+} from "../test-utils.ts";
+import { ChatSession } from "./chat-session.ts";
 
 const messages: ChatMessage[] = [
   { role: "user", content: "what's the plan?", tool_calls: undefined },

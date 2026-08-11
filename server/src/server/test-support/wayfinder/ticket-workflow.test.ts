@@ -11,7 +11,7 @@ import {
   makeWayfinderRuntime,
   taskCompleter,
   waitFor,
-} from "./test-helpers";
+} from "./test-helpers.ts";
 
 describe("wayfinder ticket workflow", () => {
   const tempDirs: string[] = [];

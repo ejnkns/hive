@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import { after, before, describe, it } from "node:test";
 import type { RequestMetric, TelemetrySink } from "telemetry";
-import { routeRequest } from "./route-request";
+import { routeRequest } from "./route-request.ts";
 
 // A mock upstream that streams SSE chunks slowly, so the test can abort
 // mid-stream and exercise the destroy races in the proxy's pipe chain.

@@ -1,12 +1,12 @@
 /** @private — only imported by create-flow-runtime.ts */
 
-import type { WorkflowInstanceControllerAPI } from "../create-workflow-instance-controller";
-import type { RuntimeWorkflowInstanceState } from "../shared/workflow-instance-state";
-import type { FlowEventHandler } from "./flow-runtime-events";
+import type { WorkflowInstanceControllerAPI } from "../create-workflow-instance-controller.ts";
+import type { RuntimeWorkflowInstanceState } from "../shared/workflow-instance-state.ts";
+import type { FlowEventHandler } from "./flow-runtime-events.ts";
 import type {
   WorkflowDefResponse,
   WorkflowInstanceEntry,
-} from "./response-types";
+} from "./response-types.ts";
 
 // The public API of one flow runtime: config/state access, instance creation
 // and dispatch, event subscription, and the serialized read shapes.

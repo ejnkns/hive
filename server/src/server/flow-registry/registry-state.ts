@@ -9,7 +9,7 @@ import type {
   FlowRuntimeEvent,
 } from "workflow-engine/create-flow-runtime";
 import { readFlowSettings } from "workflow-engine/runners";
-import type { FlowStore } from "../flow-persistence";
+import type { FlowStore } from "../flow-persistence.ts";
 
 const runtimes = new Map<
   string,

@@ -1,28 +1,28 @@
 /** @public — the flow runtime factory and its API surface. Import from here, not from create-flow-runtime/ directly. */
 
-import type { FlowPersistence } from "./create-flow-runtime/flow-persistence";
-import type { FlowRuntimeAPI } from "./create-flow-runtime/flow-runtime-api";
+import type { FlowPersistence } from "./create-flow-runtime/flow-persistence.ts";
+import type { FlowRuntimeAPI } from "./create-flow-runtime/flow-runtime-api.ts";
 import type {
   FlowEventHandler,
   FlowRuntimeEvent,
-} from "./create-flow-runtime/flow-runtime-events";
+} from "./create-flow-runtime/flow-runtime-events.ts";
 import type {
   WorkflowDefResponse,
   WorkflowInstanceEntry,
-} from "./create-flow-runtime/response-types";
+} from "./create-flow-runtime/response-types.ts";
 import {
   createWorkflowInstanceController,
   type WorkflowInstanceControllerAPI,
-} from "./create-workflow-instance-controller";
-import { summarizeWorkflowInstances } from "./derive-display";
-import { evaluateEdges } from "./evaluate-edges";
-import type { RuntimeWorkflowInstanceState } from "./shared/workflow-instance-state";
-import type { TaskRunnerFactory } from "./task-runner";
+} from "./create-workflow-instance-controller.ts";
+import { summarizeWorkflowInstances } from "./derive-display.ts";
+import { evaluateEdges } from "./evaluate-edges.ts";
+import type { RuntimeWorkflowInstanceState } from "./shared/workflow-instance-state.ts";
+import type { TaskRunnerFactory } from "./task-runner.ts";
 import type {
   RuntimeFlowEdge,
   RuntimeWorkflowConfig,
   WorkflowSummary,
-} from "./workflow-types";
+} from "./workflow-types.ts";
 
 export type {
   FlowEventHandler,

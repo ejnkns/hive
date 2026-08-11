@@ -4,8 +4,8 @@ import {
   collectConfigFieldValues,
   configFieldValueError,
   configValueMatchesType,
-} from "./collect-config-field-values";
-import type { ConfigField } from "./workflow-types";
+} from "./collect-config-field-values.ts";
+import type { ConfigField } from "./workflow-types.ts";
 
 const field = (
   overrides: Partial<ConfigField> & { key: string }

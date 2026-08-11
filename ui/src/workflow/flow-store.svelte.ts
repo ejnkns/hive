@@ -6,8 +6,8 @@
 // missed-events hole during a drop.
 
 import { slugify } from "shared/slugify";
-import type { FlowResponse, FlowWsMessage } from "../flow-api";
-import { applyMessage } from "./flow-store/apply-message";
+import type { FlowResponse, FlowWsMessage } from "../flow-api.ts";
+import { applyMessage } from "./flow-store/apply-message.ts";
 
 let flows = $state<FlowResponse[]>([]);
 let socket: WebSocket | null = null;

@@ -1,7 +1,7 @@
 /** @public — loads and registers a definition's served-at-runtime components. */
 
 import { css, html, LitElement, nothing } from "lit";
-import type { ElementConstructor } from "./components/dynamic-element-host";
+import type { ElementConstructor } from "./components/dynamic-element-host.ts";
 import {
   getComponentRenderer,
   getKindRenderer,
@@ -9,7 +9,7 @@ import {
   registerKindRenderer,
   unregisterComponentRenderer,
   unregisterKindRenderer,
-} from "./renderer-registry";
+} from "./renderer-registry.ts";
 
 // The lit runtime handed to a served component factory. A served module is
 // evaluated as a standalone blob module (no imports), so the factory receives

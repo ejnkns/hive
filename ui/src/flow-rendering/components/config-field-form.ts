@@ -1,7 +1,7 @@
 import { css, html, LitElement, type PropertyValues } from "lit";
 import type { ConfigField } from "workflow-engine/workflow-types";
-import "./config-field-control";
-import type { ConfigFieldValue } from "./config-field-control";
+import "./config-field-control.ts";
+import type { ConfigFieldValue } from "./config-field-control.ts";
 
 // The inline ConfigField form. Shared by the action-bar (action payloads) and
 // the instance-edit form (WorkflowConfig.editFields, gap 2): one
@@ -20,7 +20,7 @@ import type { ConfigFieldValue } from "./config-field-control";
 // untouched optional field stays absent — matching the engine's skip-on-absent
 // semantics); required fields are guaranteed present by the submit gate.
 
-export type { ConfigFieldValue } from "./config-field-control";
+export type { ConfigFieldValue } from "./config-field-control.ts";
 
 export class ConfigFieldForm extends LitElement {
   static properties = {

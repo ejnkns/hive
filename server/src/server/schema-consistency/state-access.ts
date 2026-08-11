@@ -2,8 +2,8 @@
  * from operation/tool function bodies. */
 
 import ts from "typescript";
-import type { ObjectLiteral } from "./ast";
-import { findFirst, unwrap, walk } from "./ast";
+import type { ObjectLiteral } from "./ast.ts";
+import { findFirst, unwrap, walk } from "./ast.ts";
 
 function isStateBase(
   expr: ts.Expression,

@@ -1,4 +1,4 @@
-import { BLACK, BOLD, GRAY, RESET, YELLOW } from "./logger";
+import { BLACK, BOLD, GRAY, RESET, YELLOW } from "./logger.ts";
 
 export const width: number = process.stdout.columns || 80;
 

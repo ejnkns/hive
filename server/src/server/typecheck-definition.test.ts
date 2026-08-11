@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { typecheckDefinitionSource } from "./typecheck-definition";
+import { typecheckDefinitionSource } from "./typecheck-definition.ts";
 
 const GOOD = `import { defineWorkflow } from "workflow-engine/workflow-types";
 import { defineOperations } from "workflow-engine/runners";

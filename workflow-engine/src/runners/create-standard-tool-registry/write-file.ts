@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import type { ToolDefinition, ToolExecutor } from "../tool-types";
+import type { ToolDefinition, ToolExecutor } from "../tool-types.ts";
 
 export const definition: ToolDefinition = {
   type: "function",

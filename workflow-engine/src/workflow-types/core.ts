@@ -1,9 +1,9 @@
 /** @private — core engine types: task outcomes, running-task context,
  * model-call status, and the gate context. */
 
-import type { ChatMessage } from "../shared/chat-message";
+import type { ChatMessage } from "../shared/chat-message.ts";
 
-export type { ChatMessage } from "../shared/chat-message";
+export type { ChatMessage } from "../shared/chat-message.ts";
 
 //
 // A workflow is a declarative state machine. States have tasks (work

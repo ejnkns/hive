@@ -16,23 +16,23 @@ import {
   defineWorkflow,
   type FlowDefinition,
 } from "workflow-engine/workflow-types";
-import { queenBeeFlow } from "../../../presets/queen-bee/flow";
-import { registerFlowApiRoutes } from "./flow-api-routes";
-import { authoringSessionFlow } from "./flow-authoring";
+import { queenBeeFlow } from "../../../presets/queen-bee/flow.ts";
+import { registerFlowApiRoutes } from "./flow-api-routes.ts";
+import { authoringSessionFlow } from "./flow-authoring.ts";
 import {
   registerFlowDefinition,
   registerUserDefinition,
   resetFlowDefinitionsForTest,
   setDefinitionsBasePathForTest,
-} from "./flow-definitions";
-import type { FlowStore } from "./flow-persistence";
+} from "./flow-definitions.ts";
+import type { FlowStore } from "./flow-persistence.ts";
 import {
   getFlowRuntime,
   registerFlowForTest,
   resetFlowRuntimesForTest,
   setFlowPersistence,
-} from "./flow-registry";
-import { setGenerationModelCallerForTest } from "./generate-flow-definition";
+} from "./flow-registry.ts";
+import { setGenerationModelCallerForTest } from "./generate-flow-definition.ts";
 
 // Parses the SSE body the generate route streams: one `data: {json}\n\n`
 // event per line.

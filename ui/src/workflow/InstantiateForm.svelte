@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { FlowCreateForm } from "../flow-rendering/components/flow-create-form";
+import type { FlowCreateForm } from "../flow-rendering/components/flow-create-form.ts";
 
 // The route shell for creating a flow instance: breadcrumb + heading, then
 // the built-in <flow-create-form> (Lit) which owns the definition fetch, the

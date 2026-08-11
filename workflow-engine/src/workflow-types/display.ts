@@ -1,7 +1,7 @@
 /** @private — derived display specs, the workflow summary, and the display
  * hint. */
 
-import type { PropPath, RuntimeRenderHint } from "./render-hints";
+import type { PropPath, RuntimeRenderHint } from "./render-hints.ts";
 
 export type DerivedDisplay =
   // Array length, optionally counting only items whose declared field equals

@@ -5,7 +5,7 @@ import {
   isEmptyConfigFieldValue,
 } from "workflow-engine/collect-config-field-values";
 import type { ConfigField } from "workflow-engine/workflow-types";
-import { getFlowDefinition } from "../flow-definitions";
+import { getFlowDefinition } from "../flow-definitions.ts";
 
 // ── Instance config validation ──
 //

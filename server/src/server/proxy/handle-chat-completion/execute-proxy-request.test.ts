@@ -2,12 +2,12 @@ import assert from "node:assert";
 import { PassThrough } from "node:stream";
 import { beforeEach, describe, it } from "node:test";
 import type { RequestMetric } from "telemetry";
-import { ProxyResponse } from "../proxy-response";
-import { routingMemory } from "../routing-memory";
+import { ProxyResponse } from "../proxy-response.ts";
+import { routingMemory } from "../routing-memory.ts";
 import {
   executeProxyRequest,
   type FailoverContext,
-} from "./execute-proxy-request";
+} from "./execute-proxy-request.ts";
 
 await describe("Proxy Router Interception Loop", async () => {
   beforeEach(() => {

@@ -8,7 +8,7 @@ import {
   resolveBasePath,
 } from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
-import type { OnboardingItemState } from "../onboarding-workflow";
+import type { OnboardingItemState } from "../onboarding-workflow.ts";
 
 export const onboardingOperations = {
   ensure_integration_branch: ensureIntegrationBranchOp,

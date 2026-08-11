@@ -12,9 +12,9 @@ import type {
   FlowLevelAction,
   RuntimeGateContext,
 } from "workflow-engine/workflow-types";
-import { getFlowDefinition } from "../flow-definitions";
-import { HttpError } from "../http-error";
-import { getFlowRuntime } from "./registry-state";
+import { getFlowDefinition } from "../flow-definitions.ts";
+import { HttpError } from "../http-error.ts";
+import { getFlowRuntime } from "./registry-state.ts";
 
 // ── Flow-level actions ──
 //

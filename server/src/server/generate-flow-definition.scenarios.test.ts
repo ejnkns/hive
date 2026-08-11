@@ -7,12 +7,12 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { STRUCTURED_INTAKE_EXEMPLAR } from "./flow-authoring";
-import type { FlowSpec } from "./flow-spec";
+import { STRUCTURED_INTAKE_EXEMPLAR } from "./flow-authoring.ts";
+import type { FlowSpec } from "./flow-spec.ts";
 import {
   type ModelCaller,
   runGenerationLoop,
-} from "./generate-flow-definition";
+} from "./generate-flow-definition.ts";
 
 // The stub: call 1 answers the design stage, call 2 returns the scenario's
 // spec. A clean spec passes on spec attempt 1.

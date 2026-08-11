@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { FlowResponse } from "../../flow-api";
-import { applyMessage } from "./apply-message";
+import type { FlowResponse } from "../../flow-api.ts";
+import { applyMessage } from "./apply-message.ts";
 
 function flow(id: string, name: string): FlowResponse {
   return {

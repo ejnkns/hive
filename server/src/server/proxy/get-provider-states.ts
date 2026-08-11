@@ -1,5 +1,5 @@
 import { loadCache, type SubScores } from "telemetry";
-import { getServerState } from "./server-state";
+import { getServerState } from "./server-state.ts";
 
 export type ProviderState = {
   provider: string;

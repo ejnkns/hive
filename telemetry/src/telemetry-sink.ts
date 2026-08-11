@@ -1,7 +1,7 @@
-import type { ConversationData } from "./conversation-store";
-import { conversationStore } from "./conversation-store";
-import { telemetryRecorder } from "./recorder";
-import type { RequestMetric } from "./request-metric";
+import type { ConversationData } from "./conversation-store.ts";
+import { conversationStore } from "./conversation-store.ts";
+import { telemetryRecorder } from "./recorder.ts";
+import type { RequestMetric } from "./request-metric.ts";
 
 export type TelemetrySink = {
   recordMetric: (metric: RequestMetric) => void;

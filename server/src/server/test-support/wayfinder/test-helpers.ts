@@ -14,8 +14,8 @@ import type { TaskRunnerContext } from "workflow-engine/task-runner";
 import {
   wayfinderFlow,
   wayfinderOperations,
-} from "../../../../../presets/wayfinder/flow";
-import { createEngineRunners } from "../../engine-bridge";
+} from "../../../../../presets/wayfinder/flow.ts";
+import { createEngineRunners } from "../../engine-bridge.ts";
 
 export type MakeRuntimeOptions = {
   basePath?: string;

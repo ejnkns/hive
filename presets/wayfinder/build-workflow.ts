@@ -5,8 +5,8 @@ import {
   BUILD_WORKER_SYSTEM_PROMPT,
   PLANNER_SYSTEM_PROMPT,
   SPECING_SYSTEM_PROMPT,
-} from "./build-workflow/prompts";
-import type { SessionTranscript } from "./ticket-workflow";
+} from "./build-workflow/prompts.ts";
+import type { SessionTranscript } from "./ticket-workflow.ts";
 
 // The worker's submit_work completion is an ai-chat session, so its task output
 // is the transcript; the outcome lives in the submit_work tool call arguments.

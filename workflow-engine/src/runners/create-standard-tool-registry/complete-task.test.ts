@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { createStandardToolDefinitions } from "../create-standard-tool-registry";
-import type { ToolContext } from "../tool-types";
-import { definition, execute } from "./complete-task";
+import { createStandardToolDefinitions } from "../create-standard-tool-registry.ts";
+import type { ToolContext } from "../tool-types.ts";
+import { definition, execute } from "./complete-task.ts";
 
 // The generic completion tool: a flow's ai task can declare it as its
 // completionTool with no domain tool code; the parsed arguments become the

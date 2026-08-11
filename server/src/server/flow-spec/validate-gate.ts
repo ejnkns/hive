@@ -1,6 +1,6 @@
 /** @private — structured gate (GateSpec) validation and read collection. */
 
-import type { FieldType, GateSpec, SpecError } from "./spec-types";
+import type { FieldType, GateSpec, SpecError } from "./spec-types.ts";
 
 export function collectGateTaskReads(gate: GateSpec, reads: Set<string>): void {
   switch (gate.kind) {

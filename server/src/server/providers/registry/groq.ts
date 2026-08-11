@@ -1,4 +1,4 @@
-import type { Provider } from "../registry";
+import type { Provider } from "../registry.ts";
 
 export const groq = {
   name: "groq",

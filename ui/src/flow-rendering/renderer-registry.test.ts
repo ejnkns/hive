@@ -5,7 +5,7 @@ import {
   getKindRenderer,
   registerComponentRenderer,
   registerKindRenderer,
-} from "./renderer-registry";
+} from "./renderer-registry.ts";
 
 // The registry only touches the element classes as constructor values, so a
 // plain dummy class exercises it without pulling Lit into the Node test.

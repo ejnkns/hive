@@ -3,7 +3,8 @@
   "compilerOptions": {
     "types": ["node"],
     "lib": ["ESNext"],
-    "noEmit": true
+    "noEmit": true,
+    "allowImportingTsExtensions": true
   },
   "include": ["src/**/*.svelte", "src/**/*.ts"]
 }

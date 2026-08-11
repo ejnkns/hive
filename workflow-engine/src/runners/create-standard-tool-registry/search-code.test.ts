@@ -4,8 +4,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
-import type { ToolContext } from "../tool-types";
-import { execute } from "./search-code";
+import type { ToolContext } from "../tool-types.ts";
+import { execute } from "./search-code.ts";
 
 // Agents must be able to see the flow's domain state: it lives in a hidden
 // directory (.queen-bee/requirements.md is the authoritative spec), and

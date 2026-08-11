@@ -1,4 +1,4 @@
-import type { DerivedDisplay, WorkflowSummary } from "./workflow-types";
+import type { DerivedDisplay, WorkflowSummary } from "./workflow-types.ts";
 
 // Evaluates a DerivedDisplay against a resolved display-field value. Pure and
 // deterministic — the same module runs in the engine tests and the UI card,

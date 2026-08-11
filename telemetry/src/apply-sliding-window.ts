@@ -1,4 +1,4 @@
-import type { RequestMetric } from "./request-metric";
+import type { RequestMetric } from "./request-metric.ts";
 
 type WindowConfig = {
   maxEntries: number;

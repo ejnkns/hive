@@ -1,5 +1,5 @@
-import { ERROR_PENALTIES } from "../error-penalties";
-import type { RequestMetric } from "../request-metric";
+import { ERROR_PENALTIES } from "../error-penalties.ts";
+import type { RequestMetric } from "../request-metric.ts";
 
 const DECAY_HALF_LIFE_MS = 30 * 60 * 1000;
 

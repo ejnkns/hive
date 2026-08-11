@@ -4,8 +4,8 @@ import type {
   ConfigField,
   DerivedDisplay,
 } from "workflow-engine/workflow-types";
-import { FIELD_TYPES } from "./spec-constants";
-import type { FieldType } from "./spec-types";
+import { FIELD_TYPES } from "./spec-constants.ts";
+import type { FieldType } from "./spec-types.ts";
 
 export function isFieldType(value: unknown): value is FieldType {
   return typeof value === "string" && value in FIELD_TYPES;

@@ -1,7 +1,7 @@
 /** @public — WebSocket protocol contract for the dashboard. Import from here, not from server or UI internals. */
 
-import type { LogEntry } from "./logger";
-import type { ModelPriority } from "./model-priority-types";
+import type { LogEntry } from "./logger.ts";
+import type { ModelPriority } from "./model-priority-types.ts";
 
 export type { ModelPriority };
 

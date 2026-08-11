@@ -17,7 +17,7 @@ import {
   setupCardRepo,
   toolAbuseWorker,
   waitFor,
-} from "./card-flow-harness";
+} from "./card-flow-harness.ts";
 
 type Scenario = {
   name: string;

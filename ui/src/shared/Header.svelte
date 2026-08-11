@@ -4,7 +4,7 @@ import Badge from "./ui/Badge.svelte";
 import Button from "./ui/Button.svelte";
 import Select from "./ui/Select.svelte";
 import Switch from "./ui/Switch.svelte";
-import type { HeaderData } from "./utils";
+import type { HeaderData } from "./utils.ts";
 
 let {
   data = $bindable({

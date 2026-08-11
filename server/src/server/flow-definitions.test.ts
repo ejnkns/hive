@@ -10,8 +10,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import Fastify, { type FastifyInstance } from "fastify";
-import { queenBeeFlow } from "../../../presets/queen-bee/flow";
-import { registerFlowApiRoutes } from "./flow-api-routes";
+import { queenBeeFlow } from "../../../presets/queen-bee/flow.ts";
+import { registerFlowApiRoutes } from "./flow-api-routes.ts";
 import {
   getRegisteredFlowDefinition,
   loadUserDefinitionsFromDisk,
@@ -19,7 +19,7 @@ import {
   registerUserDefinition,
   resetFlowDefinitionsForTest,
   setDefinitionsBasePathForTest,
-} from "./flow-definitions";
+} from "./flow-definitions.ts";
 
 const pingFlowSource = `
 import { defineWorkflow } from "workflow-engine/workflow-types";

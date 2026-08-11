@@ -8,7 +8,7 @@ import {
   idleModelCaller,
   makeWayfinderRuntime,
   waitFor,
-} from "./test-helpers";
+} from "./test-helpers.ts";
 
 describe("wayfinder charting workflow", () => {
   const tempDirs: string[] = [];

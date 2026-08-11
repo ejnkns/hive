@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { OverviewDef, OverviewEntry } from "./flow-overview";
-import { computeFlowOverview } from "./flow-overview";
+import type { OverviewDef, OverviewEntry } from "./flow-overview.ts";
+import { computeFlowOverview } from "./flow-overview.ts";
 
 const defs: OverviewDef[] = [
   {

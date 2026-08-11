@@ -8,9 +8,9 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import { prepareIsolatedWorkspace } from "workflow-engine/runners";
-import { execute as listDirectory } from "../../../../../workflow-engine/src/runners/create-standard-tool-registry/list-directory";
-import { execute as searchCode } from "../../../../../workflow-engine/src/runners/create-standard-tool-registry/search-code";
-import { cleanupCardRepo, setupCardRepo } from "./card-flow-harness";
+import { execute as listDirectory } from "../../../../../workflow-engine/src/runners/create-standard-tool-registry/list-directory.ts";
+import { execute as searchCode } from "../../../../../workflow-engine/src/runners/create-standard-tool-registry/search-code.ts";
+import { cleanupCardRepo, setupCardRepo } from "./card-flow-harness.ts";
 
 describe("agent tools can see the flow's domain state", () => {
   const roots: string[] = [];

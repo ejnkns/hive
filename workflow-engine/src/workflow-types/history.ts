@@ -1,6 +1,6 @@
 /** @private — the workflow-instance history entry types. */
 
-import type { RunningTaskContext } from "./core";
+import type { RunningTaskContext } from "./core.ts";
 
 // --- History entries ---
 

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { logger } from "shared/logger";
-import type { ModelCache } from "../model-discovery";
-import { MODELS_CACHE_PATH } from "./shared/paths";
+import type { ModelCache } from "../model-discovery.ts";
+import { MODELS_CACHE_PATH } from "./shared/paths.ts";
 
 export function loadModelCacheSync(): ModelCache | null {
   try {

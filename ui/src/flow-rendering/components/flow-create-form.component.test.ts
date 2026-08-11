@@ -7,8 +7,8 @@ import {
   settle,
   shadowRootOf,
   type,
-} from "../test-utils";
-import { FlowCreateForm } from "./flow-create-form";
+} from "../test-utils.ts";
+import { FlowCreateForm } from "./flow-create-form.ts";
 
 // Behavior tests for the built-in flow-creation page component: fetches the
 // definition's configSchema, renders the name field plus one

@@ -1,5 +1,5 @@
 import { defineTool } from "workflow-engine/runners";
-import type { RequirementsItemState } from "./requirements-workflow";
+import type { RequirementsItemState } from "./requirements-workflow.ts";
 
 // === QUEEN BEE DOMAIN TOOLS ===
 //

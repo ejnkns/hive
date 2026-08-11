@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { MetricData, ProviderPayload } from "shared/dashboard-types";
-import { formatNumber, healthColor } from "../shared/utils";
-import { groupProviders } from "./group-providers";
+import { formatNumber, healthColor } from "../shared/utils.ts";
+import { groupProviders } from "./group-providers.ts";
 import Providers from "./Providers.svelte";
 
 let {

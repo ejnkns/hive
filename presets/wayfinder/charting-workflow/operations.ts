@@ -2,7 +2,7 @@
 
 import type { OperationContext } from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
-import type { ChartingItemState } from "../charting-workflow";
+import type { ChartingItemState } from "../charting-workflow.ts";
 
 // flow.ts binds the state type and merges this into the preset's registry.
 export const chartingOperations = {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { resolveWorkspacePath } from "./resolve-workspace-path";
+import { resolveWorkspacePath } from "./resolve-workspace-path.ts";
 
 describe("resolveWorkspacePath", () => {
   it("returns a declared literal path", () => {

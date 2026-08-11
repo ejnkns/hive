@@ -5,7 +5,7 @@
  * tool-types) so workflow-types and task-runner can both consume it without a
  * type cycle. */
 
-import type { ToolName } from "./tool-types";
+import type { ToolName } from "./tool-types.ts";
 
 export type TaskRole = "ai-task" | "ai-chat" | "operation";
 

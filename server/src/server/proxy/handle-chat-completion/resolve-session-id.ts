@@ -1,7 +1,7 @@
 import { generateId } from "shared/generate-id";
 import type { Message } from "shared/message";
-import { computeSessionFingerprint } from "./resolve-session-id/compute-session-fingerprint";
-import { extractSessionHeader } from "./resolve-session-id/extract-session-header";
+import { computeSessionFingerprint } from "./resolve-session-id/compute-session-fingerprint.ts";
+import { extractSessionHeader } from "./resolve-session-id/extract-session-header.ts";
 
 export function resolveSessionId(
   headers: Record<string, string | string[] | undefined>,

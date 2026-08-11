@@ -14,7 +14,7 @@ import type {
   BuildPlan,
   BuildTicket,
   BuildWorkflowInstanceState,
-} from "../build-workflow";
+} from "../build-workflow.ts";
 
 // The build-phase ops serve two workflows with different state types, so they
 // split into two groups; flow.ts binds each state type and merges both.

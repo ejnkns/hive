@@ -1,6 +1,6 @@
 import { Transform } from "node:stream";
 import { logger } from "shared/logger";
-import type { FinishReason } from "../request-metric";
+import type { FinishReason } from "../request-metric.ts";
 
 type ToolCallDelta = {
   function?: { name?: string; arguments?: string };

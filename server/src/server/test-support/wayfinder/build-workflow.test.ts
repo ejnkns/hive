@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import type { ToolDefinition } from "workflow-engine/runners";
-import { chatReply, makeWayfinderRuntime, waitFor } from "./test-helpers";
+import { chatReply, makeWayfinderRuntime, waitFor } from "./test-helpers.ts";
 
 describe("wayfinder build workflow", () => {
   const tempDirs: string[] = [];

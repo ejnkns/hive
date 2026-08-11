@@ -25,14 +25,13 @@
   "scripts": {
     "build": "tsdown && node scripts/package-assets.mjs",
     "typecheck": "tsc --noEmit",
-    "dev": "tsdown --watch --on-success \"node --import tsx --env-file=../.env dist/main.mjs start --port 8154\"",
-    "test": "node --import tsx --test 'src/**/*.test.ts'",
-    "export:flow-authoring": "node --import tsx scripts/export-flow-authoring-doc.mjs"
+    "dev": "tsdown --watch --on-success \"node --env-file=../.env dist/main.mjs start --port 8154\"",
+    "test": "node --test 'src/**/*.test.ts'",
+    "export:flow-authoring": "node scripts/export-flow-authoring-doc.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",
     "@types/ws": "^8.18.1",
-    "tsdown": "^0.22.14",
-    "tsx": "^4.23.9"
+    "tsdown": "^0.22.14"
   }
 }

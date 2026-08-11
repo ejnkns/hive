@@ -1,8 +1,8 @@
 /** @private — action/state vocabulary: variants, visible actions, state
  * categories, views, board columns, transitions, and manual actions. */
 
-import type { ConfigField } from "./config-field";
-import type { GateContext } from "./core";
+import type { ConfigField } from "./config-field.ts";
+import type { GateContext } from "./core.ts";
 
 // --- Action variant ---
 

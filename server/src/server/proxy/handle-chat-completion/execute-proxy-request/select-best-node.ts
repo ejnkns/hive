@@ -2,8 +2,8 @@ import type { CandidateInfo } from "shared/dashboard-types";
 import { logger } from "shared/logger";
 import type { RequestMetric } from "telemetry";
 import { calculateNodeScore, type Node, type RoutingStrategy } from "telemetry";
-import { routingMemory } from "../../routing-memory";
-import { recordSelectionRound } from "../../session-aggregator";
+import { routingMemory } from "../../routing-memory.ts";
+import { recordSelectionRound } from "../../session-aggregator.ts";
 
 export function selectBestNode(
   nodes: Node[],

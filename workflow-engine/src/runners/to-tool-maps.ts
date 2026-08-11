@@ -1,6 +1,6 @@
 /** @private — only imported by runners.ts */
 
-import type { Tool, ToolDefinition, ToolExecutor } from "./tool-types";
+import type { Tool, ToolDefinition, ToolExecutor } from "./tool-types.ts";
 
 // Splits a self-contained tool list into the two name-keyed maps the ai
 // runners consume. The name comes from definition.function.name — the single

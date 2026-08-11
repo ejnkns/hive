@@ -1,7 +1,7 @@
 /** @private — only imported by runners.ts */
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { gitSucceeds, runGit } from "./git-command";
+import { gitSucceeds, runGit } from "./git-command.ts";
 
 export type IsolatedWorkspaceResult = {
   ok: boolean;

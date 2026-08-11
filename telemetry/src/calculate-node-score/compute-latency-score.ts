@@ -1,5 +1,5 @@
-import type { RequestMetric } from "../request-metric";
-import { percentile } from "../stats";
+import type { RequestMetric } from "../request-metric.ts";
+import { percentile } from "../stats.ts";
 
 const TTFT_HALF_LIFE_STANDARD = 1500;
 const TTFT_HALF_LIFE_REASONING = 8000;

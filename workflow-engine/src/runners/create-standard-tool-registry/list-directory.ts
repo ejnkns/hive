@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { readdirSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import type { ToolDefinition, ToolExecutor } from "../tool-types";
+import type { ToolDefinition, ToolExecutor } from "../tool-types.ts";
 
 export const definition: ToolDefinition = {
   type: "function",

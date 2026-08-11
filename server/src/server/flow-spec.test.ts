@@ -5,8 +5,8 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { FlowSpec } from "./flow-spec";
-import { analyzeFlowSpec, validateFlowSpec } from "./flow-spec";
+import type { FlowSpec } from "./flow-spec.ts";
+import { analyzeFlowSpec, validateFlowSpec } from "./flow-spec.ts";
 
 // A small valid spec: one workflow, one ai-task, gates on its output, a
 // createInstance action writing the only instance-state field.

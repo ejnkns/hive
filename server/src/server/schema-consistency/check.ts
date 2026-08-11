@@ -2,16 +2,20 @@
  * evaluate the invariants, flatten the report. */
 
 import ts from "typescript";
-import type { ObjectLiteral } from "./ast";
-import { findAll, parseFile, propertyOf } from "./ast";
-import { collectOpsMaps, collectToolsMaps, resolveFn } from "./capability-maps";
-import { evaluateContract, extractWorkflow } from "./contract";
-import { collectEdgeWrites, collectPayloadWrites } from "./edge-payload";
+import type { ObjectLiteral } from "./ast.ts";
+import { findAll, parseFile, propertyOf } from "./ast.ts";
+import {
+  collectOpsMaps,
+  collectToolsMaps,
+  resolveFn,
+} from "./capability-maps.ts";
+import { evaluateContract, extractWorkflow } from "./contract.ts";
+import { collectEdgeWrites, collectPayloadWrites } from "./edge-payload.ts";
 import type {
   CheckReport,
   SchemaCheckFile,
   WorkflowCheckResult,
-} from "./report-types";
+} from "./report-types.ts";
 
 export function checkDefinitionSources(files: SchemaCheckFile[]): CheckReport {
   const sourceFiles = files.map(parseFile);

@@ -9,7 +9,7 @@
  * (state-config), the flow definition (flow-definition), and instance history
  * entries (history). */
 
-export type { ChatMessage } from "./shared/chat-message";
+export type { ChatMessage } from "./shared/chat-message.ts";
 export type {
   ActionVariant,
   AutoTransition,
@@ -18,11 +18,11 @@ export type {
   StateCategory,
   VisibleAction,
   WorkflowView,
-} from "./workflow-types/actions";
+} from "./workflow-types/actions.ts";
 export type {
   ConfigField,
   ConfigFieldType,
-} from "./workflow-types/config-field";
+} from "./workflow-types/config-field.ts";
 export type {
   GateContext,
   ModelCallStatus,
@@ -31,24 +31,24 @@ export type {
   RuntimeGateContext,
   TaskOutcome,
   TaskOutputMap,
-} from "./workflow-types/core";
+} from "./workflow-types/core.ts";
 export type {
   DerivedDisplay,
   DisplayField,
   DisplayHint,
   WorkflowSummary,
-} from "./workflow-types/display";
+} from "./workflow-types/display.ts";
 export type {
   FlowDefinition,
   FlowEdge,
   FlowLevelAction,
   RuntimeFlowEdge,
-} from "./workflow-types/flow-definition";
+} from "./workflow-types/flow-definition.ts";
 export type {
   StateTransitionEntry,
   TaskExecutionEntry,
   WorkflowHistoryEntry,
-} from "./workflow-types/history";
+} from "./workflow-types/history.ts";
 export type {
   BuiltinRenderHint,
   BuiltinRenderKind,
@@ -61,13 +61,13 @@ export type {
   RenderPropScope,
   RenderPropType,
   RuntimeRenderHint,
-} from "./workflow-types/render-hints";
-export { builtinRenderContracts } from "./workflow-types/render-hints";
+} from "./workflow-types/render-hints.ts";
+export { builtinRenderContracts } from "./workflow-types/render-hints.ts";
 export type {
   RuntimeStateDef,
   RuntimeWorkflowConfig,
   StateDef,
   StateTaskDef,
   WorkflowConfig,
-} from "./workflow-types/state-config";
-export { defineWorkflow } from "./workflow-types/state-config";
+} from "./workflow-types/state-config.ts";
+export { defineWorkflow } from "./workflow-types/state-config.ts";

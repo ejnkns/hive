@@ -1,8 +1,8 @@
 import { logger } from "shared/logger";
-import { loadModelCache } from "./model-discovery/load-model-cache";
-import { saveModelCache } from "./model-discovery/save-model-cache";
-import { selectDefaultModel } from "./model-discovery/select-default-model";
-import { getModelId, type Provider } from "./registry";
+import { loadModelCache } from "./model-discovery/load-model-cache.ts";
+import { saveModelCache } from "./model-discovery/save-model-cache.ts";
+import { selectDefaultModel } from "./model-discovery/select-default-model.ts";
+import { getModelId, type Provider } from "./registry.ts";
 
 type ModelListResponse = {
   data: Array<{ id: string }>;

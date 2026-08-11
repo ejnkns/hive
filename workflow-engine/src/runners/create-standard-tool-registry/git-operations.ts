@@ -3,11 +3,11 @@
 import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readFlowSettings } from "../../read-flow-settings";
-import { readWorkflowAttempt } from "../../shared/read-workflow-attempt";
-import type { TaskDefinition } from "../../task-runner";
-import type { OperationContext } from "../create-operation-runner";
-import { gitSucceeds, runGit } from "../git-command";
+import { readFlowSettings } from "../../read-flow-settings.ts";
+import { readWorkflowAttempt } from "../../shared/read-workflow-attempt.ts";
+import type { TaskDefinition } from "../../task-runner.ts";
+import type { OperationContext } from "../create-operation-runner.ts";
+import { gitSucceeds, runGit } from "../git-command.ts";
 
 // Branch names and the domain root come from flow config, never hardcoded.
 // integrationBranch/branchPrefix/domainDir have no engine defaults — a flow

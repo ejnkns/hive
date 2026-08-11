@@ -5,7 +5,7 @@ import {
   type OperationContext,
 } from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
-import type { IntegrationItemState } from "../integration-workflow";
+import type { IntegrationItemState } from "../integration-workflow.ts";
 
 export const integrationOperations = {
   fast_forward_target_branch: fastForwardTargetBranchOp,

@@ -5,7 +5,7 @@
  * reads only what it needs when it needs it (the progressive-disclosure
  * pattern) instead of chewing through a 26KB prompt before its first reply. */
 
-import { DESIGN_DECISIONS } from "./decisions";
+import { DESIGN_DECISIONS } from "./decisions.ts";
 
 // A compact but VALID FlowSpec the agent begins from: change the id/label to
 // the user's domain and extend it as decisions land. Kept inline so the first

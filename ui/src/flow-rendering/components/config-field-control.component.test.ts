@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ConfigField } from "workflow-engine/workflow-types";
-import { click, mount, type } from "../test-utils";
-import { ConfigFieldControl } from "./config-field-control";
+import { click, mount, type } from "../test-utils.ts";
+import { ConfigFieldControl } from "./config-field-control.ts";
 
 // Behavior tests for the single-field control: one control per ConfigField
 // type, the id/name semantics, the change-event contract (hive-field-change

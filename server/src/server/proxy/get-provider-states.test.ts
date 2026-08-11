@@ -1,8 +1,8 @@
 import assert from "node:assert";
 import { beforeEach, describe, it } from "node:test";
-import { getProviderStates } from "./get-provider-states";
-import type { ServerState } from "./server-state";
-import { initServerState } from "./server-state";
+import { getProviderStates } from "./get-provider-states.ts";
+import type { ServerState } from "./server-state.ts";
+import { initServerState } from "./server-state.ts";
 
 function createEmptyServerState(): ServerState {
   return {

@@ -2,8 +2,8 @@
 import type { MetricData } from "shared/dashboard-types";
 import { onMount } from "svelte";
 import { dashboardSocket } from "./dashboard/dashboard-socket.svelte";
-import type { HeaderData } from "./shared/utils";
-import { formatNumber, formatTime } from "./shared/utils";
+import type { HeaderData } from "./shared/utils.ts";
+import { formatNumber, formatTime } from "./shared/utils.ts";
 import "./app.css";
 import CanvasHost from "./canvas/CanvasHost.svelte";
 import LivePipeline from "./dashboard/LivePipeline.svelte";

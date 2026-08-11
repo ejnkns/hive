@@ -3,7 +3,7 @@ import type { SessionState } from "shared/dashboard-types";
 import Button from "../shared/ui/Button.svelte";
 import Skeleton from "../shared/ui/Skeleton.svelte";
 import SessionCard from "./SessionCard.svelte";
-import { isTerminal } from "./stage-utils";
+import { isTerminal } from "./stage-utils.ts";
 
 let { sessions = [] as SessionState[] } = $props();
 

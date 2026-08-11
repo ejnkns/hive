@@ -1,6 +1,6 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
-import { selectDefaultModel } from "./select-default-model";
+import { selectDefaultModel } from "./select-default-model.ts";
 
 const groqPreferences = [
   "deepseek-r1-distill-llama-70b",

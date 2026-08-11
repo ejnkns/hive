@@ -1,6 +1,6 @@
-import { ERROR_PENALTIES } from "./error-penalties";
-import type { RequestMetric } from "./request-metric";
-import { mean, percentile } from "./stats";
+import { ERROR_PENALTIES } from "./error-penalties.ts";
+import type { RequestMetric } from "./request-metric.ts";
+import { mean, percentile } from "./stats.ts";
 
 /** @package */
 export type DerivedMetrics = {

@@ -1,15 +1,15 @@
 import { logger } from "shared/logger";
 import { normalizeModelId } from "shared/model-normalization";
 import type { Node, RequestMetric } from "telemetry";
-import type { ChatCompletionResult } from "../handle-chat-completion";
-import { isProviderRequestCancelledError } from "../provider-request-cancelled-error";
-import type { ProxyResponse } from "../proxy-response";
-import { routingMemory } from "../routing-memory";
+import type { ChatCompletionResult } from "../handle-chat-completion.ts";
+import { isProviderRequestCancelledError } from "../provider-request-cancelled-error.ts";
+import type { ProxyResponse } from "../proxy-response.ts";
+import { routingMemory } from "../routing-memory.ts";
 import {
   recordCircuitBreak,
   recordFailoverAttempt,
-} from "../session-aggregator";
-import { selectBestNode } from "./execute-proxy-request/select-best-node";
+} from "../session-aggregator.ts";
+import { selectBestNode } from "./execute-proxy-request/select-best-node.ts";
 
 type DispatchFn = (node: Node, payload: string) => Promise<ProxyResponse>;
 

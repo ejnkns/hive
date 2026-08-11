@@ -10,15 +10,15 @@ import type {
   RuntimeFlowEdge,
   RuntimeWorkflowConfig,
 } from "workflow-engine/workflow-types";
-import { createEngineRunners } from "../engine-bridge";
+import { createEngineRunners } from "../engine-bridge.ts";
 import {
   getFlowDefinition,
   getRegisteredFlowDefinition,
   loadDefinitionFromSource,
-} from "../flow-definitions";
-import type { FlowStore } from "../flow-persistence";
-import { HttpError } from "../http-error";
-import { registerRuntime } from "./registry-state";
+} from "../flow-definitions.ts";
+import type { FlowStore } from "../flow-persistence.ts";
+import { HttpError } from "../http-error.ts";
+import { registerRuntime } from "./registry-state.ts";
 
 // ── Flow definition registry ──
 //

@@ -5,9 +5,9 @@ import {
   queryAllDeep,
   settle,
   shadowRootOf,
-} from "../test-utils";
-import { FlowOverviewBar } from "./flow-overview";
-import type { FlowOverview } from "./workflow-instances/flow-overview";
+} from "../test-utils.ts";
+import { FlowOverviewBar } from "./flow-overview.ts";
+import type { FlowOverview } from "./workflow-instances/flow-overview.ts";
 
 function overview(overrides: Partial<FlowOverview> = {}): FlowOverview {
   return {

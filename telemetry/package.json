@@ -13,12 +13,11 @@
   "scripts": {
     "build": "tsdown",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test 'src/**/*.test.ts'"
+    "test": "node --test 'src/**/*.test.ts'"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",
     "tsdown": "^0.22.14",
-    "typescript": "^6.0.3",
-    "tsx": "^4.23.9"
+    "typescript": "^6.0.3"
   }
 }

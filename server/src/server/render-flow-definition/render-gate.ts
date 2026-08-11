@@ -1,7 +1,7 @@
 /** @private — structured GateSpec → (ctx) => ... closure rendering. */
 
-import type { GateSpec } from "../flow-spec";
-import { json } from "./render-primitives";
+import type { GateSpec } from "../flow-spec.ts";
+import { json } from "./render-primitives.ts";
 
 export function renderGate(gate: GateSpec): string {
   switch (gate.kind) {

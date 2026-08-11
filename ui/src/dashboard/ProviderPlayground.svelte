@@ -3,7 +3,7 @@ import type { AvailableProvider } from "shared/dashboard-types";
 import Button from "../shared/ui/Button.svelte";
 import Select from "../shared/ui/Select.svelte";
 import Textarea from "../shared/ui/Textarea.svelte";
-import { runProviderTest } from "./provider-playground/run-provider-test";
+import { runProviderTest } from "./provider-playground/run-provider-test.ts";
 
 let { providers }: { providers: AvailableProvider[] } = $props();
 

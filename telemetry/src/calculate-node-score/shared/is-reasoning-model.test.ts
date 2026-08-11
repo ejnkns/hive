@@ -1,6 +1,6 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
-import { isReasoningModel } from "./is-reasoning-model";
+import { isReasoningModel } from "./is-reasoning-model.ts";
 
 await describe("isReasoningModel", async () => {
   await it("matches deepseek-r1", () => {

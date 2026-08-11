@@ -1,7 +1,7 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
-import { initServerState } from "../server-state";
-import { validateProvidersOnStartup } from "./validate-providers-on-startup";
+import { initServerState } from "../server-state.ts";
+import { validateProvidersOnStartup } from "./validate-providers-on-startup.ts";
 
 function createProvider(name: string, model: string, apiKeyEnvVar: string) {
   return {

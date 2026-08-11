@@ -34,7 +34,7 @@ await describe("model-priority-config", async () => {
 
   await it("getModelPriority returns null when no file exists", async () => {
     const { getModelPriority, loadModelPriority } = await import(
-      "./model-priority-config"
+      "./model-priority-config.ts"
     );
     loadModelPriority();
     assert.strictEqual(getModelPriority(), null);
@@ -46,7 +46,7 @@ await describe("model-priority-config", async () => {
     });
 
     const { getModelPriority, loadModelPriority } = await import(
-      "./model-priority-config"
+      "./model-priority-config.ts"
     );
     loadModelPriority();
 
@@ -63,7 +63,7 @@ await describe("model-priority-config", async () => {
     });
 
     const { getModelPriority, loadModelPriority } = await import(
-      "./model-priority-config"
+      "./model-priority-config.ts"
     );
     loadModelPriority();
 
@@ -76,7 +76,7 @@ await describe("model-priority-config", async () => {
     writeConfigFile({ notModelPriority: [] });
 
     const { getModelPriority, loadModelPriority } = await import(
-      "./model-priority-config"
+      "./model-priority-config.ts"
     );
     loadModelPriority();
 
@@ -87,7 +87,7 @@ await describe("model-priority-config", async () => {
     writeConfigFile({ modelPriority: [] });
 
     const { getModelPriority, loadModelPriority } = await import(
-      "./model-priority-config"
+      "./model-priority-config.ts"
     );
     loadModelPriority();
 
@@ -101,7 +101,7 @@ await describe("model-priority-config", async () => {
     });
 
     const { getModelPriority, loadModelPriority } = await import(
-      "./model-priority-config"
+      "./model-priority-config.ts"
     );
     loadModelPriority();
 
@@ -112,7 +112,7 @@ await describe("model-priority-config", async () => {
     writeFileSync(configFilePath, "not valid json {{", "utf-8");
 
     const { getModelPriority, loadModelPriority } = await import(
-      "./model-priority-config"
+      "./model-priority-config.ts"
     );
     loadModelPriority();
 
@@ -123,7 +123,7 @@ await describe("model-priority-config", async () => {
     writeFileSync(configFilePath, '"just a string"', "utf-8");
 
     const { getModelPriority, loadModelPriority } = await import(
-      "./model-priority-config"
+      "./model-priority-config.ts"
     );
     loadModelPriority();
 

@@ -7,8 +7,8 @@ import {
   queryDeep,
   settle,
   shadowRootOf,
-} from "../test-utils";
-import { ConfigFieldForm } from "./config-field-form";
+} from "../test-utils.ts";
+import { ConfigFieldForm } from "./config-field-form.ts";
 
 function field(overrides: Partial<ConfigField> & { key: string }): ConfigField {
   return { label: overrides.key, type: "string", ...overrides };

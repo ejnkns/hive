@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { mount, mustQuery, settle, shadowRootOf } from "../test-utils";
-import { ItemHeader } from "./item-header";
+import { mount, mustQuery, settle, shadowRootOf } from "../test-utils.ts";
+import { ItemHeader } from "./item-header.ts";
 
 function header(overrides: Partial<InstanceType<typeof ItemHeader>> = {}) {
   return Object.assign(new ItemHeader(), overrides);

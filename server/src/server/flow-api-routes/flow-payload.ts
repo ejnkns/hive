@@ -1,9 +1,12 @@
 /** @private — the whole-flow snapshot payload (config, workflows, instances,
  * status, ui declarations, available flow-level actions). */
 
-import { getRegisteredFlowDefinition } from "../flow-definitions";
-import { getAvailableFlowActions, type getFlowRuntime } from "../flow-registry";
-import { computeInstanceStatus } from "../instance-status";
+import { getRegisteredFlowDefinition } from "../flow-definitions.ts";
+import {
+  getAvailableFlowActions,
+  type getFlowRuntime,
+} from "../flow-registry.ts";
+import { computeInstanceStatus } from "../instance-status.ts";
 
 export function flowPayload(
   flowId: string,

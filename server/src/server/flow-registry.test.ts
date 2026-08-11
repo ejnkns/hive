@@ -13,9 +13,9 @@ import {
   resetFlowDefinitionsForTest,
   setDefinitionsBasePathForTest,
   updateUserDefinition,
-} from "./flow-definitions";
-import { createFlowPersistence, type FlowStore } from "./flow-persistence";
-import type { FlowEventBusEvent } from "./flow-registry";
+} from "./flow-definitions.ts";
+import { createFlowPersistence, type FlowStore } from "./flow-persistence.ts";
+import type { FlowEventBusEvent } from "./flow-registry.ts";
 import {
   createFlow,
   dispatchFlowLevelAction,
@@ -26,7 +26,7 @@ import {
   rehydrateFlow,
   setFlowPersistence,
   unlinkFlow,
-} from "./flow-registry";
+} from "./flow-registry.ts";
 
 const testWorkflow = defineWorkflow({
   id: "test-wf",

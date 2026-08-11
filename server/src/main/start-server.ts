@@ -1,17 +1,11 @@
 import { printBanner } from "shared/ascii-banner";
 import { logger } from "shared/logger";
 import { getServerConfig, type ServerConfig } from "shared/server-config";
-import {
-  createServer,
-  getOverride,
-  isProviderDisabled,
-  listen,
-  loadProviders,
-} from "../server";
-import { registerFlowApiRoutes } from "../server/flow-api-routes";
-import { loadUserDefinitionsFromDisk } from "../server/flow-definitions";
-import { createFlowPersistence } from "../server/flow-persistence";
-import { rehydrateFlow, setFlowPersistence } from "../server/flow-registry";
+import { registerFlowApiRoutes } from "../server/flow-api-routes.ts";
+import { loadUserDefinitionsFromDisk } from "../server/flow-definitions.ts";
+import { createFlowPersistence } from "../server/flow-persistence.ts";
+import { rehydrateFlow, setFlowPersistence } from "../server/flow-registry.ts";
+import { loadModelPriority } from "../server/proxy/model-priority-config.ts";
 import {
   getLastUsed,
   getProviderStates,
@@ -20,9 +14,15 @@ import {
   initServerState,
   shutdown,
   start,
-} from "../server/proxy";
-import { loadModelPriority } from "../server/proxy/model-priority-config";
-import { registerBuiltinFlowDefinitions } from "./register-builtin-flow-definitions";
+} from "../server/proxy.ts";
+import {
+  createServer,
+  getOverride,
+  isProviderDisabled,
+  listen,
+  loadProviders,
+} from "../server.ts";
+import { registerBuiltinFlowDefinitions } from "./register-builtin-flow-definitions.ts";
 
 export async function startServer(overrides?: Partial<ServerConfig>) {
   printBanner();

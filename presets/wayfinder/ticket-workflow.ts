@@ -8,7 +8,7 @@ import {
   RESEARCH_SYSTEM_PROMPT,
   TASK_AFK_SYSTEM_PROMPT,
   TASK_HITL_SYSTEM_PROMPT,
-} from "./ticket-workflow/prompts";
+} from "./ticket-workflow/prompts.ts";
 
 export type TicketType = "research" | "prototype" | "grilling" | "task";
 

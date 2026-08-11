@@ -1,14 +1,14 @@
 /** @private — only imported by runners.ts */
 
-import type { ChatMessage } from "../shared/chat-message";
-import type { TaskDefinition, TaskRunner } from "../task-runner";
-import type { ModelCallStatus } from "../workflow-types";
+import type { ChatMessage } from "../shared/chat-message.ts";
+import type { TaskDefinition, TaskRunner } from "../task-runner.ts";
+import type { ModelCallStatus } from "../workflow-types.ts";
 import {
   type AgentTurnBehavior,
   runAgentLoop,
   seedTaskInput,
-} from "./agent-loop";
-import type { ToolCall, ToolDefinition, ToolExecutor } from "./tool-types";
+} from "./agent-loop.ts";
+import type { ToolCall, ToolDefinition, ToolExecutor } from "./tool-types.ts";
 
 export type AiTaskModelCaller = (
   systemPrompt: string,

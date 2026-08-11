@@ -4,21 +4,21 @@
  * the human/agent-facing document (`flowAuthoringMarkdown`). Import from
  * here, not from flow-authoring/ directly. */
 
-export { DESIGN_DECISIONS } from "./flow-authoring/decisions";
+export { DESIGN_DECISIONS } from "./flow-authoring/decisions.ts";
 export {
   FLOW_PATTERNS,
   type FlowPattern,
   renderPatternsPrompt,
   STRUCTURED_INTAKE_EXEMPLAR,
-} from "./flow-authoring/patterns";
+} from "./flow-authoring/patterns.ts";
 export {
   buildFlowAuthoringPrompt,
   flowAuthoringMarkdown,
-} from "./flow-authoring/prompt";
-export { AUTHORING_RULES } from "./flow-authoring/rules";
+} from "./flow-authoring/prompt.ts";
+export { AUTHORING_RULES } from "./flow-authoring/rules.ts";
 export {
   AUTHORING_DEFINITION_ID,
   authoringSessionFlow,
-} from "./flow-authoring/session";
-export { buildAuthoringSessionPrompt } from "./flow-authoring/session-prompt";
-export { FLOW_SPEC_SHAPE } from "./flow-authoring/vocabulary";
+} from "./flow-authoring/session.ts";
+export { buildAuthoringSessionPrompt } from "./flow-authoring/session-prompt.ts";
+export { FLOW_SPEC_SHAPE } from "./flow-authoring/vocabulary.ts";

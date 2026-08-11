@@ -28,4 +28,4 @@
  * properties), imports only workflow-engine/workflow-types + runners, and
  * loads under Node's native type-stripping. */
 
-export { renderFlowDefinition } from "./render-flow-definition/flow-renderer";
+export { renderFlowDefinition } from "./render-flow-definition/flow-renderer.ts";

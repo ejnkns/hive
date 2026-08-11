@@ -4,7 +4,7 @@ import type {
   ChatMessage,
   ModelCallStatus,
 } from "workflow-engine/workflow-types";
-import "./message-list";
+import "./message-list.ts";
 
 // The live ai-chat exchange for a running session: a scrollable transcript
 // (markdown bodies + tool chips via message-list) and an input row that

@@ -3,8 +3,8 @@ import { defineWorkflow } from "workflow-engine/workflow-types";
 import {
   FRONTIER_SYSTEM_PROMPT,
   NAMING_SYSTEM_PROMPT,
-} from "./charting-workflow/prompts";
-import type { SessionTranscript } from "./ticket-workflow";
+} from "./charting-workflow/prompts.ts";
+import type { SessionTranscript } from "./ticket-workflow.ts";
 
 export type ChartingItemState = {
   destination?: string;

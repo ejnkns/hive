@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolExecutor } from "../tool-types";
+import type { ToolDefinition, ToolExecutor } from "../tool-types.ts";
 
 // The engine's generic completion tool: a flow's ai task can declare this as
 // its completionTool (and list it in tools) without writing a domain tool.

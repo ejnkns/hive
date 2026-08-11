@@ -1,6 +1,6 @@
 import { css, html, LitElement, nothing } from "lit";
 import type { ChatMessage } from "workflow-engine/workflow-types";
-import "./markdown-view";
+import "./markdown-view.ts";
 
 // The shared transcript renderer for ai-chat sessions and agent progress:
 // markdown message bodies, compact tool-call chips, role-labelled rows. Both

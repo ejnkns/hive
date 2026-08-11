@@ -1,6 +1,6 @@
 /** @private — only imported by create-flow-runtime.ts */
 
-import type { RuntimeWorkflowInstanceState } from "../shared/workflow-instance-state";
+import type { RuntimeWorkflowInstanceState } from "../shared/workflow-instance-state.ts";
 import type {
   ActionVariant,
   BoardColumn,
@@ -11,7 +11,7 @@ import type {
   VisibleAction,
   WorkflowSummary,
   WorkflowView,
-} from "../workflow-types";
+} from "../workflow-types.ts";
 
 // The serialized workflow-definition shape the UI receives: states with their
 // actions and per-task render hints, plus the workflow's rendering hints.

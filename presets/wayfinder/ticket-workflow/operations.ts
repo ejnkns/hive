@@ -13,7 +13,7 @@ import {
   type ResolutionOutput,
   type TicketItemState,
   type TicketType,
-} from "../ticket-workflow";
+} from "../ticket-workflow.ts";
 
 // flow.ts binds the state type and merges this into the preset's registry.
 export const ticketOperations = {

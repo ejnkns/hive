@@ -1,6 +1,6 @@
 import type { Node } from "telemetry";
-import type { Provider } from "../../../providers";
-import { getModelId } from "../../../providers";
+import type { Provider } from "../../../providers.ts";
+import { getModelId } from "../../../providers.ts";
 
 export function buildNodes(qualified: ReadonlyArray<Provider>): Node[] {
   return qualified.map((p) => {

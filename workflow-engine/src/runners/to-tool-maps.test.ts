@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { toToolMaps } from "./to-tool-maps";
-import type { Tool } from "./tool-types";
+import { toToolMaps } from "./to-tool-maps.ts";
+import type { Tool } from "./tool-types.ts";
 
 function makeTool(name: string): Tool {
   return {

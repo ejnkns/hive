@@ -1,11 +1,11 @@
-import { checkAuthGuard } from "./calculate-node-score/check-auth-guard";
-import { computeContextWindowScore } from "./calculate-node-score/compute-context-window-score";
-import { computeLatencyScore } from "./calculate-node-score/compute-latency-score";
-import { computeQualityScore } from "./calculate-node-score/compute-quality-score";
-import { computeReliabilityScore } from "./calculate-node-score/compute-reliability-score";
-import { computeThroughputScore } from "./calculate-node-score/compute-throughput-score";
-import { isReasoningModel } from "./calculate-node-score/shared/is-reasoning-model";
-import type { RequestMetric } from "./request-metric";
+import { checkAuthGuard } from "./calculate-node-score/check-auth-guard.ts";
+import { computeContextWindowScore } from "./calculate-node-score/compute-context-window-score.ts";
+import { computeLatencyScore } from "./calculate-node-score/compute-latency-score.ts";
+import { computeQualityScore } from "./calculate-node-score/compute-quality-score.ts";
+import { computeReliabilityScore } from "./calculate-node-score/compute-reliability-score.ts";
+import { computeThroughputScore } from "./calculate-node-score/compute-throughput-score.ts";
+import { isReasoningModel } from "./calculate-node-score/shared/is-reasoning-model.ts";
+import type { RequestMetric } from "./request-metric.ts";
 
 export type { RequestMetric };
 export type RoutingStrategy = "balanced" | "latency" | "quality";

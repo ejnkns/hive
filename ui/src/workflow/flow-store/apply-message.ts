@@ -1,6 +1,6 @@
 /** @private — only imported by flow-store.svelte.ts */
 
-import type { FlowResponse, FlowWsMessage } from "../../flow-api";
+import type { FlowResponse, FlowWsMessage } from "../../flow-api.ts";
 
 // The pure store reducer: given the current flows and a push frame, returns the
 // next flows array. Extracted from the store so the protocol logic is testable

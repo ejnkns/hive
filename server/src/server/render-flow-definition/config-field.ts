@@ -1,7 +1,7 @@
 /** @private — ConfigField rendering (bare authoring style: identifier-named
  * keys so the schema-consistency check can resolve them). */
 
-import { json, jsonValue } from "./render-primitives";
+import { json, jsonValue } from "./render-primitives.ts";
 
 export function renderConfigField(f: {
   key: string;

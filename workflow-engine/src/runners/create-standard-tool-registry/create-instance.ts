@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolExecutor } from "../tool-types";
+import type { ToolDefinition, ToolExecutor } from "../tool-types.ts";
 
 export const definition: ToolDefinition = {
   type: "function",

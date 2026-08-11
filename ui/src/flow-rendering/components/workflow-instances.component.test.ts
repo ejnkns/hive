@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { defineFlowRenderingComponents } from "../define-components";
-import { action, boardDef, cardDef, entry } from "../test-fixtures";
+import { defineFlowRenderingComponents } from "../define-components.ts";
+import { action, boardDef, cardDef, entry } from "../test-fixtures.ts";
 import {
   click,
   mount,
@@ -8,8 +8,8 @@ import {
   mustQuery,
   settle,
   shadowRootOf,
-} from "../test-utils";
-import { WorkflowInstances } from "./workflow-instances";
+} from "../test-utils.ts";
+import { WorkflowInstances } from "./workflow-instances.ts";
 
 // Behavior tests for the board/list rendering surface: curated columns,
 // default per-state columns, flat views, collapse, and action bubbling.

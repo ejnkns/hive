@@ -1,13 +1,13 @@
 import { logger } from "shared/logger";
 import type { Node, RequestMetric } from "telemetry";
-import { isProviderRequestCancelledError } from "../provider-request-cancelled-error";
-import type { ProxyResponse } from "../proxy-response";
-import { routingMemory } from "../routing-memory";
+import { isProviderRequestCancelledError } from "../provider-request-cancelled-error.ts";
+import type { ProxyResponse } from "../proxy-response.ts";
+import { routingMemory } from "../routing-memory.ts";
 import {
   recordCircuitBreak,
   recordFailoverAttempt,
-} from "../session-aggregator";
-import { selectBestNode } from "./execute-proxy-request/select-best-node";
+} from "../session-aggregator.ts";
+import { selectBestNode } from "./execute-proxy-request/select-best-node.ts";
 
 export type FailoverContext = {
   nodes: Node[];

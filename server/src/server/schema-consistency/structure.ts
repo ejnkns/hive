@@ -2,8 +2,8 @@
  * and exit analysis, advisory only (never fails the gate). */
 
 import ts from "typescript";
-import type { ObjectLiteral } from "./ast";
-import { arrayOf, propertyOf, stringValue, unwrap } from "./ast";
+import type { ObjectLiteral } from "./ast.ts";
+import { arrayOf, propertyOf, stringValue, unwrap } from "./ast.ts";
 
 export function assessWorkflowStructure(
   config: ObjectLiteral,

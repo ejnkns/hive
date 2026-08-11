@@ -10,15 +10,15 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
-import type { TaskDefinition } from "../../task-runner";
-import type { OperationContext } from "../create-operation-runner";
+import type { TaskDefinition } from "../../task-runner.ts";
+import type { OperationContext } from "../create-operation-runner.ts";
 import {
   commitFlowState,
   ensureIntegrationBranch,
   fastForwardTargetBranch,
   mergeBranch,
   validateRepo,
-} from "./git-operations";
+} from "./git-operations.ts";
 
 const dummyTask: TaskDefinition = { id: "t", label: "T", role: "operation" };
 

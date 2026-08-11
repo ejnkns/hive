@@ -4,8 +4,8 @@ import type {
   WorkflowInstanceEntry,
 } from "workflow-engine/create-flow-runtime";
 import type { CustomRenderKind } from "workflow-engine/workflow-types";
-import type { WorkflowInstances } from "../flow-rendering";
-import { loadFlowComponents } from "../flow-rendering/load-flow-components";
+import { loadFlowComponents } from "../flow-rendering/load-flow-components.ts";
+import type { WorkflowInstances } from "../flow-rendering.ts";
 
 // The Svelte adapter for the Lit rendering surface: forwards the flow's
 // workflow definitions and instances to the workflow-instances element,

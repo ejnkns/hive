@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { action } from "../test-fixtures";
+import { action } from "../test-fixtures.ts";
 import {
   click,
   mount,
@@ -7,8 +7,8 @@ import {
   queryAllDeep,
   settle,
   shadowRootOf,
-} from "../test-utils";
-import { ActionBar } from "./action-bar";
+} from "../test-utils.ts";
+import { ActionBar } from "./action-bar.ts";
 
 function buttons(el: ActionBar): HTMLButtonElement[] {
   return queryAllDeep(el, "button") as HTMLButtonElement[];

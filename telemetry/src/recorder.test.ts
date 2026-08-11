@@ -1,7 +1,7 @@
 import assert from "node:assert";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { loadCache, saveCache } from "./cache";
-import { TelemetryRecorder } from "./recorder";
+import { loadCache, saveCache } from "./cache.ts";
+import { TelemetryRecorder } from "./recorder.ts";
 
 // TODO: Re-enable once TelemetryRecorder accepts an isolated cache adapter/path.
 // These tests currently read and overwrite the live ~/.hive/telemetry-cache.json,

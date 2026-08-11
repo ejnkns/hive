@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { mount, mustQuery, settle, shadowRootOf } from "../test-utils";
-import { MarkdownView } from "./markdown-view";
+import { mount, mustQuery, settle, shadowRootOf } from "../test-utils.ts";
+import { MarkdownView } from "./markdown-view.ts";
 
 describe("MarkdownView", () => {
   it("renders markdown structure", async () => {

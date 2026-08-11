@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import { logger } from "shared/logger";
-import type { ModelCache } from "../model-discovery";
-import { MODELS_CACHE_PATH } from "../model-discovery/shared/paths";
+import { MODELS_CACHE_PATH } from "../model-discovery/shared/paths.ts";
+import type { ModelCache } from "../model-discovery.ts";
 
 export async function loadModelCache(): Promise<ModelCache | null> {
   try {

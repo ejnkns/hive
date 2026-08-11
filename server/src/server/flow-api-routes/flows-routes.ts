@@ -3,7 +3,7 @@
 
 import type { FastifyInstance } from "fastify";
 import { slugify } from "shared/slugify";
-import { getRegisteredFlowDefinition } from "../flow-definitions";
+import { getRegisteredFlowDefinition } from "../flow-definitions.ts";
 import {
   createFlow,
   dispatchFlowLevelAction,
@@ -13,9 +13,9 @@ import {
   purgeFlow,
   unlinkFlow,
   validateInstanceConfig,
-} from "../flow-registry";
-import { HttpError } from "../http-error";
-import { flowPayload } from "./flow-payload";
+} from "../flow-registry.ts";
+import { HttpError } from "../http-error.ts";
+import { flowPayload } from "./flow-payload.ts";
 
 export function registerFlowsRoutes(server: FastifyInstance): void {
   server.get("/api/flows", async (request, reply) => {

@@ -14,9 +14,9 @@
  * contract + invariant evaluation (contract), and the orchestrating check
  * (check). */
 
-export { checkDefinitionSources } from "./schema-consistency/check";
+export { checkDefinitionSources } from "./schema-consistency/check.ts";
 export type {
   CheckReport,
   SchemaCheckFile,
   WorkflowCheckResult,
-} from "./schema-consistency/report-types";
+} from "./schema-consistency/report-types.ts";

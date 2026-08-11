@@ -16,15 +16,19 @@ import {
   defineWorkflow,
   type FlowDefinition,
 } from "workflow-engine/workflow-types";
-import { loadDefinitionFromSource } from "../flow-definitions";
-import { analyzeFlowSpec, type FlowSpec, validateFlowSpec } from "../flow-spec";
-import { renderFlowDefinition } from "../render-flow-definition";
-import { checkDefinitionSources } from "../schema-consistency";
-import { typecheckDefinitionSource } from "../typecheck-definition";
-import { renderPatternsPrompt } from "./patterns";
-import { AUTHORING_RULES } from "./rules";
-import { buildAuthoringSessionPrompt } from "./session-prompt";
-import { FLOW_SPEC_SHAPE } from "./vocabulary";
+import { loadDefinitionFromSource } from "../flow-definitions.ts";
+import {
+  analyzeFlowSpec,
+  type FlowSpec,
+  validateFlowSpec,
+} from "../flow-spec.ts";
+import { renderFlowDefinition } from "../render-flow-definition.ts";
+import { checkDefinitionSources } from "../schema-consistency.ts";
+import { typecheckDefinitionSource } from "../typecheck-definition.ts";
+import { renderPatternsPrompt } from "./patterns.ts";
+import { AUTHORING_RULES } from "./rules.ts";
+import { buildAuthoringSessionPrompt } from "./session-prompt.ts";
+import { FLOW_SPEC_SHAPE } from "./vocabulary.ts";
 
 export const AUTHORING_DEFINITION_ID = "flow-authoring";
 

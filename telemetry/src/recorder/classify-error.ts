@@ -1,4 +1,4 @@
-import type { ErrorType } from "../request-metric";
+import type { ErrorType } from "../request-metric.ts";
 
 export function classifyError(
   statusCode: number,

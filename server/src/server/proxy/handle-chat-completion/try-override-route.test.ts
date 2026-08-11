@@ -1,8 +1,8 @@
 import assert from "node:assert";
 import { beforeEach, describe, it } from "node:test";
-import type { ProxyResponse } from "../proxy-response";
-import { routingMemory } from "../routing-memory";
-import { tryOverrideRoute } from "./try-override-route";
+import type { ProxyResponse } from "../proxy-response.ts";
+import { routingMemory } from "../routing-memory.ts";
+import { tryOverrideRoute } from "./try-override-route.ts";
 
 function mockProxyResponse(status: number): ProxyResponse {
   return {

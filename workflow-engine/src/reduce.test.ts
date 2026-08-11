@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { getAvailableActions } from "./get-available-actions";
-import { reduce, type WorkflowCommand, type WorkflowEvent } from "./reduce";
-import type { RuntimeWorkflowInstanceState } from "./shared/workflow-instance-state";
-import { defineWorkflow, type NoOutput } from "./workflow-types";
+import { getAvailableActions } from "./get-available-actions.ts";
+import { reduce, type WorkflowCommand, type WorkflowEvent } from "./reduce.ts";
+import type { RuntimeWorkflowInstanceState } from "./shared/workflow-instance-state.ts";
+import { defineWorkflow, type NoOutput } from "./workflow-types.ts";
 
 const cardsWorkflow = defineWorkflow({
   id: "cards",

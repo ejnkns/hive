@@ -1,7 +1,7 @@
-export { discoverAndCacheModels } from "./providers/model-discovery";
-export { loadModelCacheSync } from "./providers/model-discovery/load-model-cache-sync";
+export { loadModelCacheSync } from "./providers/model-discovery/load-model-cache-sync.ts";
+export { discoverAndCacheModels } from "./providers/model-discovery.ts";
 export {
   allProviders as providers,
   getModelId,
   type Provider,
-} from "./providers/registry";
+} from "./providers/registry.ts";

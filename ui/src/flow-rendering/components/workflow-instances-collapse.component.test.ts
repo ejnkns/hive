@@ -1,8 +1,8 @@
 import { html, LitElement } from "lit";
 import { describe, expect, it, vi } from "vitest";
-import { defineFlowRenderingComponents } from "../define-components";
-import { loadFlowComponents } from "../load-flow-components";
-import { cardDef, entry } from "../test-fixtures";
+import { defineFlowRenderingComponents } from "../define-components.ts";
+import { loadFlowComponents } from "../load-flow-components.ts";
+import { cardDef, entry } from "../test-fixtures.ts";
 import {
   click,
   mount,
@@ -10,8 +10,8 @@ import {
   queryAllDeep,
   settle,
   shadowRootOf,
-} from "../test-utils";
-import { WorkflowInstances } from "./workflow-instances";
+} from "../test-utils.ts";
+import { WorkflowInstances } from "./workflow-instances.ts";
 
 // A served custom component (like the ideas idea-card) so the collapse/reopen
 // path runs against a custom instance component too.

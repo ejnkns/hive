@@ -1,8 +1,8 @@
 <script lang="ts">
 import type { MetricData, ProviderPayload } from "shared/dashboard-types";
-import { formatNumber, healthColor, sc } from "../shared/utils";
+import { formatNumber, healthColor, sc } from "../shared/utils.ts";
 import ActivityLog from "./ActivityLog.svelte";
-import { groupProviders } from "./group-providers";
+import { groupProviders } from "./group-providers.ts";
 
 let {
   data = [] as ProviderPayload[],

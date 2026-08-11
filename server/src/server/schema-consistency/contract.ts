@@ -3,11 +3,11 @@
 
 import ts from "typescript";
 import { engineCapabilities } from "workflow-engine/capabilities-manifest";
-import { declaredFieldsFor } from "./anchors";
-import type { ObjectLiteral } from "./ast";
-import { arrayOf, objectOf, propertyOf, stringValue } from "./ast";
-import { collectPatchWrites, collectStateReads } from "./state-access";
-import { assessWorkflowStructure } from "./structure";
+import { declaredFieldsFor } from "./anchors.ts";
+import type { ObjectLiteral } from "./ast.ts";
+import { arrayOf, objectOf, propertyOf, stringValue } from "./ast.ts";
+import { collectPatchWrites, collectStateReads } from "./state-access.ts";
+import { assessWorkflowStructure } from "./structure.ts";
 
 type WorkflowContract = {
   workflowId: string;

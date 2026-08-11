@@ -5,13 +5,13 @@ import type {
   WorkflowInstanceEntry,
 } from "workflow-engine/create-flow-runtime";
 import type { CustomRenderKind } from "workflow-engine/workflow-types";
-import { getComponentRenderer } from "../renderer-registry";
-import "./dynamic-element-host";
-import "./flow-overview";
-import { WorkflowInstanceCard } from "./workflow-instance-card";
-import { computeFlowOverview } from "./workflow-instances/flow-overview";
-import { groupInstancesByColumns } from "./workflow-instances/group-by-columns";
-import { groupInstancesByState } from "./workflow-instances/group-by-state";
+import { getComponentRenderer } from "../renderer-registry.ts";
+import "./dynamic-element-host.ts";
+import "./flow-overview.ts";
+import { WorkflowInstanceCard } from "./workflow-instance-card.ts";
+import { computeFlowOverview } from "./workflow-instances/flow-overview.ts";
+import { groupInstancesByColumns } from "./workflow-instances/group-by-columns.ts";
+import { groupInstancesByState } from "./workflow-instances/group-by-state.ts";
 
 // The structural column shape the grouping modules return; declared locally
 // so the renderer does not import a type from a private grouping module.

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { highlightTypeScript } from "./highlight";
+import { highlightTypeScript } from "./highlight.ts";
 
 describe("highlightTypeScript", () => {
   it("wraps keywords, strings, comments, and numbers in token spans", () => {

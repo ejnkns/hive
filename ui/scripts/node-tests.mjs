@@ -29,7 +29,7 @@ walk(join(root, "src"));
 
 const result = spawnSync(
   process.execPath,
-  ["--import", "tsx", "--test", ...files],
+  ["--test", ...files],
   { stdio: "inherit", cwd: root }
 );
 process.exit(result.status ?? 1);

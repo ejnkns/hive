@@ -1,9 +1,9 @@
 import assert from "node:assert";
 import { beforeEach, describe, it } from "node:test";
-import { handleChatCompletion } from "./handle-chat-completion";
-import { getLastUsed, setLastUsed } from "./last-used-state";
-import type { ServerState } from "./server-state";
-import { initServerState } from "./server-state";
+import { handleChatCompletion } from "./handle-chat-completion.ts";
+import { getLastUsed, setLastUsed } from "./last-used-state.ts";
+import type { ServerState } from "./server-state.ts";
+import { initServerState } from "./server-state.ts";
 
 function createEmptyServerState(): ServerState {
   return {

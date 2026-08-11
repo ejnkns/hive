@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { defineFlowRenderingComponents } from "../define-components";
-import { action, cardDef, entry } from "../test-fixtures";
+import { defineFlowRenderingComponents } from "../define-components.ts";
+import { action, cardDef, entry } from "../test-fixtures.ts";
 import {
   click,
   mount,
@@ -9,8 +9,8 @@ import {
   queryAllDeep,
   settle,
   shadowRootOf,
-} from "../test-utils";
-import { WorkflowInstanceCard } from "./workflow-instance-card";
+} from "../test-utils.ts";
+import { WorkflowInstanceCard } from "./workflow-instance-card.ts";
 
 // Behavior tests for the default instance card: hint-driven title, display
 // fields, markdown task outputs, action ordering, and the onAction callback.

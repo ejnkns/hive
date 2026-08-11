@@ -1,9 +1,9 @@
 import assert from "node:assert";
 import { beforeEach, describe, it } from "node:test";
 import type { Node, RequestMetric } from "telemetry";
-import type { ProxyResponse } from "../proxy-response";
-import { routingMemory } from "../routing-memory";
-import { tryModelPriorityRoute } from "./try-model-priority-route";
+import type { ProxyResponse } from "../proxy-response.ts";
+import { routingMemory } from "../routing-memory.ts";
+import { tryModelPriorityRoute } from "./try-model-priority-route.ts";
 
 function mockProxyResponse(status: number): ProxyResponse {
   return {

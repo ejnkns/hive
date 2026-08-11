@@ -32,8 +32,8 @@ import {
   registerUserDefinition,
   resetFlowDefinitionsForTest,
   setDefinitionsBasePathForTest,
-} from "./flow-definitions";
-import { checkDefinitionSources } from "./schema-consistency";
+} from "./flow-definitions.ts";
+import { checkDefinitionSources } from "./schema-consistency.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 

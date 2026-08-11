@@ -7,7 +7,7 @@ import {
   FIELD_TYPES,
   IDENTIFIER,
   infraToolNames,
-} from "./spec-constants";
+} from "./spec-constants.ts";
 import type {
   CompletionOutputField,
   FieldType,
@@ -16,20 +16,20 @@ import type {
   SpecError,
   SpecValidationContext,
   WorkflowSpec,
-} from "./spec-types";
-import { validateEdges } from "./validate-edges";
+} from "./spec-types.ts";
+import { validateEdges } from "./validate-edges.ts";
 import {
   isConfigField,
   isDerivedDisplay,
   isFieldType,
-} from "./validate-fields";
-import { collectGateTaskReads, validateGateSpec } from "./validate-gate";
+} from "./validate-fields.ts";
+import { collectGateTaskReads, validateGateSpec } from "./validate-gate.ts";
 import {
   checkLiteralMatches,
   validateCreateInstance,
   validateValueSpec,
-} from "./validate-values";
-import { validateWriters } from "./validate-writers";
+} from "./validate-values.ts";
+import { validateWriters } from "./validate-writers.ts";
 
 export function validateFlowSpec(spec: FlowSpec): SpecError[] {
   const errors: SpecError[] = [];

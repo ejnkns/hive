@@ -1,14 +1,14 @@
 /** @private — ValueSpec / literal / createInstance value validators. */
 
 import type { ConfigField } from "workflow-engine/workflow-types";
-import { DOTTED_PATH } from "./spec-constants";
+import { DOTTED_PATH } from "./spec-constants.ts";
 import type {
   CompletionOutputField,
   FieldType,
   SpecError,
   ValueSpec,
   WorkflowSpec,
-} from "./spec-types";
+} from "./spec-types.ts";
 
 export function validateValueSpec(
   value: ValueSpec,

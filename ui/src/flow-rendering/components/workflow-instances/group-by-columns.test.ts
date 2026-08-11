@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { groupInstancesByColumns } from "./group-by-columns";
+import { groupInstancesByColumns } from "./group-by-columns.ts";
 
 const states = [
   { id: "fog", label: "Fog", category: "initial" as const },

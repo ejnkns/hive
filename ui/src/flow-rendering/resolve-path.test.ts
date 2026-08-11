@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { resolvePath } from "./resolve-path";
+import { resolvePath } from "./resolve-path.ts";
 
 describe("resolvePath", () => {
   it("resolves a dotted path into a nested object", () => {

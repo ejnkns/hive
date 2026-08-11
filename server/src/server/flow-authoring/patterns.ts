@@ -5,7 +5,7 @@
  * asks the model to pick a pattern before writing the spec; the loop's gate
  * keeps every copy honest. */
 
-import type { FlowSpec } from "../flow-spec";
+import type { FlowSpec } from "../flow-spec.ts";
 
 export type FlowPattern = {
   id: string;

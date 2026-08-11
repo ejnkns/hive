@@ -1,9 +1,9 @@
 import { logger } from "shared/logger";
-import { applySlidingWindow } from "./apply-sliding-window";
-import { loadCache, type ModelScore, saveCache } from "./cache";
-import { calculateNodeScore } from "./calculate-node-score";
-import { computeDerivedMetrics } from "./derived-metrics";
-import type { RequestMetric } from "./request-metric";
+import { applySlidingWindow } from "./apply-sliding-window.ts";
+import { loadCache, type ModelScore, saveCache } from "./cache.ts";
+import { calculateNodeScore } from "./calculate-node-score.ts";
+import { computeDerivedMetrics } from "./derived-metrics.ts";
+import type { RequestMetric } from "./request-metric.ts";
 
 const FLUSH_DEBOUNCE_MS = 1_000;
 

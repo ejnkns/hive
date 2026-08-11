@@ -1,6 +1,6 @@
 import { css, html, LitElement } from "lit";
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
-import { sanitizeMarkdown } from "./markdown-view/sanitize";
+import { sanitizeMarkdown } from "./markdown-view/sanitize.ts";
 
 export class MarkdownView extends LitElement {
   static properties = {

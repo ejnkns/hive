@@ -2,7 +2,7 @@
  * resolution of an op/tool name to its function node. */
 
 import ts from "typescript";
-import { findFirst, propertyOf, stringValue, unwrap, walk } from "./ast";
+import { findFirst, propertyOf, stringValue, unwrap, walk } from "./ast.ts";
 
 export function collectOpsMaps(files: ts.SourceFile[]): Map<string, ts.Node> {
   const ops = new Map<string, ts.Node>();

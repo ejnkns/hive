@@ -1,4 +1,4 @@
-import type { Provider } from "../providers";
+import type { Provider } from "../providers.ts";
 
 export type ServerState = {
   getOverride: () => { provider: string; model: string } | null;

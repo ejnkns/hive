@@ -1,6 +1,6 @@
 /** @private — only imported by the ai runners */
 
-import { resolveDottedPath } from "./resolve-dotted-path";
+import { resolveDottedPath } from "./resolve-dotted-path.ts";
 
 const INSTANCE_REF_PREFIX = "@instance:";
 

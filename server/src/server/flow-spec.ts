@@ -43,9 +43,9 @@ export type {
   TaskSpec,
   ValueSpec,
   WorkflowSpec,
-} from "./flow-spec/spec-types";
+} from "./flow-spec/spec-types.ts";
 
 export {
   analyzeFlowSpec,
   validateFlowSpec,
-} from "./flow-spec/validate-flow-spec";
+} from "./flow-spec/validate-flow-spec.ts";

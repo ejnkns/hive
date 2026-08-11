@@ -1,6 +1,6 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
-import { computeContextWindowScore } from "./compute-context-window-score";
+import { computeContextWindowScore } from "./compute-context-window-score.ts";
 
 await describe("computeContextWindowScore", async () => {
   await it("returns 100 for reference max", () => {

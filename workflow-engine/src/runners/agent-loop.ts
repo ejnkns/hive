@@ -17,17 +17,17 @@
  *     the model stops calling tools the session waits for user input
  *     (startOnUserInput) or auto-reprompts; the transcript syncs live. */
 
-import type { ChatMessage } from "../shared/chat-message";
-import type { TaskDefinition } from "../task-runner";
-import type { ModelCallStatus } from "../workflow-types";
-import { resolveDottedPath } from "./resolve-dotted-path";
-import { resolveWorkspacePath } from "./resolve-workspace-path";
+import type { ChatMessage } from "../shared/chat-message.ts";
+import type { TaskDefinition } from "../task-runner.ts";
+import type { ModelCallStatus } from "../workflow-types.ts";
+import { resolveDottedPath } from "./resolve-dotted-path.ts";
+import { resolveWorkspacePath } from "./resolve-workspace-path.ts";
 import type {
   ToolCall,
   ToolDefinition,
   ToolExecutor,
   ToolResult,
-} from "./tool-types";
+} from "./tool-types.ts";
 
 export type AgentModelCaller = (
   systemPrompt: string,

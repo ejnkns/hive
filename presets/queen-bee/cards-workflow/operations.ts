@@ -13,7 +13,7 @@ import type {
   CardSpec,
   CardsItemState,
   ReviewPackage,
-} from "../cards-workflow";
+} from "../cards-workflow.ts";
 
 // The cards workflow's operations, keyed by the names its tasks reference.
 // flow.ts binds the state type (defineOperations<CardsItemState>) and merges

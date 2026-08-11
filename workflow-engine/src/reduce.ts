@@ -1,10 +1,10 @@
-import type { RuntimeWorkflowInstanceState } from "./shared/workflow-instance-state";
+import type { RuntimeWorkflowInstanceState } from "./shared/workflow-instance-state.ts";
 import type {
   RunningTaskContext,
   RuntimeGateContext,
   RuntimeStateDef,
   WorkflowHistoryEntry,
-} from "./workflow-types";
+} from "./workflow-types.ts";
 
 // === Events ===
 

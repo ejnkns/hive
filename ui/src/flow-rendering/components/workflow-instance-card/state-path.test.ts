@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { WorkflowHistoryEntry } from "workflow-engine/workflow-types";
-import { statePath } from "./state-path";
+import { statePath } from "./state-path.ts";
 
 function transition(fromState: string, toState: string): WorkflowHistoryEntry {
   return {

@@ -1,4 +1,4 @@
-import type { RequestMetric } from "../request-metric";
+import type { RequestMetric } from "../request-metric.ts";
 
 export type AuthGuardResult = { passed: true } | { passed: false; score: 0 };
 

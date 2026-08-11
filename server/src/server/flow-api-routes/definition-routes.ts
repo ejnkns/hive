@@ -4,7 +4,7 @@
 import { randomUUID } from "node:crypto";
 import { PassThrough } from "node:stream";
 import type { FastifyInstance } from "fastify";
-import { AUTHORING_DEFINITION_ID } from "../flow-authoring";
+import { AUTHORING_DEFINITION_ID } from "../flow-authoring.ts";
 import {
   DefinitionAlreadyExistsError,
   deleteUserDefinition,
@@ -14,11 +14,11 @@ import {
   loadDefinitionFromSource,
   registerUserDefinition,
   updateUserDefinition,
-} from "../flow-definitions";
-import { createFlow, getFlowPersistence } from "../flow-registry";
-import { generateFlowDefinitionSource } from "../generate-flow-definition";
-import { checkDefinitionSources } from "../schema-consistency";
-import { typecheckDefinitionSource } from "../typecheck-definition";
+} from "../flow-definitions.ts";
+import { createFlow, getFlowPersistence } from "../flow-registry.ts";
+import { generateFlowDefinitionSource } from "../generate-flow-definition.ts";
+import { checkDefinitionSources } from "../schema-consistency.ts";
+import { typecheckDefinitionSource } from "../typecheck-definition.ts";
 
 export function registerDefinitionRoutes(server: FastifyInstance): void {
   server.get("/api/flows/definitions", async (_request, reply) => {

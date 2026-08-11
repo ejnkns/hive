@@ -1,4 +1,4 @@
-import type { FinishReason } from "./request-metric";
+import type { FinishReason } from "./request-metric.ts";
 
 type ContentPart = {
   type: "text" | "image_url";

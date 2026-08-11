@@ -1,5 +1,5 @@
 /** @private — only imported by runners.ts */
-import type { TaskDefinition, TaskRunner } from "../task-runner";
+import type { TaskDefinition, TaskRunner } from "../task-runner.ts";
 
 // Operations are deterministic engine tasks. They receive the flow's runtime
 // context so they can read and patch flow config, and the identity and state

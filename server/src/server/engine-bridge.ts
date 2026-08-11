@@ -31,8 +31,8 @@ import type {
   ChatMessage,
   ModelCallStatus,
 } from "workflow-engine/workflow-types";
-import { handleChatCompletion } from "./proxy/handle-chat-completion";
-import { consumeSseStream } from "./sse-consume";
+import { handleChatCompletion } from "./proxy/handle-chat-completion.ts";
+import { consumeSseStream } from "./sse-consume.ts";
 
 // ─── Infrastructure operation wiring ─────────────────────────────────────
 

@@ -1,7 +1,7 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
-import type { RequestMetric } from "../request-metric";
-import { computeLatencyScore } from "./compute-latency-score";
+import type { RequestMetric } from "../request-metric.ts";
+import { computeLatencyScore } from "./compute-latency-score.ts";
 
 function mockMetric(overrides: Partial<RequestMetric>): RequestMetric {
   return {

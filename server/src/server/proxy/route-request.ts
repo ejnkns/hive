@@ -5,9 +5,9 @@ import { URL } from "node:url";
 import { logger } from "shared/logger";
 import type { FinishReason, StreamPhaseEvent, TelemetrySink } from "telemetry";
 import { classifyError, createStreamCounter, detectRefusal } from "telemetry";
-import type { MutatedRequest } from "./mutate-request";
-import { ProviderRequestCancelledError } from "./provider-request-cancelled-error";
-import { ProxyResponse } from "./proxy-response";
+import type { MutatedRequest } from "./mutate-request.ts";
+import { ProviderRequestCancelledError } from "./provider-request-cancelled-error.ts";
+import { ProxyResponse } from "./proxy-response.ts";
 import {
   recordNodeDispatched,
   recordResponseComplete,
@@ -15,7 +15,7 @@ import {
   recordThinkingStarted,
   recordTokenTick,
   recordToolAccumulating,
-} from "./session-aggregator";
+} from "./session-aggregator.ts";
 
 type RouteRequestOptions = {
   upstreamUrl: string;

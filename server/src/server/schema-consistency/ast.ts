@@ -2,7 +2,7 @@
  * unwrapping, walking) used by every extraction pass. */
 
 import ts from "typescript";
-import type { SchemaCheckFile } from "./report-types";
+import type { SchemaCheckFile } from "./report-types.ts";
 
 export type ObjectLiteral = ts.ObjectLiteralExpression;
 

@@ -3,56 +3,56 @@
 import {
   definition as commitWorkDef,
   execute as commitWorkExec,
-} from "./create-standard-tool-registry/commit-work";
+} from "./create-standard-tool-registry/commit-work.ts";
 import {
   definition as completeTaskDef,
   execute as completeTaskExec,
-} from "./create-standard-tool-registry/complete-task";
+} from "./create-standard-tool-registry/complete-task.ts";
 import {
   definition as createInstanceDef,
   execute as createInstanceExec,
-} from "./create-standard-tool-registry/create-instance";
+} from "./create-standard-tool-registry/create-instance.ts";
 import {
   definition as gitDiffDef,
   execute as gitDiffExec,
-} from "./create-standard-tool-registry/git-diff";
+} from "./create-standard-tool-registry/git-diff.ts";
 import {
   definition as gitLogDef,
   execute as gitLogExec,
-} from "./create-standard-tool-registry/git-log";
+} from "./create-standard-tool-registry/git-log.ts";
 import {
   definition as gitShowDef,
   execute as gitShowExec,
-} from "./create-standard-tool-registry/git-show";
+} from "./create-standard-tool-registry/git-show.ts";
 import {
   definition as gitStatusDef,
   execute as gitStatusExec,
-} from "./create-standard-tool-registry/git-status";
+} from "./create-standard-tool-registry/git-status.ts";
 import {
   definition as listDirDef,
   execute as listDirExec,
-} from "./create-standard-tool-registry/list-directory";
+} from "./create-standard-tool-registry/list-directory.ts";
 import {
   definition as readFileDef,
   execute as readFileExec,
-} from "./create-standard-tool-registry/read-file";
+} from "./create-standard-tool-registry/read-file.ts";
 import {
   definition as runCommandDef,
   execute as runCommandExec,
-} from "./create-standard-tool-registry/run-command";
+} from "./create-standard-tool-registry/run-command.ts";
 import {
   definition as searchCodeDef,
   execute as searchCodeExec,
-} from "./create-standard-tool-registry/search-code";
+} from "./create-standard-tool-registry/search-code.ts";
 import {
   definition as writeFileDef,
   execute as writeFileExec,
-} from "./create-standard-tool-registry/write-file";
+} from "./create-standard-tool-registry/write-file.ts";
 import type {
   InfrastructureToolName,
   ToolDefinition,
   ToolExecutor,
-} from "./tool-types";
+} from "./tool-types.ts";
 
 export function createStandardToolDefinitions(): Record<
   InfrastructureToolName,

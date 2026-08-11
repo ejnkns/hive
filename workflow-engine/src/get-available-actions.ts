@@ -1,10 +1,10 @@
-import { resolveDottedPath } from "./runners/resolve-dotted-path";
-import type { RuntimeWorkflowInstanceState } from "./shared/workflow-instance-state";
+import { resolveDottedPath } from "./runners/resolve-dotted-path.ts";
+import type { RuntimeWorkflowInstanceState } from "./shared/workflow-instance-state.ts";
 import type {
   RuntimeGateContext,
   RuntimeStateDef,
   VisibleAction,
-} from "./workflow-types";
+} from "./workflow-types.ts";
 
 export function getAvailableActions(
   states: readonly RuntimeStateDef[],

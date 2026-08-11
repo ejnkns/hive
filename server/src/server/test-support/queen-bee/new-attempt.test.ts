@@ -10,7 +10,7 @@ import { execSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
-import type { AiChatModelCaller } from "./card-flow-harness";
+import type { AiChatModelCaller } from "./card-flow-harness.ts";
 import {
   addReadyCard,
   cleanupCardRepo,
@@ -18,7 +18,7 @@ import {
   rejectingReviewer,
   setupCardRepo,
   waitFor,
-} from "./card-flow-harness";
+} from "./card-flow-harness.ts";
 
 // The honest worker on every attempt: write, commit, submit — cycling so a
 // second attempt (fresh workspace) commits again instead of submitting stale.

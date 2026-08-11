@@ -6,7 +6,7 @@ import {
   groupToolCalls,
   normalizeContent,
   resolveToolName,
-} from "../shared/utils";
+} from "../shared/utils.ts";
 
 let {
   messages = [] as ConversationMessage[],

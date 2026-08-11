@@ -2,21 +2,21 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { wayfinderFlow } from "../../../../../presets/wayfinder/flow";
-import { registerFlowDefinition } from "../../flow-definitions";
+import { wayfinderFlow } from "../../../../../presets/wayfinder/flow.ts";
+import { registerFlowDefinition } from "../../flow-definitions.ts";
 import {
   dispatchFlowLevelAction,
   type FlowLevelActionDispatchResult,
   getAvailableFlowActions,
   registerFlowForTest,
   resetFlowRuntimesForTest,
-} from "../../flow-registry";
+} from "../../flow-registry.ts";
 import {
   chartingCaller,
   idleModelCaller,
   makeWayfinderRuntime,
   waitFor,
-} from "./test-helpers";
+} from "./test-helpers.ts";
 
 describe("wayfinder flow-level actions", () => {
   let dir: string;

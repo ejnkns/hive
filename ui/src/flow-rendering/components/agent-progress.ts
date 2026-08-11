@@ -1,6 +1,6 @@
 import { css, html, LitElement } from "lit";
 import type { ChatMessage } from "workflow-engine/workflow-types";
-import "./message-list";
+import "./message-list.ts";
 
 // The live transcript of a one-shot ai-task, with a running indicator. The
 // message bodies and tool chips render via message-list.

@@ -10,10 +10,10 @@
  * vocabulary) are the knowledge; this file only orders and renders it. */
 
 import { authoringGuide } from "workflow-engine/capabilities-manifest";
-import { DESIGN_DECISIONS } from "./decisions";
-import { renderPatternsPrompt } from "./patterns";
-import { AUTHORING_RULES } from "./rules";
-import { FLOW_SPEC_SHAPE } from "./vocabulary";
+import { DESIGN_DECISIONS } from "./decisions.ts";
+import { renderPatternsPrompt } from "./patterns.ts";
+import { AUTHORING_RULES } from "./rules.ts";
+import { FLOW_SPEC_SHAPE } from "./vocabulary.ts";
 
 export function buildFlowAuthoringPrompt(): string {
   return [

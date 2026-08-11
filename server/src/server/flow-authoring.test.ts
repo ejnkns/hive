@@ -13,8 +13,8 @@ import {
   FLOW_SPEC_SHAPE,
   flowAuthoringMarkdown,
   STRUCTURED_INTAKE_EXEMPLAR,
-} from "./flow-authoring";
-import { validateFlowSpec } from "./flow-spec";
+} from "./flow-authoring.ts";
+import { validateFlowSpec } from "./flow-spec.ts";
 
 describe("flow-authoring knowledge", () => {
   it("the generation prompt carries every knowledge rung in order", () => {

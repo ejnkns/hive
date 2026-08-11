@@ -4,8 +4,8 @@ import {
   deriveAcrossDisplayValue,
   deriveDisplayValue,
   summarizeWorkflowInstances,
-} from "./derive-display";
-import type { DerivedDisplay } from "./workflow-types";
+} from "./derive-display.ts";
+import type { DerivedDisplay } from "./workflow-types.ts";
 
 const items = [
   { status: "done", cost: 3 },

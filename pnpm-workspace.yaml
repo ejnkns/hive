@@ -4,6 +4,7 @@ packages:
   - "server"
   - "ui"
   - "workflow-engine"
+  - "presets"
 allowBuilds:
   esbuild: true
   lefthook: true

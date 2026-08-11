@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { ToolContext } from "../tool-types";
-import { execute } from "./create-instance";
+import type { ToolContext } from "../tool-types.ts";
+import { execute } from "./create-instance.ts";
 
 describe("create_instance", () => {
   it("creates a workflow instance via the tool context capability", async () => {

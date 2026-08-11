@@ -2,8 +2,8 @@
  * declared field set. */
 
 import ts from "typescript";
-import type { ObjectLiteral } from "./ast";
-import { findFirst, propertyOf } from "./ast";
+import type { ObjectLiteral } from "./ast.ts";
+import { findFirst, propertyOf } from "./ast.ts";
 
 export function declaredFieldsFor(
   config: ObjectLiteral,

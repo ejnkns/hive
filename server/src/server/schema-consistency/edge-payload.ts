@@ -2,9 +2,9 @@
  * payload keys feeding each workflow. */
 
 import ts from "typescript";
-import type { ObjectLiteral } from "./ast";
-import { arrayOf, propertyOf, stringValue, unwrap, walk } from "./ast";
-import { addLiteralKeys } from "./state-access";
+import type { ObjectLiteral } from "./ast.ts";
+import { arrayOf, propertyOf, stringValue, unwrap, walk } from "./ast.ts";
+import { addLiteralKeys } from "./state-access.ts";
 
 export function collectEdgeWrites(
   flowDefinition: ObjectLiteral

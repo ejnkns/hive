@@ -1,6 +1,6 @@
 /** @private — only imported by create-flow-runtime.ts */
 
-import type { RuntimeWorkflowInstanceState } from "../shared/workflow-instance-state";
+import type { RuntimeWorkflowInstanceState } from "../shared/workflow-instance-state.ts";
 
 // The write-only persistence contract the flow runtime calls to persist
 // operational state. Implemented by the server's filesystem store; the

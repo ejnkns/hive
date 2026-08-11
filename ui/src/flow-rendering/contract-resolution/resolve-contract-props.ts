@@ -2,8 +2,8 @@
 // contract-resolution.ts only).
 
 import type { RenderContract } from "workflow-engine/workflow-types";
-import { resolvePath } from "../resolve-path";
-import { valueMatchesType } from "./validate";
+import { resolvePath } from "../resolve-path.ts";
+import { valueMatchesType } from "./validate.ts";
 
 export type ContractResolution =
   | { ok: true; props: Record<string, unknown> }

@@ -10,7 +10,7 @@ import {
   recordResponseComplete,
   recordSelectionRound,
   setAggregatorCallbacks,
-} from "./session-aggregator";
+} from "./session-aggregator.ts";
 
 function ts(offset = 0) {
   return Date.now() + offset;

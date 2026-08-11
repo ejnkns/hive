@@ -2,8 +2,12 @@
  * snapshots pushed on runtime events. */
 
 import type { FastifyInstance } from "fastify";
-import { getFlowRuntime, getFlowRuntimes, onFlowEvent } from "../flow-registry";
-import { flowPayload } from "./flow-payload";
+import {
+  getFlowRuntime,
+  getFlowRuntimes,
+  onFlowEvent,
+} from "../flow-registry.ts";
+import { flowPayload } from "./flow-payload.ts";
 
 export function registerWebsocketRoutes(server: FastifyInstance): void {
   // ── WebSocket endpoint ──

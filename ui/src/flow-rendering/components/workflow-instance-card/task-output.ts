@@ -3,7 +3,7 @@
  * null/non-object/typeof checks, so a malformed shape degrades to an empty
  * render rather than a crash. */
 
-import type { CardsViewItem } from "../cards-view";
+import type { CardsViewItem } from "../cards-view.ts";
 
 export type TaskOutcomeShape = {
   status?: string;

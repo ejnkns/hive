@@ -5,7 +5,10 @@ import type {
   WorkflowInstanceEntry,
 } from "workflow-engine/create-flow-runtime";
 import type { RunningTaskContext } from "workflow-engine/workflow-types";
-import { computeInstanceStatus, type InstanceStatus } from "./instance-status";
+import {
+  computeInstanceStatus,
+  type InstanceStatus,
+} from "./instance-status.ts";
 
 const workflow: WorkflowDefResponse = {
   id: "wf",

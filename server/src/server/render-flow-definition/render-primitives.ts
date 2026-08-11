@@ -1,7 +1,7 @@
 /** @private — the renderer's shared string primitives: identifier casing,
  * JSON emission, and FieldType → emitted TS type mappings. */
 
-import type { FieldType } from "../flow-spec";
+import type { FieldType } from "../flow-spec.ts";
 
 export function pascal(id: string): string {
   return id.length === 0 ? "" : id[0].toUpperCase() + id.slice(1);

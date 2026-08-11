@@ -1,11 +1,11 @@
 import type { IncomingHttpHeaders } from "node:http";
 import { logger } from "shared/logger";
 import { createTelemetrySink, type Node } from "telemetry";
-import type { Provider } from "../../providers";
-import { mutateRequest } from "../mutate-request";
-import { ProxyResponse } from "../proxy-response";
-import { routeRequest } from "../route-request";
-import { sanitizePayloadForProvider } from "./dispatch-request/sanitize-payload-for-provider";
+import type { Provider } from "../../providers.ts";
+import { mutateRequest } from "../mutate-request.ts";
+import { ProxyResponse } from "../proxy-response.ts";
+import { routeRequest } from "../route-request.ts";
+import { sanitizePayloadForProvider } from "./dispatch-request/sanitize-payload-for-provider.ts";
 
 export async function dispatchRequest(
   node: Node,

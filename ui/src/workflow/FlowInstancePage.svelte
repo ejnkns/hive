@@ -1,6 +1,6 @@
 <script lang="ts">
 import { onMount } from "svelte";
-import type { FlowLevelAction } from "../flow-api";
+import type { FlowLevelAction } from "../flow-api.ts";
 import {
   deleteFlow,
   dispatchAction,
@@ -8,8 +8,8 @@ import {
   fetchFlows,
   patchInstanceState,
   sendTaskInput,
-} from "../flow-api";
-import type { ConfigFieldForm } from "../flow-rendering/components/config-field-form";
+} from "../flow-api.ts";
+import type { ConfigFieldForm } from "../flow-rendering/components/config-field-form.ts";
 import Button from "../shared/ui/Button.svelte";
 import Dialog from "../shared/ui/Dialog.svelte";
 import { flowStore } from "./flow-store.svelte";

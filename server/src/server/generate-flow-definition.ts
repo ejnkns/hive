@@ -21,14 +21,18 @@
  * soundness warnings from the schema check — are fed back too, so the model
  * fixes flows that "can never finish" rather than shipping them. */
 
-import { buildFlowAuthoringPrompt } from "./flow-authoring";
-import { loadDefinitionFromSource } from "./flow-definitions";
-import { analyzeFlowSpec, type FlowSpec, validateFlowSpec } from "./flow-spec";
-import { handleChatCompletion } from "./proxy/handle-chat-completion";
-import { renderFlowDefinition } from "./render-flow-definition";
-import { checkDefinitionSources } from "./schema-consistency";
-import { consumeSseStream } from "./sse-consume";
-import { typecheckDefinitionSource } from "./typecheck-definition";
+import { buildFlowAuthoringPrompt } from "./flow-authoring.ts";
+import { loadDefinitionFromSource } from "./flow-definitions.ts";
+import {
+  analyzeFlowSpec,
+  type FlowSpec,
+  validateFlowSpec,
+} from "./flow-spec.ts";
+import { handleChatCompletion } from "./proxy/handle-chat-completion.ts";
+import { renderFlowDefinition } from "./render-flow-definition.ts";
+import { checkDefinitionSources } from "./schema-consistency.ts";
+import { consumeSseStream } from "./sse-consume.ts";
+import { typecheckDefinitionSource } from "./typecheck-definition.ts";
 
 // ─── the model caller seam ────────────────────────────────────────────
 

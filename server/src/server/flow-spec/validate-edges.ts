@@ -1,8 +1,8 @@
 /** @private — flow-edge validation (runs after the workflow walk). */
 
-import { DOTTED_PATH } from "./spec-constants";
-import type { FlowSpec, SpecValidationContext } from "./spec-types";
-import { checkLiteralMatches, validateValueSpec } from "./validate-values";
+import { DOTTED_PATH } from "./spec-constants.ts";
+import type { FlowSpec, SpecValidationContext } from "./spec-types.ts";
+import { checkLiteralMatches, validateValueSpec } from "./validate-values.ts";
 
 export function validateEdges(
   spec: FlowSpec,

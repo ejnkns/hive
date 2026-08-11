@@ -8,10 +8,10 @@
  * (definition-routes), and the realtime endpoint (websocket-routes). */
 
 import type { FastifyInstance } from "fastify";
-import { registerDefinitionRoutes } from "./flow-api-routes/definition-routes";
-import { registerFlowsRoutes } from "./flow-api-routes/flows-routes";
-import { registerInstanceRoutes } from "./flow-api-routes/instance-routes";
-import { registerWebsocketRoutes } from "./flow-api-routes/websocket-routes";
+import { registerDefinitionRoutes } from "./flow-api-routes/definition-routes.ts";
+import { registerFlowsRoutes } from "./flow-api-routes/flows-routes.ts";
+import { registerInstanceRoutes } from "./flow-api-routes/instance-routes.ts";
+import { registerWebsocketRoutes } from "./flow-api-routes/websocket-routes.ts";
 
 export function registerFlowApiRoutes(server: FastifyInstance): void {
   registerFlowsRoutes(server);

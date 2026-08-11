@@ -5,11 +5,11 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { FlowSpec } from "./flow-spec";
+import type { FlowSpec } from "./flow-spec.ts";
 import {
   type ModelCaller,
   runGenerationLoop,
-} from "./generate-flow-definition";
+} from "./generate-flow-definition.ts";
 
 const VALID_SPEC: FlowSpec = {
   id: "reviewFlow",

@@ -6,9 +6,9 @@ import {
   createFlow,
   type FlowDefinitionDetail,
   fetchFlowDefinition,
-} from "../../flow-api";
-import "./config-field-control";
-import type { ConfigFieldValue } from "./config-field-control";
+} from "../../flow-api.ts";
+import "./config-field-control.ts";
+import type { ConfigFieldValue } from "./config-field-control.ts";
 
 // The "new flow instance" page body: fetches the definition's configSchema,
 // renders the instance-name field plus one <config-field-control> per schema

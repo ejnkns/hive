@@ -6,24 +6,24 @@ import type {
   RuntimeGateContext,
 } from "workflow-engine/workflow-types";
 import {
+  buildItemOperations,
+  buildOperations,
+} from "./build-workflow/operations.ts";
+import {
   type BuildItemWorkflowInstanceState,
   type BuildPlan,
   type BuildTaskOutputs,
   type BuildWorkflowInstanceState,
   buildItemWorkflow,
   buildWorkflow,
-} from "./build-workflow";
-import {
-  buildItemOperations,
-  buildOperations,
-} from "./build-workflow/operations";
-import type { ChartingItemState } from "./charting-workflow";
-import { chartingWorkflow } from "./charting-workflow";
-import { chartingOperations } from "./charting-workflow/operations";
-import type { TicketItemState } from "./ticket-workflow";
-import { ticketWorkflow } from "./ticket-workflow";
-import { ticketOperations } from "./ticket-workflow/operations";
-import { wayfinderTools } from "./tools";
+} from "./build-workflow.ts";
+import { chartingOperations } from "./charting-workflow/operations.ts";
+import type { ChartingItemState } from "./charting-workflow.ts";
+import { chartingWorkflow } from "./charting-workflow.ts";
+import { ticketOperations } from "./ticket-workflow/operations.ts";
+import type { TicketItemState } from "./ticket-workflow.ts";
+import { ticketWorkflow } from "./ticket-workflow.ts";
+import { wayfinderTools } from "./tools.ts";
 
 // The merged domain operations across all workflows, keyed by the names the
 // workflow tasks reference. Each group's state type is bound here — the

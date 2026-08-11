@@ -1,13 +1,13 @@
 /** @private — the flow definition types: edges, config fields, flow-level
  * actions, and FlowDefinition. */
 
-import type { OperationFn } from "../runners/create-operation-runner";
-import type { Tool } from "../runners/tool-types";
-import type { ActionVariant } from "./actions";
-import type { ConfigField } from "./config-field";
-import type { RuntimeGateContext, TaskOutputMap } from "./core";
-import type { CustomRenderKind } from "./render-hints";
-import type { RuntimeWorkflowConfig } from "./state-config";
+import type { OperationFn } from "../runners/create-operation-runner.ts";
+import type { Tool } from "../runners/tool-types.ts";
+import type { ActionVariant } from "./actions.ts";
+import type { ConfigField } from "./config-field.ts";
+import type { RuntimeGateContext, TaskOutputMap } from "./core.ts";
+import type { CustomRenderKind } from "./render-hints.ts";
+import type { RuntimeWorkflowConfig } from "./state-config.ts";
 
 // === FLOW DEFINITION ===
 

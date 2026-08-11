@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { TaskDefinition } from "../task-runner";
-import { createOperationRunner } from "./create-operation-runner";
+import type { TaskDefinition } from "../task-runner.ts";
+import { createOperationRunner } from "./create-operation-runner.ts";
 
 describe("createOperationRunner", () => {
   const dummyTask: TaskDefinition = {

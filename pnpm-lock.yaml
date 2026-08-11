@@ -21,6 +21,16 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  presets:
+    dependencies:
+      workflow-engine:
+        specifier: workspace:*
+        version: link:../workflow-engine
+    devDependencies:
+      '@types/node':
+        specifier: ^26.0.0
+        version: 26.1.1
+
   server:
     dependencies:
       '@fastify/websocket':
@@ -63,9 +73,6 @@ importers:
       tsdown:
         specifier: ^0.22.14
         version: 0.22.14(tsx@4.23.9)(typescript@6.0.3)
-      tsx:
-        specifier: ^4.23.9
-        version: 4.23.9
 
   shared:
     devDependencies:
@@ -88,9 +95,6 @@ importers:
       tsdown:
         specifier: ^0.22.14
         version: 0.22.14(tsx@4.23.9)(typescript@6.0.3)
-      tsx:
-        specifier: ^4.23.9
-        version: 4.23.9
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -137,9 +141,6 @@ importers:
       svelte-check:
         specifier: ^4.7.4
         version: 4.7.4(picomatch@4.0.5)(svelte@5.56.4)(typescript@6.0.3)
-      tsx:
-        specifier: ^4.23.9
-        version: 4.23.9
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -155,9 +156,6 @@ importers:
       '@types/node':
         specifier: ^26.1.0
         version: 26.1.1
-      tsx:
-        specifier: ^4.23.9
-        version: 4.23.9
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -2497,6 +2495,7 @@ snapshots:
       '@esbuild/win32-arm64': 0.28.1
       '@esbuild/win32-ia32': 0.28.1
       '@esbuild/win32-x64': 0.28.1
+    optional: true
 
   esm-env@1.2.2: {}
 
@@ -3074,6 +3073,7 @@ snapshots:
       esbuild: 0.28.1
     optionalDependencies:
       fsevents: 2.3.3
+    optional: true
 
   typescript@6.0.3: {}
 

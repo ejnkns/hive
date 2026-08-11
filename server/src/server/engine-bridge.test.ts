@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import type { TaskRunnerContext, Tool } from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
-import { createEngineRunners } from "./engine-bridge";
+import { createEngineRunners } from "./engine-bridge.ts";
 
 const domainTool: Tool = {
   definition: {

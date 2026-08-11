@@ -1,7 +1,7 @@
 /** @private — the derived per-task output type the renderer emits from the
  * taskOutputEquals paths gates reference. */
 
-import type { FlowSpec, GateSpec } from "../flow-spec";
+import type { FlowSpec, GateSpec } from "../flow-spec.ts";
 
 type OutputNode = {
   leaf?: string;

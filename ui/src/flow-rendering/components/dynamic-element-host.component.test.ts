@@ -1,8 +1,8 @@
 import { html, LitElement } from "lit";
 import { describe, expect, it } from "vitest";
-import { mount, mustQuery, settle, shadowRootOf } from "../test-utils";
-import type { ElementConstructor } from "./dynamic-element-host";
-import { DynamicElementHost } from "./dynamic-element-host";
+import { mount, mustQuery, settle, shadowRootOf } from "../test-utils.ts";
+import type { ElementConstructor } from "./dynamic-element-host.ts";
+import { DynamicElementHost } from "./dynamic-element-host.ts";
 
 class Probe extends LitElement {
   static properties = { label: { type: String }, count: { type: Number } };

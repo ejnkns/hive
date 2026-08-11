@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { builtinRenderContracts, type RenderHint } from "./workflow-types";
+import { builtinRenderContracts, type RenderHint } from "./workflow-types.ts";
 
 describe("builtin render contracts", () => {
   it("ships all five builtin kinds", () => {

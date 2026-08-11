@@ -1,6 +1,6 @@
 /** @private — only imported by create-flow-runtime.ts */
 
-import type { RuntimeWorkflowInstanceState } from "../shared/workflow-instance-state";
+import type { RuntimeWorkflowInstanceState } from "../shared/workflow-instance-state.ts";
 
 // Flow-level events emitted by the runtime as instances change and edges fire.
 export type FlowRuntimeEvent =

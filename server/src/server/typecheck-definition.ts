@@ -22,7 +22,7 @@ import ts from "typescript";
 import {
   findServerPackageRoot,
   runtimeDefinitionsDir,
-} from "./flow-definitions";
+} from "./flow-definitions.ts";
 
 export type TypecheckIssue = {
   code: number;

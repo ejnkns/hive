@@ -1,7 +1,7 @@
 import { css, html, LitElement } from "lit";
 import type { VisibleAction } from "workflow-engine/workflow-types";
-import "./config-field-form";
-import type { ConfigFieldValue } from "./config-field-form";
+import "./config-field-form.ts";
+import type { ConfigFieldValue } from "./config-field-form.ts";
 
 // The action row on a workflow instance: buttons per available action, with a
 // two-click confirm for destructive variants and an inline form when an action

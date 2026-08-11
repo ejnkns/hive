@@ -1,8 +1,8 @@
 import { logger } from "shared/logger";
 import type { Node } from "telemetry";
-import type { ChatCompletionResult } from "../handle-chat-completion";
-import { isProviderRequestCancelledError } from "../provider-request-cancelled-error";
-import type { ProxyResponse } from "../proxy-response";
+import type { ChatCompletionResult } from "../handle-chat-completion.ts";
+import { isProviderRequestCancelledError } from "../provider-request-cancelled-error.ts";
+import type { ProxyResponse } from "../proxy-response.ts";
 
 export async function tryExactRoute(params: {
   exactNode: Node | null;

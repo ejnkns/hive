@@ -1,6 +1,6 @@
 import assert from "node:assert";
 import { beforeEach, describe, it } from "node:test";
-import { RoutingMemory, routingMemory } from "./routing-memory";
+import { RoutingMemory, routingMemory } from "./routing-memory.ts";
 
 await describe("RoutingMemory", async () => {
   beforeEach(() => {

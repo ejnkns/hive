@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { evaluateEdges } from "./evaluate-edges";
-import type { FlowEdge } from "./workflow-types";
+import { evaluateEdges } from "./evaluate-edges.ts";
+import type { FlowEdge } from "./workflow-types.ts";
 
 const testEdges: FlowEdge[] = [
   {

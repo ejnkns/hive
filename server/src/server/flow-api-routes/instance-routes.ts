@@ -3,7 +3,7 @@
 
 import type { FastifyInstance } from "fastify";
 import { collectConfigFieldValues } from "workflow-engine/collect-config-field-values";
-import { getFlowRuntime } from "../flow-registry";
+import { getFlowRuntime } from "../flow-registry.ts";
 
 export function registerInstanceRoutes(server: FastifyInstance): void {
   server.get("/api/flows/:flowId/instances", async (request, reply) => {

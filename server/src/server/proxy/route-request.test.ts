@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { RequestMetric, TelemetrySink } from "telemetry";
-import { routeRequest } from "./route-request";
+import { routeRequest } from "./route-request.ts";
 
 describe("routeRequest cancellation", () => {
   it("rejects an aborted request without recording a provider failure", async () => {

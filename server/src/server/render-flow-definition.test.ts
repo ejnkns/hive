@@ -7,13 +7,13 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { STRUCTURED_INTAKE_EXEMPLAR } from "./flow-authoring";
-import { loadDefinitionFromSource } from "./flow-definitions";
-import type { FlowSpec } from "./flow-spec";
-import { validateFlowSpec } from "./flow-spec";
-import { renderFlowDefinition } from "./render-flow-definition";
-import { checkDefinitionSources } from "./schema-consistency";
-import { typecheckDefinitionSource } from "./typecheck-definition";
+import { STRUCTURED_INTAKE_EXEMPLAR } from "./flow-authoring.ts";
+import { loadDefinitionFromSource } from "./flow-definitions.ts";
+import type { FlowSpec } from "./flow-spec.ts";
+import { validateFlowSpec } from "./flow-spec.ts";
+import { renderFlowDefinition } from "./render-flow-definition.ts";
+import { checkDefinitionSources } from "./schema-consistency.ts";
+import { typecheckDefinitionSource } from "./typecheck-definition.ts";
 
 // ─── gate ─────────────────────────────────────────────────────────────
 

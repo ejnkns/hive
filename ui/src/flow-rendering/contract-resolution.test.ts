@@ -4,7 +4,7 @@ import type {
   CustomRenderKind,
   RuntimeRenderHint,
 } from "workflow-engine/workflow-types";
-import { type ResolvedRender, resolveRender } from "./contract-resolution";
+import { type ResolvedRender, resolveRender } from "./contract-resolution.ts";
 
 type PlanProposal = {
   kind: "proposal";

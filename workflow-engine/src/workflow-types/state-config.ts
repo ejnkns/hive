@@ -1,17 +1,17 @@
 /** @private — the workflow state configuration: StateDef, WorkflowConfig,
  * and the defineWorkflow builder. */
 
-import type { TaskBase } from "../runners/task-types";
+import type { TaskBase } from "../runners/task-types.ts";
 import type {
   AutoTransition,
   BoardColumn,
   ManualAction,
   StateCategory,
   WorkflowView,
-} from "./actions";
-import type { ConfigField } from "./config-field";
-import type { DisplayHint } from "./display";
-import type { RenderHint } from "./render-hints";
+} from "./actions.ts";
+import type { ConfigField } from "./config-field.ts";
+import type { DisplayHint } from "./display.ts";
+import type { RenderHint } from "./render-hints.ts";
 
 // --- State definition ---
 

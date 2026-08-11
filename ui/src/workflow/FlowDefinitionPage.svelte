@@ -1,7 +1,7 @@
 <script lang="ts">
 import { onMount } from "svelte";
-import type { FlowDefinitionDetail } from "../flow-api";
-import { fetchFlowDefinition } from "../flow-api";
+import type { FlowDefinitionDetail } from "../flow-api.ts";
+import { fetchFlowDefinition } from "../flow-api.ts";
 import Badge from "../shared/ui/Badge.svelte";
 import Button from "../shared/ui/Button.svelte";
 import { flowStore } from "./flow-store.svelte";

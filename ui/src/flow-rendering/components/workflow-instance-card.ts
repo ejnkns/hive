@@ -13,13 +13,13 @@ import type {
   CustomRenderKind,
   RuntimeRenderHint,
 } from "workflow-engine/workflow-types";
-import { type ResolvedRender, resolveRender } from "../contract-resolution";
-import { getKindRenderer } from "../renderer-registry";
-import { resolvePath } from "../resolve-path";
-import "./config-field-form";
-import type { ConfigFieldValue } from "./config-field-form";
-import "./dynamic-element-host";
-import { statePath } from "./workflow-instance-card/state-path";
+import { type ResolvedRender, resolveRender } from "../contract-resolution.ts";
+import { getKindRenderer } from "../renderer-registry.ts";
+import { resolvePath } from "../resolve-path.ts";
+import "./config-field-form.ts";
+import type { ConfigFieldValue } from "./config-field-form.ts";
+import "./dynamic-element-host.ts";
+import { statePath } from "./workflow-instance-card/state-path.ts";
 import {
   markdownSource,
   outcomeError,
@@ -29,7 +29,7 @@ import {
   summarizeOutput,
   type TaskOutcomeShape,
   toCardsViewItems,
-} from "./workflow-instance-card/task-output";
+} from "./workflow-instance-card/task-output.ts";
 
 type SerializedTaskDef = {
   id: string;

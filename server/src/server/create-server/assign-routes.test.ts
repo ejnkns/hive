@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { PassThrough } from "node:stream";
 import { afterEach, describe, it } from "node:test";
-import type { FastifyServer } from "../create-server";
-import { createServer } from "../create-server";
+import type { FastifyServer } from "../create-server.ts";
+import { createServer } from "../create-server.ts";
 
 describe("chat completion route", () => {
   let server: FastifyServer | null = null;

@@ -5,26 +5,29 @@ import { addLogListener, getRecentLogs, logger } from "shared/logger";
 import { getServerConfig } from "shared/server-config";
 import { loadCache, telemetryRecorder } from "telemetry";
 import type { WebSocket } from "ws";
-import type { FastifyServer } from "../create-server";
+import type { FastifyServer } from "../create-server.ts";
 import {
   disableProvider,
   enableProvider,
   isProviderDisabled,
-} from "../disabled-providers-state";
-import { clearOverride, getOverride, setOverride } from "../override";
-import type { Provider } from "../providers";
-import { getModelId } from "../providers";
-import type { ChatCompletionResult, ProviderState } from "../proxy";
+} from "../disabled-providers-state.ts";
+import { clearOverride, getOverride, setOverride } from "../override.ts";
+import type { Provider } from "../providers.ts";
+import { getModelId } from "../providers.ts";
+import {
+  getModelPriority,
+  saveModelPriority,
+} from "../proxy/model-priority-config.ts";
+import type { ChatCompletionResult, ProviderState } from "../proxy.ts";
 import {
   getSessionSnapshot,
   routingMemory,
   setAggregatorCallbacks,
-} from "../proxy";
+} from "../proxy.ts";
 import {
-  getModelPriority,
-  saveModelPriority,
-} from "../proxy/model-priority-config";
-import { getCanvasState, setCanvasState } from "./assign-routes/canvas-state";
+  getCanvasState,
+  setCanvasState,
+} from "./assign-routes/canvas-state.ts";
 
 export type RouteDeps = {
   getProviders: () => ReadonlyArray<Provider>;

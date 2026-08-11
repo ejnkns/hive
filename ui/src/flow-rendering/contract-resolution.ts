@@ -7,7 +7,7 @@ import {
   type RenderContract,
   type RuntimeRenderHint,
 } from "workflow-engine/workflow-types";
-import { resolveContractProps } from "./contract-resolution/resolve-contract-props";
+import { resolveContractProps } from "./contract-resolution/resolve-contract-props.ts";
 
 export type ResolvedRender = {
   kind: string;

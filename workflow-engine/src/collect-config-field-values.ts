@@ -1,4 +1,4 @@
-import type { ConfigField } from "./workflow-types";
+import type { ConfigField } from "./workflow-types.ts";
 
 // Validates a user-supplied payload against a declared ConfigField set and
 // collects the accepted values. Used for manual actions with `fields`: the

@@ -1,6 +1,6 @@
 import { mount } from "svelte";
 import App from "./App.svelte";
-import { defineFlowRenderingComponents } from "./flow-rendering";
+import { defineFlowRenderingComponents } from "./flow-rendering.ts";
 
 defineFlowRenderingComponents();
 

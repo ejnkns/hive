@@ -1,21 +1,4 @@
 {
   "extends": "../tsconfig.base.json",
-  "compilerOptions": {
-    // presets/ has no node_modules of its own (it is not a workspace package by
-    // design, see ARCHITECTURE.md). The presets run inside the server process,
-    // so reuse the server's (and engine's) @types/node for the node:* imports.
-    "typeRoots": [
-      "../server/node_modules/@types",
-      "../workflow-engine/node_modules/@types"
-    ],
-    // Resolve workspace packages by source path, same as server/tsconfig.json.
-    // The bare "workflow-engine" specifier cannot be resolved through node_modules
-    // from here: there is no symlink at the repo root, and the exports map
-    // ("./*": "./src/*.ts") is only honored by node16/nodenext/bundler resolution.
-    "paths": {
-      "workflow-engine": ["../workflow-engine/src"],
-      "workflow-engine/*": ["../workflow-engine/src/*"]
-    }
-  },
   "include": ["queen-bee/**/*.ts", "wayfinder/**/*.ts"]
 }

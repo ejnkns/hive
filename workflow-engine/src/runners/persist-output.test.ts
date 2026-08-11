@@ -9,7 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
-import { persistOutput } from "./persist-output";
+import { persistOutput } from "./persist-output.ts";
 
 describe("persistOutput", () => {
   let root: string;

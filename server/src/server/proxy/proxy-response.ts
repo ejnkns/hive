@@ -3,7 +3,7 @@ import {
   type NormalizedError,
   type NormalizedErrorType,
   normalizeError,
-} from "./proxy-response/normalize-error";
+} from "./proxy-response/normalize-error.ts";
 
 export type { NormalizedErrorType };
 

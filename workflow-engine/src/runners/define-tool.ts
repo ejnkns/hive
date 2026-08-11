@@ -6,7 +6,7 @@ import type {
   ToolContext,
   ToolParameterSchema,
   ToolResult,
-} from "./tool-types";
+} from "./tool-types.ts";
 
 // A tool authored without the OpenAI function-call envelope: the factory
 // derives `{ type: "function", function: { name, description, parameters } }`

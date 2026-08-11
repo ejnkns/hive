@@ -1,6 +1,6 @@
-import type { Provider } from "../providers";
-import type { ModelCache } from "../providers/model-discovery";
-import { getServerState } from "./server-state";
+import type { ModelCache } from "../providers/model-discovery.ts";
+import type { Provider } from "../providers.ts";
+import { getServerState } from "./server-state.ts";
 
 let providers: ReadonlyArray<Provider> | null = null;
 

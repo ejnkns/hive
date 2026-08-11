@@ -1,10 +1,10 @@
 <script lang="ts">
 import type { RequestState } from "shared/dashboard-types";
 import Dialog from "../../shared/ui/Dialog.svelte";
-import { formatNumber, formatTime, sc } from "../../shared/utils";
+import { formatNumber, formatTime, sc } from "../../shared/utils.ts";
 import ConversationView from "../ConversationView.svelte";
 import StagePathDots from "../StagePathDots.svelte";
-import { isTerminal } from "../stage-utils";
+import { isTerminal } from "../stage-utils.ts";
 
 let {
   open = $bindable(false),

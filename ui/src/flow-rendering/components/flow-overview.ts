@@ -2,7 +2,7 @@ import { css, html, LitElement, nothing } from "lit";
 import type {
   FlowOverview,
   WorkflowOverview,
-} from "./workflow-instances/flow-overview";
+} from "./workflow-instances/flow-overview.ts";
 
 // The flow-level overview bar: a derived, at-a-glance summary of the whole
 // flow instance — flow totals plus one chip per workflow (label, count, status
