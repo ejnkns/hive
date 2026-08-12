@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { stripTypeScriptTypes } from "node:module";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { HIVE_DIR } from "shared/hive-dir";
 import { logger } from "shared/logger";
@@ -313,7 +313,7 @@ export async function loadDefinitionFromSource(
       entry: source,
       files: refFiles,
     });
-    return importModuleSetEntry(dir, flowId);
+    return loadModuleSetCopy(runtimeSlug, dir, flowId);
   }
   const runtimeFile = join(runtimeDefinitionsDir(), `${runtimeSlug}.ts`);
   mkdirSync(runtimeDefinitionsDir(), { recursive: true });
@@ -351,8 +351,57 @@ export function materializeModuleSet(
   return dir;
 }
 
-// Imports the entry of an already-materialized module-set directory.
+// Imports the entry of an already-materialized module-set directory. The
+// materialized directory is copied to a nonce-named sibling before importing:
+// the entry's relative imports resolve to fresh URLs on every load, so hand
+// edits (implemented files) are never served from Node's module cache — the
+// authoring loop's write → generate → load cycle sees each edit.
 export async function loadModuleSetDefinition(
+  dir: string,
+  flowId?: string
+): Promise<FlowDefinition> {
+  const slug = basename(dir) || "module-set";
+  return loadModuleSetCopy(slug, dir, flowId);
+}
+
+// The module-set load shared by the working-dir loader and the record loader:
+// copy the set to a fresh directory, then import its entry.
+async function loadModuleSetCopy(
+  slug: string,
+  dir: string,
+  flowId?: string
+): Promise<FlowDefinition> {
+  const loadDir = join(
+    runtimeDefinitionsDir(),
+    `${slug}-load-${nextImportNonce()}`
+  );
+  copyModuleSetFiles(dir, loadDir);
+  return importModuleSetEntry(loadDir, flowId);
+}
+
+// Copies every .ts file of a module-set directory (excluding the lint's
+// transient `__lint__` harnesses) into a fresh directory.
+function copyModuleSetFiles(dir: string, loadDir: string): void {
+  mkdirSync(loadDir, { recursive: true });
+  const walk = (sub: string): void => {
+    for (const entry of readdirSync(sub, { withFileTypes: true })) {
+      if (entry.name === "__lint__") continue;
+      const full = join(sub, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+      } else if (entry.name.endsWith(".ts")) {
+        const target = join(loadDir, relative(dir, full));
+        mkdirSync(dirname(target), { recursive: true });
+        writeFileSync(target, readFileSync(full, "utf-8"), "utf-8");
+      }
+    }
+  };
+  walk(dir);
+}
+
+// Imports a module-set entry at <dir>/flow.ts, re-stamping the id when one is
+// given (the module's own id stands otherwise).
+async function importModuleSetEntry(
   dir: string,
   flowId?: string
 ): Promise<FlowDefinition> {
@@ -363,19 +412,6 @@ export async function loadModuleSetDefinition(
   }
   const flow = module.flow as FlowDefinition;
   return flowId === undefined ? flow : { ...flow, id: flowId };
-}
-
-// Imports a module-set entry at <dir>/flow.ts, re-stamping the id.
-async function importModuleSetEntry(
-  dir: string,
-  flowId: string
-): Promise<FlowDefinition> {
-  const url = `${pathToFileURL(join(dir, "flow.ts")).href}?v=${nextImportNonce()}`;
-  const module = (await import(url)) as Record<string, unknown>;
-  if (module.flow === null || typeof module.flow !== "object") {
-    throw new Error("Definition module must export a `flow` object");
-  }
-  return { ...(module.flow as FlowDefinition), id: flowId };
 }
 
 // Writes a module set (entry + referenced files, write-always) under the

@@ -14,6 +14,7 @@ import {
 import type { RenderedModuleSet } from "../render-flow-definition.ts";
 import { checkDefinitionSources } from "../schema-consistency.ts";
 import { typecheckModuleSet } from "../typecheck-definition.ts";
+import { lintImportPolicy } from "./import-policy.ts";
 import { lintModuleSet } from "./lint.ts";
 
 export type ModuleGateResult = {
@@ -44,6 +45,18 @@ export async function runModuleSetGate(
       dir,
       files: readModuleSetFiles(dir),
       errors: findings.map((f) => `module ${f.ref}: ${f.message}`),
+      warnings: [],
+    };
+  }
+
+  // 1b. Import policy: engine primitives, the flow's own files, node:
+  //     builtins, and declared dependencies only.
+  const importFindings = lintImportPolicy(blueprint, dir);
+  if (importFindings.length > 0) {
+    return {
+      dir,
+      files: readModuleSetFiles(dir),
+      errors: importFindings.map((f) => `import ${f.file}: ${f.message}`),
       warnings: [],
     };
   }

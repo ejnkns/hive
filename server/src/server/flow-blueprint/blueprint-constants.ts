@@ -5,6 +5,11 @@ import type { FieldType, ModuleRefKind } from "./blueprint-types.ts";
 
 export const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
+// A loose npm package name: unscoped (`axios`) or scoped (`@scope/pkg`). The
+// blueprint's dependencies list holds package names — imports of those
+// packages (any subpath) are allowed by the import policy.
+export const PACKAGE_NAME = /^(@[A-Za-z0-9-._~]+\/)?[A-Za-z0-9-._~]+$/;
+
 // The closed vocabulary of blueprint-referenced module kinds — the contract
 // kinds the engine scaffolds stubs and lint for. Declared up front so the
 // system stays principled; expanding means adding a kind here and the

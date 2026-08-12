@@ -12,7 +12,10 @@ export const FLOW_BLUEPRINT_SHAPE = `## FlowBlueprint vocabulary (the JSON you e
   "configSchema": [ { "key": "basePath", "label": "Base path", "type": "string", "required": true } ],
   "workflows": [ WORKFLOW, ... ],
   "edges": [ EDGE, ... ],          // optional
-  "actions": [ FLOW_ACTION, ... ]  // optional
+  "actions": [ FLOW_ACTION, ... ], // optional
+  "tools": [ { "id": "websearch", "ref": "./tools/websearch.ts" } ],  // optional; custom tools implemented as referenced files
+  "operations": [ { "id": "score", "ref": "./ops/score.ts" } ],       // optional; custom operations implemented as referenced files
+  "dependencies": [ "axios" ]      // optional; external packages the referenced files may import (the import policy)
 }
 
 WORKFLOW: {
@@ -119,4 +122,6 @@ CONSTRAINTS (the validator rejects violations; fix them in the same blueprint):
 - gate taskOutputEquals paths start with "output" (the task's output); reads of a completionOutput task's output must reference a declared field.
 - Workflow/state/task/field/action ids must be valid TS identifiers (no dashes, no spaces).
 - A workflow with no instance state uses an empty instanceState array.
-- A task may declare either "patch" (operation role) or nothing extra; patch writes on a task read a SIBLING task's output (the patch op runs as an operation task after that task completes).`;
+- A task may declare either "patch" (operation role) or nothing extra; patch writes on a task read a SIBLING task's output (the patch op runs as an operation task after that task completes).
+- IMPORTS (the import policy): a referenced file may import engine primitives (workflow-engine/*), the flow's own files (relative paths inside the module set), node: builtins, and packages declared in the blueprint's "dependencies" list. Any other import fails the gate with a readable finding — declare the package in "dependencies" or remove the import.
+- REFERENCED FILES ("tools"/"operations"/gate/transform/extract refs): the renderer emits a contract-typed stub per reference; implement the stub's named export (keep the name the stub declares) and generate again. Hand edits are authoritative — stub emission never overwrites an existing file. Gate files export (ctx) => boolean; tool files export <id>Tools (defineTool list); operation files export <id>Operations (defineOperations map); edge transforms export a TransformContract; extractors export an OutputExtractor.`;

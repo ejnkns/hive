@@ -232,6 +232,11 @@ export type FlowBlueprint = {
   // id/name alongside the engine's infrastructure capabilities.
   tools?: ToolRefSpec[];
   operations?: OperationRefSpec[];
+  // External packages the referenced files may import. Imports are restricted
+  // to engine primitives, the flow's own files, node: builtins, and exactly
+  // these declared packages — anything else fails the module-set gate with a
+  // readable finding.
+  dependencies?: string[];
 };
 
 // ─── validation ───────────────────────────────────────────────────────

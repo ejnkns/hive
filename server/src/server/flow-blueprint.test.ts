@@ -1521,4 +1521,60 @@ describe("manual-action fields", () => {
       );
     });
   });
+
+  describe("dependencies (the flow's declared external packages)", () => {
+    // A messageFor that fails with a readable diff when no finding matches.
+    const msgFor = (blueprint: FlowBlueprint, needle: string): string => {
+      const found = messageFor(blueprint, needle);
+      assert.ok(
+        found,
+        `no finding matched "${needle}" — got: ${errorsFor(blueprint)
+          .map((e) => `${e.path}: ${e.message}`)
+          .join("; ")}`
+      );
+      return found;
+    };
+
+    it("accepts a valid dependencies list", () => {
+      assert.deepEqual(
+        validateFlowBlueprint({
+          ...VALID,
+          dependencies: ["axios", "@scope/pkg"],
+        }),
+        []
+      );
+    });
+
+    it("rejects a subpath dependency entry", () => {
+      const blueprint: FlowBlueprint = {
+        ...VALID,
+        dependencies: ["lodash/fp"],
+      };
+      assert.match(msgFor(blueprint, "package name"), /package name/);
+    });
+
+    it("rejects non-string dependency entries", () => {
+      const blueprint: FlowBlueprint = {
+        ...VALID,
+        dependencies: ["axios", 42] as unknown as string[],
+      };
+      assert.match(msgFor(blueprint, "package name"), /package name/);
+    });
+
+    it("rejects path-like dependency entries", () => {
+      const blueprint: FlowBlueprint = {
+        ...VALID,
+        dependencies: ["./local.ts", "/abs", "node:fs", "has space"],
+      };
+      assert.match(msgFor(blueprint, "package name"), /package name/);
+    });
+
+    it("rejects duplicate dependency entries", () => {
+      const blueprint: FlowBlueprint = {
+        ...VALID,
+        dependencies: ["axios", "axios"],
+      };
+      assert.match(msgFor(blueprint, "duplicate"), /duplicate/);
+    });
+  });
 });

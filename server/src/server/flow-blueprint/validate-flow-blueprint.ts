@@ -7,6 +7,7 @@ import {
   FIELD_TYPES,
   IDENTIFIER,
   infraToolNames,
+  PACKAGE_NAME,
 } from "./blueprint-constants.ts";
 import type {
   BlueprintError,
@@ -102,6 +103,25 @@ export function validateFlowBlueprint(
     for (const e of validateRefShape(op.ref, `${oPath}.ref`)) {
       error(e.path, e.message);
     }
+  }
+
+  // ── dependencies (the flow's declared external packages) ──
+  // Imports in the referenced files are restricted to engine primitives, the
+  // flow's own files, node: builtins, and exactly these packages.
+  const seenDependencies = new Set<string>();
+  for (const [dIndex, dependency] of (blueprint.dependencies ?? []).entries()) {
+    const dPath = `dependencies[${dIndex}]`;
+    if (typeof dependency !== "string" || !PACKAGE_NAME.test(dependency)) {
+      error(
+        dPath,
+        `dependency must be a package name (got ${JSON.stringify(dependency)})`
+      );
+      continue;
+    }
+    if (seenDependencies.has(dependency)) {
+      error(dPath, `duplicate dependency "${dependency}"`);
+    }
+    seenDependencies.add(dependency);
   }
 
   const workflowById = new Map<string, WorkflowSpec>();

@@ -25,6 +25,7 @@ import {
   getRegisteredFlowDefinition,
   loadUserDefinitionsFromDisk,
   resetFlowDefinitionsForTest,
+  runtimeDefinitionsDir,
   setDefinitionsBasePathForTest,
 } from "../flow-definitions.ts";
 import {
@@ -33,6 +34,102 @@ import {
   authoringTools,
 } from "./session.ts";
 import { STARTER_SKELETON } from "./session-prompt.ts";
+
+// A minimal blueprint with one referenced tool, used to drive the file-editing
+// loop in-conversation.
+const FILE_LOOP_BLUEPRINT = {
+  id: "fileLoopFlow",
+  label: "File Loop Flow",
+  configSchema: [],
+  dependencies: [],
+  tools: [{ id: "websearch", ref: "./tools/search.ts" }],
+  workflows: [
+    {
+      id: "items",
+      label: "Items",
+      instance: { title: "title" },
+      instanceState: [{ field: "title", type: "string" }],
+      initialState: "inbox",
+      terminalStates: ["done"],
+      states: [
+        {
+          id: "inbox",
+          label: "Inbox",
+          category: "initial",
+          tasks: [
+            {
+              id: "search",
+              label: "Search",
+              role: "ai-chat",
+              systemPrompt: "Search, then complete.",
+              tools: ["websearch"],
+              completionTool: "complete_task",
+              startOnUserInput: true,
+            },
+          ],
+          autoTransitions: [
+            { to: "done", gate: { kind: "taskSuccess", task: "search" } },
+          ],
+        },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  edges: [],
+  actions: [
+    {
+      id: "add_item",
+      label: "Add item",
+      variant: "primary",
+      createInstance: {
+        workflowId: "items",
+        fields: [
+          {
+            key: "title",
+            label: "Title",
+            type: "string",
+            required: true,
+          },
+        ],
+      },
+    },
+  ],
+};
+
+// The implemented tool (the "implement the stub" step) — exports the exact
+// name the entry imports.
+const LOOP_TOOL_IMPLEMENTATION = `import { defineTool } from "workflow-engine/runners";
+
+export const websearchTools = [
+  defineTool({
+    name: "websearch",
+    description: "Search the web.",
+    parameters: {
+      properties: { query: { type: "string" } },
+      required: ["query"],
+    },
+    executor: async (call) => {
+      return { toolCallId: call.id, content: "found it", isError: false };
+    },
+  }),
+];
+`;
+
+// A tool file importing a package the blueprint does not declare.
+const TOOL_IMPORTING_LRU = `import { LRUCache } from "lru-cache";
+import { defineTool } from "workflow-engine/runners";
+
+export const websearchTools = [
+  defineTool({
+    name: "websearch",
+    description: "Search.",
+    parameters: { properties: {}, required: [] },
+    executor: async (call) => {
+      return { toolCallId: call.id, content: "found it", isError: false };
+    },
+  }),
+];
+`;
 
 // A gate-clean definition source the save_definition tool registers.
 const saveToolSource = `import { defineWorkflow } from "workflow-engine/workflow-types";
@@ -601,6 +698,176 @@ describe("flow-authoring session", () => {
     } finally {
       rmSync(defsDir, { recursive: true, force: true });
       resetFlowDefinitionsForTest();
+    }
+  });
+
+  it("read_definition_file and write_definition_file operate on the module-set files within the definition root", async () => {
+    const workDir = join(runtimeDefinitionsDir(), "__authoring__");
+    rmSync(workDir, { recursive: true, force: true });
+    try {
+      const readTool = authoringTools.find(
+        (t) => t.definition.function.name === "read_definition_file"
+      );
+      const writeTool = authoringTools.find(
+        (t) => t.definition.function.name === "write_definition_file"
+      );
+      assert.ok(readTool && writeTool, "both file tools must exist");
+
+      let state: AuthoringItemState = {};
+      const ctx = {
+        workflowInstanceState: () => state,
+        patchWorkflowInstanceState: (patch: Partial<AuthoringItemState>) => {
+          state = { ...state, ...patch };
+        },
+      } as never;
+
+      const written = await writeTool.executor(
+        {
+          id: "w1",
+          name: "write_definition_file",
+          arguments: JSON.stringify({
+            path: "./scratch/probe.ts",
+            content: "export const probe = 1;\n",
+          }),
+        },
+        ctx
+      );
+      assert.equal(written.isError, false);
+      assert.equal(
+        state.files?.["./scratch/probe.ts"],
+        "export const probe = 1;\n",
+        "the write must be recorded on the session's file set"
+      );
+
+      const read = await readTool.executor(
+        {
+          id: "r1",
+          name: "read_definition_file",
+          arguments: JSON.stringify({ path: "./scratch/probe.ts" }),
+        },
+        ctx
+      );
+      assert.equal(read.isError, false);
+      assert.match(read.content, /export const probe/);
+
+      const escapeWrite = await writeTool.executor(
+        {
+          id: "w2",
+          name: "write_definition_file",
+          arguments: JSON.stringify({ path: "../escape.ts", content: "x" }),
+        },
+        ctx
+      );
+      assert.equal(escapeWrite.isError, true);
+      assert.match(escapeWrite.content, /definition root/);
+
+      const entry = await writeTool.executor(
+        {
+          id: "w3",
+          name: "write_definition_file",
+          arguments: JSON.stringify({ path: "flow.ts", content: "x" }),
+        },
+        ctx
+      );
+      assert.equal(entry.isError, true);
+      assert.match(entry.content, /rendered entry/);
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  });
+
+  it("the session agent creates and edits a referenced file in-conversation and the gate reflects it", async () => {
+    const workDir = join(runtimeDefinitionsDir(), "__authoring__");
+    rmSync(workDir, { recursive: true, force: true });
+    try {
+      const controller = await runConversation([
+        setSpecCall(FILE_LOOP_BLUEPRINT),
+        genCall(FILE_LOOP_BLUEPRINT),
+        {
+          id: "w1",
+          name: "write_definition_file",
+          arguments: JSON.stringify({
+            path: "./tools/search.ts",
+            content: LOOP_TOOL_IMPLEMENTATION,
+          }),
+        },
+        {
+          id: "r1",
+          name: "read_definition_file",
+          arguments: JSON.stringify({ path: "./tools/search.ts" }),
+        },
+        genCall(FILE_LOOP_BLUEPRINT),
+        "Done!",
+      ]);
+      const state = controller.getState()
+        .workflowInstanceState as AuthoringItemState;
+      assert.equal(state.report?.passed, true);
+      assert.equal(
+        state.files?.["./tools/search.ts"],
+        LOOP_TOOL_IMPLEMENTATION,
+        "the implemented file must survive the second generate (hand edits are authoritative)"
+      );
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  });
+
+  it("an undeclared import fails the gate with a dependency finding; declaring it passes", async () => {
+    const workDir = join(runtimeDefinitionsDir(), "__authoring__");
+    rmSync(workDir, { recursive: true, force: true });
+    try {
+      let state: AuthoringItemState = {
+        blueprint: JSON.stringify(FILE_LOOP_BLUEPRINT),
+      };
+      const ctx = {
+        workflowInstanceState: () => state,
+        patchWorkflowInstanceState: (patch: Partial<AuthoringItemState>) => {
+          state = { ...state, ...patch };
+        },
+      } as never;
+      const generate = authoringTools.find(
+        (t) => t.definition.function.name === "generate_definition"
+      );
+      const write = authoringTools.find(
+        (t) => t.definition.function.name === "write_definition_file"
+      );
+      const setBlueprint = authoringTools.find(
+        (t) => t.definition.function.name === "set_flow_blueprint"
+      );
+      assert.ok(generate && write && setBlueprint);
+
+      // The clean stub passes the gate.
+      await generate.executor(genCall(FILE_LOOP_BLUEPRINT), ctx);
+      assert.equal(state.report?.passed, true);
+
+      // The agent writes a tool importing an undeclared package.
+      await write.executor(
+        {
+          id: "w1",
+          name: "write_definition_file",
+          arguments: JSON.stringify({
+            path: "./tools/search.ts",
+            content: TOOL_IMPORTING_LRU,
+          }),
+        },
+        ctx
+      );
+      await generate.executor(genCall(FILE_LOOP_BLUEPRINT), ctx);
+      assert.equal(state.report?.passed, false);
+      assert.ok(
+        state.gateErrors?.some(
+          (e) => /lru-cache/.test(e) && /dependencies/.test(e)
+        ),
+        `expected a dependency finding, got ${JSON.stringify(state.gateErrors)}`
+      );
+
+      // Declaring the package makes the same import pass.
+      const fixed = { ...FILE_LOOP_BLUEPRINT, dependencies: ["lru-cache"] };
+      await setBlueprint.executor(setSpecCall(fixed), ctx);
+      await generate.executor(genCall(fixed), ctx);
+      assert.equal(state.report?.passed, true);
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
     }
   });
 });
