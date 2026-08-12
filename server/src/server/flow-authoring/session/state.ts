@@ -8,10 +8,10 @@ import { runtimeDefinitionsDir } from "../../flow-definitions.ts";
 
 export const AUTHORING_DEFINITION_ID = "flow-authoring";
 
-// The fallback module-set key used when a session has not recorded its own
-// (the direct-tool unit tests drive the tools with a bare state). Real
-// sessions record their flow id as the module-set slug, giving each session an
-// isolated working directory — files never leak across sessions.
+// The defensive fallback module-set key: real sessions record their flow id as
+// the module-set slug (each session gets an isolated working directory), but a
+// state without one (e.g. a bare unit-test state) still resolves somewhere
+// instead of throwing.
 export const AUTHORING_MODULE_SET = "__authoring__";
 
 export function authoringModuleSetDir(slug: string): string {

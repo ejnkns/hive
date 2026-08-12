@@ -365,7 +365,10 @@ export async function loadModuleSetDefinition(
 }
 
 // The module-set load shared by the working-dir loader and the record loader:
-// copy the set to a fresh directory, then import its entry.
+// copy the set to a fresh directory, then import its entry. The copy is
+// removed after the import — the evaluated modules are cached by their unique
+// URL, so the scratch directory is never needed again (without this, every
+// load leaves a `-load-<nonce>` directory behind forever).
 async function loadModuleSetCopy(
   slug: string,
   dir: string,
@@ -375,8 +378,12 @@ async function loadModuleSetCopy(
     runtimeDefinitionsDir(),
     `${slug}-load-${nextImportNonce()}`
   );
-  copyModuleSetFiles(dir, loadDir);
-  return importModuleSetEntry(loadDir, flowId);
+  try {
+    copyModuleSetFiles(dir, loadDir);
+    return await importModuleSetEntry(loadDir, flowId);
+  } finally {
+    rmSync(loadDir, { recursive: true, force: true });
+  }
 }
 
 // Copies every .ts file of a module-set directory (excluding the lint's

@@ -29,7 +29,6 @@ import {
   setDefinitionsBasePathForTest,
 } from "../flow-definitions.ts";
 import {
-  AUTHORING_MODULE_SET,
   type AuthoringItemState,
   authoringSessionFlow,
   authoringTools,
@@ -157,6 +156,10 @@ export const flow = {
 };
 `;
 
+// The module-set slug the conversation tests' session records (each test's
+// session works in its own directory — the shared fallback is not used).
+const AUTHOR_TEST_SLUG = "author-test-session";
+
 const toolMaps = toToolMaps(authoringTools);
 
 function operationContext(
@@ -264,6 +267,7 @@ async function runConversation(script: Array<ToolCall | string>) {
   const model = scriptedModel(script);
   const runtime = buildRuntime(model);
   const controller = runtime.addWorkflowInstance("session");
+  controller.patchWorkflowInstanceState({ moduleSetSlug: AUTHOR_TEST_SLUG });
   await settle();
   assert.equal(controller.getState().currentState, "drafting");
   assert.equal(controller.getState().hasRunningTask, true);
@@ -703,11 +707,7 @@ describe("flow-authoring session", () => {
   });
 
   it("read_definition_file and write_definition_file operate on the module-set files within the definition root", async () => {
-    const probe = join(
-      runtimeDefinitionsDir(),
-      AUTHORING_MODULE_SET,
-      "scratch"
-    );
+    const probe = join(runtimeDefinitionsDir(), "author-test-files", "scratch");
     rmSync(probe, { recursive: true, force: true });
     try {
       const readTool = authoringTools.find(
@@ -718,7 +718,9 @@ describe("flow-authoring session", () => {
       );
       assert.ok(readTool && writeTool, "both file tools must exist");
 
-      let state: AuthoringItemState = {};
+      let state: AuthoringItemState = {
+        moduleSetSlug: "author-test-files",
+      };
       const ctx = {
         workflowInstanceState: () => state,
         patchWorkflowInstanceState: (patch: Partial<AuthoringItemState>) => {
@@ -784,7 +786,7 @@ describe("flow-authoring session", () => {
   it("the session agent creates and edits a referenced file in-conversation and the gate reflects it", async () => {
     const probe = join(
       runtimeDefinitionsDir(),
-      AUTHORING_MODULE_SET,
+      AUTHOR_TEST_SLUG,
       "tools",
       "search.ts"
     );
@@ -825,13 +827,14 @@ describe("flow-authoring session", () => {
   it("an undeclared import fails the gate with a dependency finding; declaring it passes", async () => {
     const probe = join(
       runtimeDefinitionsDir(),
-      AUTHORING_MODULE_SET,
+      "author-test-undeclared",
       "tools",
       "search.ts"
     );
     rmSync(probe, { recursive: true, force: true });
     try {
       let state: AuthoringItemState = {
+        moduleSetSlug: "author-test-undeclared",
         blueprint: JSON.stringify(FILE_LOOP_BLUEPRINT),
       };
       const ctx = {
