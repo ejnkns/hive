@@ -179,22 +179,23 @@ async function sendChatMessage(text) {
 }
 
 // The session's live instance state, read via REST (the flow is hidden, so
-// the library list does not include it — fetch by the stored id).
-async function sessionState() {
-  return page.evaluate(async () => {
-    const stored = localStorage.getItem("hive:author:new");
+// the library list does not include it — fetch by the stored id). The storage
+// key is per definition ("new" for a new definition, the id otherwise).
+async function sessionState(definitionKey = "new") {
+  return page.evaluate(async (definitionKey) => {
+    const stored = localStorage.getItem(`hive:author:${definitionKey}`);
     if (!stored) return null;
     const res = await fetch(`/api/flows/${encodeURIComponent(stored)}`);
     if (!res.ok) return null;
     const flow = await res.json();
     return flow.instances?.[0]?.state ?? null;
-  });
+  }, definitionKey);
 }
 
-async function waitForSessionState(predicate, timeoutMs = 20_000) {
+async function waitForSessionState(predicate, timeoutMs = 20_000, definitionKey = "new") {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const state = await sessionState();
+    const state = await sessionState(definitionKey);
     if (state && predicate(state)) return state;
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
@@ -280,5 +281,70 @@ test("authoring session renders as the flow editor, co-edits, and saves", async 
   assert.ok(
     definition?.source?.includes("defineWorkflow"),
     "the saved definition source is the generated TypeScript"
+  );
+});
+
+// A gate-clean source for the existing-definition revision scenario.
+const REVISE_SOURCE = `import { defineWorkflow } from "workflow-engine/workflow-types";
+
+const wf = defineWorkflow({
+  id: "review",
+  label: "Review",
+  taskOutputs: {} as Record<string, never>,
+  workflowInstanceState: {} as Record<string, unknown>,
+  states: [
+    { id: "new", label: "New", category: "initial" },
+    { id: "done", label: "Done", category: "terminal" },
+  ],
+  initial: "new",
+  terminalStates: ["done"],
+});
+
+export const flow = {
+  id: "review-flow",
+  label: "Review Flow",
+  configSchema: [],
+  workflows: [wf],
+  edges: [],
+};
+`;
+
+test("revising an existing definition starts a session with its source as context", async () => {
+  // Register a definition to revise.
+  const created = await page.evaluate(async (source) => {
+    const res = await fetch("/api/flows/definitions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Revise Me", source }),
+    });
+    return res.ok ? await res.json() : null;
+  }, REVISE_SOURCE);
+  assert.ok(created, "definition registered");
+  assert.equal(created?.id, "revise-me");
+
+  // The edit route shows the start-session state (no session auto-resumes for
+  // a definition that has never been authored).
+  await page.goto(`${baseUrl}/#/flows/revise-me/edit`);
+  await page.waitForSelector("button", { hasText: "Start conversation" }, {
+    timeout: 15_000,
+  });
+  await page.locator("textarea").first().fill("Add a second workflow");
+  await page.locator("button", { hasText: "Start conversation" }).click();
+
+  // The session's first user message carries the existing source as context,
+  // so the agent proposes changes to the real definition rather than from
+  // scratch.
+  await waitForSessionState(
+    (state) => {
+      const messages = state.runningTaskContext?.messages ?? [];
+      return messages.some(
+        (m) =>
+          m.role === "user" &&
+          typeof m.content === "string" &&
+          m.content.includes("review-flow")
+      );
+    },
+    40_000,
+    "revise-me"
   );
 });

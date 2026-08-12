@@ -70,10 +70,7 @@ function authoringEntry(
       history: [],
       ...overrides,
     },
-    availableActions: [
-      { id: "validate", label: "Validate", variant: "secondary" },
-      { id: "save", label: "Save definition", variant: "primary" },
-    ],
+    availableActions: [],
     editFields: [],
     workflowSummary: { total: 0, byField: {} },
   };
@@ -163,45 +160,28 @@ describe("FlowEditor", () => {
     );
   });
 
-  it("renders the action row from availableActions and forwards clicks", async () => {
-    const el = await mountEditor();
-    const onAction = vi.fn();
-    el.onAction = onAction;
-    await el.updateComplete;
-
-    const bar = shadowRootOf(el).querySelector("action-bar");
-    expect(bar).not.toBeNull();
-    const buttons = [
-      ...shadowRootOf(bar as Element).querySelectorAll("button"),
-    ];
-    expect(buttons.map((b) => b.textContent?.trim())).toEqual([
-      "Save definition",
-      "Validate",
-    ]);
-
-    const save = buttons.find(
-      (b) => b.textContent?.trim() === "Save definition"
-    );
-    save?.dispatchEvent(click());
-    await el.updateComplete;
-    expect(onAction).toHaveBeenCalledWith("save", undefined);
-  });
-
   it("dispatches hive-action with the instance id when no onAction callback is set", async () => {
-    const el = await mountEditor();
+    const el = await mountEditor(
+      authoringEntry({
+        workflowInstanceState: {
+          prompt: "Build a flow",
+          source: "export const flow = {};",
+        },
+      })
+    );
     const emitted = new Promise<CustomEvent>((resolve) =>
       el.addEventListener("hive-action", resolve as EventListener, {
         once: true,
       })
     );
-    const bar = shadowRootOf(el).querySelector("action-bar") as Element;
-    const buttons = [...shadowRootOf(bar).querySelectorAll("button")];
-    buttons
-      .find((b) => b.textContent?.trim() === "Validate")
-      ?.dispatchEvent(click());
+    const save = shadowRootOf(el).querySelector(
+      "button.save-btn"
+    ) as HTMLButtonElement;
+    save.dispatchEvent(click());
+    await el.updateComplete;
     expect((await emitted).detail).toEqual({
       instanceId: "s1",
-      actionId: "validate",
+      actionId: "save",
     });
   });
 

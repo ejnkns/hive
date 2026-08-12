@@ -10,7 +10,6 @@ import type {
   CustomRenderKind,
 } from "workflow-engine/workflow-types";
 import { resolvePath } from "../resolve-path.ts";
-import "./action-bar.ts";
 import "./chat-session.ts";
 import "./code-editor.ts";
 
@@ -208,9 +207,6 @@ export class FlowEditor extends LitElement {
       border-color: var(--warning);
     }
 
-    .editor-actions {
-      display: flex;
-    }
   `;
 
   workflowDef: WorkflowDefResponse = null as unknown as WorkflowDefResponse;
@@ -228,9 +224,6 @@ export class FlowEditor extends LitElement {
           (error): error is string => typeof error === "string"
         )
       : [];
-    const actions = [...this.instanceEntry.availableActions].sort(
-      byVariantPriority
-    );
     const diverged = state.specDiverged === true;
     // The working artifact: the human's in-flight edits, else the agent's
     // generated source, else the live spec draft.
@@ -245,16 +238,6 @@ export class FlowEditor extends LitElement {
         </div>
         ${this.renderChat(sessionSource)}
         ${this.renderEditorPane(editorValue, previewErrors, diverged)}
-        ${
-          actions.length > 0
-            ? html`<div class="editor-actions">
-              <action-bar
-                .actions=${actions}
-                @hive-action=${this.handleAction}
-              ></action-bar>
-            </div>`
-            : nothing
-        }
       </div>
     `;
   }
@@ -479,15 +462,6 @@ export class FlowEditor extends LitElement {
 
   // ── action / message forwarding ─────────────────────────────────────
 
-  private handleAction = (
-    event: CustomEvent<{ actionId: string; payload?: Record<string, unknown> }>
-  ) => {
-    // The action-bar's event carries no flow/instance ids; stop it so the
-    // re-emitted event (with ids) is the only one that reaches the host.
-    event.stopPropagation();
-    this.emitAction(event.detail.actionId, event.detail.payload);
-  };
-
   private handleSendMessage = (event: CustomEvent<{ content: string }>) => {
     event.stopPropagation();
     // Flush the pending write-back before the turn starts so the agent's
@@ -534,21 +508,3 @@ export class FlowEditor extends LitElement {
 }
 
 customElements.define("flow-editor", FlowEditor);
-
-// Available actions order by variant so the primary call-to-action leads.
-const ACTION_VARIANT_PRIORITY: Record<string, number> = {
-  primary: 0,
-  secondary: 1,
-  default: 2,
-  destructive: 3,
-};
-
-function byVariantPriority(
-  a: { variant: string },
-  b: { variant: string }
-): number {
-  return (
-    (ACTION_VARIANT_PRIORITY[a.variant] ?? 4) -
-    (ACTION_VARIANT_PRIORITY[b.variant] ?? 4)
-  );
-}
