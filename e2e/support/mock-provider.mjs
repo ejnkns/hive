@@ -52,6 +52,9 @@ function completionFor(payload) {
   if (systemText.includes("You are the Requirements Agent")) {
     return requirementsCompletion(messages);
   }
+  if (systemText.includes("You are the Research Agent")) {
+    return researchAgentCompletion(messages);
+  }
   if (systemText.includes("You are an AI flow-design assistant")) {
     return authoringCompletion(messages);
   }
@@ -77,6 +80,12 @@ function completionFor(payload) {
 // source is manual (the agent then proposes in chat), and after the user
 // discards, the next ask regenerates.
 function authoringCompletion(messages) {
+  const firstUser = messages.find((message) => message.role === "user");
+  const prompt =
+    typeof firstUser?.content === "string" ? firstUser.content : "";
+  if (/research loop/.test(prompt)) {
+    return researchLoopCompletion(messages);
+  }
   const toolMessages = messages.filter((message) => message.role === "tool");
   const lastMessage = messages.at(-1);
   if (toolMessages.length === 0) {
@@ -389,7 +398,7 @@ const AUTHORING_SPEC = {
   configSchema: [],
   // A referenced tool: the generated definition is a module set whose entry
   // imports the stub file, so the flow-editor shows the referenced-file tabs.
-  tools: [{ id: "websearch", ref: "./tools/websearch.ts" }],
+  tools: [{ id: "websearch", ref: "./tools/search-tool.ts" }],
   workflows: [
     {
       id: "items",
@@ -443,3 +452,270 @@ const AUTHORING_SPEC = {
   ],
   edges: [],
 };
+
+// ─── the research-loop flow (ticket 4) ────────────────────────────────
+
+// The blueprint the research-loop authoring script converges on: a custom gate
+// file ref on the transition, a custom websearch tool ref, and an output
+// extractor that derives the verdict the gate reads.
+const RESEARCH_SPEC = {
+  id: "researchLoop",
+  label: "Research Loop",
+  configSchema: [],
+  tools: [{ id: "websearch", ref: "./tools/websearch.ts" }],
+  workflows: [
+    {
+      id: "research",
+      label: "Research",
+      instance: { title: "query" },
+      display: {
+        fields: [
+          { path: "query", label: "Query" },
+          { path: "verdict", label: "Verdict" },
+        ],
+      },
+      instanceState: [
+        { field: "query", type: "string" },
+        { field: "verdict", type: "string" },
+      ],
+      initialState: "searching",
+      terminalStates: ["done"],
+      states: [
+        {
+          id: "searching",
+          label: "Searching",
+          category: "initial",
+          tasks: [
+            {
+              id: "search",
+              label: "Search the web",
+              role: "ai-chat",
+              systemPrompt:
+                "You are the Research Agent. Search the web for the query, then call the completion tool with the top result's summary.",
+              tools: ["websearch"],
+              completionTool: "complete_task",
+              startOnUserInput: true,
+              inputFromInstanceState: "query",
+            },
+          ],
+          // The gate transitions live in a state whose only task is the
+          // extract: auto-transitions evaluate after each task, so a gate
+          // sharing a state with the search task would fire before the
+          // extractor has written the verdict it reads.
+          autoTransitions: [
+            {
+              to: "extracting",
+              gate: { kind: "taskSuccess", task: "search" },
+            },
+            {
+              to: "needs_review",
+              gate: { kind: "taskError", task: "search" },
+            },
+          ],
+        },
+        {
+          id: "extracting",
+          label: "Extracting",
+          category: "active",
+          tasks: [
+            {
+              id: "extractVerdict",
+              label: "Extract verdict",
+              role: "operation",
+              extract: { ref: "./extractors/parse.ts", fields: ["verdict"] },
+            },
+          ],
+          autoTransitions: [
+            {
+              to: "done",
+              gate: { kind: "file", ref: "./gates/approved.ts" },
+            },
+            { to: "needs_review", gate: { kind: "always" } },
+          ],
+        },
+        {
+          id: "needs_review",
+          label: "Needs review",
+          category: "active",
+          actions: [
+            {
+              id: "retry",
+              label: "Retry",
+              variant: "primary",
+              transitionTo: "searching",
+            },
+          ],
+        },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  edges: [],
+  actions: [
+    {
+      id: "add_research",
+      label: "Add research",
+      variant: "primary",
+      createInstance: {
+        workflowId: "research",
+        fields: [
+          { key: "query", label: "Query", type: "string", required: true },
+        ],
+      },
+    },
+  ],
+};
+
+// The implemented referenced files the research-loop authoring script writes
+// (the "implement the stub" step) — the transport in the websearch tool is
+// stubbed: the executor returns the shaped result directly.
+const RESEARCH_GATE = `import type { GateContract } from "workflow-engine/workflow-types";
+
+export const approved: GateContract = (ctx) => {
+  return ctx.workflowInstanceState.verdict === "approved";
+};
+`;
+
+const RESEARCH_TOOL = `import { defineTool } from "workflow-engine/runners";
+
+// The primitive transport is stubbed in the e2e: the shaped result is
+// returned directly (a real deployment would call a search endpoint here).
+export const websearchTools = [
+  defineTool({
+    name: "websearch",
+    description: "Search the web and return the top result.",
+    parameters: {
+      properties: { query: { type: "string" } },
+      required: ["query"],
+    },
+    executor: async (call) => {
+      return {
+        toolCallId: call.id,
+        content: JSON.stringify({ title: "Hive docs", snippet: "good result" }),
+        isError: false,
+      };
+    },
+  }),
+];
+`;
+
+const RESEARCH_EXTRACT = `import type { OutputExtractor } from "workflow-engine/workflow-types";
+
+export const parse: OutputExtractor = (ctx) => {
+  const search = ctx.taskOutputs.search as { output?: { completion?: { summary?: string } } } | undefined;
+  const summary = search?.output?.completion?.summary ?? "";
+  return { verdict: summary.includes("good") ? "approved" : "needs_review" };
+};
+`;
+
+// The research-loop authoring script: set the blueprint → generate (the stubs
+// pass the gate) → write the gate, tool, and extractor → regenerate (the
+// implementations pass) → save. Stages are tracked by the tool_call_id of the
+// last tool result.
+function researchLoopCompletion(messages) {
+  const toolMessages = messages.filter((message) => message.role === "tool");
+  const lastId = toolMessages.at(-1)?.tool_call_id ?? "";
+  if (toolMessages.length === 0) {
+    return toolCompletion(
+      [
+        toolCall("research-bp", "set_flow_blueprint", {
+          blueprint: JSON.stringify(RESEARCH_SPEC),
+        }),
+      ],
+      "designing the research loop"
+    );
+  }
+  if (lastId === "research-bp") {
+    return toolCompletion(
+      [
+        toolCall("research-gen", "generate_definition", {
+          blueprint: JSON.stringify(RESEARCH_SPEC),
+        }),
+      ],
+      "generating the module set"
+    );
+  }
+  if (lastId === "research-gen") {
+    return toolCompletion(
+      [
+        toolCall("research-write-gate", "write_definition_file", {
+          path: "./gates/approved.ts",
+          content: RESEARCH_GATE,
+        }),
+      ],
+      "implementing the gate"
+    );
+  }
+  if (lastId === "research-write-gate") {
+    return toolCompletion(
+      [
+        toolCall("research-write-tool", "write_definition_file", {
+          path: "./tools/websearch.ts",
+          content: RESEARCH_TOOL,
+        }),
+      ],
+      "implementing the websearch tool"
+    );
+  }
+  if (lastId === "research-write-tool") {
+    return toolCompletion(
+      [
+        toolCall("research-write-extract", "write_definition_file", {
+          path: "./extractors/parse.ts",
+          content: RESEARCH_EXTRACT,
+        }),
+      ],
+      "implementing the extractor"
+    );
+  }
+  if (lastId === "research-write-extract") {
+    return toolCompletion(
+      [
+        toolCall("research-gen2", "generate_definition", {
+          blueprint: JSON.stringify(RESEARCH_SPEC),
+        }),
+      ],
+      "regenerating with the implementations"
+    );
+  }
+  if (lastId === "research-gen2") {
+    return toolCompletion(
+      [toolCall("research-save", "save_definition", {})],
+      "saving the definition"
+    );
+  }
+  if (lastId === "research-save") {
+    return textCompletion("The research loop flow is registered and ready.");
+  }
+  throw new Error("Unexpected research-loop authoring state");
+}
+
+// The research agent at runtime: calls the custom websearch tool, then
+// completes with a summary the extractor classifies as approved (so the custom
+// gate routes the instance to done).
+function researchAgentCompletion(messages) {
+  const toolMessages = messages.filter((message) => message.role === "tool");
+  const lastId = toolMessages.at(-1)?.tool_call_id ?? "";
+  if (toolMessages.length === 0) {
+    return toolCompletion(
+      [toolCall("research-tool", "websearch", { query: "hive" })],
+      "researching the query"
+    );
+  }
+  if (lastId === "research-tool") {
+    return toolCompletion(
+      [
+        toolCall("research-complete", "complete_task", {
+          outcome: "implemented",
+          summary: "good result",
+          rationale: "found the top result",
+        }),
+      ],
+      "completing the research"
+    );
+  }
+  if (lastId === "research-complete") {
+    return textCompletion("The research is complete.");
+  }
+  throw new Error("Unexpected Research Agent conversation state");
+}
