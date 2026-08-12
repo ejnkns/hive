@@ -29,6 +29,7 @@ import {
   setDefinitionsBasePathForTest,
 } from "../flow-definitions.ts";
 import {
+  AUTHORING_MODULE_SET,
   type AuthoringItemState,
   authoringSessionFlow,
   authoringTools,
@@ -702,7 +703,7 @@ describe("flow-authoring session", () => {
   });
 
   it("read_definition_file and write_definition_file operate on the module-set files within the definition root", async () => {
-    const workDir = join(runtimeDefinitionsDir(), "__authoring__");
+    const workDir = join(runtimeDefinitionsDir(), AUTHORING_MODULE_SET);
     rmSync(workDir, { recursive: true, force: true });
     try {
       const readTool = authoringTools.find(
@@ -777,7 +778,7 @@ describe("flow-authoring session", () => {
   });
 
   it("the session agent creates and edits a referenced file in-conversation and the gate reflects it", async () => {
-    const workDir = join(runtimeDefinitionsDir(), "__authoring__");
+    const workDir = join(runtimeDefinitionsDir(), AUTHORING_MODULE_SET);
     rmSync(workDir, { recursive: true, force: true });
     try {
       const controller = await runConversation([
@@ -813,7 +814,7 @@ describe("flow-authoring session", () => {
   });
 
   it("an undeclared import fails the gate with a dependency finding; declaring it passes", async () => {
-    const workDir = join(runtimeDefinitionsDir(), "__authoring__");
+    const workDir = join(runtimeDefinitionsDir(), AUTHORING_MODULE_SET);
     rmSync(workDir, { recursive: true, force: true });
     try {
       let state: AuthoringItemState = {
