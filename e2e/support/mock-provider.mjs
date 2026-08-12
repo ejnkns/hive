@@ -398,7 +398,7 @@ const AUTHORING_SPEC = {
   configSchema: [],
   // A referenced tool: the generated definition is a module set whose entry
   // imports the stub file, so the flow-editor shows the referenced-file tabs.
-  tools: [{ id: "websearch", ref: "./tools/search-tool.ts" }],
+  tools: [{ id: "websearch", ref: "./tools/websearch.ts" }],
   workflows: [
     {
       id: "items",

@@ -8,7 +8,7 @@ import {
   runGenerationGate,
   validateAndPreview,
 } from "../generation-gate.ts";
-import type { AuthoringItemState } from "../state.ts";
+import { AUTHORING_MODULE_SET, type AuthoringItemState } from "../state.ts";
 import { divergedResult, isDiverged } from "./shared.ts";
 
 export const generateDefinitionTool = defineTool<AuthoringItemState>({
@@ -72,7 +72,8 @@ export const generateDefinitionTool = defineTool<AuthoringItemState>({
     }
 
     const { source, files, errors, warnings } = await runGenerationGate(
-      preview.parsed
+      preview.parsed,
+      ctx.workflowInstanceState?.()?.moduleSetSlug ?? AUTHORING_MODULE_SET
     );
     if (errors.length > 0) {
       ctx.patchWorkflowInstanceState?.({

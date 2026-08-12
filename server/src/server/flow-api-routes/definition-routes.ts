@@ -191,6 +191,10 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
     controller?.patchWorkflowInstanceState({
       prompt: prompt.trim(),
       mode: lucky ? "lucky" : "conversational",
+      // Each session owns a module-set working directory keyed by its flow id:
+      // the gate, the file tools, and the editor's file tabs read and write
+      // only this session's files.
+      moduleSetSlug: flowId,
     });
     const taskId = controller?.getState().runningTaskId;
     if (taskId) {

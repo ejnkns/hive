@@ -10,7 +10,6 @@ import {
 } from "../../flow-blueprint.ts";
 import { runModuleSetGate } from "../../module-set.ts";
 import { renderFlowDefinition } from "../../render-flow-definition.ts";
-import { AUTHORING_MODULE_SET } from "./state.ts";
 
 // Validates + renders a blueprint for the live preview; returns the parsed
 // blueprint and any findings. Used by both blueprint tools so the draft and
@@ -56,8 +55,13 @@ export function validateAndPreview(blueprintJson: string): BlueprintPreview {
 
 // The full generation gate: blueprint validation → render (entry + stubs) →
 // materialize → lint → import policy → load → typecheck → schema check.
-// Returns the entry, the current referenced files, and the findings.
-export async function runGenerationGate(blueprint: FlowBlueprint): Promise<{
+// Returns the entry, the current referenced files, and the findings. The
+// module-set slug names the session's own working directory (its flow id), so
+// concurrent sessions never share or clobber each other's referenced files.
+export async function runGenerationGate(
+  blueprint: FlowBlueprint,
+  moduleSetSlug: string
+): Promise<{
   source: string;
   files: Record<string, string>;
   errors: string[];
@@ -66,11 +70,7 @@ export async function runGenerationGate(blueprint: FlowBlueprint): Promise<{
   const blueprintWarnings = analyzeFlowBlueprint(blueprint);
 
   const rendered = renderFlowDefinition(blueprint);
-  const result = await runModuleSetGate(
-    AUTHORING_MODULE_SET,
-    blueprint,
-    rendered
-  );
+  const result = await runModuleSetGate(moduleSetSlug, blueprint, rendered);
   return {
     source: rendered.entry,
     files: result.files,

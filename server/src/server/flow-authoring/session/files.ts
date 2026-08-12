@@ -8,7 +8,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { refPathInDir } from "../../flow-definitions.ts";
-import { type AuthoringItemState, authoringModuleSetDir } from "./state.ts";
+import {
+  AUTHORING_MODULE_SET,
+  type AuthoringItemState,
+  authoringModuleSetDir,
+} from "./state.ts";
 
 export type AuthoringFileWrite =
   | { ok: true; files: Record<string, string> }
@@ -33,7 +37,10 @@ export function writeAuthoringModuleFile(
   if (content.trim() === "") {
     return { ok: false, message: "content is required" };
   }
-  const target = refPathInDir(authoringModuleSetDir(), path);
+  const target = refPathInDir(
+    authoringModuleSetDir(state.moduleSetSlug ?? AUTHORING_MODULE_SET),
+    path
+  );
   if (target === undefined) {
     return {
       ok: false,
@@ -50,7 +57,10 @@ export type AuthoringFileRead =
   | { ok: true; content: string }
   | { ok: false; message: string };
 
-export function readAuthoringModuleFile(path: string): AuthoringFileRead {
+export function readAuthoringModuleFile(
+  state: AuthoringItemState,
+  path: string
+): AuthoringFileRead {
   if (path === "" || path === "flow.ts") {
     return {
       ok: false,
@@ -58,7 +68,10 @@ export function readAuthoringModuleFile(path: string): AuthoringFileRead {
         "path is required and must name a referenced file (flow.ts is the rendered entry — edit the blueprint instead)",
     };
   }
-  const target = refPathInDir(authoringModuleSetDir(), path);
+  const target = refPathInDir(
+    authoringModuleSetDir(state.moduleSetSlug ?? AUTHORING_MODULE_SET),
+    path
+  );
   if (target === undefined) {
     return {
       ok: false,

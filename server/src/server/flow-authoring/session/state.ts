@@ -8,13 +8,14 @@ import { runtimeDefinitionsDir } from "../../flow-definitions.ts";
 
 export const AUTHORING_DEFINITION_ID = "flow-authoring";
 
-// The session's module-set working directory under the runtime definitions
-// root: the gate materializes the entry + stubs here, and the file tools read
-// and write the referenced files here (hand edits are authoritative).
+// The fallback module-set key used when a session has not recorded its own
+// (the direct-tool unit tests drive the tools with a bare state). Real
+// sessions record their flow id as the module-set slug, giving each session an
+// isolated working directory — files never leak across sessions.
 export const AUTHORING_MODULE_SET = "__authoring__";
 
-export function authoringModuleSetDir(): string {
-  return join(runtimeDefinitionsDir(), AUTHORING_MODULE_SET);
+export function authoringModuleSetDir(slug: string): string {
+  return join(runtimeDefinitionsDir(), slug);
 }
 
 export type AuthoringItemState = {
@@ -61,4 +62,8 @@ export type AuthoringItemState = {
   // refuse until the human discards (or adopts, via the future reverse
   // renderer) their edits.
   blueprintDiverged?: boolean;
+  // The session's module-set working-directory key (its flow id, set at
+  // session creation). Each session materializes, reads, and writes its own
+  // module set under this key — referenced files never leak across sessions.
+  moduleSetSlug?: string;
 };

@@ -21,9 +21,10 @@ export const readDefinitionFileTool = defineTool<AuthoringItemState>({
     },
     required: ["path"],
   },
-  executor: async (call) => {
+  executor: async (call, ctx) => {
     const args = JSON.parse(call.arguments) as { path?: string };
     const result = readAuthoringModuleFile(
+      ctx.workflowInstanceState?.() ?? {},
       typeof args.path === "string" ? args.path.trim() : ""
     );
     if (!result.ok) return toolError(call, result.message);

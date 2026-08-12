@@ -18,10 +18,7 @@ import {
 } from "workflow-engine/workflow-types";
 import { queenBeeFlow } from "../../../presets/queen-bee/flow.ts";
 import { registerFlowApiRoutes } from "./flow-api-routes.ts";
-import {
-  AUTHORING_MODULE_SET,
-  authoringSessionFlow,
-} from "./flow-authoring/session.ts";
+import { authoringSessionFlow } from "./flow-authoring/session.ts";
 import {
   registerFlowDefinition,
   registerUserDefinition,
@@ -1305,32 +1302,24 @@ describe("flow API routes", () => {
     const server = Fastify();
     servers.push(server);
     registerFlowApiRoutes(server);
-    // The module-set working directory is shared across parallel test files,
-    // so this test touches only its own unique subpath (no whole-dir cleanup).
-    const probe = join(
-      runtimeDefinitionsDir(),
-      AUTHORING_MODULE_SET,
-      "route-test"
-    );
-    rmSync(probe, { recursive: true, force: true });
+    const created = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions/author",
+      body: { prompt: "Build a review flow", lucky: true },
+    });
+    const { flowId, instanceId } = created.json() as {
+      flowId: string;
+      instanceId: string;
+    };
+    const runtime = getFlowRuntime(flowId);
+    const controller = runtime?.getWorkflowInstance(instanceId);
+    const workDir = join(runtimeDefinitionsDir(), flowId);
     try {
-      const created = await server.inject({
-        method: "POST",
-        url: "/api/flows/definitions/author",
-        body: { prompt: "Build a review flow", lucky: true },
-      });
-      const { flowId, instanceId } = created.json() as {
-        flowId: string;
-        instanceId: string;
-      };
-      const runtime = getFlowRuntime(flowId);
-      const controller = runtime?.getWorkflowInstance(instanceId);
-
       const written = await server.inject({
         method: "POST",
         url: `/api/flows/definitions/author/${flowId}/files`,
         payload: {
-          path: "./route-test/notes.ts",
+          path: "./gates/approved.ts",
           content: "export const ok = true;\n",
         },
       });
@@ -1338,12 +1327,17 @@ describe("flow API routes", () => {
       const state = controller?.getState().workflowInstanceState;
       const files = state?.files as Record<string, string> | undefined;
       assert.equal(
-        files?.["./route-test/notes.ts"],
+        files?.["./gates/approved.ts"],
         "export const ok = true;\n",
         "the write must land in the session's file set"
       );
       // File edits are authoritative: no divergence flag.
       assert.notEqual(state?.blueprintDiverged, true);
+      assert.equal(
+        state?.moduleSetSlug,
+        flowId,
+        "the session records its own module-set slug"
+      );
 
       // Escaping paths and the rendered entry are rejected.
       const escapeWrite = await server.inject({
@@ -1359,7 +1353,77 @@ describe("flow API routes", () => {
       });
       assert.equal(entryWrite.statusCode, 400);
     } finally {
-      rmSync(probe, { recursive: true, force: true });
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  });
+
+  it("each authoring session has its own module-set directory (no file leakage)", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition(authoringSessionFlow, { hidden: true });
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+    const createSession = async (): Promise<{
+      flowId: string;
+      state: () => Record<string, unknown>;
+    }> => {
+      const created = await server.inject({
+        method: "POST",
+        url: "/api/flows/definitions/author",
+        body: { prompt: "Build a flow", lucky: true },
+      });
+      const { flowId, instanceId } = created.json() as {
+        flowId: string;
+        instanceId: string;
+      };
+      const runtime = getFlowRuntime(flowId);
+      const controller = runtime?.getWorkflowInstance(instanceId);
+      if (!controller) throw new Error("no controller");
+      return {
+        flowId,
+        state: () => controller.getState().workflowInstanceState,
+      };
+    };
+    const first = await createSession();
+    const second = await createSession();
+    assert.notEqual(
+      first.flowId,
+      second.flowId,
+      "sessions have distinct flow ids"
+    );
+    try {
+      // A file written to the first session must not appear in the second.
+      await server.inject({
+        method: "POST",
+        url: `/api/flows/definitions/author/${first.flowId}/files`,
+        payload: {
+          path: "./gates/approved.ts",
+          content: "export const a = 1;\n",
+        },
+      });
+      const secondState = second.state();
+      const secondFiles = secondState.files as
+        | Record<string, string>
+        | undefined;
+      assert.equal(
+        secondFiles?.["./gates/approved.ts"],
+        undefined,
+        "another session's files must not leak into this session's file set"
+      );
+      assert.notEqual(
+        secondState.moduleSetSlug,
+        first.flowId,
+        "the second session uses its own module-set directory"
+      );
+    } finally {
+      rmSync(join(runtimeDefinitionsDir(), first.flowId), {
+        recursive: true,
+        force: true,
+      });
+      rmSync(join(runtimeDefinitionsDir(), second.flowId), {
+        recursive: true,
+        force: true,
+      });
     }
   });
 

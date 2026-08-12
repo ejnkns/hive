@@ -443,13 +443,13 @@ test("a referenced file opens as an editable tab and the edit persists across a 
     (state) =>
       state.tabs.includes("Definition") &&
       state.tabs.includes("Blueprint") &&
-      state.tabs.includes("./tools/search-tool.ts"),
+      state.tabs.includes("./tools/websearch.ts"),
     40_000
   );
 
   // Open the referenced file: the editor shows its stub.
   assert.ok(
-    await clickEditorTab("./tools/search-tool.ts"),
+    await clickEditorTab("./tools/websearch.ts"),
     "the referenced file tab must be clickable"
   );
   await waitForEditor((state) => state.code.includes("defineTool"), 40_000);
@@ -459,9 +459,9 @@ test("a referenced file opens as an editable tab and the edit persists across a 
   assert.ok(await editActiveEditor(EDITED_TOOL), "the file editor is editable");
   await waitForSessionState(
     (state) =>
-      typeof state.workflowInstanceState?.files?.["./tools/search-tool.ts"] ===
+      typeof state.workflowInstanceState?.files?.["./tools/websearch.ts"] ===
         "string" &&
-      state.workflowInstanceState.files["./tools/search-tool.ts"].includes(
+      state.workflowInstanceState.files["./tools/websearch.ts"].includes(
         "edited result"
       ) &&
       state.workflowInstanceState.blueprintDiverged !== true,
@@ -472,9 +472,9 @@ test("a referenced file opens as an editable tab and the edit persists across a 
   // Reload: the session resumes and the edited file content is still there.
   await page.reload();
   await waitForEditor(
-    (state) => state.tabs.includes("./tools/search-tool.ts"),
+    (state) => state.tabs.includes("./tools/websearch.ts"),
     40_000
   );
-  assert.ok(await clickEditorTab("./tools/search-tool.ts"));
+  assert.ok(await clickEditorTab("./tools/websearch.ts"));
   await waitForEditor((state) => state.code.includes("edited result"), 40_000);
 });
