@@ -16,8 +16,8 @@
  * definitions, and the same machinery the editor-depth initiative will reuse
  * for inline underlines. */
 
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join, relative, resolve, sep } from "node:path";
 import ts from "typescript";
 import {
   findServerPackageRoot,
@@ -29,6 +29,9 @@ export type TypecheckIssue = {
   message: string;
   line: number;
   column: number;
+  // The file within a module set the issue belongs to (relative to the module
+  // set root); undefined for the single-file check.
+  file?: string;
 };
 
 let tsconfigCache: ts.CompilerOptions | undefined;
@@ -36,8 +39,9 @@ let tsconfigCache: ts.CompilerOptions | undefined;
 // Read the server tsconfig (extends tsconfig.base.json) and reuse its
 // compiler options — crucially the `paths` mapping that resolves bare
 // `workflow-engine/*` imports to source. Cached: the tsconfig is static
-// within a process.
-function serverCompilerOptions(): ts.CompilerOptions {
+// within a process. Exported for the module-set lint, which typechecks the
+// same resolution against the per-reference contract harnesses.
+export function serverCompilerOptions(): ts.CompilerOptions {
   if (tsconfigCache) return tsconfigCache;
   // The server package root (same resolution the loader uses, working from
   // source and from the bundled dist) — the tsconfig lives there.
@@ -89,4 +93,59 @@ export function typecheckDefinitionSource(
     });
   }
   return issues;
+}
+
+// Typechecks a whole module set: the entry and every referenced file in the
+// materialized directory (the lint's transient `__lint__` harnesses are
+// excluded). Diagnostics are attributed to the file they belong to — an
+// engine source pulled in by an import is not the definition's own error.
+export function typecheckModuleSet(
+  dir: string,
+  _slug: string
+): TypecheckIssue[] {
+  const files = moduleSetFilesIn(dir);
+  const program = ts.createProgram(
+    Object.keys(files).map((rel) => join(dir, rel)),
+    serverCompilerOptions()
+  );
+  const root = resolve(dir) + sep;
+  const issues: TypecheckIssue[] = [];
+  for (const diagnostic of ts.getPreEmitDiagnostics(program)) {
+    if (!diagnostic.file) continue;
+    const fileName = diagnostic.file.fileName;
+    if (!fileName.startsWith(root)) continue;
+    const position = diagnostic.start ?? 0;
+    const { line, character } =
+      diagnostic.file.getLineAndCharacterOfPosition(position);
+    issues.push({
+      code: diagnostic.code,
+      message: ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+      line: line + 1,
+      column: character + 1,
+      file: relative(dir, fileName).split(sep).join("/"),
+    });
+  }
+  return issues;
+}
+
+// Every .ts file under the module-set directory (flow.ts + referenced files),
+// excluding the lint's transient harness directory.
+function moduleSetFilesIn(dir: string): Record<string, string> {
+  const files: Record<string, string> = {};
+  const walk = (sub: string): void => {
+    for (const entry of readdirSync(sub, { withFileTypes: true })) {
+      const full = join(sub, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === "__lint__") continue;
+        walk(full);
+      } else if (entry.name.endsWith(".ts")) {
+        files[relative(dir, full).split(sep).join("/")] = readFileSync(
+          full,
+          "utf-8"
+        );
+      }
+    }
+  };
+  walk(dir);
+  return files;
 }

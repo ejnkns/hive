@@ -3,7 +3,10 @@
 import type { GateSpec } from "../flow-blueprint.ts";
 import { json } from "./render-primitives.ts";
 
-export function renderGate(gate: GateSpec): string {
+export function renderGate(
+  gate: GateSpec,
+  fileGateBinding?: (ref: string) => string
+): string {
   switch (gate.kind) {
     case "always":
       return "true";
@@ -34,12 +37,19 @@ export function renderGate(gate: GateSpec): string {
       return `ctx.workflowInstanceState.${gate.field} === ${json(gate.value)}`;
     case "errorCountAtLeast":
       return `(ctx.taskErrorCounts.${gate.task} ?? 0) >= ${gate.count}`;
+    case "file":
+      // The referenced gate function, called with the runtime context.
+      return `${fileGateBinding?.(gate.ref) ?? gate.ref}(ctx)`;
     case "not":
-      return `!(${renderGate(gate.gate)})`;
+      return `!(${renderGate(gate.gate, fileGateBinding)})`;
     case "and":
-      return gate.gates.map((g) => `(${renderGate(g)})`).join(" && ");
+      return gate.gates
+        .map((g) => `(${renderGate(g, fileGateBinding)})`)
+        .join(" && ");
     case "or":
-      return gate.gates.map((g) => `(${renderGate(g)})`).join(" || ");
+      return gate.gates
+        .map((g) => `(${renderGate(g, fileGateBinding)})`)
+        .join(" || ");
   }
 }
 

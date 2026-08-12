@@ -22,6 +22,8 @@ import type { TaskRunnerContext } from "workflow-engine/task-runner";
 import { STRUCTURED_INTAKE_EXEMPLAR } from "../flow-authoring.ts";
 import { validateFlowBlueprint } from "../flow-blueprint.ts";
 import {
+  getRegisteredFlowDefinition,
+  loadUserDefinitionsFromDisk,
   resetFlowDefinitionsForTest,
   setDefinitionsBasePathForTest,
 } from "../flow-definitions.ts";
@@ -477,5 +479,128 @@ describe("flow-authoring session", () => {
     );
     assert.equal(none.isError, false);
     assert.match(none.content, /No definition source yet/);
+  });
+
+  it("a blueprint with file references generates and saves a module set (blueprint + file set on the record)", async () => {
+    const defsDir = mkdtempSync(join(tmpdir(), "hive-author-refs-"));
+    setDefinitionsBasePathForTest(defsDir);
+    resetFlowDefinitionsForTest();
+    try {
+      const blueprint = {
+        id: "refSessionFlow",
+        label: "Ref Session Flow",
+        configSchema: [],
+        tools: [{ id: "websearch", ref: "./tools/websearch.ts" }],
+        workflows: [
+          {
+            id: "items",
+            label: "Items",
+            instance: { title: "title" },
+            instanceState: [
+              { field: "title", type: "string" },
+              { field: "verdict", type: "string" },
+            ],
+            initialState: "inbox",
+            terminalStates: ["done"],
+            states: [
+              {
+                id: "inbox",
+                label: "Inbox",
+                category: "initial",
+                tasks: [
+                  {
+                    id: "classify",
+                    label: "Classify",
+                    role: "ai-chat",
+                    systemPrompt: "Classify, then call the completion tool.",
+                    tools: ["websearch"],
+                    completionTool: "complete_task",
+                    startOnUserInput: true,
+                  },
+                  {
+                    id: "extractVerdict",
+                    label: "Extract verdict",
+                    role: "operation",
+                    extract: {
+                      ref: "./extractors/parse.ts",
+                      fields: ["verdict"],
+                    },
+                  },
+                ],
+                autoTransitions: [
+                  {
+                    to: "done",
+                    gate: { kind: "file", ref: "./gates/approved.ts" },
+                  },
+                  { to: "inbox", gate: { kind: "always" } },
+                ],
+              },
+              { id: "done", label: "Done", category: "terminal" },
+            ],
+          },
+        ],
+        edges: [],
+        actions: [
+          {
+            id: "add_item",
+            label: "Add item",
+            variant: "primary",
+            createInstance: {
+              workflowId: "items",
+              fields: [
+                {
+                  key: "title",
+                  label: "Title",
+                  type: "string",
+                  required: true,
+                },
+              ],
+            },
+          },
+        ],
+      };
+      const controller = await runConversation([
+        setSpecCall(blueprint),
+        genCall(blueprint),
+        { id: "s-ref", name: "save_definition", arguments: "{}" },
+        "Done!",
+      ]);
+      const state = controller.getState()
+        .workflowInstanceState as AuthoringItemState;
+      assert.equal(state.report?.passed, true);
+      assert.ok(
+        typeof state.source === "string" &&
+          state.source.includes(
+            'import { approved } from "./gates/approved.ts";'
+          ),
+        "the stored source is the module-set entry wiring the references"
+      );
+      assert.ok(
+        state.files?.["./tools/websearch.ts"]?.includes("defineTool"),
+        "the module-set files must be stored on the session"
+      );
+      assert.equal(state.savedDefinitionId, "ref-session-flow");
+
+      const record = getRegisteredFlowDefinition("ref-session-flow");
+      assert.ok(record, "the definition must register");
+      assert.equal(record.blueprint?.id, "refSessionFlow");
+      assert.ok(
+        record.files?.["./gates/approved.ts"]?.includes("GateContract"),
+        "the record stores the referenced file set"
+      );
+
+      // The record re-materializes from disk on boot.
+      resetFlowDefinitionsForTest();
+      await loadUserDefinitionsFromDisk();
+      const reloaded = getRegisteredFlowDefinition("ref-session-flow");
+      assert.ok(reloaded, "the module-set definition must reload");
+      assert.ok(
+        reloaded.files?.["./extractors/parse.ts"]?.includes("OutputExtractor"),
+        "the reloaded record keeps the file set"
+      );
+    } finally {
+      rmSync(defsDir, { recursive: true, force: true });
+      resetFlowDefinitionsForTest();
+    }
   });
 });

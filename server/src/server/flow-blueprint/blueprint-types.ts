@@ -43,6 +43,16 @@ export type FanOutValueSpec =
   | { kind: "itemPath"; path: string }
   | { kind: "instanceId" };
 
+// A blueprint-referenced code module — the closed vocabulary of reference
+// kinds. The engine scaffolds contract types, stubs, and lint for each; the
+// referenced file's named export implements the contract.
+export type ModuleRefKind =
+  | "gate"
+  | "tool"
+  | "operation"
+  | "transform"
+  | "extract";
+
 export type GateSpec =
   | { kind: "always" }
   | { kind: "never" }
@@ -65,13 +75,40 @@ export type GateSpec =
   | { kind: "errorCountAtLeast"; task: string; count: number }
   | { kind: "not"; gate: GateSpec }
   | { kind: "and"; gates: GateSpec[] }
-  | { kind: "or"; gates: GateSpec[] };
+  | { kind: "or"; gates: GateSpec[] }
+  // A gate implemented in a referenced file: `ref` is a relative path inside
+  // the definition root whose named export is `(ctx: RuntimeGateContext) =>
+  // boolean`. Nested in not/and/or like any other gate.
+  | { kind: "file"; ref: string };
+
+// A custom tool the flow ships: the file's `<id>Tools` export is a list of
+// self-contained tools (defineTool) merged into the definition's tools.
+export type ToolRefSpec = { id: string; ref: string };
+
+// A custom operation the flow ships: the file's `<id>Operations` export is a
+// defineOperations map merged into the definition's operations. Tasks
+// reference the op by `id`.
+export type OperationRefSpec = { id: string; ref: string };
+
+// An edge transform implemented in a referenced file. `fields` declares the
+// target instance-state fields the transform produces — the renderer wraps
+// the imported transform so the schema-consistency check sees the writes.
+export type EdgeTransformRefSpec = { ref: string; fields: string[] };
+
+// A task output extractor implemented in a referenced file: an operation task
+// whose generated op runs the extractor on the instance's task outputs and
+// merges the returned fields into instance state. `fields` declares those
+// fields (must be declared instance-state fields).
+export type ExtractRefSpec = { ref: string; fields: string[] };
 
 export type TaskSpec = {
   id: string;
   label?: string;
   role: "operation" | "ai-task" | "ai-chat";
-  operations?: string[];
+  // Engine operation names, ids of flow-level operations, or inline
+  // references to a custom operation module (`{ ref }` — the op is registered
+  // under the export name from `<ref>` and the task runs it).
+  operations?: (string | { ref: string })[];
   operationInputs?: Record<string, unknown>;
   tools?: string[];
   completionTool?: string;
@@ -90,6 +127,10 @@ export type TaskSpec = {
   // end the task, and the parsed arguments become the task output. Only on
   // ai-task/ai-chat; mutually exclusive with an explicit completionTool.
   completionOutput?: CompletionOutputField[];
+  // A referenced output extractor: the generated op runs the referenced
+  // extractor over the instance's task outputs and patches the declared
+  // `fields` into instance state. Operation tasks only.
+  extract?: ExtractRefSpec;
 };
 
 export type AutoTransitionSpec = {
@@ -156,12 +197,17 @@ export type EdgeSpec = {
   fromWorkflow: string;
   fromStates: string[];
   toWorkflow: string;
+  // Value-source transforms (mutually exclusive with `transform`):
   fields?: Record<string, ValueSpec>;
   fanOut?: {
     task: string;
     path: string;
     fields: Record<string, FanOutValueSpec>;
   };
+  // A transform implemented in a referenced file. `fields` declares the target
+  // instance-state fields the transform produces (mutually exclusive with
+  // `fields`/`fanOut` — the reference IS the transform).
+  transform?: EdgeTransformRefSpec;
 };
 
 export type FlowLevelActionSpec = {
@@ -182,6 +228,10 @@ export type FlowBlueprint = {
   workflows: WorkflowSpec[];
   edges?: EdgeSpec[];
   actions?: FlowLevelActionSpec[];
+  // Custom tools and operations referenced as files; tasks reference them by
+  // id/name alongside the engine's infrastructure capabilities.
+  tools?: ToolRefSpec[];
+  operations?: OperationRefSpec[];
 };
 
 // ─── validation ───────────────────────────────────────────────────────

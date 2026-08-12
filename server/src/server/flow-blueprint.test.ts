@@ -5,9 +5,10 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { FlowBlueprint } from "./flow-blueprint.ts";
+import type { FlowBlueprint, GateSpec } from "./flow-blueprint.ts";
 import {
   analyzeFlowBlueprint,
+  MODULE_REF_KINDS,
   validateFlowBlueprint,
 } from "./flow-blueprint.ts";
 
@@ -1199,5 +1200,325 @@ describe("manual-action fields", () => {
       actions: [],
     };
     assert.deepEqual(validateFlowBlueprint(blueprint), []);
+  });
+
+  describe("blueprint-referenced modules (the five kinds)", () => {
+    // A valid blueprint exercising every reference kind: a gate file ref, a
+    // custom tool, flow-level + inline operation refs, an edge transform ref,
+    // and an output extractor ref. The validator must accept it as-is.
+    const REFS: FlowBlueprint = {
+      id: "refFlow",
+      label: "Ref Flow",
+      configSchema: [],
+      tools: [{ id: "websearch", ref: "./tools/websearch.ts" }],
+      operations: [{ id: "score", ref: "./ops/score.ts" }],
+      workflows: [
+        {
+          id: "items",
+          label: "Items",
+          instance: { title: "title" },
+          instanceState: [
+            { field: "title", type: "string" },
+            { field: "verdict", type: "string" },
+          ],
+          initialState: "inbox",
+          terminalStates: ["done"],
+          states: [
+            {
+              id: "inbox",
+              label: "Inbox",
+              category: "initial",
+              tasks: [
+                {
+                  id: "classify",
+                  label: "Classify",
+                  role: "ai-chat",
+                  systemPrompt: "Classify, then call the completion tool.",
+                  tools: ["websearch"],
+                  completionTool: "complete_task",
+                  inputFromInstanceState: "title",
+                },
+                {
+                  id: "runScore",
+                  label: "Score",
+                  role: "operation",
+                  operations: ["score", { ref: "./ops/inline-score.ts" }],
+                },
+                {
+                  id: "extractVerdict",
+                  label: "Extract verdict",
+                  role: "operation",
+                  extract: {
+                    ref: "./extractors/parse.ts",
+                    fields: ["verdict"],
+                  },
+                },
+              ],
+              autoTransitions: [
+                {
+                  to: "done",
+                  gate: { kind: "file", ref: "./gates/approved.ts" },
+                },
+                { to: "inbox", gate: { kind: "always" } },
+              ],
+            },
+            { id: "done", label: "Done", category: "terminal" },
+          ],
+        },
+        {
+          id: "summary",
+          label: "Summary",
+          instance: { title: "title" },
+          instanceState: [{ field: "title", type: "string" }],
+          initialState: "ready",
+          terminalStates: ["ready"],
+          states: [{ id: "ready", label: "Ready", category: "initial" }],
+        },
+      ],
+      edges: [
+        {
+          fromWorkflow: "items",
+          fromStates: ["done"],
+          toWorkflow: "summary",
+          transform: { ref: "./edges/to-summary.ts", fields: ["title"] },
+        },
+      ],
+      actions: [
+        {
+          id: "add_item",
+          label: "Add item",
+          variant: "primary",
+          createInstance: {
+            workflowId: "items",
+            fields: [
+              {
+                key: "title",
+                label: "Title",
+                type: "string",
+                required: true,
+              },
+            ],
+          },
+        },
+      ],
+    };
+
+    // A messageFor that fails with a readable diff when no finding matches
+    // (messageFor is optional by design; the existing tests assert.ok first).
+    const msgFor = (blueprint: FlowBlueprint, needle: string): string => {
+      const found = messageFor(blueprint, needle);
+      assert.ok(
+        found,
+        `no finding matched "${needle}" — got: ${errorsFor(blueprint)
+          .map((e) => `${e.path}: ${e.message}`)
+          .join("; ")}`
+      );
+      return found;
+    };
+
+    it("declares the closed set gate | tool | operation | transform | extract", () => {
+      assert.deepEqual(
+        [...MODULE_REF_KINDS],
+        ["gate", "tool", "operation", "transform", "extract"]
+      );
+    });
+
+    it("accepts a blueprint exercising all five reference kinds", () => {
+      assert.deepEqual(validateFlowBlueprint(REFS), []);
+    });
+
+    it("rejects a gate file ref with a malformed path", () => {
+      const bad = (gate: GateSpec): FlowBlueprint => ({
+        ...REFS,
+        workflows: [
+          {
+            ...REFS.workflows[0],
+            states: REFS.workflows[0].states.map((s) =>
+              s.id === "inbox"
+                ? {
+                    ...s,
+                    autoTransitions: [
+                      { to: "done", gate },
+                      { to: "inbox", gate: { kind: "always" } },
+                    ],
+                  }
+                : s
+            ),
+          },
+        ],
+      });
+      assert.match(
+        msgFor(
+          bad({ kind: "file", ref: 42 } as unknown as GateSpec),
+          "must be a non-empty string"
+        ),
+        /non-empty string/
+      );
+      assert.match(
+        msgFor(
+          bad({ kind: "file", ref: "/abs.ts" } as GateSpec),
+          "must be a relative"
+        ),
+        /relative/
+      );
+      assert.match(
+        msgFor(
+          bad({ kind: "file", ref: "./x.js" } as GateSpec),
+          "must end in .ts"
+        ),
+        /\.ts/
+      );
+    });
+
+    it("rejects tools with duplicate or non-identifier ids", () => {
+      const dup: FlowBlueprint = {
+        ...REFS,
+        tools: [
+          { id: "websearch", ref: "./a.ts" },
+          { id: "websearch", ref: "./b.ts" },
+        ],
+      };
+      assert.match(msgFor(dup, "duplicate tool id"), /duplicate tool/);
+      const badId: FlowBlueprint = {
+        ...REFS,
+        tools: [{ id: "web-search", ref: "./a.ts" }],
+      };
+      assert.match(msgFor(badId, "must be a valid identifier"), /identifier/);
+    });
+
+    it("rejects flow-level operations with duplicate ids", () => {
+      const dup: FlowBlueprint = {
+        ...REFS,
+        operations: [
+          { id: "score", ref: "./a.ts" },
+          { id: "score", ref: "./b.ts" },
+        ],
+      };
+      assert.match(msgFor(dup, "duplicate operation id"), /duplicate/);
+    });
+
+    it("rejects a task listing an unknown operation name", () => {
+      const blueprint: FlowBlueprint = {
+        ...REFS,
+        workflows: [
+          {
+            ...REFS.workflows[0],
+            states: REFS.workflows[0].states.map((s) =>
+              s.id === "inbox"
+                ? {
+                    ...s,
+                    tasks: (s.tasks ?? []).map((t) =>
+                      t.id === "runScore" ? { ...t, operations: ["nope"] } : t
+                    ),
+                  }
+                : s
+            ),
+          },
+        ],
+      };
+      assert.match(msgFor(blueprint, "unknown operation"), /unknown operation/);
+    });
+
+    it("rejects extract on a non-operation task", () => {
+      const blueprint: FlowBlueprint = {
+        ...REFS,
+        workflows: [
+          {
+            ...REFS.workflows[0],
+            states: REFS.workflows[0].states.map((s) =>
+              s.id === "inbox"
+                ? {
+                    ...s,
+                    tasks: (s.tasks ?? []).map((t) =>
+                      t.id === "classify"
+                        ? {
+                            ...t,
+                            extract: {
+                              ref: "./extractors/parse.ts",
+                              fields: ["verdict"],
+                            },
+                          }
+                        : t
+                    ),
+                  }
+                : s
+            ),
+          },
+        ],
+      };
+      assert.match(
+        msgFor(blueprint, "requires an operation task"),
+        /operation task/
+      );
+    });
+
+    it("rejects extract fields not declared in instanceState", () => {
+      const blueprint: FlowBlueprint = {
+        ...REFS,
+        workflows: [
+          {
+            ...REFS.workflows[0],
+            states: REFS.workflows[0].states.map((s) =>
+              s.id === "inbox"
+                ? {
+                    ...s,
+                    tasks: (s.tasks ?? []).map((t) =>
+                      t.id === "extractVerdict"
+                        ? {
+                            ...t,
+                            extract: {
+                              ref: "./extractors/parse.ts",
+                              fields: ["nope"],
+                            },
+                          }
+                        : t
+                    ),
+                  }
+                : s
+            ),
+          },
+        ],
+      };
+      assert.match(
+        msgFor(blueprint, "not declared in instanceState"),
+        /not declared/
+      );
+    });
+
+    it("rejects an edge transform ref combined with field sources", () => {
+      const blueprint: FlowBlueprint = {
+        ...REFS,
+        edges: [
+          {
+            fromWorkflow: "items",
+            fromStates: ["done"],
+            toWorkflow: "summary",
+            fields: {
+              title: { kind: "literal", value: "x" },
+            },
+            transform: { ref: "./edges/to-summary.ts", fields: ["title"] },
+          },
+        ],
+      };
+      assert.match(msgFor(blueprint, "declares both"), /declares both/);
+    });
+
+    it("rejects transform ref fields not declared in the target workflow", () => {
+      const blueprint: FlowBlueprint = {
+        ...REFS,
+        edges: [
+          {
+            fromWorkflow: "items",
+            fromStates: ["done"],
+            toWorkflow: "summary",
+            transform: { ref: "./edges/to-summary.ts", fields: ["nope"] },
+          },
+        ],
+      };
+      assert.match(
+        msgFor(blueprint, "not declared in target workflow"),
+        /target workflow/
+      );
+    });
   });
 });

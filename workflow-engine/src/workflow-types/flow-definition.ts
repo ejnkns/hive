@@ -34,6 +34,12 @@ export type FlowEdge<
 
 export type RuntimeFlowEdge = FlowEdge;
 
+// The contract a blueprint-referenced edge transform implements: the source
+// workflow's task outcomes → target instance state (or an array for fan-out).
+// The renderer emits stubs typed with this and the module-set lint checks the
+// referenced export against it.
+export type TransformContract = NonNullable<FlowEdge["transform"]>;
+
 // The value/input type of a ConfigField. `type` drives both validation and
 // rendering (the existing code conflates value type with presentation — e.g.
 // "string" + options renders a single select). Canonical stored formats:

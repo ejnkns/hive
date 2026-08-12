@@ -23,16 +23,18 @@ export function validateWriters(
     if (!stateTypes || !taskIds) continue;
 
     const writes: Set<string> = new Set();
-    // 1. this workflow's patch ops
+    // 1. this workflow's patch ops and extractor writes
     for (const state of wf.states) {
       for (const task of state.tasks ?? []) {
         for (const field of Object.keys(task.patch ?? {})) writes.add(field);
+        for (const field of task.extract?.fields ?? []) writes.add(field);
       }
     }
     // 2. engine ops used by this workflow's tasks that write state
     for (const state of wf.states) {
       for (const task of state.tasks ?? []) {
         for (const op of task.operations ?? []) {
+          if (typeof op !== "string") continue;
           for (const field of engineOpWritesByName.get(op) ?? []) {
             writes.add(field);
           }
@@ -46,6 +48,7 @@ export function validateWriters(
       if (edge.fanOut) {
         for (const field of Object.keys(edge.fanOut.fields)) writes.add(field);
       }
+      for (const field of edge.transform?.fields ?? []) writes.add(field);
     }
     // 4. createInstance payload keys into this workflow (state + flow level)
     for (const state of wf.states) {

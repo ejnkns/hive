@@ -28,4 +28,5 @@
  * properties), imports only workflow-engine/workflow-types + runners, and
  * loads under Node's native type-stripping. */
 
+export type { RenderedModuleSet } from "./render-flow-definition/flow-renderer.ts";
 export { renderFlowDefinition } from "./render-flow-definition/flow-renderer.ts";

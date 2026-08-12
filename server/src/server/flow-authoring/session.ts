@@ -22,13 +22,12 @@ import {
   validateFlowBlueprint,
 } from "../flow-blueprint.ts";
 import {
-  loadDefinitionFromSource,
   registerUserDefinition,
   updateUserDefinition,
 } from "../flow-definitions.ts";
+import { runModuleSetGate } from "../module-set.ts";
 import { renderFlowDefinition } from "../render-flow-definition.ts";
 import { checkDefinitionSources } from "../schema-consistency.ts";
-import { typecheckDefinitionSource } from "../typecheck-definition.ts";
 import { renderPatternsPrompt } from "./patterns.ts";
 import { AUTHORING_RULES } from "./rules.ts";
 import { buildAuthoringSessionPrompt } from "./session-prompt.ts";
@@ -57,8 +56,13 @@ export type AuthoringItemState = {
     errors: string[];
     warnings: string[];
   };
-  // The gate-passed TypeScript source (written by generate_definition).
+  // The gate-passed TypeScript source (written by generate_definition). For a
+  // blueprint with file references this is the module-set entry (flow.ts); the
+  // referenced files live in `files`.
   source?: string;
+  // The referenced files of the current module set (relative path → source),
+  // written by generate_definition and saved with the definition.
+  files?: Record<string, string>;
   // The blueprint's label — a suggested name for the saved definition.
   suggestedName?: string;
   // The registered definition id after a successful save. Written by the
@@ -107,7 +111,7 @@ function validateAndPreview(blueprintJson: string): BlueprintPreview {
   try {
     return {
       parsed,
-      previewSource: renderFlowDefinition(parsed),
+      previewSource: renderFlowDefinition(parsed).entry,
       previewErrors: [],
     };
   } catch (err) {
@@ -121,39 +125,24 @@ function validateAndPreview(blueprintJson: string): BlueprintPreview {
   }
 }
 
-// The full generation gate: blueprint validation → render → load → schema check →
-// typecheck. Returns the source (empty on failure) and the findings.
-async function runGenerationGate(
-  blueprint: FlowBlueprint
-): Promise<{ source: string; errors: string[]; warnings: string[] }> {
+// The full generation gate: blueprint validation → render (entry + stubs) →
+// materialize → lint → load → typecheck → schema check. Returns the entry,
+// the current referenced files, and the findings.
+async function runGenerationGate(blueprint: FlowBlueprint): Promise<{
+  source: string;
+  files: Record<string, string>;
+  errors: string[];
+  warnings: string[];
+}> {
   const blueprintWarnings = analyzeFlowBlueprint(blueprint);
 
-  const source = renderFlowDefinition(blueprint);
-
-  let loadErrors: string[] = [];
-  try {
-    await loadDefinitionFromSource("__authoring__", source);
-  } catch (err) {
-    loadErrors = [
-      `The generated definition failed to load: ${
-        err instanceof Error ? err.message : String(err)
-      }`,
-    ];
-  }
-  if (loadErrors.length > 0) {
-    return { source, errors: loadErrors, warnings: blueprintWarnings };
-  }
-
-  const check = checkDefinitionSources([{ path: "authoring.ts", source }]);
-  const typeIssues = typecheckDefinitionSource(source, "__authoring__");
-  const errors = [
-    ...check.errors,
-    ...typeIssues.map((i) => `typecheck ${i.line}:${i.column} — ${i.message}`),
-  ];
+  const rendered = renderFlowDefinition(blueprint);
+  const result = await runModuleSetGate("__authoring__", blueprint, rendered);
   return {
-    source,
-    errors,
-    warnings: [...blueprintWarnings, ...check.warnings],
+    source: rendered.entry,
+    files: result.files,
+    errors: result.errors,
+    warnings: [...blueprintWarnings, ...result.warnings],
   };
 }
 
@@ -201,9 +190,28 @@ export async function saveAuthoringDefinition(
   }
 
   const targetId = state.savedDefinitionId;
+  let blueprint: FlowBlueprint | undefined;
+  if (typeof state.blueprint === "string" && state.blueprint !== "") {
+    try {
+      blueprint = JSON.parse(state.blueprint) as FlowBlueprint;
+    } catch {
+      // A malformed stored blueprint is not a save blocker — the rendered
+      // source is the truth.
+    }
+  }
   const record = targetId
-    ? await updateUserDefinition(targetId, { name, source })
-    : await registerUserDefinition({ name, source });
+    ? await updateUserDefinition(targetId, {
+        name,
+        source,
+        files: state.files,
+        blueprint,
+      })
+    : await registerUserDefinition({
+        name,
+        source,
+        blueprint,
+        files: state.files,
+      });
   const check = checkDefinitionSources([{ path: `${record.id}.ts`, source }]);
   return {
     id: record.id,
@@ -399,7 +407,7 @@ export const authoringTools = [
         };
       }
 
-      const { source, errors, warnings } = await runGenerationGate(
+      const { source, files, errors, warnings } = await runGenerationGate(
         preview.parsed
       );
       if (errors.length > 0) {
@@ -408,6 +416,7 @@ export const authoringTools = [
           previewSource: preview.previewSource,
           previewErrors: [],
           gateErrors: errors,
+          files,
           report: { passed: false, attempts: 1, errors, warnings },
           suggestedName: preview.parsed.label,
         });
@@ -426,6 +435,7 @@ export const authoringTools = [
         previewSource: source,
         previewErrors: [],
         source,
+        files,
         gateErrors: [],
         report: { passed: true, attempts: 1, errors: [], warnings },
         suggestedName: preview.parsed.label,

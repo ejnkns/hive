@@ -5,6 +5,7 @@ import type {
   BlueprintValidationContext,
   FlowBlueprint,
 } from "./blueprint-types.ts";
+import { validateRefShape } from "./validate-ref.ts";
 import { checkLiteralMatches, validateValueSpec } from "./validate-values.ts";
 
 export function validateEdges(
@@ -117,6 +118,39 @@ export function validateEdges(
           error(
             `${ePath}.fanOut.fields.${field}`,
             `itemPath must be a dotted path (got ${JSON.stringify(value.path)})`
+          );
+        }
+      }
+    }
+    if (edge.transform) {
+      const declaredFields =
+        Object.keys(edge.fields ?? {}).length > 0 || edge.fanOut !== undefined;
+      if (declaredFields) {
+        error(
+          `${ePath}.transform`,
+          `edge declares both value-source fields/fanOut and a transform reference — the reference IS the transform, use one or the other`
+        );
+      }
+      for (const e of validateRefShape(
+        edge.transform.ref,
+        `${ePath}.transform.ref`
+      )) {
+        error(e.path, e.message);
+      }
+      if (
+        !Array.isArray(edge.transform.fields) ||
+        edge.transform.fields.length === 0
+      ) {
+        error(
+          `${ePath}.transform.fields`,
+          `transform must declare the instance-state fields it produces (got ${JSON.stringify(edge.transform.fields)})`
+        );
+      }
+      for (const field of edge.transform.fields ?? []) {
+        if (!toTypes.has(field)) {
+          error(
+            `${ePath}.transform.fields`,
+            `transform writes "${field}" which is not declared in target workflow "${to.id}" instanceState`
           );
         }
       }

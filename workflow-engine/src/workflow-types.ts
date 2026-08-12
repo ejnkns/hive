@@ -25,6 +25,7 @@ export type {
 } from "./workflow-types/config-field.ts";
 export type {
   GateContext,
+  GateContract,
   ModelCallStatus,
   NoOutput,
   RunningTaskContext,
@@ -39,10 +40,15 @@ export type {
   WorkflowSummary,
 } from "./workflow-types/display.ts";
 export type {
+  ExtractContext,
+  OutputExtractor,
+} from "./workflow-types/extractor.ts";
+export type {
   FlowDefinition,
   FlowEdge,
   FlowLevelAction,
   RuntimeFlowEdge,
+  TransformContract,
 } from "./workflow-types/flow-definition.ts";
 export type {
   StateTransitionEntry,

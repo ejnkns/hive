@@ -24,6 +24,7 @@ import {
   isFieldType,
 } from "./validate-fields.ts";
 import { collectGateTaskReads, validateGateSpec } from "./validate-gate.ts";
+import { validateRefShape } from "./validate-ref.ts";
 import {
   checkLiteralMatches,
   validateCreateInstance,
@@ -63,6 +64,44 @@ export function validateFlowBlueprint(
         );
       }
     });
+  }
+
+  // ── blueprint-referenced modules ──
+  // Custom tools and operations the flow ships as referenced files. Tasks
+  // reference tools by id and operations by id (alongside engine ops).
+  const toolIds = new Set<string>();
+  for (const [tIndex, tool] of (blueprint.tools ?? []).entries()) {
+    const tPath = `tools[${tIndex}]`;
+    if (typeof tool.id !== "string" || !IDENTIFIER.test(tool.id)) {
+      error(
+        `${tPath}.id`,
+        `tool id must be a valid identifier (got ${JSON.stringify(tool.id)})`
+      );
+    }
+    if (toolIds.has(tool.id)) {
+      error(`${tPath}.id`, `duplicate tool id "${tool.id}"`);
+    }
+    toolIds.add(tool.id);
+    for (const e of validateRefShape(tool.ref, `${tPath}.ref`)) {
+      error(e.path, e.message);
+    }
+  }
+  const operationIds = new Set<string>();
+  for (const [oIndex, op] of (blueprint.operations ?? []).entries()) {
+    const oPath = `operations[${oIndex}]`;
+    if (typeof op.id !== "string" || !IDENTIFIER.test(op.id)) {
+      error(
+        `${oPath}.id`,
+        `operation id must be a valid identifier (got ${JSON.stringify(op.id)})`
+      );
+    }
+    if (operationIds.has(op.id)) {
+      error(`${oPath}.id`, `duplicate operation id "${op.id}"`);
+    }
+    operationIds.add(op.id);
+    for (const e of validateRefShape(op.ref, `${oPath}.ref`)) {
+      error(e.path, e.message);
+    }
   }
 
   const workflowById = new Map<string, WorkflowSpec>();
@@ -260,6 +299,37 @@ export function validateFlowBlueprint(
           }
           completionOutputs.set(task.id, task.completionOutput);
         }
+        if (task.extract !== undefined) {
+          if (task.role !== "operation") {
+            error(
+              `${tPath}.extract`,
+              `extract requires an operation task (it runs as a generated op that patches instance state); ${task.id} is ${task.role}`
+            );
+          }
+          if (
+            !Array.isArray(task.extract.fields) ||
+            task.extract.fields.length === 0
+          ) {
+            error(
+              `${tPath}.extract.fields`,
+              `extract must declare the instance-state fields it produces (got ${JSON.stringify(task.extract.fields)})`
+            );
+          }
+          for (const e of validateRefShape(
+            task.extract.ref,
+            `${tPath}.extract.ref`
+          )) {
+            error(e.path, e.message);
+          }
+          for (const field of task.extract.fields ?? []) {
+            if (!stateTypes.has(field)) {
+              error(
+                `${tPath}.extract.fields`,
+                `extract writes "${field}" which is not declared in instanceState`
+              );
+            }
+          }
+        }
       }
     }
 
@@ -270,18 +340,37 @@ export function validateFlowBlueprint(
         const tPath = `${sPath}.tasks[${tIndex}]`;
         if (typeof task.id !== "string" || !taskIds.has(task.id)) continue;
         for (const op of task.operations ?? []) {
-          if (!engineOpNames.has(op)) {
-            error(
-              `${tPath}.operations`,
-              `unknown engine operation "${op}" (available: ${[...engineOpNames].sort().join(", ")})`
-            );
+          if (typeof op === "string") {
+            if (!engineOpNames.has(op) && !operationIds.has(op)) {
+              error(
+                `${tPath}.operations`,
+                `unknown operation "${op}" (engine ops and flow-level operation ids: ${[
+                  ...engineOpNames,
+                  ...operationIds,
+                ]
+                  .sort()
+                  .join(", ")})`
+              );
+            }
+          } else {
+            for (const e of validateRefShape(
+              op.ref,
+              `${tPath}.operations.ref`
+            )) {
+              error(e.path, e.message);
+            }
           }
         }
         for (const tool of task.tools ?? []) {
-          if (!infraToolNames.has(tool)) {
+          if (!infraToolNames.has(tool) && !toolIds.has(tool)) {
             error(
               `${tPath}.tools`,
-              `unknown tool "${tool}" (available: ${[...infraToolNames].sort().join(", ")})`
+              `unknown tool "${tool}" (available: ${[
+                ...infraToolNames,
+                ...toolIds,
+              ]
+                .sort()
+                .join(", ")})`
             );
           }
         }

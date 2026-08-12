@@ -1,6 +1,14 @@
-/** @private — the renderer: FlowBlueprint → TypeScript flow definition module. */
+/** @private — the renderer: FlowBlueprint → the module set: the definition
+ * entry wiring blueprint-referenced modules via imports, plus one
+ * contract-typed stub per reference. */
 
-import type { FieldType, FlowBlueprint } from "../flow-blueprint.ts";
+import type { FieldType } from "../flow-blueprint.ts";
+import {
+  collectModuleReferences,
+  type FlowBlueprint,
+  type ModuleReference,
+  opNameOf,
+} from "../flow-blueprint.ts";
 import { renderConfigFields } from "./config-field.ts";
 import {
   buildOutputNode,
@@ -16,14 +24,37 @@ import {
   schemaType,
 } from "./render-primitives.ts";
 import { renderEdgeValue, renderPatchValue } from "./render-value.ts";
+import { renderReferenceStubs } from "./stubs.ts";
 
-export function renderFlowDefinition(blueprint: FlowBlueprint): string {
+export type RenderedModuleSet = {
+  // The definition module (flow.ts): the workflows, edges, and capabilities
+  // with every reference wired via an import.
+  entry: string;
+  // The referenced modules: relative ref path → stub source (one per unique
+  // ref; an existing file is authoritative and wins on materialization).
+  files: Record<string, string>;
+};
+
+export function renderFlowDefinition(
+  blueprint: FlowBlueprint
+): RenderedModuleSet {
   const out: string[] = [];
   const emit = (level: number, text: string) =>
     out.push("  ".repeat(level) + text);
 
+  // ── blueprint-referenced modules ──
+  // The normalized reference inventory drives the imports and wiring; the
+  // same inventory feeds the stub generator and the module-set lint, so the
+  // three never drift.
+  const refs = collectModuleReferences(blueprint);
+  const bindingByRef = buildBindings(refs);
+  const fileGateBinding = (ref: string) => bindingByRef.get(ref) ?? ref;
+
   const hasPatchOps = blueprint.workflows.some((wf) =>
     wf.states.some((s) => (s.tasks ?? []).some((t) => t.patch !== undefined))
+  );
+  const hasExtractOps = blueprint.workflows.some((wf) =>
+    wf.states.some((s) => (s.tasks ?? []).some((t) => t.extract !== undefined))
   );
   const hasCompletionOutput = blueprint.workflows.some((wf) =>
     wf.states.some((s) =>
@@ -59,16 +90,17 @@ export function renderFlowDefinition(blueprint: FlowBlueprint): string {
     0,
     `import { defineWorkflow, type FlowDefinition, type FlowEdge } from "workflow-engine/workflow-types";`
   );
-  if (hasPatchOps || hasCompletionOutput)
+  if (hasPatchOps || hasExtractOps || hasCompletionOutput)
     emit(
       0,
       `import { ${[
-        hasPatchOps && "defineOperations",
+        (hasPatchOps || hasExtractOps) && "defineOperations",
         hasCompletionOutput && "defineTool",
       ]
         .filter(Boolean)
         .join(", ")} } from "workflow-engine/runners";`
     );
+  for (const line of buildImportLines(refs, bindingByRef)) emit(0, line);
   emit(0, "");
   if (needsReadPath) {
     emit(0, "function readPath(value: unknown, path: string): unknown {");
@@ -138,9 +170,10 @@ export function renderFlowDefinition(blueprint: FlowBlueprint): string {
       emit(0, "");
     }
 
-    // ── ops map (only when patch ops are declared) ──
+    // ── ops map (only when patch/extract ops are declared) ──
     const patchTasks = tasks.filter((t) => t.patch !== undefined);
-    if (patchTasks.length > 0) {
+    const extractTasks = tasks.filter((t) => t.extract !== undefined);
+    if (patchTasks.length > 0 || extractTasks.length > 0) {
       const stateType =
         wf.instanceState.length > 0 ? typeName : "Record<string, unknown>";
       emit(
@@ -192,6 +225,27 @@ export function renderFlowDefinition(blueprint: FlowBlueprint): string {
           const expr =
             value.kind === "taskOutput" ? field : renderPatchValue(value, type);
           emit(3, `${field}: ${expr},`);
+        }
+        emit(2, "});");
+        emit(2, "return { ok: true };");
+        emit(1, "},");
+      }
+      for (const task of extractTasks) {
+        const extract = task.extract ?? { ref: "", fields: [] };
+        const binding = bindingByRef.get(extract.ref) ?? extract.ref;
+        emit(1, `${wf.id}_${task.id}_extract: (task, params, ctx) => {`);
+        emit(2, `const extracted = ${binding}({`);
+        emit(3, "taskOutputs: ctx.taskOutputs(),");
+        emit(3, "workflowInstanceState: ctx.workflowInstanceState,");
+        emit(2, "});");
+        emit(2, "ctx.patchWorkflowInstanceState({");
+        for (const field of extract.fields) {
+          const fieldDecl = wf.instanceState.find((f) => f.field === field);
+          const type: FieldType = fieldDecl?.type ?? "object";
+          emit(
+            3,
+            `${field}: extracted.${field} as ${fieldType(type)} | undefined,`
+          );
         }
         emit(2, "});");
         emit(2, "return { ok: true };");
@@ -309,12 +363,13 @@ export function renderFlowDefinition(blueprint: FlowBlueprint): string {
           emit(5, `label: ${json(task.label ?? task.id)},`);
           emit(5, 'trigger: "auto",');
           emit(5, `role: ${json(task.role)},`);
-          if (task.operations && task.operations.length > 0) {
-            const ops = [...task.operations];
-            if (task.patch) ops.push(`${wf.id}_${task.id}_patch`);
-            emit(5, `operations: [${ops.map(json).join(", ")}],`);
-          } else if (task.patch) {
-            emit(5, `operations: [${json(`${wf.id}_${task.id}_patch`)}],`);
+          const taskOps = (task.operations ?? []).map((op) =>
+            typeof op === "string" ? op : opNameOf(op.ref)
+          );
+          if (task.patch) taskOps.push(`${wf.id}_${task.id}_patch`);
+          if (task.extract) taskOps.push(`${wf.id}_${task.id}_extract`);
+          if (taskOps.length > 0) {
+            emit(5, `operations: [${taskOps.map(json).join(", ")}],`);
           }
           if (
             task.operationInputs &&
@@ -365,7 +420,10 @@ export function renderFlowDefinition(blueprint: FlowBlueprint): string {
         for (const transition of state.autoTransitions) {
           emit(4, "{");
           emit(5, `to: ${json(transition.to)},`);
-          emit(5, `gate: (ctx) => ${renderGate(transition.gate)},`);
+          emit(
+            5,
+            `gate: (ctx) => ${renderGate(transition.gate, fileGateBinding)},`
+          );
           emit(4, "},");
         }
         emit(3, "],");
@@ -380,7 +438,10 @@ export function renderFlowDefinition(blueprint: FlowBlueprint): string {
           if (action.confirmText)
             emit(5, `confirmText: ${json(action.confirmText)},`);
           if (action.gate)
-            emit(5, `gate: (ctx) => ${renderGate(action.gate)},`);
+            emit(
+              5,
+              `gate: (ctx) => ${renderGate(action.gate, fileGateBinding)},`
+            );
           if (action.maxWorkflowInstancesInTarget !== undefined) {
             emit(
               5,
@@ -425,11 +486,25 @@ export function renderFlowDefinition(blueprint: FlowBlueprint): string {
   emit(1, `configSchema: [${renderConfigFields(blueprint.configSchema)}],`);
   if (blueprint.domainDir) emit(1, `domainDir: ${json(blueprint.domainDir)},`);
   emit(1, `workflows: [${workflowNames.join(", ")}],`);
-  const opMapNames = blueprint.workflows
+  // The operations map merges the referenced op maps (flow-level ops first,
+  // then inline task refs) and the per-workflow patch/extract maps.
+  const operationRefs = refs.filter(
+    (r): r is ModuleReference & { kind: "operation" } => r.kind === "operation"
+  );
+  const opRefBindings = [
+    ...operationRefs.filter((r) => r.path.startsWith("operations[")),
+    ...operationRefs.filter((r) => !r.path.startsWith("operations[")),
+  ].map((r) => bindingByRef.get(r.ref) ?? r.ref);
+  const workflowOpMapNames = blueprint.workflows
     .filter((wf) =>
-      wf.states.some((s) => (s.tasks ?? []).some((t) => t.patch !== undefined))
+      wf.states.some((s) =>
+        (s.tasks ?? []).some(
+          (t) => t.patch !== undefined || t.extract !== undefined
+        )
+      )
     )
     .map((wf) => `${wf.id}Operations`);
+  const opMapNames = [...opRefBindings, ...workflowOpMapNames];
   if (opMapNames.length > 0) {
     emit(1, `operations: { ${opMapNames.map((n) => `...${n}`).join(", ")} },`);
   }
@@ -440,11 +515,12 @@ export function renderFlowDefinition(blueprint: FlowBlueprint): string {
       )
     )
     .map((wf) => `${wf.id}CompletionTools`);
-  if (completionToolMapNames.length > 0) {
-    emit(
-      1,
-      `tools: [${completionToolMapNames.map((n) => `...${n}`).join(", ")}],`
-    );
+  const toolListNames = refs
+    .filter((r) => r.kind === "tool")
+    .map((r) => bindingByRef.get(r.ref) ?? r.ref);
+  const tools = [...toolListNames, ...completionToolMapNames];
+  if (tools.length > 0) {
+    emit(1, `tools: [${tools.map((n) => `...${n}`).join(", ")}],`);
   }
   if (blueprint.actions && blueprint.actions.length > 0) {
     emit(1, "actions: [");
@@ -475,7 +551,26 @@ export function renderFlowDefinition(blueprint: FlowBlueprint): string {
     emit(3, `fromWorkflow: ${json(edge.fromWorkflow)},`);
     emit(3, `fromStates: [${edge.fromStates.map(json).join(", ")}],`);
     emit(3, `toWorkflow: ${json(edge.toWorkflow)},`);
-    if (edge.fanOut) {
+    if (edge.transform) {
+      // The referenced transform is wrapped so its writes stay visible to the
+      // schema-consistency check (literal keys) and the erased FlowEdge type
+      // (arrays mean fan-out — a single object is normalized to a one-item
+      // array).
+      const binding =
+        bindingByRef.get(edge.transform.ref) ?? edge.transform.ref;
+      emit(3, "transform: (source) => {");
+      emit(4, `const out = ${binding}(source);`);
+      emit(4, "return (Array.isArray(out) ? out : [out]).map((row) => ({");
+      for (const field of edge.transform.fields) {
+        const fieldDecl = blueprint.workflows
+          .find((w) => w.id === edge.toWorkflow)
+          ?.instanceState.find((f) => f.field === field);
+        const type: FieldType = fieldDecl?.type ?? "object";
+        emit(5, `${field}: row.${field} as ${fieldType(type)} | undefined,`);
+      }
+      emit(4, "}));");
+      emit(3, "},");
+    } else if (edge.fanOut) {
       const fan = edge.fanOut;
       emit(3, "transform: (source) => {");
       emit(
@@ -517,5 +612,47 @@ export function renderFlowDefinition(blueprint: FlowBlueprint): string {
   emit(1, "],");
   emit(0, "} satisfies FlowDefinition;");
 
-  return `${out.join("\n")}\n`;
+  return {
+    entry: `${out.join("\n")}\n`,
+    files: renderReferenceStubs(blueprint),
+  };
+}
+
+// ── reference imports ────────────────────────────────────────────────
+
+// Maps each unique referenced module to the import binding the entry uses.
+// Bindings are the stub export names; a collision (two files deriving the
+// same name) is disambiguated with a numeric suffix.
+function buildBindings(refs: ModuleReference[]): Map<string, string> {
+  const used = new Set<string>();
+  const byRef = new Map<string, string>();
+  for (const ref of refs) {
+    if (byRef.has(ref.ref)) continue;
+    let binding = ref.exportName;
+    let n = 2;
+    while (used.has(binding)) binding = `${ref.exportName}_${n++}`;
+    used.add(binding);
+    byRef.set(ref.ref, binding);
+  }
+  return byRef;
+}
+
+// One import line per unique module, in first-use order.
+function buildImportLines(
+  refs: ModuleReference[],
+  bindingByRef: Map<string, string>
+): string[] {
+  const lines: string[] = [];
+  const seen = new Set<string>();
+  for (const ref of refs) {
+    if (seen.has(ref.ref)) continue;
+    seen.add(ref.ref);
+    const binding = bindingByRef.get(ref.ref) ?? ref.ref;
+    lines.push(
+      binding === ref.exportName
+        ? `import { ${binding} } from "${ref.ref}";`
+        : `import { ${ref.exportName} as ${binding} } from "${ref.ref}";`
+    );
+  }
+  return lines;
 }

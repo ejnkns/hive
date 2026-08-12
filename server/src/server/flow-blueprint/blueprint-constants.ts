@@ -1,9 +1,21 @@
 /** @private — shared regexes and engine-capability sets the blueprint validators use. */
 
 import { engineCapabilities } from "workflow-engine/capabilities-manifest";
-import type { FieldType } from "./blueprint-types.ts";
+import type { FieldType, ModuleRefKind } from "./blueprint-types.ts";
 
 export const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+
+// The closed vocabulary of blueprint-referenced module kinds — the contract
+// kinds the engine scaffolds stubs and lint for. Declared up front so the
+// system stays principled; expanding means adding a kind here and the
+// contract/render/lint wiring for it.
+export const MODULE_REF_KINDS: readonly ModuleRefKind[] = [
+  "gate",
+  "tool",
+  "operation",
+  "transform",
+  "extract",
+];
 export const DOTTED_PATH =
   /^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*$/;
 

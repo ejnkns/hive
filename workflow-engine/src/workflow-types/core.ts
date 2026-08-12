@@ -114,3 +114,8 @@ export type GateContext<
 };
 
 export type RuntimeGateContext = GateContext;
+
+// The contract a blueprint-referenced gate implements: a predicate over the
+// runtime gate context. The renderer emits stubs typed with this and the
+// module-set lint checks the referenced export against it.
+export type GateContract = (ctx: RuntimeGateContext) => boolean;

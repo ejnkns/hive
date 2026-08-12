@@ -27,25 +27,36 @@
  * the orchestrating validateFlowBlueprint with its delegated edge and
  * writer-invariant sections. */
 
+export { MODULE_REF_KINDS } from "./flow-blueprint/blueprint-constants.ts";
 export type {
   ActionSpec,
   AutoTransitionSpec,
   BlueprintError,
   CompletionOutputField,
   EdgeSpec,
+  EdgeTransformRefSpec,
+  ExtractRefSpec,
   FanOutValueSpec,
   FieldType,
   FlowBlueprint,
   FlowLevelActionSpec,
   GateSpec,
   InstanceStateField,
+  ModuleRefKind,
+  OperationRefSpec,
   StateSpec,
   TaskSpec,
+  ToolRefSpec,
   ValueSpec,
   WorkflowSpec,
 } from "./flow-blueprint/blueprint-types.ts";
-
+export type { ModuleReference } from "./flow-blueprint/reference-inventory.ts";
+export {
+  collectModuleReferences,
+  opNameOf,
+} from "./flow-blueprint/reference-inventory.ts";
 export {
   analyzeFlowBlueprint,
   validateFlowBlueprint,
 } from "./flow-blueprint/validate-flow-blueprint.ts";
+export { isRefWithinRoot } from "./flow-blueprint/validate-ref.ts";

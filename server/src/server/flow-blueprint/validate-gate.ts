@@ -1,6 +1,7 @@
 /** @private — structured gate (GateSpec) validation and read collection. */
 
 import type { BlueprintError, FieldType, GateSpec } from "./blueprint-types.ts";
+import { validateRefShape } from "./validate-ref.ts";
 
 export function collectGateTaskReads(gate: GateSpec, reads: Set<string>): void {
   switch (gate.kind) {
@@ -91,6 +92,11 @@ export function validateGateSpec(
           path,
           `gate references task "${gate.task}" which the workflow does not declare (tasks: ${[...taskIds].join(", ")})`
         );
+      }
+      break;
+    case "file":
+      for (const e of validateRefShape(gate.ref, `${path}.ref`)) {
+        errors.push(e);
       }
       break;
     case "not":

@@ -28,7 +28,7 @@ async function assertRenderedPassesGate(
     `spec validation failed for ${slug}: ${specErrors.map((e) => `${e.path}: ${e.message}`).join("; ")}`
   );
 
-  const source = renderFlowDefinition(spec);
+  const source = renderFlowDefinition(spec).entry;
 
   // Transpile + load (the runtime surface).
   const flow = await loadDefinitionFromSource(slug, source);
@@ -881,5 +881,263 @@ describe("render flow definition", () => {
       source,
       /derive: \{"kind":"progress","where":\{"field":"status","equals":"done"\}\}/
     );
+  });
+
+  describe("module-set rendering (blueprint-referenced modules)", () => {
+    // A blueprint exercising all five reference kinds end to end: a gate file
+    // ref on a transition, a custom tool an agent task calls, flow-level +
+    // inline operation refs, an edge transform ref, and an output extractor.
+    const REFS: FlowBlueprint = {
+      id: "moduleSetFlow",
+      label: "Module Set Flow",
+      configSchema: [],
+      tools: [{ id: "websearch", ref: "./tools/websearch.ts" }],
+      operations: [{ id: "score", ref: "./ops/score.ts" }],
+      workflows: [
+        {
+          id: "research",
+          label: "Research",
+          instance: { title: "query" },
+          display: {
+            fields: [
+              { path: "query", label: "Query" },
+              { path: "result", label: "Result" },
+              { path: "score", label: "Score" },
+              { path: "verdict", label: "Verdict" },
+            ],
+          },
+          instanceState: [
+            { field: "query", type: "string" },
+            { field: "result", type: "string" },
+            { field: "score", type: "number" },
+            { field: "verdict", type: "string" },
+          ],
+          initialState: "searching",
+          terminalStates: ["done"],
+          states: [
+            {
+              id: "searching",
+              label: "Searching",
+              category: "initial",
+              tasks: [
+                {
+                  id: "search",
+                  label: "Search the web",
+                  role: "ai-chat",
+                  systemPrompt:
+                    "Search for the query, report the top result, then call the completion tool.",
+                  tools: ["websearch"],
+                  completionTool: "complete_task",
+                  inputFromInstanceState: "query",
+                },
+                {
+                  id: "scoreResult",
+                  label: "Score the result",
+                  role: "operation",
+                  operations: ["score", { ref: "./ops/annotate.ts" }],
+                },
+                {
+                  id: "recordScore",
+                  label: "Record the score",
+                  role: "operation",
+                  patch: {
+                    score: {
+                      kind: "taskOutput",
+                      task: "scoreResult",
+                      path: "output.score",
+                    },
+                    result: {
+                      kind: "taskOutput",
+                      task: "search",
+                      path: "output.completion.summary",
+                    },
+                  },
+                },
+              ],
+              autoTransitions: [
+                {
+                  to: "extracting",
+                  gate: { kind: "taskSuccess", task: "recordScore" },
+                },
+                {
+                  to: "needs_review",
+                  gate: { kind: "taskError", task: "recordScore" },
+                },
+              ],
+            },
+            {
+              id: "extracting",
+              label: "Extracting",
+              category: "active",
+              tasks: [
+                {
+                  id: "extractResult",
+                  label: "Extract the verdict",
+                  role: "operation",
+                  extract: {
+                    ref: "./extractors/parse-result.ts",
+                    fields: ["verdict"],
+                  },
+                },
+              ],
+              autoTransitions: [
+                {
+                  to: "done",
+                  gate: { kind: "file", ref: "./gates/approved.ts" },
+                },
+                { to: "needs_review", gate: { kind: "always" } },
+              ],
+            },
+            {
+              id: "needs_review",
+              label: "Needs review",
+              category: "active",
+              actions: [
+                {
+                  id: "retry",
+                  label: "Retry",
+                  variant: "primary",
+                  transitionTo: "extracting",
+                  gate: {
+                    kind: "instanceStateEquals",
+                    field: "verdict",
+                    value: "approved",
+                  },
+                },
+              ],
+            },
+            { id: "done", label: "Done", category: "terminal" },
+          ],
+        },
+        {
+          id: "summary",
+          label: "Summary",
+          instance: { title: "title" },
+          display: { fields: [{ path: "body", label: "Body" }] },
+          instanceState: [
+            { field: "title", type: "string" },
+            { field: "body", type: "string" },
+          ],
+          initialState: "ready",
+          terminalStates: ["ready"],
+          states: [{ id: "ready", label: "Ready", category: "initial" }],
+        },
+      ],
+      edges: [
+        {
+          fromWorkflow: "research",
+          fromStates: ["done"],
+          toWorkflow: "summary",
+          transform: {
+            ref: "./edges/to-summary.ts",
+            fields: ["title", "body"],
+          },
+        },
+      ],
+      actions: [
+        {
+          id: "add_research",
+          label: "Add research",
+          variant: "primary",
+          createInstance: {
+            workflowId: "research",
+            fields: [
+              {
+                key: "query",
+                label: "Query",
+                type: "string",
+                required: true,
+              },
+            ],
+          },
+        },
+      ],
+    };
+
+    it("renders the entry with the references wired via imports", async () => {
+      const rendered = renderFlowDefinition(REFS);
+      const entry = rendered.entry;
+      assert.match(
+        entry,
+        /import \{ approved \} from "\.\/gates\/approved\.ts";/
+      );
+      assert.match(
+        entry,
+        /import \{ websearchTools \} from "\.\/tools\/websearch\.ts";/
+      );
+      assert.match(
+        entry,
+        /import \{ scoreOperations \} from "\.\/ops\/score\.ts";/
+      );
+      assert.match(
+        entry,
+        /import \{ annotateOperations \} from "\.\/ops\/annotate\.ts";/
+      );
+      assert.match(
+        entry,
+        /import \{ toSummary \} from "\.\/edges\/to-summary\.ts";/
+      );
+      assert.match(
+        entry,
+        /import \{ parseResult \} from "\.\/extractors\/parse-result\.ts";/
+      );
+      // The gate reference is called with the runtime context.
+      assert.match(entry, /gate: \(ctx\) => approved\(ctx\),/);
+      // The ops maps and tool list are merged into the flow.
+      assert.match(entry, /\.\.\.scoreOperations/);
+      assert.match(entry, /\.\.\.annotateOperations/);
+      assert.match(entry, /\.\.\.researchOperations/);
+      assert.match(entry, /tools: \[\.\.\.websearchTools/);
+      // The extract op runs the imported extractor and patches the declared
+      // fields as literal keys.
+      assert.match(entry, /const extracted = parseResult\(\{/);
+      assert.match(entry, /verdict: extracted\.verdict/);
+      // The ref transform is wrapped so its writes stay visible to the
+      // schema-consistency check.
+      assert.match(entry, /const out = toSummary\(source\);/);
+      assert.match(entry, /row\.title/);
+      assert.match(entry, /row\.body/);
+    });
+
+    it("emits one contract-typed stub per reference", () => {
+      const rendered = renderFlowDefinition(REFS);
+      assert.deepEqual(
+        Object.keys(rendered.files).sort(),
+        [
+          "./edges/to-summary.ts",
+          "./extractors/parse-result.ts",
+          "./gates/approved.ts",
+          "./ops/annotate.ts",
+          "./ops/score.ts",
+          "./tools/websearch.ts",
+        ].sort()
+      );
+      const gateStub = rendered.files["./gates/approved.ts"];
+      assert.match(gateStub, /GateContract/);
+      assert.match(gateStub, /export const approved/);
+      const toolStub = rendered.files["./tools/websearch.ts"];
+      assert.match(toolStub, /defineTool/);
+      assert.match(toolStub, /name: "websearch"/);
+      const opStub = rendered.files["./ops/score.ts"];
+      assert.match(opStub, /defineOperations/);
+      assert.match(opStub, /score:/);
+      const transformStub = rendered.files["./edges/to-summary.ts"];
+      assert.match(transformStub, /TransformContract/);
+      assert.match(transformStub, /export const toSummary/);
+      const extractStub = rendered.files["./extractors/parse-result.ts"];
+      assert.match(extractStub, /OutputExtractor/);
+      assert.match(extractStub, /export const parseResult/);
+    });
+
+    it("keeps the no-reference corpus output unchanged", async () => {
+      const plain = renderFlowDefinition(STRUCTURED_INTAKE_EXEMPLAR);
+      assert.deepEqual(Object.keys(plain.files), []);
+      assert.match(plain.entry, /export const flow = \{/);
+      const source = await assertRenderedPassesGate(
+        STRUCTURED_INTAKE_EXEMPLAR,
+        "module-set-plain"
+      );
+      assert.match(source, /completionTool: "items_classify_complete"/);
+    });
   });
 });

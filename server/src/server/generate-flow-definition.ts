@@ -225,7 +225,7 @@ export async function runGenerationLoop(
         });
       } else {
         emit({ type: "stage", stage: "rendering" });
-        const source = renderFlowDefinition(blueprint);
+        const source = renderFlowDefinition(blueprint).entry;
         bestSource = source;
 
         emit({ type: "stage", stage: "checking" });
