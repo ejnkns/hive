@@ -1,7 +1,7 @@
-/** @private — shared regexes and engine-capability sets the spec validators use. */
+/** @private — shared regexes and engine-capability sets the blueprint validators use. */
 
 import { engineCapabilities } from "workflow-engine/capabilities-manifest";
-import type { FieldType } from "./spec-types.ts";
+import type { FieldType } from "./blueprint-types.ts";
 
 export const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 export const DOTTED_PATH =

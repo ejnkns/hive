@@ -64,7 +64,7 @@ function authoringEntry(
         prompt: "Build a review flow",
         previewSource: 'export const flow = { id: "demo" };',
         previewErrors: [
-          "spec.workflows[0]: state id 'x' is not a valid identifier",
+          "blueprint.workflows[0]: state id 'x' is not a valid identifier",
         ],
       },
       history: [],
@@ -126,7 +126,7 @@ describe("FlowEditor", () => {
     const notes = shadowRootOf(el).querySelectorAll(".pane-errors li");
     expect(notes.length).toBe(1);
     expect(notes[0]?.textContent).toContain(
-      "spec.workflows[0]: state id 'x' is not a valid identifier"
+      "blueprint.workflows[0]: state id 'x' is not a valid identifier"
     );
   });
 
@@ -237,7 +237,9 @@ describe("FlowEditor", () => {
           savedDefinitionId: "review-flow",
           savedName: "Review Flow",
           saveFindings: {
-            errors: ["spec.workflows[0]: a gate reads an undeclared field"],
+            errors: [
+              "blueprint.workflows[0]: a gate reads an undeclared field",
+            ],
             warnings: ["state 'new' has no way out"],
           },
         },
@@ -251,7 +253,7 @@ describe("FlowEditor", () => {
       ...shadowRootOf(el).querySelectorAll(".saved-findings li"),
     ];
     expect(findings.map((f) => f.textContent)).toEqual([
-      "spec.workflows[0]: a gate reads an undeclared field",
+      "blueprint.workflows[0]: a gate reads an undeclared field",
       "1 warning(s)",
     ]);
   });
@@ -307,7 +309,7 @@ describe("FlowEditor", () => {
         workflowInstanceState: {
           prompt: "p",
           source: "const a = 1;",
-          specDiverged: true,
+          blueprintDiverged: true,
         },
       })
     );

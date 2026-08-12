@@ -1,6 +1,6 @@
 // Generation scenarios: each pattern in the flow-authoring knowledge, driven
 // end to end through the loop with a stubbed model caller. A scenario passes
-// when the loop reports zero errors AND zero warnings — i.e. the model's spec
+// when the loop reports zero errors AND zero warnings — i.e. the model's blueprint
 // for that pattern validates, renders, loads, typechecks, and is structurally
 // sound. This is the regression surface for the skill: if a pattern stops
 // generating cleanly, generation quality broke with it.
@@ -8,30 +8,30 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STRUCTURED_INTAKE_EXEMPLAR } from "./flow-authoring.ts";
-import type { FlowSpec } from "./flow-spec.ts";
+import type { FlowBlueprint } from "./flow-blueprint.ts";
 import {
   type ModelCaller,
   runGenerationLoop,
 } from "./generate-flow-definition.ts";
 
 // The stub: call 1 answers the design stage, call 2 returns the scenario's
-// spec. A clean spec passes on spec attempt 1.
-function modelReturning(spec: FlowSpec): ModelCaller {
+// blueprint. A clean blueprint passes on blueprint attempt 1.
+function modelReturning(blueprint: FlowBlueprint): ModelCaller {
   let calls = 0;
   return async () => {
     calls++;
     return calls === 1
       ? "Design: the flow described by the request."
-      : `\`\`\`json\n${JSON.stringify(spec)}\n\`\`\``;
+      : `\`\`\`json\n${JSON.stringify(blueprint)}\n\`\`\``;
   };
 }
 
 async function assertScenarioPasses(
   request: string,
-  spec: FlowSpec,
+  blueprint: FlowBlueprint,
   assertions: (source: string) => void
 ): Promise<void> {
-  const result = await runGenerationLoop(request, modelReturning(spec));
+  const result = await runGenerationLoop(request, modelReturning(blueprint));
   assert.equal(result.report.passed, true, request);
   assert.deepEqual(
     result.report.errors,
@@ -48,7 +48,7 @@ async function assertScenarioPasses(
 
 // A proposal a human approves or rejects: ai-chat HITL session, a Done action
 // completing it, approve/reject verdicts.
-const HUMAN_REVIEW_SPEC: FlowSpec = {
+const HUMAN_REVIEW_SPEC: FlowBlueprint = {
   id: "proposalReview",
   label: "Proposal Review",
   configSchema: [],
@@ -142,7 +142,7 @@ const HUMAN_REVIEW_SPEC: FlowSpec = {
 
 // A plan workflow whose ai-task returns a card list, fanned out into card
 // instances via an edge — exercises the object[] completionOutput type.
-const PIPELINE_FANOUT_SPEC: FlowSpec = {
+const PIPELINE_FANOUT_SPEC: FlowBlueprint = {
   id: "planning",
   label: "Planning",
   configSchema: [],
@@ -245,7 +245,7 @@ const PIPELINE_FANOUT_SPEC: FlowSpec = {
 
 // A repo-backed card lifecycle: worktree, worker with git tools, committed-work
 // verification, and an acceptance merge.
-const GIT_WORK_SPEC: FlowSpec = {
+const GIT_WORK_SPEC: FlowBlueprint = {
   id: "repoWork",
   label: "Repo Work",
   configSchema: [
@@ -258,7 +258,7 @@ const GIT_WORK_SPEC: FlowSpec = {
       instance: { title: "cardSpec" },
       display: {
         fields: [
-          { path: "cardSpec", label: "Card spec" },
+          { path: "cardSpec", label: "Card blueprint" },
           { path: "verdict", label: "Verdict" },
         ],
       },
@@ -299,7 +299,7 @@ const GIT_WORK_SPEC: FlowSpec = {
               label: "Run worker agent",
               role: "ai-task",
               systemPrompt:
-                "Implement the card spec in the workspace, commit the work, then complete the task.",
+                "Implement the card blueprint in the workspace, commit the work, then complete the task.",
               tools: [
                 "read_file",
                 "write_file",
@@ -415,7 +415,7 @@ const GIT_WORK_SPEC: FlowSpec = {
         fields: [
           {
             key: "cardSpec",
-            label: "Card spec",
+            label: "Card blueprint",
             type: "string",
             required: true,
           },

@@ -1,14 +1,14 @@
-/** @public — AI flow generation: description → design → validated spec →
+/** @public — AI flow generation: description → design → validated blueprint →
  * rendered, gate-checked TypeScript definition, iterating against the gate
  * until it passes (or the attempt budget is spent).
  *
- * The hybrid design: the model emits a **structured FlowSpec** (JSON, in a
+ * The hybrid design: the model emits a **structured FlowBlueprint** (JSON, in a
  * fenced block — the proxy chat path has no tool-call wiring, and JSON-in-a-
  * fence is provider-agnostic), the deterministic renderer turns it into TS
  * with the schema-consistency check's conventions structurally baked in, and
- * the gate — spec validation → render → transpile+load → schema-consistency
+ * the gate — blueprint validation → render → transpile+load → schema-consistency
  * check → per-definition typecheck — feeds its failures back for a revised
- * spec, up to N attempts.
+ * blueprint, up to N attempts.
  *
  * The model never writes TypeScript, so convention drift is impossible; the
  * failures it iterates on are real semantic errors (unknown references, reads
@@ -16,18 +16,18 @@
  *
  * Two stages, per the flow-authoring skill: a **design pass** first (entities,
  * lifecycles, patterns, error escape hatches — one model turn, kept in
- * context), then the **spec pass** iterating against the gate. Advisory
- * findings — spec-level anti-patterns (`analyzeFlowSpec`) and structural
+ * context), then the **blueprint pass** iterating against the gate. Advisory
+ * findings — blueprint-level anti-patterns (`analyzeFlowBlueprint`) and structural
  * soundness warnings from the schema check — are fed back too, so the model
  * fixes flows that "can never finish" rather than shipping them. */
 
 import { buildFlowAuthoringPrompt } from "./flow-authoring.ts";
-import { loadDefinitionFromSource } from "./flow-definitions.ts";
 import {
-  analyzeFlowSpec,
-  type FlowSpec,
-  validateFlowSpec,
-} from "./flow-spec.ts";
+  analyzeFlowBlueprint,
+  type FlowBlueprint,
+  validateFlowBlueprint,
+} from "./flow-blueprint.ts";
+import { loadDefinitionFromSource } from "./flow-definitions.ts";
 import { handleChatCompletion } from "./proxy/handle-chat-completion.ts";
 import { renderFlowDefinition } from "./render-flow-definition.ts";
 import { checkDefinitionSources } from "./schema-consistency.ts";
@@ -88,7 +88,7 @@ const MAX_ATTEMPTS = 4;
 export type GenerationProgressEvent =
   | {
       type: "stage";
-      stage: "design" | "spec" | "validating" | "rendering" | "checking";
+      stage: "design" | "blueprint" | "validating" | "rendering" | "checking";
       attempt?: number;
       maxAttempts?: number;
     }
@@ -163,7 +163,7 @@ export async function runGenerationLoop(
     {
       role: "user",
       content: [
-        "Design this flow first (entities and lifecycles, where AI is used, what each ai-task returns, how a human drives it, how workflows connect, the error escape hatch). Keep it to 3-8 bullet lines, then you will be asked for the spec.",
+        "Design this flow first (entities and lifecycles, where AI is used, what each ai-task returns, how a human drives it, how workflows connect, the error escape hatch). Keep it to 3-8 bullet lines, then you will be asked for the blueprint.",
         "",
         `Request: ${prompt}`,
       ].join("\n"),
@@ -171,35 +171,35 @@ export async function runGenerationLoop(
   ];
 
   // Stage 1 — design. One model turn; the design stays in the conversation so
-  // every spec attempt (and feedback round) revises against the same plan.
+  // every blueprint attempt (and feedback round) revises against the same plan.
   emit({ type: "stage", stage: "design" });
   const design = await callModel(messages);
   messages.push({ role: "assistant", content: design });
   messages.push({
     role: "user",
     content:
-      "Now produce the JSON FlowSpec for this design, in a single fenced code block. No prose outside the block.",
+      "Now produce the JSON FlowBlueprint for this design, in a single fenced code block. No prose outside the block.",
   });
 
   let bestSource: string | undefined;
   let lastErrors: string[] = [];
   let lastWarnings: string[] = [];
 
-  // Stage 2 — the spec, iterated against the gate.
+  // Stage 2 — the blueprint, iterated against the gate.
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     emit({
       type: "stage",
-      stage: "spec",
+      stage: "blueprint",
       attempt,
       maxAttempts,
     });
     const content = await callModel(messages);
     messages.push({ role: "assistant", content });
 
-    const spec = extractSpecJson(content);
-    if (spec === undefined) {
+    const blueprint = extractBlueprintJson(content);
+    if (blueprint === undefined) {
       lastErrors = [
-        "The model did not return a JSON flow spec in a fenced code block",
+        "The model did not return a JSON flow blueprint in a fenced code block",
       ];
       lastWarnings = [];
       emit({
@@ -210,11 +210,13 @@ export async function runGenerationLoop(
       });
     } else {
       emit({ type: "stage", stage: "validating" });
-      const specErrors = validateFlowSpec(spec);
-      const specWarnings = analyzeFlowSpec(spec);
-      if (specErrors.length > 0) {
-        lastErrors = specErrors.map((e) => `spec.${e.path}: ${e.message}`);
-        lastWarnings = specWarnings;
+      const blueprintErrors = validateFlowBlueprint(blueprint);
+      const blueprintWarnings = analyzeFlowBlueprint(blueprint);
+      if (blueprintErrors.length > 0) {
+        lastErrors = blueprintErrors.map(
+          (e) => `blueprint.${e.path}: ${e.message}`
+        );
+        lastWarnings = blueprintWarnings;
         emit({
           type: "attempt_failed",
           attempt,
@@ -223,14 +225,14 @@ export async function runGenerationLoop(
         });
       } else {
         emit({ type: "stage", stage: "rendering" });
-        const source = renderFlowDefinition(spec);
+        const source = renderFlowDefinition(blueprint);
         bestSource = source;
 
         emit({ type: "stage", stage: "checking" });
         const loadErrors = await tryLoad(source);
         if (loadErrors.length > 0) {
           lastErrors = loadErrors;
-          lastWarnings = specWarnings;
+          lastWarnings = blueprintWarnings;
           emit({
             type: "attempt_failed",
             attempt,
@@ -250,8 +252,8 @@ export async function runGenerationLoop(
           ];
           if (errors.length === 0) {
             lastErrors = [];
-            lastWarnings = [...specWarnings, ...check.warnings];
-            // A clean spec passes immediately; one with advisory findings gets
+            lastWarnings = [...blueprintWarnings, ...check.warnings];
+            // A clean blueprint passes immediately; one with advisory findings gets
             // a feedback round (and passes with warnings on the last attempt).
             if (lastWarnings.length === 0 || attempt === maxAttempts) {
               return {
@@ -267,7 +269,7 @@ export async function runGenerationLoop(
             emit({ type: "warnings", findings: lastWarnings });
           } else {
             lastErrors = errors;
-            lastWarnings = [...specWarnings, ...check.warnings];
+            lastWarnings = [...blueprintWarnings, ...check.warnings];
             emit({
               type: "attempt_failed",
               attempt,
@@ -316,13 +318,13 @@ async function tryLoad(source: string): Promise<string[]> {
   }
 }
 
-// Errors reject the spec and lead the feedback; warnings are advisory (the
-// spec rendered) but the model gets one chance to fix them before generation
+// Errors reject the blueprint and lead the feedback; warnings are advisory (the
+// blueprint rendered) but the model gets one chance to fix them before generation
 // passes with warnings reported.
 function buildFeedback(errors: string[], warnings: string[]): string {
   if (errors.length > 0) {
     return [
-      "Your previous spec was rejected. Fix every issue below and return a corrected JSON flow spec (same format, one fenced block). Do not argue; do not repeat the same mistakes.",
+      "Your previous blueprint was rejected. Fix every issue below and return a corrected JSON flow blueprint (same format, one fenced block). Do not argue; do not repeat the same mistakes.",
       "",
       ...errors.map((e) => `- ${e}`),
       ...(warnings.length > 0
@@ -335,13 +337,13 @@ function buildFeedback(errors: string[], warnings: string[]): string {
     ].join("\n");
   }
   return [
-    "Your previous spec validated and rendered, but has advisory findings. Fix them if they apply and return the corrected JSON flow spec (one fenced block). If a finding does not apply to your design, return the spec unchanged.",
+    "Your previous blueprint validated and rendered, but has advisory findings. Fix them if they apply and return the corrected JSON flow blueprint (one fenced block). If a finding does not apply to your design, return the blueprint unchanged.",
     "",
     ...warnings.map((w) => `- ${w}`),
   ].join("\n");
 }
 
-function extractSpecJson(content: string): FlowSpec | undefined {
+function extractBlueprintJson(content: string): FlowBlueprint | undefined {
   const fenced = content.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
   const candidate = (fenced?.[1] ?? content).trim();
   try {
@@ -351,7 +353,7 @@ function extractSpecJson(content: string): FlowSpec | undefined {
       parsed !== null &&
       Array.isArray((parsed as { workflows?: unknown }).workflows)
     ) {
-      return parsed as FlowSpec;
+      return parsed as FlowBlueprint;
     }
     return undefined;
   } catch {

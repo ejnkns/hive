@@ -13,11 +13,11 @@ import { authoringGuide } from "workflow-engine/capabilities-manifest";
 import { DESIGN_DECISIONS } from "./decisions.ts";
 import { renderPatternsPrompt } from "./patterns.ts";
 import { AUTHORING_RULES } from "./rules.ts";
-import { FLOW_SPEC_SHAPE } from "./vocabulary.ts";
+import { FLOW_BLUEPRINT_SHAPE } from "./vocabulary.ts";
 
 export function buildFlowAuthoringPrompt(): string {
   return [
-    "You design flow definitions for the Hive workflow engine. The engine provides the capabilities at the bottom for free; a flow only declares its domain. Follow the process: first design the flow, then emit the JSON FlowSpec.",
+    "You design flow definitions for the Hive workflow engine. The engine provides the capabilities at the bottom for free; a flow only declares its domain. Follow the process: first design the flow, then emit the JSON FlowBlueprint.",
     "",
     DESIGN_DECISIONS,
     "",
@@ -25,15 +25,15 @@ export function buildFlowAuthoringPrompt(): string {
     "",
     AUTHORING_RULES,
     "",
-    FLOW_SPEC_SHAPE,
+    FLOW_BLUEPRINT_SHAPE,
     "",
     "## Capabilities (what the engine provides for free)",
     authoringGuide(),
     "",
     "## Process",
     "1. Design the flow: entities and their lifecycles, where AI is used, what structured data each ai-task returns, how a human drives it, how workflows connect, and the error escape hatch. Keep the design short (3-8 bullet lines).",
-    "2. Emit the JSON FlowSpec in a single fenced code block. No prose outside the design, no TypeScript.",
-    "3. On validation feedback, fix every listed issue and emit a corrected spec — revise the design too if the feedback says the design is wrong.",
+    "2. Emit the JSON FlowBlueprint in a single fenced code block. No prose outside the design, no TypeScript.",
+    "3. On validation feedback, fix every listed issue and emit a corrected blueprint — revise the design too if the feedback says the design is wrong.",
   ].join("\n");
 }
 
@@ -50,7 +50,7 @@ export function flowAuthoringMarkdown(): string {
     AUTHORING_RULES,
     "",
     "## Vocabulary",
-    FLOW_SPEC_SHAPE,
+    FLOW_BLUEPRINT_SHAPE,
     "",
     "## Engine capabilities",
     authoringGuide(),

@@ -1,4 +1,4 @@
-/** @private — the spec validator: walks flows/workflows, then delegates the
+/** @private — the blueprint validator: walks flows/workflows, then delegates the
  * edge and writer-invariant sections. */
 
 import {
@@ -7,16 +7,16 @@ import {
   FIELD_TYPES,
   IDENTIFIER,
   infraToolNames,
-} from "./spec-constants.ts";
+} from "./blueprint-constants.ts";
 import type {
+  BlueprintError,
+  BlueprintValidationContext,
   CompletionOutputField,
   FieldType,
-  FlowSpec,
+  FlowBlueprint,
   GateSpec,
-  SpecError,
-  SpecValidationContext,
   WorkflowSpec,
-} from "./spec-types.ts";
+} from "./blueprint-types.ts";
 import { validateEdges } from "./validate-edges.ts";
 import {
   isConfigField,
@@ -31,29 +31,31 @@ import {
 } from "./validate-values.ts";
 import { validateWriters } from "./validate-writers.ts";
 
-export function validateFlowSpec(spec: FlowSpec): SpecError[] {
-  const errors: SpecError[] = [];
+export function validateFlowBlueprint(
+  blueprint: FlowBlueprint
+): BlueprintError[] {
+  const errors: BlueprintError[] = [];
   const error = (path: string, message: string): void => {
     errors.push({ path, message });
   };
 
   // ── flow level ──
-  if (typeof spec.id !== "string" || !IDENTIFIER.test(spec.id)) {
+  if (typeof blueprint.id !== "string" || !IDENTIFIER.test(blueprint.id)) {
     error(
       "id",
-      `flow id must be a valid identifier (got ${JSON.stringify(spec.id)})`
+      `flow id must be a valid identifier (got ${JSON.stringify(blueprint.id)})`
     );
   }
-  if (typeof spec.label !== "string" || spec.label.trim() === "") {
+  if (typeof blueprint.label !== "string" || blueprint.label.trim() === "") {
     error("label", "flow label is required");
   }
-  if (!Array.isArray(spec.workflows) || spec.workflows.length === 0) {
+  if (!Array.isArray(blueprint.workflows) || blueprint.workflows.length === 0) {
     error("workflows", "a flow needs at least one workflow");
   }
-  if (!Array.isArray(spec.configSchema)) {
+  if (!Array.isArray(blueprint.configSchema)) {
     error("configSchema", "configSchema must be an array");
   } else {
-    spec.configSchema.forEach((field, i) => {
+    blueprint.configSchema.forEach((field, i) => {
       if (!isConfigField(field)) {
         error(
           `configSchema[${i}]`,
@@ -76,7 +78,7 @@ export function validateFlowSpec(spec: FlowSpec): SpecError[] {
   >();
 
   // ── workflows ──
-  for (const [wfIndex, wf] of spec.workflows.entries()) {
+  for (const [wfIndex, wf] of blueprint.workflows.entries()) {
     const wfPath = `workflows[${wfIndex}]`;
     if (typeof wf.id !== "string" || !IDENTIFIER.test(wf.id)) {
       error(
@@ -614,7 +616,7 @@ export function validateFlowSpec(spec: FlowSpec): SpecError[] {
   }
 
   // ── flow-level actions ──
-  for (const [aIndex, action] of (spec.actions ?? []).entries()) {
+  for (const [aIndex, action] of (blueprint.actions ?? []).entries()) {
     const aPath = `actions[${aIndex}]`;
     if (typeof action.id !== "string" || !IDENTIFIER.test(action.id)) {
       error(`${aPath}.id`, "action id must be a valid identifier");
@@ -653,25 +655,25 @@ export function validateFlowSpec(spec: FlowSpec): SpecError[] {
     }
   }
 
-  const context: SpecValidationContext = {
+  const context: BlueprintValidationContext = {
     workflowById,
     stateIdsByWorkflow,
     taskIdsByWorkflow,
     instanceStateById,
     completionOutputById,
   };
-  validateEdges(spec, context, error);
-  validateWriters(spec, context, error);
+  validateEdges(blueprint, context, error);
+  validateWriters(blueprint, context, error);
 
   return errors;
 }
-export function analyzeFlowSpec(spec: FlowSpec): string[] {
+export function analyzeFlowBlueprint(blueprint: FlowBlueprint): string[] {
   const findings: string[] = [];
 
   // 1. A prompt-less ai-task/ai-chat has no instructions: the agent produces
   //    prose instead of completing, or the ai-task runner fails fast when
   //    there is also no input.
-  for (const wf of spec.workflows) {
+  for (const wf of blueprint.workflows) {
     for (const state of wf.states) {
       for (const task of state.tasks ?? []) {
         if (
@@ -689,7 +691,7 @@ export function analyzeFlowSpec(spec: FlowSpec): string[] {
   // 2. A completionOutput task whose output nobody reads records nothing: the
   //    structured fields are discarded.
   const readTaskIds = new Set<string>();
-  for (const wf of spec.workflows) {
+  for (const wf of blueprint.workflows) {
     for (const state of wf.states) {
       for (const task of state.tasks ?? []) {
         for (const value of Object.values(task.patch ?? {})) {
@@ -704,13 +706,13 @@ export function analyzeFlowSpec(spec: FlowSpec): string[] {
       }
     }
   }
-  for (const edge of spec.edges ?? []) {
+  for (const edge of blueprint.edges ?? []) {
     for (const value of Object.values(edge.fields ?? {})) {
       if (value.kind === "taskOutput") readTaskIds.add(value.task);
     }
     if (edge.fanOut) readTaskIds.add(edge.fanOut.task);
   }
-  for (const wf of spec.workflows) {
+  for (const wf of blueprint.workflows) {
     for (const state of wf.states) {
       for (const task of state.tasks ?? []) {
         if (
@@ -728,13 +730,13 @@ export function analyzeFlowSpec(spec: FlowSpec): string[] {
 
   // 3. A flow with no creation path anywhere can never run.
   const hasCreateInstance =
-    (spec.actions ?? []).some((a) => a.createInstance !== undefined) ||
-    spec.workflows.some((wf) =>
+    (blueprint.actions ?? []).some((a) => a.createInstance !== undefined) ||
+    blueprint.workflows.some((wf) =>
       wf.states.some((s) =>
         (s.actions ?? []).some((a) => a.createInstance !== undefined)
       )
     );
-  if (!hasCreateInstance && (spec.edges ?? []).length === 0) {
+  if (!hasCreateInstance && (blueprint.edges ?? []).length === 0) {
     findings.push(
       "nothing ever creates an instance — add a flow-level or state-level createInstance action, or an edge feeding a workflow"
     );

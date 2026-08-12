@@ -71,12 +71,12 @@ export type GenerationReport = {
 
 // Live progress events the generate route streams over SSE, mirrored from the
 // server's GenerationProgressEvent so the editor can render what is actually
-// happening: the model's streamed design/spec, the gate stages, and any
+// happening: the model's streamed design/blueprint, the gate stages, and any
 // rejected attempts.
 export type GenerationProgressEvent =
   | {
       type: "stage";
-      stage: "design" | "spec" | "validating" | "rendering" | "checking";
+      stage: "design" | "blueprint" | "validating" | "rendering" | "checking";
       attempt?: number;
       maxAttempts?: number;
     }
@@ -176,8 +176,8 @@ export async function createFlow(input: {
 }
 
 // Creates a flow-authoring session (a hidden flow instance whose ai-chat
-// agent converges on a spec with the user) and returns the session ids. When
-// `lucky` is true the agent is told to produce the spec without questions.
+// agent converges on a blueprint with the user) and returns the session ids. When
+// `lucky` is true the agent is told to produce the blueprint without questions.
 export async function authorFlowDefinition(input: {
   prompt: string;
   lucky?: boolean;
@@ -236,7 +236,7 @@ export async function saveAuthoringDefinition(flowId: string): Promise<{
 }
 
 // The write-back behind the flow-editor's editable code pane: patches the
-// human's current definition source into the session (marking the spec
+// human's current definition source into the session (marking the blueprint
 // diverged), or clears the divergence when the human hands back.
 export async function saveAuthoringSource(
   flowId: string,

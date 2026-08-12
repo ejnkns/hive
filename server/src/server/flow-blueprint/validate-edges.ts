@@ -1,16 +1,19 @@
 /** @private — flow-edge validation (runs after the workflow walk). */
 
-import { DOTTED_PATH } from "./spec-constants.ts";
-import type { FlowSpec, SpecValidationContext } from "./spec-types.ts";
+import { DOTTED_PATH } from "./blueprint-constants.ts";
+import type {
+  BlueprintValidationContext,
+  FlowBlueprint,
+} from "./blueprint-types.ts";
 import { checkLiteralMatches, validateValueSpec } from "./validate-values.ts";
 
 export function validateEdges(
-  spec: FlowSpec,
-  context: SpecValidationContext,
+  blueprint: FlowBlueprint,
+  context: BlueprintValidationContext,
   error: (path: string, message: string) => void
 ): void {
   // ── edges ──
-  for (const [eIndex, edge] of (spec.edges ?? []).entries()) {
+  for (const [eIndex, edge] of (blueprint.edges ?? []).entries()) {
     const ePath = `edges[${eIndex}]`;
     const from = context.workflowById.get(edge.fromWorkflow);
     const to = context.workflowById.get(edge.toWorkflow);

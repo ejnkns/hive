@@ -1,8 +1,8 @@
 // The flow editor as a rendered flow instantiation, end to end: a lucky-mode
 // authoring session renders as a flow instance (the built-in flow-editor
 // composing header, chat, editable definition source, and save), and the
-// co-editing loop works — hand edits write back (spec diverged), the agent's
-// spec tools are gated and it proposes in chat, and discard hands the
+// co-editing loop works — hand edits write back (blueprint diverged), the agent's
+// blueprint tools are gated and it proposes in chat, and discard hands the
 // definition back. One session, a bounded set of scripted model calls.
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
@@ -228,10 +228,10 @@ test("authoring session renders as the flow editor, co-edits, and saves", async 
     (state) =>
       typeof state.workflowInstanceState?.source === "string" &&
       state.workflowInstanceState.source.includes("manual tweak") &&
-      state.workflowInstanceState.specDiverged === true
+      state.workflowInstanceState.blueprintDiverged === true
   );
 
-  // Ask the agent to continue: its set_flow_spec is gated (manual edits) and
+  // Ask the agent to continue: its set_flow_blueprint is gated (manual edits) and
   // it proposes in chat instead of overwriting.
   assert.ok(await sendChatMessage("please add a reject action"));
   await waitForSessionState((state) => {
@@ -248,10 +248,10 @@ test("authoring session renders as the flow editor, co-edits, and saves", async 
   // Discard hands the definition back — the divergence clears.
   assert.ok(await clickEditorButton("Discard edits"));
   await waitForSessionState(
-    (state) => state.workflowInstanceState?.specDiverged === false
+    (state) => state.workflowInstanceState?.blueprintDiverged === false
   );
 
-  // Regenerate: the agent's spec tools work again and the editor adopts the
+  // Regenerate: the agent's blueprint tools work again and the editor adopts the
   // regenerated source (the manual tweak is gone).
   assert.ok(await sendChatMessage("regenerate the definition"));
   await waitForEditor(

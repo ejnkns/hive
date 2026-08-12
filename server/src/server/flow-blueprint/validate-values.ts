@@ -1,14 +1,14 @@
 /** @private — ValueSpec / literal / createInstance value validators. */
 
 import type { ConfigField } from "workflow-engine/workflow-types";
-import { DOTTED_PATH } from "./spec-constants.ts";
+import { DOTTED_PATH } from "./blueprint-constants.ts";
 import type {
+  BlueprintError,
   CompletionOutputField,
   FieldType,
-  SpecError,
   ValueSpec,
   WorkflowSpec,
-} from "./spec-types.ts";
+} from "./blueprint-types.ts";
 
 export function validateValueSpec(
   value: ValueSpec,
@@ -18,8 +18,8 @@ export function validateValueSpec(
   // from a task with a structured completion contract must address a declared
   // field (the parsed completion arguments ARE the ai-task output).
   completionOutputByTask?: Map<string, CompletionOutputField[]>
-): SpecError[] {
-  const errors: SpecError[] = [];
+): BlueprintError[] {
+  const errors: BlueprintError[] = [];
   if (value.kind === "literal") return errors;
   if (value.kind === "instanceId") return errors;
   if (value.kind === "taskOutput") {
@@ -64,7 +64,7 @@ export function checkLiteralMatches(
   value: string | number | boolean,
   fieldTypeName: FieldType,
   path: string
-): SpecError[] {
+): BlueprintError[] {
   if (fieldTypeName === "object" || fieldTypeName.endsWith("[]")) {
     return [
       {
@@ -89,8 +89,8 @@ export function validateCreateInstance(
   workflowById: Map<string, WorkflowSpec>,
   instanceStateById: Map<string, Map<string, FieldType>>,
   path: string
-): SpecError[] {
-  const errors: SpecError[] = [];
+): BlueprintError[] {
+  const errors: BlueprintError[] = [];
   const target = workflowById.get(create.workflowId);
   if (!target) {
     errors.push({

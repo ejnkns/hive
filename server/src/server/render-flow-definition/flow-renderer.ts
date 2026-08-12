@@ -1,6 +1,6 @@
-/** @private — the renderer: FlowSpec → TypeScript flow definition module. */
+/** @private — the renderer: FlowBlueprint → TypeScript flow definition module. */
 
-import type { FieldType, FlowSpec } from "../flow-spec.ts";
+import type { FieldType, FlowBlueprint } from "../flow-blueprint.ts";
 import { renderConfigFields } from "./config-field.ts";
 import {
   buildOutputNode,
@@ -17,21 +17,21 @@ import {
 } from "./render-primitives.ts";
 import { renderEdgeValue, renderPatchValue } from "./render-value.ts";
 
-export function renderFlowDefinition(spec: FlowSpec): string {
+export function renderFlowDefinition(blueprint: FlowBlueprint): string {
   const out: string[] = [];
   const emit = (level: number, text: string) =>
     out.push("  ".repeat(level) + text);
 
-  const hasPatchOps = spec.workflows.some((wf) =>
+  const hasPatchOps = blueprint.workflows.some((wf) =>
     wf.states.some((s) => (s.tasks ?? []).some((t) => t.patch !== undefined))
   );
-  const hasCompletionOutput = spec.workflows.some((wf) =>
+  const hasCompletionOutput = blueprint.workflows.some((wf) =>
     wf.states.some((s) =>
       (s.tasks ?? []).some((t) => t.completionOutput !== undefined)
     )
   );
   const needsReadPath = (() => {
-    for (const wf of spec.workflows) {
+    for (const wf of blueprint.workflows) {
       for (const state of wf.states) {
         for (const task of state.tasks ?? []) {
           if (
@@ -43,7 +43,7 @@ export function renderFlowDefinition(spec: FlowSpec): string {
         }
       }
     }
-    for (const edge of spec.edges ?? []) {
+    for (const edge of blueprint.edges ?? []) {
       if (
         (edge.fields &&
           Object.values(edge.fields).some((v) => v.kind === "taskOutput")) ||
@@ -87,8 +87,8 @@ export function renderFlowDefinition(spec: FlowSpec): string {
     string,
     Map<string, { rest: string; type: string }[]>
   >();
-  for (const wf of spec.workflows) {
-    const byTask = collectOutputPaths(spec);
+  for (const wf of blueprint.workflows) {
+    const byTask = collectOutputPaths(blueprint);
     const perWorkflow = new Map<string, { rest: string; type: string }[]>();
     for (const state of wf.states) {
       for (const task of state.tasks ?? []) {
@@ -99,7 +99,7 @@ export function renderFlowDefinition(spec: FlowSpec): string {
   }
 
   const workflowNames: string[] = [];
-  for (const wf of spec.workflows) {
+  for (const wf of blueprint.workflows) {
     workflowNames.push(`${wf.id}Wf`);
     const p = pascal(wf.id);
     const typeName = `${p}ItemState`;
@@ -418,13 +418,14 @@ export function renderFlowDefinition(spec: FlowSpec): string {
 
   // ── the flow ──
   emit(0, "export const flow = {");
-  emit(1, `id: ${json(spec.id)},`);
-  emit(1, `label: ${json(spec.label)},`);
-  if (spec.description) emit(1, `description: ${json(spec.description)},`);
-  emit(1, `configSchema: [${renderConfigFields(spec.configSchema)}],`);
-  if (spec.domainDir) emit(1, `domainDir: ${json(spec.domainDir)},`);
+  emit(1, `id: ${json(blueprint.id)},`);
+  emit(1, `label: ${json(blueprint.label)},`);
+  if (blueprint.description)
+    emit(1, `description: ${json(blueprint.description)},`);
+  emit(1, `configSchema: [${renderConfigFields(blueprint.configSchema)}],`);
+  if (blueprint.domainDir) emit(1, `domainDir: ${json(blueprint.domainDir)},`);
   emit(1, `workflows: [${workflowNames.join(", ")}],`);
-  const opMapNames = spec.workflows
+  const opMapNames = blueprint.workflows
     .filter((wf) =>
       wf.states.some((s) => (s.tasks ?? []).some((t) => t.patch !== undefined))
     )
@@ -432,7 +433,7 @@ export function renderFlowDefinition(spec: FlowSpec): string {
   if (opMapNames.length > 0) {
     emit(1, `operations: { ${opMapNames.map((n) => `...${n}`).join(", ")} },`);
   }
-  const completionToolMapNames = spec.workflows
+  const completionToolMapNames = blueprint.workflows
     .filter((wf) =>
       wf.states.some((s) =>
         (s.tasks ?? []).some((t) => t.completionOutput !== undefined)
@@ -445,9 +446,9 @@ export function renderFlowDefinition(spec: FlowSpec): string {
       `tools: [${completionToolMapNames.map((n) => `...${n}`).join(", ")}],`
     );
   }
-  if (spec.actions && spec.actions.length > 0) {
+  if (blueprint.actions && blueprint.actions.length > 0) {
     emit(1, "actions: [");
-    for (const action of spec.actions) {
+    for (const action of blueprint.actions) {
       emit(2, "{");
       emit(3, `id: ${json(action.id)},`);
       emit(3, `label: ${json(action.label)},`);
@@ -469,7 +470,7 @@ export function renderFlowDefinition(spec: FlowSpec): string {
     emit(1, "],");
   }
   emit(1, "edges: [");
-  for (const edge of spec.edges ?? []) {
+  for (const edge of blueprint.edges ?? []) {
     emit(2, "{");
     emit(3, `fromWorkflow: ${json(edge.fromWorkflow)},`);
     emit(3, `fromStates: [${edge.fromStates.map(json).join(", ")}],`);
@@ -483,7 +484,7 @@ export function renderFlowDefinition(spec: FlowSpec): string {
       );
       emit(4, "return items.map((item) => ({");
       for (const [field, value] of Object.entries(fan.fields)) {
-        const fieldDecl = spec.workflows
+        const fieldDecl = blueprint.workflows
           .find((w) => w.id === edge.toWorkflow)
           ?.instanceState.find((f) => f.field === field);
         const type: FieldType = fieldDecl?.type ?? "object";
@@ -503,7 +504,7 @@ export function renderFlowDefinition(spec: FlowSpec): string {
       const fields = edge.fields ?? {};
       emit(3, "transform: (source) => ({");
       for (const [field, value] of Object.entries(fields)) {
-        const fieldDecl = spec.workflows
+        const fieldDecl = blueprint.workflows
           .find((w) => w.id === edge.toWorkflow)
           ?.instanceState.find((f) => f.field === field);
         const type: FieldType = fieldDecl?.type ?? "object";

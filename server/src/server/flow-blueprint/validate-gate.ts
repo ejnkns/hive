@@ -1,6 +1,6 @@
 /** @private — structured gate (GateSpec) validation and read collection. */
 
-import type { FieldType, GateSpec, SpecError } from "./spec-types.ts";
+import type { BlueprintError, FieldType, GateSpec } from "./blueprint-types.ts";
 
 export function collectGateTaskReads(gate: GateSpec, reads: Set<string>): void {
   switch (gate.kind) {
@@ -28,8 +28,8 @@ export function validateGateSpec(
   taskIds: Set<string>,
   stateTypes: Map<string, FieldType>,
   path: string
-): SpecError[] {
-  const errors: SpecError[] = [];
+): BlueprintError[] {
+  const errors: BlueprintError[] = [];
   const error = (p: string, message: string) =>
     errors.push({ path: p, message });
 

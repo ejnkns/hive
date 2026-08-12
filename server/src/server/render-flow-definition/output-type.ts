@@ -1,7 +1,7 @@
 /** @private — the derived per-task output type the renderer emits from the
  * taskOutputEquals paths gates reference. */
 
-import type { FlowSpec, GateSpec } from "../flow-spec.ts";
+import type { FlowBlueprint, GateSpec } from "../flow-blueprint.ts";
 
 type OutputNode = {
   leaf?: string;
@@ -12,7 +12,7 @@ type OutputNode = {
 // task's output ("" = the whole output) and the comparison value's type.
 // Mirrors the validation that keeps paths prefix-consistent.
 export function collectOutputPaths(
-  spec: FlowSpec
+  blueprint: FlowBlueprint
 ): Map<string, { rest: string; type: string }[]> {
   const byTask = new Map<string, { rest: string; type: string }[]>();
   const visitGate = (gate: GateSpec) => {
@@ -28,7 +28,7 @@ export function collectOutputPaths(
       for (const g of gate.gates) visitGate(g);
     }
   };
-  for (const wf of spec.workflows) {
+  for (const wf of blueprint.workflows) {
     for (const state of wf.states) {
       for (const transition of state.autoTransitions ?? [])
         visitGate(transition.gate);

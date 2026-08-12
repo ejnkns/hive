@@ -1,9 +1,9 @@
-/** The FlowSpec vocabulary — the closed, validated JSON shape an AI emits.
+/** The FlowBlueprint vocabulary — the closed, validated JSON shape an AI emits.
  * This is the reference rung of the flow-authoring knowledge: what the model
  * can say, not how to design. The decisions/patterns/rules modules sit above
  * it in the prompt; the loop's validation enforces it. */
 
-export const FLOW_SPEC_SHAPE = `## FlowSpec vocabulary (the JSON you emit — validated before rendering)
+export const FLOW_BLUEPRINT_SHAPE = `## FlowBlueprint vocabulary (the JSON you emit — validated before rendering)
 
 {
   "id": "reviewFlow",              // valid TS identifier (camelCase)
@@ -111,7 +111,7 @@ EDGE: {
   "fanOut": { "task": "planWork", "path": "output.items", "fields": { "title": { "kind": "itemPath", "path": "title" }, "dependsOn": { "kind": "itemPath", "path": "dependencies" } } }  // optional; one items instance per array item
 }
 
-CONSTRAINTS (the validator rejects violations; fix them in the same spec):
+CONSTRAINTS (the validator rejects violations; fix them in the same blueprint):
 - Every instance-state field that is READ (gates, instance/display hints, inputFromInstanceState, "@instance:" refs, dependsOnState) must have a WRITER: a patch op on an operation task, an edge field into that workflow, a createInstance payload key, or an engine op. Fields the engine provides (worktreePath, branchName, attempt) need no writer.
 - Every write (patch key, edge field, createInstance key) must be declared in the target workflow's instanceState.
 - Only engine operations and infrastructure tools from the capabilities list may be referenced.

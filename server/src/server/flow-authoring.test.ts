@@ -9,12 +9,12 @@ import {
   AUTHORING_RULES,
   buildFlowAuthoringPrompt,
   DESIGN_DECISIONS,
+  FLOW_BLUEPRINT_SHAPE,
   FLOW_PATTERNS,
-  FLOW_SPEC_SHAPE,
   flowAuthoringMarkdown,
   STRUCTURED_INTAKE_EXEMPLAR,
 } from "./flow-authoring.ts";
-import { validateFlowSpec } from "./flow-spec.ts";
+import { validateFlowBlueprint } from "./flow-blueprint.ts";
 
 describe("flow-authoring knowledge", () => {
   it("the generation prompt carries every knowledge rung in order", () => {
@@ -22,7 +22,7 @@ describe("flow-authoring knowledge", () => {
     const decisionIndex = prompt.indexOf(DESIGN_DECISIONS);
     const patternsIndex = prompt.indexOf("## Patterns");
     const rulesIndex = prompt.indexOf(AUTHORING_RULES);
-    const vocabularyIndex = prompt.indexOf(FLOW_SPEC_SHAPE);
+    const vocabularyIndex = prompt.indexOf(FLOW_BLUEPRINT_SHAPE);
     const capabilitiesIndex = prompt.indexOf("## Capabilities");
     const processIndex = prompt.indexOf("## Process");
 
@@ -63,16 +63,16 @@ describe("flow-authoring knowledge", () => {
     const markdown = flowAuthoringMarkdown();
     assert.ok(markdown.includes(DESIGN_DECISIONS));
     assert.ok(markdown.includes(AUTHORING_RULES));
-    assert.ok(markdown.includes(FLOW_SPEC_SHAPE));
+    assert.ok(markdown.includes(FLOW_BLUEPRINT_SHAPE));
     assert.ok(markdown.includes("## Patterns"));
     assert.ok(markdown.includes("Item Intake"));
   });
 
-  it("the structured-intake exemplar validates as a spec", () => {
+  it("the structured-intake exemplar validates as a blueprint", () => {
     assert.deepEqual(
-      validateFlowSpec(STRUCTURED_INTAKE_EXEMPLAR),
+      validateFlowBlueprint(STRUCTURED_INTAKE_EXEMPLAR),
       [],
-      "the reference exemplar must be a valid spec"
+      "the reference exemplar must be a valid blueprint"
     );
   });
 });

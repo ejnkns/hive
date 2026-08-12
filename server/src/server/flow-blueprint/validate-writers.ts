@@ -1,16 +1,22 @@
-/** @private — the spec-level every-read-has-a-writer invariant. */
+/** @private — the blueprint-level every-read-has-a-writer invariant. */
 
-import { ENGINE_PROVIDED, engineOpWritesByName } from "./spec-constants.ts";
-import type { FlowSpec, SpecValidationContext } from "./spec-types.ts";
+import {
+  ENGINE_PROVIDED,
+  engineOpWritesByName,
+} from "./blueprint-constants.ts";
+import type {
+  BlueprintValidationContext,
+  FlowBlueprint,
+} from "./blueprint-types.ts";
 import { collectGateStateReads } from "./validate-gate.ts";
 
 export function validateWriters(
-  spec: FlowSpec,
-  context: SpecValidationContext,
+  blueprint: FlowBlueprint,
+  context: BlueprintValidationContext,
   error: (path: string, message: string) => void
 ): void {
-  // ── the missing-writer invariant, at the spec level ──
-  for (const [wfIndex, wf] of spec.workflows.entries()) {
+  // ── the missing-writer invariant, at the blueprint level ──
+  for (const [wfIndex, wf] of blueprint.workflows.entries()) {
     const wfPath = `workflows[${wfIndex}]`;
     const stateTypes = context.instanceStateById.get(wf.id);
     const taskIds = context.taskIdsByWorkflow.get(wf.id);
@@ -34,7 +40,7 @@ export function validateWriters(
       }
     }
     // 3. edges into this workflow
-    for (const edge of spec.edges ?? []) {
+    for (const edge of blueprint.edges ?? []) {
       if (edge.toWorkflow !== wf.id) continue;
       for (const field of Object.keys(edge.fields ?? {})) writes.add(field);
       if (edge.fanOut) {
@@ -52,7 +58,7 @@ export function validateWriters(
         for (const field of action.fields ?? []) writes.add(field.key);
       }
     }
-    for (const action of spec.actions ?? []) {
+    for (const action of blueprint.actions ?? []) {
       if (action.createInstance?.workflowId === wf.id) {
         for (const field of action.createInstance.fields) writes.add(field.key);
       }

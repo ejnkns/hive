@@ -1,10 +1,10 @@
 /** The flow-authoring session: a hidden built-in flow whose single workflow
  * instance is a live authoring conversation — the requirements-drafting
  * pattern (queen-bee) applied to flow authoring, where the artifact is a
- * FlowSpec/TypeScript definition instead of requirements.md.
+ * FlowBlueprint/TypeScript definition instead of requirements.md.
  *
- * The session has ONE state: drafting. The ai-chat agent maintains the spec
- * draft via `set_flow_spec` (rendered live as TypeScript in the editor), and
+ * The session has ONE state: drafting. The ai-chat agent maintains the blueprint
+ * draft via `set_flow_blueprint` (rendered live as TypeScript in the editor), and
  * the generation gate runs as the `generate_definition` TOOL — so a failed
  * gate returns its findings to the agent in the same conversation (nothing is
  * lost), the agent fixes and retries, and the session never ends on its own:
@@ -17,22 +17,22 @@ import {
   type FlowDefinition,
 } from "workflow-engine/workflow-types";
 import {
+  analyzeFlowBlueprint,
+  type FlowBlueprint,
+  validateFlowBlueprint,
+} from "../flow-blueprint.ts";
+import {
   loadDefinitionFromSource,
   registerUserDefinition,
   updateUserDefinition,
 } from "../flow-definitions.ts";
-import {
-  analyzeFlowSpec,
-  type FlowSpec,
-  validateFlowSpec,
-} from "../flow-spec.ts";
 import { renderFlowDefinition } from "../render-flow-definition.ts";
 import { checkDefinitionSources } from "../schema-consistency.ts";
 import { typecheckDefinitionSource } from "../typecheck-definition.ts";
 import { renderPatternsPrompt } from "./patterns.ts";
 import { AUTHORING_RULES } from "./rules.ts";
 import { buildAuthoringSessionPrompt } from "./session-prompt.ts";
-import { FLOW_SPEC_SHAPE } from "./vocabulary.ts";
+import { FLOW_BLUEPRINT_SHAPE } from "./vocabulary.ts";
 
 export const AUTHORING_DEFINITION_ID = "flow-authoring";
 
@@ -40,10 +40,10 @@ export type AuthoringItemState = {
   // The user's original request (the session card's title).
   prompt?: string;
   // How this session was started: conversational asks clarifying questions and
-  // drafts interactively; lucky produces the spec without questions.
+  // drafts interactively; lucky produces the blueprint without questions.
   mode?: "conversational" | "lucky";
-  // The current FlowSpec draft, maintained by the agent via set_flow_spec.
-  spec?: string;
+  // The current FlowBlueprint draft, maintained by the agent via set_flow_blueprint.
+  blueprint?: string;
   // The rendered TypeScript of the current draft (live preview in the editor).
   previewSource?: string;
   // Validation/render findings of the current draft (fed back to the agent).
@@ -59,7 +59,7 @@ export type AuthoringItemState = {
   };
   // The gate-passed TypeScript source (written by generate_definition).
   source?: string;
-  // The spec's label — a suggested name for the saved definition.
+  // The blueprint's label — a suggested name for the saved definition.
   suggestedName?: string;
   // The registered definition id after a successful save. Written by the
   // save_definition tool (agent path) and the synchronous save route (the
@@ -71,28 +71,28 @@ export type AuthoringItemState = {
   // Non-blocking schema-consistency findings from the last save.
   saveFindings?: { errors: string[]; warnings: string[] };
   // True while the human has edited the definition TS directly (the editor's
-  // write-back). The spec draft is frozen: set_flow_spec/generate_definition
+  // write-back). The blueprint draft is frozen: set_flow_blueprint/generate_definition
   // refuse until the human discards (or adopts, via the future reverse
   // renderer) their edits.
-  specDiverged?: boolean;
+  blueprintDiverged?: boolean;
 };
 
 // ─── shared gate machinery ────────────────────────────────────────────
 
-// Validates + renders a spec for the live preview; returns the parsed spec and
+// Validates + renders a blueprint for the live preview; returns the parsed blueprint and
 // any findings. Used by both tools so the draft and the generated source never
 // drift.
-type SpecPreview = {
-  parsed: FlowSpec;
+type BlueprintPreview = {
+  parsed: FlowBlueprint;
   previewSource: string;
   previewErrors: string[];
 };
 
-function validateAndPreview(specJson: string): SpecPreview {
-  const parsed = JSON.parse(specJson) as FlowSpec;
+function validateAndPreview(blueprintJson: string): BlueprintPreview {
+  const parsed = JSON.parse(blueprintJson) as FlowBlueprint;
   const findings = [
-    ...validateFlowSpec(parsed),
-    ...analyzeFlowSpec(parsed).map((finding) => ({
+    ...validateFlowBlueprint(parsed),
+    ...analyzeFlowBlueprint(parsed).map((finding) => ({
       path: "flow",
       message: finding,
     })),
@@ -101,7 +101,7 @@ function validateAndPreview(specJson: string): SpecPreview {
     return {
       parsed,
       previewSource: "",
-      previewErrors: findings.map((e) => `spec.${e.path}: ${e.message}`),
+      previewErrors: findings.map((e) => `blueprint.${e.path}: ${e.message}`),
     };
   }
   try {
@@ -121,14 +121,14 @@ function validateAndPreview(specJson: string): SpecPreview {
   }
 }
 
-// The full generation gate: spec validation → render → load → schema check →
+// The full generation gate: blueprint validation → render → load → schema check →
 // typecheck. Returns the source (empty on failure) and the findings.
 async function runGenerationGate(
-  spec: FlowSpec
+  blueprint: FlowBlueprint
 ): Promise<{ source: string; errors: string[]; warnings: string[] }> {
-  const specWarnings = analyzeFlowSpec(spec);
+  const blueprintWarnings = analyzeFlowBlueprint(blueprint);
 
-  const source = renderFlowDefinition(spec);
+  const source = renderFlowDefinition(blueprint);
 
   let loadErrors: string[] = [];
   try {
@@ -141,7 +141,7 @@ async function runGenerationGate(
     ];
   }
   if (loadErrors.length > 0) {
-    return { source, errors: loadErrors, warnings: specWarnings };
+    return { source, errors: loadErrors, warnings: blueprintWarnings };
   }
 
   const check = checkDefinitionSources([{ path: "authoring.ts", source }]);
@@ -153,7 +153,7 @@ async function runGenerationGate(
   return {
     source,
     errors,
-    warnings: [...specWarnings, ...check.warnings],
+    warnings: [...blueprintWarnings, ...check.warnings],
   };
 }
 
@@ -161,7 +161,7 @@ async function runGenerationGate(
 // disclosure): each topic returns the relevant module so the system prompt can
 // stay compact and the agent reads only what it needs when drafting.
 const KNOWLEDGE_TOPICS: Record<string, string> = {
-  vocabulary: FLOW_SPEC_SHAPE,
+  vocabulary: FLOW_BLUEPRINT_SHAPE,
   patterns: renderPatternsPrompt(),
   capabilities: authoringGuide(),
   rules: AUTHORING_RULES,
@@ -234,8 +234,8 @@ export function savePatch(result: {
   };
 }
 
-// The divergence gate both spec tools enforce: while the human owns the
-// source (specDiverged, set by the editor's write-back), the agent must not
+// The divergence gate both blueprint tools enforce: while the human owns the
+// source (blueprintDiverged, set by the editor's write-back), the agent must not
 // overwrite it — it proposes in chat instead.
 function divergedResult(call: { id: string }): {
   toolCallId: string;
@@ -245,7 +245,7 @@ function divergedResult(call: { id: string }): {
   return {
     toolCallId: call.id,
     content:
-      "The definition has manual edits (the user edited the TypeScript directly), so the spec is frozen. Do not overwrite it. Propose changes in chat — read the current source with read_definition_source — and let the user apply them, discard their edits, or adopt them.",
+      "The definition has manual edits (the user edited the TypeScript directly), so the blueprint is frozen. Do not overwrite it. Propose changes in chat — read the current source with read_definition_source — and let the user apply them, discard their edits, or adopt them.",
     isError: true,
   };
 }
@@ -253,7 +253,7 @@ function divergedResult(call: { id: string }): {
 function isDiverged(ctx: {
   workflowInstanceState?: () => AuthoringItemState;
 }): boolean {
-  return ctx.workflowInstanceState?.()?.specDiverged === true;
+  return ctx.workflowInstanceState?.()?.blueprintDiverged === true;
 }
 
 // ─── tools ────────────────────────────────────────────────────────────
@@ -262,7 +262,7 @@ export const authoringTools = [
   defineTool<AuthoringItemState>({
     name: "read_authoring_knowledge",
     description:
-      "Read a section of the flow-authoring reference before writing or extending a spec. Topics: 'vocabulary' (the FlowSpec JSON shape and constraints), 'patterns' (tested lifecycle exemplars), 'capabilities' (engine operations, infrastructure tools, state fields), or 'rules' (failure-mode guardrails).",
+      "Read a section of the flow-authoring reference before writing or extending a blueprint. Topics: 'vocabulary' (the FlowBlueprint JSON shape and constraints), 'patterns' (tested lifecycle exemplars), 'capabilities' (engine operations, infrastructure tools, state fields), or 'rules' (failure-mode guardrails).",
     parameters: {
       properties: {
         topic: {
@@ -285,36 +285,36 @@ export const authoringTools = [
     },
   }),
   defineTool<AuthoringItemState>({
-    name: "set_flow_spec",
+    name: "set_flow_blueprint",
     description:
-      "Replace the flow's spec draft with the complete FlowSpec JSON. Call this after every substantive decision with the full spec; the draft renders live in the editor. The result reports validation errors to fix.",
+      "Replace the flow's blueprint draft with the complete FlowBlueprint JSON. Call this after every substantive decision with the full blueprint; the draft renders live in the editor. The result reports validation errors to fix.",
     parameters: {
       properties: {
-        spec: {
+        blueprint: {
           type: "string",
-          description: "The complete FlowSpec as a JSON string.",
+          description: "The complete FlowBlueprint as a JSON string.",
         },
       },
-      required: ["spec"],
+      required: ["blueprint"],
     },
     executor: async (call, ctx) => {
       if (isDiverged(ctx)) return divergedResult(call);
-      const args = JSON.parse(call.arguments) as { spec?: string };
-      if (typeof args.spec !== "string" || args.spec.trim() === "") {
+      const args = JSON.parse(call.arguments) as { blueprint?: string };
+      if (typeof args.blueprint !== "string" || args.blueprint.trim() === "") {
         return {
           toolCallId: call.id,
-          content: "spec is required",
+          content: "blueprint is required",
           isError: true,
         };
       }
 
-      let preview: SpecPreview;
+      let preview: BlueprintPreview;
       try {
-        preview = validateAndPreview(args.spec);
+        preview = validateAndPreview(args.blueprint);
       } catch (err) {
         return {
           toolCallId: call.id,
-          content: `spec is not valid JSON: ${
+          content: `blueprint is not valid JSON: ${
             err instanceof Error ? err.message : String(err)
           }`,
           isError: true,
@@ -322,7 +322,7 @@ export const authoringTools = [
       }
 
       ctx.patchWorkflowInstanceState?.({
-        spec: args.spec,
+        blueprint: args.blueprint,
         previewSource: preview.previewSource,
         previewErrors: preview.previewErrors,
       });
@@ -342,34 +342,34 @@ export const authoringTools = [
   defineTool<AuthoringItemState>({
     name: "generate_definition",
     description:
-      "Run the generation gate on the current spec draft and produce the TypeScript definition in the editor. Pass the same spec JSON you last passed to set_flow_spec. Returns the gate findings — if there are errors, fix the spec with set_flow_spec and call this again. The conversation continues after a successful generation.",
+      "Run the generation gate on the current blueprint draft and produce the TypeScript definition in the editor. Pass the same blueprint JSON you last passed to set_flow_blueprint. Returns the gate findings — if there are errors, fix the blueprint with set_flow_blueprint and call this again. The conversation continues after a successful generation.",
     parameters: {
       properties: {
-        spec: {
+        blueprint: {
           type: "string",
-          description: "The complete FlowSpec JSON to generate.",
+          description: "The complete FlowBlueprint JSON to generate.",
         },
       },
-      required: ["spec"],
+      required: ["blueprint"],
     },
     executor: async (call, ctx) => {
       if (isDiverged(ctx)) return divergedResult(call);
-      const args = JSON.parse(call.arguments) as { spec?: string };
-      if (typeof args.spec !== "string" || args.spec.trim() === "") {
+      const args = JSON.parse(call.arguments) as { blueprint?: string };
+      if (typeof args.blueprint !== "string" || args.blueprint.trim() === "") {
         return {
           toolCallId: call.id,
-          content: "spec is required",
+          content: "blueprint is required",
           isError: true,
         };
       }
 
-      let preview: SpecPreview;
+      let preview: BlueprintPreview;
       try {
-        preview = validateAndPreview(args.spec);
+        preview = validateAndPreview(args.blueprint);
       } catch (err) {
         return {
           toolCallId: call.id,
-          content: `spec is not valid JSON: ${
+          content: `blueprint is not valid JSON: ${
             err instanceof Error ? err.message : String(err)
           }`,
           isError: true,
@@ -378,7 +378,7 @@ export const authoringTools = [
 
       if (preview.previewErrors.length > 0) {
         ctx.patchWorkflowInstanceState?.({
-          spec: args.spec,
+          blueprint: args.blueprint,
           previewSource: preview.previewSource,
           previewErrors: preview.previewErrors,
           gateErrors: preview.previewErrors,
@@ -404,7 +404,7 @@ export const authoringTools = [
       );
       if (errors.length > 0) {
         ctx.patchWorkflowInstanceState?.({
-          spec: args.spec,
+          blueprint: args.blueprint,
           previewSource: preview.previewSource,
           previewErrors: [],
           gateErrors: errors,
@@ -422,7 +422,7 @@ export const authoringTools = [
       }
 
       ctx.patchWorkflowInstanceState?.({
-        spec: args.spec,
+        blueprint: args.blueprint,
         previewSource: source,
         previewErrors: [],
         source,
@@ -441,13 +441,13 @@ export const authoringTools = [
   defineTool<AuthoringItemState>({
     name: "save_definition",
     description:
-      "Register the current generated definition (the source in the editor) as a flow definition. Call this when the user asks to save or says it is ready — the definition registers immediately and the editor shows the saved state. The first save creates the definition (named from the spec's label, or the explicit name); later saves update the same definition.",
+      "Register the current generated definition (the source in the editor) as a flow definition. Call this when the user asks to save or says it is ready — the definition registers immediately and the editor shows the saved state. The first save creates the definition (named from the blueprint's label, or the explicit name); later saves update the same definition.",
     parameters: {
       properties: {
         name: {
           type: "string",
           description:
-            "Optional name override. Defaults to the spec's label (suggestedName).",
+            "Optional name override. Defaults to the blueprint's label (suggestedName).",
         },
       },
       required: [],
@@ -481,7 +481,7 @@ export const authoringTools = [
   defineTool<AuthoringItemState>({
     name: "read_definition_source",
     description:
-      "Read the current definition TypeScript — the working artifact, including any manual edits the user made directly in the editor. Use this to reason about the exact current source before proposing changes (especially while the spec is frozen by manual edits).",
+      "Read the current definition TypeScript — the working artifact, including any manual edits the user made directly in the editor. Use this to reason about the exact current source before proposing changes (especially while the blueprint is frozen by manual edits).",
     parameters: {
       properties: {},
       required: [],
@@ -538,7 +538,7 @@ const sessionWorkflow = defineWorkflow({
           systemPrompt: buildAuthoringSessionPrompt(),
           tools: [
             "read_authoring_knowledge",
-            "set_flow_spec",
+            "set_flow_blueprint",
             "generate_definition",
             "save_definition",
             "read_definition_source",
@@ -555,7 +555,7 @@ export const authoringSessionFlow = {
   id: AUTHORING_DEFINITION_ID,
   label: "Flow Authoring Session",
   description:
-    "A live conversation that designs a Hive flow definition, maintaining the spec draft as decisions are made.",
+    "A live conversation that designs a Hive flow definition, maintaining the blueprint draft as decisions are made.",
   configSchema: [],
   workflows: [sessionWorkflow],
   tools: authoringTools,

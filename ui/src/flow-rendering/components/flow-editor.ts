@@ -23,8 +23,8 @@ import "./code-editor.ts";
 // The editor is live and bidirectional: the agent's changes (previewSource /
 // source) appear as the session works, and the human's direct edits write
 // back into instance state (throttled, ~800 ms debounce, flushed on send /
-// save / disconnect) marking the spec diverged — while diverged the agent's
-// spec tools refuse and the human can discard their edits to hand back.
+// save / disconnect) marking the blueprint diverged — while diverged the agent's
+// blueprint tools refuse and the human can discard their edits to hand back.
 
 const WRITE_BACK_DEBOUNCE_MS = 800;
 
@@ -224,9 +224,9 @@ export class FlowEditor extends LitElement {
           (error): error is string => typeof error === "string"
         )
       : [];
-    const diverged = state.specDiverged === true;
+    const diverged = state.blueprintDiverged === true;
     // The working artifact: the human's in-flight edits, else the agent's
-    // generated source, else the live spec draft.
+    // generated source, else the live blueprint draft.
     const editorValue =
       this.editedValue ??
       (sessionSource !== "" ? sessionSource : previewSource);
@@ -368,7 +368,7 @@ export class FlowEditor extends LitElement {
   }
 
   // The editable code pane: the working definition source (the human's edits
-  // or the agent's latest), the draft notes from the spec validator, and —
+  // or the agent's latest), the draft notes from the blueprint validator, and —
   // while diverged — the discard handoff.
   private renderEditorPane(value: string, errors: string[], diverged: boolean) {
     return html`<div class="pane">
@@ -403,7 +403,7 @@ export class FlowEditor extends LitElement {
       ${
         diverged
           ? html`<p class="diverged-note"
-              >Manual edits — the agent's spec is frozen. Propose changes in
+              >Manual edits — the agent's blueprint is frozen. Propose changes in
               chat or discard your edits to hand the definition back.</p
             >`
           : nothing
@@ -427,7 +427,7 @@ export class FlowEditor extends LitElement {
     this.requestUpdate();
   };
 
-  // Writes the pending snapshot into the session state (marking the spec
+  // Writes the pending snapshot into the session state (marking the blueprint
   // diverged). Returns when the patch is in flight; save/send await it so the
   // definition being saved or reasoned about includes the human's latest text.
   private async flushWriteBack(): Promise<void> {

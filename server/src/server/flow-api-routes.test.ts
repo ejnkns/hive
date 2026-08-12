@@ -1238,7 +1238,7 @@ describe("flow API routes", () => {
     assert.equal((again.json() as { id: string }).id, "review-flow");
   });
 
-  it("POST /api/flows/definitions/author/:flowId/source writes back the human's edits and marks the spec diverged", async () => {
+  it("POST /api/flows/definitions/author/:flowId/source writes back the human's edits and marks the blueprint diverged", async () => {
     setFlowPersistence(noopPersistence);
     registerFlowDefinition(authoringSessionFlow, { hidden: true });
     const server = Fastify();
@@ -1266,7 +1266,7 @@ describe("flow API routes", () => {
     assert.equal(written.statusCode, 200);
     const state = controller?.getState().workflowInstanceState;
     assert.equal(state?.source, "export const flow = {}; // hand edit");
-    assert.equal(state?.specDiverged, true);
+    assert.equal(state?.blueprintDiverged, true);
 
     // Discard hands the definition back to the agent.
     const discarded = await server.inject({
@@ -1276,7 +1276,7 @@ describe("flow API routes", () => {
     });
     assert.equal(discarded.statusCode, 200);
     assert.equal(
-      controller?.getState().workflowInstanceState.specDiverged,
+      controller?.getState().workflowInstanceState.blueprintDiverged,
       false
     );
   });

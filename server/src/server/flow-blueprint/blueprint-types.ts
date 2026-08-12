@@ -1,4 +1,4 @@
-/** @private — the FlowSpec type vocabulary, shared by the spec validators. */
+/** @private — the FlowBlueprint type vocabulary, shared by the blueprint validators. */
 
 import type {
   BoardColumn,
@@ -172,7 +172,7 @@ export type FlowLevelActionSpec = {
   dispatchToAll?: { workflowId: string; actionId: string };
 };
 
-export type FlowSpec = {
+export type FlowBlueprint = {
   id: string;
   label: string;
   description?: string;
@@ -186,11 +186,11 @@ export type FlowSpec = {
 
 // ─── validation ───────────────────────────────────────────────────────
 
-export type SpecError = { path: string; message: string };
+export type BlueprintError = { path: string; message: string };
 
-// The cross-cutting context validateFlowSpec builds while walking workflows;
+// The cross-cutting context validateFlowBlueprint builds while walking workflows;
 // the edge and writer validators that run afterwards receive it.
-export type SpecValidationContext = {
+export type BlueprintValidationContext = {
   workflowById: Map<string, WorkflowSpec>;
   stateIdsByWorkflow: Map<string, Set<string>>;
   taskIdsByWorkflow: Map<string, Set<string>>;

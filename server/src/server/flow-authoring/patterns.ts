@@ -1,18 +1,18 @@
 /** The patterns rung of the flow-authoring knowledge: tested lifecycle shapes
  * the model copies. One full exemplar (structured-intake, embedded as a
- * validated spec) plus compact sketches for the rest — each sketch shows only
+ * validated blueprint) plus compact sketches for the rest — each sketch shows only
  * the distinctive state/task/edge/action shape, not the full JSON. The prompt
- * asks the model to pick a pattern before writing the spec; the loop's gate
+ * asks the model to pick a pattern before writing the blueprint; the loop's gate
  * keeps every copy honest. */
 
-import type { FlowSpec } from "../flow-spec.ts";
+import type { FlowBlueprint } from "../flow-blueprint.ts";
 
 export type FlowPattern = {
   id: string;
   name: string;
   when: string;
-  // One pattern carries its full validated spec as the copyable exemplar.
-  exemplar?: FlowSpec;
+  // One pattern carries its full validated blueprint as the copyable exemplar.
+  exemplar?: FlowBlueprint;
   // The others carry a compact shape sketch (the distinctive parts only).
   sketch?: string;
 };
@@ -22,7 +22,7 @@ export type FlowPattern = {
 // the agent skipped the contract), taskError gates routing to a retry state,
 // and a flow-level createInstance action. The model copies this SHAPE and
 // renames the nouns for its domain.
-export const STRUCTURED_INTAKE_EXEMPLAR: FlowSpec = {
+export const STRUCTURED_INTAKE_EXEMPLAR: FlowBlueprint = {
   id: "intake",
   label: "Item Intake",
   description: "Classify incoming items into a category and tags.",
@@ -221,7 +221,7 @@ export function renderPatternsPrompt(): string {
     lines.push(`### ${pattern.name} — when: ${pattern.when}`);
     if (pattern.exemplar) {
       lines.push(
-        `A complete valid spec for this pattern:\n\`\`\`json\n${JSON.stringify(pattern.exemplar, null, 2)}\n\`\`\``
+        `A complete valid blueprint for this pattern:\n\`\`\`json\n${JSON.stringify(pattern.exemplar, null, 2)}\n\`\`\``
       );
     } else if (pattern.sketch) {
       lines.push(pattern.sketch);

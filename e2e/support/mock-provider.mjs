@@ -71,9 +71,9 @@ function completionFor(payload) {
   throw new Error("Mock provider received an unknown Agent Role");
 }
 
-// The flow-authoring session: set_flow_spec lands the live preview,
+// The flow-authoring session: set_flow_blueprint lands the live preview,
 // generate_definition runs the real engine gate and writes the source. Later
-// turns cover co-editing: the divergence gate refuses set_flow_spec while the
+// turns cover co-editing: the divergence gate refuses set_flow_blueprint while the
 // source is manual (the agent then proposes in chat), and after the user
 // discards, the next ask regenerates.
 function authoringCompletion(messages) {
@@ -82,22 +82,22 @@ function authoringCompletion(messages) {
   if (toolMessages.length === 0) {
     return toolCompletion(
       [
-        toolCall("author-spec", "set_flow_spec", {
-          spec: JSON.stringify(AUTHORING_SPEC),
+        toolCall("author-blueprint", "set_flow_blueprint", {
+          blueprint: JSON.stringify(AUTHORING_SPEC),
         }),
       ],
       "mock authoring reasoning"
     );
   }
   if (
-    lastMessage?.tool_call_id?.startsWith("author-spec") &&
+    lastMessage?.tool_call_id?.startsWith("author-blueprint") &&
     !lastMessage.content.includes("manual edits")
   ) {
-    // set_flow_spec succeeded (or the divergence was discarded) — generate.
+    // set_flow_blueprint succeeded (or the divergence was discarded) — generate.
     return toolCompletion(
       [
         toolCall("author-gen", "generate_definition", {
-          spec: JSON.stringify(AUTHORING_SPEC),
+          blueprint: JSON.stringify(AUTHORING_SPEC),
         }),
       ],
       "mock authoring reasoning"
@@ -112,16 +112,16 @@ function authoringCompletion(messages) {
     lastMessage?.role === "tool" &&
     lastMessage.content.includes("manual edits")
   ) {
-    // The divergence gate refused the spec update — propose in chat instead.
+    // The divergence gate refused the blueprint update — propose in chat instead.
     return textCompletion(
-      "I see you edited the definition by hand, so the spec is frozen. I'd suggest adding a reject action with a confirm; apply it yourself or discard your edits so I can take over."
+      "I see you edited the definition by hand, so the blueprint is frozen. I'd suggest adding a reject action with a confirm; apply it yourself or discard your edits so I can take over."
     );
   }
   if (lastMessage?.role === "user") {
     return toolCompletion(
       [
-        toolCall("author-spec", "set_flow_spec", {
-          spec: JSON.stringify(AUTHORING_SPEC),
+        toolCall("author-blueprint", "set_flow_blueprint", {
+          blueprint: JSON.stringify(AUTHORING_SPEC),
         }),
       ],
       "mock authoring reasoning"
@@ -378,7 +378,7 @@ Display a deterministic greeting.
 - Localized greetings.
 `;
 
-// The gate-clean FlowSpec the mock authoring agent produces: a review flow
+// The gate-clean FlowBlueprint the mock authoring agent produces: a review flow
 // whose items move from new to done via manual actions, with a createInstance
 // flow-level action writing the title field (the writer the title reads
 // need). The real generate_definition gate runs against it in the e2e.

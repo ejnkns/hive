@@ -7,7 +7,7 @@
 
 import { DESIGN_DECISIONS } from "./decisions.ts";
 
-// A compact but VALID FlowSpec the agent begins from: change the id/label to
+// A compact but VALID FlowBlueprint the agent begins from: change the id/label to
 // the user's domain and extend it as decisions land. Kept inline so the first
 // draft can be a real, renderable definition within a couple of turns.
 export const STARTER_SKELETON = `{
@@ -50,24 +50,24 @@ export function buildAuthoringSessionPrompt(): string {
     "",
     "## Working with the user",
     "Focus on coming to a shared understanding with the user before exploring possibilities. Ask one or two clarifying questions at a time — the few that actually change the design (entities and lifecycles, where AI is used, what structured data each ai-task returns, how a human drives it, how workflows connect, and the error escape hatch).",
-    "Start drafting as soon as the first decisions land: begin from the starter skeleton below (change the id/label to the user's domain), then add each workflow, state, task, and action as the user's decisions solidify. Call `set_flow_spec` after every substantive change — the editor preview updates live, so the user watches the definition take shape.",
+    "Start drafting as soon as the first decisions land: begin from the starter skeleton below (change the id/label to the user's domain), then add each workflow, state, task, and action as the user's decisions solidify. Call `set_flow_blueprint` after every substantive change — the editor preview updates live, so the user watches the definition take shape.",
     "Keep improving the same draft as the conversation progresses; never start over unless the user changes direction.",
-    "When the user asks to generate (or clicks Generate), call `generate_definition` with the current spec — the same JSON you last passed to set_flow_spec. If it returns gate findings, fix the spec and call it again. A successful generation places the TypeScript in the editor, but the conversation continues — keep refining.",
-    'When asked to "just generate it" or "I\'m feeling lucky", do not ask questions — consult the knowledge reference (patterns, vocabulary), produce the best complete spec you can from the request, then generate.',
+    "When the user asks to generate (or clicks Generate), call `generate_definition` with the current blueprint — the same JSON you last passed to set_flow_blueprint. If it returns gate findings, fix the blueprint and call it again. A successful generation places the TypeScript in the editor, but the conversation continues — keep refining.",
+    'When asked to "just generate it" or "I\'m feeling lucky", do not ask questions — consult the knowledge reference (patterns, vocabulary), produce the best complete blueprint you can from the request, then generate.',
     "",
     "## Manual edits (the user edits the TypeScript directly)",
-    "The user can edit the definition TypeScript directly in the editor. When they do, the spec freezes: `set_flow_spec` and `generate_definition` refuse until the user discards (or adopts) their edits. In that state, do not try to overwrite — read the current source with `read_definition_source`, propose specific changes in chat, and let the user apply them or hand the definition back.",
+    "The user can edit the definition TypeScript directly in the editor. When they do, the blueprint freezes: `set_flow_blueprint` and `generate_definition` refuse until the user discards (or adopts) their edits. In that state, do not try to overwrite — read the current source with `read_definition_source`, propose specific changes in chat, and let the user apply them or hand the definition back.",
     "",
     "## How to design a flow (decisions, in order)",
     DESIGN_DECISIONS,
     "",
     "## Starter skeleton (a valid draft to begin from)",
-    "Begin your first `set_flow_spec` from this shape — change the id/label to the user's domain and extend it as decisions land:",
+    "Begin your first `set_flow_blueprint` from this shape — change the id/label to the user's domain and extend it as decisions land:",
     `\`\`\`json\n${STARTER_SKELETON}\n\`\`\``,
     "",
     "## Knowledge reference (consult on demand)",
-    "The exact vocabulary, pattern exemplars, capability list, and failure-mode rules are NOT inline — call the `read_authoring_knowledge` tool with a topic whenever you need the precise details before writing or extending a spec:",
-    "- `vocabulary` — the FlowSpec JSON shape and its constraints",
+    "The exact vocabulary, pattern exemplars, capability list, and failure-mode rules are NOT inline — call the `read_authoring_knowledge` tool with a topic whenever you need the precise details before writing or extending a blueprint:",
+    "- `vocabulary` — the FlowBlueprint JSON shape and its constraints",
     "- `patterns` — tested lifecycle exemplars (structured intake, human review, pipeline/fan-out, git work)",
     "- `capabilities` — engine operations, infrastructure tools, and state fields",
     "- `rules` — the failure-mode guardrails (consult before generate_definition)",

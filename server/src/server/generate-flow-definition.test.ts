@@ -1,17 +1,17 @@
-// The generation loop with a stubbed model caller: happy path (valid spec
-// passes on the first attempt), fixup path (a rejected spec's errors are fed
-// back and a revised spec passes), and exhaust paths (no usable spec → error).
+// The generation loop with a stubbed model caller: happy path (valid blueprint
+// passes on the first attempt), fixup path (a rejected blueprint's errors are fed
+// back and a revised blueprint passes), and exhaust paths (no usable blueprint → error).
 // No real model calls; the deterministic renderer/gate do the real work.
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { FlowSpec } from "./flow-spec.ts";
+import type { FlowBlueprint } from "./flow-blueprint.ts";
 import {
   type ModelCaller,
   runGenerationLoop,
 } from "./generate-flow-definition.ts";
 
-const VALID_SPEC: FlowSpec = {
+const VALID_SPEC: FlowBlueprint = {
   id: "reviewFlow",
   label: "Review Flow",
   configSchema: [],
@@ -78,7 +78,7 @@ const VALID_SPEC: FlowSpec = {
 
 // Same shape, but the autoTransition gate references a task that doesn't
 // exist — validation must reject it.
-const BAD_SPEC: FlowSpec = {
+const BAD_SPEC: FlowBlueprint = {
   ...VALID_SPEC,
   workflows: [
     {
@@ -101,12 +101,12 @@ const BAD_SPEC: FlowSpec = {
   ],
 };
 
-function specJson(spec: FlowSpec): string {
-  return `\`\`\`json\n${JSON.stringify(spec)}\n\`\`\``;
+function specJson(blueprint: FlowBlueprint): string {
+  return `\`\`\`json\n${JSON.stringify(blueprint)}\n\`\`\``;
 }
 
 describe("generation loop", () => {
-  it("passes on the first attempt when the model returns a valid spec", async () => {
+  it("passes on the first attempt when the model returns a valid blueprint", async () => {
     const model: ModelCaller = async () => specJson(VALID_SPEC);
     const result = await runGenerationLoop("Build a review flow", model);
     assert.equal(result.report.passed, true);
@@ -116,11 +116,11 @@ describe("generation loop", () => {
     assert.ok(result.source.includes("defineWorkflow"));
   });
 
-  it("feeds the rejection back and passes on a revised spec", async () => {
+  it("feeds the rejection back and passes on a revised blueprint", async () => {
     const calls: { role: string; content: string }[][] = [];
     const model: ModelCaller = async (messages) => {
       calls.push(messages.map((m) => ({ ...m })));
-      // Call 1 is the design stage; calls 2+ are spec attempts.
+      // Call 1 is the design stage; calls 2+ are blueprint attempts.
       return calls.length === 1
         ? "Design: one review workflow with a run task."
         : calls.length === 2
@@ -141,12 +141,12 @@ describe("generation loop", () => {
     );
   });
 
-  it("feeds advisory warnings back for a spec that validates but has findings", async () => {
+  it("feeds advisory warnings back for a blueprint that validates but has findings", async () => {
     const calls: { role: string; content: string }[][] = [];
-    // A spec with a prompt-less ai-task validates and renders, but the
+    // A blueprint with a prompt-less ai-task validates and renders, but the
     // flow-authoring analysis flags it — the loop feeds that back instead of
     // silently passing.
-    const WARNING_SPEC: FlowSpec = {
+    const WARNING_SPEC: FlowBlueprint = {
       ...VALID_SPEC,
       workflows: [
         {
@@ -193,7 +193,7 @@ describe("generation loop", () => {
     let call = 0;
     const combined: ModelCaller = async (_messages, callbacks) => {
       call++;
-      // Stream two deltas on every model call (design and each spec attempt),
+      // Stream two deltas on every model call (design and each blueprint attempt),
       // then return the right shape per stage.
       callbacks?.onDelta?.("chunk-");
       callbacks?.onDelta?.("chunk");
@@ -207,10 +207,10 @@ describe("generation loop", () => {
       (event) => events.push(event.type)
     );
     assert.equal(result.report.passed, true);
-    assert.equal(call, 2, "design stage plus one spec attempt");
+    assert.equal(call, 2, "design stage plus one blueprint attempt");
 
-    // The design and spec stages stream deltas, then the deterministic gate
-    // stages run, and a clean spec ends without failure events.
+    // The design and blueprint stages stream deltas, then the deterministic gate
+    // stages run, and a clean blueprint ends without failure events.
     assert.deepEqual(events, [
       "stage",
       "delta",
@@ -224,16 +224,16 @@ describe("generation loop", () => {
     ]);
   });
 
-  it("throws after exhausting attempts when the model never emits a spec", async () => {
+  it("throws after exhausting attempts when the model never emits a blueprint", async () => {
     const model: ModelCaller = async () =>
       "I cannot produce a flow definition for that.";
     await assert.rejects(
       () => runGenerationLoop("Build a review flow", model, 3),
-      /JSON flow spec/
+      /JSON flow blueprint/
     );
   });
 
-  it("throws after exhausting attempts when the spec never validates", async () => {
+  it("throws after exhausting attempts when the blueprint never validates", async () => {
     const model: ModelCaller = async () => specJson(BAD_SPEC);
     await assert.rejects(
       () => runGenerationLoop("Build a review flow", model, 3),

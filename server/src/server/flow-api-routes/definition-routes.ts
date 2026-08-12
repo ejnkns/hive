@@ -153,7 +153,7 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
 
   server.post("/api/flows/definitions/author", async (request, reply) => {
     // Creates a flow-authoring session: a hidden flow instance whose ai-chat
-    // agent converges on a spec with the user. The session is interactive and
+    // agent converges on a blueprint with the user. The session is interactive and
     // stays alive until the user closes it or leaves; the prompt (and optional
     // context, e.g. an existing definition to revise) is recorded in instance
     // state and sent as the first chat message — wrapped in the "no questions"
@@ -194,7 +194,7 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
     if (taskId) {
       const context = typeof body?.context === "string" ? body.context : "";
       const firstMessage = lucky
-        ? `Produce the complete flow spec now. Do not ask clarifying questions — make reasonable assumptions, call set_flow_spec, then call generate_definition.\n\nRequest: ${prompt.trim()}${context ? `\n\n${context}` : ""}`
+        ? `Produce the complete flow blueprint now. Do not ask clarifying questions — make reasonable assumptions, call set_flow_blueprint, then call generate_definition.\n\nRequest: ${prompt.trim()}${context ? `\n\n${context}` : ""}`
         : `${prompt.trim()}${context ? `\n\n${context}` : ""}`;
       controller.sendTaskInput(taskId, firstMessage, "user");
     }
@@ -257,7 +257,7 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
 
   // The write-back behind the flow-editor's editable code pane: the human's
   // current definition source, patched into the session state (marking the
-  // spec diverged), or discard — clearing the divergence so the agent's next
+  // blueprint diverged), or discard — clearing the divergence so the agent's next
   // generate wins. The editor debounces its patches; this route is the dumb
   // sync point.
   server.post(
@@ -284,14 +284,17 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
       const controller = runtime.getWorkflowInstance(instance.id);
 
       if (body?.discard === true) {
-        controller?.patchWorkflowInstanceState({ specDiverged: false });
+        controller?.patchWorkflowInstanceState({ blueprintDiverged: false });
         return reply.send({ ok: true, discarded: true });
       }
       const source = typeof body?.source === "string" ? body.source : "";
       if (source === "") {
         return reply.status(400).send({ error: "source is required" });
       }
-      controller?.patchWorkflowInstanceState({ source, specDiverged: true });
+      controller?.patchWorkflowInstanceState({
+        source,
+        blueprintDiverged: true,
+      });
       return reply.send({ ok: true });
     }
   );

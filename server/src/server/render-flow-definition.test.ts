@@ -8,9 +8,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STRUCTURED_INTAKE_EXEMPLAR } from "./flow-authoring.ts";
+import type { FlowBlueprint } from "./flow-blueprint.ts";
+import { validateFlowBlueprint } from "./flow-blueprint.ts";
 import { loadDefinitionFromSource } from "./flow-definitions.ts";
-import type { FlowSpec } from "./flow-spec.ts";
-import { validateFlowSpec } from "./flow-spec.ts";
 import { renderFlowDefinition } from "./render-flow-definition.ts";
 import { checkDefinitionSources } from "./schema-consistency.ts";
 import { typecheckDefinitionSource } from "./typecheck-definition.ts";
@@ -18,10 +18,10 @@ import { typecheckDefinitionSource } from "./typecheck-definition.ts";
 // ─── gate ─────────────────────────────────────────────────────────────
 
 async function assertRenderedPassesGate(
-  spec: FlowSpec,
+  spec: FlowBlueprint,
   slug: string
 ): Promise<string> {
-  const specErrors = validateFlowSpec(spec);
+  const specErrors = validateFlowBlueprint(spec);
   assert.deepEqual(
     specErrors,
     [],
@@ -61,7 +61,7 @@ async function assertRenderedPassesGate(
 
 describe("render flow definition", () => {
   it("renders a worktree + verify + merge card flow (engine ops, patch op, newAttempt, error counts)", async () => {
-    const spec: FlowSpec = {
+    const spec: FlowBlueprint = {
       id: "reviewFlow",
       label: "Review Flow",
       description: "A card lifecycle with engine-owned verification.",
@@ -245,7 +245,7 @@ describe("render flow definition", () => {
   });
 
   it("renders a fan-out flow (plan → one cards instance per card)", async () => {
-    const spec: FlowSpec = {
+    const spec: FlowBlueprint = {
       id: "planFlow",
       label: "Plan Flow",
       configSchema: [],
@@ -332,7 +332,7 @@ describe("render flow definition", () => {
   });
 
   it("renders createInstance actions (state-level and flow-level) as declared writes", async () => {
-    const spec: FlowSpec = {
+    const spec: FlowBlueprint = {
       id: "ideasFlow",
       label: "Ideas Flow",
       configSchema: [],
@@ -437,7 +437,7 @@ describe("render flow definition", () => {
   });
 
   it("renders a minimal non-git two-state flow (no tasks, no ops)", async () => {
-    const spec: FlowSpec = {
+    const spec: FlowBlueprint = {
       id: "simpleFlow",
       label: "Simple Flow",
       configSchema: [
@@ -493,7 +493,7 @@ describe("render flow definition", () => {
     // completionOutput the renderer generates a per-task completion tool, the
     // parsed arguments become the output, and the patch op fails when the
     // model skipped the contract (routing to needs_review via taskError).
-    const spec: FlowSpec = {
+    const spec: FlowBlueprint = {
       id: "ideaOrganizer",
       label: "Idea Organizer",
       configSchema: [],
@@ -646,7 +646,7 @@ describe("render flow definition", () => {
   });
 
   it("renders manual-action input fields", async () => {
-    const spec: FlowSpec = {
+    const spec: FlowBlueprint = {
       id: "reviewFlow",
       label: "Review Flow",
       configSchema: [],
@@ -697,7 +697,7 @@ describe("render flow definition", () => {
   });
 
   it("renders richer configSchema field types with placeholder and defaultValue", async () => {
-    const spec: FlowSpec = {
+    const spec: FlowBlueprint = {
       id: "richFlow",
       label: "Rich Flow",
       configSchema: [
@@ -753,7 +753,7 @@ describe("render flow definition", () => {
   });
 
   it("renders editFields on a workflow", async () => {
-    const spec: FlowSpec = {
+    const spec: FlowBlueprint = {
       id: "editFlow",
       label: "Edit Flow",
       configSchema: [],
@@ -793,7 +793,7 @@ describe("render flow definition", () => {
   });
 
   it("renders confirmText on a manual action", async () => {
-    const spec: FlowSpec = {
+    const spec: FlowBlueprint = {
       id: "confirmFlow",
       label: "Confirm Flow",
       configSchema: [],
@@ -832,7 +832,7 @@ describe("render flow definition", () => {
   });
 
   it("renders a derived display field", async () => {
-    const spec: FlowSpec = {
+    const spec: FlowBlueprint = {
       id: "deriveFlow",
       label: "Derive Flow",
       configSchema: [],

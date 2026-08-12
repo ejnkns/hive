@@ -1,7 +1,7 @@
 /** @private — ValueSpec → expression rendering for patch ops and edge
  * transforms (with the cast to the declared field type). */
 
-import type { FieldType, ValueSpec } from "../flow-spec.ts";
+import type { FieldType, ValueSpec } from "../flow-blueprint.ts";
 import { castTo, json } from "./render-primitives.ts";
 
 export function renderPatchValue(

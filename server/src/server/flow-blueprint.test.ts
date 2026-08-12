@@ -1,16 +1,19 @@
-// Spec validation: the spec-level gate the model iterates against. Every
+// Spec validation: the blueprint-level gate the model iterates against. Every
 // error must be precise and model-actionable (path + message referencing the
 // offending id), and the read↔write invariants must be reported against the
-// spec, before anything is rendered.
+// blueprint, before anything is rendered.
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { FlowSpec } from "./flow-spec.ts";
-import { analyzeFlowSpec, validateFlowSpec } from "./flow-spec.ts";
+import type { FlowBlueprint } from "./flow-blueprint.ts";
+import {
+  analyzeFlowBlueprint,
+  validateFlowBlueprint,
+} from "./flow-blueprint.ts";
 
-// A small valid spec: one workflow, one ai-task, gates on its output, a
+// A small valid blueprint: one workflow, one ai-task, gates on its output, a
 // createInstance action writing the only instance-state field.
-const VALID: FlowSpec = {
+const VALID: FlowBlueprint = {
   id: "reviewFlow",
   label: "Review Flow",
   configSchema: [],
@@ -74,21 +77,26 @@ const VALID: FlowSpec = {
   edges: [],
 };
 
-function errorsFor(spec: FlowSpec): { path: string; message: string }[] {
-  return validateFlowSpec(spec);
+function errorsFor(
+  blueprint: FlowBlueprint
+): { path: string; message: string }[] {
+  return validateFlowBlueprint(blueprint);
 }
 
-function messageFor(spec: FlowSpec, needle: string): string | undefined {
-  return errorsFor(spec).find((e) => e.message.includes(needle))?.message;
+function messageFor(
+  blueprint: FlowBlueprint,
+  needle: string
+): string | undefined {
+  return errorsFor(blueprint).find((e) => e.message.includes(needle))?.message;
 }
 
-describe("validateFlowSpec", () => {
-  it("accepts a well-formed spec", () => {
+describe("validateFlowBlueprint", () => {
+  it("accepts a well-formed blueprint", () => {
     assert.deepEqual(errorsFor(VALID), []);
   });
 
   it("accepts configSchema fields with the richer types", () => {
-    const spec: FlowSpec = {
+    const blueprint: FlowBlueprint = {
       ...VALID,
       configSchema: [
         { key: "note", label: "Note", type: "textarea" },
@@ -104,11 +112,11 @@ describe("validateFlowSpec", () => {
         },
       ],
     };
-    assert.deepEqual(errorsFor(spec), []);
+    assert.deepEqual(errorsFor(blueprint), []);
   });
 
   it("rejects a configSchema field with a malformed options list", () => {
-    const spec: FlowSpec = {
+    const blueprint: FlowBlueprint = {
       ...VALID,
       configSchema: [
         {
@@ -116,16 +124,16 @@ describe("validateFlowSpec", () => {
           label: "Kind",
           type: "string",
           options: ["a", 2],
-        } as unknown as FlowSpec["configSchema"][number],
+        } as unknown as FlowBlueprint["configSchema"][number],
       ],
     };
-    const errors = errorsFor(spec);
+    const errors = errorsFor(blueprint);
     assert.equal(errors.length, 1);
     assert.equal(errors[0].path, "configSchema[0]");
   });
 
   it("accepts editFields whose keys are declared in instanceState", () => {
-    const spec: FlowSpec = {
+    const blueprint: FlowBlueprint = {
       ...VALID,
       workflows: [
         {
@@ -141,11 +149,11 @@ describe("validateFlowSpec", () => {
         },
       ],
     };
-    assert.deepEqual(errorsFor(spec), []);
+    assert.deepEqual(errorsFor(blueprint), []);
   });
 
   it("rejects an editFields key not declared in instanceState", () => {
-    const spec: FlowSpec = {
+    const blueprint: FlowBlueprint = {
       ...VALID,
       workflows: [
         {
@@ -154,24 +162,24 @@ describe("validateFlowSpec", () => {
         },
       ],
     };
-    const errors = errorsFor(spec);
+    const errors = errorsFor(blueprint);
     assert.equal(errors.length, 1);
     assert.equal(errors[0].path, "workflows[0].editFields[0].key");
     assert.match(errors[0].message, /not declared in instanceState/);
   });
 
   it("rejects an empty editFields declaration", () => {
-    const spec: FlowSpec = {
+    const blueprint: FlowBlueprint = {
       ...VALID,
       workflows: [{ ...VALID.workflows[0], editFields: [] }],
     };
-    const errors = errorsFor(spec);
+    const errors = errorsFor(blueprint);
     assert.equal(errors.length, 1);
     assert.equal(errors[0].path, "workflows[0].editFields");
   });
 
   it("accepts derived display fields and rejects malformed derives", () => {
-    const withDerive: FlowSpec = {
+    const withDerive: FlowBlueprint = {
       ...VALID,
       workflows: [
         {
@@ -205,7 +213,7 @@ describe("validateFlowSpec", () => {
     assert.deepEqual(errorsFor(withDerive), []);
 
     // progress without where, unknown kind, non-scalar equals.
-    const bad: FlowSpec = {
+    const bad: FlowBlueprint = {
       ...VALID,
       workflows: [
         {
@@ -222,7 +230,7 @@ describe("validateFlowSpec", () => {
           },
         },
       ],
-    } as unknown as FlowSpec;
+    } as unknown as FlowBlueprint;
     const errors = errorsFor(bad);
     assert.equal(errors.length, 1);
     assert.equal(errors[0].path, "workflows[0].display.fields[0].derive");
@@ -230,7 +238,7 @@ describe("validateFlowSpec", () => {
   });
 
   it("accepts across-instance derives and requires single-segment paths", () => {
-    const withAcross: FlowSpec = {
+    const withAcross: FlowBlueprint = {
       ...VALID,
       workflows: [
         {
@@ -261,7 +269,7 @@ describe("validateFlowSpec", () => {
 
     // A dotted path on an across derive is rejected (the summary aggregates
     // top-level fields only).
-    const dotted: FlowSpec = {
+    const dotted: FlowBlueprint = {
       ...VALID,
       workflows: [
         {
@@ -289,7 +297,7 @@ describe("validateFlowSpec", () => {
   });
 
   it("accepts confirmText on an action and rejects a non-string value", () => {
-    const withConfirm: FlowSpec = {
+    const withConfirm: FlowBlueprint = {
       ...VALID,
       workflows: [
         {
@@ -333,7 +341,7 @@ describe("validateFlowSpec", () => {
           ),
         },
       ],
-    } as unknown as FlowSpec;
+    } as unknown as FlowBlueprint;
     const errors = errorsFor(bad);
     assert.equal(errors.length, 1);
     assert.equal(
@@ -343,7 +351,7 @@ describe("validateFlowSpec", () => {
   });
 
   it("rejects a gate referencing an unknown task", () => {
-    const bad: FlowSpec = {
+    const bad: FlowBlueprint = {
       ...VALID,
       workflows: [
         {
@@ -374,7 +382,7 @@ describe("validateFlowSpec", () => {
   });
 
   it("rejects an unknown engine operation and lists the valid ones", () => {
-    const bad: FlowSpec = {
+    const bad: FlowBlueprint = {
       ...VALID,
       workflows: [
         {
@@ -405,7 +413,7 @@ describe("validateFlowSpec", () => {
   });
 
   it("rejects an unknown tool", () => {
-    const bad: FlowSpec = {
+    const bad: FlowBlueprint = {
       ...VALID,
       workflows: [
         {
@@ -433,7 +441,7 @@ describe("validateFlowSpec", () => {
   });
 
   it("rejects a completionTool other than complete_task", () => {
-    const bad: FlowSpec = {
+    const bad: FlowBlueprint = {
       ...VALID,
       workflows: [
         {
@@ -465,10 +473,10 @@ describe("validateFlowSpec", () => {
     );
   });
 
-  it("reports a read with no writer at the spec level", () => {
+  it("reports a read with no writer at the blueprint level", () => {
     // A gate reading instance state that only createInstance writes a
     // different field for.
-    const bad: FlowSpec = {
+    const bad: FlowBlueprint = {
       ...VALID,
       workflows: [
         {
@@ -500,14 +508,14 @@ describe("validateFlowSpec", () => {
     const message = messageFor(bad, "nothing writes it");
     assert.ok(
       message,
-      `expected a spec-level missing-writer error, got: ${errorsFor(bad)
+      `expected a blueprint-level missing-writer error, got: ${errorsFor(bad)
         .map((e) => e.message)
         .join("; ")}`
     );
   });
 
   it("rejects a patch key not declared in instanceState", () => {
-    const bad: FlowSpec = {
+    const bad: FlowBlueprint = {
       ...VALID,
       workflows: [
         {
@@ -543,7 +551,7 @@ describe("validateFlowSpec", () => {
   });
 
   it("rejects a patch on a non-operation task", () => {
-    const bad: FlowSpec = {
+    const bad: FlowBlueprint = {
       ...VALID,
       workflows: [
         {
@@ -576,7 +584,7 @@ describe("validateFlowSpec", () => {
   });
 
   it("rejects an instanceStateEquals comparison with the wrong value type", () => {
-    const bad: FlowSpec = {
+    const bad: FlowBlueprint = {
       ...VALID,
       workflows: [
         {
@@ -609,7 +617,7 @@ describe("validateFlowSpec", () => {
   });
 
   it("rejects a taskOutputEquals path that does not start with output", () => {
-    const bad: FlowSpec = {
+    const bad: FlowBlueprint = {
       ...VALID,
       workflows: [
         {
@@ -639,7 +647,7 @@ describe("validateFlowSpec", () => {
   });
 
   it("rejects a literal value whose type mismatches the declared field type", () => {
-    const bad: FlowSpec = {
+    const bad: FlowBlueprint = {
       ...VALID,
       edges: [
         {
@@ -660,7 +668,7 @@ describe("validateFlowSpec", () => {
   });
 
   it("rejects conflicting taskOutputEquals paths on the same task", () => {
-    const bad: FlowSpec = {
+    const bad: FlowBlueprint = {
       ...VALID,
       workflows: [
         {
@@ -704,7 +712,7 @@ describe("validateFlowSpec", () => {
   });
 
   it("rejects a dependsOnState use without a declared and written dependsOn field", () => {
-    const bad: FlowSpec = {
+    const bad: FlowBlueprint = {
       ...VALID,
       workflows: [
         {
@@ -738,7 +746,7 @@ describe("validateFlowSpec", () => {
   });
 
   it("accepts a structured completion contract (completionOutput on an ai-task)", () => {
-    const spec: FlowSpec = {
+    const blueprint: FlowBlueprint = {
       ...VALID,
       workflows: [
         {
@@ -786,11 +794,11 @@ describe("validateFlowSpec", () => {
         },
       ],
     };
-    assert.deepEqual(errorsFor(spec), []);
+    assert.deepEqual(errorsFor(blueprint), []);
   });
 
   it("rejects completionOutput on a non-ai-task role", () => {
-    const bad: FlowSpec = {
+    const bad: FlowBlueprint = {
       ...VALID,
       workflows: [
         {
@@ -823,7 +831,7 @@ describe("validateFlowSpec", () => {
   });
 
   it("rejects completionOutput combined with an explicit completionTool", () => {
-    const bad: FlowSpec = {
+    const bad: FlowBlueprint = {
       ...VALID,
       workflows: [
         {
@@ -857,7 +865,7 @@ describe("validateFlowSpec", () => {
   });
 
   it("rejects a taskOutput read of a field the source task does not declare", () => {
-    const bad: FlowSpec = {
+    const bad: FlowBlueprint = {
       ...VALID,
       workflows: [
         {
@@ -906,7 +914,7 @@ describe("validateFlowSpec", () => {
   });
 
   it("rejects a taskOutputEquals gate on an undeclared completionOutput field", () => {
-    const bad: FlowSpec = {
+    const bad: FlowBlueprint = {
       ...VALID,
       workflows: [
         {
@@ -950,9 +958,9 @@ describe("validateFlowSpec", () => {
   });
 });
 
-describe("analyzeFlowSpec", () => {
+describe("analyzeFlowBlueprint", () => {
   it("flags an ai-task with no systemPrompt", () => {
-    const spec: FlowSpec = {
+    const blueprint: FlowBlueprint = {
       ...VALID,
       workflows: [
         {
@@ -975,7 +983,7 @@ describe("analyzeFlowSpec", () => {
         },
       ],
     };
-    const findings = analyzeFlowSpec(spec);
+    const findings = analyzeFlowBlueprint(blueprint);
     assert.ok(
       findings.some((f) => f.includes("no systemPrompt")),
       `expected a prompt finding, got: ${findings.join("; ")}`
@@ -983,7 +991,7 @@ describe("analyzeFlowSpec", () => {
   });
 
   it("flags completionOutput that nothing reads", () => {
-    const spec: FlowSpec = {
+    const blueprint: FlowBlueprint = {
       ...VALID,
       workflows: [
         {
@@ -1011,7 +1019,7 @@ describe("analyzeFlowSpec", () => {
         },
       ],
     };
-    const findings = analyzeFlowSpec(spec);
+    const findings = analyzeFlowBlueprint(blueprint);
     assert.ok(
       findings.some((f) => f.includes("nothing reads its output")),
       `expected an unconsumed-output finding, got: ${findings.join("; ")}`
@@ -1019,7 +1027,7 @@ describe("analyzeFlowSpec", () => {
   });
 
   it("does not flag completionOutput that a patch reads", () => {
-    const spec: FlowSpec = {
+    const blueprint: FlowBlueprint = {
       ...VALID,
       workflows: [
         {
@@ -1059,7 +1067,7 @@ describe("analyzeFlowSpec", () => {
         },
       ],
     };
-    const findings = analyzeFlowSpec(spec);
+    const findings = analyzeFlowBlueprint(blueprint);
     assert.ok(
       !findings.some((f) => f.includes("nothing reads its output")),
       `unexpected unconsumed-output finding: ${findings.join("; ")}`
@@ -1067,12 +1075,12 @@ describe("analyzeFlowSpec", () => {
   });
 
   it("flags a flow with no creation path", () => {
-    const spec: FlowSpec = {
+    const blueprint: FlowBlueprint = {
       ...VALID,
       actions: [],
       edges: [],
     };
-    const findings = analyzeFlowSpec(spec);
+    const findings = analyzeFlowBlueprint(blueprint);
     assert.ok(
       findings.some((f) => f.includes("nothing ever creates an instance")),
       `expected a creation-path finding, got: ${findings.join("; ")}`
@@ -1082,7 +1090,7 @@ describe("analyzeFlowSpec", () => {
 
 describe("manual-action fields", () => {
   it("accepts an action whose input fields are declared in instanceState", () => {
-    const spec: FlowSpec = {
+    const blueprint: FlowBlueprint = {
       ...VALID,
       workflows: [
         {
@@ -1118,11 +1126,11 @@ describe("manual-action fields", () => {
         },
       ],
     };
-    assert.deepEqual(validateFlowSpec(spec), []);
+    assert.deepEqual(validateFlowBlueprint(blueprint), []);
   });
 
   it("rejects an action field not declared in instanceState", () => {
-    const spec: FlowSpec = {
+    const blueprint: FlowBlueprint = {
       ...VALID,
       workflows: [
         {
@@ -1152,10 +1160,10 @@ describe("manual-action fields", () => {
         },
       ],
     };
-    const message = messageFor(spec, "not declared in instanceState");
+    const message = messageFor(blueprint, "not declared in instanceState");
     assert.ok(
       message,
-      `expected a declared-field error, got: ${errorsFor(spec)
+      `expected a declared-field error, got: ${errorsFor(blueprint)
         .map((e) => e.message)
         .join("; ")}`
     );
@@ -1164,7 +1172,7 @@ describe("manual-action fields", () => {
   it("counts manual-action fields as writers of instance state", () => {
     // A field that is only written by an action payload (never by a patch,
     // edge, or createInstance) must not be flagged as "read with no writer".
-    const spec: FlowSpec = {
+    const blueprint: FlowBlueprint = {
       ...VALID,
       workflows: [
         {
@@ -1190,6 +1198,6 @@ describe("manual-action fields", () => {
       ],
       actions: [],
     };
-    assert.deepEqual(validateFlowSpec(spec), []);
+    assert.deepEqual(validateFlowBlueprint(blueprint), []);
   });
 });
