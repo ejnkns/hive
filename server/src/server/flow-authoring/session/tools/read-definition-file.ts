@@ -2,10 +2,9 @@
  * current module set, constrained to the definition root. Only
  * flow-authoring/session/tools.ts imports this. */
 
-import { existsSync, readFileSync } from "node:fs";
 import { defineTool } from "workflow-engine/runners";
-import { refPathInDir } from "../../../flow-definitions.ts";
-import { type AuthoringItemState, authoringModuleSetDir } from "../state.ts";
+import { readAuthoringModuleFile } from "../files.ts";
+import type { AuthoringItemState } from "../state.ts";
 import { toolError } from "./shared.ts";
 
 export const readDefinitionFileTool = defineTool<AuthoringItemState>({
@@ -24,29 +23,13 @@ export const readDefinitionFileTool = defineTool<AuthoringItemState>({
   },
   executor: async (call) => {
     const args = JSON.parse(call.arguments) as { path?: string };
-    const path = typeof args.path === "string" ? args.path.trim() : "";
-    if (path === "" || path === "flow.ts") {
-      return toolError(
-        call,
-        "path is required and must name a referenced file (flow.ts is the rendered entry — edit the blueprint instead)"
-      );
-    }
-    const target = refPathInDir(authoringModuleSetDir(), path);
-    if (target === undefined) {
-      return toolError(
-        call,
-        `path must stay inside the definition root (got "${path}")`
-      );
-    }
-    if (!existsSync(target)) {
-      return toolError(
-        call,
-        `no file at "${path}" — generate the definition first (the gate emits a stub for every referenced file)`
-      );
-    }
+    const result = readAuthoringModuleFile(
+      typeof args.path === "string" ? args.path.trim() : ""
+    );
+    if (!result.ok) return toolError(call, result.message);
     return {
       toolCallId: call.id,
-      content: readFileSync(target, "utf-8"),
+      content: result.content,
       isError: false,
     };
   },

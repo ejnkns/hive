@@ -703,8 +703,12 @@ describe("flow-authoring session", () => {
   });
 
   it("read_definition_file and write_definition_file operate on the module-set files within the definition root", async () => {
-    const workDir = join(runtimeDefinitionsDir(), AUTHORING_MODULE_SET);
-    rmSync(workDir, { recursive: true, force: true });
+    const probe = join(
+      runtimeDefinitionsDir(),
+      AUTHORING_MODULE_SET,
+      "scratch"
+    );
+    rmSync(probe, { recursive: true, force: true });
     try {
       const readTool = authoringTools.find(
         (t) => t.definition.function.name === "read_definition_file"
@@ -773,13 +777,18 @@ describe("flow-authoring session", () => {
       assert.equal(entry.isError, true);
       assert.match(entry.content, /rendered entry/);
     } finally {
-      rmSync(workDir, { recursive: true, force: true });
+      rmSync(probe, { recursive: true, force: true });
     }
   });
 
   it("the session agent creates and edits a referenced file in-conversation and the gate reflects it", async () => {
-    const workDir = join(runtimeDefinitionsDir(), AUTHORING_MODULE_SET);
-    rmSync(workDir, { recursive: true, force: true });
+    const probe = join(
+      runtimeDefinitionsDir(),
+      AUTHORING_MODULE_SET,
+      "tools",
+      "search.ts"
+    );
+    rmSync(probe, { recursive: true, force: true });
     try {
       const controller = await runConversation([
         setSpecCall(FILE_LOOP_BLUEPRINT),
@@ -809,13 +818,18 @@ describe("flow-authoring session", () => {
         "the implemented file must survive the second generate (hand edits are authoritative)"
       );
     } finally {
-      rmSync(workDir, { recursive: true, force: true });
+      rmSync(probe, { recursive: true, force: true });
     }
   });
 
   it("an undeclared import fails the gate with a dependency finding; declaring it passes", async () => {
-    const workDir = join(runtimeDefinitionsDir(), AUTHORING_MODULE_SET);
-    rmSync(workDir, { recursive: true, force: true });
+    const probe = join(
+      runtimeDefinitionsDir(),
+      AUTHORING_MODULE_SET,
+      "tools",
+      "search.ts"
+    );
+    rmSync(probe, { recursive: true, force: true });
     try {
       let state: AuthoringItemState = {
         blueprint: JSON.stringify(FILE_LOOP_BLUEPRINT),
@@ -868,7 +882,7 @@ describe("flow-authoring session", () => {
       await generate.executor(genCall(fixed), ctx);
       assert.equal(state.report?.passed, true);
     } finally {
-      rmSync(workDir, { recursive: true, force: true });
+      rmSync(probe, { recursive: true, force: true });
     }
   });
 });

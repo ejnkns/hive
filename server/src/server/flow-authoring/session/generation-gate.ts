@@ -78,3 +78,32 @@ export async function runGenerationGate(blueprint: FlowBlueprint): Promise<{
     warnings: [...blueprintWarnings, ...result.warnings],
   };
 }
+
+// The blueprint write-back behind the editor's blueprint tab: always records
+// the human's text, and — when it parses and validates — re-renders the live
+// preview (the definition entry). Mid-edit invalid JSON lands with a draft
+// note instead of failing the write.
+export function saveAuthoringBlueprint(blueprintJson: string): {
+  blueprint: string;
+  previewSource: string;
+  previewErrors: string[];
+} {
+  try {
+    const preview = validateAndPreview(blueprintJson);
+    return {
+      blueprint: blueprintJson,
+      previewSource: preview.previewSource,
+      previewErrors: preview.previewErrors,
+    };
+  } catch (err) {
+    return {
+      blueprint: blueprintJson,
+      previewSource: "",
+      previewErrors: [
+        `blueprint is not valid JSON: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      ],
+    };
+  }
+}

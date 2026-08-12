@@ -387,6 +387,9 @@ const AUTHORING_SPEC = {
   label: "Review Flow",
   description: "A review flow with a ready state and approve/reject actions.",
   configSchema: [],
+  // A referenced tool: the generated definition is a module set whose entry
+  // imports the stub file, so the flow-editor shows the referenced-file tabs.
+  tools: [{ id: "websearch", ref: "./tools/websearch.ts" }],
   workflows: [
     {
       id: "items",

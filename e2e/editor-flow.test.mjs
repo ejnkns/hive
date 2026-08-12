@@ -59,6 +59,11 @@ async function editorState() {
     const title =
       shadow.querySelector(".editor-title")?.textContent?.trim() ?? null;
     const code = firstText(shadow, ".code") ?? "";
+    const tabs = [];
+    for (const tab of shadow.querySelectorAll("button.tab")) {
+      const label = tab.textContent?.trim();
+      if (label && !tabs.includes(label)) tabs.push(label);
+    }
     const saved =
       shadow.querySelector(".saved-status")?.textContent?.trim() ?? "";
     const buttons = [];
@@ -72,7 +77,7 @@ async function editorState() {
       }
     };
     walkButtons(shadow);
-    return { title, code, saved, buttons };
+    return { title, code, saved, buttons, tabs };
   });
 }
 
@@ -116,6 +121,42 @@ async function clickEditorButton(buttonLabel, timeoutMs = 40_000) {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   return false;
+}
+
+// Clicks a flow-editor tab by its label (Definition / Blueprint / file path).
+async function clickEditorTab(tabLabel, timeoutMs = 40_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const clicked = await page.evaluate((tabLabel) => {
+      const walk = (root) => {
+        for (const el of root.querySelectorAll("button.tab")) {
+          if (el.textContent?.trim() === tabLabel) return el;
+        }
+        for (const el of root.querySelectorAll("*")) {
+          if (el.shadowRoot) {
+            const found = walk(el.shadowRoot);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
+      const host = document.querySelector("workflow-instances");
+      const tab = walk(host?.shadowRoot ?? document);
+      if (!tab) return false;
+      tab.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, composed: true })
+      );
+      return true;
+    }, tabLabel);
+    if (clicked) return true;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  return false;
+}
+
+// Replaces the active code editor's text (the active tab's editor).
+async function editActiveEditor(text) {
+  return editDefinitionSource(text);
 }
 
 // Replaces the flow-editor's editable source with the given text.
@@ -192,7 +233,11 @@ async function sessionState(definitionKey = "new") {
   }, definitionKey);
 }
 
-async function waitForSessionState(predicate, timeoutMs = 20_000, definitionKey = "new") {
+async function waitForSessionState(
+  predicate,
+  timeoutMs = 20_000,
+  definitionKey = "new"
+) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const state = await sessionState(definitionKey);
@@ -256,8 +301,7 @@ test("authoring session renders as the flow editor, co-edits, and saves", async 
   assert.ok(await sendChatMessage("regenerate the definition"));
   await waitForEditor(
     (state) =>
-      state.code.includes("reviewFlow") &&
-      !state.code.includes("manual tweak"),
+      state.code.includes("reviewFlow") && !state.code.includes("manual tweak"),
     40_000
   );
 
@@ -283,6 +327,20 @@ test("authoring session renders as the flow editor, co-edits, and saves", async 
     "the saved definition source is the generated TypeScript"
   );
 });
+
+// The implemented tool the human types into the referenced-file tab.
+const EDITED_TOOL =
+  'import { defineTool } from "workflow-engine/runners";\n' +
+  "export const websearchTools = [\n" +
+  "  defineTool({\n" +
+  '    name: "websearch",\n' +
+  '    description: "Search the web.",\n' +
+  "    parameters: { properties: {}, required: [] },\n" +
+  "    executor: async (call) => ({\n" +
+  '      toolCallId: call.id, content: "edited result", isError: false,\n' +
+  "    }),\n" +
+  "  }),\n" +
+  "];\n";
 
 // A gate-clean source for the existing-definition revision scenario.
 const REVISE_SOURCE = `import { defineWorkflow } from "workflow-engine/workflow-types";
@@ -325,9 +383,13 @@ test("revising an existing definition starts a session with its source as contex
   // The edit route shows the start-session state (no session auto-resumes for
   // a definition that has never been authored).
   await page.goto(`${baseUrl}/#/flows/revise-me/edit`);
-  await page.waitForSelector("button", { hasText: "Start conversation" }, {
-    timeout: 15_000,
-  });
+  await page.waitForSelector(
+    "button",
+    { hasText: "Start conversation" },
+    {
+      timeout: 15_000,
+    }
+  );
   await page.locator("textarea").first().fill("Add a second workflow");
   await page.locator("button", { hasText: "Start conversation" }).click();
 
@@ -347,4 +409,72 @@ test("revising an existing definition starts a session with its source as contex
     40_000,
     "revise-me"
   );
+});
+
+test("a referenced file opens as an editable tab and the edit persists across a reload", async () => {
+  // Register a definition to author (an existing-definition session resumes
+  // across a reload; a new-definition session intentionally starts fresh).
+  await page.goto(`${baseUrl}/#/flows`);
+  const created = await page.evaluate(async (source) => {
+    const res = await fetch("/api/flows/definitions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Tab Me", source }),
+    });
+    return res.ok ? await res.json() : null;
+  }, REVISE_SOURCE);
+  assert.ok(created, "definition registered");
+  assert.equal(created?.id, "tab-me");
+
+  // Start a session: the mock's blueprint declares a referenced tool, so the
+  // generated definition is a module set and the editor shows file tabs.
+  await page.goto(`${baseUrl}/#/flows/tab-me/edit`);
+  await page.waitForSelector(
+    "button",
+    { hasText: "Start conversation" },
+    { timeout: 15_000 }
+  );
+  await page.locator("textarea").first().fill("Add a websearch tool");
+  await page.locator("button", { hasText: "Start conversation" }).click();
+
+  // The editor shows the Definition tab, the Blueprint tab, and a tab per
+  // referenced file.
+  await waitForEditor(
+    (state) =>
+      state.tabs.includes("Definition") &&
+      state.tabs.includes("Blueprint") &&
+      state.tabs.includes("./tools/websearch.ts"),
+    40_000
+  );
+
+  // Open the referenced file: the editor shows its stub.
+  assert.ok(
+    await clickEditorTab("./tools/websearch.ts"),
+    "the referenced file tab must be clickable"
+  );
+  await waitForEditor((state) => state.code.includes("defineTool"), 40_000);
+
+  // Edit the file: the write-back lands in the session (authoritative — no
+  // divergence).
+  assert.ok(await editActiveEditor(EDITED_TOOL), "the file editor is editable");
+  await waitForSessionState(
+    (state) =>
+      typeof state.workflowInstanceState?.files?.["./tools/websearch.ts"] ===
+        "string" &&
+      state.workflowInstanceState.files["./tools/websearch.ts"].includes(
+        "edited result"
+      ) &&
+      state.workflowInstanceState.blueprintDiverged !== true,
+    20_000,
+    "tab-me"
+  );
+
+  // Reload: the session resumes and the edited file content is still there.
+  await page.reload();
+  await waitForEditor(
+    (state) => state.tabs.includes("./tools/websearch.ts"),
+    40_000
+  );
+  assert.ok(await clickEditorTab("./tools/websearch.ts"));
+  await waitForEditor((state) => state.code.includes("edited result"), 40_000);
 });

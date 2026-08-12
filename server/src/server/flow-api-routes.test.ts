@@ -18,11 +18,15 @@ import {
 } from "workflow-engine/workflow-types";
 import { queenBeeFlow } from "../../../presets/queen-bee/flow.ts";
 import { registerFlowApiRoutes } from "./flow-api-routes.ts";
-import { authoringSessionFlow } from "./flow-authoring.ts";
+import {
+  AUTHORING_MODULE_SET,
+  authoringSessionFlow,
+} from "./flow-authoring/session.ts";
 import {
   registerFlowDefinition,
   registerUserDefinition,
   resetFlowDefinitionsForTest,
+  runtimeDefinitionsDir,
   setDefinitionsBasePathForTest,
 } from "./flow-definitions.ts";
 import type { FlowStore } from "./flow-persistence.ts";
@@ -1293,6 +1297,154 @@ describe("flow API routes", () => {
       payload: { source: "const a = 1;" },
     });
     assert.equal(response.statusCode, 404);
+  });
+
+  it("POST /api/flows/definitions/author/:flowId/files writes a referenced file authoritatively", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition(authoringSessionFlow, { hidden: true });
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+    // The module-set working directory is shared across parallel test files,
+    // so this test touches only its own unique subpath (no whole-dir cleanup).
+    const probe = join(
+      runtimeDefinitionsDir(),
+      AUTHORING_MODULE_SET,
+      "route-test"
+    );
+    rmSync(probe, { recursive: true, force: true });
+    try {
+      const created = await server.inject({
+        method: "POST",
+        url: "/api/flows/definitions/author",
+        body: { prompt: "Build a review flow", lucky: true },
+      });
+      const { flowId, instanceId } = created.json() as {
+        flowId: string;
+        instanceId: string;
+      };
+      const runtime = getFlowRuntime(flowId);
+      const controller = runtime?.getWorkflowInstance(instanceId);
+
+      const written = await server.inject({
+        method: "POST",
+        url: `/api/flows/definitions/author/${flowId}/files`,
+        payload: {
+          path: "./route-test/notes.ts",
+          content: "export const ok = true;\n",
+        },
+      });
+      assert.equal(written.statusCode, 200);
+      const state = controller?.getState().workflowInstanceState;
+      const files = state?.files as Record<string, string> | undefined;
+      assert.equal(
+        files?.["./route-test/notes.ts"],
+        "export const ok = true;\n",
+        "the write must land in the session's file set"
+      );
+      // File edits are authoritative: no divergence flag.
+      assert.notEqual(state?.blueprintDiverged, true);
+
+      // Escaping paths and the rendered entry are rejected.
+      const escapeWrite = await server.inject({
+        method: "POST",
+        url: `/api/flows/definitions/author/${flowId}/files`,
+        payload: { path: "../escape.ts", content: "x" },
+      });
+      assert.equal(escapeWrite.statusCode, 400);
+      const entryWrite = await server.inject({
+        method: "POST",
+        url: `/api/flows/definitions/author/${flowId}/files`,
+        payload: { path: "flow.ts", content: "x" },
+      });
+      assert.equal(entryWrite.statusCode, 400);
+    } finally {
+      rmSync(probe, { recursive: true, force: true });
+    }
+  });
+
+  it("POST /api/flows/definitions/author/:flowId/blueprint writes back and re-renders the preview", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition(authoringSessionFlow, { hidden: true });
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const created = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions/author",
+      body: { prompt: "Build a review flow", lucky: true },
+    });
+    const { flowId, instanceId } = created.json() as {
+      flowId: string;
+      instanceId: string;
+    };
+    const runtime = getFlowRuntime(flowId);
+    const controller = runtime?.getWorkflowInstance(instanceId);
+
+    const blueprint = JSON.stringify({
+      id: "miniFlow",
+      label: "Mini",
+      configSchema: [],
+      workflows: [
+        {
+          id: "wf",
+          label: "Wf",
+          instanceState: [{ field: "title", type: "string" }],
+          initialState: "s",
+          terminalStates: ["d"],
+          states: [
+            { id: "s", label: "S", category: "initial" },
+            { id: "d", label: "D", category: "terminal" },
+          ],
+        },
+      ],
+      edges: [],
+      actions: [
+        {
+          id: "add",
+          label: "Add",
+          createInstance: {
+            workflowId: "wf",
+            fields: [
+              { key: "title", label: "Title", type: "string", required: true },
+            ],
+          },
+        },
+      ],
+    });
+    const written = await server.inject({
+      method: "POST",
+      url: `/api/flows/definitions/author/${flowId}/blueprint`,
+      payload: { blueprint },
+    });
+    assert.equal(written.statusCode, 200);
+    const state = controller?.getState().workflowInstanceState;
+    assert.equal(state?.blueprint, blueprint);
+    assert.ok(
+      typeof state?.previewSource === "string" &&
+        state.previewSource.includes("miniFlow"),
+      "the blueprint edit must re-render the preview entry"
+    );
+    assert.deepEqual(state?.previewErrors, []);
+
+    // Mid-edit invalid JSON is tolerated: the blueprint lands with a draft
+    // note instead of a 400.
+    const broken = await server.inject({
+      method: "POST",
+      url: `/api/flows/definitions/author/${flowId}/blueprint`,
+      payload: { blueprint: "{not json" },
+    });
+    assert.equal(broken.statusCode, 200);
+    const brokenState = controller?.getState().workflowInstanceState;
+    assert.equal(brokenState?.blueprint, "{not json");
+    assert.ok(
+      Array.isArray(brokenState?.previewErrors) &&
+        brokenState.previewErrors.some((e) =>
+          String(e).includes("not valid JSON")
+        ),
+      "the draft notes must surface the parse error"
+    );
   });
 
   it("POST /api/flows/definitions/author requires a prompt", async () => {

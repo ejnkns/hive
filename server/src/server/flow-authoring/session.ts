@@ -20,6 +20,11 @@
  * (generation-gate), the save core (save), the per-tool files (tools/), and
  * the workflow definition (workflow). */
 
+export {
+  readAuthoringModuleFile,
+  writeAuthoringModuleFile,
+} from "./session/files.ts";
+export { saveAuthoringBlueprint } from "./session/generation-gate.ts";
 export { saveAuthoringDefinition, savePatch } from "./session/save.ts";
 export {
   AUTHORING_DEFINITION_ID,

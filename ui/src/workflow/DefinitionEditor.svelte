@@ -8,7 +8,9 @@ import {
   dispatchAction,
   fetchFlow,
   fetchFlowDefinition,
+  saveAuthoringBlueprint,
   saveAuthoringDefinition,
+  saveAuthoringFile,
   saveAuthoringSource,
   sendTaskInput,
 } from "../flow-api.ts";
@@ -157,19 +159,41 @@ async function handleAuthorAction(
   }
 }
 
-// The flow-editor's editable source writes back through onPatchState: the
-// human's current definition, patched into the session (spec diverged). The
-// write-back route is flow-scoped, so the instanceId is not needed.
+// The flow-editor's editable panes write back through onPatchState: the
+// human's current definition (`source`, marking the blueprint diverged), a
+// referenced file (`files`, authoritative — no divergence), or the blueprint
+// text (`blueprint`, re-rendered into the preview). Each write-back route is
+// flow-scoped, so the instanceId is not needed.
 function handleAuthorPatch(
   flowId: string,
   _instanceId: string,
   values: Record<string, unknown>
 ) {
   const source = typeof values.source === "string" ? values.source : "";
-  if (source === "") return;
-  void saveAuthoringSource(flowId, source).catch((err) => {
-    error = err instanceof Error ? err.message : "Failed to save source";
-  });
+  if (source !== "") {
+    void saveAuthoringSource(flowId, source).catch((err) => {
+      error = err instanceof Error ? err.message : "Failed to save source";
+    });
+  }
+  const files =
+    values.files !== null &&
+    typeof values.files === "object" &&
+    !Array.isArray(values.files)
+      ? (values.files as Record<string, string>)
+      : {};
+  for (const [path, content] of Object.entries(files)) {
+    if (typeof content !== "string" || content === "") continue;
+    void saveAuthoringFile(flowId, path, content).catch((err) => {
+      error = err instanceof Error ? err.message : "Failed to save file";
+    });
+  }
+  const blueprint =
+    typeof values.blueprint === "string" ? values.blueprint : "";
+  if (blueprint !== "") {
+    void saveAuthoringBlueprint(flowId, blueprint).catch((err) => {
+      error = err instanceof Error ? err.message : "Failed to save blueprint";
+    });
+  }
 }
 
 async function handleAuthorSend(

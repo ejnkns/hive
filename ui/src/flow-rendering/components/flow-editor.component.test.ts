@@ -324,4 +324,93 @@ describe("FlowEditor", () => {
     await el.updateComplete;
     expect(onAction).toHaveBeenCalledWith("discard", undefined);
   });
+
+  it("renders a Blueprint tab and one tab per referenced file", async () => {
+    const el = await mountEditor(
+      authoringEntry({
+        workflowInstanceState: {
+          prompt: "p",
+          blueprint: '{ "id": "demo" }',
+          files: {
+            "./gates/approved.ts": "export const ok = true;",
+            "./tools/search.ts": "export const tools = [];",
+          },
+        },
+      })
+    );
+    const tabs = Array.from(
+      shadowRootOf(el).querySelectorAll("button.tab")
+    ).map((tab) => tab.textContent?.trim());
+    expect(tabs).toEqual([
+      "Definition",
+      "Blueprint",
+      "./gates/approved.ts",
+      "./tools/search.ts",
+    ]);
+    // The definition tab is active by default.
+    expect(
+      (
+        shadowRootOf(el).querySelector("button.tab.active") as HTMLElement
+      ).textContent?.trim()
+    ).toBe("Definition");
+  });
+
+  it("switches to a file tab and edits write back as files (authoritative, no divergence)", async () => {
+    const el = await mountEditor(
+      authoringEntry({
+        workflowInstanceState: {
+          prompt: "p",
+          files: { "./gates/approved.ts": "export const ok = true;" },
+        },
+      })
+    );
+    const onPatchState = vi.fn();
+    el.onPatchState = onPatchState;
+    await el.updateComplete;
+
+    const gateTab = Array.from(
+      shadowRootOf(el).querySelectorAll("button.tab")
+    ).find(
+      (tab) => tab.textContent?.trim() === "./gates/approved.ts"
+    ) as HTMLButtonElement;
+    gateTab.dispatchEvent(click());
+    await el.updateComplete;
+
+    const textarea = queryDeep(el, "textarea") as HTMLTextAreaElement;
+    expect(textarea.value).toBe("export const ok = true;");
+    type(textarea, "export const ok = false;");
+    await el.updateComplete;
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    expect(onPatchState).toHaveBeenCalledWith({
+      files: { "./gates/approved.ts": "export const ok = false;" },
+    });
+  });
+
+  it("blueprint edits write back as the blueprint text", async () => {
+    const el = await mountEditor(
+      authoringEntry({
+        workflowInstanceState: { prompt: "p", blueprint: "{ }" },
+      })
+    );
+    const onPatchState = vi.fn();
+    el.onPatchState = onPatchState;
+    await el.updateComplete;
+
+    const blueprintTab = Array.from(
+      shadowRootOf(el).querySelectorAll("button.tab")
+    ).find(
+      (tab) => tab.textContent?.trim() === "Blueprint"
+    ) as HTMLButtonElement;
+    blueprintTab.dispatchEvent(click());
+    await el.updateComplete;
+
+    const textarea = queryDeep(el, "textarea") as HTMLTextAreaElement;
+    expect(textarea.value).toBe("{ }");
+    type(textarea, '{ "id": "demo" }');
+    await el.updateComplete;
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    expect(onPatchState).toHaveBeenCalledWith({
+      blueprint: '{ "id": "demo" }',
+    });
+  });
 });

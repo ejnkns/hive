@@ -5,8 +5,10 @@ import { randomUUID } from "node:crypto";
 import { PassThrough } from "node:stream";
 import type { FastifyInstance } from "fastify";
 import {
+  saveAuthoringBlueprint,
   saveAuthoringDefinition,
   savePatch,
+  writeAuthoringModuleFile,
 } from "../flow-authoring/session.ts";
 import { AUTHORING_DEFINITION_ID } from "../flow-authoring.ts";
 import {
@@ -295,6 +297,76 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
         source,
         blueprintDiverged: true,
       });
+      return reply.send({ ok: true });
+    }
+  );
+
+  // The write-back behind the flow-editor's file tabs: a referenced file of
+  // the session's module set, written authoritatively (the file IS the truth —
+  // no divergence machinery for files). The same core as the agent's
+  // write_definition_file tool; the snapshot carries the updated file set back
+  // to the editor.
+  server.post(
+    "/api/flows/definitions/author/:flowId/files",
+    async (request, reply) => {
+      // Fastify params type is erased; shape guaranteed by route pattern
+      const { flowId } = request.params as { flowId: string };
+      const body = request.body as { path?: string; content?: string } | null;
+
+      const runtime = getFlowRuntime(flowId);
+      if (!runtime) {
+        return reply.status(404).send({ error: "Flow not found" });
+      }
+      if (runtime.getFlowConfig().definitionId !== AUTHORING_DEFINITION_ID) {
+        return reply.status(404).send({ error: "Flow not found" });
+      }
+      const instance = runtime.getWorkflowInstanceEntries()[0];
+      if (!instance) {
+        return reply.status(404).send({ error: "No authoring session" });
+      }
+      const controller = runtime.getWorkflowInstance(instance.id);
+      const state = instance.state.workflowInstanceState;
+      const result = writeAuthoringModuleFile(
+        state,
+        typeof body?.path === "string" ? body.path : "",
+        typeof body?.content === "string" ? body.content : ""
+      );
+      if (!result.ok) {
+        return reply.status(400).send({ error: result.message });
+      }
+      controller?.patchWorkflowInstanceState({ files: result.files });
+      return reply.send({ ok: true });
+    }
+  );
+
+  // The write-back behind the flow-editor's blueprint tab: the human's
+  // blueprint text, recorded and re-rendered into the live preview (the same
+  // validate → render the agent's set_flow_blueprint runs).
+  server.post(
+    "/api/flows/definitions/author/:flowId/blueprint",
+    async (request, reply) => {
+      // Fastify params type is erased; shape guaranteed by route pattern
+      const { flowId } = request.params as { flowId: string };
+      const body = request.body as { blueprint?: string } | null;
+      const blueprint =
+        typeof body?.blueprint === "string" ? body.blueprint : "";
+      if (blueprint === "") {
+        return reply.status(400).send({ error: "blueprint is required" });
+      }
+
+      const runtime = getFlowRuntime(flowId);
+      if (!runtime) {
+        return reply.status(404).send({ error: "Flow not found" });
+      }
+      if (runtime.getFlowConfig().definitionId !== AUTHORING_DEFINITION_ID) {
+        return reply.status(404).send({ error: "Flow not found" });
+      }
+      const instance = runtime.getWorkflowInstanceEntries()[0];
+      if (!instance) {
+        return reply.status(404).send({ error: "No authoring session" });
+      }
+      const controller = runtime.getWorkflowInstance(instance.id);
+      controller?.patchWorkflowInstanceState(saveAuthoringBlueprint(blueprint));
       return reply.send({ ok: true });
     }
   );

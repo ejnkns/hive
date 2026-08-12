@@ -273,6 +273,50 @@ export async function discardAuthoringSource(flowId: string): Promise<void> {
   }
 }
 
+// The write-back behind the flow-editor's file tabs: writes a referenced file
+// of the session's module set authoritatively (the file IS the truth — no
+// divergence flag).
+export async function saveAuthoringFile(
+  flowId: string,
+  path: string,
+  content: string
+): Promise<void> {
+  const res = await fetch(
+    `/api/flows/definitions/author/${encodeURIComponent(flowId)}/files`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path, content }),
+    }
+  );
+  if (!res.ok) {
+    // Error response shape is guaranteed by the server endpoint
+    const err = (await res.json()) as { error?: string };
+    throw new Error(err.error ?? "Failed to save file");
+  }
+}
+
+// The write-back behind the flow-editor's blueprint tab: records the human's
+// blueprint text and re-renders the live preview.
+export async function saveAuthoringBlueprint(
+  flowId: string,
+  blueprint: string
+): Promise<void> {
+  const res = await fetch(
+    `/api/flows/definitions/author/${encodeURIComponent(flowId)}/blueprint`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ blueprint }),
+    }
+  );
+  if (!res.ok) {
+    // Error response shape is guaranteed by the server endpoint
+    const err = (await res.json()) as { error?: string };
+    throw new Error(err.error ?? "Failed to save blueprint");
+  }
+}
+
 export async function deleteFlow(flowId: string, purge = false): Promise<void> {
   const res = await fetch(`/api/flows/${encodeURIComponent(flowId)}`, {
     method: "DELETE",
