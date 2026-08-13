@@ -15,7 +15,8 @@ export const FLOW_BLUEPRINT_SHAPE = `## FlowBlueprint vocabulary (the JSON you e
   "actions": [ FLOW_ACTION, ... ], // optional
   "tools": [ { "id": "websearch", "ref": "./tools/websearch.ts" } ],  // optional; custom tools implemented as referenced files
   "operations": [ { "id": "score", "ref": "./ops/score.ts" } ],       // optional; custom operations implemented as referenced files
-  "dependencies": [ "axios" ]      // optional; external packages the referenced files may import (the import policy)
+  "dependencies": [ "axios" ],    // optional; external packages the referenced files may import (the import policy)
+  "ui": { "components": { "idea-card": "<Lit module source>" } }  // optional; served-at-runtime component modules: component id → TypeScript source. The renderer passes them into the definition's ui.components; the server transpiles and serves each. A workflow wires one via WORKFLOW.ui.instanceComponent.
 }
 
 WORKFLOW: {
@@ -26,7 +27,7 @@ WORKFLOW: {
   "terminalStates": ["done"],
   "states": [ STATE, ... ],
   "instance": { "title": "title" },   // optional; dotted path into instanceState
-  "ui": { "view": "board", "columns": [ { "id": "ready", "label": "Ready", "states": ["ready"] } ] },  // optional
+  "ui": { "view": "board", "columns": [ { "id": "ready", "label": "Ready", "states": ["ready"] } ], "instanceComponent": "idea-card" },  // optional; instanceComponent is a served component id (a key of the flow's ui.components)
   "display": { "fields": [ { "path": "description", "label": "Description", "render": "markdown" } ] },  // optional; a field may add "render" or "derive" (see DERIVED DISPLAY below) — render is one of the builtin kinds ("markdown"/"text"/"card"/"cards"/"json") as a bare string OR the object form { "kind": "markdown", "props": { "title": "title" } } when binding prop names to dotted paths (the blueprint cannot declare custom render kinds)
   "editFields": [ CONFIG FIELD, ... ]  // optional; the instance-state fields a user may edit in place via the "Edit details" form. Keys MUST be declared in instanceState. Each entry is a CONFIG FIELD (below).
 }
@@ -71,7 +72,7 @@ TASK: {
   "operationInputs": { "require": "committed" },   // verify_workspace: committed | changes | none
   "tools": ["websearch", "read_file", "write_file"],  // infrastructure tool names + custom tool ids (the flow's "tools" list); the task's completion tool is added automatically
   "completionTool": "complete_task",   // optional; only when the task does NOT declare "completionOutput" — then it must be "complete_task"
-  "completionOutput": [ { "field": "category", "type": "string", "description": "optional" } ],  // optional; ai-task ONLY. Declares the structured fields the task must return. The renderer generates a completion tool <workflowId>_<taskId>_complete with these fields (all required); the parsed arguments become the task output, so patch ops read output.<field> and gates compare output.<field>. Do NOT also set completionTool.
+  "completionOutput": [ { "field": "category", "type": "string", "description": "optional" } ],  // optional; ai-task or ai-chat. Declares the structured fields the task must return. The renderer generates a completion tool <workflowId>_<taskId>_complete with these fields (all required); the parsed arguments become the task output, so patch ops read output.<field> and gates compare output.<field>. An ai-chat surfaces them as output.completion.<field> next to the transcript (gates compare output.completion.<field>); an ai-task's output IS the arguments (output.<field>). Do NOT also set completionTool.
   "workspacePath": "@instance:worktreePath",  // literal dir or "@instance:<field>"
   "inputFromInstanceState": "brief",   // dotted path into instanceState, seeded as the first message
   "persist": { "path": "reviews/{instanceId}-{attempt}.json" },
@@ -92,6 +93,7 @@ STATE_ACTION: {
 }
 
 FLOW_ACTION: { "id": "add_item", "label": "Add item", "variant": "primary",
+  "gate": GATE,   // optional; a visibility gate evaluated against the flow-level runtime context (e.g. a cross-instance file gate). Structured instance/task gates do not apply at the flow level.
   "createInstance": { "workflowId": "items", "fields": [ { "key": "title", "label": "Title", "type": "string", "required": true } ] },
   "dispatchToAll": { "workflowId": "items", "actionId": "start" } }   // either createInstance or dispatchToAll
 
@@ -122,7 +124,7 @@ CONSTRAINTS (the validator rejects violations; fix them in the same blueprint):
 - Every write (patch key, edge field, createInstance key) must be declared in the target workflow's instanceState.
 - Only engine operations and infrastructure tools from the capabilities list may be referenced.
 - completionTool must be "complete_task" — UNLESS the task declares "completionOutput", in which case the renderer generates the completion tool and completionTool must be omitted.
-- gate taskOutputEquals paths start with "output" (the task's output); reads of a completionOutput task's output must reference a declared field.
+- gate taskOutputEquals paths start with "output" (the task's output); reads of a completionOutput task's output must reference a declared field through the role's wrapper (ai-task: output.<field>; ai-chat: output.completion.<field>).
 - Workflow/state/task/field/action ids must be valid TS identifiers (no dashes, no spaces).
 - A workflow with no instance state uses an empty instanceState array.
 - A task may declare either "patch" (operation role) or nothing extra; patch writes on a task read a SIBLING task's output (the patch op runs as an operation task after that task completes).

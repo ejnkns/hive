@@ -12,7 +12,7 @@ import {
 import type {
   BlueprintError,
   BlueprintValidationContext,
-  CompletionOutputField,
+  CompletionContract,
   FieldType,
   FlowBlueprint,
   GateSpec,
@@ -29,6 +29,8 @@ import { collectGateTaskReads, validateGateSpec } from "./validate-gate.ts";
 import { validateRefShape } from "./validate-ref.ts";
 import {
   checkLiteralMatches,
+  completionReadField,
+  completionReadPathError,
   validateCreateInstance,
   validateValueSpec,
 } from "./validate-values.ts";
@@ -66,6 +68,27 @@ export function validateFlowBlueprint(
         );
       }
     });
+  }
+
+  // ── served component modules (ui.components) ──
+  // Component id → TypeScript source, passed through into the definition's
+  // ui.components; the server transpiles and serves each. Ids are opaque
+  // strings (they key the served-component route), so only the source's
+  // presence is validated.
+  if (blueprint.ui?.components !== undefined) {
+    for (const [componentId, source] of Object.entries(
+      blueprint.ui.components
+    )) {
+      if (typeof componentId !== "string" || componentId.trim() === "") {
+        error("ui.components", "component ids must be non-empty strings");
+      }
+      if (typeof source !== "string" || source.trim() === "") {
+        error(
+          `ui.components.${componentId}`,
+          `component "${componentId}" must be a non-empty source string`
+        );
+      }
+    }
   }
 
   // ── blueprint-referenced modules ──
@@ -129,12 +152,13 @@ export function validateFlowBlueprint(
   const stateIdsByWorkflow = new Map<string, Set<string>>();
   const taskIdsByWorkflow = new Map<string, Set<string>>();
   const instanceStateById = new Map<string, Map<string, FieldType>>();
-  // Per-workflow: task id → declared structured completion fields. Used to
+  // Per-workflow: task id → declared structured completion contract. Used to
   // check that taskOutput reads (patch/edge values, taskOutputEquals gates)
-  // resolve to fields the source task actually returns.
+  // resolve to fields the source task actually returns through the role's
+  // wrapper (ai-task: output.<field>; ai-chat: output.completion.<field>).
   const completionOutputById = new Map<
     string,
-    Map<string, CompletionOutputField[]>
+    Map<string, CompletionContract>
   >();
 
   // ── workflows ──
@@ -164,7 +188,7 @@ export function validateFlowBlueprint(
     taskIdsByWorkflow.set(wf.id, taskIds);
     const stateTypes = new Map<string, FieldType>();
     instanceStateById.set(wf.id, stateTypes);
-    const completionOutputs = new Map<string, CompletionOutputField[]>();
+    const completionOutputs = new Map<string, CompletionContract>();
     completionOutputById.set(wf.id, completionOutputs);
 
     if (Array.isArray(wf.instanceState)) {
@@ -276,10 +300,10 @@ export function validateFlowBlueprint(
           }
         }
         if (task.completionOutput !== undefined) {
-          if (task.role !== "ai-task") {
+          if (task.role !== "ai-task" && task.role !== "ai-chat") {
             error(
               `${tPath}.completionOutput`,
-              `completionOutput declares a structured completion contract and requires an ai-task role; ${task.id} is ${task.role}`
+              `completionOutput declares a structured completion contract and requires an ai-task or ai-chat role; ${task.id} is ${task.role}`
             );
           }
           if (task.completionTool !== undefined) {
@@ -318,7 +342,10 @@ export function validateFlowBlueprint(
               `duplicate completionOutput on task "${task.id}"`
             );
           }
-          completionOutputs.set(task.id, task.completionOutput);
+          completionOutputs.set(task.id, {
+            role: task.role === "ai-chat" ? "ai-chat" : "ai-task",
+            fields: task.completionOutput,
+          });
         }
         if (task.extract !== undefined) {
           if (task.role !== "operation") {
@@ -639,6 +666,16 @@ export function validateFlowBlueprint(
           `invalid ui.view ${JSON.stringify(wf.ui.view)} (valid: board, list, document, chat)`
         );
       }
+      if (
+        wf.ui.instanceComponent !== undefined &&
+        (typeof wf.ui.instanceComponent !== "string" ||
+          wf.ui.instanceComponent.trim() === "")
+      ) {
+        error(
+          `${wfPath}.ui.instanceComponent`,
+          `ui.instanceComponent must be a served component id (a key of the flow's ui.components)`
+        );
+      }
       for (const [cIndex, column] of (wf.ui.columns ?? []).entries()) {
         for (const stateId of column.states) {
           if (!stateIds.has(stateId)) {
@@ -671,26 +708,30 @@ export function validateFlowBlueprint(
         } else if (gate.path.startsWith("output.")) {
           pathsForTask(gate.task).add(gate.path.slice("output.".length));
           // A task with a structured completion contract returns exactly its
-          // declared fields; gate reads must address one of them and match
-          // its type.
-          const fields = completionOutputs.get(gate.task);
-          if (fields !== undefined) {
-            const fieldName = gate.path.slice("output.".length).split(".")[0];
-            const declared = fields.find((f) => f.field === fieldName);
-            if (declared === undefined) {
-              error(
-                `${wfPath}`,
-                `taskOutputEquals reads output field "${fieldName}" which task "${gate.task}" does not declare in completionOutput (declared: ${fields.map((f) => f.field).join(", ")})`
-              );
-            } else if (
-              !declared.type.endsWith("[]") &&
-              declared.type !== "object" &&
-              declared.type !== typeof gate.value
-            ) {
-              error(
-                `${wfPath}`,
-                `taskOutputEquals compares completionOutput field "${fieldName}" (type ${declared.type}) with a ${typeof gate.value} value`
-              );
+          // declared fields (through the role's wrapper); gate reads must
+          // address one of them and match its type.
+          const contract = completionOutputs.get(gate.task);
+          if (contract !== undefined) {
+            const readError = completionReadPathError(contract, gate.path);
+            if (readError !== undefined) {
+              error(`${wfPath}`, readError);
+            } else {
+              const fieldName = completionReadField(contract, gate.path);
+              const declared =
+                fieldName !== undefined
+                  ? contract.fields.find((f) => f.field === fieldName)
+                  : undefined;
+              if (
+                declared !== undefined &&
+                !declared.type.endsWith("[]") &&
+                declared.type !== "object" &&
+                declared.type !== typeof gate.value
+              ) {
+                error(
+                  `${wfPath}`,
+                  `taskOutputEquals compares completionOutput field "${fieldName}" (type ${declared.type}) with a ${typeof gate.value} value`
+                );
+              }
             }
           }
         } else {
@@ -738,6 +779,19 @@ export function validateFlowBlueprint(
     const aPath = `actions[${aIndex}]`;
     if (typeof action.id !== "string" || !IDENTIFIER.test(action.id)) {
       error(`${aPath}.id`, "action id must be a valid identifier");
+    }
+    if (action.gate) {
+      // Flow-level gates see the flow-level runtime context (cross-instance
+      // queries); instance/task gates do not apply — an empty context rejects
+      // them, while file/structural gates pass.
+      for (const e of validateGateSpec(
+        action.gate,
+        new Set(),
+        new Map(),
+        `${aPath}.gate`
+      )) {
+        error(e.path, e.message);
+      }
     }
     if (action.createInstance) {
       for (const e of validateCreateInstance(

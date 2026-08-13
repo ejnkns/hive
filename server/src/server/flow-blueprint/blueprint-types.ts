@@ -24,10 +24,22 @@ export type InstanceStateField = { field: string; type: FieldType };
 // generates a completion tool with exactly these fields (all required); the
 // agent calls it to end the task; the parsed arguments become the task output
 // (so patch ops read output.<field> and gates compare output.<field>).
+// An ai-chat runner wraps the parsed arguments as `output.completion` next to
+// the transcript, so reads of an ai-chat contract address
+// `output.completion.<field>`.
 export type CompletionOutputField = {
   field: string;
   type: FieldType;
   description?: string;
+};
+
+// A task's declared structured completion contract, with the role that
+// determines where the parsed arguments surface in the task output: directly
+// (ai-task: `output.<field>`) or wrapped by the ai-chat transcript
+// (`output.completion.<field>`).
+export type CompletionContract = {
+  role: "ai-task" | "ai-chat";
+  fields: CompletionOutputField[];
 };
 
 // Where a write's value comes from. `taskOutput` paths are dot-paths relative
@@ -175,7 +187,13 @@ export type WorkflowSpec = {
   label: string;
   description?: string;
   instance?: { title?: string; subtitle?: string };
-  ui?: { view?: WorkflowView; columns?: BoardColumn[] };
+  ui?: {
+    view?: WorkflowView;
+    columns?: BoardColumn[];
+    // A served component id (a key of the flow's `ui.components`) that renders
+    // this workflow's instances instead of the default card.
+    instanceComponent?: string;
+  };
   display?: {
     fields: {
       path: string;
@@ -222,6 +240,10 @@ export type FlowLevelActionSpec = {
   id: string;
   label: string;
   variant?: "primary" | "secondary" | "destructive" | "default";
+  // A visibility gate evaluated against the flow-level runtime context (e.g.
+  // a cross-instance file gate). Structured instance/task gates do not apply
+  // at the flow level — the validator rejects them.
+  gate?: GateSpec;
   createInstance?: { workflowId: string; fields: ConfigField[] };
   dispatchToAll?: { workflowId: string; actionId: string };
 };
@@ -232,7 +254,14 @@ export type FlowBlueprint = {
   description?: string;
   configSchema: ConfigField[];
   domainDir?: string;
-  ui?: { view?: WorkflowView };
+  ui?: {
+    view?: WorkflowView;
+    // Served-at-runtime component modules: component id → TypeScript source
+    // (erasable syntax). The renderer passes them through into the
+    // definition's `ui.components`; the server transpiles and serves each, and
+    // the rendering surface fetches, evaluates, and registers the module.
+    components?: Record<string, string>;
+  };
   workflows: WorkflowSpec[];
   edges?: EdgeSpec[];
   actions?: FlowLevelActionSpec[];
@@ -258,5 +287,5 @@ export type BlueprintValidationContext = {
   stateIdsByWorkflow: Map<string, Set<string>>;
   taskIdsByWorkflow: Map<string, Set<string>>;
   instanceStateById: Map<string, Map<string, FieldType>>;
-  completionOutputById: Map<string, Map<string, CompletionOutputField[]>>;
+  completionOutputById: Map<string, Map<string, CompletionContract>>;
 };

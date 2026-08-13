@@ -155,12 +155,17 @@ export function renderFlowDefinition(
       emit(0, `type ${p}TaskOutputs = {`);
       for (const task of tasks) {
         // A structured completion contract types the task's output from the
-        // declared fields (the parsed completion arguments ARE the output of
-        // an ai-task); otherwise the type is derived from gate paths.
+        // declared fields: an ai-task's output IS the parsed completion
+        // arguments; an ai-chat wraps them next to the transcript as
+        // `completion`, so gates read output.completion.<field>.
         const outputType = task.completionOutput
-          ? `{ ${task.completionOutput
-              .map((f) => `${f.field}?: ${fieldType(f.type)};`)
-              .join(" ")} }`
+          ? task.role === "ai-chat"
+            ? `{ content?: string; completion?: { ${task.completionOutput
+                .map((f) => `${f.field}?: ${fieldType(f.type)};`)
+                .join(" ")} } }`
+            : `{ ${task.completionOutput
+                .map((f) => `${f.field}?: ${fieldType(f.type)};`)
+                .join(" ")} }`
           : renderOutputNode(
               buildOutputNode(taskOutputPaths.get(task.id) ?? [])
             );
@@ -313,6 +318,8 @@ export function renderFlowDefinition(
     if (wf.ui) {
       const parts: string[] = [];
       if (wf.ui.view) parts.push(`view: ${json(wf.ui.view)}`);
+      if (wf.ui.instanceComponent)
+        parts.push(`instanceComponent: ${json(wf.ui.instanceComponent)}`);
       if (wf.ui.columns) {
         const columns = wf.ui.columns
           .map(
@@ -485,6 +492,12 @@ export function renderFlowDefinition(
     emit(1, `description: ${json(blueprint.description)},`);
   emit(1, `configSchema: [${renderConfigFields(blueprint.configSchema)}],`);
   if (blueprint.domainDir) emit(1, `domainDir: ${json(blueprint.domainDir)},`);
+  if (blueprint.ui?.components) {
+    const components = Object.entries(blueprint.ui.components)
+      .map(([componentId, source]) => `${json(componentId)}: ${json(source)}`)
+      .join(", ");
+    emit(1, `ui: { components: { ${components} } },`);
+  }
   emit(1, `workflows: [${workflowNames.join(", ")}],`);
   // The operations map merges the referenced op maps (flow-level ops first,
   // then inline task refs) and the per-workflow patch/extract maps.
@@ -529,6 +542,8 @@ export function renderFlowDefinition(
       emit(3, `id: ${json(action.id)},`);
       emit(3, `label: ${json(action.label)},`);
       if (action.variant) emit(3, `variant: ${json(action.variant)},`);
+      if (action.gate)
+        emit(3, `gate: (ctx) => ${renderGate(action.gate, fileGateBinding)},`);
       if (action.createInstance) {
         emit(
           3,

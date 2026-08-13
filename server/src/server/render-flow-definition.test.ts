@@ -633,6 +633,161 @@ describe("render flow definition", () => {
     );
   });
 
+  it("renders an ai-chat completion contract (completionOutput on ai-chat, output.completion reads)", async () => {
+    // The queen-bee worker shape: a multi-turn ai-chat whose completion tool
+    // carries the structured outcome; gates branch on output.completion.<field>.
+    const spec: FlowBlueprint = {
+      id: "workerFlow",
+      label: "Worker Flow",
+      configSchema: [],
+      workflows: [
+        {
+          id: "cards",
+          label: "Cards",
+          display: { fields: [{ path: "outcome", label: "Outcome" }] },
+          instanceState: [{ field: "outcome", type: "string" }],
+          initialState: "running",
+          terminalStates: ["reviewed", "unfulfillable"],
+          states: [
+            {
+              id: "running",
+              label: "Running",
+              category: "initial",
+              tasks: [
+                {
+                  id: "runAgent",
+                  label: "Run worker",
+                  role: "ai-chat",
+                  systemPrompt:
+                    "Implement the card, then call cards_runAgent_complete with the outcome.",
+                  startOnUserInput: true,
+                  completionOutput: [
+                    { field: "outcome", type: "string" },
+                    { field: "summary", type: "string" },
+                  ],
+                },
+                {
+                  id: "record",
+                  label: "Record outcome",
+                  role: "operation",
+                  patch: {
+                    outcome: {
+                      kind: "taskOutput",
+                      task: "runAgent",
+                      path: "output.completion.outcome",
+                    },
+                  },
+                },
+              ],
+              autoTransitions: [
+                {
+                  to: "reviewed",
+                  gate: {
+                    kind: "taskOutputEquals",
+                    task: "runAgent",
+                    path: "output.completion.outcome",
+                    value: "implemented",
+                  },
+                },
+                {
+                  to: "unfulfillable",
+                  gate: { kind: "taskError", task: "runAgent" },
+                },
+              ],
+            },
+            { id: "reviewed", label: "Reviewed", category: "terminal" },
+            { id: "unfulfillable", label: "Unfulfillable", category: "error" },
+          ],
+        },
+      ],
+      actions: [],
+      edges: [],
+    };
+
+    const source = await assertRenderedPassesGate(spec, "corpus-worker");
+    assert.match(source, /export const cardsCompletionTools = \[/);
+    assert.match(source, /name: "cards_runAgent_complete"/);
+    assert.match(source, /completionTool: "cards_runAgent_complete"/);
+    // The ai-chat output type wraps the fields under `completion`.
+    assert.match(
+      source,
+      /completion\?: \{ outcome\?: string; summary\?: string; \}/
+    );
+    // The patch op reads through the wrapper and the gate compares it.
+    assert.match(
+      source,
+      /readPath\(ctx\.taskOutputs\(\)\.runAgent, "output\.completion\.outcome"\)/
+    );
+    assert.match(
+      source,
+      /ctx\.taskOutputs\.runAgent\?\.output\?\.completion\?\.outcome === "implemented"/
+    );
+  });
+
+  it("renders ui.components and a workflow instanceComponent, and the served source resolves", async () => {
+    const componentSource =
+      "export default function (lit) { return { components: {} }; }";
+    const spec: FlowBlueprint = {
+      id: "servedFlow",
+      label: "Served Flow",
+      configSchema: [],
+      ui: { components: { "idea-card": componentSource } },
+      workflows: [
+        {
+          id: "ideas",
+          label: "Ideas",
+          instance: { title: "title" },
+          ui: { view: "list", instanceComponent: "idea-card" },
+          instanceState: [{ field: "title", type: "string" }],
+          initialState: "backlog",
+          terminalStates: ["archived"],
+          states: [
+            {
+              id: "backlog",
+              label: "Backlog",
+              category: "initial",
+              actions: [
+                { id: "archive", label: "Archive", transitionTo: "archived" },
+              ],
+            },
+            { id: "archived", label: "Archived", category: "terminal" },
+          ],
+        },
+      ],
+      actions: [
+        {
+          id: "add_idea",
+          label: "Add idea",
+          variant: "primary",
+          createInstance: {
+            workflowId: "ideas",
+            fields: [
+              {
+                key: "title",
+                label: "Title",
+                type: "string",
+                required: true,
+              },
+            ],
+          },
+        },
+      ],
+      edges: [],
+    };
+
+    const source = await assertRenderedPassesGate(spec, "corpus-served");
+    assert.match(source, /instanceComponent: "idea-card"/);
+    assert.match(
+      source,
+      /ui: \{ components: \{ "idea-card": "export default function \(lit\) \{ return \{ components: \{\} \}; \}" \} \},/
+    );
+
+    // The loaded definition carries the served component; the server's
+    // served-component resolver reads it back.
+    const flow = await loadDefinitionFromSource("corpus-served-load", source);
+    assert.equal(flow.ui?.components?.["idea-card"], componentSource);
+  });
+
   it("keeps the structured-intake pattern exemplar gate-clean (the flow-authoring reference)", async () => {
     // The exemplar embedded in the generation prompt is the shape the model
     // copies — if it stops validating/rendering/typechecking cleanly, every

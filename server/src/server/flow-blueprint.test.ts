@@ -822,7 +822,7 @@ describe("validateFlowBlueprint", () => {
         },
       ],
     };
-    const message = messageFor(bad, "requires an ai-task role");
+    const message = messageFor(bad, "requires an ai-task or ai-chat role");
     assert.ok(
       message,
       `expected a role error, got: ${errorsFor(bad)
@@ -955,6 +955,211 @@ describe("validateFlowBlueprint", () => {
       `expected a field-resolution error, got: ${errorsFor(bad)
         .map((e) => e.message)
         .join("; ")}`
+    );
+  });
+
+  it("accepts a structured completion contract on an ai-chat (reads via output.completion.<field>)", () => {
+    const blueprint: FlowBlueprint = {
+      ...VALID,
+      workflows: [
+        {
+          ...VALID.workflows[0],
+          instanceState: [
+            { field: "title", type: "string" },
+            { field: "outcome", type: "string" },
+          ],
+          states: VALID.workflows[0].states.map((s) =>
+            s.id === "running"
+              ? {
+                  ...s,
+                  tasks: [
+                    {
+                      id: "run",
+                      label: "Run",
+                      role: "ai-chat",
+                      systemPrompt:
+                        "Implement the work, then call the completion tool.",
+                      startOnUserInput: true,
+                      completionOutput: [
+                        { field: "outcome", type: "string" },
+                        { field: "summary", type: "string" },
+                      ],
+                    },
+                    {
+                      id: "record",
+                      label: "Record outcome",
+                      role: "operation",
+                      patch: {
+                        outcome: {
+                          kind: "taskOutput",
+                          task: "run",
+                          path: "output.completion.outcome",
+                        },
+                      },
+                    },
+                  ],
+                  autoTransitions: [
+                    {
+                      to: "approved",
+                      gate: {
+                        kind: "taskOutputEquals",
+                        task: "run",
+                        path: "output.completion.outcome",
+                        value: "implemented",
+                      },
+                    },
+                  ],
+                }
+              : s
+          ),
+        },
+      ],
+    };
+    assert.deepEqual(errorsFor(blueprint), []);
+  });
+
+  it("rejects an ai-chat completionOutput read that skips the completion wrapper", () => {
+    const bad: FlowBlueprint = {
+      ...VALID,
+      workflows: [
+        {
+          ...VALID.workflows[0],
+          states: VALID.workflows[0].states.map((s) =>
+            s.id === "running"
+              ? {
+                  ...s,
+                  tasks: [
+                    {
+                      id: "run",
+                      label: "Run",
+                      role: "ai-chat",
+                      systemPrompt: "Complete the work.",
+                      completionOutput: [{ field: "outcome", type: "string" }],
+                    },
+                  ],
+                  autoTransitions: [
+                    {
+                      to: "approved",
+                      gate: {
+                        kind: "taskOutputEquals",
+                        task: "run",
+                        path: "output.outcome",
+                        value: "implemented",
+                      },
+                    },
+                  ],
+                }
+              : s
+          ),
+        },
+      ],
+    };
+    const message = messageFor(bad, "output.completion.<field>");
+    assert.ok(
+      message,
+      `expected the ai-chat wrapper rule, got: ${errorsFor(bad)
+        .map((e) => e.message)
+        .join("; ")}`
+    );
+  });
+
+  it("rejects completionOutput on a role other than ai-task or ai-chat", () => {
+    const bad: FlowBlueprint = {
+      ...VALID,
+      workflows: [
+        {
+          ...VALID.workflows[0],
+          states: VALID.workflows[0].states.map((s) =>
+            s.id === "running"
+              ? {
+                  ...s,
+                  tasks: [
+                    {
+                      id: "run",
+                      label: "Run",
+                      role: "operation",
+                      completionOutput: [{ field: "category", type: "string" }],
+                    },
+                  ],
+                }
+              : s
+          ),
+        },
+      ],
+    };
+    const message = messageFor(bad, "requires an ai-task or ai-chat role");
+    assert.ok(
+      message,
+      `expected a role error, got: ${errorsFor(bad)
+        .map((e) => e.message)
+        .join("; ")}`
+    );
+  });
+
+  it("accepts a file-gated flow-level action and rejects an instance-state gate on one", () => {
+    const gated: FlowBlueprint = {
+      ...VALID,
+      actions: [
+        {
+          id: "start_build",
+          label: "Start build",
+          variant: "primary",
+          gate: { kind: "file", ref: "./gates/map-is-clear.ts" },
+          createInstance: {
+            workflowId: "review",
+            fields: [
+              { key: "title", label: "Title", type: "string", required: true },
+            ],
+          },
+        },
+      ],
+    };
+    assert.deepEqual(errorsFor(gated), []);
+
+    const bad: FlowBlueprint = {
+      ...VALID,
+      actions: [
+        {
+          id: "start_build",
+          label: "Start build",
+          gate: {
+            kind: "instanceStateEquals",
+            field: "title",
+            value: "x",
+          },
+        },
+      ],
+    };
+    assert.ok(
+      messageFor(bad, "is not declared"),
+      "an instance-state gate on a flow-level action must be rejected"
+    );
+  });
+
+  it("validates ui.components sources and workflow instanceComponent ids", () => {
+    const withComponents: FlowBlueprint = {
+      ...VALID,
+      ui: {
+        components: {
+          "idea-card": "export default function (lit) { return {}; }",
+        },
+      },
+      workflows: [
+        {
+          ...VALID.workflows[0],
+          ui: { view: "list", instanceComponent: "idea-card" },
+        },
+      ],
+    };
+    assert.deepEqual(errorsFor(withComponents), []);
+
+    const emptySource: FlowBlueprint = {
+      ...VALID,
+      ui: { components: { "idea-card": "   " } },
+    };
+    assert.ok(
+      messageFor(emptySource, "non-empty source string"),
+      "an empty component source must be rejected"
     );
   });
 });

@@ -4,20 +4,69 @@ import type { ConfigField } from "workflow-engine/workflow-types";
 import { DOTTED_PATH } from "./blueprint-constants.ts";
 import type {
   BlueprintError,
-  CompletionOutputField,
+  CompletionContract,
   FieldType,
   ValueSpec,
   WorkflowSpec,
 } from "./blueprint-types.ts";
 
+// Where a task's structured completion fields surface in its output depends
+// on the role: an ai-task's output IS the parsed completion arguments
+// (`output.<field>`); an ai-chat wraps them next to the transcript
+// (`output.completion.<field>`). These helpers keep every read of a
+// completion-contract task (patch/edge values and taskOutputEquals gates)
+// addressing exactly the declared fields through the role's wrapper.
+
+// The declared field a task-output read addresses, or undefined when the read
+// is not field-addressed (the whole output / whole completion).
+export function completionReadField(
+  contract: CompletionContract,
+  path: string
+): string | undefined {
+  const prefix = contract.role === "ai-task" ? "output." : "output.completion.";
+  if (path.startsWith(prefix)) {
+    return path.slice(prefix.length).split(".")[0];
+  }
+  return undefined;
+}
+
+// An error message when the read does not address the contract's declared
+// fields through the role's wrapper, or undefined when it is valid.
+export function completionReadPathError(
+  contract: CompletionContract,
+  path: string
+): string | undefined {
+  const declared = contract.fields.map((f) => f.field).join(", ");
+  if (path === "output") return undefined;
+  if (contract.role === "ai-task") {
+    if (path.startsWith("output.")) {
+      const field = completionReadField(contract, path);
+      return field !== undefined &&
+        contract.fields.some((f) => f.field === field)
+        ? undefined
+        : `taskOutput path ${JSON.stringify(path)} reads field "${field}" which task does not declare in completionOutput (declared: ${declared})`;
+    }
+    return `taskOutput path must start with "output" (the task's outcome), got ${JSON.stringify(path)}`;
+  }
+  if (path === "output.completion") return undefined;
+  if (path.startsWith("output.completion.")) {
+    const field = completionReadField(contract, path);
+    return field !== undefined && contract.fields.some((f) => f.field === field)
+      ? undefined
+      : `taskOutput path ${JSON.stringify(path)} reads completion field "${field}" which task does not declare in completionOutput (declared: ${declared})`;
+  }
+  return `an ai-chat completion contract surfaces its fields at output.completion.<field> (got ${JSON.stringify(path)}) — an ai-chat task's output is the transcript with the parsed completion arguments nested under "completion"`;
+}
+
 export function validateValueSpec(
   value: ValueSpec,
   taskIds: Set<string>,
   path: string,
-  // The source workflow's task id → completionOutput map; when present, reads
-  // from a task with a structured completion contract must address a declared
-  // field (the parsed completion arguments ARE the ai-task output).
-  completionOutputByTask?: Map<string, CompletionOutputField[]>
+  // The source workflow's task id → completion contract map; when present,
+  // reads from a task with a structured completion contract must address a
+  // declared field through the role's wrapper (the parsed completion arguments
+  // ARE the ai-task output, or the ai-chat output's `completion`).
+  completionOutputByTask?: Map<string, CompletionContract>
 ): BlueprintError[] {
   const errors: BlueprintError[] = [];
   if (value.kind === "literal") return errors;
@@ -36,23 +85,10 @@ export function validateValueSpec(
       });
       return errors;
     }
-    const fields = completionOutputByTask?.get(value.task);
-    if (fields !== undefined) {
-      const segments = value.path.split(".");
-      if (segments[0] !== "output") {
-        errors.push({
-          path,
-          message: `taskOutput path must start with "output" (the task's outcome), got ${JSON.stringify(value.path)}`,
-        });
-      } else if (
-        value.path !== "output" &&
-        !fields.some((f) => f.field === segments[1])
-      ) {
-        errors.push({
-          path,
-          message: `taskOutput path ${JSON.stringify(value.path)} reads field "${segments[1]}" which task "${value.task}" does not declare in completionOutput (declared: ${fields.map((f) => f.field).join(", ")})`,
-        });
-      }
+    const contract = completionOutputByTask?.get(value.task);
+    if (contract !== undefined) {
+      const readError = completionReadPathError(contract, value.path);
+      if (readError !== undefined) errors.push({ path, message: readError });
     }
   }
   return errors;

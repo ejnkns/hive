@@ -116,6 +116,10 @@ export function collectModuleReferences(
     }
   }
 
+  for (const [aIndex, action] of (blueprint.actions ?? []).entries()) {
+    if (action.gate) gateRefs(action.gate, `actions[${aIndex}].gate`);
+  }
+
   for (const [tIndex, tool] of (blueprint.tools ?? []).entries()) {
     out.push({
       kind: "tool",
