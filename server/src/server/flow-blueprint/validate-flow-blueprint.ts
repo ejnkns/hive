@@ -45,10 +45,14 @@ export function validateFlowBlueprint(
   };
 
   // ── flow level ──
-  if (typeof blueprint.id !== "string" || !IDENTIFIER.test(blueprint.id)) {
+  // The flow id is the definition's route/id (e.g. "queen-bee", "reviewFlow");
+  // the engine treats it as an opaque string, so a loose slug pattern (letters,
+  // digits, dashes) is allowed — it is not used as a TS symbol.
+  const FLOW_ID = /^[A-Za-z0-9][A-Za-z0-9-]*$/;
+  if (typeof blueprint.id !== "string" || !FLOW_ID.test(blueprint.id)) {
     error(
       "id",
-      `flow id must be a valid identifier (got ${JSON.stringify(blueprint.id)})`
+      `flow id must be a non-empty slug of letters, digits, and dashes (got ${JSON.stringify(blueprint.id)})`
     );
   }
   if (typeof blueprint.label !== "string" || blueprint.label.trim() === "") {

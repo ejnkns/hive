@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import Fastify, { type FastifyInstance } from "fastify";
-import { queenBeeFlow } from "../../../presets/queen-bee/flow.ts";
+import { flow as queenBeeFlow } from "../../../presets/queen-bee/flow.ts";
 import { registerBuiltinFlowDefinitions } from "../main/register-builtin-flow-definitions.ts";
 import { registerFlowApiRoutes } from "./flow-api-routes.ts";
 import {
@@ -222,15 +222,18 @@ describe("flow definition library", () => {
     assert.equal(queenBee.builtIn, true);
     assert.ok(
       typeof queenBee.source === "string" &&
-        queenBee.source.includes("queenBeeFlow"),
-      "a preset's entry source is captured for the view"
+        queenBee.source.includes("export const flow = {") &&
+        queenBee.source.includes('id: "queen-bee"'),
+      "a preset's entry source is the rendered definition"
     );
     assert.ok(
-      queenBee.files?.["cards-workflow.ts"]?.includes("defineWorkflow"),
+      queenBee.files?.["cards/ops/build-review-package.ts"]?.includes(
+        "build_review_packageOperations"
+      ),
       "a preset's referenced modules are captured as files"
     );
     assert.ok(
-      queenBee.files?.["tools.ts"] !== undefined,
+      queenBee.files?.["tools/update-requirements-draft.ts"] !== undefined,
       "the preset's tools module is part of the file set"
     );
     const wayfinder = getRegisteredFlowDefinition("wayfinder");

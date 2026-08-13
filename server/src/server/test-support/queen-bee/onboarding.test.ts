@@ -10,7 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { queenBeeFlow } from "../../../../../presets/queen-bee/flow.ts";
+import { flow as queenBeeFlow } from "../../../../../presets/queen-bee/flow.ts";
 import { registerFlowDefinition } from "../../flow-definitions.ts";
 import {
   createFlowPersistence,

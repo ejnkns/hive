@@ -1,15 +1,12 @@
-// Requirements workflow internals; import via requirements-workflow.ts.
+// The requirements workflow's finalize_requirements operation, referenced by
+// the queen-bee blueprint.
 
-import type { OperationContext } from "workflow-engine/runners";
+import {
+  defineOperations,
+  type OperationContext,
+} from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
-import type { RequirementsItemState } from "../requirements-workflow.ts";
-
-// The requirements workflow's operations, keyed by the names its tasks
-// reference. flow.ts binds the state type and merges this into the registry.
-export const requirementsOperations = {
-  finalize_requirements: finalizeRequirementsOp,
-  clear_requirements_state: clearRequirementsStateOp,
-};
+import type { RequirementsState } from "../types.ts";
 
 // The requirements draft is the requirements session's running output, recorded
 // in the instance state by the update_requirements_draft tool. Finalizing
@@ -20,7 +17,7 @@ export const requirementsOperations = {
 function finalizeRequirementsOp(
   _task: TaskDefinition,
   _params: Record<string, unknown>,
-  ctx: OperationContext<RequirementsItemState>
+  ctx: OperationContext<RequirementsState>
 ): string {
   const raw = ctx.workflowInstanceState().requirementsDraft;
   const draft = typeof raw === "string" ? raw : "";
@@ -72,14 +69,7 @@ function extractRequirementsFromToolCalls(
   return found;
 }
 
-// Clears the requirements draft and task outputs from the instance so a reset
-// returns the workflow to a truly clean slate. Without this, an old draft
-// would survive a reset and auto-approve on the next session.
-function clearRequirementsStateOp(
-  _task: TaskDefinition,
-  _params: Record<string, unknown>,
-  ctx: OperationContext<RequirementsItemState>
-): { ok: boolean } {
-  ctx.patchWorkflowInstanceState({ requirementsDraft: undefined });
-  return { ok: true };
-}
+export const finalize_requirementsOperations =
+  defineOperations<RequirementsState>({
+    finalize_requirements: finalizeRequirementsOp,
+  });

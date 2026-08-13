@@ -1,6 +1,8 @@
-// Onboarding workflow internals; import via onboarding-workflow.ts.
+// The onboarding workflow's ensure_integration_branch operation, referenced by
+// the queen-bee blueprint.
 
 import {
+  defineOperations,
   ensureIntegrationBranch,
   gitOptional,
   type OperationContext,
@@ -8,19 +10,14 @@ import {
   resolveBasePath,
 } from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
-import type { OnboardingItemState } from "../onboarding-workflow.ts";
-
-export const onboardingOperations = {
-  ensure_integration_branch: ensureIntegrationBranchOp,
-  write_project_metadata: writeProjectMetadata,
-};
+import type { OnboardingState } from "../types.ts";
 
 type OperationResult = Record<string, unknown>;
 
 function ensureIntegrationBranchOp(
   task: TaskDefinition,
   _params: Record<string, unknown>,
-  ctx: OperationContext<OnboardingItemState>
+  ctx: OperationContext<OnboardingState>
 ): OperationResult {
   const basePath = resolveBasePath(ctx.flowConfig());
   const { integrationBranch, branchPrefix } = readFlowSettings(
@@ -39,22 +36,6 @@ function ensureIntegrationBranchOp(
   );
   ctx.patchFlowConfig({ basePath, targetBranch });
   return { ...result, targetBranch };
-}
-
-function writeProjectMetadata(
-  _task: TaskDefinition,
-  _params: Record<string, unknown>,
-  ctx: OperationContext<OnboardingItemState>
-): OperationResult {
-  const config = ctx.flowConfig();
-  const basePath = resolveBasePath(ctx.flowConfig());
-  const name =
-    typeof config.name === "string"
-      ? config.name
-      : (basePath.split("/").pop() ?? basePath);
-  const targetBranch =
-    typeof config.targetBranch === "string" ? config.targetBranch : "main";
-  return { name, basePath, targetBranch };
 }
 
 // The user's development branch, excluding the queen-bee integration branch and
@@ -87,3 +68,8 @@ function inferTargetBranch(
   }
   return preferred;
 }
+
+export const ensure_integration_branchOperations =
+  defineOperations<OnboardingState>({
+    ensure_integration_branch: ensureIntegrationBranchOp,
+  });

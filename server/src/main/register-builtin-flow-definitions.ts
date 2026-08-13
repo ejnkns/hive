@@ -3,7 +3,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { logger } from "shared/logger";
-import { queenBeeFlow } from "../../../presets/queen-bee/flow.ts";
+import { flow as queenBeeFlow } from "../../../presets/queen-bee/flow.ts";
 import { flow as wayfinderFlow } from "../../../presets/wayfinder/flow.ts";
 import { authoringSessionFlow } from "../server/flow-authoring.ts";
 import {

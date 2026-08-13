@@ -617,7 +617,10 @@ export function renderFlowDefinition(
       emit(3, "},");
     } else {
       const fields = edge.fields ?? {};
-      emit(3, "transform: (source) => ({");
+      // A field-less edge is a pure signal (create/merge without data); its
+      // transform takes no parameter so the unused-param lint stays quiet.
+      const param = Object.keys(fields).length > 0 ? "source" : "";
+      emit(3, `transform: (${param}) => ({`);
       for (const [field, value] of Object.entries(fields)) {
         const fieldDecl = blueprint.workflows
           .find((w) => w.id === edge.toWorkflow)

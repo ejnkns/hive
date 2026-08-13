@@ -16,7 +16,7 @@ import {
   defineWorkflow,
   type FlowDefinition,
 } from "workflow-engine/workflow-types";
-import { queenBeeFlow } from "../../../presets/queen-bee/flow.ts";
+import { flow as queenBeeFlow } from "../../../presets/queen-bee/flow.ts";
 import { registerFlowApiRoutes } from "./flow-api-routes.ts";
 import { authoringSessionFlow } from "./flow-authoring/session.ts";
 import {

@@ -187,19 +187,23 @@ function plannerCompletion(messages) {
   }
   if (lastMessage?.tool_call_id === "planner-read") {
     assertAssistantTurn(messages, "mock planner reasoning", 2);
-    // The plan task completes via the submit_plan completion tool; its parsed
-    // arguments become the task output the Accept-proposal gate reads.
+    // The plan task completes via the generated requirements_plan_complete
+    // completion tool; its parsed arguments become the task output the
+    // Accept-proposal gate reads. Each card is shaped for the requirements→
+    // cards fan-out: cardSpec plus the titles it blocks on.
     return toolCompletion([
-      toolCall("planner-submit", "submit_plan", {
+      toolCall("planner-submit", "requirements_plan_complete", {
         kind: "proposal",
         cards: [
           {
-            title: "Render deterministic greeting",
-            description:
-              "Render the approved greeting from the application entry point.",
-            acceptanceCriteria: [
-              "Running the application displays Hello from Hive",
-            ],
+            cardSpec: {
+              title: "Render deterministic greeting",
+              description:
+                "Render the approved greeting from the application entry point.",
+              acceptanceCriteria: [
+                "Running the application displays Hello from Hive",
+              ],
+            },
             dependencies: [],
             requirementRefs: ["FR-1", "AC-1"],
           },
@@ -240,7 +244,7 @@ function workerCompletion(messages) {
   }
   if (lastMessage?.tool_call_id === "worker-commit") {
     return toolCompletion([
-      toolCall("worker-submit", "submit_work", {
+      toolCall("worker-submit", "cards_runAgent_complete", {
         outcome: "implemented",
         verificationNotRunReason:
           "The fixture has no executable test runner; the Reviewer inspects the committed value.",
@@ -264,7 +268,7 @@ function reviewerCompletion(messages) {
   if (lastMessage?.tool_call_id === "reviewer-log") {
     assertAssistantTurn(messages, "mock reviewer reasoning", 2);
     return toolCompletion([
-      toolCall("reviewer-submit", "submit_review", {
+      toolCall("reviewer-submit", "cards_review_complete", {
         verdict: "approved",
         findings: [],
         verificationAssessment: {

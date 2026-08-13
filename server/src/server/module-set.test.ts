@@ -23,7 +23,7 @@ import {
 import type { ToolCall } from "workflow-engine/runners/tool-types";
 import type { TaskRunnerContext } from "workflow-engine/task-runner";
 import type { FlowDefinition } from "workflow-engine/workflow-types";
-import { queenBeeFlow } from "../../../presets/queen-bee/flow.ts";
+import { flow as queenBeeFlow } from "../../../presets/queen-bee/flow.ts";
 import type { FlowBlueprint } from "./flow-blueprint.ts";
 import { validateFlowBlueprint } from "./flow-blueprint.ts";
 import {

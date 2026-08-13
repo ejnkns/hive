@@ -16,10 +16,7 @@ import {
   createAiTaskRunner,
   type TaskRunnerContext,
 } from "workflow-engine/runners";
-import {
-  queenBeeFlow,
-  queenBeeOperations,
-} from "../../../../../presets/queen-bee/flow.ts";
+import { flow as queenBeeFlow } from "../../../../../presets/queen-bee/flow.ts";
 import { createEngineRunners } from "../../engine-bridge.ts";
 
 export type CardFlowOptions = {
@@ -42,7 +39,7 @@ export function makeCardRuntime(options: CardFlowOptions) {
   };
   const baseRunners = createEngineRunners({
     tools: queenBeeFlow.tools,
-    operations: queenBeeOperations,
+    operations: queenBeeFlow.operations,
   });
   return createFlowRuntime(
     "project",
@@ -160,7 +157,7 @@ export function honestWorker(): AiChatModelCaller {
       toolCalls: [
         {
           id: "w3",
-          name: "submit_work",
+          name: "cards_runAgent_complete",
           arguments: JSON.stringify({ outcome: "implemented" }),
         },
       ],
@@ -177,7 +174,7 @@ export function alreadySatisfiedWorker(): AiChatModelCaller {
     toolCalls: [
       {
         id: "s1",
-        name: "submit_work",
+        name: "cards_runAgent_complete",
         arguments: JSON.stringify({
           outcome: "already_satisfied",
           noChangeRationale: "Behavior already present",
@@ -196,7 +193,7 @@ export function noCommitWorker(): AiChatModelCaller {
     toolCalls: [
       {
         id: "s1",
-        name: "submit_work",
+        name: "cards_runAgent_complete",
         arguments: JSON.stringify({ outcome: "implemented" }),
       },
     ],
@@ -227,7 +224,7 @@ export function toolAbuseWorker(): AiChatModelCaller {
       toolCalls: [
         {
           id: "s1",
-          name: "submit_work",
+          name: "cards_runAgent_complete",
           arguments: JSON.stringify({ outcome: "implemented" }),
         },
       ],
@@ -242,7 +239,7 @@ export function approvingReviewer(): AiTaskModelCaller {
     toolCalls: [
       {
         id: "r1",
-        name: "submit_review",
+        name: "cards_review_complete",
         arguments: JSON.stringify({
           verdict: "approved",
           findings: [],
@@ -260,7 +257,7 @@ export function rejectingReviewer(): AiTaskModelCaller {
     toolCalls: [
       {
         id: "r1",
-        name: "submit_review",
+        name: "cards_review_complete",
         arguments: JSON.stringify({
           verdict: "changes_requested",
           findings: [
@@ -271,6 +268,10 @@ export function rejectingReviewer(): AiTaskModelCaller {
               recommendation: "make it work",
             },
           ],
+          verificationAssessment: {
+            status: "insufficient",
+            notes: "does not work",
+          },
         }),
       },
     ],

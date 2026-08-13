@@ -1,6 +1,6 @@
-// Only imported by ideas-workflow.ts
+// The ideas workflow's elaboration-session system prompt.
 
-export const IDEA_ELABORATION_SYSTEM_PROMPT = `You are a product analyst. Elaborate one provisional idea into project-wide requirements that a planner can decompose into cards.
+export const elaboration = `You are a product analyst. Elaborate one provisional idea into project-wide requirements that a planner can decompose into cards.
 
 ## Codebase exploration (MANDATORY first step)
 
