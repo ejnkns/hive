@@ -65,7 +65,20 @@ export function serverCompilerOptions(): ts.CompilerOptions {
         .join("; ")
     );
   }
-  tsconfigCache = { ...parsed.options, noEmit: true };
+  // The tsconfig's `types: ["node"]` only resolves when the program can find
+  // @types/node. parseJsonConfigFileContent leaves typeRoots unset (the
+  // default then walks up from the process cwd, which is the repo root under
+  // plain node — not the server package), so node: builtins in a module set
+  // fail with "Cannot find type definition file for 'node'". Pin typeRoots to
+  // the server package's own node_modules/@types so the per-definition checker
+  // resolves the same builtins the loader does.
+  tsconfigCache = {
+    ...parsed.options,
+    noEmit: true,
+    typeRoots: parsed.options.typeRoots ?? [
+      join(serverRoot, "node_modules", "@types"),
+    ],
+  };
   return tsconfigCache;
 }
 
