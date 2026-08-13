@@ -27,7 +27,7 @@ WORKFLOW: {
   "states": [ STATE, ... ],
   "instance": { "title": "title" },   // optional; dotted path into instanceState
   "ui": { "view": "board", "columns": [ { "id": "ready", "label": "Ready", "states": ["ready"] } ] },  // optional
-  "display": { "fields": [ { "path": "description", "label": "Description", "render": "markdown" } ] },  // optional; a field may add "render" or "derive" (see DERIVED DISPLAY below) — render is the bare kind string ("markdown"/"text"/"card"/"cards"/"json", or a custom kind) OR the object form { "kind": "markdown", "props": { "title": "title" } } when binding prop names to dotted paths
+  "display": { "fields": [ { "path": "description", "label": "Description", "render": "markdown" } ] },  // optional; a field may add "render" or "derive" (see DERIVED DISPLAY below) — render is one of the builtin kinds ("markdown"/"text"/"card"/"cards"/"json") as a bare string OR the object form { "kind": "markdown", "props": { "title": "title" } } when binding prop names to dotted paths (the blueprint cannot declare custom render kinds)
   "editFields": [ CONFIG FIELD, ... ]  // optional; the instance-state fields a user may edit in place via the "Edit details" form. Keys MUST be declared in instanceState. Each entry is a CONFIG FIELD (below).
 }
 

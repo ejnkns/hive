@@ -1639,6 +1639,52 @@ describe("manual-action fields", () => {
       assert.match(msgFor(blueprint, "render must be"), /render must be/);
     });
 
+    it("rejects a non-builtin kind string (typos and unknown kinds)", () => {
+      const blueprint: FlowBlueprint = {
+        ...VALID,
+        workflows: [
+          {
+            ...VALID.workflows[0],
+            display: {
+              fields: [
+                {
+                  path: "title",
+                  label: "Title",
+                  render: "markdownn" as never,
+                },
+              ],
+            },
+          },
+        ],
+      };
+      const message = msgFor(blueprint, "render kind must be one of");
+      assert.match(message, /markdown/);
+    });
+
+    it("rejects a non-builtin kind in the object form", () => {
+      const blueprint: FlowBlueprint = {
+        ...VALID,
+        workflows: [
+          {
+            ...VALID.workflows[0],
+            display: {
+              fields: [
+                {
+                  path: "title",
+                  label: "Title",
+                  render: { kind: "hero-card" } as never,
+                },
+              ],
+            },
+          },
+        ],
+      };
+      assert.match(
+        msgFor(blueprint, "render kind must be one of"),
+        /render kind must be one of/
+      );
+    });
+
     it("rejects a render hint without a kind", () => {
       const blueprint: FlowBlueprint = {
         ...VALID,
@@ -1658,8 +1704,8 @@ describe("manual-action fields", () => {
         ],
       };
       assert.match(
-        msgFor(blueprint, "render.kind is required"),
-        /render.kind is required/
+        msgFor(blueprint, "render kind must be one of"),
+        /render kind must be one of/
       );
     });
 

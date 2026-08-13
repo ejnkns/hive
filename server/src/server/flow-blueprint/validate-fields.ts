@@ -17,11 +17,24 @@ export function isFieldType(value: unknown): value is FieldType {
 // a model mistake the renderer would otherwise emit as broken TypeScript
 // ("Type 'string' is not assignable to type 'RuntimeRenderHint'") deep in
 // the generated entry — catch it here with a readable finding instead.
+// The render kinds a blueprint may reference: the engine's builtin set. The
+// blueprint cannot declare custom render kinds (only hand-authored definitions
+// can, via FlowDefinition.ui.kinds), so a custom name would silently fall back
+// to json at runtime — a typo'd or unknown kind is caught here instead.
+const BUILTIN_RENDER_KINDS: readonly string[] = [
+  "markdown",
+  "text",
+  "card",
+  "cards",
+  "json",
+];
+
 export function renderHintErrors(
   value: unknown,
   path: string
 ): BlueprintError[] {
   const errors: BlueprintError[] = [];
+  const kindMessage = `render kind must be one of ${BUILTIN_RENDER_KINDS.map((k) => `"${k}"`).join(", ")} (the blueprint cannot declare custom render kinds)`;
   // A bare string is the kind shorthand — the renderer normalizes it to
   // { kind: <string> } for the definition.
   if (typeof value === "string") {
@@ -30,6 +43,8 @@ export function renderHintErrors(
         path,
         message: `render must be a non-empty kind string or an object with a kind (e.g. "markdown" or { kind: "markdown" })`,
       });
+    } else if (!BUILTIN_RENDER_KINDS.includes(value)) {
+      errors.push({ path, message: kindMessage });
     }
     return errors;
   }
@@ -41,11 +56,12 @@ export function renderHintErrors(
     return errors;
   }
   const hint = value as Record<string, unknown>;
-  if (typeof hint.kind !== "string" || hint.kind.trim() === "") {
-    errors.push({
-      path: `${path}.kind`,
-      message: `render.kind is required and must be a string (builtin kinds: markdown, text, card, cards, json — or a custom kind)`,
-    });
+  if (
+    typeof hint.kind !== "string" ||
+    hint.kind.trim() === "" ||
+    !BUILTIN_RENDER_KINDS.includes(hint.kind)
+  ) {
+    errors.push({ path: `${path}.kind`, message: kindMessage });
   }
   if (
     hint.props !== undefined &&

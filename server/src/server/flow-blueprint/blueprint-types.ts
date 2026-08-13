@@ -2,9 +2,9 @@
 
 import type {
   BoardColumn,
+  BuiltinRenderKind,
   ConfigField,
   DerivedDisplay,
-  RuntimeRenderHint,
   WorkflowView,
 } from "workflow-engine/workflow-types";
 
@@ -182,7 +182,13 @@ export type WorkflowSpec = {
       label?: string;
       // A render hint: the object form ({ kind, props? }) or the bare-kind
       // shorthand ("markdown" — the renderer normalizes it to { kind: "markdown" }).
-      render?: RuntimeRenderHint | string;
+      // The kind is restricted to the engine's builtin render kinds — the
+      // blueprint cannot declare custom kinds (a hand-authored definition can,
+      // via ui.kinds), so anything else would silently fall back to json at
+      // runtime; a typo'd or unknown kind is caught here instead.
+      render?:
+        | { kind: BuiltinRenderKind; props?: Record<string, string> }
+        | BuiltinRenderKind;
       derive?: DerivedDisplay;
     }[];
   };
