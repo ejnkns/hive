@@ -7,10 +7,19 @@
 // operation/transform/extract all run.
 
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import { createFlowRuntime } from "workflow-engine/create-flow-runtime";
 import {
   createAiChatRunner,
@@ -23,7 +32,9 @@ import {
 import type { ToolCall } from "workflow-engine/runners/tool-types";
 import type { TaskRunnerContext } from "workflow-engine/task-runner";
 import type { FlowDefinition } from "workflow-engine/workflow-types";
+import { queenBeeBlueprint } from "../../../presets/queen-bee/blueprint.ts";
 import { flow as queenBeeFlow } from "../../../presets/queen-bee/flow.ts";
+import { wayfinderBlueprint } from "../../../presets/wayfinder/blueprint.ts";
 import type { FlowBlueprint } from "./flow-blueprint.ts";
 import { validateFlowBlueprint } from "./flow-blueprint.ts";
 import {
@@ -42,6 +53,8 @@ import {
   runModuleSetGate,
 } from "./module-set.ts";
 import { renderFlowDefinition } from "./render-flow-definition.ts";
+import { checkDefinitionSources } from "./schema-consistency.ts";
+import { typecheckModuleSet } from "./typecheck-definition.ts";
 
 // ─── the five-kind blueprint ──────────────────────────────────────────
 
@@ -758,3 +771,102 @@ describe("import policy", () => {
     );
   });
 });
+
+// ─── the built-in presets stay gate-clean ─────────────────────────────
+
+// The presets are blueprint-defined flows: each renders into a module set
+// (entry + the preset package's referenced files) that must pass the full gate
+// with zero errors AND zero warnings — the renderer is gate-clean by
+// construction, so any finding is a defect in the preset's blueprint or
+// referenced files. This is the conversion's behavioral oracle.
+describe("rendered presets pass the module-set gate", () => {
+  const PRESETS = [
+    {
+      name: "queen-bee",
+      blueprint: queenBeeBlueprint,
+    },
+    {
+      name: "wayfinder",
+      blueprint: wayfinderBlueprint,
+    },
+  ] as const;
+
+  for (const preset of PRESETS) {
+    it(`${preset.name} renders, loads, and checks clean`, async () => {
+      const errors = validateFlowBlueprint(preset.blueprint);
+      assert.deepEqual(
+        errors.map((e) => `${e.path}: ${e.message}`),
+        [],
+        `${preset.name} blueprint validation`
+      );
+
+      const rendered = renderFlowDefinition(preset.blueprint);
+      const dir = materializeModuleSet(`${preset.name}-gate`, rendered);
+      const files = readPresetFiles(preset.name);
+      // Overwrite the stubs with the preset's real implementations.
+      for (const [ref, source] of Object.entries(files)) {
+        const target = join(dir, ref.replace(/^\.\//, ""));
+        mkdirSync(dirname(target), { recursive: true });
+        writeFileSync(target, source, "utf-8");
+      }
+
+      const lint = lintModuleSet(preset.blueprint, dir);
+      assert.deepEqual(
+        lint.map((f) => f.message),
+        [],
+        `${preset.name} reference lint`
+      );
+
+      const flow = await loadModuleSetDefinition(dir);
+      assert.ok("workflows" in flow, `${preset.name} loads as a static flow`);
+      assert.ok(flow.workflows.length >= 1, `${preset.name} has workflows`);
+
+      const typeIssues = typecheckModuleSet(dir, preset.name);
+      assert.deepEqual(
+        typeIssues.map((i) => `${i.file}:${i.line}:${i.column} ${i.message}`),
+        [],
+        `${preset.name} whole-set typecheck`
+      );
+
+      const check = checkDefinitionSources([
+        { path: "flow.ts", source: rendered.entry },
+        ...Object.entries(files).map(([path, source]) => ({ path, source })),
+      ]);
+      assert.deepEqual(check.errors, [], `${preset.name} schema errors`);
+      assert.deepEqual(check.warnings, [], `${preset.name} schema warnings`);
+    });
+  }
+});
+
+// The preset package's referenced sources (every .ts except the blueprint and
+// the rendered entry — the design artifacts), keyed `./`-style like the
+// module-set lint reports.
+function readPresetFiles(presetName: string): Record<string, string> {
+  const presetRoot = join(
+    dirname(fileURLToPath(import.meta.url)),
+    "..",
+    "..",
+    "..",
+    "presets",
+    presetName
+  );
+  const files: Record<string, string> = {};
+  const walk = (sub: string): void => {
+    for (const entry of readdirSync(sub, { withFileTypes: true })) {
+      const full = join(sub, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+      } else if (
+        entry.name.endsWith(".ts") &&
+        entry.name !== "blueprint.ts" &&
+        entry.name !== "flow.ts" &&
+        entry.name !== "ideas-card.ts"
+      ) {
+        files[`./${relative(presetRoot, full).split(sep).join("/")}`] =
+          readFileSync(full, "utf-8");
+      }
+    }
+  };
+  walk(presetRoot);
+  return files;
+}

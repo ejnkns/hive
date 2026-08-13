@@ -189,6 +189,7 @@ export type ActionSpec = {
 export type StateSpec = {
   id: string;
   label: string;
+  description?: string;
   category?: "initial" | "active" | "terminal" | "error";
   tasks?: TaskSpec[];
   autoTransitions?: AutoTransitionSpec[];

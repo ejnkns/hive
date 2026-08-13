@@ -57,6 +57,7 @@ ACROSS-INSTANCE DERIVES (same display field, but the path names an instance-stat
 STATE: {
   "id": "running",
   "label": "Running",
+  "description": "optional",  // a short state description (rendered in the UI)
   "category": "initial" | "active" | "terminal" | "error",
   "tasks": [ TASK, ... ],          // auto tasks that run on state entry
   "autoTransitions": [ { "to": "validating", "gate": GATE }, ... ],

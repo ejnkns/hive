@@ -5,14 +5,15 @@
  * idea-card component is inline via ui.components (imported from ideas-card.ts
  * so the source string lives beside the blueprint).
  *
- * The object is intentionally unannotated: the FlowBlueprint type lives in the
- * server package (presets cannot import it without a layering cycle), so the
- * structural check happens at registration, where renderFlowDefinition's
- * FlowBlueprint parameter and validateFlowBlueprint gate the shape. */
+ * The FlowBlueprint type is imported type-only from the server package (a
+ * relative import — erased at runtime, so presets never depend on server);
+ * the composition root re-checks the shape via validateFlowBlueprint when it
+ * registers the preset. */
 
+import type { FlowBlueprint } from "../../server/src/server/flow-blueprint.ts";
 import { ideaCardComponentSource } from "./ideas-card.ts";
 
-export const queenBeeBlueprint = {
+export const queenBeeBlueprint: FlowBlueprint = {
   id: "queen-bee",
   label: "Queen Bee",
   description:

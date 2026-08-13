@@ -59,10 +59,12 @@ export function registerFlowDefinition(
     builtIn?: boolean;
     hidden?: boolean;
     // The module set of a built-in/preset flow (its entry source + referenced
-    // files), captured so built-ins are defined the same way user-generated
-    // flows are — viewable from the library instead of a dead edit button.
+    // files) plus the blueprint it was rendered from, so built-ins are defined
+    // the same way user-generated flows are — viewable from the library
+    // instead of a dead edit button.
     source?: string;
     files?: Record<string, string>;
+    blueprint?: FlowBlueprint;
   } = {}
 ): void {
   definitions.set(definition.id, {
@@ -74,6 +76,7 @@ export function registerFlowDefinition(
     configSchema: definition.configSchema ?? [],
     flow: definition,
     source: options.source,
+    blueprint: options.blueprint,
     files: options.files,
   });
 }

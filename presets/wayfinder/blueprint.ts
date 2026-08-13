@@ -1,15 +1,17 @@
 /** @public — the wayfinder preset as a FlowBlueprint: the design artifact the
  * renderer turns into the definition module set (entry + referenced files).
  * The workflows/states/tasks/actions/edges are structured data; custom tools,
- * operations, gates, and system prompts are file references (the prompts live in
- * collocated per-workflow prompts/ files).
+ * operations, gates, and system prompts are file references (the prompts live
+ * in collocated per-workflow prompts/ files).
  *
- * The object is intentionally unannotated: the FlowBlueprint type lives in the
- * server package (presets cannot import it without a layering cycle), so the
- * structural check happens at registration, where renderFlowDefinition's
- * FlowBlueprint parameter and validateFlowBlueprint gate the shape. */
+ * The FlowBlueprint type is imported type-only from the server package (a
+ * relative import — erased at runtime, so presets never depend on server);
+ * the composition root re-checks the shape via validateFlowBlueprint when it
+ * registers the preset. */
 
-export const wayfinderBlueprint = {
+import type { FlowBlueprint } from "../../server/src/server/flow-blueprint.ts";
+
+export const wayfinderBlueprint: FlowBlueprint = {
   id: "wayfinder",
   label: "Wayfinder",
   description:

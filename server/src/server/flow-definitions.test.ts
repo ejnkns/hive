@@ -214,12 +214,13 @@ describe("flow definition library", () => {
     assert.equal(response.statusCode, 404);
   });
 
-  it("built-in (preset) definitions carry their module set like user flows", () => {
+  it("built-in (preset) definitions carry their module set like user flows", async () => {
     resetFlowDefinitionsForTest();
-    registerBuiltinFlowDefinitions();
+    await registerBuiltinFlowDefinitions();
     const queenBee = getRegisteredFlowDefinition("queen-bee");
     assert.ok(queenBee, "queen-bee must register as a built-in");
     assert.equal(queenBee.builtIn, true);
+    assert.equal(queenBee.blueprint?.id, "queen-bee");
     assert.ok(
       typeof queenBee.source === "string" &&
         queenBee.source.includes("export const flow = {") &&
@@ -227,16 +228,17 @@ describe("flow definition library", () => {
       "a preset's entry source is the rendered definition"
     );
     assert.ok(
-      queenBee.files?.["cards/ops/build-review-package.ts"]?.includes(
+      queenBee.files?.["./cards/ops/build-review-package.ts"]?.includes(
         "build_review_packageOperations"
       ),
       "a preset's referenced modules are captured as files"
     );
     assert.ok(
-      queenBee.files?.["tools/update-requirements-draft.ts"] !== undefined,
+      queenBee.files?.["./tools/update-requirements-draft.ts"] !== undefined,
       "the preset's tools module is part of the file set"
     );
     const wayfinder = getRegisteredFlowDefinition("wayfinder");
+    assert.equal(wayfinder?.blueprint?.id, "wayfinder");
     assert.ok(
       typeof wayfinder?.source === "string" &&
         wayfinder.source.includes("export const flow = {") &&
@@ -244,7 +246,7 @@ describe("flow definition library", () => {
       "wayfinder's source is the rendered definition"
     );
     assert.ok(
-      wayfinder?.files?.["charting/ops/settle-chart.ts"] !== undefined,
+      wayfinder?.files?.["./charting/ops/settle-chart.ts"] !== undefined,
       "wayfinder's referenced modules are captured as files"
     );
     resetFlowDefinitionsForTest();

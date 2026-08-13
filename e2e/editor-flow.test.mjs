@@ -565,4 +565,21 @@ test("a built-in flow definition is viewable read-only (View instead of Edit)", 
     return editor?.shadowRoot?.querySelector("textarea")?.disabled ?? false;
   });
   assert.equal(disabled, true, "the viewer is read-only");
+
+  // The Blueprint tab shows the design artifact (JSON) the definition renders
+  // from — a blueprint-defined built-in is viewable like a user flow.
+  await page.locator("button", { hasText: "Blueprint" }).first().click();
+  await page.waitForFunction(() => {
+    const editor = document.querySelector("code-editor");
+    const value = editor?.shadowRoot?.querySelector("textarea")?.value ?? "";
+    return value.includes('"id": "queen-bee"') && value.includes('"workflows"');
+  });
+  const blueprintValue = await page.evaluate(() => {
+    const editor = document.querySelector("code-editor");
+    return editor?.shadowRoot?.querySelector("textarea")?.value ?? "";
+  });
+  assert.ok(
+    blueprintValue.includes('"label": "Queen Bee"'),
+    "the Blueprint tab shows the rendered blueprint JSON"
+  );
 });

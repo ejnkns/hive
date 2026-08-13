@@ -96,6 +96,9 @@ export type FlowDefinitionDetail = FlowDefinitionSummary & {
   // The referenced file set of a module-set definition (used to seed a
   // revision session's editor tabs).
   files?: Record<string, string>;
+  // The design artifact the definition was rendered from (built-in presets and
+  // user module sets) — shown read-only on the View page.
+  blueprint?: unknown;
 };
 
 export type InstancesApiResponse = {

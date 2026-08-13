@@ -52,7 +52,7 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
   // Register built-in flow definitions before rehydration so persisted flows
   // can rebuild their runtimes from the definition registry. The server does
   // not know what any preset is; it just loads the definitions it ships.
-  registerBuiltinFlowDefinitions();
+  await registerBuiltinFlowDefinitions();
   await loadUserDefinitionsFromDisk();
 
   const persistence = createFlowPersistence();

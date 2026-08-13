@@ -59,6 +59,9 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
       builtIn: record.builtIn,
       configSchema: record.configSchema,
       source: record.source,
+      // The design artifact the definition was rendered from (a blueprint-
+      // defined flow — built-in presets and user module sets).
+      blueprint: record.blueprint,
       // The referenced file set of a module-set definition (a revision
       // session seeds its editor tabs from these).
       files: record.files,

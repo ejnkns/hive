@@ -361,6 +361,8 @@ export function renderFlowDefinition(
       emit(2, "{");
       emit(3, `id: ${json(state.id)},`);
       emit(3, `label: ${json(state.label)},`);
+      if (state.description)
+        emit(3, `description: ${json(state.description)},`);
       if (state.category) emit(3, `category: ${json(state.category)},`);
       if (state.tasks && state.tasks.length > 0) {
         emit(3, "tasks: [");

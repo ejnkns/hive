@@ -78,6 +78,7 @@ const chartingWf = defineWorkflow({
     {
       id: "naming",
       label: "Naming",
+      description: "Sharpen the destination and settle standing notes.",
       category: "active",
       tasks: [
         {
@@ -111,6 +112,8 @@ const chartingWf = defineWorkflow({
     {
       id: "frontier",
       label: "Frontier",
+      description:
+        "Surface open decisions and first steps across the whole space.",
       category: "active",
       tasks: [
         {
@@ -152,6 +155,8 @@ const chartingWf = defineWorkflow({
     {
       id: "charted",
       label: "Charted",
+      description:
+        "The map is charted. Add tickets, graduate fog, resolve the frontier, then Start build.",
       category: "terminal",
     },
   ],
@@ -348,6 +353,7 @@ const ticketWf = defineWorkflow({
     {
       id: "fog",
       label: "Fog",
+      description: "Not yet specified — the question is still foggy.",
       category: "initial",
       tasks: [
         {
@@ -377,6 +383,7 @@ const ticketWf = defineWorkflow({
     {
       id: "ready",
       label: "Ready",
+      description: "Claimable — the frontier.",
       category: "active",
       actions: [
         {
@@ -716,11 +723,13 @@ const ticketWf = defineWorkflow({
     {
       id: "closed",
       label: "Closed",
+      description: "A Decisions-so-far entry.",
       category: "terminal",
     },
     {
       id: "out_of_scope",
       label: "Out of scope",
+      description: "Closed — never graduates.",
       category: "terminal",
     },
   ],
@@ -775,6 +784,8 @@ const buildWf = defineWorkflow({
     {
       id: "specing",
       label: "Specing",
+      description:
+        "Synthesize the decision records into a spec and check the seams with the human.",
       category: "initial",
       tasks: [
         {
@@ -841,6 +852,8 @@ const buildWf = defineWorkflow({
     {
       id: "proposed",
       label: "Proposed",
+      description:
+        "The draft build plan — quiz the breakdown before the fan-out.",
       category: "active",
       actions: [
         {
@@ -885,6 +898,7 @@ const buildWf = defineWorkflow({
     {
       id: "accepted",
       label: "Accepted",
+      description: "The plan is accepted; build items fan out.",
       category: "terminal",
     },
   ],

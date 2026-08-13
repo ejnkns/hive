@@ -23,12 +23,15 @@ const filePaths = $derived(
   detail?.files ? Object.keys(detail.files).sort() : []
 );
 
-// The read-only editor shows the entry source on the Definition tab and each
-// referenced module on its own tab.
+// The read-only editor shows the entry source on the Definition tab, the
+// rendered blueprint JSON on the Blueprint tab, and each referenced module on
+// its own tab.
 const activeValue = $derived(
   activeTab === "definition"
     ? (detail?.source ?? "")
-    : (detail?.files?.[activeTab] ?? "")
+    : activeTab === "blueprint"
+      ? JSON.stringify(detail?.blueprint ?? null, null, 2)
+      : (detail?.files?.[activeTab] ?? "")
 );
 
 onMount(async () => {
@@ -74,6 +77,15 @@ $effect(() => {
       >
         Definition
       </button>
+      {#if detail?.blueprint !== undefined && detail?.blueprint !== null}
+        <button
+          type="button"
+          class:active={activeTab === "blueprint"}
+          onclick={() => (activeTab = "blueprint")}
+        >
+          Blueprint
+        </button>
+      {/if}
       {#each filePaths as path (path)}
         <button
           type="button"
@@ -87,7 +99,11 @@ $effect(() => {
     <div class="pane">
       <div class="pane-head">
         <span class="pane-title">
-          {activeTab === "definition" ? "Definition source (.ts)" : activeTab}
+          {activeTab === "definition"
+            ? "Definition source (.ts)"
+            : activeTab === "blueprint"
+              ? "Blueprint (JSON)"
+              : activeTab}
         </span>
         <span class="pane-note"
           >read-only — this flow ships with the server</span
