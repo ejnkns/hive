@@ -59,6 +59,30 @@ function authorStorageKey(): string {
   return `hive:author:${definitionId ?? "new"}`;
 }
 
+// After saving a NEW definition, re-key the session under the saved id and
+// route to its edit page: the session becomes the definition's own session
+// (resumable at #/flows/<id>/edit), and the definition's page — with the
+// instantiate form — is one hop away. Guards against re-firing for the same
+// saved id within the mount.
+let routedSavedId = "";
+
+$effect(() => {
+  if (isNew) {
+    routedSavedId = "";
+  }
+  if (!isNew || !authorFlowId) return;
+  const savedId =
+    typeof authorFlow?.instances?.[0]?.state.workflowInstanceState
+      ?.savedDefinitionId === "string"
+      ? authorFlow.instances[0].state.workflowInstanceState.savedDefinitionId
+      : "";
+  if (savedId === "" || savedId === routedSavedId) return;
+  routedSavedId = savedId;
+  localStorage.removeItem(authorStorageKey());
+  localStorage.setItem(`hive:author:${savedId}`, authorFlowId);
+  window.location.hash = `#/flows/${encodeURIComponent(savedId)}/edit`;
+});
+
 async function startAuthoring(lucky: boolean) {
   if (!aiPrompt.trim()) return;
   authoring = true;

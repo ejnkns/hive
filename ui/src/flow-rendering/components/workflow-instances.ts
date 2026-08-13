@@ -349,8 +349,8 @@ export class WorkflowInstances extends LitElement {
         workflowDef: def,
         instanceEntry: entry,
         customKinds: this.customKinds,
-        onAction: (actionId: string) => {
-          this.emitAction(entry.id, actionId);
+        onAction: (actionId: string, payload?: Record<string, unknown>) => {
+          this.emitAction(entry.id, actionId, payload);
         },
         onSendMessage: (content: string) => {
           this.emitSendMessage(entry.id, content);
@@ -362,10 +362,14 @@ export class WorkflowInstances extends LitElement {
     ></dynamic-element-host>`;
   }
 
-  private emitAction(instanceId: string, actionId: string): void {
+  private emitAction(
+    instanceId: string,
+    actionId: string,
+    payload?: Record<string, unknown>
+  ): void {
     this.dispatchEvent(
       new CustomEvent("hive-action", {
-        detail: { flowId: this.flowId, instanceId, actionId },
+        detail: { flowId: this.flowId, instanceId, actionId, payload },
         bubbles: true,
         composed: true,
       })

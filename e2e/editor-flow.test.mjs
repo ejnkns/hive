@@ -305,16 +305,31 @@ test("authoring session renders as the flow editor, co-edits, and saves", async 
     40_000
   );
 
-  // Save registers the definition synchronously; the flow-editor reflects it.
+  // Save registers the definition synchronously; the session is re-keyed
+  // under the saved definition and routed to its edit page (still the session).
   assert.ok(
     await clickEditorButton("Save definition"),
     "the save button is available and clicked"
   );
   await waitForEditor((state) => state.saved.includes("review-flow"));
-  assert.equal(
-    await page.evaluate(() => window.location.hash),
-    "#/flows/new",
-    "save keeps the user in the session"
+  await waitFor(
+    async () =>
+      (await page.evaluate(() => window.location.hash)) ===
+      "#/flows/review-flow/edit"
+  );
+  // The session resumes on the edit page: the saved status is still there.
+  await waitForEditor((state) => state.saved.includes("review-flow"));
+
+  // The "done" affordance: Instantiate flow leaves the session for the
+  // definition's page (where the instantiate form lives).
+  assert.ok(
+    await clickEditorButton("Instantiate flow"),
+    "the instantiate button appears once the definition is saved"
+  );
+  await waitFor(
+    async () =>
+      (await page.evaluate(() => window.location.hash)) ===
+      "#/flows/review-flow"
   );
 
   const definition = await page.evaluate(async () => {
@@ -327,6 +342,16 @@ test("authoring session renders as the flow editor, co-edits, and saves", async 
     "the saved definition source is the generated TypeScript"
   );
 });
+
+// Polls until a predicate returns a truthy value.
+async function waitFor(predicate, timeoutMs = 20_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error("Timed out");
+}
 
 // The implemented tool the human types into the referenced-file tab.
 const EDITED_TOOL =

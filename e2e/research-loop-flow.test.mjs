@@ -40,15 +40,22 @@ async function waitFor(predicate, timeoutMs = 60_000) {
 }
 
 // The authoring session's live instance state (the flow is hidden; fetch by
-// the stored flow id).
+// the stored flow id). The session's storage key is re-keyed from "new" to the
+// saved definition id once save_definition lands, so look up any live key.
 async function sessionState() {
   return page.evaluate(async () => {
-    const stored = localStorage.getItem("hive:author:new");
-    if (!stored) return null;
-    const res = await fetch(`/api/flows/${encodeURIComponent(stored)}`);
-    if (!res.ok) return null;
-    const flow = await res.json();
-    return flow.instances?.[0]?.state ?? null;
+    const keys = Object.keys(localStorage).filter((key) =>
+      key.startsWith("hive:author:")
+    );
+    for (const key of keys) {
+      const stored = localStorage.getItem(key);
+      if (!stored) continue;
+      const res = await fetch(`/api/flows/${encodeURIComponent(stored)}`);
+      if (!res.ok) continue;
+      const flow = await res.json();
+      return flow.instances?.[0]?.state ?? null;
+    }
+    return null;
   });
 }
 
