@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import Fastify, { type FastifyInstance } from "fastify";
 import { queenBeeFlow } from "../../../presets/queen-bee/flow.ts";
+import { registerBuiltinFlowDefinitions } from "../main/register-builtin-flow-definitions.ts";
 import { registerFlowApiRoutes } from "./flow-api-routes.ts";
 import {
   getRegisteredFlowDefinition,
@@ -211,5 +212,33 @@ describe("flow definition library", () => {
     });
 
     assert.equal(response.statusCode, 404);
+  });
+
+  it("built-in (preset) definitions carry their module set like user flows", () => {
+    resetFlowDefinitionsForTest();
+    registerBuiltinFlowDefinitions();
+    const queenBee = getRegisteredFlowDefinition("queen-bee");
+    assert.ok(queenBee, "queen-bee must register as a built-in");
+    assert.equal(queenBee.builtIn, true);
+    assert.ok(
+      typeof queenBee.source === "string" &&
+        queenBee.source.includes("queenBeeFlow"),
+      "a preset's entry source is captured for the view"
+    );
+    assert.ok(
+      queenBee.files?.["cards-workflow.ts"]?.includes("defineWorkflow"),
+      "a preset's referenced modules are captured as files"
+    );
+    assert.ok(
+      queenBee.files?.["tools.ts"] !== undefined,
+      "the preset's tools module is part of the file set"
+    );
+    const wayfinder = getRegisteredFlowDefinition("wayfinder");
+    assert.ok(
+      typeof wayfinder?.source === "string" &&
+        wayfinder.source.includes("wayfinderFlow"),
+      "wayfinder's source is captured too"
+    );
+    resetFlowDefinitionsForTest();
   });
 });

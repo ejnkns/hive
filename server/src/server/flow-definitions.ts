@@ -55,7 +55,15 @@ const definitions = new Map<string, RegisteredFlowDefinition>();
 
 export function registerFlowDefinition(
   definition: FlowDefinition,
-  options: { builtIn?: boolean; hidden?: boolean } = {}
+  options: {
+    builtIn?: boolean;
+    hidden?: boolean;
+    // The module set of a built-in/preset flow (its entry source + referenced
+    // files), captured so built-ins are defined the same way user-generated
+    // flows are — viewable from the library instead of a dead edit button.
+    source?: string;
+    files?: Record<string, string>;
+  } = {}
 ): void {
   definitions.set(definition.id, {
     id: definition.id,
@@ -65,6 +73,8 @@ export function registerFlowDefinition(
     hidden: options.hidden ?? false,
     configSchema: definition.configSchema ?? [],
     flow: definition,
+    source: options.source,
+    files: options.files,
   });
 }
 

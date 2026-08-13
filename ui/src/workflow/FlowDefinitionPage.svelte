@@ -52,7 +52,15 @@ async function load() {
         {/if}
       </div>
       <div class="header-actions">
-        {#if !definition.builtIn}
+        {#if definition.builtIn}
+          <Button variant="platinum">
+            <a
+              class="btn-link"
+              href={`#/flows/${encodeURIComponent(definition.id)}/view`}
+              >View</a
+            >
+          </Button>
+        {:else}
           <Button variant="platinum">
             <a
               class="btn-link"

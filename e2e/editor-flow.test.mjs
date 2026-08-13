@@ -543,3 +543,26 @@ test("revising an existing definition shows its referenced files as editable tab
     40_000
   );
 });
+
+test("a built-in flow definition is viewable read-only (View instead of Edit)", async () => {
+  await page.goto(`${baseUrl}/#/flows/queen-bee`);
+  // The built-in's definition page offers View (never Edit).
+  await page.waitForSelector("a", { hasText: "View" }, { timeout: 20_000 });
+  await page.locator("a", { hasText: "View" }).first().click();
+
+  // The read-only viewer shows the preset's entry source on the Definition tab.
+  await page.waitForSelector("code-editor", { timeout: 20_000 });
+  const code = await page.evaluate(() => {
+    const editor = document.querySelector("code-editor");
+    return editor?.shadowRoot?.querySelector("textarea")?.value ?? "";
+  });
+  assert.ok(
+    code.includes("queenBeeFlow"),
+    "the preset's entry source must be viewable"
+  );
+  const disabled = await page.evaluate(() => {
+    const editor = document.querySelector("code-editor");
+    return editor?.shadowRoot?.querySelector("textarea")?.disabled ?? false;
+  });
+  assert.equal(disabled, true, "the viewer is read-only");
+});
