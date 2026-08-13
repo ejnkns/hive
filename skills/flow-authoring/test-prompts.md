@@ -197,6 +197,33 @@ implementing the referenced files in-conversation (`write_definition_file`)
 then regenerating until the gate passes, then `save_definition`. The strongest
 end-to-end proof of the blueprint-referenced-modules capability.
 
+## 11. Responsive website audit (verification loop + persisted report)
+
+```text
+A flow for auditing website responsiveness. A user submits a URL and optionally
+custom breakpoints. An AI audits the site by checking it at each breakpoint —
+mobile, tablet, desktop — and finds layout problems: content that overflows or
+gets clipped, overlapping elements, and especially controls that are visible at
+some breakpoints but not others, like a checkout button or nav link that only
+exists at one viewport. For each issue it records the severity, the breakpoint
+where it appears, and a suggested fix, and it writes a report of everything
+found. If the site is clean the audit passes on its own; otherwise the owner
+reviews the report, fixes the site, and re-audits, looping until it passes, or
+closes the audit accepting the known issues. If the audit task itself fails
+(site unreachable), the audit lands in review with retry and discard.
+```
+
+Expect: single workflow; one ai-task with `completionOutput` (verdict, issues
+`object[]`, summary) + patch op; the verdict gate (`taskOutputEquals` or
+`instanceStateEquals`) auto-routing a clean audit straight to a terminal; a
+`persist` report artifact; one `review` state serving as both the issues review
+and the taskError escape hatch, with re-audit and close actions. Loop safety
+comes from the human-driven re-audit plus an always-available accept — don't
+force `errorCountAtLeast` (it counts task errors, not fail verdicts). Watch that
+it doesn't invent browser/viewport tools: the audit agent works with the
+infrastructure tool set (`run_command` can drive a headless fetch), and unknown
+tool names fail the gate.
+
 ## Testing matrix
 
 | Prompt | Exercises | Watch for |
@@ -211,3 +238,4 @@ end-to-end proof of the blueprint-referenced-modules capability.
 | 8 Vague request | conversational clarification | agent asks, doesn't guess |
 | 9 Bakery orders | domain genericity | same patterns, new nouns |
 | 10 Research loop | referenced modules: custom tool + file gate | gate after the extractor; files implemented in-conversation |
+| 11 Responsive audit | verdict auto-route, verification loop, persist | no invented browser tools, loop termination |

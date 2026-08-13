@@ -24,8 +24,11 @@ export function buildPromptPreview(lastMsg: Message | undefined): string {
   }
 
   if (lastMsg.role === "tool") {
+    // The tool result is the shaped output a custom tool returned — carry the
+    // whole text (not just its length) so the dashboard can show it truncated
+    // by default and expand to the full content.
     const text = typeof lastMsg.content === "string" ? lastMsg.content : "";
-    return `tool result (${text.length} chars)`;
+    return text === "" ? "tool result" : `tool result: ${text}`;
   }
 
   const text = typeof lastMsg.content === "string" ? lastMsg.content : "";
