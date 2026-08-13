@@ -37,8 +37,13 @@ async function registerPresetFromBlueprint(
   // them next to the entry, so the entry's relative imports resolve.
   const rendered = renderFlowDefinition(blueprint);
   const files = readPresetModuleSetFiles(presetName);
+  // The materialization dir is per-process (a pid-named runtime slug) so
+  // concurrent boots — e.g. the e2e suites' parallel servers — never race on
+  // the same server/.runtime/definitions/<slug> write (the loader's copy is
+  // already nonce-named; the base write must be process-unique too). The
+  // flowId re-stamps the loaded definition's id.
   const flow = await loadDefinitionFromSource(
-    presetName,
+    `${presetName}-boot-${process.pid}`,
     rendered.entry,
     presetName,
     files
