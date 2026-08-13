@@ -22,6 +22,7 @@
 
 export {
   readAuthoringModuleFile,
+  seedAuthoringModuleFiles,
   writeAuthoringModuleFile,
 } from "./session/files.ts";
 export { saveAuthoringBlueprint } from "./session/generation-gate.ts";

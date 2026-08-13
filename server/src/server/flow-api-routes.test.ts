@@ -1427,6 +1427,86 @@ describe("flow API routes", () => {
     }
   });
 
+  it("GET /api/flows/definitions/:id returns the referenced file set and POST registers one", async () => {
+    setFlowPersistence(noopPersistence);
+    resetFlowDefinitionsForTest();
+    const defsDir = mkdtempSync(join(tmpdir(), "hive-route-files-"));
+    setDefinitionsBasePathForTest(defsDir);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+    try {
+      const created = await server.inject({
+        method: "POST",
+        url: "/api/flows/definitions",
+        body: {
+          name: "Files Flow",
+          source: "export const flow = { id: 'files-flow' };",
+          files: { "./gates/approved.ts": "export const ok = true;\n" },
+        },
+      });
+      assert.equal(created.statusCode, 201);
+      const detail = await server.inject({
+        method: "GET",
+        url: "/api/flows/definitions/files-flow",
+      });
+      assert.equal(detail.statusCode, 200);
+      const body = detail.json() as { files?: Record<string, string> };
+      assert.equal(
+        body.files?.["./gates/approved.ts"],
+        "export const ok = true;\n",
+        "the definition detail must expose the referenced file set"
+      );
+    } finally {
+      rmSync(defsDir, { recursive: true, force: true });
+      rmSync(join(runtimeDefinitionsDir(), "files-flow"), {
+        recursive: true,
+        force: true,
+      });
+      resetFlowDefinitionsForTest();
+    }
+  });
+
+  it("POST /api/flows/definitions/author with files seeds the session's module set", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition(authoringSessionFlow, { hidden: true });
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+    const created = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions/author",
+      body: {
+        prompt: "Revise a flow",
+        context: "The user wants changes to this existing definition.",
+        files: { "./gates/approved.ts": "export const ok = true;\n" },
+      },
+    });
+    const { flowId, instanceId } = created.json() as {
+      flowId: string;
+      instanceId: string;
+    };
+    const runtime = getFlowRuntime(flowId);
+    const controller = runtime?.getWorkflowInstance(instanceId);
+    const workDir = join(runtimeDefinitionsDir(), flowId);
+    try {
+      assert.equal(created.statusCode, 201);
+      const state = controller?.getState().workflowInstanceState;
+      const files = state?.files as Record<string, string> | undefined;
+      assert.equal(
+        files?.["./gates/approved.ts"],
+        "export const ok = true;\n",
+        "the revision session must carry the existing definition's files"
+      );
+      assert.ok(
+        existsSync(join(workDir, "gates/approved.ts")),
+        "the seeded files must be materialized in the session's module set"
+      );
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  });
+
   it("POST /api/flows/definitions/author/:flowId/blueprint writes back and re-renders the preview", async () => {
     setFlowPersistence(noopPersistence);
     registerFlowDefinition(authoringSessionFlow, { hidden: true });

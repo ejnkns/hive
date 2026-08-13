@@ -478,3 +478,43 @@ test("a referenced file opens as an editable tab and the edit persists across a 
   assert.ok(await clickEditorTab("./tools/websearch.ts"));
   await waitForEditor((state) => state.code.includes("edited result"), 40_000);
 });
+
+test("revising an existing definition shows its referenced files as editable tabs", async () => {
+  // Register a module-set definition with a referenced file.
+  await page.goto(`${baseUrl}/#/flows`);
+  const created = await page.evaluate(async () => {
+    const res = await fetch("/api/flows/definitions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Tab Seed",
+        source: "export const flow = { id: 'tab-seed' };",
+        files: { "./gates/approved.ts": "export const ok = true;\n" },
+      }),
+    });
+    return res.ok ? await res.json() : null;
+  });
+  assert.ok(created, "definition registered");
+  assert.equal(created?.id, "tab-seed");
+
+  // Start a revision session — the seeded file appears as an editable tab.
+  await page.goto(`${baseUrl}/#/flows/tab-seed/edit`);
+  await page.waitForSelector(
+    "button",
+    { hasText: "Start conversation" },
+    { timeout: 15_000 }
+  );
+  await page.locator("textarea").first().fill("Tighten the gate");
+  await page.locator("button", { hasText: "Start conversation" }).click();
+  await waitForEditor(
+    (state) => state.tabs.includes("./gates/approved.ts"),
+    40_000
+  );
+
+  // Open it: the seeded content is there (the file is editable in-conversation).
+  assert.ok(await clickEditorTab("./gates/approved.ts"));
+  await waitForEditor(
+    (state) => state.code.includes("export const ok = true;"),
+    40_000
+  );
+});

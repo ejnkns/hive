@@ -57,6 +57,24 @@ export type AuthoringFileRead =
   | { ok: true; content: string }
   | { ok: false; message: string };
 
+// Seeds a set of files (an existing definition's referenced files being
+// revised) into the session's module-set working directory, returning the
+// merged file set the caller patches into instance state. Each file goes
+// through the same containment-checked write as the write_definition_file
+// tool — a seeded file is authoritative, never overwritten by stub emission.
+export function seedAuthoringModuleFiles(
+  state: AuthoringItemState,
+  files: Record<string, string>
+): AuthoringFileWrite {
+  let merged = { ...(state.files ?? {}) };
+  for (const [path, content] of Object.entries(files)) {
+    const result = writeAuthoringModuleFile(state, path, content);
+    if (!result.ok) return result;
+    merged = result.files;
+  }
+  return { ok: true, files: merged };
+}
+
 export function readAuthoringModuleFile(
   state: AuthoringItemState,
   path: string

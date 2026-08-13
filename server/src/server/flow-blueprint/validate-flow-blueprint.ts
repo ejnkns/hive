@@ -23,6 +23,7 @@ import {
   isConfigField,
   isDerivedDisplay,
   isFieldType,
+  renderHintErrors,
 } from "./validate-fields.ts";
 import { collectGateTaskReads, validateGateSpec } from "./validate-gate.ts";
 import { validateRefShape } from "./validate-ref.ts";
@@ -573,6 +574,14 @@ export function validateFlowBlueprint(
           `${wfPath}.display.fields[${dIndex}].path`,
           `display hint references undeclared state field "${first}"`
         );
+      }
+      if (field.render !== undefined) {
+        for (const e of renderHintErrors(
+          field.render,
+          `${wfPath}.display.fields[${dIndex}].render`
+        )) {
+          error(e.path, e.message);
+        }
       }
       if (field.derive !== undefined && !isDerivedDisplay(field.derive)) {
         error(

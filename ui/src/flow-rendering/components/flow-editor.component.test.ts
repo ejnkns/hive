@@ -413,4 +413,44 @@ describe("FlowEditor", () => {
       blueprint: '{ "id": "demo" }',
     });
   });
+
+  it("renders an Instantiate flow button once the definition is saved and emits the action", async () => {
+    const el = await mountEditor(
+      authoringEntry({
+        workflowInstanceState: {
+          prompt: "p",
+          source: "export const flow = {};",
+          savedDefinitionId: "review-flow",
+          savedName: "Review Flow",
+        },
+      })
+    );
+    const button = Array.from(shadowRootOf(el).querySelectorAll("button")).find(
+      (b) => b.textContent?.trim() === "Instantiate flow"
+    );
+    expect(button).toBeDefined();
+    const onAction = vi.fn();
+    el.onAction = onAction;
+    await el.updateComplete;
+    button?.dispatchEvent(click());
+    await el.updateComplete;
+    expect(onAction).toHaveBeenCalledWith("instantiate", {
+      id: "review-flow",
+    });
+  });
+
+  it("hides the Instantiate flow button before the definition is saved", async () => {
+    const el = await mountEditor(
+      authoringEntry({
+        workflowInstanceState: {
+          prompt: "p",
+          source: "export const flow = {};",
+        },
+      })
+    );
+    const button = Array.from(shadowRootOf(el).querySelectorAll("button")).find(
+      (b) => b.textContent?.trim() === "Instantiate flow"
+    );
+    expect(button).toBeUndefined();
+  });
 });

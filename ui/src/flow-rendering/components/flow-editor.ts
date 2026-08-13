@@ -151,6 +151,24 @@ export class FlowEditor extends LitElement {
       cursor: default;
     }
 
+    button.instantiate-btn {
+      font-family: inherit;
+      font-size: 0.625rem;
+      height: 24px;
+      padding: 0 0.5rem;
+      border-radius: 4px;
+      border: 1px solid var(--accent);
+      background: transparent;
+      color: var(--accent);
+      cursor: pointer;
+      flex: none;
+    }
+
+    button.instantiate-btn:hover {
+      background: var(--accent);
+      color: var(--bg);
+    }
+
     .tab-bar {
       display: flex;
       gap: 0.25rem;
@@ -615,6 +633,17 @@ export class FlowEditor extends LitElement {
         >
           Save definition
         </button>
+        ${
+          savedId !== ""
+            ? html`<button
+                class="instantiate-btn"
+                type="button"
+                @click=${() => this.emitAction("instantiate", { id: savedId })}
+              >
+                Instantiate flow
+              </button>`
+            : nothing
+        }
       </div>
       ${
         ctx !== null && ctx.role === "ai-chat"

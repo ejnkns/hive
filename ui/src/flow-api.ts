@@ -93,6 +93,9 @@ export type GenerationProgressEvent =
 
 export type FlowDefinitionDetail = FlowDefinitionSummary & {
   source: string;
+  // The referenced file set of a module-set definition (used to seed a
+  // revision session's editor tabs).
+  files?: Record<string, string>;
 };
 
 export type InstancesApiResponse = {
@@ -184,6 +187,10 @@ export async function authorFlowDefinition(input: {
   // Optional extra context for the first message (e.g. an existing definition
   // source the agent should revise).
   context?: string;
+  // The referenced file set of an existing definition being revised — the
+  // session seeds its module set from these so the file tabs and the agent's
+  // file tools see the current files.
+  files?: Record<string, string>;
 }): Promise<{ flowId: string; instanceId: string }> {
   const res = await fetch("/api/flows/definitions/author", {
     method: "POST",

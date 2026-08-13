@@ -1577,4 +1577,102 @@ describe("manual-action fields", () => {
       assert.match(msgFor(blueprint, "duplicate"), /duplicate/);
     });
   });
+
+  describe("render hints", () => {
+    const msgFor = (blueprint: FlowBlueprint, needle: string): string => {
+      const found = messageFor(blueprint, needle);
+      assert.ok(
+        found,
+        `no finding matched "${needle}" — got: ${errorsFor(blueprint)
+          .map((e) => `${e.path}: ${e.message}`)
+          .join("; ")}`
+      );
+      return found;
+    };
+
+    it("accepts a valid render hint object on a display field", () => {
+      const blueprint: FlowBlueprint = {
+        ...VALID,
+        workflows: [
+          {
+            ...VALID.workflows[0],
+            display: {
+              fields: [
+                { path: "title", label: "Title", render: { kind: "markdown" } },
+              ],
+            },
+          },
+        ],
+      };
+      assert.deepEqual(validateFlowBlueprint(blueprint), []);
+    });
+
+    it("rejects a bare-string render hint on a display field", () => {
+      const blueprint: FlowBlueprint = {
+        ...VALID,
+        workflows: [
+          {
+            ...VALID.workflows[0],
+            display: {
+              fields: [
+                { path: "title", label: "Title", render: "markdown" as never },
+              ],
+            },
+          },
+        ],
+      };
+      assert.match(
+        msgFor(blueprint, "render must be an object"),
+        /render must be an object/
+      );
+    });
+
+    it("rejects a render hint without a kind", () => {
+      const blueprint: FlowBlueprint = {
+        ...VALID,
+        workflows: [
+          {
+            ...VALID.workflows[0],
+            display: {
+              fields: [
+                {
+                  path: "title",
+                  label: "Title",
+                  render: { props: { title: "title" } } as never,
+                },
+              ],
+            },
+          },
+        ],
+      };
+      assert.match(
+        msgFor(blueprint, "render.kind is required"),
+        /render.kind is required/
+      );
+    });
+
+    it("rejects a non-object render props", () => {
+      const blueprint: FlowBlueprint = {
+        ...VALID,
+        workflows: [
+          {
+            ...VALID.workflows[0],
+            display: {
+              fields: [
+                {
+                  path: "title",
+                  label: "Title",
+                  render: { kind: "cards", props: "items" } as never,
+                },
+              ],
+            },
+          },
+        ],
+      };
+      assert.match(
+        msgFor(blueprint, "render.props must be an object"),
+        /render.props must be an object/
+      );
+    });
+  });
 });

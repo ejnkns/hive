@@ -14,13 +14,23 @@ export const readDefinitionSourceTool = defineTool<AuthoringItemState>({
     required: [],
   },
   executor: async (call, ctx) => {
-    const source = ctx.workflowInstanceState?.()?.source;
+    const state = ctx.workflowInstanceState?.() ?? {};
+    // The gate-passed source, or — before/without a passing gate — the live
+    // rendered entry (previewSource). A failed generate_definition must still
+    // be readable: the agent fixes the blueprint by looking at the exact
+    // typecheck line, not by guessing.
+    const source =
+      typeof state.source === "string" && state.source !== ""
+        ? state.source
+        : typeof state.previewSource === "string"
+          ? state.previewSource
+          : "";
     return {
       toolCallId: call.id,
       content:
-        typeof source === "string" && source !== ""
+        source !== ""
           ? source
-          : "No definition source yet — the agent's last generate_definition output, or a manual edit, will appear here.",
+          : "No definition source yet — the agent's last set_flow_blueprint or generate_definition output will appear here.",
       isError: false,
     };
   },

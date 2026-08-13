@@ -5,10 +5,50 @@ import type {
   DerivedDisplay,
 } from "workflow-engine/workflow-types";
 import { FIELD_TYPES } from "./blueprint-constants.ts";
-import type { FieldType } from "./blueprint-types.ts";
+import type { BlueprintError, FieldType } from "./blueprint-types.ts";
 
 export function isFieldType(value: unknown): value is FieldType {
   return typeof value === "string" && value in FIELD_TYPES;
+}
+
+// A render hint (a task's or display field's `render`) must be the wire shape
+// the engine consumes — an object with a string `kind` (builtin or custom)
+// and an optional string→string props map. A bare string or a missing kind is
+// a model mistake the renderer would otherwise emit as broken TypeScript
+// ("Type 'string' is not assignable to type 'RuntimeRenderHint'") deep in
+// the generated entry — catch it here with a readable finding instead.
+export function renderHintErrors(
+  value: unknown,
+  path: string
+): BlueprintError[] {
+  const errors: BlueprintError[] = [];
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    errors.push({
+      path,
+      message: `render must be an object with a kind (e.g. { kind: "markdown" }), got ${JSON.stringify(value)}`,
+    });
+    return errors;
+  }
+  const hint = value as Record<string, unknown>;
+  if (typeof hint.kind !== "string" || hint.kind.trim() === "") {
+    errors.push({
+      path: `${path}.kind`,
+      message: `render.kind is required and must be a string (builtin kinds: markdown, text, card, cards, json — or a custom kind)`,
+    });
+  }
+  if (
+    hint.props !== undefined &&
+    (typeof hint.props !== "object" ||
+      hint.props === null ||
+      Array.isArray(hint.props) ||
+      Object.values(hint.props).some((p) => typeof p !== "string"))
+  ) {
+    errors.push({
+      path: `${path}.props`,
+      message: `render.props must be an object mapping prop names to dotted paths (got ${JSON.stringify(hint.props)})`,
+    });
+  }
+  return errors;
 }
 
 // A derived display field entry: count/progress need a where clause with a

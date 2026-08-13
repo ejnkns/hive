@@ -8,6 +8,7 @@ import {
   saveAuthoringBlueprint,
   saveAuthoringDefinition,
   savePatch,
+  seedAuthoringModuleFiles,
   writeAuthoringModuleFile,
 } from "../flow-authoring/session.ts";
 import { AUTHORING_DEFINITION_ID } from "../flow-authoring.ts";
@@ -58,6 +59,9 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
       builtIn: record.builtIn,
       configSchema: record.configSchema,
       source: record.source,
+      // The referenced file set of a module-set definition (a revision
+      // session seeds its editor tabs from these).
+      files: record.files,
     });
   });
 
@@ -164,6 +168,10 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
       prompt?: string;
       lucky?: boolean;
       context?: string;
+      // The referenced file set of an existing definition being revised — the
+      // session seeds its module-set working directory from these so the file
+      // tabs and the read/write tools see the current files.
+      files?: Record<string, string>;
     } | null;
     const prompt = body?.prompt;
     if (typeof prompt !== "string" || prompt.trim() === "") {
@@ -196,6 +204,24 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
       // only this session's files.
       moduleSetSlug: flowId,
     });
+    // A revision session seeds the existing definition's referenced files so
+    // they are visible in the editor tabs and editable in-conversation (hand
+    // edits remain authoritative).
+    if (
+      body?.files !== null &&
+      typeof body?.files === "object" &&
+      !Array.isArray(body.files) &&
+      Object.keys(body.files).length > 0
+    ) {
+      const seed = seedAuthoringModuleFiles(
+        controller?.getState().workflowInstanceState ?? {},
+        body.files as Record<string, string>
+      );
+      if (!seed.ok) {
+        return reply.status(400).send({ error: seed.message });
+      }
+      controller?.patchWorkflowInstanceState({ files: seed.files });
+    }
     const taskId = controller?.getState().runningTaskId;
     if (taskId) {
       const context = typeof body?.context === "string" ? body.context : "";
@@ -413,6 +439,12 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
     const source = typeof body?.source === "string" ? body.source : "";
     const description =
       typeof body?.description === "string" ? body.description : undefined;
+    const files =
+      body?.files !== null &&
+      typeof body?.files === "object" &&
+      !Array.isArray(body.files)
+        ? (body.files as Record<string, string>)
+        : undefined;
     if (name === "") {
       return reply.status(400).send({ error: "name is required" });
     }
@@ -425,6 +457,7 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
         name,
         description,
         source,
+        files,
       });
       const check = checkDefinitionSources([
         { path: `${record.id}.ts`, source },
@@ -460,6 +493,12 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
     const source = typeof body?.source === "string" ? body.source : "";
     const description =
       typeof body?.description === "string" ? body.description : undefined;
+    const files =
+      body?.files !== null &&
+      typeof body?.files === "object" &&
+      !Array.isArray(body.files)
+        ? (body.files as Record<string, string>)
+        : undefined;
     if (name === "") {
       return reply.status(400).send({ error: "name is required" });
     }
@@ -472,6 +511,7 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
         name,
         description,
         source,
+        files,
       });
       const check = checkDefinitionSources([
         { path: `${record.id}.ts`, source },

@@ -67,14 +67,24 @@ async function startAuthoring(lucky: boolean) {
     // When revising an existing definition, hand the agent its current source
     // so it can propose changes rather than designing from scratch.
     let context: string | undefined;
+    let files: Record<string, string> | undefined;
     if (!isNew && definitionId) {
       const detail = await fetchFlowDefinition(definitionId);
       context = `The user wants changes to this existing definition source:\n\n\`\`\`ts\n${detail.source ?? ""}\n\`\`\``;
+      // Seed the revision session with the existing definition's referenced
+      // files so the editor tabs and the agent's file tools see them.
+      files =
+        detail.files !== null &&
+        typeof detail.files === "object" &&
+        !Array.isArray(detail.files)
+          ? (detail.files as Record<string, string>)
+          : undefined;
     }
     const { flowId, instanceId } = await authorFlowDefinition({
       prompt: aiPrompt.trim(),
       lucky,
       context,
+      files,
     });
     authorFlowId = flowId;
     authorInstanceId = instanceId;
@@ -150,6 +160,15 @@ async function handleAuthorAction(
   }
   if (actionId === "discard") {
     await discardEdits(flowId);
+    return;
+  }
+  // The "done" affordance: once the definition is saved, send the user to the
+  // definition's page (where the instantiate form lives).
+  if (actionId === "instantiate") {
+    const id = typeof payload?.id === "string" ? payload.id : "";
+    if (id !== "") {
+      window.location.hash = `#/flows/${encodeURIComponent(id)}`;
+    }
     return;
   }
   try {

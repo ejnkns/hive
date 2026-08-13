@@ -555,6 +555,26 @@ describe("flow-authoring session", () => {
     }
   });
 
+  it("read_definition_source falls back to the rendered entry after a failed generate", async () => {
+    const tool = authoringTools.find(
+      (t) => t.definition.function.name === "read_definition_source"
+    );
+    assert.ok(tool, "read_definition_source tool must be defined");
+
+    // A gate failure leaves the rendered entry in previewSource (source is
+    // only set on success) — the agent must still be able to read it.
+    const result = await tool.executor(
+      { id: "r0", name: "read_definition_source", arguments: "{}" },
+      {
+        workflowInstanceState: () => ({
+          previewSource: "export const flow = {}; // line 1",
+        }),
+      } as never
+    );
+    assert.equal(result.isError, false);
+    assert.match(result.content, /line 1/);
+  });
+
   it("read_definition_source returns the current source, including manual edits", async () => {
     const tool = authoringTools.find(
       (t) => t.definition.function.name === "read_definition_source"
