@@ -1,6 +1,6 @@
 ---
 name: flow-authoring
-description: Design and generate Hive flow definitions (presets and AI-generated flows) with a tested lifecycle. Use when the user wants to create a flow, asks to "generate a flow", design a workflow, add an item/record lifecycle, fix a generated flow that doesn't work, or build on the Hive workflow engine's flow-authoring vocabulary (FlowSpec, completionOutput, edges, states, gates).
+description: Design and generate Hive flow definitions (presets and AI-generated flows) with a tested lifecycle. Use when the user wants to create a flow, asks to "generate a flow", design a workflow, add an item/record lifecycle, fix a generated flow that doesn't work, or build on the Hive workflow engine's flow-authoring vocabulary (FlowBlueprint, completionOutput, edges, states, gates, blueprint-referenced modules).
 ---
 
 # Flow Authoring — Hive
@@ -35,11 +35,11 @@ Match the request to a pattern in `reference.md` (## Patterns) and copy its shap
 
 **Completion criterion:** you can name the pattern and the section of reference.md you're copying. A request that fits a pattern but gets a novel shape is a redesign, not authoring.
 
-### 3. Author — two paths
+### 3. Author — the session (the product path)
 
-**Generate with the AI loop** (the product path): use the definition editor's generate pane, or drive `runGenerationLoop(prompt, modelCaller)` / `POST /api/flows/definitions/generate`. The loop is design-first and iterates against the gate; read its `report.warnings` — a `passed` run with warnings is not done.
+Use the definition editor's authoring session: describe the flow, and the agent converges on a `FlowBlueprint` with you (or lucky-mode one-shots it). The agent drafts the blueprint (`set_flow_blueprint`), runs the gate (`generate_definition`), and — when the flow needs custom logic — **implements the referenced files in-conversation** (`read_definition_file` / `write_definition_file`): the renderer emits a contract-typed stub per reference; the agent fills in the body and regenerates until the gate passes, then `save_definition` registers it. Hand edits to referenced files are authoritative — stub emission never overwrites them.
 
-**Hand-author a preset** (in-repo, versioned): write the `FlowDefinition` in TypeScript following the conventions the schema-consistency check enforces (`defineWorkflow` anchor, `defineOperations`/`defineTool` maps, `satisfies FlowEdge`). Copy the structure from a preset; `presets/queen-bee/flow.ts` is the assembly reference (workflows + operations merged at the flow level).
+**Hand-author a preset** (in-repo, versioned): write the `FlowDefinition` in TypeScript following the conventions the schema-consistency check enforces (`defineWorkflow` anchor, `defineOperations`/`defineTool` maps, `satisfies FlowEdge`). Copy the structure from a preset; `presets/queen-bee/flow.ts` is the assembly reference (workflows + operations merged at the flow level). The legacy one-shot proxy path (`runGenerationLoop` / `POST /api/flows/definitions/generate`) still exists but is superseded by the session.
 
 Every ai-task and ai-chat declares a `systemPrompt` naming the job and the completion tool; every ai-task that records data uses `completionOutput` + a sibling patch op; every displayed field (`instance`/`display` hints) has a writer.
 
@@ -68,11 +68,14 @@ Every workflow's instances must show meaningful content: `instance: { title }` a
 - **A record op that "succeeds" without data** silently fakes progress — the generated patch op fails when a sourced value is missing; gate its `taskError` into needs-review.
 - **An instance with an empty payload** spawns a zombie auto-task on every boot — required createInstance fields reject empty values, and auto tasks seed from instance state.
 - **A flow that can never finish** — states nothing reaches, or that can't leave, or transitions gated `never` — is caught by the structural-soundness warnings; treat them as blocking during authoring.
+- **A gate firing before its inputs exist** — auto-transitions evaluate after each task, so a gate that reads a field an extractor writes must live in the state after the extractor, not the same state.
+- **An undeclared import in a referenced file** fails the gate — declare every external package in the blueprint's `dependencies`; hand edits to referenced files are authoritative.
 
 ## Context pointers
 
 - `skills/flow-authoring/reference.md` — the rendered knowledge: decisions, patterns, rules, vocabulary, capabilities. Read first.
-- `server/src/server/flow-authoring/` — the source modules (single source of truth; regenerate reference.md after edits).
+- `server/src/server/flow-authoring/` — the source modules (single source of truth; regenerate reference.md with `pnpm --filter server export:flow-authoring` after editing the modules).
 - `presets/queen-bee/` and `presets/wayfinder/` — canonical real flows.
 - `CONTEXT.md` → Workflow Engine terms — the domain glossary.
 - `server/src/server/schema-consistency.ts` — the check (reads/writes, structural soundness).
+- `server/src/server/module-set.ts` — the module-set gate (structural lint, import policy, load, typecheck) for blueprint-referenced modules.

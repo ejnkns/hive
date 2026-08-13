@@ -26,12 +26,14 @@ The knowledge for designing and generating Hive flow definitions. This document 
 
 8. **Documents.** When a task produces a document (a specification, a review package, a report), declare `persist: { path }` so the output lands in the flow's domain root; the path supports `{instanceId}` and `{attempt}` substitution.
 
-9. **Pick the pattern, don't improvise.** Match the request to one of the patterns below and copy its shape: structured intake, human review, pipeline/fan-out, or git-backed work. The patterns are the tested shapes; the vocabulary is their language. Use whatever nouns fit the request's domain — the patterns and vocabulary are domain-agnostic.
+9. **Pick the pattern, don't improvise.** Match the request to one of the patterns below and copy its shape: structured intake, human review, pipeline/fan-out, git-backed work, or custom logic. The patterns are the tested shapes; the vocabulary is their language. Use whatever nouns fit the request's domain — the patterns and vocabulary are domain-agnostic.
+
+10. **Custom logic beyond the structured vocabulary — reference a file.** When a gate needs comparisons the structured predicates can't express, or the flow needs a custom tool (websearch, a scraper), operation, edge transform, or output extractor, declare it as a blueprint-referenced module: flow-level `tools`/`operations` lists, a `{ kind: "file", ref }` gate, an edge `transform: { ref }`, or a task `extract: { ref }`. The renderer emits a contract-typed stub per reference; implement the stub's named export (keep the name and contract) and generate again — hand edits are authoritative. A referenced file may import engine primitives, the flow's own files, `node:` builtins, and packages declared in the blueprint's `dependencies`; anything else fails the gate with a readable finding. Keep a file-gate transition in a state whose tasks are all complete — auto-transitions evaluate after each task.
 
 ## Patterns (pick the one that fits, then copy its shape)
 
 ### Structured intake — when: users add items that an AI classifies, enriches, or triages into recorded fields, then items finish or need a human retry
-A complete valid spec for this pattern:
+A complete valid blueprint for this pattern:
 ```json
 {
   "id": "intake",
@@ -237,6 +239,23 @@ git-backed work — work happens in a repository, with a worker and a reviewer:
   the flow needs a basePath bound to the repo (configSchema with basePath, or an onboarding workflow
   that patches it via patch_flow_config).
 
+### Custom logic (referenced modules) — when: a gate needs logic beyond the structured predicates, or the flow needs a custom tool, operation, edge transform, or output extractor (a research loop, a websearch, a scraper)
+custom-logic — reference a file for anything the structured vocabulary can't express:
+  flow level: "tools": [ { "id": "websearch", "ref": "./tools/websearch.ts" } ],
+              "operations": [ { "id": "score", "ref": "./ops/score.ts" } ],
+              "dependencies": [ "axios" ]   // external packages the files may import
+  a transition's gate: { "kind": "file", "ref": "./gates/approved.ts" }  // the file exports (ctx) => boolean
+  a task: "tools": ["websearch"] (the custom tool id) and "operations": ["score", { "ref": "./ops/annotate.ts" }]
+  an operation task may declare "extract": { "ref": "./extractors/parse.ts", "fields": ["verdict"] } — a
+    referenced output extractor that patches the declared instance-state fields
+  an edge: "transform": { "ref": "./edges/to-summary.ts", "fields": ["title", "body"] } — the target fields
+  the renderer emits a contract-typed stub per reference; implement the stub's named export (keep the
+  name and contract) and generate again — hand edits are authoritative. A file gate reads the runtime
+  gate context (ctx.workflowInstanceState), so keep its transition in a state whose tasks are all
+  complete (auto-transitions evaluate after each task).
+  example lifecycle: searching (ai-chat task with the custom tool) → extracting (extractor op) → done,
+  where the transition out of extracting is gated by the referenced gate file.
+
 ## Rules that make generated flows actually work
 
 - Every `ai-task` and `ai-chat` declares a `systemPrompt` that names the job and the completion tool to call. A prompt-less agent produces prose instead of structured output, or the runner fails fast.
@@ -248,9 +267,13 @@ git-backed work — work happens in a repository, with a worker and a reviewer:
 - Every workflow with fallible tasks has a way out: a needs-review/error state with a retry action. An instance that can never leave a running state is a zombie.
 - Design the whole lifecycle before writing the spec: which states exist, which are reachable from `initial`, which transitions fire under which gate, which terminals finish. A state nothing reaches, or that cannot leave, is a design flaw the check flags.
 - Choose the pattern that matches the request (structured intake, human review, pipeline/fan-out, git-backed work) and copy its shape — do not improvise a new lifecycle when a tested one fits.
+- Implement a referenced file by keeping the export name and contract the generated stub declares — the entry imports that exact name and the gate checks it. A renamed or mis-typed export fails the lint with a specific finding.
+- Hand edits to referenced files are authoritative — stub emission never overwrites an existing file. Write the implementation, then generate again to run the gate against it.
+- Declare every external package a referenced file imports in the blueprint's `dependencies`. Imports are limited to engine primitives (workflow-engine/*), the flow's own files, `node:` builtins, and declared packages; anything else fails the gate with a readable finding.
+- Keep a gate transition in a state whose tasks are all complete before the gate runs — auto-transitions evaluate after each task, so a gate sharing a state with an earlier task fires too early (a file gate reading a field an extractor writes must live in the state after the extractor).
 
 ## Vocabulary
-## FlowSpec vocabulary (the JSON you emit — validated before rendering)
+## FlowBlueprint vocabulary (the JSON you emit — validated before rendering)
 
 {
   "id": "reviewFlow",              // valid TS identifier (camelCase)
@@ -259,7 +282,10 @@ git-backed work — work happens in a repository, with a worker and a reviewer:
   "configSchema": [ { "key": "basePath", "label": "Base path", "type": "string", "required": true } ],
   "workflows": [ WORKFLOW, ... ],
   "edges": [ EDGE, ... ],          // optional
-  "actions": [ FLOW_ACTION, ... ]  // optional
+  "actions": [ FLOW_ACTION, ... ], // optional
+  "tools": [ { "id": "websearch", "ref": "./tools/websearch.ts" } ],  // optional; custom tools implemented as referenced files
+  "operations": [ { "id": "score", "ref": "./ops/score.ts" } ],       // optional; custom operations implemented as referenced files
+  "dependencies": [ "axios" ]      // optional; external packages the referenced files may import (the import policy)
 }
 
 WORKFLOW: {
@@ -271,8 +297,31 @@ WORKFLOW: {
   "states": [ STATE, ... ],
   "instance": { "title": "title" },   // optional; dotted path into instanceState
   "ui": { "view": "board", "columns": [ { "id": "ready", "label": "Ready", "states": ["ready"] } ] },  // optional
-  "display": { "fields": [ { "path": "description", "label": "Description" } ] }                          // optional
+  "display": { "fields": [ { "path": "description", "label": "Description" } ] },                          // optional; a field may add "render" (markdown/text/card/cards/json) or "derive" (see DERIVED DISPLAY below)
+  "editFields": [ CONFIG FIELD, ... ]  // optional; the instance-state fields a user may edit in place via the "Edit details" form. Keys MUST be declared in instanceState. Each entry is a CONFIG FIELD (below).
 }
+
+CONFIG FIELD (configSchema entries and createInstance "fields"; validated before render — type must be one of the list):
+  { "key": "title", "label": "Title", "type": "string", "required": true }   // string | boolean | number | textarea | date | datetime | string[]
+  // textarea: multiline string. date: "YYYY-MM-DD". datetime: "YYYY-MM-DDTHH:mm".
+  // string[]: multi-select; with "options" a closed set (each chosen value must be in it), without a free tag list.
+  // "options": ["a", "b"] on a string field renders a single select; on string[] a multi-select.
+  // "placeholder": "…" (input placeholder) and "defaultValue": … (pre-fill) are optional on any field.
+
+DERIVED DISPLAY (optional "derive" on a display field; computes from the resolved path value — an array):
+  { "kind": "count" }                                             // array length ("N pending")
+  { "kind": "count", "where": { "field": "status", "equals": "done" } }  // count of items where item.status === "done"
+  { "kind": "progress", "where": { "field": "status", "equals": "done" } }  // "3 of 5 done" (bar); where is required
+  { "kind": "sum" }                                               // sum of an array of numbers
+  { "kind": "sum", "field": "cost" }                             // sum of item.cost across the array
+  // Example: { "path": "items", "label": "Done", "derive": { "kind": "progress", "where": { "field": "status", "equals": "done" } } }
+  // A derive that cannot evaluate (non-array, missing item field) falls back to the raw value.
+
+ACROSS-INSTANCE DERIVES (same display field, but the path names an instance-state FIELD to aggregate over ALL instances of the workflow; requires a single-segment path):
+  { "kind": "countAcross" }                                       // total instances
+  { "kind": "countAcross", "equals": "pending" }                  // instances whose state[path] === "pending" ("N pending")
+  { "kind": "progressAcross", "equals": "review" }                // "2 of 5 instances in review" (bar); equals is required
+  // Example: { "path": "status", "label": "In review", "derive": { "kind": "countAcross", "equals": "review" } }
 
 STATE: {
   "id": "running",
@@ -288,15 +337,16 @@ TASK: {
   "label": "Run agent",
   "role": "operation" | "ai-task" | "ai-chat",
   "systemPrompt": "…",             // optional; ALWAYS set it on ai-task/ai-chat so the agent knows its job and that it must call the completion tool
-  "operations": ["prepare_worktree"],  // ENGINE op names only (capabilities list)
+  "operations": ["prepare_worktree", "score", { "ref": "./ops/annotate.ts" }],  // engine op names, flow-level custom op ids, or inline references to a custom operation module
   "operationInputs": { "require": "committed" },   // verify_workspace: committed | changes | none
-  "tools": ["read_file", "write_file", "run_command", "git_status", "git_diff", "git_log", "commit_work", "search_code", "list_directory", "git_show"],  // infrastructure tool names only; the task's completion tool is added automatically
+  "tools": ["websearch", "read_file", "write_file"],  // infrastructure tool names + custom tool ids (the flow's "tools" list); the task's completion tool is added automatically
   "completionTool": "complete_task",   // optional; only when the task does NOT declare "completionOutput" — then it must be "complete_task"
   "completionOutput": [ { "field": "category", "type": "string", "description": "optional" } ],  // optional; ai-task ONLY. Declares the structured fields the task must return. The renderer generates a completion tool <workflowId>_<taskId>_complete with these fields (all required); the parsed arguments become the task output, so patch ops read output.<field> and gates compare output.<field>. Do NOT also set completionTool.
   "workspacePath": "@instance:worktreePath",  // literal dir or "@instance:<field>"
   "inputFromInstanceState": "brief",   // dotted path into instanceState, seeded as the first message
   "persist": { "path": "reviews/{instanceId}-{attempt}.json" },
   "patch": { "verdict": { "kind": "taskOutput", "task": "runAgent", "path": "output.verdict" } }  // OPERATION tasks only; writes instance state. A sourced value that resolves to undefined makes the op FAIL (taskError) — declare a retry/needs-review state for it.
+  "extract": { "ref": "./extractors/parse.ts", "fields": ["verdict"] }  // OPERATION tasks only; a referenced output extractor. The generated op runs the extractor over the instance's task outputs and patches the declared fields into instance state.
 }
 
 STATE_ACTION: {
@@ -307,6 +357,7 @@ STATE_ACTION: {
   "newAttempt": true,               // optional: engine bumps the attempt counter and discards the abandoned workspace
   "completesRunningTask": true,     // optional: a human "Done" ends a running ai-chat session; the transcript is the output
   "dependsOnState": "done",         // optional: engine blocks until instances reach this state
+  "confirmText": "Archive permanently?",  // optional: custom wording for the two-click confirm. Destructive variants confirm by default; declaring it adds a confirm step to any variant. Pair with "fields" for the "confirm + reason" pattern (collect a justification, then confirm).
   "createInstance": { "workflowId": "items", "fields": [ { "key": "title", "label": "Title", "type": "string", "required": true } ] }  // optional
 }
 
@@ -321,6 +372,7 @@ GATE (structured predicates — NO expression language, one of):
   { "kind": "taskOutputEquals", "task": "runAgent", "path": "output.completion.outcome", "value": "approved" }   // path MUST start with "output"
   { "kind": "instanceStateEquals", "field": "verdict", "value": "approved" }   // field declared in instanceState; scalar value must match its type
   { "kind": "errorCountAtLeast", "task": "validateCompletion", "count": 3 }
+  { "kind": "file", "ref": "./gates/approved.ts" }   // a gate implemented in a referenced file: the file exports (ctx) => boolean, and the engine calls it with the runtime gate context. Keep the transition in a state whose tasks are all complete — auto-transitions evaluate after each task.
   { "kind": "not", "gate": GATE } | { "kind": "and", "gates": [ GATE, ... ] } | { "kind": "or", "gates": [ GATE, ... ] }
 
 VALUE SOURCES (patch and edge field values):
@@ -332,9 +384,10 @@ EDGE: {
   "fromWorkflow": "planning", "fromStates": ["done"], "toWorkflow": "items",
   "fields": { "title": { "kind": "taskOutput", "task": "planWork", "path": "output" } },   // optional
   "fanOut": { "task": "planWork", "path": "output.items", "fields": { "title": { "kind": "itemPath", "path": "title" }, "dependsOn": { "kind": "itemPath", "path": "dependencies" } } }  // optional; one items instance per array item
+  "transform": { "ref": "./edges/to-summary.ts", "fields": ["title", "body"] }  // optional; the edge transform implemented in a referenced file (mutually exclusive with fields/fanOut). "fields" declares the target instance-state fields the transform produces.
 }
 
-CONSTRAINTS (the validator rejects violations; fix them in the same spec):
+CONSTRAINTS (the validator rejects violations; fix them in the same blueprint):
 - Every instance-state field that is READ (gates, instance/display hints, inputFromInstanceState, "@instance:" refs, dependsOnState) must have a WRITER: a patch op on an operation task, an edge field into that workflow, a createInstance payload key, or an engine op. Fields the engine provides (worktreePath, branchName, attempt) need no writer.
 - Every write (patch key, edge field, createInstance key) must be declared in the target workflow's instanceState.
 - Only engine operations and infrastructure tools from the capabilities list may be referenced.
@@ -343,6 +396,8 @@ CONSTRAINTS (the validator rejects violations; fix them in the same spec):
 - Workflow/state/task/field/action ids must be valid TS identifiers (no dashes, no spaces).
 - A workflow with no instance state uses an empty instanceState array.
 - A task may declare either "patch" (operation role) or nothing extra; patch writes on a task read a SIBLING task's output (the patch op runs as an operation task after that task completes).
+- IMPORTS (the import policy): a referenced file may import engine primitives (workflow-engine/*), the flow's own files (relative paths inside the module set), node: builtins, and packages declared in the blueprint's "dependencies" list. Any other import fails the gate with a readable finding — declare the package in "dependencies" or remove the import.
+- REFERENCED FILES ("tools"/"operations"/gate/transform/extract refs): the renderer emits a contract-typed stub per reference; implement the stub's named export (keep the name the stub declares) and generate again. Hand edits are authoritative — stub emission never overwrites an existing file. Gate files export (ctx) => boolean; tool files export <id>Tools (defineTool list); operation files export <id>Operations (defineOperations map); edge transforms export a TransformContract; extractors export an OutputExtractor.
 
 ## Engine capabilities
 HIVE WORKFLOW ENGINE — CAPABILITIES A FLOW GETS FOR FREE
@@ -371,6 +426,9 @@ A flow definition declares only its domain. Everything listed here is generic en
 - workflowInstancesInState(stateId?) — query instances by state from gates and ops
 - maxWorkflowInstancesInTarget — engine-enforced concurrency limit on a ManualAction
 - dependsOnState — engine backstop: resolves workflowInstanceState.dependsOn (ids or titles) against instances already in the target state
+
+## Instance-state access in tools and ops
+- Tools (defineTool executors) and operations (defineOperations) receive a live instance-state getter (ctx.workflowInstanceState()) and patch (ctx.patchWorkflowInstanceState(...)). The getter sees the current state — including patches from earlier turns, the flow, or the instance-state API — so a capability like an authoring session's save_definition can read the generated source and the id of a prior save instead of requiring every input as a parameter. Tools mirror the operation context; the generic engine never reads or writes files.
 
 ## Engine-provided state fields (no flow writer needed)
 - worktreePath — written by prepare_worktree (and flows' own workspace ops); read by verify_workspace, merge_branch, and @instance: workspacePath refs

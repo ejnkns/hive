@@ -67,15 +67,16 @@ TASK: {
   "label": "Run agent",
   "role": "operation" | "ai-task" | "ai-chat",
   "systemPrompt": "…",             // optional; ALWAYS set it on ai-task/ai-chat so the agent knows its job and that it must call the completion tool
-  "operations": ["prepare_worktree"],  // ENGINE op names only (capabilities list)
+  "operations": ["prepare_worktree", "score", { "ref": "./ops/annotate.ts" }],  // engine op names, flow-level custom op ids, or inline references to a custom operation module
   "operationInputs": { "require": "committed" },   // verify_workspace: committed | changes | none
-  "tools": ["read_file", "write_file", "run_command", "git_status", "git_diff", "git_log", "commit_work", "search_code", "list_directory", "git_show"],  // infrastructure tool names only; the task's completion tool is added automatically
+  "tools": ["websearch", "read_file", "write_file"],  // infrastructure tool names + custom tool ids (the flow's "tools" list); the task's completion tool is added automatically
   "completionTool": "complete_task",   // optional; only when the task does NOT declare "completionOutput" — then it must be "complete_task"
   "completionOutput": [ { "field": "category", "type": "string", "description": "optional" } ],  // optional; ai-task ONLY. Declares the structured fields the task must return. The renderer generates a completion tool <workflowId>_<taskId>_complete with these fields (all required); the parsed arguments become the task output, so patch ops read output.<field> and gates compare output.<field>. Do NOT also set completionTool.
   "workspacePath": "@instance:worktreePath",  // literal dir or "@instance:<field>"
   "inputFromInstanceState": "brief",   // dotted path into instanceState, seeded as the first message
   "persist": { "path": "reviews/{instanceId}-{attempt}.json" },
   "patch": { "verdict": { "kind": "taskOutput", "task": "runAgent", "path": "output.verdict" } }  // OPERATION tasks only; writes instance state. A sourced value that resolves to undefined makes the op FAIL (taskError) — declare a retry/needs-review state for it.
+  "extract": { "ref": "./extractors/parse.ts", "fields": ["verdict"] }  // OPERATION tasks only; a referenced output extractor. The generated op runs the extractor over the instance's task outputs and patches the declared fields into instance state.
 }
 
 STATE_ACTION: {
@@ -101,6 +102,7 @@ GATE (structured predicates — NO expression language, one of):
   { "kind": "taskOutputEquals", "task": "runAgent", "path": "output.completion.outcome", "value": "approved" }   // path MUST start with "output"
   { "kind": "instanceStateEquals", "field": "verdict", "value": "approved" }   // field declared in instanceState; scalar value must match its type
   { "kind": "errorCountAtLeast", "task": "validateCompletion", "count": 3 }
+  { "kind": "file", "ref": "./gates/approved.ts" }   // a gate implemented in a referenced file: the file exports (ctx) => boolean, and the engine calls it with the runtime gate context. Keep the transition in a state whose tasks are all complete — auto-transitions evaluate after each task.
   { "kind": "not", "gate": GATE } | { "kind": "and", "gates": [ GATE, ... ] } | { "kind": "or", "gates": [ GATE, ... ] }
 
 VALUE SOURCES (patch and edge field values):
@@ -112,6 +114,7 @@ EDGE: {
   "fromWorkflow": "planning", "fromStates": ["done"], "toWorkflow": "items",
   "fields": { "title": { "kind": "taskOutput", "task": "planWork", "path": "output" } },   // optional
   "fanOut": { "task": "planWork", "path": "output.items", "fields": { "title": { "kind": "itemPath", "path": "title" }, "dependsOn": { "kind": "itemPath", "path": "dependencies" } } }  // optional; one items instance per array item
+  "transform": { "ref": "./edges/to-summary.ts", "fields": ["title", "body"] }  // optional; the edge transform implemented in a referenced file (mutually exclusive with fields/fanOut). "fields" declares the target instance-state fields the transform produces.
 }
 
 CONSTRAINTS (the validator rejects violations; fix them in the same blueprint):

@@ -6,7 +6,7 @@
 import { writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { flowAuthoringMarkdown } from "../src/server/flow-authoring";
+import { flowAuthoringMarkdown } from "../src/server/flow-authoring.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const target = resolve(here, "../../skills/flow-authoring/reference.md");

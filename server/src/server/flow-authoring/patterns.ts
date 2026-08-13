@@ -185,6 +185,26 @@ const GIT_WORK_SKETCH = `git-backed work — work happens in a repository, with 
   the flow needs a basePath bound to the repo (configSchema with basePath, or an onboarding workflow
   that patches it via patch_flow_config).`;
 
+// Custom logic — the blueprint-referenced modules: file references for gates,
+// tools, operations, edge transforms, and output extractors. Tested end to end
+// by the research-loop e2e (a custom gate deciding a transition + a custom
+// websearch tool returning a shaped result).
+const CUSTOM_LOGIC_SKETCH = `custom-logic — reference a file for anything the structured vocabulary can't express:
+  flow level: "tools": [ { "id": "websearch", "ref": "./tools/websearch.ts" } ],
+              "operations": [ { "id": "score", "ref": "./ops/score.ts" } ],
+              "dependencies": [ "axios" ]   // external packages the files may import
+  a transition's gate: { "kind": "file", "ref": "./gates/approved.ts" }  // the file exports (ctx) => boolean
+  a task: "tools": ["websearch"] (the custom tool id) and "operations": ["score", { "ref": "./ops/annotate.ts" }]
+  an operation task may declare "extract": { "ref": "./extractors/parse.ts", "fields": ["verdict"] } — a
+    referenced output extractor that patches the declared instance-state fields
+  an edge: "transform": { "ref": "./edges/to-summary.ts", "fields": ["title", "body"] } — the target fields
+  the renderer emits a contract-typed stub per reference; implement the stub's named export (keep the
+  name and contract) and generate again — hand edits are authoritative. A file gate reads the runtime
+  gate context (ctx.workflowInstanceState), so keep its transition in a state whose tasks are all
+  complete (auto-transitions evaluate after each task).
+  example lifecycle: searching (ai-chat task with the custom tool) → extracting (extractor op) → done,
+  where the transition out of extracting is gated by the referenced gate file.`;
+
 export const FLOW_PATTERNS: FlowPattern[] = [
   {
     id: "structured-intake",
@@ -209,6 +229,12 @@ export const FLOW_PATTERNS: FlowPattern[] = [
     name: "Git-backed work",
     when: "the work is code in a repository that must be committed, verified, and reviewed",
     sketch: GIT_WORK_SKETCH,
+  },
+  {
+    id: "custom-logic",
+    name: "Custom logic (referenced modules)",
+    when: "a gate needs logic beyond the structured predicates, or the flow needs a custom tool, operation, edge transform, or output extractor (a research loop, a websearch, a scraper)",
+    sketch: CUSTOM_LOGIC_SKETCH,
   },
 ];
 

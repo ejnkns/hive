@@ -15,20 +15,22 @@ pane. Every prompt can be run two ways:
 The prompts deliberately cover different domains to test that generation is
 domain-agnostic, and different engine capabilities (multi-workflow + edges,
 fan-out of structured output, HITL chat, escalation/retry, git work,
-cross-instance dependencies).
+cross-instance dependencies, blueprint-referenced custom logic).
 
 ## What to verify on every run
 
-- The session reaches **done** and the gate-passed TypeScript lands in the
-  editor automatically.
-- **I'm feeling lucky**: the agent writes the spec without asking questions and
-  finalizes on its own. If it stalls, the console should show the 60s timeout
-  behavior — not a 10s kill.
+- The agent's `generate_definition` passes the gate and the TypeScript lands in
+  the editor automatically (the session stays in drafting — it never ends on
+  its own).
+- **I'm feeling lucky**: the agent writes the blueprint without asking questions
+  and generates on its own.
 - **Conversational**: the agent asks only what actually changes the design,
-  then drafts; the spec preview updates after each `set_flow_spec`.
+  then drafts; the editor preview updates after each `set_flow_blueprint`.
 - The final definition has: a `systemPrompt` on every ai-task/ai-chat,
   `completionOutput` for any structured data, a `needs_review`-style escape
   hatch for fallible tasks, and zero gate warnings.
+- A referenced file's edit survives: after a `write_definition_file`, the file
+  tab shows the edit and a reload resumes the session with it.
 - **Close session** cleans up (the flow disappears from the library); reloading
   the page resumes an open session.
 
@@ -179,6 +181,22 @@ Expect: the structured-intake/human-review shape applied to an unfamiliar
 domain — the same lifecycle patterns, renamed nouns. Confirms generation is
 domain-agnostic (not idea/card/ticket-shaped by default).
 
+## 10. Research loop (blueprint-referenced custom logic)
+
+```text
+A research loop flow. An AI searches the web for a query with a custom
+websearch tool and extracts a verdict about the result. The verdict decides
+whether the loop is done or needs human review; a human can retry from there.
+```
+
+Expect: the custom-logic pattern — a flow-level `tools` reference (the
+websearch file), a `{ kind: "file", ref }` gate on the transition out of the
+extracting state (after the extractor writes the verdict the gate reads — a
+gate sharing a state with an earlier task fires too early), and the agent
+implementing the referenced files in-conversation (`write_definition_file`)
+then regenerating until the gate passes, then `save_definition`. The strongest
+end-to-end proof of the blueprint-referenced-modules capability.
+
 ## Testing matrix
 
 | Prompt | Exercises | Watch for |
@@ -192,3 +210,4 @@ domain-agnostic (not idea/card/ticket-shaped by default).
 | 7 Recruiting | multi-stage, mixed AI roles, hold loop | bounded loops |
 | 8 Vague request | conversational clarification | agent asks, doesn't guess |
 | 9 Bakery orders | domain genericity | same patterns, new nouns |
+| 10 Research loop | referenced modules: custom tool + file gate | gate after the extractor; files implemented in-conversation |
