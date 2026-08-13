@@ -180,7 +180,9 @@ export type WorkflowSpec = {
     fields: {
       path: string;
       label?: string;
-      render?: RuntimeRenderHint;
+      // A render hint: the object form ({ kind, props? }) or the bare-kind
+      // shorthand ("markdown" — the renderer normalizes it to { kind: "markdown" }).
+      render?: RuntimeRenderHint | string;
       derive?: DerivedDisplay;
     }[];
   };

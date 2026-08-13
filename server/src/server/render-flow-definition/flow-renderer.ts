@@ -329,7 +329,7 @@ export function renderFlowDefinition(
         .map((f) => {
           const parts = [`path: ${json(f.path)}`];
           if (f.label) parts.push(`label: ${json(f.label)}`);
-          if (f.render) parts.push(`render: ${JSON.stringify(f.render)}`);
+          if (f.render) parts.push(`render: ${renderHintSource(f.render)}`);
           if (f.derive) parts.push(`derive: ${JSON.stringify(f.derive)}`);
           return `{ ${parts.join(", ")} }`;
         })
@@ -635,6 +635,14 @@ function buildBindings(refs: ModuleReference[]): Map<string, string> {
     byRef.set(ref.ref, binding);
   }
   return byRef;
+}
+
+// The emitted render hint: a bare string is the blueprint's kind shorthand
+// for a prop-less render ({ kind: <string> }) — normalize it to the object
+// shape the definition type (RuntimeRenderHint) expects.
+function renderHintSource(render: unknown): string {
+  const hint = typeof render === "string" ? { kind: render } : render;
+  return JSON.stringify(hint);
 }
 
 // One import line per unique module, in first-use order.

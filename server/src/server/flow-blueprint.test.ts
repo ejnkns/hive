@@ -1607,7 +1607,7 @@ describe("manual-action fields", () => {
       assert.deepEqual(validateFlowBlueprint(blueprint), []);
     });
 
-    it("rejects a bare-string render hint on a display field", () => {
+    it("accepts a bare-string render hint as the kind shorthand", () => {
       const blueprint: FlowBlueprint = {
         ...VALID,
         workflows: [
@@ -1621,10 +1621,22 @@ describe("manual-action fields", () => {
           },
         ],
       };
-      assert.match(
-        msgFor(blueprint, "render must be an object"),
-        /render must be an object/
-      );
+      assert.deepEqual(validateFlowBlueprint(blueprint), []);
+    });
+
+    it("rejects an empty-string render hint", () => {
+      const blueprint: FlowBlueprint = {
+        ...VALID,
+        workflows: [
+          {
+            ...VALID.workflows[0],
+            display: {
+              fields: [{ path: "title", label: "Title", render: "" as never }],
+            },
+          },
+        ],
+      };
+      assert.match(msgFor(blueprint, "render must be"), /render must be/);
     });
 
     it("rejects a render hint without a kind", () => {

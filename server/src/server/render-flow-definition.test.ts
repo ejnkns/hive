@@ -831,6 +831,45 @@ describe("render flow definition", () => {
     assert.match(source, /confirmText: "Delete everything\?",/);
   });
 
+  it("normalizes a bare-string render hint to { kind: ... } in the entry", async () => {
+    const spec: FlowBlueprint = {
+      id: "renderFlow",
+      label: "Render Flow",
+      configSchema: [],
+      workflows: [
+        {
+          id: "board",
+          label: "Board",
+          instanceState: [{ field: "note", type: "string" }],
+          editFields: [{ key: "note", label: "Note", type: "string" }],
+          display: {
+            fields: [
+              { path: "note", label: "Note", render: "markdown" as never },
+            ],
+          },
+          initialState: "ready",
+          terminalStates: ["done"],
+          states: [
+            {
+              id: "ready",
+              label: "Ready",
+              category: "initial",
+              actions: [
+                { id: "finish", label: "Finish", transitionTo: "done" },
+              ],
+            },
+            { id: "done", label: "Done", category: "terminal" },
+          ],
+        },
+      ],
+      actions: [],
+      edges: [],
+    };
+
+    const source = await assertRenderedPassesGate(spec, "corpus-render");
+    assert.match(source, /render: \{"kind":"markdown"\}/);
+  });
+
   it("renders a derived display field", async () => {
     const spec: FlowBlueprint = {
       id: "deriveFlow",

@@ -22,10 +22,21 @@ export function renderHintErrors(
   path: string
 ): BlueprintError[] {
   const errors: BlueprintError[] = [];
+  // A bare string is the kind shorthand — the renderer normalizes it to
+  // { kind: <string> } for the definition.
+  if (typeof value === "string") {
+    if (value.trim() === "") {
+      errors.push({
+        path,
+        message: `render must be a non-empty kind string or an object with a kind (e.g. "markdown" or { kind: "markdown" })`,
+      });
+    }
+    return errors;
+  }
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     errors.push({
       path,
-      message: `render must be an object with a kind (e.g. { kind: "markdown" }), got ${JSON.stringify(value)}`,
+      message: `render must be a kind string or an object with a kind (e.g. "markdown" or { kind: "markdown" }), got ${JSON.stringify(value)}`,
     });
     return errors;
   }
