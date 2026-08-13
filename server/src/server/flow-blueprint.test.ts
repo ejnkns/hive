@@ -1162,6 +1162,242 @@ describe("validateFlowBlueprint", () => {
       "an empty component source must be rejected"
     );
   });
+
+  it("counts declared tool and operation writes as writers for the workflows that use them", () => {
+    const blueprint: FlowBlueprint = {
+      ...VALID,
+      tools: [
+        {
+          id: "record_spec",
+          ref: "./tools/record-spec.ts",
+          writes: ["spec"],
+        },
+      ],
+      operations: [
+        {
+          id: "refresh",
+          ref: "./ops/refresh.ts",
+          writes: ["reviewIsStale"],
+        },
+      ],
+      workflows: [
+        {
+          ...VALID.workflows[0],
+          instanceState: [
+            { field: "title", type: "string" },
+            { field: "spec", type: "string" },
+            { field: "reviewIsStale", type: "boolean" },
+          ],
+          states: VALID.workflows[0].states.map((s) =>
+            s.id === "running"
+              ? {
+                  ...s,
+                  tasks: [
+                    {
+                      id: "run",
+                      label: "Run",
+                      role: "ai-task",
+                      completionTool: "complete_task",
+                      tools: ["read_file", "record_spec"],
+                      operations: ["refresh"],
+                    },
+                  ],
+                  autoTransitions: [
+                    {
+                      to: "approved",
+                      gate: {
+                        kind: "taskOutputEquals",
+                        task: "run",
+                        path: "output",
+                        value: "done",
+                      },
+                    },
+                  ],
+                }
+              : s
+          ),
+        },
+      ],
+    };
+    // The tool/op writes satisfy the reads below (the run task's ops/tools
+    // write spec and reviewIsStale, and a gate reads reviewIsStale).
+    const withReads: FlowBlueprint = {
+      ...blueprint,
+      workflows: [
+        {
+          ...blueprint.workflows[0],
+          states: blueprint.workflows[0].states.map((s) =>
+            s.id === "running"
+              ? {
+                  ...s,
+                  autoTransitions: [
+                    {
+                      to: "approved",
+                      gate: {
+                        kind: "taskOutputEquals",
+                        task: "run",
+                        path: "output",
+                        value: "done",
+                      },
+                    },
+                    {
+                      to: "approved",
+                      gate: {
+                        kind: "instanceStateEquals",
+                        field: "reviewIsStale",
+                        value: true,
+                      },
+                    },
+                  ],
+                }
+              : s
+          ),
+        },
+      ],
+    };
+    assert.deepEqual(errorsFor(withReads), []);
+
+    // Without the declaration the write is invisible to the invariant.
+    const undeclared: FlowBlueprint = {
+      ...VALID,
+      operations: [{ id: "refresh", ref: "./ops/refresh.ts" }],
+      workflows: [
+        {
+          ...VALID.workflows[0],
+          instanceState: [
+            { field: "title", type: "string" },
+            { field: "reviewIsStale", type: "boolean" },
+          ],
+          states: VALID.workflows[0].states.map((s) =>
+            s.id === "running"
+              ? {
+                  ...s,
+                  tasks: [
+                    {
+                      id: "run",
+                      label: "Run",
+                      role: "ai-task",
+                      completionTool: "complete_task",
+                      operations: ["refresh"],
+                    },
+                  ],
+                  autoTransitions: [
+                    {
+                      to: "approved",
+                      gate: {
+                        kind: "taskOutputEquals",
+                        task: "run",
+                        path: "output",
+                        value: "done",
+                      },
+                    },
+                    {
+                      to: "approved",
+                      gate: {
+                        kind: "instanceStateEquals",
+                        field: "reviewIsStale",
+                        value: true,
+                      },
+                    },
+                  ],
+                }
+              : s
+          ),
+        },
+      ],
+    };
+    assert.ok(
+      messageFor(undeclared, "nothing writes it"),
+      "an undeclared custom-op write must leave the read flagged"
+    );
+  });
+
+  it("accepts a systemPromptRef and rejects it combined with an inline systemPrompt", () => {
+    const withRef: FlowBlueprint = {
+      ...VALID,
+      workflows: [
+        {
+          ...VALID.workflows[0],
+          states: VALID.workflows[0].states.map((s) =>
+            s.id === "running"
+              ? {
+                  ...s,
+                  tasks: [
+                    {
+                      id: "run",
+                      label: "Run",
+                      role: "ai-task",
+                      completionTool: "complete_task",
+                      systemPromptRef: "./prompts/worker.ts",
+                    },
+                  ],
+                }
+              : s
+          ),
+        },
+      ],
+    };
+    assert.deepEqual(errorsFor(withRef), []);
+
+    const both: FlowBlueprint = {
+      ...withRef,
+      workflows: [
+        {
+          ...withRef.workflows[0],
+          states: withRef.workflows[0].states.map((s) =>
+            s.id === "running"
+              ? {
+                  ...s,
+                  tasks: [
+                    {
+                      id: "run",
+                      label: "Run",
+                      role: "ai-task",
+                      completionTool: "complete_task",
+                      systemPrompt: "inline",
+                      systemPromptRef: "./prompts/worker.ts",
+                    },
+                  ],
+                }
+              : s
+          ),
+        },
+      ],
+    };
+    assert.ok(
+      messageFor(both, "use one or the other"),
+      "declaring both an inline and a referenced prompt must be rejected"
+    );
+
+    const badRef: FlowBlueprint = {
+      ...withRef,
+      workflows: [
+        {
+          ...withRef.workflows[0],
+          states: withRef.workflows[0].states.map((s) =>
+            s.id === "running"
+              ? {
+                  ...s,
+                  tasks: [
+                    {
+                      id: "run",
+                      label: "Run",
+                      role: "ai-task",
+                      completionTool: "complete_task",
+                      systemPromptRef: "prompts/worker",
+                    },
+                  ],
+                }
+              : s
+          ),
+        },
+      ],
+    };
+    assert.ok(
+      messageFor(badRef, "must start with"),
+      "a malformed prompt ref must be rejected"
+    );
+  });
 });
 
 describe("analyzeFlowBlueprint", () => {
@@ -1407,7 +1643,7 @@ describe("manual-action fields", () => {
     assert.deepEqual(validateFlowBlueprint(blueprint), []);
   });
 
-  describe("blueprint-referenced modules (the five kinds)", () => {
+  describe("blueprint-referenced modules (the six kinds)", () => {
     // A valid blueprint exercising every reference kind: a gate file ref, a
     // custom tool, flow-level + inline operation refs, an edge transform ref,
     // and an output extractor ref. The validator must accept it as-is.
@@ -1521,10 +1757,10 @@ describe("manual-action fields", () => {
       return found;
     };
 
-    it("declares the closed set gate | tool | operation | transform | extract", () => {
+    it("declares the closed set gate | tool | operation | transform | extract | prompt", () => {
       assert.deepEqual(
         [...MODULE_REF_KINDS],
-        ["gate", "tool", "operation", "transform", "extract"]
+        ["gate", "tool", "operation", "transform", "extract", "prompt"]
       );
     });
 

@@ -20,6 +20,7 @@ export const MODULE_REF_KINDS: readonly ModuleRefKind[] = [
   "operation",
   "transform",
   "extract",
+  "prompt",
 ];
 export const DOTTED_PATH =
   /^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*$/;

@@ -63,7 +63,8 @@ export type ModuleRefKind =
   | "tool"
   | "operation"
   | "transform"
-  | "extract";
+  | "extract"
+  | "prompt";
 
 export type GateSpec =
   | { kind: "always" }
@@ -95,12 +96,19 @@ export type GateSpec =
 
 // A custom tool the flow ships: the file's `<id>Tools` export is a list of
 // self-contained tools (defineTool) merged into the definition's tools.
-export type ToolRefSpec = { id: string; ref: string };
+// `writes` declares the instance-state fields the tools' executors patch —
+// the blueprint's read↔write invariant counts them as writers for the
+// workflows whose tasks use the tool (the module-set schema-consistency check
+// verifies the declared writes against the actual executor bodies).
+export type ToolRefSpec = { id: string; ref: string; writes?: string[] };
 
 // A custom operation the flow ships: the file's `<id>Operations` export is a
 // defineOperations map merged into the definition's operations. Tasks
-// reference the op by `id`.
-export type OperationRefSpec = { id: string; ref: string };
+// reference the op by `id`. `writes` declares the instance-state fields the
+// op patches (the blueprint's read↔write invariant counts them as writers for
+// the workflows whose tasks use the op; the module-set schema-consistency
+// check verifies against the actual op body).
+export type OperationRefSpec = { id: string; ref: string; writes?: string[] };
 
 // An edge transform implemented in a referenced file. `fields` declares the
 // target instance-state fields the transform produces — the renderer wraps
@@ -125,7 +133,12 @@ export type TaskSpec = {
   tools?: string[];
   completionTool?: string;
   completionSignal?: string;
+  // The task's system prompt, inline or as a referenced file. `systemPromptRef`
+  // points at a module whose named export (the camel-cased file base name) is
+  // the prompt string — the renderer imports it into the entry. Mutually
+  // exclusive with `systemPrompt`.
   systemPrompt?: string;
+  systemPromptRef?: string;
   startOnUserInput?: boolean;
   workspacePath?: string;
   inputFromInstanceState?: string;
@@ -288,4 +301,8 @@ export type BlueprintValidationContext = {
   taskIdsByWorkflow: Map<string, Set<string>>;
   instanceStateById: Map<string, Map<string, FieldType>>;
   completionOutputById: Map<string, Map<string, CompletionContract>>;
+  // Flow-level custom capabilities' declared instance-state writes, keyed by
+  // id; the writer validator counts them for workflows whose tasks use them.
+  toolWritesById: Map<string, string[]>;
+  operationWritesById: Map<string, string[]>;
 };

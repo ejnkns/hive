@@ -11,6 +11,11 @@ import { STRUCTURED_INTAKE_EXEMPLAR } from "./flow-authoring.ts";
 import type { FlowBlueprint } from "./flow-blueprint.ts";
 import { validateFlowBlueprint } from "./flow-blueprint.ts";
 import { loadDefinitionFromSource } from "./flow-definitions.ts";
+import {
+  lintModuleSet,
+  loadModuleSetDefinition,
+  materializeModuleSet,
+} from "./module-set.ts";
 import { renderFlowDefinition } from "./render-flow-definition.ts";
 import { checkDefinitionSources } from "./schema-consistency.ts";
 import { typecheckDefinitionSource } from "./typecheck-definition.ts";
@@ -1333,5 +1338,70 @@ describe("render flow definition", () => {
       );
       assert.match(source, /completionTool: "items_classify_complete"/);
     });
+  });
+
+  it("renders a referenced system prompt (systemPromptRef imports the prompt const)", async () => {
+    const spec: FlowBlueprint = {
+      id: "promptFlow",
+      label: "Prompt Flow",
+      configSchema: [],
+      workflows: [
+        {
+          id: "research",
+          label: "Research",
+          instanceState: [{ field: "query", type: "string" }],
+          initialState: "searching",
+          terminalStates: ["done"],
+          states: [
+            {
+              id: "searching",
+              label: "Searching",
+              category: "initial",
+              tasks: [
+                {
+                  id: "search",
+                  label: "Search",
+                  role: "ai-task",
+                  completionTool: "complete_task",
+                  systemPromptRef: "./prompts/worker.ts",
+                },
+              ],
+              autoTransitions: [
+                { to: "done", gate: { kind: "taskSuccess", task: "search" } },
+              ],
+            },
+            { id: "done", label: "Done", category: "terminal" },
+          ],
+        },
+      ],
+      actions: [],
+      edges: [],
+    };
+
+    const rendered = renderFlowDefinition(spec);
+    assert.match(
+      rendered.entry,
+      /import \{ worker \} from "\.\/prompts\/worker\.ts";/
+    );
+    assert.match(rendered.entry, /systemPrompt: worker,/);
+    const stub = rendered.files["./prompts/worker.ts"];
+    assert.match(stub, /export const worker = /);
+
+    // The prompt file is part of the module set: writing an implementation and
+    // running the gate stays clean.
+    rendered.files["./prompts/worker.ts"] =
+      'export const worker = "You are the Research Agent. Complete the search.";\n';
+    const dir = materializeModuleSet("prompt-flow", rendered);
+    const findings = lintModuleSet(spec, dir);
+    assert.deepEqual(findings, []);
+    const flow = await loadModuleSetDefinition(dir);
+    if (!("workflows" in flow)) {
+      throw new Error("expected a static definition");
+    }
+    const task = flow.workflows[0]?.states?.[0]?.tasks?.[0];
+    assert.equal(
+      task?.systemPrompt,
+      "You are the Research Agent. Complete the search."
+    );
   });
 });

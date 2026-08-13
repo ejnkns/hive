@@ -283,8 +283,8 @@ custom-logic — reference a file for anything the structured vocabulary can't e
   "workflows": [ WORKFLOW, ... ],
   "edges": [ EDGE, ... ],          // optional
   "actions": [ FLOW_ACTION, ... ], // optional
-  "tools": [ { "id": "websearch", "ref": "./tools/websearch.ts" } ],  // optional; custom tools implemented as referenced files
-  "operations": [ { "id": "score", "ref": "./ops/score.ts" } ],       // optional; custom operations implemented as referenced files
+  "tools": [ { "id": "websearch", "ref": "./tools/websearch.ts", "writes": ["result"] } ],  // optional; custom tools implemented as referenced files. "writes" declares the instance-state fields the tool executors patch (the read↔write invariant counts them as writers for workflows whose tasks use the tool)
+  "operations": [ { "id": "score", "ref": "./ops/score.ts", "writes": ["score"] } ],       // optional; custom operations implemented as referenced files. "writes" declares the instance-state fields the op patches (same writer rule)
   "dependencies": [ "axios" ],    // optional; external packages the referenced files may import (the import policy)
   "ui": { "components": { "idea-card": "<Lit module source>" } }  // optional; served-at-runtime component modules: component id → TypeScript source. The renderer passes them into the definition's ui.components; the server transpiles and serves each. A workflow wires one via WORKFLOW.ui.instanceComponent.
 }
@@ -338,6 +338,7 @@ TASK: {
   "label": "Run agent",
   "role": "operation" | "ai-task" | "ai-chat",
   "systemPrompt": "…",             // optional; ALWAYS set it on ai-task/ai-chat so the agent knows its job and that it must call the completion tool
+  "systemPromptRef": "./prompts/worker.ts",  // optional; a referenced system prompt — the file's named export (the camel-cased base name, e.g. "worker") is the prompt string, imported into the entry. Mutually exclusive with "systemPrompt". Hand-authored prompts live in collocated files; the renderer emits a stub to fill in.
   "operations": ["prepare_worktree", "score", { "ref": "./ops/annotate.ts" }],  // engine op names, flow-level custom op ids, or inline references to a custom operation module
   "operationInputs": { "require": "committed" },   // verify_workspace: committed | changes | none
   "tools": ["websearch", "read_file", "write_file"],  // infrastructure tool names + custom tool ids (the flow's "tools" list); the task's completion tool is added automatically

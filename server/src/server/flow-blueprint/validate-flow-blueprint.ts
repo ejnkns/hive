@@ -94,7 +94,10 @@ export function validateFlowBlueprint(
   // ── blueprint-referenced modules ──
   // Custom tools and operations the flow ships as referenced files. Tasks
   // reference tools by id and operations by id (alongside engine ops).
+  // `writes` declares the instance-state fields the referenced executors
+  // patch, so the read↔write invariant counts them as writers.
   const toolIds = new Set<string>();
+  const toolWritesById = new Map<string, string[]>();
   for (const [tIndex, tool] of (blueprint.tools ?? []).entries()) {
     const tPath = `tools[${tIndex}]`;
     if (typeof tool.id !== "string" || !IDENTIFIER.test(tool.id)) {
@@ -110,8 +113,19 @@ export function validateFlowBlueprint(
     for (const e of validateRefShape(tool.ref, `${tPath}.ref`)) {
       error(e.path, e.message);
     }
+    const writes = tool.writes ?? [];
+    for (const [wIndex, field] of writes.entries()) {
+      if (!IDENTIFIER.test(field)) {
+        error(
+          `${tPath}.writes[${wIndex}]`,
+          `tool write must be a valid identifier (got ${JSON.stringify(field)})`
+        );
+      }
+    }
+    toolWritesById.set(tool.id, writes);
   }
   const operationIds = new Set<string>();
+  const operationWritesById = new Map<string, string[]>();
   for (const [oIndex, op] of (blueprint.operations ?? []).entries()) {
     const oPath = `operations[${oIndex}]`;
     if (typeof op.id !== "string" || !IDENTIFIER.test(op.id)) {
@@ -127,6 +141,16 @@ export function validateFlowBlueprint(
     for (const e of validateRefShape(op.ref, `${oPath}.ref`)) {
       error(e.path, e.message);
     }
+    const writes = op.writes ?? [];
+    for (const [wIndex, field] of writes.entries()) {
+      if (!IDENTIFIER.test(field)) {
+        error(
+          `${oPath}.writes[${wIndex}]`,
+          `operation write must be a valid identifier (got ${JSON.stringify(field)})`
+        );
+      }
+    }
+    operationWritesById.set(op.id, writes);
   }
 
   // ── dependencies (the flow's declared external packages) ──
@@ -297,6 +321,23 @@ export function validateFlowBlueprint(
                 `instanceId values require a string field (${field} is ${declaredType})`
               );
             }
+          }
+        }
+        if (
+          task.systemPrompt !== undefined &&
+          task.systemPromptRef !== undefined
+        ) {
+          error(
+            `${tPath}.systemPromptRef`,
+            `a task declares both an inline systemPrompt and a systemPromptRef — use one or the other (${task.id} declares both)`
+          );
+        }
+        if (task.systemPromptRef !== undefined) {
+          for (const e of validateRefShape(
+            task.systemPromptRef,
+            `${tPath}.systemPromptRef`
+          )) {
+            error(e.path, e.message);
           }
         }
         if (task.completionOutput !== undefined) {
@@ -833,6 +874,8 @@ export function validateFlowBlueprint(
     taskIdsByWorkflow,
     instanceStateById,
     completionOutputById,
+    toolWritesById,
+    operationWritesById,
   };
   validateEdges(blueprint, context, error);
   validateWriters(blueprint, context, error);
@@ -844,16 +887,18 @@ export function analyzeFlowBlueprint(blueprint: FlowBlueprint): string[] {
 
   // 1. A prompt-less ai-task/ai-chat has no instructions: the agent produces
   //    prose instead of completing, or the ai-task runner fails fast when
-  //    there is also no input.
+  //    there is also no input. A systemPromptRef counts as a prompt (the
+  //    referenced file is the prompt).
   for (const wf of blueprint.workflows) {
     for (const state of wf.states) {
       for (const task of state.tasks ?? []) {
         if (
           (task.role === "ai-task" || task.role === "ai-chat") &&
-          (task.systemPrompt ?? "").trim() === ""
+          (task.systemPrompt ?? "").trim() === "" &&
+          task.systemPromptRef === undefined
         ) {
           findings.push(
-            `workflow "${wf.id}" task "${task.id}" has no systemPrompt — the agent has no instructions; declare one naming the job and the completion tool to call`
+            `workflow "${wf.id}" task "${task.id}" has no systemPrompt — the agent has no instructions; declare one naming the job and the completion tool to call (or reference a prompt file via systemPromptRef)`
           );
         }
       }

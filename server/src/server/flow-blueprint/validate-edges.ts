@@ -114,11 +114,15 @@ export function validateEdges(
           );
           continue;
         }
-        if (value.kind === "itemPath" && !DOTTED_PATH.test(value.path)) {
-          error(
-            `${ePath}.fanOut.fields.${field}`,
-            `itemPath must be a dotted path (got ${JSON.stringify(value.path)})`
-          );
+        if (value.kind === "itemPath" && value.path !== "") {
+          if (!DOTTED_PATH.test(value.path)) {
+            error(
+              `${ePath}.fanOut.fields.${field}`,
+              `itemPath must be a dotted path (got ${JSON.stringify(value.path)})`
+            );
+          }
+        } else if (value.kind === "itemPath") {
+          // An empty itemPath seeds the target field with the whole array item.
         }
       }
     }

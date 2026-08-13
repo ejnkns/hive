@@ -85,7 +85,9 @@ export function renderOutputNode(node: OutputNode): string {
   const parts = [...(node.children ?? new Map()).entries()].map(
     ([segment, child]) => `${segment}?: ${renderOutputNode(child)}`
   );
-  return parts.length === 0 ? "{}" : `{ ${parts.join("; ")} }`;
+  return parts.length === 0
+    ? "Record<string, never>"
+    : `{ ${parts.join("; ")} }`;
 }
 
 // ─── value rendering (patch ops / edge transforms) ────────────────────

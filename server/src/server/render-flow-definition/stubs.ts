@@ -36,6 +36,8 @@ function renderStub(ref: ModuleReference): string {
       return transformStub(ref.exportName);
     case "extract":
       return extractStub(ref.exportName);
+    case "prompt":
+      return promptStub(ref.exportName);
   }
 }
 
@@ -105,5 +107,12 @@ export const ${exportName}: OutputExtractor = (ctx) => {
   // TODO: implement — this stub extracts nothing
   return {};
 };
+`;
+}
+
+function promptStub(exportName: string): string {
+  return `// @generated — blueprint-referenced system prompt. Write the prompt
+// below; the entry imports this export by name: ${exportName}.
+export const ${exportName} = "TODO: write the system prompt";
 `;
 }

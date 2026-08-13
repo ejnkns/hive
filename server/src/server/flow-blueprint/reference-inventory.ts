@@ -48,6 +48,14 @@ export type ModuleReference =
       workflowId: string;
       taskId: string;
       path: string;
+    }
+  | {
+      kind: "prompt";
+      ref: string;
+      exportName: string;
+      workflowId: string;
+      taskId: string;
+      path: string;
     };
 
 export function collectModuleReferences(
@@ -99,6 +107,18 @@ export function collectModuleReferences(
             exportName: refExportName("operation", { ref: op.ref }),
             id: opNameOf(op.ref),
             path: `${tPath}.operations`,
+          });
+        }
+        if (task.systemPromptRef) {
+          out.push({
+            kind: "prompt",
+            ref: task.systemPromptRef,
+            exportName: refExportName("prompt", {
+              ref: task.systemPromptRef,
+            }),
+            workflowId: wf.id,
+            taskId: task.id,
+            path: `${tPath}.systemPromptRef`,
           });
         }
         if (task.extract) {

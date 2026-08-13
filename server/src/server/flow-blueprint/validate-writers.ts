@@ -30,12 +30,23 @@ export function validateWriters(
         for (const field of task.extract?.fields ?? []) writes.add(field);
       }
     }
-    // 2. engine ops used by this workflow's tasks that write state
+    // 2. engine ops used by this workflow's tasks that write state, plus
+    //    flow-level custom ops and tools whose executors patch state (the
+    //    blueprint declares their writes; the module-set schema-consistency
+    //    check verifies them against the actual bodies).
     for (const state of wf.states) {
       for (const task of state.tasks ?? []) {
         for (const op of task.operations ?? []) {
           if (typeof op !== "string") continue;
           for (const field of engineOpWritesByName.get(op) ?? []) {
+            writes.add(field);
+          }
+          for (const field of context.operationWritesById.get(op) ?? []) {
+            writes.add(field);
+          }
+        }
+        for (const tool of task.tools ?? []) {
+          for (const field of context.toolWritesById.get(tool) ?? []) {
             writes.add(field);
           }
         }

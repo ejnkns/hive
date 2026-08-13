@@ -110,5 +110,10 @@ function harnessSource(ref: ModuleReference): string {
       return `import { ${ref.exportName} } from "${specifier}";\nimport type { TransformContract } from "workflow-engine/workflow-types";\nconst _check: TransformContract = ${ref.exportName};\n`;
     case "extract":
       return `import { ${ref.exportName} } from "${specifier}";\nimport type { OutputExtractor } from "workflow-engine/workflow-types";\nconst _check: OutputExtractor = ${ref.exportName};\n`;
+    case "prompt":
+      // The prompt contract is a plain string const; only a missing export or
+      // a non-string export fails the lint (an empty TODO stub passes — the
+      // prompt-less analysis catches a task that never gets its prompt).
+      return `import { ${ref.exportName} } from "${specifier}";\nconst _check: string = ${ref.exportName};\n`;
   }
 }

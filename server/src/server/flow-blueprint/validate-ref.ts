@@ -45,11 +45,11 @@ export function isRefWithinRoot(ref: string): boolean {
 }
 
 // The export name a reference's stub declares and the entry imports. Derived
-// per kind so the lint can check the exact symbol: gates/transforms/extracts
-// export the camel-cased file base name; tools export `<id>Tools` (a tool
-// list); operations export `<id>Operations` (an ops map).
+// per kind so the lint can check the exact symbol: gates/transforms/extracts/
+// prompts export the camel-cased file base name; tools export `<id>Tools` (a
+// tool list); operations export `<id>Operations` (an ops map).
 export function refExportName(
-  kind: "gate" | "tool" | "operation" | "transform" | "extract",
+  kind: "gate" | "tool" | "operation" | "transform" | "extract" | "prompt",
   idOrRef: { id: string; ref: string } | { ref: string }
 ): string {
   if (kind === "tool" || kind === "operation") {

@@ -405,8 +405,13 @@ export function renderFlowDefinition(
             emit(5, `completionTool: ${json(completionToolName)},`);
           if (task.completionSignal)
             emit(5, `completionSignal: ${json(task.completionSignal)},`);
-          if (task.systemPrompt)
+          if (task.systemPromptRef) {
+            // A referenced prompt: the entry imports the prompt const and the
+            // task references the binding (the camel-cased file base name).
+            emit(5, `systemPrompt: ${fileGateBinding(task.systemPromptRef)},`);
+          } else if (task.systemPrompt) {
             emit(5, `systemPrompt: ${json(task.systemPrompt)},`);
+          }
           if (task.startOnUserInput) emit(5, "startOnUserInput: true,");
           if (task.workspacePath)
             emit(5, `workspacePath: ${json(task.workspacePath)},`);
