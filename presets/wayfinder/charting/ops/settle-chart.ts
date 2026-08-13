@@ -1,13 +1,12 @@
-// Charting workflow internals; import via charting-workflow.ts.
+// The charting workflow's settle_chart operation, referenced by the wayfinder blueprint.
 
-import type { OperationContext } from "workflow-engine/runners";
+import {
+  defineOperations,
+  type OperationContext,
+} from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
-import type { ChartingItemState } from "../charting-workflow.ts";
-
-// flow.ts binds the state type and merges this into the preset's registry.
-export const chartingOperations = {
-  settle_chart: settleChartOp,
-};
+import { readString } from "../../shared/read.ts";
+import type { ChartingState } from "../types.ts";
 
 // Writes the settled destination/notes into flow config (so the effort's
 // standing facts are flow-level, not session-level) and returns the map.md body
@@ -16,7 +15,7 @@ export const chartingOperations = {
 function settleChartOp(
   _task: TaskDefinition,
   _params: Record<string, unknown>,
-  ctx: OperationContext<ChartingItemState>
+  ctx: OperationContext<ChartingState>
 ): string {
   const config = ctx.flowConfig();
   const state = ctx.workflowInstanceState();
@@ -49,6 +48,6 @@ function buildMapBody(destination: string, notes: string): string {
   ].join("\n");
 }
 
-function readString(value: unknown): string | undefined {
-  return typeof value === "string" && value !== "" ? value : undefined;
-}
+export const settle_chartOperations = defineOperations<ChartingState>({
+  settle_chart: settleChartOp,
+});

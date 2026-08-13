@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { wayfinderFlow } from "../../../../../presets/wayfinder/flow.ts";
+import { flow as wayfinderFlow } from "../../../../../presets/wayfinder/flow.ts";
 import { registerFlowDefinition } from "../../flow-definitions.ts";
 import {
   dispatchFlowLevelAction,

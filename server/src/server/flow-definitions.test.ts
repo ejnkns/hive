@@ -236,8 +236,13 @@ describe("flow definition library", () => {
     const wayfinder = getRegisteredFlowDefinition("wayfinder");
     assert.ok(
       typeof wayfinder?.source === "string" &&
-        wayfinder.source.includes("wayfinderFlow"),
-      "wayfinder's source is captured too"
+        wayfinder.source.includes("export const flow = {") &&
+        wayfinder.source.includes('id: "wayfinder"'),
+      "wayfinder's source is the rendered definition"
+    );
+    assert.ok(
+      wayfinder?.files?.["charting/ops/settle-chart.ts"] !== undefined,
+      "wayfinder's referenced modules are captured as files"
     );
     resetFlowDefinitionsForTest();
   });
