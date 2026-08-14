@@ -396,6 +396,132 @@ export const flow = {
 };
 `;
 
+test("closing the authoring session keeps the definition's files visible and editable", async () => {
+  // Register a definition to work on (a data module with a referenced file).
+  // Navigate first so the page origin matches the API host.
+  await page.goto(`${baseUrl}/#/flows`);
+  const created = await page.evaluate(
+    async ({ source, files, baseUrl }) => {
+      const res = await fetch(`${baseUrl}/api/flows/definitions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Close Me", source, files }),
+      });
+      return res.ok ? await res.json() : null;
+    },
+    { source: CLOSE_SOURCE, files: CLOSE_FILES, baseUrl }
+  );
+  assert.ok(created, "definition registered");
+  assert.equal(created?.id, "close-me");
+
+  // Start a revision session on it; the session is live (the mock writes its
+  // own module into the working copy).
+  await page.goto(`${baseUrl}/#/flows/close-me/edit`);
+  await page.waitForSelector(
+    "button",
+    { hasText: "Start conversation" },
+    { timeout: 15_000 }
+  );
+  await page.locator("textarea").first().fill("Tighten the gate");
+  await page.locator("button", { hasText: "Start conversation" }).click();
+  await waitForEditor((state) => state.code.includes("FlowDefinition"), 40_000);
+
+  // Close the session (a shell button, not inside the flow-editor): the
+  // persistent files stay visible and editable — the session was a
+  // collaborator, not the only way to see the flow.
+  await page.locator("button.author-close").click();
+  // The no-session files editor binds the saved source once the detail
+  // refreshes (the close also re-fetches it).
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector("code-editor")
+        ?.shadowRoot?.querySelector("textarea")
+        ?.value?.includes("closeFlow") ?? false,
+    { timeout: 15_000 }
+  );
+  const tabs = await page.evaluate(() =>
+    Array.from(document.querySelectorAll(".tab-bar button")).map((tab) =>
+      tab.textContent?.trim()
+    )
+  );
+  assert.ok(
+    tabs.includes("./tools/search.ts"),
+    `the referenced file tab is visible: ${tabs.join(", ")}`
+  );
+
+  // The no-session files editor is editable: change the label, save
+  // explicitly, and the definition updates.
+  const edited = await page.evaluate(() => {
+    const textarea = document
+      .querySelector("code-editor")
+      ?.shadowRoot?.querySelector("textarea");
+    if (!textarea) return false;
+    textarea.value = textarea.value.replace(
+      'label: "Close Me",',
+      'label: "Close Me (edited)",'
+    );
+    textarea.dispatchEvent(
+      new Event("input", { bubbles: true, composed: true })
+    );
+    return true;
+  });
+  assert.ok(edited, "the no-session editor must be editable");
+  await page.waitForFunction(
+    () => {
+      const save = Array.from(document.querySelectorAll("button")).find((b) =>
+        b.textContent?.includes("Save definition")
+      );
+      return save !== undefined && !save.disabled;
+    },
+    { timeout: 15_000 }
+  );
+  await page.locator("button", { hasText: "Save definition" }).click();
+  await page.waitForSelector(".saved-status", { timeout: 15_000 });
+
+  // The definition survives and the explicit save persisted the edit.
+  const definition = await page.evaluate(async () => {
+    const res = await fetch("/api/flows/definitions/close-me");
+    return res.ok ? await res.json() : null;
+  });
+  assert.ok(definition, "the saved definition survives closing the session");
+  assert.equal(definition?.name, "Close Me");
+  assert.ok(
+    definition?.source?.includes("Close Me (edited)"),
+    "the explicit save persisted the edit"
+  );
+});
+
+// A registered definition the close-session test works on (a data module with
+// a referenced file, so the no-session files editor shows a file tab).
+const CLOSE_SOURCE = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "closeFlow",
+  label: "Close Me",
+  configSchema: [],
+  tools: [{ id: "websearch", ref: "./tools/search.ts" }],
+  workflows: [
+    {
+      id: "items",
+      label: "Items",
+      instanceState: [{ field: "title", type: "string" }],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
+        { id: "new", label: "New", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  edges: [],
+};
+`;
+
+const CLOSE_FILES = {
+  "./tools/search.ts": "export const searchTools = [];\n",
+};
+
 test("hand edits are the state: the agent continues with them in force", async () => {
   // Lucky session: the generated definition module renders as the editor.
   await page.goto(`${baseUrl}/#/flows/new`);

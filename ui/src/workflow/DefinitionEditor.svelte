@@ -1,5 +1,6 @@
 <script lang="ts">
 import { onMount } from "svelte";
+import type { FlowDefinitionDetail } from "../flow-api.ts";
 import {
   authorFlowDefinition,
   deleteFlow,
@@ -11,19 +12,24 @@ import {
   saveAuthoringFile,
   saveAuthoringSource,
   sendTaskInput,
+  updateFlowDefinition,
 } from "../flow-api.ts";
+// Importing the code-editor module registers the <code-editor> element used
+// by the no-session files editor (the session renders its own via flow-editor).
+import type { CodeEditor } from "../flow-rendering/components/code-editor.ts";
+import "../flow-rendering/components/code-editor.ts";
 import Button from "../shared/ui/Button.svelte";
 import Dialog from "../shared/ui/Dialog.svelte";
 import Textarea from "../shared/ui/Textarea.svelte";
 import { flowStore } from "./flow-store.svelte";
 import LitFlowHost from "./LitFlowHost.svelte";
 
-// The flow definition editor, session-scoped: the authoring session (a
-// hidden flow instance) IS the editor. The shell keeps the route, the
-// start-session state, the session lifecycle (start/close), and the REST
-// execution for the flow-editor's actions and write-back; everything else —
-// chat, the editable definition source, save, discard — renders through the
-// flow-editor instance component.
+// The flow definition editor: the authoring session (a hidden flow instance)
+// is the AI collaborator on the flow's files — but the files are the
+// persistent artifact and stay visible and editable whether the session is
+// active or not. The shell keeps the route, the session lifecycle
+// (start/close), and the no-session files editor (tabs + explicit save);
+// the active session renders through the flow-editor instance component.
 
 let {
   definitionId,
@@ -34,6 +40,9 @@ let {
 } = $props();
 
 let isBuiltIn = $state(false);
+// The saved definition's detail (name, source, files) — the persistent files
+// the no-session state shows and edits.
+let savedDetail = $state<FlowDefinitionDetail | null>(null);
 let loading = $state(false);
 let error = $state<string | null>(null);
 let aiPrompt = $state("");
@@ -41,8 +50,8 @@ let deleteOpen = $state(false);
 let authoring = $state(false);
 
 // The authoring session: a hidden flow instance whose ai-chat agent converges
-// on a spec with the user. The flow-editor renders it — chat, the editable
-// definition source, save, discard.
+// on a definition with the user. The flow-editor renders it — chat, the
+// editable definition module, save.
 let authorFlowId = $state<string | null>(null);
 let authorInstanceId = $state<string | null>(null);
 
@@ -50,6 +59,26 @@ let authorInstanceId = $state<string | null>(null);
 const authorFlow = $derived(
   authorFlowId ? flowStore.getFlow(authorFlowId) : null
 );
+
+// The no-session files editor: the active tab, the human's in-flight edits
+// per tab (overriding the saved value until Save), and the save status.
+let activeTab = $state("definition");
+let editedValues = $state<Record<string, string>>({});
+let saving = $state(false);
+let saveStatus = $state<string | null>(null);
+let editor: CodeEditor | null = $state(null);
+
+const filePaths = $derived(
+  savedDetail ? Object.keys(savedDetail.files ?? {}).sort() : []
+);
+
+const activeValue = $derived(
+  activeTab === "definition"
+    ? (editedValues.definition ?? savedDetail?.source ?? "")
+    : (editedValues[activeTab] ?? savedDetail?.files?.[activeTab] ?? "")
+);
+
+const hasPendingEdits = $derived(Object.keys(editedValues).length > 0);
 
 // Resume a session after a reload: the session flow persists server-side; the
 // editor remembers its id per definition.
@@ -79,6 +108,11 @@ $effect(() => {
   localStorage.removeItem(authorStorageKey());
   localStorage.setItem(`hive:author:${savedId}`, authorFlowId);
   window.location.hash = `#/flows/${encodeURIComponent(savedId)}/edit`;
+});
+
+// The no-session code editor is controlled: the shell owns its value.
+$effect(() => {
+  if (editor !== null) editor.value = activeValue;
 });
 
 async function startAuthoring(lucky: boolean) {
@@ -120,8 +154,19 @@ async function startAuthoring(lucky: boolean) {
   }
 }
 
+// Starting a conversation from the no-session files editor: persist any
+// unsaved edits first so the session seeds from the current content.
+async function startAuthoringFromFiles(lucky: boolean) {
+  if (authoring || !aiPrompt.trim()) return;
+  if (hasPendingEdits) {
+    const ok = await saveDefinition();
+    if (!ok) return; // the save failed — do not start on stale state
+  }
+  await startAuthoring(lucky);
+}
+
 // Closes (deletes) the authoring session flow and returns the pane to the
-// start-conversation state. The session is disposable — a failed delete is
+// persistent files editor. The session is disposable — a failed delete is
 // not an error; the stored key is cleared either way.
 async function closeAuthoring() {
   if (!authorFlowId) return;
@@ -134,6 +179,9 @@ async function closeAuthoring() {
   localStorage.removeItem(authorStorageKey());
   authorFlowId = null;
   authorInstanceId = null;
+  // The session's save may have updated the definition; refresh the files the
+  // no-session editor shows.
+  void refreshDetail();
 }
 
 async function resumeAuthoring(): Promise<void> {
@@ -167,8 +215,8 @@ async function resumeAuthoring(): Promise<void> {
   }
 }
 
-// The flow-editor emits hive-action for its Save button ("save") and Discard
-// handoff ("discard"); the shell executes the app-level effect (REST).
+// The flow-editor emits hive-action for its Save button ("save") and the
+// "done" affordance ("instantiate"); the shell executes the app-level effect.
 // Any other action falls through to dispatch.
 async function handleAuthorAction(
   flowId: string,
@@ -244,6 +292,51 @@ async function saveFromSession(flowId: string) {
   }
 }
 
+// ── the no-session files editor ───────────────────────────────────────
+
+function selectTab(tab: string) {
+  activeTab = tab;
+}
+
+function handleFileEdit(event: CustomEvent<{ value: string }>) {
+  editedValues[activeTab] = event.detail.value;
+  saveStatus = null;
+}
+
+// The explicit save: PUT the current source + files to the definition-update
+// route (the same registration seam the session save uses). Returns whether
+// the save succeeded, so a caller can decide whether to proceed on the saved
+// state.
+async function saveDefinition(): Promise<boolean> {
+  if (!definitionId || !savedDetail || saving) return false;
+  saving = true;
+  error = null;
+  saveStatus = null;
+  const source = editedValues.definition ?? savedDetail.source ?? "";
+  const files = { ...(savedDetail.files ?? {}) };
+  for (const [path, content] of Object.entries(editedValues)) {
+    if (path === "definition") continue;
+    files[path] = content;
+  }
+  try {
+    await updateFlowDefinition(definitionId, {
+      name: savedDetail.name,
+      description: savedDetail.description,
+      source,
+      files,
+    });
+    savedDetail = { ...savedDetail, source, files };
+    editedValues = {};
+    saveStatus = "Saved";
+    return true;
+  } catch (err) {
+    error = err instanceof Error ? err.message : "Failed to save definition";
+    return false;
+  } finally {
+    saving = false;
+  }
+}
+
 onMount(() => {
   void load();
   void resumeAuthoring();
@@ -257,13 +350,21 @@ async function load() {
   loading = true;
   error = null;
   try {
-    const detail = await fetchFlowDefinition(definitionId);
-    isBuiltIn = detail.builtIn;
+    await refreshDetail();
   } catch (err) {
     error = err instanceof Error ? err.message : "Failed to load definition";
   } finally {
     loading = false;
   }
+}
+
+// Re-fetches the saved definition's detail without the loading flash (used
+// when the session closes and may have updated the files).
+async function refreshDetail() {
+  if (isNew || !definitionId) return;
+  const detail = await fetchFlowDefinition(definitionId);
+  isBuiltIn = detail.builtIn;
+  savedDetail = detail;
 }
 
 async function remove() {
@@ -312,58 +413,127 @@ async function remove() {
       Built-in flow definitions ship with the server and cannot be edited.
       Existing instances use their snapshot of this definition.
     </div>
-  {:else}
-    {#if authorFlowId && authorFlow}
-      <!-- The authoring session renders as a flow instance: the flow-editor
-           composes the header, the chat with Save, and the editable
-           definition module. The shell only mounts the rendering surface and
-           owns the session lifecycle. -->
-      <div class="author-toolbar">
-        <button type="button" class="author-close" onclick={closeAuthoring}>
-          Close session
-        </button>
-      </div>
-      <LitFlowHost
-        flowId={authorFlow.id}
-        workflowDefs={authorFlow.workflows}
-        instances={authorFlow.instances}
-        customKinds={authorFlow.ui?.kinds ?? []}
-        components={authorFlow.ui?.components ?? {}}
-        onAction={handleAuthorAction}
-        onSendMessage={handleAuthorSend}
-        onPatchState={handleAuthorPatch}
+  {:else if authorFlowId && authorFlow}
+    <!-- The authoring session renders as a flow instance: the flow-editor
+         composes the header, the chat with Save, and the editable
+         definition module. The shell only mounts the rendering surface and
+         owns the session lifecycle. -->
+    <div class="author-toolbar">
+      <button type="button" class="author-close" onclick={closeAuthoring}>
+        Close session
+      </button>
+    </div>
+    <LitFlowHost
+      flowId={authorFlow.id}
+      workflowDefs={authorFlow.workflows}
+      instances={authorFlow.instances}
+      customKinds={authorFlow.ui?.kinds ?? []}
+      components={authorFlow.ui?.components ?? {}}
+      onAction={handleAuthorAction}
+      onSendMessage={handleAuthorSend}
+      onPatchState={handleAuthorPatch}
+    />
+  {:else if isNew}
+    <div class="start-session">
+      <p class="ai-hint">
+        Describe the flow you want. The agent will ask what is unclear, then
+        draft the definition module with you — or try "I'm feeling lucky" for a
+        one-shot attempt. The definition renders as the session's editable
+        editor; you can edit the TypeScript directly at any time (your edits ARE
+        the state — the agent's next turn reads them).
+      </p>
+      <Textarea
+        bind:value={aiPrompt}
+        placeholder="A review flow: a ready state with an approve/reject action..."
       />
-    {:else}
-      <div class="start-session">
-        <p class="ai-hint">
-          Describe the flow you want. The agent will ask what is unclear, then
-          draft the definition module with you — or try "I'm feeling lucky" for
-          a one-shot attempt. The definition renders as the session's editable
-          editor; you can edit the TypeScript directly at any time (your edits
-          ARE the state — the agent's next turn reads them).
-        </p>
+      <div class="start-actions">
+        <Button
+          variant="azure"
+          disabled={authoring || !aiPrompt.trim()}
+          onclick={() => startAuthoring(false)}
+        >
+          {authoring ? "Starting session..." : "Start conversation"}
+        </Button>
+        <Button
+          variant="platinum"
+          disabled={authoring || !aiPrompt.trim()}
+          onclick={() => startAuthoring(true)}
+        >
+          I'm feeling lucky
+        </Button>
+      </div>
+    </div>
+  {:else}
+    <!-- A saved definition with no active session: the persistent files are
+         always visible and editable — the session is a collaborator, not the
+         only way to see the flow. -->
+    <div class="session-bar">
+      <div class="session-prompt">
         <Textarea
           bind:value={aiPrompt}
-          placeholder="A review flow: a ready state with an approve/reject action..."
+          rows={1}
+          placeholder="What would you like to change about this definition? The agent reads your current source and revises it with you."
         />
-        <div class="start-actions">
-          <Button
-            variant="azure"
-            disabled={authoring || !aiPrompt.trim()}
-            onclick={() => startAuthoring(false)}
-          >
-            {authoring ? "Starting session..." : "Start conversation"}
-          </Button>
-          <Button
-            variant="platinum"
-            disabled={authoring || !aiPrompt.trim()}
-            onclick={() => startAuthoring(true)}
-          >
-            I'm feeling lucky
-          </Button>
-        </div>
       </div>
-    {/if}
+      <div class="start-actions">
+        <Button
+          variant="azure"
+          disabled={authoring || !aiPrompt.trim()}
+          onclick={() => startAuthoringFromFiles(false)}
+        >
+          {authoring ? "Starting session..." : "Start conversation"}
+        </Button>
+        <Button
+          variant="platinum"
+          disabled={authoring || !aiPrompt.trim()}
+          onclick={() => startAuthoringFromFiles(true)}
+        >
+          I'm feeling lucky
+        </Button>
+      </div>
+    </div>
+    <div class="tab-bar">
+      <button
+        type="button"
+        class:active={activeTab === "definition"}
+        onclick={() => selectTab("definition")}
+      >
+        Definition
+      </button>
+      {#each filePaths as path (path)}
+        <button
+          type="button"
+          class:active={activeTab === path}
+          onclick={() => selectTab(path)}
+        >
+          {path}
+        </button>
+      {/each}
+    </div>
+    <div class="pane">
+      <div class="pane-head">
+        <span class="pane-title">
+          {activeTab === "definition" ? "Definition module (.ts)" : activeTab}
+        </span>
+      </div>
+      <code-editor
+        bind:this={editor}
+        onhive-code-change={handleFileEdit}
+      ></code-editor>
+    </div>
+    <div class="files-actions">
+      <Button
+        variant="azure"
+        size="small"
+        disabled={!hasPendingEdits || saving}
+        onclick={() => void saveDefinition()}
+      >
+        {saving ? "Saving..." : "Save definition"}
+      </Button>
+      {#if saveStatus}
+        <span class="saved-status">{saveStatus}</span>
+      {/if}
+    </div>
   {/if}
 </div>
 
@@ -452,6 +622,86 @@ h1 {
   max-width: 480px;
 }
 
+.session-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.session-prompt {
+  flex: 1;
+  min-width: 0;
+}
+
+.tab-bar {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.375rem;
+}
+
+.tab-bar button {
+  font-family: inherit;
+  font-size: 0.625rem;
+  height: 24px;
+  padding: 0 0.5rem;
+  border-radius: 4px 4px 0 0;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-bar button:hover {
+  color: var(--text);
+}
+
+.tab-bar button.active {
+  background: var(--bg);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.pane {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem;
+}
+
+.pane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.375rem;
+}
+
+.pane-title {
+  font-size: 0.5625rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+.files-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.saved-status {
+  font-size: 0.625rem;
+  color: var(--success);
+}
+
 .ai-hint {
   font-size: 0.75rem;
   color: var(--muted);
@@ -462,6 +712,7 @@ h1 {
 .start-actions {
   display: flex;
   gap: 0.5rem;
+  flex: none;
 }
 
 .loading {

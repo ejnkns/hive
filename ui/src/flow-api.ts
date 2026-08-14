@@ -332,7 +332,12 @@ export async function createFlowDefinition(input: {
 
 export async function updateFlowDefinition(
   id: string,
-  input: { name: string; description?: string; source: string }
+  input: {
+    name: string;
+    description?: string;
+    source: string;
+    files?: Record<string, string>;
+  }
 ): Promise<FlowDefinitionSummary> {
   const res = await fetch(`/api/flows/definitions/${encodeURIComponent(id)}`, {
     method: "PUT",
