@@ -11,7 +11,10 @@ import { join, relative, resolve } from "node:path";
 import { describe, it } from "node:test";
 import { queenBeeBlueprint } from "../../../presets/queen-bee/blueprint.ts";
 import { wayfinderBlueprint } from "../../../presets/wayfinder/blueprint.ts";
-import { validateFlowBlueprint } from "./flow-blueprint.ts";
+import {
+  analyzeFlowBlueprint,
+  validateFlowBlueprint,
+} from "./flow-blueprint.ts";
 import { materializeModuleSet, runModuleSetGate } from "./module-set.ts";
 import { parseFlowDefinition } from "./parse-flow-definition.ts";
 import { renderFlowDefinition } from "./render-flow-definition.ts";
@@ -71,16 +74,22 @@ function presetPackageFiles(name: string): Record<string, string> {
 }
 
 // The full module-set gate for a blueprint + rendered module set (zero errors
-// AND zero warnings — the oracle's bar for the parsed presets). The gate runs
-// against the session-shaped module set: the real preset files are seeded
-// first (like a revision session's files), then the gate materializes and
-// keeps them.
+// AND zero warnings — the oracle's bar for the parsed presets: blueprint
+// validation, the analyze warnings, lint, import policy, load, typecheck, and
+// schema consistency). The gate runs against the session-shaped module set:
+// the real preset files are seeded first (like a revision session's files),
+// then the gate materializes and keeps them.
 async function assertFullGate(
   name: string,
   blueprint: Parameters<typeof renderFlowDefinition>[0],
   rendered: ReturnType<typeof renderFlowDefinition>,
   files: Record<string, string>
 ): Promise<void> {
+  assert.deepEqual(
+    validateFlowBlueprint(blueprint),
+    [],
+    `${name} blueprint validation errors`
+  );
   const slug = `parse-${name}-${process.pid}`;
   materializeModuleSet(slug, { entry: rendered.entry, files });
   const gate = await runModuleSetGate(slug, blueprint, rendered);
@@ -132,6 +141,11 @@ describe("parse flow definition", () => {
       reRendered,
       files
     );
+    assert.deepEqual(
+      analyzeFlowBlueprint(parsed.blueprint),
+      [],
+      "the parsed queen-bee blueprint must stay analysis-warning-clean"
+    );
   });
 
   it("round-trips the wayfinder preset with files, including the build fan-out edge and file gates", async () => {
@@ -161,6 +175,13 @@ describe("parse flow definition", () => {
       "type",
       "dependsOn",
     ]);
+    // The shipped wayfinder blueprint carries pre-existing analysis warnings
+    // (its completionOutput tasks have no patch readers) — the parse must
+    // preserve them exactly, never add new ones.
+    assert.deepEqual(
+      analyzeFlowBlueprint(parsed),
+      analyzeFlowBlueprint(wayfinderBlueprint)
+    );
   });
 
   it("documents the known-loss section: writes are not recovered without the files map", async () => {
