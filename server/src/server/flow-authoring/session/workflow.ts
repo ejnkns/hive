@@ -5,8 +5,8 @@
  * flow-authoring/session.ts imports this. */
 
 import {
+  type CompiledFlowDefinition,
   defineWorkflow,
-  type FlowDefinition,
 } from "workflow-engine/workflow-types";
 import { buildAuthoringSessionPrompt } from "../session-prompt.ts";
 import { AUTHORING_DEFINITION_ID, type AuthoringItemState } from "./state.ts";
@@ -73,4 +73,4 @@ export const authoringSessionFlow = {
   tools: authoringTools,
   actions: [],
   edges: [],
-} satisfies FlowDefinition;
+} satisfies CompiledFlowDefinition;

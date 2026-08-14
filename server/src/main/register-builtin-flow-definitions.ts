@@ -48,7 +48,7 @@ async function registerPresetFromBlueprint(
     presetName,
     files
   );
-  registerFlowDefinition(flow, {
+  registerFlowDefinition(flow.flow, {
     builtIn: true,
     blueprint,
     source: rendered.entry,

@@ -14,23 +14,32 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { HIVE_DIR } from "shared/hive-dir";
 import { logger } from "shared/logger";
 import { slugify } from "shared/slugify";
+import {
+  collectDefinitionRefs,
+  compileFlowDefinition,
+} from "workflow-engine/compile-flow-definition";
 import type {
+  CompiledFlowDefinition,
   ConfigField,
   FlowDefinition,
 } from "workflow-engine/workflow-types";
 import type { FlowBlueprint } from "./flow-blueprint.ts";
+import { validateFlowDefinition } from "./flow-definition.ts";
 
 // ── Types ──
 
-// A registered definition pairs the engine FlowDefinition with the library
-// metadata the UI needs. `builtIn` marks definitions shipped by the server
-// (not persisted, not deletable); `hidden` keeps a definition out of the flow
-// library list while remaining instantiable (e.g. the flow-authoring session).
+// A registered definition pairs the compiled runtime projection (what the
+// engine executes) with the library metadata the UI needs. `builtIn` marks
+// definitions shipped by the server (not persisted, not deletable); `hidden`
+// keeps a definition out of the flow library list while remaining
+// instantiable (e.g. the flow-authoring session).
 //
-// A definition generated from a blueprint with file references is a module
-// set: `source` is the entry module (flow.ts) and `files` maps each referenced
-// relative path to its source. `blueprint` is the design artifact the set was
-// rendered from. Single-file definitions leave both unset.
+// A definition generated from a data module (or a legacy blueprint-rendered
+// module set) is a module set: `source` is the entry module (flow.ts) and
+// `files` maps each referenced relative path to its source. `definition` is
+// the pure-data form a data module carries (the editor/builder bind to it);
+// `flow` is the compiled projection the runtime executes. `blueprint` is the
+// legacy design artifact two-artifact flows were rendered from (retiring).
 export type RegisteredFlowDefinition = {
   id: string;
   name: string;
@@ -38,10 +47,21 @@ export type RegisteredFlowDefinition = {
   builtIn: boolean;
   hidden: boolean;
   configSchema: ConfigField[];
-  flow: FlowDefinition;
+  flow: CompiledFlowDefinition;
+  // The pure-data form of a definition module (the builder contract).
+  definition?: FlowDefinition;
   source?: string;
   blueprint?: FlowBlueprint;
   files?: Record<string, string>;
+};
+
+// What loading a definition module produces: the compiled runtime projection
+// plus — when the module is a data definition — the pure-data form itself
+// (the editor binds to it; the runtime keeps both so the projection can be
+// rebuilt deterministically).
+export type LoadedDefinition = {
+  flow: CompiledFlowDefinition;
+  definition?: FlowDefinition;
 };
 
 export type DefinitionManifest = Record<
@@ -54,7 +74,7 @@ export type DefinitionManifest = Record<
 const definitions = new Map<string, RegisteredFlowDefinition>();
 
 export function registerFlowDefinition(
-  definition: FlowDefinition,
+  definition: CompiledFlowDefinition,
   options: {
     builtIn?: boolean;
     hidden?: boolean;
@@ -65,6 +85,8 @@ export function registerFlowDefinition(
     source?: string;
     files?: Record<string, string>;
     blueprint?: FlowBlueprint;
+    // The pure-data form of a data definition module.
+    definition?: FlowDefinition;
   } = {}
 ): void {
   definitions.set(definition.id, {
@@ -75,6 +97,7 @@ export function registerFlowDefinition(
     hidden: options.hidden ?? false,
     configSchema: definition.configSchema ?? [],
     flow: definition,
+    definition: options.definition,
     source: options.source,
     blueprint: options.blueprint,
     files: options.files,
@@ -88,7 +111,9 @@ export function getRegisteredFlowDefinition(
 }
 
 // Engine-level lookup used by the flow lifecycle (createFlow / rehydrateFlow).
-export function getFlowDefinition(id: string): FlowDefinition | undefined {
+export function getFlowDefinition(
+  id: string
+): CompiledFlowDefinition | undefined {
   return definitions.get(id)?.flow;
 }
 
@@ -122,7 +147,7 @@ export async function registerUserDefinition(input: {
     );
   }
 
-  const flow = await loadDefinitionFromSource(
+  const loaded = await loadDefinitionFromSource(
     slug,
     input.source,
     slug,
@@ -134,8 +159,9 @@ export async function registerUserDefinition(input: {
     description: input.description,
     builtIn: false,
     hidden: false,
-    configSchema: flow.configSchema ?? [],
-    flow,
+    configSchema: loaded.flow.configSchema ?? [],
+    flow: loaded.flow,
+    definition: loaded.definition,
     source: input.source,
     blueprint: input.blueprint,
     files: input.files,
@@ -165,7 +191,7 @@ export async function updateUserDefinition(
     throw new Error("Built-in flow definitions cannot be edited");
   }
 
-  const flow = await loadDefinitionFromSource(
+  const loaded = await loadDefinitionFromSource(
     id,
     input.source,
     id,
@@ -177,8 +203,9 @@ export async function updateUserDefinition(
     description: input.description,
     builtIn: false,
     hidden: false,
-    configSchema: flow.configSchema ?? [],
-    flow,
+    configSchema: loaded.flow.configSchema ?? [],
+    flow: loaded.flow,
+    definition: loaded.definition,
     source: input.source,
     blueprint: input.blueprint ?? existing.blueprint,
     files: input.files,
@@ -250,16 +277,17 @@ export async function loadUserDefinitionsFromDisk(): Promise<void> {
       const slug = singleFile.replace(/\.ts$/, "");
       try {
         const source = readFileSync(join(dir, singleFile), "utf-8");
-        const flow = await loadDefinitionFromSource(slug, source);
+        const loaded = await loadDefinitionFromSource(slug, source);
         const meta = manifest[slug];
         definitions.set(slug, {
           id: slug,
-          name: meta?.name ?? flow.label ?? slug,
-          description: meta?.description ?? flow.description,
+          name: meta?.name ?? loaded.flow.label ?? slug,
+          description: meta?.description ?? loaded.flow.description,
           builtIn: false,
           hidden: false,
-          configSchema: flow.configSchema ?? [],
-          flow,
+          configSchema: loaded.flow.configSchema ?? [],
+          flow: loaded.flow,
+          definition: loaded.definition,
           source,
         });
       } catch (err) {
@@ -273,7 +301,7 @@ export async function loadUserDefinitionsFromDisk(): Promise<void> {
       const slug = entry;
       try {
         const files = readDefinitionFiles(join(dir, slug));
-        const flow = await loadDefinitionFromSource(
+        const loaded = await loadDefinitionFromSource(
           slug,
           files["flow.ts"] ?? "",
           slug,
@@ -282,12 +310,13 @@ export async function loadUserDefinitionsFromDisk(): Promise<void> {
         const meta = manifest[slug];
         definitions.set(slug, {
           id: slug,
-          name: meta?.name ?? flow.label ?? slug,
-          description: meta?.description ?? flow.description,
+          name: meta?.name ?? loaded.flow.label ?? slug,
+          description: meta?.description ?? loaded.flow.description,
           builtIn: false,
           hidden: false,
-          configSchema: flow.configSchema ?? [],
-          flow,
+          configSchema: loaded.flow.configSchema ?? [],
+          flow: loaded.flow,
+          definition: loaded.definition,
           source: files["flow.ts"],
           files: refFilesOf(files),
         });
@@ -310,6 +339,13 @@ export async function loadUserDefinitionsFromDisk(): Promise<void> {
 // materialized into an in-package working copy at server/.runtime/definitions/
 // before being imported. The durable source stays in ~/.hive/definitions/.
 //
+// The loader seam: import the definition module → validate (a data module's
+// declared parts are decidable) → compile (compileFlowDefinition with a ref
+// resolver that imports the referenced modules) → the compiled projection the
+// runtime executes. A legacy closure-form module (blueprint-rendered or
+// hand-authored compiled) is used directly — the runtime contract never
+// changed, only the authoring seam did.
+//
 // runtimeSlug names the materialized working copy; flowId is the id stamped
 // onto the loaded definition (normally equal to the slug, but a rehydrated
 // instance snapshot re-stamps the original definition id). When refFiles are
@@ -320,13 +356,53 @@ export async function loadDefinitionFromSource(
   source: string,
   flowId: string = runtimeSlug,
   refFiles?: Record<string, string>
-): Promise<FlowDefinition> {
+): Promise<LoadedDefinition> {
+  const form = await importDefinitionModule(runtimeSlug, source, refFiles);
+  if (isDefinitionData(form)) {
+    const dir =
+      refFiles !== undefined && Object.keys(refFiles).length > 0
+        ? writeModuleSetDir(runtimeSlug, { entry: source, files: refFiles })
+        : undefined;
+    return compileDataDefinition(form, flowId, dir);
+  }
+  // Legacy compiled form (closure gates/transforms, ops/tools by name): the
+  // runtime contract is unchanged, so it registers as-is. The data module's
+  // FlowDefinition type is the backstop — a legacy module only reaches here
+  // because its shape predates the vocabulary.
+  return {
+    flow: { ...(form as CompiledFlowDefinition), id: flowId },
+  };
+}
+
+// Whether an imported module's `flow` export is a pure-data definition (every
+// workflow declares instanceState — the data vocabulary's required anchor). A
+// legacy compiled workflow never carries instanceState (it uses the erased
+// workflowInstanceState anchor instead), so the check is unambiguous.
+export function isDefinitionData(form: unknown): form is FlowDefinition {
+  if (typeof form !== "object" || form === null) return false;
+  const workflows = (form as { workflows?: unknown }).workflows;
+  if (!Array.isArray(workflows) || workflows.length === 0) return false;
+  return workflows.every(
+    (wf) =>
+      typeof wf === "object" &&
+      wf !== null &&
+      Array.isArray((wf as { instanceState?: unknown }).instanceState)
+  );
+}
+
+// Imports the definition module (materializing the module set when refs are
+// given) and returns its `flow` export.
+async function importDefinitionModule(
+  runtimeSlug: string,
+  source: string,
+  refFiles?: Record<string, string>
+): Promise<unknown> {
   if (refFiles !== undefined && Object.keys(refFiles).length > 0) {
     const dir = writeModuleSetDir(runtimeSlug, {
       entry: source,
       files: refFiles,
     });
-    return loadModuleSetCopy(runtimeSlug, dir, flowId);
+    return importModuleSetEntry(dir);
   }
   const runtimeFile = join(runtimeDefinitionsDir(), `${runtimeSlug}.ts`);
   mkdirSync(runtimeDefinitionsDir(), { recursive: true });
@@ -338,7 +414,51 @@ export async function loadDefinitionFromSource(
   if (module.flow === null || typeof module.flow !== "object") {
     throw new Error("Definition module must export a `flow` object");
   }
-  return { ...(module.flow as FlowDefinition), id: flowId };
+  return module.flow;
+}
+
+// The data-definition compile: validate the declared parts, import every
+// referenced module (refs are by path — the definition itself imports
+// nothing), and compile to the runtime projection. `dir` is the materialized
+// module-set root the refs resolve against (undefined for a single-file
+// definition with no refs).
+async function compileDataDefinition(
+  definition: FlowDefinition,
+  flowId: string,
+  dir: string | undefined
+): Promise<LoadedDefinition> {
+  const errors = validateFlowDefinition(definition);
+  if (errors.length > 0) {
+    throw new Error(
+      `Flow definition validation failed:\n${errors
+        .map((e) => `  ${e.path}: ${e.message}`)
+        .join("\n")}`
+    );
+  }
+
+  const modules = new Map<string, Record<string, unknown>>();
+  for (const { ref } of collectDefinitionRefs(definition)) {
+    if (modules.has(ref)) continue;
+    if (dir === undefined) {
+      throw new Error(
+        `Reference ${ref} cannot resolve — a definition with file references must be saved with its referenced files`
+      );
+    }
+    const target = refPathInDir(dir, ref);
+    if (target === undefined) {
+      throw new Error(
+        `Reference ${ref} is outside the definition root — reference paths must stay inside the module-set directory`
+      );
+    }
+    const url = `${pathToFileURL(target).href}?v=${nextImportNonce()}`;
+    const module = (await import(url)) as Record<string, unknown>;
+    modules.set(ref, module);
+  }
+  const compiled = compileFlowDefinition(
+    definition,
+    (ref) => modules.get(ref) ?? {}
+  );
+  return { flow: { ...compiled, id: flowId }, definition };
 }
 
 // ── module-set materialization ──
@@ -369,10 +489,14 @@ export function materializeModuleSet(
 // the entry's relative imports resolve to fresh URLs on every load, so hand
 // edits (implemented files) are never served from Node's module cache — the
 // authoring loop's write → generate → load cycle sees each edit.
+//
+// The module-set gate loads rendered (closure-form) entries through this
+// path — the raw module.flow IS the compiled projection. A data definition
+// module-set entry compiles through loadDefinitionFromSource instead.
 export async function loadModuleSetDefinition(
   dir: string,
   flowId?: string
-): Promise<FlowDefinition> {
+): Promise<CompiledFlowDefinition> {
   const slug = basename(dir) || "module-set";
   return loadModuleSetCopy(slug, dir, flowId);
 }
@@ -386,14 +510,15 @@ async function loadModuleSetCopy(
   slug: string,
   dir: string,
   flowId?: string
-): Promise<FlowDefinition> {
+): Promise<CompiledFlowDefinition> {
   const loadDir = join(
     runtimeDefinitionsDir(),
     `${slug}-load-${nextImportNonce()}`
   );
   try {
     copyModuleSetFiles(dir, loadDir);
-    return await importModuleSetEntry(loadDir, flowId);
+    const flow = await importModuleSetEntry(loadDir);
+    return flowId === undefined ? flow : { ...flow, id: flowId };
   } finally {
     rmSync(loadDir, { recursive: true, force: true });
   }
@@ -419,19 +544,17 @@ function copyModuleSetFiles(dir: string, loadDir: string): void {
   walk(dir);
 }
 
-// Imports a module-set entry at <dir>/flow.ts, re-stamping the id when one is
-// given (the module's own id stands otherwise).
+// Imports a module-set entry at <dir>/flow.ts (the raw module.flow — the
+// compiled projection for a rendered closure-form entry).
 async function importModuleSetEntry(
-  dir: string,
-  flowId?: string
-): Promise<FlowDefinition> {
+  dir: string
+): Promise<CompiledFlowDefinition> {
   const url = `${pathToFileURL(join(dir, "flow.ts")).href}?v=${nextImportNonce()}`;
   const module = (await import(url)) as Record<string, unknown>;
   if (module.flow === null || typeof module.flow !== "object") {
     throw new Error("Definition module must export a `flow` object");
   }
-  const flow = module.flow as FlowDefinition;
-  return flowId === undefined ? flow : { ...flow, id: flowId };
+  return module.flow as CompiledFlowDefinition;
 }
 
 // Writes a module set (entry + referenced files, write-always) under the

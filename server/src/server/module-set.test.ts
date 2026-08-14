@@ -31,7 +31,7 @@ import {
 } from "workflow-engine/runners";
 import type { ToolCall } from "workflow-engine/runners/tool-types";
 import type { TaskRunnerContext } from "workflow-engine/task-runner";
-import type { FlowDefinition } from "workflow-engine/workflow-types";
+import type { CompiledFlowDefinition } from "workflow-engine/workflow-types";
 import { queenBeeBlueprint } from "../../../presets/queen-bee/blueprint.ts";
 import { flow as queenBeeFlow } from "../../../presets/queen-bee/flow.ts";
 import { wayfinderBlueprint } from "../../../presets/wayfinder/blueprint.ts";
@@ -661,7 +661,9 @@ const GATE_ALWAYS_FALSE = `import type { GateContract } from "workflow-engine/wo
 export const approved: GateContract = (ctx) => false;
 `;
 
-function approvedGateOf(flow: FlowDefinition): (ctx: unknown) => boolean {
+function approvedGateOf(
+  flow: CompiledFlowDefinition
+): (ctx: unknown) => boolean {
   if (!("workflows" in flow)) {
     throw new Error("expected a static definition");
   }

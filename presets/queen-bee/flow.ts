@@ -1,7 +1,7 @@
 import { defineTool } from "workflow-engine/runners";
 import {
+  type CompiledFlowDefinition,
   defineWorkflow,
-  type FlowDefinition,
   type FlowEdge,
 } from "workflow-engine/workflow-types";
 import { build_review_packageOperations } from "./cards/ops/build-review-package.ts";
@@ -1239,4 +1239,4 @@ export const flow = {
       },
     } satisfies FlowEdge,
   ],
-} satisfies FlowDefinition;
+} satisfies CompiledFlowDefinition;

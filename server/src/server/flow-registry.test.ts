@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import {
+  type CompiledFlowDefinition,
   defineWorkflow,
-  type FlowDefinition,
 } from "workflow-engine/workflow-types";
 import {
   deleteUserDefinition,
@@ -111,7 +111,7 @@ describe("flow-registry", () => {
       label: "Tickets Def",
       workflows: [inputDriven],
       edges: [],
-    } satisfies FlowDefinition;
+    } satisfies CompiledFlowDefinition;
     registerFlowDefinition(definition);
 
     const persistence = getFlowPersistence();
@@ -435,7 +435,7 @@ const actionDefinition = {
       createInstance: { workflowId: "item" },
     },
   ],
-} satisfies FlowDefinition;
+} satisfies CompiledFlowDefinition;
 
 describe("flow-level actions", () => {
   let dir: string;

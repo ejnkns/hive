@@ -1,7 +1,7 @@
 import { defineTool } from "workflow-engine/runners";
 import {
+  type CompiledFlowDefinition,
   defineWorkflow,
-  type FlowDefinition,
   type FlowEdge,
 } from "workflow-engine/workflow-types";
 import { finalize_specOperations } from "./build/ops/finalize-spec.ts";
@@ -1306,4 +1306,4 @@ export const flow = {
       },
     } satisfies FlowEdge,
   ],
-} satisfies FlowDefinition;
+} satisfies CompiledFlowDefinition;

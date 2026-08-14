@@ -13,8 +13,8 @@ import fastifyWebsocket from "@fastify/websocket";
 import Fastify, { type FastifyInstance } from "fastify";
 import { createFlowRuntime } from "workflow-engine/create-flow-runtime";
 import {
+  type CompiledFlowDefinition,
   defineWorkflow,
-  type FlowDefinition,
 } from "workflow-engine/workflow-types";
 import { flow as queenBeeFlow } from "../../../presets/queen-bee/flow.ts";
 import { registerFlowApiRoutes } from "./flow-api-routes.ts";
@@ -151,7 +151,7 @@ const actionApiDefinition = {
       createInstance: { workflowId: "item" },
     },
   ],
-} satisfies FlowDefinition;
+} satisfies CompiledFlowDefinition;
 
 const editableWorkflow = defineWorkflow({
   id: "ticket",
@@ -182,7 +182,7 @@ const editableDefinition = {
   label: "Editable Definition",
   workflows: [editableWorkflow],
   edges: [],
-} satisfies FlowDefinition;
+} satisfies CompiledFlowDefinition;
 
 const flowDefinitionSource = `
 import { defineWorkflow } from "workflow-engine/workflow-types";

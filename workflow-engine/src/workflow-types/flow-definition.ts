@@ -1,15 +1,83 @@
-/** @private — the flow definition types: edges, config fields, flow-level
- * actions, and FlowDefinition. */
+/** @private — the flow definition: the single pure-data artifact an agent
+ * writes, a UI builder edits, and the engine compiles to the runtime
+ * projection at registration (compile-flow-definition.ts). The name
+ * "blueprint" retired: this is the repo's FlowDefinition itself, extended
+ * with the vocabulary (instanceState data, structured gates/values,
+ * patch/completionOutput/extract task fields, task render hints, ui
+ * kinds/view).
+ *
+ * The runtime contract the engine executes is `CompiledFlowDefinition` — the
+ * same definition after compilation (closures for gates/transforms, ops/tools
+ * by name). The runners, UI, and engine internals consume the compiled
+ * projection and never see the data form; the compile step is the seam the
+ * migration moved, not the runtime seam. */
 
 import type { OperationFn } from "../runners/create-operation-runner.ts";
 import type { Tool } from "../runners/tool-types.ts";
-import type { ActionVariant } from "./actions.ts";
+import type { ActionVariant, WorkflowView } from "./actions.ts";
 import type { ConfigField } from "./config-field.ts";
 import type { RuntimeGateContext, TaskOutputMap } from "./core.ts";
+import type {
+  DefinitionError,
+  DefinitionValidationContext,
+  EdgeSpec,
+  FlowLevelActionSpec,
+  OperationRefSpec,
+  ToolRefSpec,
+  WorkflowSpec,
+} from "./definition-vocabulary.ts";
 import type { CustomRenderKind } from "./render-hints.ts";
 import type { RuntimeWorkflowConfig } from "./state-config.ts";
 
-// === FLOW DEFINITION ===
+// === FLOW DEFINITION (the pure-data authoring artifact) ===
+
+// The complete description of one flow type, as data: its workflows, the
+// edges between them, and the capabilities its tasks call by name — custom
+// tools and operations are REFS to referenced modules (`./tools/x.ts`), the
+// loader imports them and passes a resolveRef to the compiler. Gates are
+// structured predicates, values are a small set of sources, patches and
+// completion contracts are declared data. Nothing here is a closure — a
+// visual editor serializes and round-trips this shape as-is, and arbitrary
+// logic always lives in a referenced module (the builder boundary).
+export type FlowDefinition = {
+  id: string;
+  label: string;
+  description?: string;
+  configSchema?: ConfigField[];
+  // Directory under basePath that holds this instance's persisted domain
+  // state; defaults to .<definition-id>.
+  domainDir?: string;
+  // Flow-level rendering declarations. Pure data.
+  ui?: {
+    // Custom render kinds the definition's tasks may reference; the rendering
+    // surface validates resolved props against each contract and falls back to
+    // json on mismatch.
+    kinds?: CustomRenderKind[];
+    // Served-at-runtime component modules: component id → TypeScript module
+    // source (erasable syntax). Each module default-exports a factory that
+    // receives the app's lit runtime and returns the component/kinds it
+    // registers. Opaque to the engine — the server transpiles and serves it;
+    // the rendering surface fetches, evaluates, and registers the result.
+    components?: Record<string, string>;
+    // A flow-level layout hint (the surface may fall back).
+    view?: WorkflowView;
+  };
+  // Custom tools and operations referenced as files; tasks reference them by
+  // id/name alongside the engine's infrastructure capabilities.
+  tools?: ToolRefSpec[];
+  operations?: OperationRefSpec[];
+  // External packages the referenced files may import. Imports are restricted
+  // to engine primitives, the flow's own files, node: builtins, and exactly
+  // these declared packages — anything else fails the module-set gate with a
+  // readable finding.
+  dependencies?: string[];
+  workflows: WorkflowSpec[];
+  edges?: EdgeSpec[];
+  // Project-level actions rendered on the instance header.
+  actions?: FlowLevelActionSpec[];
+};
+
+// === THE COMPILED PROJECTION (the runtime contract) ===
 
 // Edge between workflows. The transform receives the source workflow's
 // task outputs and produces context for the target workflow. It returns either
@@ -34,22 +102,12 @@ export type FlowEdge<
 
 export type RuntimeFlowEdge = FlowEdge;
 
-// The contract a blueprint-referenced edge transform implements: the source
+// The contract a definition-referenced edge transform implements: the source
 // workflow's task outcomes → target instance state (or an array for fan-out).
-// The renderer emits stubs typed with this and the module-set lint checks the
-// referenced export against it.
+// The module-set lint checks the referenced export against this.
 export type TransformContract = NonNullable<FlowEdge["transform"]>;
 
-// The value/input type of a ConfigField. `type` drives both validation and
-// rendering (the existing code conflates value type with presentation — e.g.
-// "string" + options renders a single select). Canonical stored formats:
-//   "date"     → "YYYY-MM-DD" (what <input type="date"> emits)
-//   "datetime" → "YYYY-MM-DDTHH:mm" (what <input type="datetime-local"> emits)
-//   "string[]" → array of strings; with `options` a multi-select (every chosen
-//                 value must be in `options`), without a free-form tag list
-// The canonical formats are validated server-side (collectConfigFieldValues)
-// and by the UI renderers, so stored values never drift.
-// dispatch a state-level action to every eligible instance of a workflow.
+// A compiled project-level action rendered on the instance header.
 export type FlowLevelAction = {
   id: string;
   label: string;
@@ -63,24 +121,19 @@ export type FlowLevelAction = {
   dispatchToAll?: { workflowId: string; actionId: string };
 };
 
-// A FlowDefinition is the complete description of one flow type: its
-// workflows, the edges between them, and the capabilities its tasks call by
-// name — self-contained domain tools (schema + executor) and deterministic
-// domain operations. Infrastructure tools and operations are not listed here —
-// the engine ships them to every flow. Capabilities are resolved by name
-// against the merged registry (engine infrastructure + this list) at runtime.
-//
-// A definition is either static (its workflows listed directly) or a factory
-// (buildWorkflows resolves flow config into workflow configs). Static
-// definitions ARE the layout; a factory exists for presets whose workflow
-// definitions depend on flow config (e.g. a concurrency limit or a system
-// prompt override). The engine executes the resolved result either way.
-export type FlowDefinition = {
+// The runtime projection compileFlowDefinition produces: the data definition
+// with every gate/transform compiled to closures and the capability refs
+// resolved to their tool/op objects. The runners, UI, and engine internals
+// consume exactly this shape. A definition is either static (its workflows
+// listed directly) or a factory (buildWorkflows resolves flow config into
+// workflow configs) — the compiled projection carries the same alternatives,
+// but the data form is always static (a factory is a runtime concern).
+export type CompiledFlowDefinition = {
   id: string;
   label: string;
   description?: string;
   configSchema?: ConfigField[];
-  edges: FlowEdge[];
+  edges: RuntimeFlowEdge[];
   tools?: readonly Tool[];
   operations?: Record<string, OperationFn>;
   // Directory under basePath that holds this instance's persisted domain
@@ -88,18 +141,12 @@ export type FlowDefinition = {
   domainDir?: string;
   // Project-level actions rendered on the instance header.
   actions?: FlowLevelAction[];
-  // Flow-level rendering declarations. Pure data.
+  // Flow-level rendering declarations. Pure data (passes through the compile
+  // step unchanged).
   ui?: {
-    // Custom render kinds the definition's tasks may reference; the rendering
-    // surface validates resolved props against each contract and falls back to
-    // json on mismatch.
     kinds?: CustomRenderKind[];
-    // Served-at-runtime component modules: component id → TypeScript module
-    // source (erasable syntax). Each module default-exports a factory that
-    // receives the app's lit runtime and returns the component/kinds it
-    // registers. Opaque to the engine — the server transpiles and serves it;
-    // the rendering surface fetches, evaluates, and registers the result.
     components?: Record<string, string>;
+    view?: WorkflowView;
   };
 } & (
   | { workflows: RuntimeWorkflowConfig[] }
@@ -109,3 +156,5 @@ export type FlowDefinition = {
       ) => RuntimeWorkflowConfig[];
     }
 );
+
+export type { DefinitionError, DefinitionValidationContext };

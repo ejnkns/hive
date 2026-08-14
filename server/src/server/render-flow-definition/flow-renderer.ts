@@ -88,7 +88,7 @@ export function renderFlowDefinition(
 
   emit(
     0,
-    `import { defineWorkflow, type FlowDefinition, type FlowEdge } from "workflow-engine/workflow-types";`
+    `import { defineWorkflow, type CompiledFlowDefinition, type FlowEdge } from "workflow-engine/workflow-types";`
   );
   if (hasPatchOps || hasExtractOps || hasCompletionOutput)
     emit(
@@ -635,7 +635,7 @@ export function renderFlowDefinition(
     emit(2, "} satisfies FlowEdge,");
   }
   emit(1, "],");
-  emit(0, "} satisfies FlowDefinition;");
+  emit(0, "} satisfies CompiledFlowDefinition;");
 
   return {
     entry: `${out.join("\n")}\n`,

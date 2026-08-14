@@ -37,7 +37,8 @@ async function assertRenderedPassesGate(
   const source = renderFlowDefinition(spec).entry;
 
   // Transpile + load (the runtime surface).
-  const flow = await loadDefinitionFromSource(slug, source);
+  const loaded = await loadDefinitionFromSource(slug, source);
+  const flow = loaded.flow;
   assert.ok("workflows" in flow, `${slug} loaded as a static definition`);
   if ("workflows" in flow) {
     assert.ok(flow.workflows.length >= 1, `${slug} loaded no workflows`);
@@ -815,8 +816,8 @@ describe("render flow definition", () => {
 
     // The loaded definition carries the served component; the server's
     // served-component resolver reads it back.
-    const flow = await loadDefinitionFromSource("corpus-served-load", source);
-    assert.equal(flow.ui?.components?.["idea-card"], componentSource);
+    const loaded = await loadDefinitionFromSource("corpus-served-load", source);
+    assert.equal(loaded.flow.ui?.components?.["idea-card"], componentSource);
   });
 
   it("keeps the structured-intake pattern exemplar gate-clean (the flow-authoring reference)", async () => {

@@ -6,7 +6,7 @@ import type { FlowRuntimeAPI } from "workflow-engine/create-flow-runtime";
 import { createFlowRuntime } from "workflow-engine/create-flow-runtime";
 import type { OperationFn, Tool } from "workflow-engine/runners";
 import type {
-  FlowDefinition,
+  CompiledFlowDefinition,
   RuntimeFlowEdge,
   RuntimeWorkflowConfig,
 } from "workflow-engine/workflow-types";
@@ -24,10 +24,10 @@ import { registerRuntime } from "./registry-state.ts";
 //
 // The definition library (register/list/get/delete, TS loading, persistence)
 // lives in flow-definitions.ts. The registry here is generic: it owns only the
-// FlowRuntime instances, resolving definitions by id on demand.
+// FlowRuntime instances, resolving compiled definitions by id on demand.
 
 function resolveWorkflows(
-  definition: FlowDefinition,
+  definition: CompiledFlowDefinition,
   config: Record<string, unknown>
 ): RuntimeWorkflowConfig[] {
   if ("buildWorkflows" in definition) {
@@ -151,11 +151,12 @@ export async function rehydrateFlow(
 
   if (snapshotSource && typeof definitionId === "string") {
     try {
-      const snapshotFlow = await loadDefinitionFromSource(
+      const loaded = await loadDefinitionFromSource(
         `snapshot-${flowId}`,
         snapshotSource,
         definitionId
       );
+      const snapshotFlow = loaded.flow;
       workflows = resolveWorkflows(snapshotFlow, cfg);
       edges = snapshotFlow.edges;
       domain = {
