@@ -74,11 +74,11 @@ function completionFor(payload) {
   throw new Error("Mock provider received an unknown Agent Role");
 }
 
-// The flow-authoring session: set_flow_blueprint lands the live preview,
-// generate_definition runs the real engine gate and writes the source. Later
-// turns cover co-editing: the divergence gate refuses set_flow_blueprint while the
-// source is manual (the agent then proposes in chat), and after the user
-// discards, the next ask regenerates.
+// The flow-authoring session: set_flow_definition lands the definition module
+// (validated live), validate_definition runs the real definition gate and
+// compiles it. Later turns cover co-editing: the human's edits ARE the state,
+// so the agent reads the current source (read_definition_source) and builds on
+// it instead of overwriting; when asked to regenerate, it rewrites the module.
 function authoringCompletion(messages) {
   const firstUser = messages.find((message) => message.role === "user");
   const prompt =
@@ -88,52 +88,66 @@ function authoringCompletion(messages) {
   }
   const toolMessages = messages.filter((message) => message.role === "tool");
   const lastMessage = messages.at(-1);
+  const lastId = toolMessages.at(-1)?.tool_call_id ?? "";
   if (toolMessages.length === 0) {
     return toolCompletion(
       [
-        toolCall("author-blueprint", "set_flow_blueprint", {
-          blueprint: JSON.stringify(AUTHORING_SPEC),
+        toolCall("author-bp", "set_flow_definition", {
+          source: AUTHORING_DEFINITION,
         }),
       ],
       "mock authoring reasoning"
     );
   }
-  if (
-    lastMessage?.tool_call_id?.startsWith("author-blueprint") &&
-    !lastMessage.content.includes("manual edits")
-  ) {
-    // set_flow_blueprint succeeded (or the divergence was discarded) — generate.
+  // A fresh user message drives the next behavior (the tool-result branches
+  // below only continue the current tool chain).
+  if (lastMessage?.role === "user") {
+    const content =
+      typeof lastMessage.content === "string" ? lastMessage.content : "";
+    if (/regenerate/.test(content)) {
+      return toolCompletion(
+        [
+          toolCall("author-bp", "set_flow_definition", {
+            source: AUTHORING_DEFINITION,
+          }),
+        ],
+        "mock authoring reasoning"
+      );
+    }
+    // Any other user message: read the current source (including manual
+    // edits) and propose in chat — never overwrite the human's work.
+    return toolCompletion(
+      [toolCall("author-read", "read_definition_source", {})],
+      "mock authoring reasoning"
+    );
+  }
+  if (lastId === "author-bp") {
     return toolCompletion(
       [
-        toolCall("author-gen", "generate_definition", {
-          blueprint: JSON.stringify(AUTHORING_SPEC),
+        toolCall("author-write", "write_definition_file", {
+          path: "./tools/websearch.ts",
+          content: AUTHORING_TOOL,
         }),
       ],
+      "implementing the referenced tool"
+    );
+  }
+  if (lastId === "author-write") {
+    return toolCompletion(
+      [toolCall("author-gen", "validate_definition", {})],
       "mock authoring reasoning"
     );
   }
-  if (lastMessage?.tool_call_id?.startsWith("author-gen")) {
+  if (lastId === "author-gen") {
     return textCompletion(
       "The definition is ready — summarize it for the user."
     );
   }
-  if (
-    lastMessage?.role === "tool" &&
-    lastMessage.content.includes("manual edits")
-  ) {
-    // The divergence gate refused the blueprint update — propose in chat instead.
+  if (lastId === "author-read") {
+    // The agent reviewed the human's current source and proposes in chat
+    // without overwriting it (the edit IS the state).
     return textCompletion(
-      "I see you edited the definition by hand, so the blueprint is frozen. I'd suggest adding a reject action with a confirm; apply it yourself or discard your edits so I can take over."
-    );
-  }
-  if (lastMessage?.role === "user") {
-    return toolCompletion(
-      [
-        toolCall("author-blueprint", "set_flow_blueprint", {
-          blueprint: JSON.stringify(AUTHORING_SPEC),
-        }),
-      ],
-      "mock authoring reasoning"
+      "I reviewed the current definition module, including your manual edits. I'd suggest adding a reject action with a confirm; apply it yourself or ask me to regenerate."
     );
   }
   return textCompletion("The definition is ready.");
@@ -391,17 +405,18 @@ Display a deterministic greeting.
 - Localized greetings.
 `;
 
-// The gate-clean FlowBlueprint the mock authoring agent produces: a review flow
-// whose items move from new to done via manual actions, with a createInstance
-// flow-level action writing the title field (the writer the title reads
-// need). The real generate_definition gate runs against it in the e2e.
-const AUTHORING_SPEC = {
+// The gate-clean definition module the mock authoring agent produces: a
+// review flow whose items move from new to done via manual actions, with a
+// createInstance flow-level action writing the title field (the writer the
+// title reads need). The real validate_definition gate runs against it in the
+// e2e. A referenced tool makes it a module set (the editor shows file tabs).
+const AUTHORING_DEFINITION = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
   id: "reviewFlow",
   label: "Review Flow",
   description: "A review flow with a ready state and approve/reject actions.",
   configSchema: [],
-  // A referenced tool: the generated definition is a module set whose entry
-  // imports the stub file, so the flow-editor shows the referenced-file tabs.
   tools: [{ id: "websearch", ref: "./tools/websearch.ts" }],
   workflows: [
     {
@@ -410,7 +425,7 @@ const AUTHORING_SPEC = {
       instance: { title: "title" },
       display: { fields: [{ path: "title", label: "Title" }] },
       instanceState: [{ field: "title", type: "string" }],
-      initialState: "new",
+      initial: "new",
       terminalStates: ["done"],
       states: [
         {
@@ -418,18 +433,8 @@ const AUTHORING_SPEC = {
           label: "New",
           category: "initial",
           actions: [
-            {
-              id: "complete",
-              label: "Complete",
-              variant: "primary",
-              transitionTo: "done",
-            },
-            {
-              id: "reject",
-              label: "Reject",
-              variant: "destructive",
-              transitionTo: "done",
-            },
+            { id: "complete", label: "Complete", variant: "primary", transitionTo: "done" },
+            { id: "reject", label: "Reject", variant: "destructive", transitionTo: "done" },
           ],
         },
         { id: "done", label: "Done", category: "terminal" },
@@ -443,26 +448,40 @@ const AUTHORING_SPEC = {
       variant: "primary",
       createInstance: {
         workflowId: "items",
-        fields: [
-          {
-            key: "title",
-            label: "Title",
-            type: "string",
-            required: true,
-          },
-        ],
+        fields: [{ key: "title", label: "Title", type: "string", required: true }],
       },
     },
   ],
   edges: [],
 };
+`;
+
+// The implemented websearch tool the review-flow authoring script writes
+// (the definition references it; the file IS the truth).
+const AUTHORING_TOOL = `import { defineTool } from "workflow-engine/runners";
+
+export const websearchTools = [
+  defineTool({
+    name: "websearch",
+    description: "Search the web.",
+    parameters: { properties: { query: { type: "string" } }, required: ["query"] },
+    executor: async (call) => ({
+      toolCallId: call.id,
+      content: JSON.stringify({ title: "Hive docs", snippet: "good result" }),
+      isError: false,
+    }),
+  }),
+];
+`;
 
 // ─── the research-loop flow (ticket 4) ────────────────────────────────
 
-// The blueprint the research-loop authoring script converges on: a custom gate
-// file ref on the transition, a custom websearch tool ref, and an output
-// extractor that derives the verdict the gate reads.
-const RESEARCH_SPEC = {
+// The definition module the research-loop authoring script converges on: a
+// custom gate file ref on the transition, a custom websearch tool ref, and an
+// output extractor that derives the verdict the gate reads.
+const RESEARCH_DEFINITION = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
   id: "researchLoop",
   label: "Research Loop",
   configSchema: [],
@@ -482,7 +501,7 @@ const RESEARCH_SPEC = {
         { field: "query", type: "string" },
         { field: "verdict", type: "string" },
       ],
-      initialState: "searching",
+      initial: "searching",
       terminalStates: ["done"],
       states: [
         {
@@ -494,8 +513,7 @@ const RESEARCH_SPEC = {
               id: "search",
               label: "Search the web",
               role: "ai-chat",
-              systemPrompt:
-                "You are the Research Agent. Search the web for the query, then call the completion tool with the top result's summary.",
+              systemPrompt: "You are the Research Agent. Search the web for the query, then call the completion tool with the top result's summary.",
               tools: ["websearch"],
               completionTool: "complete_task",
               startOnUserInput: true,
@@ -507,14 +525,8 @@ const RESEARCH_SPEC = {
           // sharing a state with the search task would fire before the
           // extractor has written the verdict it reads.
           autoTransitions: [
-            {
-              to: "extracting",
-              gate: { kind: "taskSuccess", task: "search" },
-            },
-            {
-              to: "needs_review",
-              gate: { kind: "taskError", task: "search" },
-            },
+            { to: "extracting", gate: { kind: "taskSuccess", task: "search" } },
+            { to: "needs_review", gate: { kind: "taskError", task: "search" } },
           ],
         },
         {
@@ -530,10 +542,7 @@ const RESEARCH_SPEC = {
             },
           ],
           autoTransitions: [
-            {
-              to: "done",
-              gate: { kind: "file", ref: "./gates/approved.ts" },
-            },
+            { to: "done", gate: { kind: "file", ref: "./gates/approved.ts" } },
             { to: "needs_review", gate: { kind: "always" } },
           ],
         },
@@ -562,13 +571,12 @@ const RESEARCH_SPEC = {
       variant: "primary",
       createInstance: {
         workflowId: "research",
-        fields: [
-          { key: "query", label: "Query", type: "string", required: true },
-        ],
+        fields: [{ key: "query", label: "Query", type: "string", required: true }],
       },
     },
   ],
 };
+`;
 
 // The implemented referenced files the research-loop authoring script writes
 // (the "implement the stub" step) — the transport in the websearch tool is
@@ -612,18 +620,18 @@ export const parse: OutputExtractor = (ctx) => {
 };
 `;
 
-// The research-loop authoring script: set the blueprint → generate (the stubs
-// pass the gate) → write the gate, tool, and extractor → regenerate (the
-// implementations pass) → save. Stages are tracked by the tool_call_id of the
-// last tool result.
+// The research-loop authoring script: set the definition module → validate
+// (the gate passes with stubs in place) → write the gate, tool, and extractor
+// → validate (the implementations pass) → save. Stages are tracked by the
+// tool_call_id of the last tool result.
 function researchLoopCompletion(messages) {
   const toolMessages = messages.filter((message) => message.role === "tool");
   const lastId = toolMessages.at(-1)?.tool_call_id ?? "";
   if (toolMessages.length === 0) {
     return toolCompletion(
       [
-        toolCall("research-bp", "set_flow_blueprint", {
-          blueprint: JSON.stringify(RESEARCH_SPEC),
+        toolCall("research-bp", "set_flow_definition", {
+          source: RESEARCH_DEFINITION,
         }),
       ],
       "designing the research loop"
@@ -631,12 +639,8 @@ function researchLoopCompletion(messages) {
   }
   if (lastId === "research-bp") {
     return toolCompletion(
-      [
-        toolCall("research-gen", "generate_definition", {
-          blueprint: JSON.stringify(RESEARCH_SPEC),
-        }),
-      ],
-      "generating the module set"
+      [toolCall("research-gen", "validate_definition", {})],
+      "validating the definition module"
     );
   }
   if (lastId === "research-gen") {
@@ -674,12 +678,8 @@ function researchLoopCompletion(messages) {
   }
   if (lastId === "research-write-extract") {
     return toolCompletion(
-      [
-        toolCall("research-gen2", "generate_definition", {
-          blueprint: JSON.stringify(RESEARCH_SPEC),
-        }),
-      ],
-      "regenerating with the implementations"
+      [toolCall("research-gen2", "validate_definition", {})],
+      "validating with the implementations"
     );
   }
   if (lastId === "research-gen2") {

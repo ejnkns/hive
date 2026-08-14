@@ -13,34 +13,30 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import ts from "typescript";
-import {
-  collectModuleReferences,
-  type FlowBlueprint,
-  isRefWithinRoot,
-  type ModuleReference,
-} from "../flow-blueprint.ts";
+import type { DefinitionReference } from "workflow-engine/compile-flow-definition";
+import { isRefWithinRoot } from "../flow-definition.ts";
 import { refPathInDir } from "../flow-definitions.ts";
 import { serverCompilerOptions } from "../typecheck-definition.ts";
 
 export type ModuleFinding = {
-  kind: ModuleReference["kind"];
+  kind: DefinitionReference["kind"];
   ref: string;
-  // The blueprint path of the reference (e.g. "workflows[0].states[1].autoTransitions[0].gate").
+  // The definition path of the reference (e.g. "workflows[0].states[1].autoTransitions[0].gate").
   path: string;
   message: string;
 };
 
 export function lintModuleSet(
-  blueprint: FlowBlueprint,
+  refs: readonly DefinitionReference[],
   dir: string
 ): ModuleFinding[] {
   const findings: ModuleFinding[] = [];
   const harnessDir = join(dir, "__lint__");
-  const harnessByFile = new Map<string, ModuleReference>();
+  const harnessByFile = new Map<string, DefinitionReference>();
   const harnessFiles: string[] = [];
   let index = 0;
 
-  for (const ref of collectModuleReferences(blueprint)) {
+  for (const ref of refs) {
     const target = refPathInDir(dir, ref.ref);
     if (target === undefined || !isRefWithinRoot(ref.ref)) {
       findings.push({
@@ -96,7 +92,7 @@ export function lintModuleSet(
 // The harness imports the reference's export and pins it to the contract
 // type. The harness lives in the module set's `__lint__/` directory, so the
 // import specifier is `../`-prefixed against the module-set root.
-function harnessSource(ref: ModuleReference): string {
+function harnessSource(ref: DefinitionReference): string {
   const relativeRef = ref.ref.startsWith("./") ? ref.ref.slice(2) : ref.ref;
   const specifier = `../${relativeRef}`;
   switch (ref.kind) {

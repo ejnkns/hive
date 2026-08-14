@@ -1,5 +1,5 @@
 // Ticket 4 — the generated research-loop flow, end to end: an authoring
-// session converges on a research-loop blueprint with a custom gate reference
+// session converges on a research-loop definition module with a custom gate reference
 // and a custom websearch tool reference, the agent writes the referenced files
 // in-conversation, and the module set passes the gate and saves. The e2e then
 // instantiates the saved definition and runs it for real: the custom websearch
@@ -80,8 +80,8 @@ test("a generated research-loop flow runs with its custom gate and websearch too
     .fill("Build a research loop flow with a custom gate and a websearch tool");
   await page.locator("button", { hasText: "I'm feeling lucky" }).click();
 
-  // The agent sets the blueprint, generates, writes the referenced files, and
-  // saves the registered definition — all in-conversation.
+  // The agent sets the definition module, validates, writes the referenced
+  // files, and saves the registered definition — all in-conversation.
   const state = await waitFor(async () => {
     const s = await sessionState();
     return s?.workflowInstanceState?.savedDefinitionId === "research-loop"
@@ -97,17 +97,16 @@ test("a generated research-loop flow runs with its custom gate and websearch too
     "the session's file set carries the implemented gate"
   );
 
-  // The definition registers and is servable, with the module-set entry
-  // importing the referenced files.
+  // The definition registers and is servable: the source is the pure-data
+  // definition module (references by ref path — the entry imports nothing),
+  // and the registered record carries the parsed data form.
   const definition = await fetchJson("/api/flows/definitions/research-loop");
   assert.ok(definition, "the definition must register");
-  assert.match(
-    definition.source,
-    /import \{ approved \} from "\.\/gates\/approved\.ts";/
-  );
-  assert.match(
-    definition.source,
-    /import \{ websearchTools \} from "\.\/tools\/websearch\.ts";/
+  assert.match(definition.source, /export const flow: FlowDefinition = \{/);
+  assert.match(definition.source, /ref: "\.\/gates\/approved\.ts"/);
+  assert.ok(
+    definition.definition?.id === "researchLoop",
+    "the registered record carries the pure-data definition"
   );
 
   // Instantiate the saved definition and run it: the custom tool executes and

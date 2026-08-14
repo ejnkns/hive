@@ -20,8 +20,8 @@ export type AuthoringFileWrite =
 
 // Writes a referenced file into the module-set working directory and returns
 // the session's updated file set (the caller patches it into instance state).
-// `path` is relative to the definition root; the rendered entry (flow.ts) is
-// not a referenced file — edit the blueprint to change it.
+// `path` is relative to the definition root; the definition module (flow.ts)
+// is the entry, not a referenced file — set_flow_definition changes it.
 export function writeAuthoringModuleFile(
   state: AuthoringItemState,
   path: string,
@@ -31,7 +31,7 @@ export function writeAuthoringModuleFile(
     return {
       ok: false,
       message:
-        "path is required and must name a referenced file (flow.ts is the rendered entry — edit the blueprint instead)",
+        "path is required and must name a referenced file (flow.ts is the definition module — set_flow_definition changes it)",
     };
   }
   if (content.trim() === "") {
@@ -83,7 +83,7 @@ export function readAuthoringModuleFile(
     return {
       ok: false,
       message:
-        "path is required and must name a referenced file (flow.ts is the rendered entry — edit the blueprint instead)",
+        "path is required and must name a referenced file (flow.ts is the definition module — set_flow_definition changes it)",
     };
   }
   const target = refPathInDir(
@@ -99,7 +99,7 @@ export function readAuthoringModuleFile(
   if (!existsSync(target)) {
     return {
       ok: false,
-      message: `no file at "${path}" — generate the definition first (the gate emits a stub for every referenced file)`,
+      message: `no file at "${path}" — validate the definition first (the gate checks every referenced file)`,
     };
   }
   return { ok: true, content: readFileSync(target, "utf-8") };

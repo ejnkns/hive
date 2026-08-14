@@ -212,26 +212,25 @@ export const flow = {
 // source, transpiled by the server, and fetched by the rendering surface.
 // A gate-clean source the authoring session's save path registers (the e2e's
 // agent produces a review-flow equivalent).
-const authoringSaveSource = `import { defineWorkflow } from "workflow-engine/workflow-types";
+const authoringSaveSource = `import type { FlowDefinition } from "workflow-engine/workflow-types";
 
-const wf = defineWorkflow({
-  id: "review",
-  label: "Review",
-  taskOutputs: {} as Record<string, never>,
-  workflowInstanceState: {} as Record<string, unknown>,
-  states: [
-    { id: "new", label: "New", category: "initial" },
-    { id: "done", label: "Done", category: "terminal" },
-  ],
-  initial: "new",
-  terminalStates: ["done"],
-});
-
-export const flow = {
-  id: "review-flow",
+export const flow: FlowDefinition = {
+  id: "reviewFlow",
   label: "Review Flow",
   configSchema: [],
-  workflows: [wf],
+  workflows: [
+    {
+      id: "review",
+      label: "Review",
+      instanceState: [],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
+        { id: "new", label: "New", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
   edges: [],
 };
 `;
@@ -1239,7 +1238,7 @@ describe("flow API routes", () => {
     assert.equal((again.json() as { id: string }).id, "review-flow");
   });
 
-  it("POST /api/flows/definitions/author/:flowId/source writes back the human's edits and marks the blueprint diverged", async () => {
+  it("POST /api/flows/definitions/author/:flowId/source writes back the human's edits (the edit IS the state)", async () => {
     setFlowPersistence(noopPersistence);
     registerFlowDefinition(authoringSessionFlow, { hidden: true });
     const server = Fastify();
@@ -1262,24 +1261,16 @@ describe("flow API routes", () => {
     const written = await server.inject({
       method: "POST",
       url: `/api/flows/definitions/author/${flowId}/source`,
-      payload: { source: "export const flow = {}; // hand edit" },
+      payload: { source: authoringSaveSource },
     });
     assert.equal(written.statusCode, 200);
     const state = controller?.getState().workflowInstanceState;
-    assert.equal(state?.source, "export const flow = {}; // hand edit");
-    assert.equal(state?.blueprintDiverged, true);
-
-    // Discard hands the definition back to the agent.
-    const discarded = await server.inject({
-      method: "POST",
-      url: `/api/flows/definitions/author/${flowId}/source`,
-      payload: { discard: true },
-    });
-    assert.equal(discarded.statusCode, 200);
-    assert.equal(
-      controller?.getState().workflowInstanceState.blueprintDiverged,
-      false
-    );
+    assert.equal(state?.source, authoringSaveSource);
+    // The parsed definition rides along so the editor binds to the object.
+    const parsed = state?.parsedDefinition as { id?: string } | undefined;
+    assert.equal(parsed?.id, "reviewFlow");
+    // One artifact: no divergence flag, no adoption.
+    assert.equal(state?.blueprintDiverged, undefined);
   });
 
   it("POST /api/flows/definitions/author/:flowId/source rejects a non-authoring flow", async () => {
@@ -1505,90 +1496,6 @@ describe("flow API routes", () => {
     } finally {
       rmSync(workDir, { recursive: true, force: true });
     }
-  });
-
-  it("POST /api/flows/definitions/author/:flowId/blueprint writes back and re-renders the preview", async () => {
-    setFlowPersistence(noopPersistence);
-    registerFlowDefinition(authoringSessionFlow, { hidden: true });
-    const server = Fastify();
-    servers.push(server);
-    registerFlowApiRoutes(server);
-
-    const created = await server.inject({
-      method: "POST",
-      url: "/api/flows/definitions/author",
-      body: { prompt: "Build a review flow", lucky: true },
-    });
-    const { flowId, instanceId } = created.json() as {
-      flowId: string;
-      instanceId: string;
-    };
-    const runtime = getFlowRuntime(flowId);
-    const controller = runtime?.getWorkflowInstance(instanceId);
-
-    const blueprint = JSON.stringify({
-      id: "miniFlow",
-      label: "Mini",
-      configSchema: [],
-      workflows: [
-        {
-          id: "wf",
-          label: "Wf",
-          instanceState: [{ field: "title", type: "string" }],
-          initialState: "s",
-          terminalStates: ["d"],
-          states: [
-            { id: "s", label: "S", category: "initial" },
-            { id: "d", label: "D", category: "terminal" },
-          ],
-        },
-      ],
-      edges: [],
-      actions: [
-        {
-          id: "add",
-          label: "Add",
-          createInstance: {
-            workflowId: "wf",
-            fields: [
-              { key: "title", label: "Title", type: "string", required: true },
-            ],
-          },
-        },
-      ],
-    });
-    const written = await server.inject({
-      method: "POST",
-      url: `/api/flows/definitions/author/${flowId}/blueprint`,
-      payload: { blueprint },
-    });
-    assert.equal(written.statusCode, 200);
-    const state = controller?.getState().workflowInstanceState;
-    assert.equal(state?.blueprint, blueprint);
-    assert.ok(
-      typeof state?.previewSource === "string" &&
-        state.previewSource.includes("miniFlow"),
-      "the blueprint edit must re-render the preview entry"
-    );
-    assert.deepEqual(state?.previewErrors, []);
-
-    // Mid-edit invalid JSON is tolerated: the blueprint lands with a draft
-    // note instead of a 400.
-    const broken = await server.inject({
-      method: "POST",
-      url: `/api/flows/definitions/author/${flowId}/blueprint`,
-      payload: { blueprint: "{not json" },
-    });
-    assert.equal(broken.statusCode, 200);
-    const brokenState = controller?.getState().workflowInstanceState;
-    assert.equal(brokenState?.blueprint, "{not json");
-    assert.ok(
-      Array.isArray(brokenState?.previewErrors) &&
-        brokenState.previewErrors.some((e) =>
-          String(e).includes("not valid JSON")
-        ),
-      "the draft notes must surface the parse error"
-    );
   });
 
   it("POST /api/flows/definitions/author requires a prompt", async () => {

@@ -36,7 +36,10 @@ import { queenBeeBlueprint } from "../../../presets/queen-bee/blueprint.ts";
 import { flow as queenBeeFlow } from "../../../presets/queen-bee/flow.ts";
 import { wayfinderBlueprint } from "../../../presets/wayfinder/blueprint.ts";
 import type { FlowBlueprint } from "./flow-blueprint.ts";
-import { validateFlowBlueprint } from "./flow-blueprint.ts";
+import {
+  collectModuleReferences,
+  validateFlowBlueprint,
+} from "./flow-blueprint.ts";
 import {
   getRegisteredFlowDefinition,
   loadUserDefinitionsFromDisk,
@@ -418,14 +421,17 @@ describe("module-set pipeline", () => {
     const dir = materializeModuleSet("seam-clean", rendered);
     assert.ok(existsSync(join(dir, "flow.ts")));
     assert.ok(existsSync(join(dir, "gates/approved.ts")));
-    assert.deepEqual(lintModuleSet(FIVE_KIND, dir), []);
+    assert.deepEqual(
+      lintModuleSet(collectModuleReferences(FIVE_KIND), dir),
+      []
+    );
   });
 
   it("reports a missing referenced file with a specific finding", async () => {
     const rendered = renderFlowDefinition(FIVE_KIND);
     const dir = materializeModuleSet("seam-missing", rendered);
     rmSync(join(dir, "gates/approved.ts"));
-    const findings = lintModuleSet(FIVE_KIND, dir);
+    const findings = lintModuleSet(collectModuleReferences(FIVE_KIND), dir);
     const finding = findings.find((f) => f.ref === "./gates/approved.ts");
     assert.ok(
       finding,
@@ -463,7 +469,7 @@ describe("module-set pipeline", () => {
     const dir = materializeModuleSet("seam-escape", rendered);
     // The escaping ref is never written outside the module-set directory.
     assert.ok(!existsSync(join(dir, "../escape.ts")));
-    const findings = lintModuleSet(blueprint, dir);
+    const findings = lintModuleSet(collectModuleReferences(blueprint), dir);
     const finding = findings.find((f) => f.ref === "../escape.ts");
     assert.ok(
       finding,
@@ -479,7 +485,7 @@ describe("module-set pipeline", () => {
       join(dir, "gates/approved.ts"),
       `import type { GateContract } from "workflow-engine/workflow-types";\nexport const wrongName: GateContract = () => false;\n`
     );
-    const findings = lintModuleSet(FIVE_KIND, dir);
+    const findings = lintModuleSet(collectModuleReferences(FIVE_KIND), dir);
     const finding = findings.find((f) => f.ref === "./gates/approved.ts");
     assert.ok(
       finding,
@@ -496,7 +502,7 @@ describe("module-set pipeline", () => {
       join(dir, "gates/approved.ts"),
       `import type { RuntimeGateContext } from "workflow-engine/workflow-types";\nexport const approved = (ctx: RuntimeGateContext) => "yes";\n`
     );
-    const findings = lintModuleSet(FIVE_KIND, dir);
+    const findings = lintModuleSet(collectModuleReferences(FIVE_KIND), dir);
     const finding = findings.find((f) => f.ref === "./gates/approved.ts");
     assert.ok(
       finding,
@@ -812,7 +818,10 @@ describe("rendered presets pass the module-set gate", () => {
         writeFileSync(target, source, "utf-8");
       }
 
-      const lint = lintModuleSet(preset.blueprint, dir);
+      const lint = lintModuleSet(
+        collectModuleReferences(preset.blueprint),
+        dir
+      );
       assert.deepEqual(
         lint.map((f) => f.message),
         [],

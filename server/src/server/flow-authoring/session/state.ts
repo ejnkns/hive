@@ -22,31 +22,31 @@ export type AuthoringItemState = {
   // The user's original request (the session card's title).
   prompt?: string;
   // How this session was started: conversational asks clarifying questions and
-  // drafts interactively; lucky produces the blueprint without questions.
+  // drafts interactively; lucky produces the definition without questions.
   mode?: "conversational" | "lucky";
-  // The current FlowBlueprint draft, maintained by the agent via set_flow_blueprint.
-  blueprint?: string;
-  // The rendered TypeScript of the current draft (live preview in the editor).
-  previewSource?: string;
-  // Validation/render findings of the current draft (fed back to the agent).
+  // The definition module source (the single pure-data artifact the agent
+  // writes and the human edits — the editor's Definition tab shows it).
+  source?: string;
+  // The referenced files of the current module set (relative path → source),
+  // written by the file tools and saved with the definition.
+  files?: Record<string, string>;
+  // Definition-validation findings of the current source (fed back to the
+  // agent by set_flow_definition; shown as draft notes in the editor).
   previewErrors?: string[];
-  // The gate findings of the last generate_definition call.
+  // The module-set gate findings of the last validate_definition call.
   gateErrors?: string[];
-  // The gate outcome of the last generate_definition call.
+  // The gate outcome of the last validate_definition call.
   report?: {
     passed: boolean;
     attempts: number;
     errors: string[];
     warnings: string[];
   };
-  // The gate-passed TypeScript source (written by generate_definition). For a
-  // blueprint with file references this is the module-set entry (flow.ts); the
-  // referenced files live in `files`.
-  source?: string;
-  // The referenced files of the current module set (relative path → source),
-  // written by generate_definition and saved with the definition.
-  files?: Record<string, string>;
-  // The blueprint's label — a suggested name for the saved definition.
+  // The parsed definition object of the current source (the editor binds its
+  // Definition tab to it, so a structured-form panel can replace the raw
+  // literal without re-plumbing).
+  parsedDefinition?: unknown;
+  // The definition's label — a suggested name for the saved definition.
   suggestedName?: string;
   // The registered definition id after a successful save. Written by the
   // save_definition tool (agent path) and the synchronous save route (the
@@ -55,13 +55,9 @@ export type AuthoringItemState = {
   // The resolved display name of the saved definition (the suggested name or
   // the agent's explicit override).
   savedName?: string;
-  // Non-blocking schema-consistency findings from the last save.
+  // Non-blocking findings from the last save (the definition validator's
+  // analysis — warnings the author may fix).
   saveFindings?: { errors: string[]; warnings: string[] };
-  // True while the human has edited the definition TS directly (the editor's
-  // write-back). The blueprint draft is frozen: set_flow_blueprint/generate_definition
-  // refuse until the human discards (or adopts, via the future reverse
-  // renderer) their edits.
-  blueprintDiverged?: boolean;
   // The session's module-set working-directory key (its flow id, set at
   // session creation). Each session materializes, reads, and writes its own
   // module set under this key — referenced files never leak across sessions.

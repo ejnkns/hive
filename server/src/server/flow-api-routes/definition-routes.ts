@@ -5,15 +5,13 @@ import { randomUUID } from "node:crypto";
 import { PassThrough } from "node:stream";
 import type { FastifyInstance } from "fastify";
 import {
-  adoptAuthoringEdits,
-  adoptPatch,
-  saveAuthoringBlueprint,
   saveAuthoringDefinition,
   savePatch,
   seedAuthoringModuleFiles,
   writeAuthoringModuleFile,
 } from "../flow-authoring/session.ts";
 import { AUTHORING_DEFINITION_ID } from "../flow-authoring.ts";
+import { parseDefinition } from "../flow-definition.ts";
 import {
   DefinitionAlreadyExistsError,
   deleteUserDefinition,
@@ -61,8 +59,10 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
       builtIn: record.builtIn,
       configSchema: record.configSchema,
       source: record.source,
-      // The design artifact the definition was rendered from (a blueprint-
-      // defined flow — built-in presets and user module sets).
+      // The pure-data form of a definition module (the builder contract — the
+      // editor's Definition tab binds to it).
+      definition: record.definition,
+      // The design artifact two-artifact flows were rendered from (retiring).
       blueprint: record.blueprint,
       // The referenced file set of a module-set definition (a revision
       // session seeds its editor tabs from these).
@@ -231,7 +231,7 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
     if (taskId) {
       const context = typeof body?.context === "string" ? body.context : "";
       const firstMessage = lucky
-        ? `Produce the complete flow blueprint now. Do not ask clarifying questions — make reasonable assumptions, call set_flow_blueprint, then call generate_definition.\n\nRequest: ${prompt.trim()}${context ? `\n\n${context}` : ""}`
+        ? `Produce the complete flow definition module now. Do not ask clarifying questions — make reasonable assumptions, call set_flow_definition, then call validate_definition.\n\nRequest: ${prompt.trim()}${context ? `\n\n${context}` : ""}`
         : `${prompt.trim()}${context ? `\n\n${context}` : ""}`;
       controller.sendTaskInput(taskId, firstMessage, "user");
     }
@@ -292,63 +292,18 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
     }
   );
 
-  // The adopt-manual-edits handoff: the human's current definition source is
-  // parsed back into the session's blueprint (the reverse renderer), the
-  // divergence clears, and the agent's blueprint tools work again with the
-  // hand edits folded in. Runs the same adoptAuthoringEdits core the future
-  // agent-side affordance would; the route is a thin authoring-flow-gated
-  // endpoint.
-  server.post(
-    "/api/flows/definitions/author/:flowId/adopt",
-    async (request, reply) => {
-      // Fastify params type is erased; shape guaranteed by route pattern
-      const { flowId } = request.params as { flowId: string };
-
-      const runtime = getFlowRuntime(flowId);
-      if (!runtime) {
-        return reply.status(404).send({ error: "Flow not found" });
-      }
-      if (runtime.getFlowConfig().definitionId !== AUTHORING_DEFINITION_ID) {
-        return reply.status(404).send({ error: "Flow not found" });
-      }
-      const instance = runtime.getWorkflowInstanceEntries()[0];
-      if (!instance) {
-        return reply.status(404).send({ error: "No authoring session" });
-      }
-      const controller = runtime.getWorkflowInstance(instance.id);
-      const state = instance.state.workflowInstanceState;
-      try {
-        const result = adoptAuthoringEdits(state);
-        controller?.patchWorkflowInstanceState(adoptPatch(result));
-        return reply.send({
-          ok: true,
-          // The not-spec-representable parts of the hand edits (what could not
-          // be folded into the blueprint) — the editor surfaces them; the
-          // agent sees them in the next turn.
-          findings: result.findings,
-        });
-      } catch (err) {
-        return reply.status(400).send({
-          error: err instanceof Error ? err.message : "Adopt failed",
-        });
-      }
-    }
-  );
-
   // The write-back behind the flow-editor's editable code pane: the human's
-  // current definition source, patched into the session state (marking the
-  // blueprint diverged), or discard — clearing the divergence so the agent's next
-  // generate wins. The editor debounces its patches; this route is the dumb
+  // current definition module source, patched into the session state — the
+  // edit IS the state (one artifact; no divergence flag, no adoption). The
+  // agent's tools read the current source, so the next turn builds on the
+  // human's edit. The editor debounces its patches; this route is the dumb
   // sync point.
   server.post(
     "/api/flows/definitions/author/:flowId/source",
     async (request, reply) => {
       // Fastify params type is erased; shape guaranteed by route pattern
       const { flowId } = request.params as { flowId: string };
-      const body = request.body as {
-        source?: string;
-        discard?: boolean;
-      } | null;
+      const body = request.body as { source?: string } | null;
 
       const runtime = getFlowRuntime(flowId);
       if (!runtime) {
@@ -363,18 +318,19 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
       }
       const controller = runtime.getWorkflowInstance(instance.id);
 
-      if (body?.discard === true) {
-        controller?.patchWorkflowInstanceState({ blueprintDiverged: false });
-        return reply.send({ ok: true, discarded: true });
-      }
       const source = typeof body?.source === "string" ? body.source : "";
       if (source === "") {
         return reply.status(400).send({ error: "source is required" });
       }
-      controller?.patchWorkflowInstanceState({
-        source,
-        blueprintDiverged: true,
-      });
+      // The parsed definition rides along so the editor's Definition tab
+      // binds to the object, not just the literal text.
+      let parsedDefinition: unknown;
+      try {
+        parsedDefinition = parseDefinition(source).definition;
+      } catch {
+        parsedDefinition = undefined;
+      }
+      controller?.patchWorkflowInstanceState({ source, parsedDefinition });
       return reply.send({ ok: true });
     }
   );
@@ -413,38 +369,6 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
         return reply.status(400).send({ error: result.message });
       }
       controller?.patchWorkflowInstanceState({ files: result.files });
-      return reply.send({ ok: true });
-    }
-  );
-
-  // The write-back behind the flow-editor's blueprint tab: the human's
-  // blueprint text, recorded and re-rendered into the live preview (the same
-  // validate → render the agent's set_flow_blueprint runs).
-  server.post(
-    "/api/flows/definitions/author/:flowId/blueprint",
-    async (request, reply) => {
-      // Fastify params type is erased; shape guaranteed by route pattern
-      const { flowId } = request.params as { flowId: string };
-      const body = request.body as { blueprint?: string } | null;
-      const blueprint =
-        typeof body?.blueprint === "string" ? body.blueprint : "";
-      if (blueprint === "") {
-        return reply.status(400).send({ error: "blueprint is required" });
-      }
-
-      const runtime = getFlowRuntime(flowId);
-      if (!runtime) {
-        return reply.status(404).send({ error: "Flow not found" });
-      }
-      if (runtime.getFlowConfig().definitionId !== AUTHORING_DEFINITION_ID) {
-        return reply.status(404).send({ error: "Flow not found" });
-      }
-      const instance = runtime.getWorkflowInstanceEntries()[0];
-      if (!instance) {
-        return reply.status(404).send({ error: "No authoring session" });
-      }
-      const controller = runtime.getWorkflowInstance(instance.id);
-      controller?.patchWorkflowInstanceState(saveAuthoringBlueprint(blueprint));
       return reply.send({ ok: true });
     }
   );

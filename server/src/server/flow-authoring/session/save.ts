@@ -1,16 +1,19 @@
 /** @private — the one save implementation, shared by the save_definition tool
  * (the agent saves from chat) and the synchronous save route (the editor's
- * Save button): register the session's generated source as a definition —
+ * Save button): register the session's definition module as a definition —
  * create on the first save, update by savedDefinitionId afterwards. Only
  * flow-authoring/session.ts (re-export) and session/tools/save-definition.ts
  * import from here. */
 
-import type { FlowBlueprint } from "../../flow-blueprint.ts";
+import {
+  analyzeFlowDefinition,
+  parseDefinition,
+  validateFlowDefinition,
+} from "../../flow-definition.ts";
 import {
   registerUserDefinition,
   updateUserDefinition,
 } from "../../flow-definitions.ts";
-import { checkDefinitionSources } from "../../schema-consistency.ts";
 import type { AuthoringItemState } from "./state.ts";
 
 export async function saveAuthoringDefinition(
@@ -25,7 +28,7 @@ export async function saveAuthoringDefinition(
   const source = typeof state.source === "string" ? state.source : "";
   if (source === "") {
     throw new Error(
-      "Nothing to save — ask the agent to generate a definition first."
+      "Nothing to save — ask the agent to write a definition module first."
     );
   }
   const suggested =
@@ -39,34 +42,31 @@ export async function saveAuthoringDefinition(
   }
 
   const targetId = state.savedDefinitionId;
-  let blueprint: FlowBlueprint | undefined;
-  if (typeof state.blueprint === "string" && state.blueprint !== "") {
-    try {
-      blueprint = JSON.parse(state.blueprint) as FlowBlueprint;
-    } catch {
-      // A malformed stored blueprint is not a save blocker — the rendered
-      // source is the truth.
-    }
-  }
   const record = targetId
     ? await updateUserDefinition(targetId, {
         name,
         source,
         files: state.files,
-        blueprint,
       })
     : await registerUserDefinition({
         name,
         source,
-        blueprint,
         files: state.files,
       });
-  const check = checkDefinitionSources([{ path: `${record.id}.ts`, source }]);
+
+  // Non-blocking save findings: the definition validator's analysis of the
+  // saved module (the load already validated + compiled — errors would have
+  // thrown above; these are the advisory warnings).
+  const { definition, findings } = parseDefinition(source);
+  const warnings = [...analyzeFlowDefinition(definition), ...findings];
+  const errors = validateFlowDefinition(definition).map(
+    (e) => `${e.path}: ${e.message}`
+  );
   return {
     id: record.id,
     name: record.name,
-    checkErrors: check.errors,
-    checkWarnings: check.warnings,
+    checkErrors: errors,
+    checkWarnings: warnings,
   };
 }
 

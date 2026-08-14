@@ -96,9 +96,9 @@ export type FlowDefinitionDetail = FlowDefinitionSummary & {
   // The referenced file set of a module-set definition (used to seed a
   // revision session's editor tabs).
   files?: Record<string, string>;
-  // The design artifact the definition was rendered from (built-in presets and
-  // user module sets) — shown read-only on the View page.
-  blueprint?: unknown;
+  // The pure-data form of a definition module (the builder contract — the
+  // editor's Definition tab binds to it).
+  definition?: unknown;
 };
 
 export type InstancesApiResponse = {
@@ -246,8 +246,8 @@ export async function saveAuthoringDefinition(flowId: string): Promise<{
 }
 
 // The write-back behind the flow-editor's editable code pane: patches the
-// human's current definition source into the session (marking the blueprint
-// diverged), or clears the divergence when the human hands back.
+// human's current definition module into the session. The edit IS the state —
+// one artifact; no divergence flag, no adoption.
 export async function saveAuthoringSource(
   flowId: string,
   source: string
@@ -265,47 +265,6 @@ export async function saveAuthoringSource(
     const err = (await res.json()) as { error?: string };
     throw new Error(err.error ?? "Failed to save source");
   }
-}
-
-export async function discardAuthoringSource(flowId: string): Promise<void> {
-  const res = await fetch(
-    `/api/flows/definitions/author/${encodeURIComponent(flowId)}/source`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ discard: true }),
-    }
-  );
-  if (!res.ok) {
-    // Error response shape is guaranteed by the server endpoint
-    const err = (await res.json()) as { error?: string };
-    throw new Error(err.error ?? "Failed to discard edits");
-  }
-}
-
-// The adopt-manual-edits handoff: the current definition source is parsed
-// back into the session's blueprint (the reverse renderer), the divergence
-// clears, and the agent's blueprint tools work again with the hand edits
-// folded in. Returns the not-spec-representable parts the parse could not
-// fold into the blueprint.
-export async function adoptAuthoringEdits(flowId: string): Promise<{
-  findings: string[];
-}> {
-  const res = await fetch(
-    `/api/flows/definitions/author/${encodeURIComponent(flowId)}/adopt`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    }
-  );
-  if (!res.ok) {
-    // Error response shape is guaranteed by the server endpoint
-    const err = (await res.json()) as { error?: string };
-    throw new Error(err.error ?? "Failed to adopt edits");
-  }
-  // Success response shape is guaranteed by the server endpoint
-  return (await res.json()) as { findings: string[] };
 }
 
 // The write-back behind the flow-editor's file tabs: writes a referenced file
@@ -328,27 +287,6 @@ export async function saveAuthoringFile(
     // Error response shape is guaranteed by the server endpoint
     const err = (await res.json()) as { error?: string };
     throw new Error(err.error ?? "Failed to save file");
-  }
-}
-
-// The write-back behind the flow-editor's blueprint tab: records the human's
-// blueprint text and re-renders the live preview.
-export async function saveAuthoringBlueprint(
-  flowId: string,
-  blueprint: string
-): Promise<void> {
-  const res = await fetch(
-    `/api/flows/definitions/author/${encodeURIComponent(flowId)}/blueprint`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ blueprint }),
-    }
-  );
-  if (!res.ok) {
-    // Error response shape is guaranteed by the server endpoint
-    const err = (await res.json()) as { error?: string };
-    throw new Error(err.error ?? "Failed to save blueprint");
   }
 }
 

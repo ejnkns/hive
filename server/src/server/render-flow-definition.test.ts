@@ -9,7 +9,10 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STRUCTURED_INTAKE_EXEMPLAR } from "./flow-authoring.ts";
 import type { FlowBlueprint } from "./flow-blueprint.ts";
-import { validateFlowBlueprint } from "./flow-blueprint.ts";
+import {
+  collectModuleReferences,
+  validateFlowBlueprint,
+} from "./flow-blueprint.ts";
 import { loadDefinitionFromSource } from "./flow-definitions.ts";
 import {
   lintModuleSet,
@@ -1419,7 +1422,7 @@ describe("render flow definition", () => {
     rendered.files["./prompts/worker.ts"] =
       'export const worker = "You are the Research Agent. Complete the search.";\n';
     const dir = materializeModuleSet("prompt-flow", rendered);
-    const findings = lintModuleSet(spec, dir);
+    const findings = lintModuleSet(collectModuleReferences(spec), dir);
     assert.deepEqual(findings, []);
     const flow = await loadModuleSetDefinition(dir);
     if (!("workflows" in flow)) {

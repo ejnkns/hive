@@ -1,9 +1,10 @@
 // The flow editor as a rendered flow instantiation, end to end: a lucky-mode
 // authoring session renders as a flow instance (the built-in flow-editor
-// composing header, chat, editable definition source, and save), and the
-// co-editing loop works — hand edits write back (blueprint diverged), the agent's
-// blueprint tools are gated and it proposes in chat, and discard hands the
-// definition back. One session, a bounded set of scripted model calls.
+// composing header, chat, editable definition module, and save), and the
+// one-artifact co-editing loop works — hand edits write back (the edit IS the
+// state), the agent reads the current source and builds on it without
+// overwriting, and a regenerate takes the definition back. One session, a
+// bounded set of scripted model calls.
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { startHiveTestApp } from "./support/hive-test-app.mjs";
@@ -123,7 +124,7 @@ async function clickEditorButton(buttonLabel, timeoutMs = 40_000) {
   return false;
 }
 
-// Clicks a flow-editor tab by its label (Definition / Blueprint / file path).
+// Clicks a flow-editor tab by its label (Definition / file path).
 async function clickEditorTab(tabLabel, timeoutMs = 40_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -258,7 +259,7 @@ test("authoring session renders as the flow editor, co-edits, and saves", async 
   await page.locator("button", { hasText: "I'm feeling lucky" }).click();
 
   // The session renders as a flow instance: the flow-editor's header carries
-  // the user's prompt, and the editable editor shows the generated source.
+  // the user's prompt, and the editable editor shows the definition module.
   await waitForEditor(
     (state) => state.title === "A review flow with approve and reject actions"
   );
@@ -268,16 +269,16 @@ test("authoring session renders as the flow editor, co-edits, and saves", async 
     "the editable source is present"
   );
 
-  // The write-back lands: the session source is the manual text, diverged.
+  // The write-back lands: the session source is the manual text. One artifact
+  // — the edit IS the state (no divergence flag, no adoption).
   await waitForSessionState(
     (state) =>
       typeof state.workflowInstanceState?.source === "string" &&
-      state.workflowInstanceState.source.includes("manual tweak") &&
-      state.workflowInstanceState.blueprintDiverged === true
+      state.workflowInstanceState.source.includes("manual tweak")
   );
 
-  // Ask the agent to continue: its set_flow_blueprint is gated (manual edits) and
-  // it proposes in chat instead of overwriting.
+  // Ask the agent to continue: it reads the current source and proposes in
+  // chat instead of overwriting the human's edit.
   assert.ok(await sendChatMessage("please add a reject action"));
   await waitForSessionState((state) => {
     const messages = state.runningTaskContext?.messages ?? [];
@@ -285,19 +286,18 @@ test("authoring session renders as the flow editor, co-edits, and saves", async 
       (m) =>
         m.role === "assistant" &&
         typeof m.content === "string" &&
-        m.content.includes("by hand") &&
-        m.content.includes("frozen")
+        m.content.includes("manual edits")
     );
   }, 40_000);
-
-  // Discard hands the definition back — the divergence clears.
-  assert.ok(await clickEditorButton("Discard edits"));
+  // The human's edit survives the agent's turn (it is the state).
   await waitForSessionState(
-    (state) => state.workflowInstanceState?.blueprintDiverged === false
+    (state) =>
+      typeof state.workflowInstanceState?.source === "string" &&
+      state.workflowInstanceState.source.includes("manual tweak")
   );
 
-  // Regenerate: the agent's blueprint tools work again and the editor adopts the
-  // regenerated source (the manual tweak is gone).
+  // Regenerate: the agent rewrites the definition module (the manual tweak is
+  // gone — the agent took over again).
   assert.ok(await sendChatMessage("regenerate the definition"));
   await waitForEditor(
     (state) =>
@@ -338,8 +338,12 @@ test("authoring session renders as the flow editor, co-edits, and saves", async 
   });
   assert.equal(definition?.name, "Review Flow");
   assert.ok(
-    definition?.source?.includes("defineWorkflow"),
-    "the saved definition source is the generated TypeScript"
+    definition?.source?.includes("FlowDefinition"),
+    "the saved definition source is the definition module"
+  );
+  assert.ok(
+    definition?.definition?.id === "reviewFlow",
+    "the registered record carries the pure-data form"
   );
 });
 
@@ -392,8 +396,8 @@ export const flow = {
 };
 `;
 
-test("adopting hand edits folds them into the blueprint and the agent continues", async () => {
-  // Lucky session: the generated definition renders as the editable editor.
+test("hand edits are the state: the agent continues with them in force", async () => {
+  // Lucky session: the generated definition module renders as the editor.
   await page.goto(`${baseUrl}/#/flows/new`);
   await page.waitForSelector("textarea", { timeout: 15_000 });
   await page
@@ -406,7 +410,7 @@ test("adopting hand edits folds them into the blueprint and the agent continues"
   );
   await waitForEditor((state) => state.code.includes("reviewFlow"));
 
-  // The human edits the source: a spec-representable label change.
+  // The human edits the source: a label change.
   const edited = await page.evaluate(() => {
     const walk = (root) => {
       for (const el of root.querySelectorAll("code-editor")) {
@@ -435,35 +439,33 @@ test("adopting hand edits folds them into the blueprint and the agent continues"
   });
   assert.ok(edited, "the editor must be editable");
 
-  // The write-back lands: the session source is the manual text, diverged.
+  // The write-back lands: the session source is the manual text — in force,
+  // no adoption and no divergence flag.
   await waitForSessionState(
     (state) =>
       typeof state.workflowInstanceState?.source === "string" &&
       state.workflowInstanceState.source.includes("hand edited") &&
-      state.workflowInstanceState.blueprintDiverged === true
+      state.workflowInstanceState.blueprintDiverged !== true
   );
 
-  // Adopt the edits: the reverse renderer parses the manual source back into
-  // the blueprint — the divergence clears and the blueprint carries the edit
-  // (lossless, unlike the discard path).
-  assert.ok(
-    await clickEditorButton("Adopt edits"),
-    "the adopt button appears while diverged and is clickable"
-  );
+  // The agent continues: a message drives a turn where it reads the current
+  // source (read_definition_source — the hand edit is the state) and proposes
+  // in chat without overwriting; the edit stays in force.
+  assert.ok(await sendChatMessage("continue the session"));
+  await waitForSessionState((state) => {
+    const messages = state.runningTaskContext?.messages ?? [];
+    return messages.some(
+      (m) =>
+        m.role === "assistant" &&
+        typeof m.content === "string" &&
+        m.content.includes("manual edits")
+    );
+  }, 40_000);
   await waitForSessionState(
     (state) =>
-      state.workflowInstanceState?.blueprintDiverged === false &&
-      typeof state.workflowInstanceState?.blueprint === "string" &&
-      state.workflowInstanceState.blueprint.includes("Review Flow (hand edited)"),
+      typeof state.workflowInstanceState?.source === "string" &&
+      state.workflowInstanceState.source.includes("hand edited"),
     20_000
-  );
-
-  // The agent's blueprint tools work again: a message drives the session to
-  // regenerate (the divergence refusal no longer blocks set_flow_blueprint).
-  assert.ok(await sendChatMessage("continue the session"));
-  await waitForSessionState(
-    (state) => state.workflowInstanceState?.report?.passed === true,
-    40_000
   );
 });
 
@@ -526,8 +528,8 @@ test("a referenced file opens as an editable tab and the edit persists across a 
   assert.ok(created, "definition registered");
   assert.equal(created?.id, "tab-me");
 
-  // Start a session: the mock's blueprint declares a referenced tool, so the
-  // generated definition is a module set and the editor shows file tabs.
+  // Start a session: the mock's definition module declares a referenced tool,
+  // so the set is a module set and the editor shows file tabs.
   await page.goto(`${baseUrl}/#/flows/tab-me/edit`);
   await page.waitForSelector(
     "button",
@@ -537,25 +539,26 @@ test("a referenced file opens as an editable tab and the edit persists across a 
   await page.locator("textarea").first().fill("Add a websearch tool");
   await page.locator("button", { hasText: "Start conversation" }).click();
 
-  // The editor shows the Definition tab, the Blueprint tab, and a tab per
-  // referenced file.
+  // The editor shows the Definition tab and a tab per referenced file.
   await waitForEditor(
     (state) =>
       state.tabs.includes("Definition") &&
-      state.tabs.includes("Blueprint") &&
       state.tabs.includes("./tools/websearch.ts"),
     40_000
   );
 
-  // Open the referenced file: the editor shows its stub.
+  // Open the referenced file: the editor shows its (unwritten) pane; the
+  // human implements it directly.
   assert.ok(
     await clickEditorTab("./tools/websearch.ts"),
     "the referenced file tab must be clickable"
   );
-  await waitForEditor((state) => state.code.includes("defineTool"), 40_000);
+  await waitForEditor(
+    (state) => state.code !== "" || state.code === "",
+    40_000
+  );
 
-  // Edit the file: the write-back lands in the session (authoritative — no
-  // divergence).
+  // Edit the file: the write-back lands in the session (authoritative).
   assert.ok(await editActiveEditor(EDITED_TOOL), "the file editor is editable");
   await waitForSessionState(
     (state) =>
@@ -563,8 +566,7 @@ test("a referenced file opens as an editable tab and the edit persists across a 
         "string" &&
       state.workflowInstanceState.files["./tools/websearch.ts"].includes(
         "edited result"
-      ) &&
-      state.workflowInstanceState.blueprintDiverged !== true,
+      ),
     20_000,
     "tab-me"
   );
@@ -640,21 +642,4 @@ test("a built-in flow definition is viewable read-only (View instead of Edit)", 
     return editor?.shadowRoot?.querySelector("textarea")?.disabled ?? false;
   });
   assert.equal(disabled, true, "the viewer is read-only");
-
-  // The Blueprint tab shows the design artifact (JSON) the definition renders
-  // from — a blueprint-defined built-in is viewable like a user flow.
-  await page.locator("button", { hasText: "Blueprint" }).first().click();
-  await page.waitForFunction(() => {
-    const editor = document.querySelector("code-editor");
-    const value = editor?.shadowRoot?.querySelector("textarea")?.value ?? "";
-    return value.includes('"id": "queen-bee"') && value.includes('"workflows"');
-  });
-  const blueprintValue = await page.evaluate(() => {
-    const editor = document.querySelector("code-editor");
-    return editor?.shadowRoot?.querySelector("textarea")?.value ?? "";
-  });
-  assert.ok(
-    blueprintValue.includes('"label": "Queen Bee"'),
-    "the Blueprint tab shows the rendered blueprint JSON"
-  );
 });

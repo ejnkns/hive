@@ -45,8 +45,56 @@ import type {
 export type RefResolver = (ref: string) => Record<string, unknown>;
 
 // One referenced module of a definition, with the kind that determines the
-// export name the compile step and the module-set lint use.
-export type DefinitionRef = { kind: ModuleRefKind; ref: string };
+// export name the compile step and the module-set lint use. The compile step
+// and the loader consume only kind + ref; the lint also needs the export
+// name, the definition path of the reference (for findings), and the id
+// (tool/op refs — the harness pins the map's key).
+export type DefinitionReference =
+  | {
+      kind: "gate";
+      ref: string;
+      exportName: string;
+      // The definition path of the reference (e.g. "workflows[0].states[0].autoTransitions[1].gate").
+      path: string;
+    }
+  | {
+      kind: "tool";
+      ref: string;
+      exportName: string;
+      id: string;
+      path: string;
+    }
+  | {
+      kind: "operation";
+      ref: string;
+      exportName: string;
+      id: string;
+      path: string;
+    }
+  | {
+      kind: "transform";
+      ref: string;
+      exportName: string;
+      fields: string[];
+      path: string;
+    }
+  | {
+      kind: "extract";
+      ref: string;
+      exportName: string;
+      fields: string[];
+      workflowId: string;
+      taskId: string;
+      path: string;
+    }
+  | {
+      kind: "prompt";
+      ref: string;
+      exportName: string;
+      workflowId: string;
+      taskId: string;
+      path: string;
+    };
 
 // ─── ref naming (the reference-identity authority) ────────────────────
 
@@ -93,56 +141,124 @@ export function opNameOf(ref: string): string {
 // Every referenced module of a definition, deduplicated by kind + ref (a gate
 // file nested in and/or appears once; the same file referenced as a gate and
 // as a prompt is two refs). The loader pre-imports exactly these so the
-// compile step's resolveRef never misses.
-export function collectDefinitionRefs(form: FlowDefinition): DefinitionRef[] {
-  const refs: DefinitionRef[] = [];
+// compile step's resolveRef never misses; the module-set lint checks each
+// against its contract.
+export function collectDefinitionRefs(
+  form: FlowDefinition
+): DefinitionReference[] {
+  const refs: DefinitionReference[] = [];
   const seen = new Set<string>();
-  const add = (kind: ModuleRefKind, ref: string): void => {
-    const key = `${kind}:${ref}`;
+  const add = (ref: DefinitionReference): void => {
+    const key = `${ref.kind}:${ref.ref}`;
     if (seen.has(key)) return;
     seen.add(key);
-    refs.push({ kind, ref });
+    refs.push(ref);
   };
-  const walkGate = (gate: GateSpec): void => {
+  const walkGate = (gate: GateSpec, path: string): void => {
     if (gate.kind === "file") {
-      add("gate", gate.ref);
+      add({
+        kind: "gate",
+        ref: gate.ref,
+        exportName: refExportName("gate", { ref: gate.ref }),
+        path,
+      });
       return;
     }
     if (gate.kind === "not") {
-      walkGate(gate.gate);
+      walkGate(gate.gate, `${path}.gate`);
       return;
     }
     if (gate.kind === "and" || gate.kind === "or") {
-      for (const g of gate.gates) walkGate(g);
+      for (const [i, g] of gate.gates.entries()) {
+        walkGate(g, `${path}.gates[${i}]`);
+      }
     }
   };
 
-  for (const tool of form.tools ?? []) add("tool", tool.ref);
-  for (const op of form.operations ?? []) add("operation", op.ref);
-  for (const wf of form.workflows) {
-    for (const state of wf.states) {
-      for (const task of state.tasks ?? []) {
+  for (const [tIndex, tool] of (form.tools ?? []).entries()) {
+    add({
+      kind: "tool",
+      ref: tool.ref,
+      exportName: refExportName("tool", { id: tool.id, ref: tool.ref }),
+      id: tool.id,
+      path: `tools[${tIndex}]`,
+    });
+  }
+  for (const [oIndex, op] of (form.operations ?? []).entries()) {
+    add({
+      kind: "operation",
+      ref: op.ref,
+      exportName: refExportName("operation", { id: op.id, ref: op.ref }),
+      id: op.id,
+      path: `operations[${oIndex}]`,
+    });
+  }
+  for (const [wfIndex, wf] of form.workflows.entries()) {
+    const wfPath = `workflows[${wfIndex}]`;
+    for (const [sIndex, state] of wf.states.entries()) {
+      const sPath = `${wfPath}.states[${sIndex}]`;
+      for (const [tIndex, task] of (state.tasks ?? []).entries()) {
+        const tPath = `${sPath}.tasks[${tIndex}]`;
         for (const op of task.operations ?? []) {
-          if (typeof op !== "string") add("operation", op.ref);
+          if (typeof op === "string") continue;
+          const id = opNameOf(op.ref);
+          add({
+            kind: "operation",
+            ref: op.ref,
+            exportName: refExportName("operation", { id, ref: op.ref }),
+            id,
+            path: `${tPath}.operations`,
+          });
         }
         if (task.systemPromptRef !== undefined) {
-          add("prompt", task.systemPromptRef);
+          add({
+            kind: "prompt",
+            ref: task.systemPromptRef,
+            exportName: refExportName("prompt", { ref: task.systemPromptRef }),
+            workflowId: wf.id,
+            taskId: task.id,
+            path: `${tPath}.systemPromptRef`,
+          });
         }
-        if (task.extract !== undefined) add("extract", task.extract.ref);
+        if (task.extract !== undefined) {
+          add({
+            kind: "extract",
+            ref: task.extract.ref,
+            exportName: refExportName("extract", { ref: task.extract.ref }),
+            fields: task.extract.fields,
+            workflowId: wf.id,
+            taskId: task.id,
+            path: `${tPath}.extract`,
+          });
+        }
       }
-      for (const transition of state.autoTransitions ?? []) {
-        walkGate(transition.gate);
+      for (const [tIndex, transition] of (
+        state.autoTransitions ?? []
+      ).entries()) {
+        walkGate(transition.gate, `${sPath}.autoTransitions[${tIndex}].gate`);
       }
-      for (const action of state.actions ?? []) {
-        if (action.gate !== undefined) walkGate(action.gate);
+      for (const [aIndex, action] of (state.actions ?? []).entries()) {
+        if (action.gate !== undefined) {
+          walkGate(action.gate, `${sPath}.actions[${aIndex}].gate`);
+        }
       }
     }
   }
-  for (const action of form.actions ?? []) {
-    if (action.gate !== undefined) walkGate(action.gate);
+  for (const [aIndex, action] of (form.actions ?? []).entries()) {
+    if (action.gate !== undefined) {
+      walkGate(action.gate, `actions[${aIndex}].gate`);
+    }
   }
-  for (const edge of form.edges ?? []) {
-    if (edge.transform !== undefined) add("transform", edge.transform.ref);
+  for (const [eIndex, edge] of (form.edges ?? []).entries()) {
+    if (edge.transform !== undefined) {
+      add({
+        kind: "transform",
+        ref: edge.transform.ref,
+        exportName: refExportName("transform", { ref: edge.transform.ref }),
+        fields: edge.transform.fields,
+        path: `edges[${eIndex}].transform`,
+      });
+    }
   }
   return refs;
 }
@@ -342,7 +458,7 @@ function compileTask(
 
   if (task.patch !== undefined) {
     const patchName = `${workflowId}_${task.id}_patch`;
-    ops[patchName] = buildPatchOp(workflowId, task.id, task.patch);
+    ops[patchName] = buildPatchOp(task.patch);
     operations.push(patchName);
   }
   if (task.extract !== undefined) {
@@ -635,11 +751,7 @@ export function buildGate(
 // produce the declared output), and patches instance state. The op throws so
 // taskError gates route the instance to a retry/needs-review state instead of
 // silently recording an empty write as success.
-function buildPatchOp(
-  workflowId: string,
-  taskId: string,
-  patch: Record<string, ValueSpec>
-): OperationFn {
+function buildPatchOp(patch: Record<string, ValueSpec>): OperationFn {
   const sourcedFields = Object.entries(patch).filter(
     (entry): entry is [string, Extract<ValueSpec, { kind: "taskOutput" }>] =>
       entry[1].kind === "taskOutput"

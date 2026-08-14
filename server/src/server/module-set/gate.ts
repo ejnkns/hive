@@ -1,21 +1,33 @@
 /** @private — the module-set gate: the authoring-loop → runtime seam for a
- * blueprint with file references. Orchestrates validate (caller) → render
- * (caller) → materialize → lint → load → typecheck → schema-consistency, and
- * returns the current file set so the caller can store it on the definition
- * record. */
+ * definition with file references.
+ *
+ * Two entry points share the machinery:
+ *  - `runModuleSetGate` (legacy): the two-artifact blueprint → rendered module
+ *    set path, kept for the renderer corpus and preset boot until deletion.
+ *  - `runDefinitionModuleGate` (the definition world): a pure-data definition
+ *    module + its referenced files. Orchestrates validate (the definition
+ *    validator, in the caller) → lint → import policy → typecheck →
+ *    declared-writes verification → load (import → validate → compile), and
+ *    returns the compiled flow plus the current file set. */
 
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
+import { collectDefinitionRefs } from "workflow-engine/compile-flow-definition";
+import type { FlowDefinition } from "workflow-engine/workflow-types";
 import type { FlowBlueprint } from "../flow-blueprint.ts";
+import { collectModuleReferences } from "../flow-blueprint.ts";
 import {
+  loadDefinitionFromSource,
   loadModuleSetDefinition,
   materializeModuleSet,
+  writeModuleSetDir,
 } from "../flow-definitions.ts";
 import type { RenderedModuleSet } from "../render-flow-definition.ts";
 import { checkDefinitionSources } from "../schema-consistency.ts";
 import { typecheckModuleSet } from "../typecheck-definition.ts";
 import { lintImportPolicy } from "./import-policy.ts";
 import { lintModuleSet } from "./lint.ts";
+import { verifyDeclaredWrites } from "./verify-writes.ts";
 
 export type ModuleGateResult = {
   // The materialized module-set directory.
@@ -39,7 +51,7 @@ export async function runModuleSetGate(
 
   // 1. Per-reference structural lint (missing file, escaping path, export,
   //    contract) — the file set's own gate, before anything loads.
-  const findings = lintModuleSet(blueprint, dir);
+  const findings = lintModuleSet(collectModuleReferences(blueprint), dir);
   if (findings.length > 0) {
     return {
       dir,
@@ -51,7 +63,7 @@ export async function runModuleSetGate(
 
   // 1b. Import policy: engine primitives, the flow's own files, node:
   //     builtins, and declared dependencies only.
-  const importFindings = lintImportPolicy(blueprint, dir);
+  const importFindings = lintImportPolicy(blueprint.dependencies ?? [], dir);
   if (importFindings.length > 0) {
     return {
       dir,
@@ -109,6 +121,113 @@ export async function runModuleSetGate(
     flow,
   };
 }
+
+// The definition-world gate: a definition module + referenced files → the
+// compiled flow, or the stage findings. The definition validator (the
+// declared-parts checks) runs in the caller; this gate covers the referenced
+// modules — the same lint/import-policy/typecheck machinery, the
+// declared-writes verification (declarations can lie), and the load (import →
+// validate → compile → the runtime surface).
+export async function runDefinitionModuleGate(
+  runtimeSlug: string,
+  definition: FlowDefinition,
+  source: string,
+  refFiles: Record<string, string>
+): Promise<{
+  dir: string;
+  files: Record<string, string>;
+  errors: string[];
+  warnings: string[];
+  flow?: Awaited<ReturnType<typeof loadDefinitionFromSource>>["flow"];
+}> {
+  const dir = writeModuleSetDir(runtimeSlug, {
+    entry: source,
+    files: refFiles,
+  });
+
+  // 1. Per-reference structural lint (missing file, escaping path, export,
+  //    contract).
+  const findings = lintModuleSet(collectDefinitionRefs(definition), dir);
+  if (findings.length > 0) {
+    return {
+      dir,
+      files: readModuleSetFiles(dir),
+      errors: findings.map((f) => `module ${f.ref}: ${f.message}`),
+      warnings: [],
+    };
+  }
+
+  // 1b. Import policy.
+  const importFindings = lintImportPolicy(definition.dependencies ?? [], dir);
+  if (importFindings.length > 0) {
+    return {
+      dir,
+      files: readModuleSetFiles(dir),
+      errors: importFindings.map((f) => `import ${f.file}: ${f.message}`),
+      warnings: [],
+    };
+  }
+
+  // 2. Whole-set typecheck (the definition module + every referenced file).
+  const typeIssues = typecheckModuleSet(dir, runtimeSlug);
+  if (typeIssues.length > 0) {
+    return {
+      dir,
+      files: readModuleSetFiles(dir),
+      errors: typeIssues.map((i) => {
+        const where = i.file
+          ? `${i.file}:${i.line}:${i.column}`
+          : `${i.line}:${i.column}`;
+        return `typecheck ${where} — ${i.message}`;
+      }),
+      warnings: [],
+    };
+  }
+
+  // 3. Declared tool/op writes vs the actual executor bodies (declarations
+  //    can lie — the read↔write invariant counts only what really patches).
+  const writeFindings = verifyDeclaredWrites(definition, refFiles);
+  if (writeFindings.length > 0) {
+    return {
+      dir,
+      files: readModuleSetFiles(dir),
+      errors: writeFindings.map((f) => `writes ${f.ref}: ${f.message}`),
+      warnings: [],
+    };
+  }
+
+  // 4. Load: import the module, validate, compile with the ref resolver —
+  //    the runtime surface.
+  try {
+    const loaded = await loadDefinitionFromSource(
+      runtimeSlug,
+      source,
+      undefined,
+      readModuleSetFiles(dir)
+    );
+    return {
+      dir,
+      files: readModuleSetFiles(dir),
+      errors: [],
+      warnings: [],
+      flow: loaded.flow,
+    };
+  } catch (err) {
+    return {
+      dir,
+      files: readModuleSetFiles(dir),
+      errors: [
+        `The definition failed to load: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      ],
+      warnings: [],
+    };
+  }
+}
+
+// The reference inventory of a data definition (the engine's collect walks
+// the data form; the lint consumes the same shape as the blueprint's).
 
 // The current referenced files of a materialized module-set directory (the
 // entry's relative paths as declared, e.g. "./gates/approved.ts"; the lint's

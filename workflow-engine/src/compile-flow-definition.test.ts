@@ -230,13 +230,28 @@ function operationRunners(compiled: CompiledFlowDefinition) {
 // ─── compile shape ────────────────────────────────────────────────────
 
 describe("compileFlowDefinition", () => {
-  it("collects every referenced module (kind + ref, deduplicated)", () => {
+  it("collects every referenced module (kind + ref + export name, deduplicated)", () => {
     const refs = collectDefinitionRefs(researchFlow);
-    assert.deepEqual(refs, [
-      { kind: "tool", ref: "./tools/websearch.ts" },
-      { kind: "extract", ref: "./extractors/parse.ts" },
-      { kind: "gate", ref: "./gates/approved.ts" },
-    ]);
+    assert.deepEqual(
+      refs.map(({ kind, ref, exportName }) => ({ kind, ref, exportName })),
+      [
+        {
+          kind: "tool",
+          ref: "./tools/websearch.ts",
+          exportName: "websearchTools",
+        },
+        {
+          kind: "extract",
+          ref: "./extractors/parse.ts",
+          exportName: "parse",
+        },
+        {
+          kind: "gate",
+          ref: "./gates/approved.ts",
+          exportName: "approved",
+        },
+      ]
+    );
   });
 
   it("compiles a pure-data definition into the runtime projection", () => {
@@ -365,7 +380,7 @@ describe("compileFlowDefinition", () => {
       recordTask?.operations?.includes("items_record_patch"),
       "the patch op is appended to the task's operations"
     );
-    const patchOp = compiled.operations?.["items_record_patch"];
+    const patchOp = compiled.operations?.items_record_patch;
     assert.ok(patchOp, "the patch op is registered in the flow ops map");
 
     const ctx = {

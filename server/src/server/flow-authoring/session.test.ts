@@ -1,9 +1,10 @@
 // The flow-authoring session: a single interactive drafting state whose ai-chat
-// agent maintains the blueprint via set_flow_blueprint and runs the generation gate via
-// the generate_definition TOOL — so gate failures return to the agent in the
-// same conversation (nothing is lost) and the session never ends on its own.
-// The engine's model caller is stubbed (the runner seam); the tools and the
-// gate run for real, proving the lifecycle without a provider call.
+// agent maintains the definition module via set_flow_definition and runs the
+// full gate via the validate_definition TOOL — so gate failures return to the
+// agent in the same conversation (nothing is lost) and the session never ends
+// on its own. The engine's model caller is stubbed (the runner seam); the
+// tools and the gate run for real, proving the lifecycle without a provider
+// call.
 
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -19,9 +20,7 @@ import {
 } from "workflow-engine/runners";
 import type { ToolCall } from "workflow-engine/runners/tool-types";
 import type { TaskRunnerContext } from "workflow-engine/task-runner";
-import { STRUCTURED_INTAKE_EXEMPLAR } from "../flow-authoring.ts";
-import type { FlowBlueprint } from "../flow-blueprint.ts";
-import { validateFlowBlueprint } from "../flow-blueprint.ts";
+import { parseDefinition } from "../flow-definition.ts";
 import {
   getRegisteredFlowDefinition,
   loadUserDefinitionsFromDisk,
@@ -29,19 +28,18 @@ import {
   runtimeDefinitionsDir,
   setDefinitionsBasePathForTest,
 } from "../flow-definitions.ts";
-import { renderFlowDefinition } from "../render-flow-definition.ts";
 import {
   type AuthoringItemState,
-  adoptAuthoringEdits,
-  adoptPatch,
   authoringSessionFlow,
   authoringTools,
 } from "./session.ts";
 import { STARTER_SKELETON } from "./session-prompt.ts";
 
-// A minimal blueprint with one referenced tool, used to drive the file-editing
+// A definition module with one referenced tool, used to drive the file-editing
 // loop in-conversation.
-const FILE_LOOP_BLUEPRINT = {
+const FILE_LOOP_MODULE = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
   id: "fileLoopFlow",
   label: "File Loop Flow",
   configSchema: [],
@@ -53,7 +51,7 @@ const FILE_LOOP_BLUEPRINT = {
       label: "Items",
       instance: { title: "title" },
       instanceState: [{ field: "title", type: "string" }],
-      initialState: "inbox",
+      initial: "inbox",
       terminalStates: ["done"],
       states: [
         {
@@ -87,21 +85,81 @@ const FILE_LOOP_BLUEPRINT = {
       variant: "primary",
       createInstance: {
         workflowId: "items",
-        fields: [
-          {
-            key: "title",
-            label: "Title",
-            type: "string",
-            required: true,
-          },
-        ],
+        fields: [{ key: "title", label: "Title", type: "string", required: true }],
       },
     },
   ],
 };
+`;
+
+// A definition module with a referenced tool, a referenced gate, and an
+// extractor — the module-set path end to end.
+const REFS_MODULE = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "refSessionFlow",
+  label: "Ref Session Flow",
+  configSchema: [],
+  tools: [{ id: "websearch", ref: "./tools/websearch.ts" }],
+  workflows: [
+    {
+      id: "items",
+      label: "Items",
+      instance: { title: "title" },
+      instanceState: [
+        { field: "title", type: "string" },
+        { field: "verdict", type: "string" },
+      ],
+      initial: "inbox",
+      terminalStates: ["done"],
+      states: [
+        {
+          id: "inbox",
+          label: "Inbox",
+          category: "initial",
+          tasks: [
+            {
+              id: "classify",
+              label: "Classify",
+              role: "ai-chat",
+              systemPrompt: "Classify, then call the completion tool.",
+              tools: ["websearch"],
+              completionTool: "complete_task",
+              startOnUserInput: true,
+            },
+            {
+              id: "extractVerdict",
+              label: "Extract verdict",
+              role: "operation",
+              extract: { ref: "./extractors/parse.ts", fields: ["verdict"] },
+            },
+          ],
+          autoTransitions: [
+            { to: "done", gate: { kind: "file", ref: "./gates/approved.ts" } },
+            { to: "inbox", gate: { kind: "always" } },
+          ],
+        },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  edges: [],
+  actions: [
+    {
+      id: "add_item",
+      label: "Add item",
+      variant: "primary",
+      createInstance: {
+        workflowId: "items",
+        fields: [{ key: "title", label: "Title", type: "string", required: true }],
+      },
+    },
+  ],
+};
+`;
 
 // The implemented tool (the "implement the stub" step) — exports the exact
-// name the entry imports.
+// name the definition's tool ref expects.
 const LOOP_TOOL_IMPLEMENTATION = `import { defineTool } from "workflow-engine/runners";
 
 export const websearchTools = [
@@ -119,7 +177,7 @@ export const websearchTools = [
 ];
 `;
 
-// A tool file importing a package the blueprint does not declare.
+// A tool file importing a package the definition does not declare.
 const TOOL_IMPORTING_LRU = `import { LRUCache } from "lru-cache";
 import { defineTool } from "workflow-engine/runners";
 
@@ -135,27 +193,26 @@ export const websearchTools = [
 ];
 `;
 
-// A gate-clean definition source the save_definition tool registers.
-const saveToolSource = `import { defineWorkflow } from "workflow-engine/workflow-types";
+// A gate-clean data definition module the save_definition tool registers.
+const SAVE_MODULE = `import type { FlowDefinition } from "workflow-engine/workflow-types";
 
-const wf = defineWorkflow({
-  id: "review",
-  label: "Review",
-  taskOutputs: {} as Record<string, never>,
-  workflowInstanceState: {} as Record<string, unknown>,
-  states: [
-    { id: "new", label: "New", category: "initial" },
-    { id: "done", label: "Done", category: "terminal" },
-  ],
-  initial: "new",
-  terminalStates: ["done"],
-});
-
-export const flow = {
-  id: "review-flow",
+export const flow: FlowDefinition = {
+  id: "reviewFlow",
   label: "Review Flow",
   configSchema: [],
-  workflows: [wf],
+  workflows: [
+    {
+      id: "review",
+      label: "Review",
+      instanceState: [],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
+        { id: "new", label: "New", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
   edges: [],
 };
 `;
@@ -223,44 +280,28 @@ function buildRuntime(model: ReturnType<typeof scriptedModel>) {
   );
 }
 
-function setSpecCall(blueprint: unknown): ToolCall {
+function setDefinitionCall(source: string): ToolCall {
   return {
     id: "c1",
-    name: "set_flow_blueprint",
-    arguments: JSON.stringify({ blueprint: JSON.stringify(blueprint) }),
+    name: "set_flow_definition",
+    arguments: JSON.stringify({ source }),
   };
 }
 
-function genCall(blueprint: unknown): ToolCall {
+function validateCall(): ToolCall {
   return {
     id: "c2",
-    name: "generate_definition",
-    arguments: JSON.stringify({ blueprint: JSON.stringify(blueprint) }),
+    name: "validate_definition",
+    arguments: "{}",
   };
 }
 
-// A blueprint that fails validation (a gate referencing an unknown task).
-const BAD_SPEC = {
-  ...STRUCTURED_INTAKE_EXEMPLAR,
-  workflows: [
-    {
-      ...STRUCTURED_INTAKE_EXEMPLAR.workflows[0],
-      states: STRUCTURED_INTAKE_EXEMPLAR.workflows[0].states.map((s) =>
-        s.id === "inbox"
-          ? {
-              ...s,
-              autoTransitions: [
-                {
-                  to: "needs_review",
-                  gate: { kind: "taskSuccess", task: "nonexistent" },
-                },
-              ],
-            }
-          : s
-      ),
-    },
-  ],
-};
+// A definition module that fails validation (a transition to an unknown
+// state).
+const BAD_MODULE = REFS_MODULE.replace(
+  '{ to: "done", gate: { kind: "file", ref: "./gates/approved.ts" } },',
+  '{ to: "missing", gate: { kind: "file", ref: "./gates/approved.ts" } },'
+);
 
 async function settle(): Promise<void> {
   // Let the engine's async chains (model turns, tool execution, the gate) run.
@@ -281,10 +322,10 @@ async function runConversation(script: Array<ToolCall | string>) {
 }
 
 describe("flow-authoring session", () => {
-  it("converges on a blueprint and generates gate-clean source in the same conversation", async () => {
+  it("converges on a definition module and validates gate-clean source in the same conversation", async () => {
     const controller = await runConversation([
-      setSpecCall(STRUCTURED_INTAKE_EXEMPLAR),
-      genCall(STRUCTURED_INTAKE_EXEMPLAR),
+      setDefinitionCall(REFS_MODULE),
+      validateCall(),
       "Done!",
     ]);
 
@@ -297,29 +338,29 @@ describe("flow-authoring session", () => {
     assert.equal(
       state.history.filter((h) => h.type === "state_transition").length,
       0,
-      "generation must not transition the instance"
+      "validation must not transition the instance"
     );
     const itemState = state.workflowInstanceState as AuthoringItemState;
     assert.ok(
       typeof itemState.source === "string" &&
-        itemState.source.includes("defineWorkflow"),
-      "the gate-passed source must be written into instance state"
+        itemState.source.includes("FlowDefinition"),
+      "the validated source must be written into instance state"
     );
     assert.equal(itemState.report?.passed, true);
     assert.equal(
       itemState.suggestedName,
-      "Item Intake",
-      "the blueprint's label must be suggested as the definition name"
+      "Ref Session Flow",
+      "the definition's label must be suggested as the definition name"
     );
     assert.deepEqual(itemState.gateErrors ?? [], []);
   });
 
-  it("returns gate failures to the agent in-conversation, which fixes and regenerates", async () => {
+  it("returns gate failures to the agent in-conversation, which fixes and revalidates", async () => {
     const controller = await runConversation([
-      setSpecCall(BAD_SPEC),
-      genCall(BAD_SPEC),
-      setSpecCall(STRUCTURED_INTAKE_EXEMPLAR),
-      genCall(STRUCTURED_INTAKE_EXEMPLAR),
+      setDefinitionCall(BAD_MODULE),
+      validateCall(),
+      setDefinitionCall(REFS_MODULE),
+      validateCall(),
       "Done!",
     ]);
 
@@ -338,36 +379,23 @@ describe("flow-authoring session", () => {
     assert.equal(itemState.report?.passed, true);
     assert.ok(
       typeof itemState.source === "string" && itemState.source !== "",
-      "the corrected blueprint must produce a source"
+      "the corrected module must produce a source"
     );
     assert.deepEqual(itemState.gateErrors ?? [], []);
   });
 
-  it("set_flow_blueprint rejects invalid JSON and reports validation findings", async () => {
+  it("set_flow_definition reports validation findings and stores the module", async () => {
     const tool = authoringTools.find(
-      (t) => t.definition.function.name === "set_flow_blueprint"
+      (t) => t.definition.function.name === "set_flow_definition"
     );
-    assert.ok(tool, "set_flow_blueprint tool must be defined");
-
-    const badJson = await tool.executor(
-      {
-        id: "x1",
-        name: "set_flow_blueprint",
-        arguments: JSON.stringify({ blueprint: "{not json" }),
-      },
-      {} as never
-    );
-    assert.equal(badJson.isError, true);
-    assert.match(badJson.content, /not valid JSON/);
+    assert.ok(tool, "set_flow_definition tool must be defined");
 
     const captured: { patched?: Partial<AuthoringItemState> } = {};
-    const findings = await tool.executor(
+    const result = await tool.executor(
       {
-        id: "x2",
-        name: "set_flow_blueprint",
-        arguments: JSON.stringify({
-          blueprint: JSON.stringify({ id: "bad-id!", workflows: [] }),
-        }),
+        id: "x1",
+        name: "set_flow_definition",
+        arguments: JSON.stringify({ source: BAD_MODULE }),
       },
       {
         patchWorkflowInstanceState: (patch: Partial<AuthoringItemState>) => {
@@ -375,54 +403,58 @@ describe("flow-authoring session", () => {
         },
       } as never
     );
-    assert.equal(findings.isError, false);
-    assert.match(findings.content, /finding/);
+    assert.equal(result.isError, false);
+    assert.match(result.content, /finding/);
     assert.ok(
       (captured.patched?.previewErrors?.length ?? 0) > 0,
       "validation findings must land in previewErrors"
     );
+    assert.equal(captured.patched?.source, BAD_MODULE);
+    // The parsed definition rides along for the editor's Definition tab.
+    assert.ok(captured.patched?.parsedDefinition !== undefined);
   });
 
-  it("generate_definition writes the source on success and gateErrors on failure", async () => {
+  it("validate_definition writes the source on success and gateErrors on failure", async () => {
     const tool = authoringTools.find(
-      (t) => t.definition.function.name === "generate_definition"
+      (t) => t.definition.function.name === "validate_definition"
     );
-    assert.ok(tool, "generate_definition tool must be defined");
+    assert.ok(tool, "validate_definition tool must be defined");
 
-    // Success: the exemplar passes the full gate.
+    // Success: the module passes the full gate.
     const okCaptured: { patched?: Partial<AuthoringItemState> } = {};
     const ok = await tool.executor(
+      { id: "g1", name: "validate_definition", arguments: "{}" },
       {
-        id: "g1",
-        name: "generate_definition",
-        arguments: JSON.stringify({
-          blueprint: JSON.stringify(STRUCTURED_INTAKE_EXEMPLAR),
+        workflowInstanceState: () => ({
+          source: REFS_MODULE,
+          files: {
+            "./tools/websearch.ts": LOOP_TOOL_IMPLEMENTATION,
+            "./gates/approved.ts":
+              'import type { GateContract } from "workflow-engine/workflow-types";\nexport const approved: GateContract = () => true;\n',
+            "./extractors/parse.ts":
+              'import type { OutputExtractor } from "workflow-engine/workflow-types";\nexport const parse: OutputExtractor = () => ({ verdict: "x" });\n',
+          },
         }),
-      },
-      {
         patchWorkflowInstanceState: (patch: Partial<AuthoringItemState>) => {
           okCaptured.patched = patch;
         },
       } as never
     );
     assert.equal(ok.isError, false);
-    assert.match(ok.content, /generated successfully/);
+    assert.match(ok.content, /validated and compiled successfully/);
     assert.ok(
       typeof okCaptured.patched?.source === "string" &&
-        okCaptured.patched.source.includes("defineWorkflow")
+        okCaptured.patched.source.includes("FlowDefinition")
     );
     assert.equal(okCaptured.patched?.report?.passed, true);
     assert.deepEqual(okCaptured.patched?.gateErrors ?? [], []);
 
-    // Failure: a blueprint that fails validation records the findings.
+    // Failure: a module that fails validation records the findings.
     const badCaptured: { patched?: Partial<AuthoringItemState> } = {};
     const bad = await tool.executor(
+      { id: "g2", name: "validate_definition", arguments: "{}" },
       {
-        id: "g2",
-        name: "generate_definition",
-        arguments: JSON.stringify({ blueprint: JSON.stringify(BAD_SPEC) }),
-      },
-      {
+        workflowInstanceState: () => ({ source: BAD_MODULE }),
         patchWorkflowInstanceState: (patch: Partial<AuthoringItemState>) => {
           badCaptured.patched = patch;
         },
@@ -435,7 +467,6 @@ describe("flow-authoring session", () => {
       (badCaptured.patched?.gateErrors?.length ?? 0) > 0,
       "gate failures must record gateErrors"
     );
-    assert.equal(badCaptured.patched?.source, undefined);
   });
 
   it("read_authoring_knowledge serves the reference modules on demand", async () => {
@@ -472,8 +503,11 @@ describe("flow-authoring session", () => {
     assert.match(unknown.content, /Unknown topic/);
   });
 
-  it("the starter skeleton is a valid blueprint the agent begins from", () => {
-    assert.deepEqual(validateFlowBlueprint(JSON.parse(STARTER_SKELETON)), []);
+  it("the starter skeleton is a valid definition module the agent begins from", () => {
+    const { definition, findings } = parseDefinition(STARTER_SKELETON);
+    assert.deepEqual(findings, []);
+    assert.equal(definition.id, "myFlow");
+    assert.equal(definition.workflows.length, 1);
   });
 
   it("save_definition registers the generated definition and records the save in instance state", async () => {
@@ -487,7 +521,7 @@ describe("flow-authoring session", () => {
       assert.ok(tool, "save_definition tool must be defined");
 
       let state: AuthoringItemState = {
-        source: saveToolSource,
+        source: SAVE_MODULE,
         suggestedName: "Review Flow",
       };
       const result = await tool.executor(
@@ -522,7 +556,7 @@ describe("flow-authoring session", () => {
     }
   });
 
-  it("save_definition rejects a session with no generated source", async () => {
+  it("save_definition rejects a session with no source", async () => {
     const tool = authoringTools.find(
       (t) => t.definition.function.name === "save_definition"
     );
@@ -537,108 +571,6 @@ describe("flow-authoring session", () => {
     assert.match(result.content, /Nothing to save/);
   });
 
-  it("adoptAuthoringEdits parses hand edits back into the blueprint and clears the divergence", () => {
-    const source = renderFlowDefinition(STRUCTURED_INTAKE_EXEMPLAR).entry;
-    // A spec-representable hand edit: a changed flow label.
-    const handEdited = source.replace(
-      'label: "Item Intake",',
-      'label: "Item Intake (renamed by hand)",'
-    );
-    assert.notEqual(handEdited, source, "the hand edit must apply");
-
-    const result = adoptAuthoringEdits({
-      source: handEdited,
-      blueprintDiverged: true,
-    });
-    assert.deepEqual(result.findings, []);
-    assert.deepEqual(result.previewErrors, []);
-    const adopted = JSON.parse(result.blueprint) as FlowBlueprint;
-    assert.equal(adopted.label, "Item Intake (renamed by hand)");
-    assert.equal(adopted.id, "intake");
-    assert.equal(adopted.workflows.length, 1);
-
-    // The patch clears the divergence and re-renders the preview.
-    const patch = adoptPatch(result);
-    assert.equal(patch.blueprintDiverged, false);
-    assert.ok(
-      patch.previewSource?.includes("Item Intake (renamed by hand)"),
-      "the preview must re-render the adopted label"
-    );
-    assert.equal(patch.blueprint, result.blueprint);
-  });
-
-  it("adoptAuthoringEdits surfaces not-spec-representable hand edits as findings but still recovers the blueprint", () => {
-    const source = renderFlowDefinition(STRUCTURED_INTAKE_EXEMPLAR).entry;
-    // A hand-written gate body (a !== comparison the renderer never emits).
-    const handEdited = source.replace(
-      'gate: (ctx) => ctx.taskOutputs.record?.status === "success",',
-      'gate: (ctx) => ctx.taskOutputs.record?.status !== "success",'
-    );
-    assert.notEqual(handEdited, source);
-
-    const result = adoptAuthoringEdits({
-      source: handEdited,
-      blueprintDiverged: true,
-    });
-    assert.ok(
-      result.findings.some(
-        (f) => f.includes("gate") && f.includes("not spec-representable")
-      ),
-      `expected a gate finding, got ${JSON.stringify(result.findings)}`
-    );
-    // The representable rest is still adopted.
-    const adopted = JSON.parse(result.blueprint) as FlowBlueprint;
-    assert.equal(adopted.id, "intake");
-    assert.equal(adopted.workflows[0]?.states.length, 4);
-    assert.equal(adoptPatch(result).blueprintDiverged, false);
-  });
-
-  it("adoptAuthoringEdits rejects a session with no generated source", () => {
-    assert.throws(() => adoptAuthoringEdits({}), /Nothing to adopt/);
-  });
-
-  it("set_flow_blueprint and generate_definition refuse while the source is diverged", async () => {
-    const divergedCtx = {
-      workflowInstanceState: () => ({
-        source: "export const flow = {}; // hand edit",
-        blueprintDiverged: true,
-      }),
-      patchWorkflowInstanceState: () => {},
-    } as never;
-    for (const name of ["set_flow_blueprint", "generate_definition"]) {
-      const tool = authoringTools.find(
-        (t) => t.definition.function.name === name
-      );
-      assert.ok(tool, `${name} tool must be defined`);
-      const result = await tool.executor(
-        { id: `d-${name}`, name, arguments: "{}" },
-        divergedCtx
-      );
-      assert.equal(result.isError, true, `${name} must refuse while diverged`);
-      assert.match(result.content, /manual edits/, `${name} gate message`);
-    }
-  });
-
-  it("read_definition_source falls back to the rendered entry after a failed generate", async () => {
-    const tool = authoringTools.find(
-      (t) => t.definition.function.name === "read_definition_source"
-    );
-    assert.ok(tool, "read_definition_source tool must be defined");
-
-    // A gate failure leaves the rendered entry in previewSource (source is
-    // only set on success) — the agent must still be able to read it.
-    const result = await tool.executor(
-      { id: "r0", name: "read_definition_source", arguments: "{}" },
-      {
-        workflowInstanceState: () => ({
-          previewSource: "export const flow = {}; // line 1",
-        }),
-      } as never
-    );
-    assert.equal(result.isError, false);
-    assert.match(result.content, /line 1/);
-  });
-
   it("read_definition_source returns the current source, including manual edits", async () => {
     const tool = authoringTools.find(
       (t) => t.definition.function.name === "read_definition_source"
@@ -650,7 +582,6 @@ describe("flow-authoring session", () => {
       {
         workflowInstanceState: () => ({
           source: "export const flow = {}; // hand edit",
-          blueprintDiverged: true,
         }),
       } as never
     );
@@ -664,90 +595,44 @@ describe("flow-authoring session", () => {
       } as never
     );
     assert.equal(none.isError, false);
-    assert.match(none.content, /No definition source yet/);
+    assert.match(none.content, /No definition module yet/);
   });
 
-  it("a blueprint with file references generates and saves a module set (blueprint + file set on the record)", async () => {
+  it("a definition module with file references validates and saves a module set (file set on the record)", async () => {
     const defsDir = mkdtempSync(join(tmpdir(), "hive-author-refs-"));
     setDefinitionsBasePathForTest(defsDir);
     resetFlowDefinitionsForTest();
     try {
-      const blueprint = {
-        id: "refSessionFlow",
-        label: "Ref Session Flow",
-        configSchema: [],
-        tools: [{ id: "websearch", ref: "./tools/websearch.ts" }],
-        workflows: [
-          {
-            id: "items",
-            label: "Items",
-            instance: { title: "title" },
-            instanceState: [
-              { field: "title", type: "string" },
-              { field: "verdict", type: "string" },
-            ],
-            initialState: "inbox",
-            terminalStates: ["done"],
-            states: [
-              {
-                id: "inbox",
-                label: "Inbox",
-                category: "initial",
-                tasks: [
-                  {
-                    id: "classify",
-                    label: "Classify",
-                    role: "ai-chat",
-                    systemPrompt: "Classify, then call the completion tool.",
-                    tools: ["websearch"],
-                    completionTool: "complete_task",
-                    startOnUserInput: true,
-                  },
-                  {
-                    id: "extractVerdict",
-                    label: "Extract verdict",
-                    role: "operation",
-                    extract: {
-                      ref: "./extractors/parse.ts",
-                      fields: ["verdict"],
-                    },
-                  },
-                ],
-                autoTransitions: [
-                  {
-                    to: "done",
-                    gate: { kind: "file", ref: "./gates/approved.ts" },
-                  },
-                  { to: "inbox", gate: { kind: "always" } },
-                ],
-              },
-              { id: "done", label: "Done", category: "terminal" },
-            ],
-          },
-        ],
-        edges: [],
-        actions: [
-          {
-            id: "add_item",
-            label: "Add item",
-            variant: "primary",
-            createInstance: {
-              workflowId: "items",
-              fields: [
-                {
-                  key: "title",
-                  label: "Title",
-                  type: "string",
-                  required: true,
-                },
-              ],
-            },
-          },
-        ],
-      };
       const controller = await runConversation([
-        setSpecCall(blueprint),
-        genCall(blueprint),
+        setDefinitionCall(REFS_MODULE),
+        validateCall(),
+        {
+          id: "w-gate",
+          name: "write_definition_file",
+          arguments: JSON.stringify({
+            path: "./gates/approved.ts",
+            content:
+              'import type { GateContract } from "workflow-engine/workflow-types";\nexport const approved: GateContract = () => true;\n',
+          }),
+        },
+        {
+          id: "w-tool",
+          name: "write_definition_file",
+          arguments: JSON.stringify({
+            path: "./tools/websearch.ts",
+            content: LOOP_TOOL_IMPLEMENTATION,
+          }),
+        },
+        {
+          id: "w-extract",
+          name: "write_definition_file",
+          arguments: JSON.stringify({
+            path: "./extractors/parse.ts",
+            content:
+              'import type { OutputExtractor } from "workflow-engine/workflow-types";\nexport const parse: OutputExtractor = () => ({ verdict: "x" });\n',
+          }),
+        },
+        validateCall(),
         { id: "s-ref", name: "save_definition", arguments: "{}" },
         "Done!",
       ]);
@@ -756,10 +641,8 @@ describe("flow-authoring session", () => {
       assert.equal(state.report?.passed, true);
       assert.ok(
         typeof state.source === "string" &&
-          state.source.includes(
-            'import { approved } from "./gates/approved.ts";'
-          ),
-        "the stored source is the module-set entry wiring the references"
+          state.source.includes("FlowDefinition"),
+        "the stored source is the definition module"
       );
       assert.ok(
         state.files?.["./tools/websearch.ts"]?.includes("defineTool"),
@@ -769,7 +652,6 @@ describe("flow-authoring session", () => {
 
       const record = getRegisteredFlowDefinition("ref-session-flow");
       assert.ok(record, "the definition must register");
-      assert.equal(record.blueprint?.id, "refSessionFlow");
       assert.ok(
         record.files?.["./gates/approved.ts"]?.includes("GateContract"),
         "the record stores the referenced file set"
@@ -861,7 +743,7 @@ describe("flow-authoring session", () => {
         ctx
       );
       assert.equal(entry.isError, true);
-      assert.match(entry.content, /rendered entry/);
+      assert.match(entry.content, /definition module/);
     } finally {
       rmSync(probe, { recursive: true, force: true });
     }
@@ -877,8 +759,8 @@ describe("flow-authoring session", () => {
     rmSync(probe, { recursive: true, force: true });
     try {
       const controller = await runConversation([
-        setSpecCall(FILE_LOOP_BLUEPRINT),
-        genCall(FILE_LOOP_BLUEPRINT),
+        setDefinitionCall(FILE_LOOP_MODULE),
+        validateCall(),
         {
           id: "w1",
           name: "write_definition_file",
@@ -892,7 +774,7 @@ describe("flow-authoring session", () => {
           name: "read_definition_file",
           arguments: JSON.stringify({ path: "./tools/search.ts" }),
         },
-        genCall(FILE_LOOP_BLUEPRINT),
+        validateCall(),
         "Done!",
       ]);
       const state = controller.getState()
@@ -901,7 +783,7 @@ describe("flow-authoring session", () => {
       assert.equal(
         state.files?.["./tools/search.ts"],
         LOOP_TOOL_IMPLEMENTATION,
-        "the implemented file must survive the second generate (hand edits are authoritative)"
+        "the implemented file must survive the second validate (hand edits are authoritative)"
       );
     } finally {
       rmSync(probe, { recursive: true, force: true });
@@ -919,7 +801,7 @@ describe("flow-authoring session", () => {
     try {
       let state: AuthoringItemState = {
         moduleSetSlug: "author-test-undeclared",
-        blueprint: JSON.stringify(FILE_LOOP_BLUEPRINT),
+        source: FILE_LOOP_MODULE,
       };
       const ctx = {
         workflowInstanceState: () => state,
@@ -927,20 +809,16 @@ describe("flow-authoring session", () => {
           state = { ...state, ...patch };
         },
       } as never;
-      const generate = authoringTools.find(
-        (t) => t.definition.function.name === "generate_definition"
+      const validate = authoringTools.find(
+        (t) => t.definition.function.name === "validate_definition"
       );
       const write = authoringTools.find(
         (t) => t.definition.function.name === "write_definition_file"
       );
-      const setBlueprint = authoringTools.find(
-        (t) => t.definition.function.name === "set_flow_blueprint"
+      const setDefinition = authoringTools.find(
+        (t) => t.definition.function.name === "set_flow_definition"
       );
-      assert.ok(generate && write && setBlueprint);
-
-      // The clean stub passes the gate.
-      await generate.executor(genCall(FILE_LOOP_BLUEPRINT), ctx);
-      assert.equal(state.report?.passed, true);
+      assert.ok(validate && write && setDefinition);
 
       // The agent writes a tool importing an undeclared package.
       await write.executor(
@@ -954,7 +832,7 @@ describe("flow-authoring session", () => {
         },
         ctx
       );
-      await generate.executor(genCall(FILE_LOOP_BLUEPRINT), ctx);
+      await validate.executor(validateCall(), ctx);
       assert.equal(state.report?.passed, false);
       assert.ok(
         state.gateErrors?.some(
@@ -964,9 +842,12 @@ describe("flow-authoring session", () => {
       );
 
       // Declaring the package makes the same import pass.
-      const fixed = { ...FILE_LOOP_BLUEPRINT, dependencies: ["lru-cache"] };
-      await setBlueprint.executor(setSpecCall(fixed), ctx);
-      await generate.executor(genCall(fixed), ctx);
+      const fixed = FILE_LOOP_MODULE.replace(
+        "dependencies: [],",
+        'dependencies: ["lru-cache"],'
+      );
+      await setDefinition.executor(setDefinitionCall(fixed), ctx);
+      await validate.executor(validateCall(), ctx);
       assert.equal(state.report?.passed, true);
     } finally {
       rmSync(probe, { recursive: true, force: true });

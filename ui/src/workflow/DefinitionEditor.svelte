@@ -1,15 +1,12 @@
 <script lang="ts">
 import { onMount } from "svelte";
 import {
-  adoptAuthoringEdits,
   authorFlowDefinition,
   deleteFlow,
   deleteFlowDefinition,
-  discardAuthoringSource,
   dispatchAction,
   fetchFlow,
   fetchFlowDefinition,
-  saveAuthoringBlueprint,
   saveAuthoringDefinition,
   saveAuthoringFile,
   saveAuthoringSource,
@@ -183,14 +180,6 @@ async function handleAuthorAction(
     await saveFromSession(flowId);
     return;
   }
-  if (actionId === "discard") {
-    await discardEdits(flowId);
-    return;
-  }
-  if (actionId === "adopt") {
-    await adoptEdits(flowId);
-    return;
-  }
   // The "done" affordance: once the definition is saved, send the user to the
   // definition's page (where the instantiate form lives).
   if (actionId === "instantiate") {
@@ -208,10 +197,9 @@ async function handleAuthorAction(
 }
 
 // The flow-editor's editable panes write back through onPatchState: the
-// human's current definition (`source`, marking the blueprint diverged), a
-// referenced file (`files`, authoritative — no divergence), or the blueprint
-// text (`blueprint`, re-rendered into the preview). Each write-back route is
-// flow-scoped, so the instanceId is not needed.
+// human's current definition module (`source` — the single artifact; the edit
+// IS the state) and referenced files (`files`, authoritative). Each write-back
+// route is flow-scoped, so the instanceId is not needed.
 function handleAuthorPatch(
   flowId: string,
   _instanceId: string,
@@ -235,13 +223,6 @@ function handleAuthorPatch(
       error = err instanceof Error ? err.message : "Failed to save file";
     });
   }
-  const blueprint =
-    typeof values.blueprint === "string" ? values.blueprint : "";
-  if (blueprint !== "") {
-    void saveAuthoringBlueprint(flowId, blueprint).catch((err) => {
-      error = err instanceof Error ? err.message : "Failed to save blueprint";
-    });
-  }
 }
 
 async function handleAuthorSend(
@@ -260,29 +241,6 @@ async function saveFromSession(flowId: string) {
     await saveAuthoringDefinition(flowId);
   } catch (err) {
     error = err instanceof Error ? err.message : "Failed to save definition";
-  }
-}
-
-// Discard handoff: clears the divergence so the agent's next generate wins.
-async function discardEdits(flowId: string) {
-  error = null;
-  try {
-    await discardAuthoringSource(flowId);
-  } catch (err) {
-    error = err instanceof Error ? err.message : "Failed to discard edits";
-  }
-}
-
-// Adopt handoff: the reverse renderer parses the human's edited source back
-// into the session's blueprint (clearing the divergence), so the agent
-// continues with the edits folded in. Not-spec-representable parts surface as
-// findings in the editor's draft notes.
-async function adoptEdits(flowId: string) {
-  error = null;
-  try {
-    await adoptAuthoringEdits(flowId);
-  } catch (err) {
-    error = err instanceof Error ? err.message : "Failed to adopt edits";
   }
 }
 
@@ -358,8 +316,8 @@ async function remove() {
     {#if authorFlowId && authorFlow}
       <!-- The authoring session renders as a flow instance: the flow-editor
            composes the header, the chat with Save, and the editable
-           definition source with the discard handoff. The shell only mounts
-           the rendering surface and owns the session lifecycle. -->
+           definition module. The shell only mounts the rendering surface and
+           owns the session lifecycle. -->
       <div class="author-toolbar">
         <button type="button" class="author-close" onclick={closeAuthoring}>
           Close session
@@ -379,9 +337,10 @@ async function remove() {
       <div class="start-session">
         <p class="ai-hint">
           Describe the flow you want. The agent will ask what is unclear, then
-          draft the definition with you — or try "I'm feeling lucky" for a
-          one-shot attempt. The definition renders as the session's editable
-          editor; you can edit the TypeScript directly at any time.
+          draft the definition module with you — or try "I'm feeling lucky" for
+          a one-shot attempt. The definition renders as the session's editable
+          editor; you can edit the TypeScript directly at any time (your edits
+          ARE the state — the agent's next turn reads them).
         </p>
         <Textarea
           bind:value={aiPrompt}

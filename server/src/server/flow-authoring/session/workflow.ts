@@ -1,6 +1,6 @@
 /** @private — the session workflow: a hidden built-in flow whose single
  * workflow instance is a live authoring conversation. One drafting state whose
- * ai-chat agent maintains the blueprint and runs the gate through the
+ * ai-chat agent maintains the definition module and runs the gate through the
  * authoring tools; the session never ends on its own. Only
  * flow-authoring/session.ts imports this. */
 
@@ -48,8 +48,8 @@ const sessionWorkflow = defineWorkflow({
           systemPrompt: buildAuthoringSessionPrompt(),
           tools: [
             "read_authoring_knowledge",
-            "set_flow_blueprint",
-            "generate_definition",
+            "set_flow_definition",
+            "validate_definition",
             "save_definition",
             "read_definition_source",
             "read_definition_file",

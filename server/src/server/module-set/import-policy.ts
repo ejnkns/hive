@@ -1,17 +1,15 @@
-/** @private — the import policy for blueprint-referenced modules: a file in
+/** @private — the import policy for definition-referenced modules: a file in
  * the module set may import engine primitives (`workflow-engine/*`), the
  * flow's own files (relative imports staying inside the module set), `node:`
- * builtins, and packages declared in the blueprint's `dependencies`. Anything
+ * builtins, and packages declared in the definition's `dependencies`. Anything
  * else is rejected with a readable, model-actionable finding — the declaration
- * is the legibility (the flow's capabilities are readable from the blueprint),
- * the gate is the enforcement. Ticket 1 left the slot open by design; this is
- * the pass that fills it. */
+ * is the legibility (the flow's capabilities are readable from the
+ * definition), the gate is the enforcement. */
 
 import { readdirSync, readFileSync } from "node:fs";
 import { isBuiltin } from "node:module";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import ts from "typescript";
-import type { FlowBlueprint } from "../flow-blueprint.ts";
 
 export type ImportFinding = {
   // The file within the module set (relative path, e.g. "gates/approved.ts").
@@ -22,11 +20,11 @@ export type ImportFinding = {
 };
 
 export function lintImportPolicy(
-  blueprint: FlowBlueprint,
+  dependencies: string[],
   dir: string
 ): ImportFinding[] {
   const findings: ImportFinding[] = [];
-  const declared = new Set(blueprint.dependencies ?? []);
+  const declared = new Set(dependencies);
   const root = resolve(dir);
   for (const [relPath, source] of moduleSetSources(dir)) {
     const sourceFile = ts.createSourceFile(
@@ -87,7 +85,7 @@ function importVerdict(
   }
   return {
     ok: false,
-    message: `imports "${specifier}" which is not declared in the blueprint's dependencies — add "${pkg}" to the blueprint's dependencies list or remove the import`,
+    message: `imports "${specifier}" which is not declared in the definition's dependencies — add "${pkg}" to the dependencies list or remove the import`,
   };
 }
 
