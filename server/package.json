@@ -26,8 +26,7 @@
     "build": "tsdown && node scripts/package-assets.mjs",
     "typecheck": "tsc --noEmit",
     "dev": "tsdown --watch --on-success \"node --env-file=../.env dist/main.mjs start --port 8154\"",
-    "test": "node --test 'src/**/*.test.ts'",
-    "export:flow-authoring": "node scripts/export-flow-authoring-doc.mjs"
+    "test": "node --test 'src/**/*.test.ts'"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",

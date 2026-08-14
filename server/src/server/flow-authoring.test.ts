@@ -1,66 +1,54 @@
-// The flow-authoring knowledge core: the reference document must carry every
-// rung the authoring flow needs (decisions → patterns → rules → vocabulary →
-// capabilities), and the reference exemplar the agent copies must stay valid
-// as a pure-data definition.
+// The flow-authoring knowledge, read at runtime from the self-contained skill
+// (`skills/flow-authoring/*.md`): every rung the authoring flow needs must be
+// present and substantive, and the skill must carry no retired vocabulary
+// (the patterns rung was removed — the decisions/rules/vocabulary rungs guide
+// generation on their own).
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import {
-  AUTHORING_RULES,
-  DESIGN_DECISIONS,
-  FLOW_DEFINITION_SHAPE,
-  FLOW_PATTERNS,
-  flowAuthoringMarkdown,
-  STRUCTURED_INTAKE_EXEMPLAR,
-} from "./flow-authoring.ts";
-import {
-  analyzeFlowDefinition,
-  validateFlowDefinition,
-} from "./flow-definition.ts";
+import { readKnowledge } from "./flow-authoring/knowledge.ts";
 
 describe("flow-authoring knowledge", () => {
-  it("the reference document carries every knowledge rung in order", () => {
-    const markdown = flowAuthoringMarkdown();
-    const decisionIndex = markdown.indexOf(DESIGN_DECISIONS);
-    const patternsIndex = markdown.indexOf("## Patterns");
-    const rulesIndex = markdown.indexOf(AUTHORING_RULES);
-    const vocabularyIndex = markdown.indexOf(FLOW_DEFINITION_SHAPE);
-    const capabilitiesIndex = markdown.indexOf("## Engine capabilities");
-
-    for (const [name, index] of [
-      ["decisions", decisionIndex],
-      ["patterns", patternsIndex],
-      ["rules", rulesIndex],
-      ["vocabulary", vocabularyIndex],
-      ["capabilities", capabilitiesIndex],
-    ] as const) {
-      assert.ok(index >= 0, `reference missing ${name}`);
+  it("reads every knowledge rung from the skill directory", () => {
+    for (const topic of ["decisions", "rules", "vocabulary"] as const) {
+      const content = readKnowledge(topic);
+      assert.ok(content.length > 200, `${topic} knowledge must be substantive`);
     }
+  });
 
-    // Every pattern is named so the agent can pick one.
-    for (const pattern of FLOW_PATTERNS) {
-      assert.ok(
-        markdown.includes(pattern.name),
-        `reference missing pattern ${pattern.name}`
-      );
-    }
-    // The full exemplar is embedded, not just named.
+  it("the decisions rung carries the design sequence, not the retired patterns", () => {
+    const decisions = readKnowledge("decisions");
+    assert.match(decisions, /## How to design a flow \(decisions, in order\)/);
+    assert.match(decisions, /1\. \*\*Entities\.\*\*/);
+    assert.match(
+      decisions,
+      /9\. \*\*Custom logic beyond the structured vocabulary/
+    );
     assert.ok(
-      markdown.includes("Item Intake"),
-      "the structured-intake exemplar must be embedded"
+      !decisions.includes("Pick the pattern"),
+      "the retired patterns rung must not leak into the decisions"
     );
   });
 
-  it("the structured-intake exemplar validates as a pure-data definition", () => {
-    assert.deepEqual(
-      validateFlowDefinition(STRUCTURED_INTAKE_EXEMPLAR),
-      [],
-      "the reference exemplar must be a valid definition"
+  it("the rules rung carries the failure-mode guardrails", () => {
+    const rules = readKnowledge("rules");
+    assert.match(rules, /## Rules that make generated flows actually work/);
+    assert.match(rules, /declares a `systemPrompt`/);
+    assert.match(
+      rules,
+      /Implement a referenced file by keeping the export name and contract/
     );
-    assert.deepEqual(
-      analyzeFlowDefinition(STRUCTURED_INTAKE_EXEMPLAR),
-      [],
-      "the reference exemplar must analyze clean (zero warnings)"
+    assert.ok(
+      !rules.includes("Choose the pattern"),
+      "the retired pattern-matching rule must not leak into the rules"
     );
+  });
+
+  it("the vocabulary rung carries the pure-data shape", () => {
+    const vocabulary = readKnowledge("vocabulary");
+    assert.match(vocabulary, /## FlowDefinition vocabulary/);
+    assert.match(vocabulary, /WORKFLOW: \{/);
+    assert.match(vocabulary, /CONSTRAINTS/);
+    assert.match(vocabulary, /REFERENCED FILES/);
   });
 });

@@ -7,7 +7,7 @@ description: Design and generate Hive flow definitions (presets and AI-generated
 
 Design flows for the Hive workflow engine the way the engine actually works: pick a tested lifecycle, declare the domain, let the engine provide everything else. The engine is declarative — a flow is data (workflows, states, tasks, edges, actions), and the definition validator + module-set gate keep it honest.
 
-The authoritative knowledge — decisions, patterns, rules, vocabulary, capabilities — lives in `server/src/server/flow-authoring/` and is rendered into `skills/flow-authoring/reference.md` (regenerate with `pnpm --filter server export:flow-authoring` after changing the modules). **Read reference.md before authoring.** The reference presets `presets/queen-bee/` and `presets/wayfinder/` are the canonical real flows.
+The authoritative knowledge — decisions, rules, vocabulary — lives in this skill directory (`decisions.md`, `rules.md`, `vocabulary.md`), and the runtime authoring session reads it from here; `capabilities` is the engine's own manifest (`workflow-engine/capabilities-manifest`). **Read the knowledge files before authoring** (decisions → rules → vocabulary). The reference presets `presets/queen-bee/` and `presets/wayfinder/` are the canonical real flows.
 
 ## Process
 
@@ -24,18 +24,7 @@ Produce, in order:
 
 **Completion criterion:** every workflow has a way in (creation path), a way through (each active state can leave), and a way out (a terminal or an error state with a retry). If any state can't be reached or can't leave, redesign before writing.
 
-### 2. Pick the pattern, don't improvise
-
-Match the request to a pattern in `reference.md` (## Patterns) and copy its shape:
-
-- **structured-intake** — users add items an AI classifies/enriches into recorded fields.
-- **human-review** — an AI proposal a human approves or rejects (ai-chat HITL).
-- **pipeline-fanout** — one workflow's output creates many instances of another (`object[]` + `fanOut`).
-- **git-work** — repo-backed work (worktree, worker with git tools, committed-work verification, merge).
-
-**Completion criterion:** you can name the pattern and the section of reference.md you're copying. A request that fits a pattern but gets a novel shape is a redesign, not authoring.
-
-### 3. Author — the session (the product path)
+### 2. Author — the session (the product path)
 
 Use the definition editor's authoring session: describe the flow, and the agent converges on a `FlowDefinition` with you (or lucky-mode one-shots it). The agent writes the definition module (`set_flow_definition`), runs the gate (`validate_definition`), and — when the flow needs custom logic — **implements the referenced files in-conversation** (`read_definition_file` / `write_definition_file`): the referenced file implements the export the reference derives; the agent fills in the body and validates until the gate passes, then `save_definition` registers it. Hand edits to the module and files are authoritative — the definition is the only artifact.
 
@@ -45,7 +34,7 @@ Every ai-task and ai-chat declares a `systemPrompt` naming the job and the compl
 
 **Completion criterion:** the definition declares a systemPrompt on every AI task, records structured output through completionOutput → patch, and has a needs-review escape hatch.
 
-### 4. Run the gate
+### 3. Run the gate
 
 For session-generated flows the validate_definition tool runs it. For hand-authored presets:
 
@@ -55,7 +44,7 @@ For session-generated flows the validate_definition tool runs it. For hand-autho
 
 **Completion criterion:** the definition validator reports zero errors AND zero warnings (`validateFlowDefinition` errors, `analyzeFlowDefinition` warnings), the module-set gate passes for any referenced files, and the flow typechecks. Zero warnings is the bar — a "completionOutput nobody reads" or "nothing creates an instance" warning means the design leaks a field.
 
-### 5. Verify the rendered UI
+### 4. Verify the rendered UI
 
 Every workflow's instances must show meaningful content: `instance: { title }` and `display: { fields }` for the fields that exist. A board groups by state; a `list`/`document`/`chat` view stacks instances. The UI renders task outputs via render hints when declared.
 
@@ -73,8 +62,8 @@ Every workflow's instances must show meaningful content: `instance: { title }` a
 
 ## Context pointers
 
-- `skills/flow-authoring/reference.md` — the rendered knowledge: decisions, patterns, rules, vocabulary, capabilities. Read first.
-- `server/src/server/flow-authoring/` — the source modules (single source of truth; regenerate reference.md with `pnpm --filter server export:flow-authoring` after editing the modules).
+- `decisions.md`, `rules.md`, `vocabulary.md` — the knowledge files (this directory); the runtime session reads them, so edit the markdown, not server code. Read decisions first.
+- `server/src/server/flow-authoring/` — the session machinery (tools, workflow, prompt) + `knowledge.ts` (reads the knowledge files at runtime).
 - `presets/queen-bee/` and `presets/wayfinder/` — canonical real flows.
 - `CONTEXT.md` → Workflow Engine terms — the domain glossary.
 - `server/src/server/flow-definition/` — the definition parser + validator (declared parts; reads/writes invariant; structural-soundness analysis).

@@ -475,7 +475,7 @@ describe("flow-authoring session", () => {
     );
     assert.ok(tool, "read_authoring_knowledge tool must be defined");
 
-    for (const topic of ["vocabulary", "patterns", "capabilities", "rules"]) {
+    for (const topic of ["vocabulary", "capabilities", "rules"]) {
       const result = await tool.executor(
         {
           id: `k-${topic}`,

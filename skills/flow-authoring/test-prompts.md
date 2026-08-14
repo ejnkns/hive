@@ -101,7 +101,7 @@ are accepted, the release is shipped. The release manager can approve all
 remaining cards at once.
 ```
 
-Expect: the git-work pattern (prepare_worktree → worker with git tools →
+Expect: a git-backed-work lifecycle (prepare_worktree → worker with git tools →
 verify_workspace → review → merge_branch), `dependsOnState` for card
 dependencies, and `dispatchToAll` for the bulk approve. This one most often
 exposes vocabulary limits — "when all cards are accepted" needs a cross-instance
@@ -119,7 +119,7 @@ due date, which a human marks done.
 
 Expect: `startOnUserInput` ai-chat (the live transcript in the UI), `object[]`
 completion output for the extracted items, and a `fanOut` edge creating one
-instance per item. Strong test of the pipeline pattern — and where a sloppy
+instance per item. Strong test of the pipeline/fan-out shape — and where a sloppy
 spec shows up fastest (e.g. forgetting the creation path, which the
 "nothing ever creates an instance" warning now catches).
 
@@ -177,8 +177,8 @@ marks the order ready; the customer picks it up and it's closed. If the AI
 suggestion fails, a human sets the time manually.
 ```
 
-Expect: the structured-intake/human-review shape applied to an unfamiliar
-domain — the same lifecycle patterns, renamed nouns. Confirms generation is
+Expect: an intake lifecycle with human review applied to an unfamiliar
+domain — the same lifecycle shapes, renamed nouns. Confirms generation is
 domain-agnostic (not idea/card/ticket-shaped by default).
 
 ## 10. Research loop (definition-referenced custom logic)
@@ -189,7 +189,7 @@ websearch tool and extracts a verdict about the result. The verdict decides
 whether the loop is done or needs human review; a human can retry from there.
 ```
 
-Expect: the custom-logic pattern — a flow-level `tools` reference (the
+Expect: definition-referenced custom logic — a flow-level `tools` reference (the
 websearch file), a `{ kind: "file", ref }` gate on the transition out of the
 extracting state (after the extractor writes the verdict the gate reads — a
 gate sharing a state with an earlier task fires too early), and the agent
@@ -236,6 +236,6 @@ tool names fail the gate.
 | 6 Invoices | decision gate, bounded correction | threshold routing |
 | 7 Recruiting | multi-stage, mixed AI roles, hold loop | bounded loops |
 | 8 Vague request | conversational clarification | agent asks, doesn't guess |
-| 9 Bakery orders | domain genericity | same patterns, new nouns |
+| 9 Bakery orders | domain genericity | same lifecycle shapes, new nouns |
 | 10 Research loop | referenced modules: custom tool + file gate | gate after the extractor; files implemented in-conversation |
 | 11 Responsive audit | verdict auto-route, verification loop, persist | no invented browser tools, loop termination |

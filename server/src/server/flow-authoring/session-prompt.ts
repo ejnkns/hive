@@ -5,7 +5,7 @@
  * reads only what it needs when it needs it (the progressive-disclosure
  * pattern) instead of chewing through a huge prompt before its first reply. */
 
-import { DESIGN_DECISIONS } from "./decisions.ts";
+import { readKnowledge } from "./knowledge.ts";
 
 // A compact but VALID definition module the agent begins from: change the
 // id/label to the user's domain and extend it as decisions land. Kept inline
@@ -59,7 +59,7 @@ export function buildAuthoringSessionPrompt(): string {
     "Start drafting as soon as the first decisions land: begin from the starter skeleton below (change the id/label to the user's domain), then add each workflow, state, task, and action as the user's decisions solidify. Call `set_flow_definition` after every substantive change with the complete definition module — the editor preview updates live, so the user watches the definition take shape.",
     "Keep improving the same draft as the conversation progresses; never start over unless the user changes direction.",
     "When the user asks to validate (or clicks Generate), call `validate_definition` — it runs the full gate on the current module and its referenced files (validation, lint, import policy, typecheck, declared writes, and the load). If it returns findings, fix the module (or the referenced files) and call it again. A successful validation compiles the definition to the runtime projection, but the conversation continues — keep refining.",
-    'When asked to "just generate it" or "I\'m feeling lucky", do not ask questions — consult the knowledge reference (patterns, vocabulary), produce the best complete definition module you can from the request, then validate.',
+    'When asked to "just generate it" or "I\'m feeling lucky", do not ask questions — consult the knowledge reference (vocabulary, rules), produce the best complete definition module you can from the request, then validate.',
     "",
     "## The definition module is the single artifact",
     "The flow definition is a pure-data TypeScript module (`export const flow: FlowDefinition = { ... }`): workflows/states/tasks/actions as data, structured gates and value sources, and every piece of custom logic (gates, tools, operations, transforms, extractors, prompts) as a referenced file. It is the only artifact — there is no blueprint to render. The user can edit it directly in the editor; their edits ARE the state (no divergence, no adoption). When they do, read the current source with `read_definition_source` and build on it — never start from a stale copy.",
@@ -67,17 +67,15 @@ export function buildAuthoringSessionPrompt(): string {
     "## Referenced files (gates, tools, operations, transforms, extractors)",
     "When the definition references a file (a gate `{ kind: \"file\", ref }`, a flow-level `tools`/`operations` entry, an edge `transform: { ref }`, a task `extract: { ref }` or `systemPromptRef`), implement it: read it with `read_definition_file`, replace its body (keeping the export name and the contract), and write it back with `write_definition_file` — then call `validate_definition` again so the gate runs against your implementation. Hand edits are authoritative: validation never overwrites a file you wrote. Gate files export `(ctx) => boolean` (read `ctx.workflowInstanceState`); tool files export `<id>Tools` (a `defineTool` list); operation files export `<id>Operations` (a `defineOperations` map); edge transforms export a `TransformContract`; extractors export an `OutputExtractor`; prompt files export a string. A referenced file may import engine primitives, the flow's own files, `node:` builtins, and packages declared in the definition's `dependencies` — an undeclared import fails the gate; add it to `dependencies` or remove it.",
     "",
-    "## How to design a flow (decisions, in order)",
-    DESIGN_DECISIONS,
+    readKnowledge("decisions"),
     "",
     "## Starter skeleton (a valid draft to begin from)",
     "Begin your first `set_flow_definition` from this shape — change the id/label to the user's domain and extend it as decisions land:",
     `\`\`\`ts\n${STARTER_SKELETON}\n\`\`\``,
     "",
     "## Knowledge reference (consult on demand)",
-    "The exact vocabulary, pattern exemplars, capability list, and failure-mode rules are NOT inline — call the `read_authoring_knowledge` tool with a topic whenever you need the precise details before writing or extending a definition:",
+    "The exact vocabulary, capability list, and failure-mode rules are NOT inline — call the `read_authoring_knowledge` tool with a topic whenever you need the precise details before writing or extending a definition:",
     "- `vocabulary` — the FlowDefinition data shape and its constraints",
-    "- `patterns` — tested lifecycle exemplars (structured intake, human review, pipeline/fan-out, git work, custom logic)",
     "- `capabilities` — engine operations, infrastructure tools, and state fields",
     "- `rules` — the failure-mode guardrails (consult before validate_definition)",
     "Do not recite these from memory; read the section you need.",

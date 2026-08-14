@@ -1,12 +1,6 @@
-/** The flow definition vocabulary — the pure-data shape an agent writes as a
- * typed TS module. This is the reference rung of the flow-authoring
- * knowledge: what the agent can say, not how to design. The
- * decisions/patterns/rules modules sit above it in the reference; the
- * definition validator enforces it. */
+## FlowDefinition vocabulary (the typed TS module you write — validated before it registers)
 
-export const FLOW_DEFINITION_SHAPE = `## FlowDefinition vocabulary (the typed TS module you write — validated before it registers)
-
-The flow definition is the single pure-data artifact: \`export const flow: FlowDefinition = { ... }\` in a TypeScript module, imported from \`workflow-engine/workflow-types\`. Workflows/states/tasks/actions/edges are data; gates are structured predicates; values are a small set of sources; every piece of custom logic (gates, tools, operations, transforms, extractors, prompts) is a referenced file (by ref path — the module imports nothing). No closures — a UI builder must serialize and round-trip this shape.
+The flow definition is the single pure-data artifact: `export const flow: FlowDefinition = { ... }` in a TypeScript module, imported from `workflow-engine/workflow-types`. Workflows/states/tasks/actions/edges are data; gates are structured predicates; values are a small set of sources; every piece of custom logic (gates, tools, operations, transforms, extractors, prompts) is a referenced file (by ref path — the module imports nothing). No closures — a UI builder must serialize and round-trip this shape.
 
 {
   id: "reviewFlow",              // non-empty slug (letters, digits, dashes)
@@ -136,8 +130,4 @@ CONSTRAINTS (the validator rejects violations; fix them in the same definition):
 - A workflow with no instance state uses an empty instanceState array.
 - A task may declare either "patch" (operation role) or nothing extra; patch writes on a task read a SIBLING task's output (the patch op runs as an operation task after that task completes).
 - IMPORTS (the import policy): a referenced file may import engine primitives (workflow-engine/*), the flow's own files (relative paths inside the module set), node: builtins, and packages declared in the definition's "dependencies" list. Any other import fails the gate with a readable finding — declare the package in "dependencies" or remove the import.
-- REFERENCED FILES ("tools"/"operations"/gate/transform/extract refs): implement the referenced file's named export — keep the name the reference derives (gates/transforms/extracts/prompts export the camel-cased file base name; tools export <id>Tools (a defineTool list); operations export <id>Operations (a defineOperations map)) — and validate again. Hand edits are authoritative — validation never overwrites a file. Gate files export (ctx) => boolean; edge transforms export a TransformContract; extractors export an OutputExtractor; prompt files export a string.`;
-
-// The legacy name kept for import compatibility during the migration (the
-// blueprint vocabulary retired when the definition became the only artifact).
-export const FLOW_BLUEPRINT_SHAPE = FLOW_DEFINITION_SHAPE;
+- REFERENCED FILES ("tools"/"operations"/gate/transform/extract refs): implement the referenced file's named export — keep the name the reference derives (gates/transforms/extracts/prompts export the camel-cased file base name; tools export <id>Tools (a defineTool list); operations export <id>Operations (a defineOperations map)) — and validate again. Hand edits are authoritative — validation never overwrites a file. Gate files export (ctx) => boolean; edge transforms export a TransformContract; extractors export an OutputExtractor; prompt files export a string.

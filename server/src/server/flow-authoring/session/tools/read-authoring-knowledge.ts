@@ -3,30 +3,29 @@
 
 import { authoringGuide } from "workflow-engine/capabilities-manifest";
 import { defineTool } from "workflow-engine/runners";
-import { renderPatternsPrompt } from "../../patterns.ts";
-import { AUTHORING_RULES } from "../../rules.ts";
-import { FLOW_DEFINITION_SHAPE } from "../../vocabulary.ts";
+import { readKnowledge } from "../../knowledge.ts";
 import type { AuthoringItemState } from "../state.ts";
 
 // The knowledge reference the session agent consults on demand (progressive
-// disclosure): each topic returns the relevant module so the system prompt can
-// stay compact and the agent reads only what it needs when drafting.
+// disclosure): each topic returns the relevant knowledge so the system prompt
+// can stay compact and the agent reads only what it needs when drafting.
+// vocabulary/rules are the skill's markdown files (the skill dir is the
+// single source of truth); capabilities is the engine's own manifest.
 const KNOWLEDGE_TOPICS: Record<string, string> = {
-  vocabulary: FLOW_DEFINITION_SHAPE,
-  patterns: renderPatternsPrompt(),
+  vocabulary: readKnowledge("vocabulary"),
   capabilities: authoringGuide(),
-  rules: AUTHORING_RULES,
+  rules: readKnowledge("rules"),
 };
 
 export const readAuthoringKnowledgeTool = defineTool<AuthoringItemState>({
   name: "read_authoring_knowledge",
   description:
-    "Read a section of the flow-authoring reference before writing or extending a definition. Topics: 'vocabulary' (the FlowDefinition data shape and constraints), 'patterns' (tested lifecycle exemplars), 'capabilities' (engine operations, infrastructure tools, state fields), or 'rules' (failure-mode guardrails).",
+    "Read a section of the flow-authoring reference before writing or extending a definition. Topics: 'vocabulary' (the FlowDefinition data shape and constraints), 'capabilities' (engine operations, infrastructure tools, state fields), or 'rules' (failure-mode guardrails).",
   parameters: {
     properties: {
       topic: {
         type: "string",
-        enum: ["vocabulary", "patterns", "capabilities", "rules"],
+        enum: ["vocabulary", "capabilities", "rules"],
       },
     },
     required: ["topic"],
