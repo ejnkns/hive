@@ -392,6 +392,81 @@ export const flow = {
 };
 `;
 
+test("adopting hand edits folds them into the blueprint and the agent continues", async () => {
+  // Lucky session: the generated definition renders as the editable editor.
+  await page.goto(`${baseUrl}/#/flows/new`);
+  await page.waitForSelector("textarea", { timeout: 15_000 });
+  await page
+    .locator("textarea")
+    .first()
+    .fill("A review flow with approve and reject actions");
+  await page.locator("button", { hasText: "I'm feeling lucky" }).click();
+  await waitForEditor(
+    (state) => state.title === "A review flow with approve and reject actions"
+  );
+  await waitForEditor((state) => state.code.includes("reviewFlow"));
+
+  // The human edits the source: a spec-representable label change.
+  const edited = await page.evaluate(() => {
+    const walk = (root) => {
+      for (const el of root.querySelectorAll("code-editor")) {
+        const textarea = el.shadowRoot?.querySelector("textarea");
+        if (textarea) return textarea;
+      }
+      for (const el of root.querySelectorAll("*")) {
+        if (el.shadowRoot) {
+          const found = walk(el.shadowRoot);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+    const host = document.querySelector("workflow-instances");
+    const textarea = walk(host?.shadowRoot ?? document);
+    if (!textarea) return false;
+    textarea.value = textarea.value.replace(
+      'label: "Review Flow",',
+      'label: "Review Flow (hand edited)",'
+    );
+    textarea.dispatchEvent(
+      new Event("input", { bubbles: true, composed: true })
+    );
+    return true;
+  });
+  assert.ok(edited, "the editor must be editable");
+
+  // The write-back lands: the session source is the manual text, diverged.
+  await waitForSessionState(
+    (state) =>
+      typeof state.workflowInstanceState?.source === "string" &&
+      state.workflowInstanceState.source.includes("hand edited") &&
+      state.workflowInstanceState.blueprintDiverged === true
+  );
+
+  // Adopt the edits: the reverse renderer parses the manual source back into
+  // the blueprint — the divergence clears and the blueprint carries the edit
+  // (lossless, unlike the discard path).
+  assert.ok(
+    await clickEditorButton("Adopt edits"),
+    "the adopt button appears while diverged and is clickable"
+  );
+  await waitForSessionState(
+    (state) =>
+      state.workflowInstanceState?.blueprintDiverged === false &&
+      typeof state.workflowInstanceState?.blueprint === "string" &&
+      state.workflowInstanceState.blueprint.includes("Review Flow (hand edited)"),
+    20_000
+  );
+
+  // The agent's blueprint tools work again: a message drives the session to
+  // regenerate (the divergence refusal no longer blocks set_flow_blueprint).
+  assert.ok(await sendChatMessage("continue the session"));
+  await waitForSessionState(
+    (state) => state.workflowInstanceState?.report?.passed === true,
+    40_000
+  );
+});
+
 test("revising an existing definition starts a session with its source as context", async () => {
   // Register a definition to revise.
   const created = await page.evaluate(async (source) => {

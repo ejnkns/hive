@@ -20,6 +20,7 @@ import {
 import type { ToolCall } from "workflow-engine/runners/tool-types";
 import type { TaskRunnerContext } from "workflow-engine/task-runner";
 import { STRUCTURED_INTAKE_EXEMPLAR } from "../flow-authoring.ts";
+import type { FlowBlueprint } from "../flow-blueprint.ts";
 import { validateFlowBlueprint } from "../flow-blueprint.ts";
 import {
   getRegisteredFlowDefinition,
@@ -28,8 +29,11 @@ import {
   runtimeDefinitionsDir,
   setDefinitionsBasePathForTest,
 } from "../flow-definitions.ts";
+import { renderFlowDefinition } from "../render-flow-definition.ts";
 import {
   type AuthoringItemState,
+  adoptAuthoringEdits,
+  adoptPatch,
   authoringSessionFlow,
   authoringTools,
 } from "./session.ts";
@@ -531,6 +535,66 @@ describe("flow-authoring session", () => {
     );
     assert.equal(result.isError, true);
     assert.match(result.content, /Nothing to save/);
+  });
+
+  it("adoptAuthoringEdits parses hand edits back into the blueprint and clears the divergence", () => {
+    const source = renderFlowDefinition(STRUCTURED_INTAKE_EXEMPLAR).entry;
+    // A spec-representable hand edit: a changed flow label.
+    const handEdited = source.replace(
+      'label: "Item Intake",',
+      'label: "Item Intake (renamed by hand)",'
+    );
+    assert.notEqual(handEdited, source, "the hand edit must apply");
+
+    const result = adoptAuthoringEdits({
+      source: handEdited,
+      blueprintDiverged: true,
+    });
+    assert.deepEqual(result.findings, []);
+    assert.deepEqual(result.previewErrors, []);
+    const adopted = JSON.parse(result.blueprint) as FlowBlueprint;
+    assert.equal(adopted.label, "Item Intake (renamed by hand)");
+    assert.equal(adopted.id, "intake");
+    assert.equal(adopted.workflows.length, 1);
+
+    // The patch clears the divergence and re-renders the preview.
+    const patch = adoptPatch(result);
+    assert.equal(patch.blueprintDiverged, false);
+    assert.ok(
+      patch.previewSource?.includes("Item Intake (renamed by hand)"),
+      "the preview must re-render the adopted label"
+    );
+    assert.equal(patch.blueprint, result.blueprint);
+  });
+
+  it("adoptAuthoringEdits surfaces not-spec-representable hand edits as findings but still recovers the blueprint", () => {
+    const source = renderFlowDefinition(STRUCTURED_INTAKE_EXEMPLAR).entry;
+    // A hand-written gate body (a !== comparison the renderer never emits).
+    const handEdited = source.replace(
+      'gate: (ctx) => ctx.taskOutputs.record?.status === "success",',
+      'gate: (ctx) => ctx.taskOutputs.record?.status !== "success",'
+    );
+    assert.notEqual(handEdited, source);
+
+    const result = adoptAuthoringEdits({
+      source: handEdited,
+      blueprintDiverged: true,
+    });
+    assert.ok(
+      result.findings.some(
+        (f) => f.includes("gate") && f.includes("not spec-representable")
+      ),
+      `expected a gate finding, got ${JSON.stringify(result.findings)}`
+    );
+    // The representable rest is still adopted.
+    const adopted = JSON.parse(result.blueprint) as FlowBlueprint;
+    assert.equal(adopted.id, "intake");
+    assert.equal(adopted.workflows[0]?.states.length, 4);
+    assert.equal(adoptPatch(result).blueprintDiverged, false);
+  });
+
+  it("adoptAuthoringEdits rejects a session with no generated source", () => {
+    assert.throws(() => adoptAuthoringEdits({}), /Nothing to adopt/);
   });
 
   it("set_flow_blueprint and generate_definition refuse while the source is diverged", async () => {

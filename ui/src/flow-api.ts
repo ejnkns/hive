@@ -283,6 +283,31 @@ export async function discardAuthoringSource(flowId: string): Promise<void> {
   }
 }
 
+// The adopt-manual-edits handoff: the current definition source is parsed
+// back into the session's blueprint (the reverse renderer), the divergence
+// clears, and the agent's blueprint tools work again with the hand edits
+// folded in. Returns the not-spec-representable parts the parse could not
+// fold into the blueprint.
+export async function adoptAuthoringEdits(flowId: string): Promise<{
+  findings: string[];
+}> {
+  const res = await fetch(
+    `/api/flows/definitions/author/${encodeURIComponent(flowId)}/adopt`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    }
+  );
+  if (!res.ok) {
+    // Error response shape is guaranteed by the server endpoint
+    const err = (await res.json()) as { error?: string };
+    throw new Error(err.error ?? "Failed to adopt edits");
+  }
+  // Success response shape is guaranteed by the server endpoint
+  return (await res.json()) as { findings: string[] };
+}
+
 // The write-back behind the flow-editor's file tabs: writes a referenced file
 // of the session's module set authoritatively (the file IS the truth — no
 // divergence flag).

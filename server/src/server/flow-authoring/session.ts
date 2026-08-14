@@ -21,6 +21,11 @@
  * the workflow definition (workflow). */
 
 export {
+  type AdoptResult,
+  adoptAuthoringEdits,
+  adoptPatch,
+} from "./session/adopt.ts";
+export {
   readAuthoringModuleFile,
   seedAuthoringModuleFiles,
   writeAuthoringModuleFile,

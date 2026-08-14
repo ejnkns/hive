@@ -5,6 +5,8 @@ import { randomUUID } from "node:crypto";
 import { PassThrough } from "node:stream";
 import type { FastifyInstance } from "fastify";
 import {
+  adoptAuthoringEdits,
+  adoptPatch,
   saveAuthoringBlueprint,
   saveAuthoringDefinition,
   savePatch,
@@ -285,6 +287,49 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
         }
         return reply.status(400).send({
           error: err instanceof Error ? err.message : "Save failed",
+        });
+      }
+    }
+  );
+
+  // The adopt-manual-edits handoff: the human's current definition source is
+  // parsed back into the session's blueprint (the reverse renderer), the
+  // divergence clears, and the agent's blueprint tools work again with the
+  // hand edits folded in. Runs the same adoptAuthoringEdits core the future
+  // agent-side affordance would; the route is a thin authoring-flow-gated
+  // endpoint.
+  server.post(
+    "/api/flows/definitions/author/:flowId/adopt",
+    async (request, reply) => {
+      // Fastify params type is erased; shape guaranteed by route pattern
+      const { flowId } = request.params as { flowId: string };
+
+      const runtime = getFlowRuntime(flowId);
+      if (!runtime) {
+        return reply.status(404).send({ error: "Flow not found" });
+      }
+      if (runtime.getFlowConfig().definitionId !== AUTHORING_DEFINITION_ID) {
+        return reply.status(404).send({ error: "Flow not found" });
+      }
+      const instance = runtime.getWorkflowInstanceEntries()[0];
+      if (!instance) {
+        return reply.status(404).send({ error: "No authoring session" });
+      }
+      const controller = runtime.getWorkflowInstance(instance.id);
+      const state = instance.state.workflowInstanceState;
+      try {
+        const result = adoptAuthoringEdits(state);
+        controller?.patchWorkflowInstanceState(adoptPatch(result));
+        return reply.send({
+          ok: true,
+          // The not-spec-representable parts of the hand edits (what could not
+          // be folded into the blueprint) — the editor surfaces them; the
+          // agent sees them in the next turn.
+          findings: result.findings,
+        });
+      } catch (err) {
+        return reply.status(400).send({
+          error: err instanceof Error ? err.message : "Adopt failed",
         });
       }
     }

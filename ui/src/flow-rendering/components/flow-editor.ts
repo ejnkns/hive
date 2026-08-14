@@ -273,6 +273,30 @@ export class FlowEditor extends LitElement {
       border-color: var(--warning);
     }
 
+    button.adopt-btn {
+      font-family: inherit;
+      font-size: 0.625rem;
+      height: 22px;
+      padding: 0 0.5rem;
+      border-radius: 4px;
+      border: 1px solid var(--success);
+      background: transparent;
+      color: var(--success);
+      cursor: pointer;
+      flex: none;
+    }
+
+    button.adopt-btn:hover {
+      background: var(--success);
+      color: var(--bg);
+    }
+
+    .diverged-actions {
+      display: flex;
+      gap: 0.375rem;
+      align-items: center;
+    }
+
   `;
 
   workflowDef: WorkflowDefResponse = null as unknown as WorkflowDefResponse;
@@ -461,13 +485,23 @@ export class FlowEditor extends LitElement {
         <span class="pane-title">Definition source (.ts)</span>
         ${
           diverged
-            ? html`<button
-                class="discard-btn"
-                type="button"
-                @click=${() => this.emitAction("discard")}
-              >
-                Discard edits
-              </button>`
+            ? html`<div class="diverged-actions">
+                <button
+                  class="adopt-btn"
+                  type="button"
+                  title="Parse the edited source back into the blueprint so the agent continues with your edits folded in"
+                  @click=${() => this.emitAction("adopt")}
+                >
+                  Adopt edits
+                </button>
+                <button
+                  class="discard-btn"
+                  type="button"
+                  @click=${() => this.emitAction("discard")}
+                >
+                  Discard edits
+                </button>
+              </div>`
             : nothing
         }
       </div>
@@ -489,8 +523,9 @@ export class FlowEditor extends LitElement {
       ${
         diverged
           ? html`<p class="diverged-note"
-              >Manual edits — the agent's blueprint is frozen. Propose changes in
-              chat or discard your edits to hand the definition back.</p
+              >Manual edits — the agent's blueprint is frozen. Adopt your edits to
+              fold them back into the blueprint, propose changes in chat, or
+              discard your edits to hand the definition back.</p
             >`
           : nothing
       }

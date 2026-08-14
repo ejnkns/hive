@@ -1,6 +1,7 @@
 <script lang="ts">
 import { onMount } from "svelte";
 import {
+  adoptAuthoringEdits,
   authorFlowDefinition,
   deleteFlow,
   deleteFlowDefinition,
@@ -186,6 +187,10 @@ async function handleAuthorAction(
     await discardEdits(flowId);
     return;
   }
+  if (actionId === "adopt") {
+    await adoptEdits(flowId);
+    return;
+  }
   // The "done" affordance: once the definition is saved, send the user to the
   // definition's page (where the instantiate form lives).
   if (actionId === "instantiate") {
@@ -265,6 +270,19 @@ async function discardEdits(flowId: string) {
     await discardAuthoringSource(flowId);
   } catch (err) {
     error = err instanceof Error ? err.message : "Failed to discard edits";
+  }
+}
+
+// Adopt handoff: the reverse renderer parses the human's edited source back
+// into the session's blueprint (clearing the divergence), so the agent
+// continues with the edits folded in. Not-spec-representable parts surface as
+// findings in the editor's draft notes.
+async function adoptEdits(flowId: string) {
+  error = null;
+  try {
+    await adoptAuthoringEdits(flowId);
+  } catch (err) {
+    error = err instanceof Error ? err.message : "Failed to adopt edits";
   }
 }
 
