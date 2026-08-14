@@ -14,9 +14,22 @@
  * contract + invariant evaluation (contract), and the orchestrating check
  * (check). */
 
+// The AST helpers and state-access extraction passes, shared with the reverse
+// renderer (parse-flow-definition): the parse reads a rendered definition's
+// literals and recovers the tool/op `writes` declarations from the referenced
+// files with the same extraction the check itself uses, so the recovered
+// writes always match the actual executor bodies. Import from here, not from
+// schema-consistency/ directly.
+export type { ObjectLiteral } from "./schema-consistency/ast.ts";
+export { parseFile, unwrap } from "./schema-consistency/ast.ts";
+export { resolveFn } from "./schema-consistency/capability-maps.ts";
 export { checkDefinitionSources } from "./schema-consistency/check.ts";
 export type {
   CheckReport,
   SchemaCheckFile,
   WorkflowCheckResult,
 } from "./schema-consistency/report-types.ts";
+export {
+  collectPatchWrites,
+  collectStateReads,
+} from "./schema-consistency/state-access.ts";

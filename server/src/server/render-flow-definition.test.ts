@@ -16,6 +16,7 @@ import {
   loadModuleSetDefinition,
   materializeModuleSet,
 } from "./module-set.ts";
+import { parseFlowDefinition } from "./parse-flow-definition.ts";
 import { renderFlowDefinition } from "./render-flow-definition.ts";
 import { checkDefinitionSources } from "./schema-consistency.ts";
 import { typecheckDefinitionSource } from "./typecheck-definition.ts";
@@ -59,7 +60,32 @@ async function assertRenderedPassesGate(
     `${slug} check warnings: ${report.warnings.join("; ")}`
   );
 
+  // The reverse renderer round-trips the emission: parse the rendered entry
+  // back into the blueprint, validate it clean, and re-render byte-identical
+  // (the parse is the renderer's mirror — a corpus spec that stops
+  // round-tripping fails loudly here).
+  const parsed = parseFlowDefinition(source, renderedFiles(spec));
+  assert.deepEqual(
+    parsed.findings,
+    [],
+    `${slug} parse findings: ${parsed.findings.join("; ")}`
+  );
+  const parsedErrors = validateFlowBlueprint(parsed.blueprint);
+  assert.deepEqual(
+    parsedErrors,
+    [],
+    `${slug} parsed blueprint validation: ${parsedErrors.map((e) => `${e.path}: ${e.message}`).join("; ")}`
+  );
+  const reRendered = renderFlowDefinition(parsed.blueprint).entry;
+  assert.equal(reRendered, source, `${slug} must round-trip byte-identically`);
+
   return source;
+}
+
+// The files map a corpus round-trip parses with: the rendered stubs (the
+// session passes its current files; a corpus spec's stubs are its files).
+function renderedFiles(spec: FlowBlueprint): Record<string, string> {
+  return renderFlowDefinition(spec).files;
 }
 
 // ─── the corpus ───────────────────────────────────────────────────────
