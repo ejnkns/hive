@@ -39,7 +39,7 @@ Match the request to a pattern in `reference.md` (## Patterns) and copy its shap
 
 Use the definition editor's authoring session: describe the flow, and the agent converges on a `FlowDefinition` with you (or lucky-mode one-shots it). The agent writes the definition module (`set_flow_definition`), runs the gate (`validate_definition`), and — when the flow needs custom logic — **implements the referenced files in-conversation** (`read_definition_file` / `write_definition_file`): the referenced file implements the export the reference derives; the agent fills in the body and validates until the gate passes, then `save_definition` registers it. Hand edits to the module and files are authoritative — the definition is the only artifact.
 
-**Hand-author a preset** (in-repo, versioned): write the `FlowDefinition` in TypeScript following the conventions the schema-consistency check enforces (`defineWorkflow` anchor, `defineOperations`/`defineTool` maps, `satisfies FlowEdge`). Copy the structure from a preset; `presets/queen-bee/flow.ts` is the assembly reference (workflows + operations merged at the flow level). The legacy one-shot proxy path (`runGenerationLoop` / `POST /api/flows/definitions/generate`) still exists but is superseded by the session.
+**Hand-author a preset** (in-repo, versioned): write the pure-data definition module (`export const flow: FlowDefinition = { ... }` — workflows/states/tasks/actions as data, custom logic as refs), the same artifact the session produces. Copy the structure from a preset; `presets/queen-bee/flow.ts` is the assembly reference. The boot path loads presets through the same seam as a user flow: import → validate → compile → register.
 
 Every ai-task and ai-chat declares a `systemPrompt` naming the job and the completion tool; every ai-task that records data uses `completionOutput` + a sibling patch op; every displayed field (`instance`/`display` hints) has a writer.
 
@@ -47,13 +47,13 @@ Every ai-task and ai-chat declares a `systemPrompt` naming the job and the compl
 
 ### 4. Run the gate
 
-For generated flows the loop runs it. For hand-authored presets:
+For session-generated flows the validate_definition tool runs it. For hand-authored presets:
 
-- `pnpm --filter workflow-engine test` and `pnpm --filter server test` — the schema-consistency suite covers presets; add the flow to the test's `PRESETS` list if it's a new built-in.
+- `pnpm --filter workflow-engine test` and `pnpm --filter server test` — the definition suites cover presets (`schema-consistency.test.ts` runs each preset through the definition validator + module-set gate); add the flow to that test's `PRESETS` list if it's a new built-in.
 - `pnpm typecheck` — the per-definition typechecker and preset typecheck.
-- The renderer corpus (`server/src/server/render-flow-definition.test.ts`) proves generated shapes render gate-clean — if your change touches the renderer, extend the corpus.
+- The definition corpus (`server/src/server/flow-definition.test.ts`, `workflow-engine/src/compile-flow-definition.test.ts`) proves definitions validate clean, compile to the runtime projection, and run — extend it when the vocabulary changes.
 
-**Completion criterion:** `schema-consistency` reports zero errors and zero warnings for the definition, and the flow typechecks. Zero warnings is the bar — a "fields never read" or "written but never read" warning means the design leaks a field.
+**Completion criterion:** the definition validator reports zero errors AND zero warnings (`validateFlowDefinition` errors, `analyzeFlowDefinition` warnings), the module-set gate passes for any referenced files, and the flow typechecks. Zero warnings is the bar — a "completionOutput nobody reads" or "nothing creates an instance" warning means the design leaks a field.
 
 ### 5. Verify the rendered UI
 
@@ -77,5 +77,5 @@ Every workflow's instances must show meaningful content: `instance: { title }` a
 - `server/src/server/flow-authoring/` — the source modules (single source of truth; regenerate reference.md with `pnpm --filter server export:flow-authoring` after editing the modules).
 - `presets/queen-bee/` and `presets/wayfinder/` — canonical real flows.
 - `CONTEXT.md` → Workflow Engine terms — the domain glossary.
-- `server/src/server/schema-consistency.ts` — the check (reads/writes, structural soundness).
+- `server/src/server/flow-definition/` — the definition parser + validator (declared parts; reads/writes invariant; structural-soundness analysis).
 - `server/src/server/module-set.ts` — the module-set gate (structural lint, import policy, typecheck, declared-writes verification, load) for definition-referenced modules.
