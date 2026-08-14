@@ -395,6 +395,10 @@ async function saveNewDefinition(): Promise<boolean> {
   error = null;
   saveStatus = null;
   try {
+    // Re-derive the refs + label from the current source first: the save must
+    // carry the freshest name (the module's label) and file set, not the last
+    // debounced parse.
+    await refreshDraftRefs();
     const name = draftLabel !== "" ? draftLabel : "Untitled flow";
     const files =
       Object.keys(draftFiles ?? {}).length > 0 ? (draftFiles ?? {}) : undefined;

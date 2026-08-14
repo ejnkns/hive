@@ -347,6 +347,114 @@ test("authoring session renders as the flow editor, co-edits, and saves", async 
   );
 });
 
+test("the new-flow screen shows the canonical scaffold as an editable draft", async () => {
+  await page.goto(`${baseUrl}/#/flows/new`);
+  // The no-session files editor seeds from the canonical scaffold (fetched
+  // from the server — the editor carries no copy of its own).
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector("code-editor")
+        ?.shadowRoot?.querySelector("textarea")
+        ?.value?.includes("myFlow") ?? false,
+    { timeout: 15_000 }
+  );
+  // Tabs: only the Definition tab (the scaffold declares no refs).
+  const tabs = await page.evaluate(() =>
+    Array.from(document.querySelectorAll(".tab-bar button")).map((tab) =>
+      tab.textContent?.trim()
+    )
+  );
+  assert.deepEqual(tabs, ["Definition"]);
+  // The hand-write Save is present and enabled even without edits: saving the
+  // scaffold as-is creates the flow (the session is not the only path).
+  const save = await page.evaluate(() =>
+    Array.from(document.querySelectorAll("button")).some((b) =>
+      b.textContent?.includes("Save as new flow")
+    )
+  );
+  assert.ok(save, "the hand-write save button is present");
+});
+
+test("hand-writing the scaffold saves a definition without a session", async () => {
+  await page.goto(`${baseUrl}/#/flows/new`);
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector("code-editor")
+        ?.shadowRoot?.querySelector("textarea")
+        ?.value?.includes("myFlow") ?? false,
+    { timeout: 15_000 }
+  );
+  // Hand-write: rename the scaffold's id and label directly.
+  const edited = await page.evaluate(() => {
+    const textarea = document
+      .querySelector("code-editor")
+      ?.shadowRoot?.querySelector("textarea");
+    if (!textarea) return false;
+    textarea.value = textarea.value
+      .replace('id: "myFlow",', 'id: "handFlow",')
+      .replace('label: "My Flow",', 'label: "Hand Written",');
+    textarea.dispatchEvent(
+      new Event("input", { bubbles: true, composed: true })
+    );
+    return true;
+  });
+  assert.ok(edited, "the scaffold must be editable");
+  // Save without any session: the definition is created from the draft and
+  // the editor routes to its edit page.
+  await page.locator("button", { hasText: "Save as new flow" }).click();
+  await waitFor(
+    async () =>
+      (await page.evaluate(() => window.location.hash)) ===
+      "#/flows/hand-written/edit"
+  );
+  const definition = await page.evaluate(async () => {
+    const res = await fetch("/api/flows/definitions/hand-written");
+    return res.ok ? await res.json() : null;
+  });
+  assert.ok(definition, "the hand-written definition exists");
+  assert.equal(definition?.name, "Hand Written");
+  assert.ok(
+    definition?.source?.includes('id: "handFlow"'),
+    "the saved source is the hand-written module"
+  );
+});
+
+test("a conversation seeds from the editor's scaffold edits", async () => {
+  await page.goto(`${baseUrl}/#/flows/new`);
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector("code-editor")
+        ?.shadowRoot?.querySelector("textarea")
+        ?.value?.includes("myFlow") ?? false,
+    { timeout: 15_000 }
+  );
+  // Edit the scaffold's label before starting the conversation.
+  await page.evaluate(() => {
+    const textarea = document
+      .querySelector("code-editor")
+      ?.shadowRoot?.querySelector("textarea");
+    if (!textarea) return false;
+    textarea.value = textarea.value.replace(
+      'label: "My Flow",',
+      'label: "My Edited Flow",'
+    );
+    textarea.dispatchEvent(
+      new Event("input", { bubbles: true, composed: true })
+    );
+    return true;
+  });
+  // Start a conversation: the session seeds from the edited scaffold (the
+  // edit IS the state — the agent reads it, not a stale copy).
+  await page.locator("textarea").first().fill("extend the scaffold");
+  await page.locator("button", { hasText: "Start conversation" }).click();
+  // The agent read the seeded source and set it back verbatim — the editor
+  // shows the human's edited label, not a mock-authored copy.
+  await waitForEditor((state) => state.code.includes("My Edited Flow"), 40_000);
+});
+
 // Polls until a predicate returns a truthy value.
 async function waitFor(predicate, timeoutMs = 20_000) {
   const deadline = Date.now() + timeoutMs;

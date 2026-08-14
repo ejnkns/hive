@@ -79,10 +79,17 @@ function completionFor(payload) {
 // compiles it. Later turns cover co-editing: the human's edits ARE the state,
 // so the agent reads the current source (read_definition_source) and builds on
 // it instead of overwriting; when asked to regenerate, it rewrites the module.
+
+// Parametrized new-session scenarios: the mock keys the authored definition
+// (and tool sequence) by the session prompt, so different prompts converge on
+// different drafts. The default path below keeps the review-flow script.
 function authoringCompletion(messages) {
   const firstUser = messages.find((message) => message.role === "user");
   const prompt =
     typeof firstUser?.content === "string" ? firstUser.content : "";
+  if (prompt.includes(SCAFFOLD_SEED_PROMPT)) {
+    return scaffoldSeedCompletion(messages);
+  }
   if (/research loop/.test(prompt)) {
     return researchLoopCompletion(messages);
   }
@@ -151,6 +158,45 @@ function authoringCompletion(messages) {
     );
   }
   return textCompletion("The definition is ready.");
+}
+
+// ─── scaffold-seed scenario (new-flow editor) ─────────────────────────
+
+// The prompt that keys this scenario in the e2e: "start a conversation from
+// the scaffold" scenarios prove the session seeded from the editor's draft —
+// the mock reads the current source (which carries the human's scaffold
+// edits) and sets it back verbatim, so the editor's Definition tab shows the
+// human's draft after the agent's turn, not a mock-authored copy.
+const SCAFFOLD_SEED_PROMPT = "extend the scaffold";
+
+function scaffoldSeedCompletion(messages) {
+  const toolMessages = messages.filter((message) => message.role === "tool");
+  const lastId = toolMessages.at(-1)?.tool_call_id ?? "";
+  if (toolMessages.length === 0) {
+    // First turn: read the seeded source (proves the session started from the
+    // editor's draft — the edit IS the state from turn zero).
+    return toolCompletion(
+      [toolCall("seed-read", "read_definition_source", {})],
+      "reading the scaffold the editor seeded"
+    );
+  }
+  if (lastId === "seed-read") {
+    // The tool result carries the session's current source — the human's
+    // scaffold edits. Set it back verbatim: the editor shows the seeded
+    // draft, not a mock-authored copy.
+    const seeded = toolMessages.at(-1)?.content ?? "";
+    return toolCompletion(
+      [toolCall("seed-set", "set_flow_definition", { source: seeded })],
+      "building on the seeded scaffold"
+    );
+  }
+  if (lastId === "seed-set") {
+    return toolCompletion(
+      [toolCall("seed-validate", "validate_definition", {})],
+      "validating the seeded scaffold"
+    );
+  }
+  return textCompletion("The scaffold is ready — summarize it for the user.");
 }
 
 function requirementsCompletion(messages) {
