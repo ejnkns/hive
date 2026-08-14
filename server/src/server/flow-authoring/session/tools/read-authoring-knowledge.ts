@@ -5,14 +5,14 @@ import { authoringGuide } from "workflow-engine/capabilities-manifest";
 import { defineTool } from "workflow-engine/runners";
 import { renderPatternsPrompt } from "../../patterns.ts";
 import { AUTHORING_RULES } from "../../rules.ts";
-import { FLOW_BLUEPRINT_SHAPE } from "../../vocabulary.ts";
+import { FLOW_DEFINITION_SHAPE } from "../../vocabulary.ts";
 import type { AuthoringItemState } from "../state.ts";
 
 // The knowledge reference the session agent consults on demand (progressive
 // disclosure): each topic returns the relevant module so the system prompt can
 // stay compact and the agent reads only what it needs when drafting.
 const KNOWLEDGE_TOPICS: Record<string, string> = {
-  vocabulary: FLOW_BLUEPRINT_SHAPE,
+  vocabulary: FLOW_DEFINITION_SHAPE,
   patterns: renderPatternsPrompt(),
   capabilities: authoringGuide(),
   rules: AUTHORING_RULES,

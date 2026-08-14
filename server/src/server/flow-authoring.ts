@@ -18,4 +18,7 @@ export {
   authoringSessionFlow,
 } from "./flow-authoring/session.ts";
 export { buildAuthoringSessionPrompt } from "./flow-authoring/session-prompt.ts";
-export { FLOW_BLUEPRINT_SHAPE } from "./flow-authoring/vocabulary.ts";
+export {
+  FLOW_BLUEPRINT_SHAPE,
+  FLOW_DEFINITION_SHAPE,
+} from "./flow-authoring/vocabulary.ts";

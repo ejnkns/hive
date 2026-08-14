@@ -8,13 +8,13 @@ import { authoringGuide } from "workflow-engine/capabilities-manifest";
 import { DESIGN_DECISIONS } from "./decisions.ts";
 import { renderPatternsPrompt } from "./patterns.ts";
 import { AUTHORING_RULES } from "./rules.ts";
-import { FLOW_BLUEPRINT_SHAPE } from "./vocabulary.ts";
+import { FLOW_DEFINITION_SHAPE } from "./vocabulary.ts";
 
 export function flowAuthoringMarkdown(): string {
   return [
     "# Flow Authoring — the Hive skill",
     "",
-    "The knowledge for designing and generating Hive flow definitions. This document is rendered from the same modules the in-product generation prompt uses (`server/src/server/flow-authoring/`), so it cannot drift from what the generator teaches the model.",
+    "The knowledge for designing Hive flow definitions. This document is rendered from the authoring knowledge modules (`server/src/server/flow-authoring/`), so it cannot drift from what the authoring session teaches the agent.",
     "",
     DESIGN_DECISIONS,
     "",
@@ -23,7 +23,7 @@ export function flowAuthoringMarkdown(): string {
     AUTHORING_RULES,
     "",
     "## Vocabulary",
-    FLOW_BLUEPRINT_SHAPE,
+    FLOW_DEFINITION_SHAPE,
     "",
     "## Engine capabilities",
     authoringGuide(),

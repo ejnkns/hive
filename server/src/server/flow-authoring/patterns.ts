@@ -185,7 +185,7 @@ const GIT_WORK_SKETCH = `git-backed work — work happens in a repository, with 
   the flow needs a basePath bound to the repo (configSchema with basePath, or an onboarding workflow
   that patches it via patch_flow_config).`;
 
-// Custom logic — the blueprint-referenced modules: file references for gates,
+// Custom logic — the definition-referenced modules: file references for gates,
 // tools, operations, edge transforms, and output extractors. Tested end to end
 // by the research-loop e2e (a custom gate deciding a transition + a custom
 // websearch tool returning a shaped result).
@@ -198,8 +198,8 @@ const CUSTOM_LOGIC_SKETCH = `custom-logic — reference a file for anything the 
   an operation task may declare "extract": { "ref": "./extractors/parse.ts", "fields": ["verdict"] } — a
     referenced output extractor that patches the declared instance-state fields
   an edge: "transform": { "ref": "./edges/to-summary.ts", "fields": ["title", "body"] } — the target fields
-  the renderer emits a contract-typed stub per reference; implement the stub's named export (keep the
-  name and contract) and generate again — hand edits are authoritative. A file gate reads the runtime
+  the referenced file implements the export the reference derives (keep the
+  name and contract) and validate again — hand edits are authoritative. A file gate reads the runtime
   gate context (ctx.workflowInstanceState), so keep its transition in a state whose tasks are all
   complete (auto-transitions evaluate after each task).
   example lifecycle: searching (ai-chat task with the custom tool) → extracting (extractor op) → done,
@@ -247,7 +247,7 @@ export function renderPatternsPrompt(): string {
     lines.push(`### ${pattern.name} — when: ${pattern.when}`);
     if (pattern.exemplar) {
       lines.push(
-        `A complete valid blueprint for this pattern:\n\`\`\`json\n${JSON.stringify(pattern.exemplar, null, 2)}\n\`\`\``
+        `A complete valid definition for this pattern:\n\`\`\`json\n${JSON.stringify(pattern.exemplar, null, 2)}\n\`\`\``
       );
     } else if (pattern.sketch) {
       lines.push(pattern.sketch);

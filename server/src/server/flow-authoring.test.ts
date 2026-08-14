@@ -8,7 +8,7 @@ import { describe, it } from "node:test";
 import {
   AUTHORING_RULES,
   DESIGN_DECISIONS,
-  FLOW_BLUEPRINT_SHAPE,
+  FLOW_DEFINITION_SHAPE,
   FLOW_PATTERNS,
   flowAuthoringMarkdown,
   STRUCTURED_INTAKE_EXEMPLAR,
@@ -24,7 +24,7 @@ describe("flow-authoring knowledge", () => {
     const decisionIndex = markdown.indexOf(DESIGN_DECISIONS);
     const patternsIndex = markdown.indexOf("## Patterns");
     const rulesIndex = markdown.indexOf(AUTHORING_RULES);
-    const vocabularyIndex = markdown.indexOf(FLOW_BLUEPRINT_SHAPE);
+    const vocabularyIndex = markdown.indexOf(FLOW_DEFINITION_SHAPE);
     const capabilitiesIndex = markdown.indexOf("## Engine capabilities");
 
     for (const [name, index] of [
