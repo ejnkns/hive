@@ -377,3 +377,87 @@ describe("loadDefinitionFromSource (a definition module validates → compiles �
     );
   });
 });
+
+// ─── the expressiveness oracle ────────────────────────────────────────
+
+// A definition carrying the vocabulary the blueprint could not express — a
+// custom render kind (ui.kinds), a task render hint, a flow-level ui.view,
+// and a file gate — validates and compiles. Nothing requires a hand-off
+// because "the blueprint can't express it".
+const EXPRESSIVE_MODULE = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "expressiveFlow",
+  label: "Expressive Flow",
+  configSchema: [],
+  ui: { view: "list", kinds: [{ kind: "score", contract: { props: [] } }] },
+  workflows: [
+    {
+      id: "items",
+      label: "Items",
+      instanceState: [
+        { field: "title", type: "string" },
+        { field: "verdict", type: "string" },
+      ],
+      initial: "ready",
+      terminalStates: ["done"],
+      states: [
+        {
+          id: "ready",
+          label: "Ready",
+          tasks: [
+            {
+              id: "score",
+              label: "Score",
+              role: "ai-task",
+              systemPrompt: "Score the item, then complete.",
+              completionOutput: [{ field: "outcome", type: "string" }],
+              render: { kind: "score", props: { content: "output.outcome" } },
+            },
+          ],
+          autoTransitions: [
+            { to: "done", gate: { kind: "file", ref: "./gates/approved.ts" } },
+          ],
+        },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  edges: [],
+};
+`;
+
+const EXPRESSIVE_FILES: Record<string, string> = {
+  "./gates/approved.ts": `import type { GateContract } from "workflow-engine/workflow-types";
+export const approved: GateContract = (ctx) =>
+  ctx.workflowInstanceState.verdict === "approved";
+`,
+};
+
+describe("the expressiveness oracle (vocabulary the blueprint could not express)", () => {
+  it("a definition with a custom render kind, a task render hint, a flow-level ui.view, and a file gate validates and compiles", async () => {
+    const { definition, findings } = parseDefinition(EXPRESSIVE_MODULE);
+    assert.deepEqual(findings, []);
+    assert.deepEqual(validateFlowDefinition(definition), []);
+    assert.equal(definition.ui?.view, "list");
+    assert.equal(definition.ui?.kinds?.[0]?.kind, "score");
+    assert.deepEqual(definition.workflows[0]?.states[0]?.tasks?.[0]?.render, {
+      kind: "score",
+      props: { content: "output.outcome" },
+    });
+
+    const loaded = await loadDefinitionFromSource(
+      "definition-expressive",
+      EXPRESSIVE_MODULE,
+      "expressiveFlow",
+      EXPRESSIVE_FILES
+    );
+    assert.ok("workflows" in loaded.flow);
+    const task = loaded.flow.workflows[0]?.states[0]?.tasks?.[0];
+    assert.deepEqual(task?.render, {
+      kind: "score",
+      props: { content: "output.outcome" },
+    });
+    assert.equal(loaded.flow.ui?.view, "list");
+  });
+});
