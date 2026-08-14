@@ -3,11 +3,14 @@ import { onMount } from "svelte";
 import type { FlowDefinitionDetail } from "../flow-api.ts";
 import {
   authorFlowDefinition,
+  createFlowDefinition,
   deleteFlow,
   deleteFlowDefinition,
   dispatchAction,
   fetchFlow,
   fetchFlowDefinition,
+  fetchFlowScaffold,
+  parseDefinitionRefs,
   saveAuthoringDefinition,
   saveAuthoringFile,
   saveAuthoringSource,
@@ -68,13 +71,48 @@ let saving = $state(false);
 let saveStatus = $state<string | null>(null);
 let editor: CodeEditor | null = $state(null);
 
+// The new-flow draft: the canonical scaffold (fetched from the server — one
+// source of truth), the file tabs derived from the draft's declared refs
+// (declared-but-unwritten refs get an empty tab, like the session editor),
+// and the label the hand-write Save defaults its name to.
+let scaffoldSource = $state("");
+let draftRefs = $state<string[]>([]);
+let draftLabel = $state("");
+let refsTimer: ReturnType<typeof setTimeout> | undefined;
+
 const filePaths = $derived(
   savedDetail ? Object.keys(savedDetail.files ?? {}).sort() : []
 );
 
+// The source the no-session editor shows: the scaffold (new flow) or the
+// saved definition's source, overridden by any in-flight edit.
+const draftSource = $derived(
+  isNew
+    ? (editedValues.definition ?? scaffoldSource)
+    : (editedValues.definition ?? savedDetail?.source ?? "")
+);
+
+// The tabs in the new-flow state derive from the draft's declared refs; the
+// saved state derives from persisted files only.
+const draftFilePaths = $derived(isNew ? draftRefs : filePaths);
+
+// The referenced files of the new-flow draft: the declared refs the human has
+// actually written (an unwritten ref simply doesn't exist — the module-set
+// gate flags the missing file on save, like the session's declared-but-
+// unwritten tabs).
+const draftFiles = $derived(
+  isNew
+    ? Object.fromEntries(
+        draftRefs
+          .filter((ref) => (editedValues[ref] ?? "") !== "")
+          .map((ref) => [ref, editedValues[ref] ?? ""])
+      )
+    : null
+);
+
 const activeValue = $derived(
   activeTab === "definition"
-    ? (editedValues.definition ?? savedDetail?.source ?? "")
+    ? draftSource
     : (editedValues[activeTab] ?? savedDetail?.files?.[activeTab] ?? "")
 );
 
@@ -120,13 +158,22 @@ async function startAuthoring(lucky: boolean) {
   authoring = true;
   error = null;
   try {
-    // When revising an existing definition, hand the agent its current source
-    // so it can propose changes rather than designing from scratch.
     let context: string | undefined;
     let files: Record<string, string> | undefined;
-    if (!isNew && definitionId) {
+    let source: string | undefined;
+    if (isNew) {
+      // The new-flow draft: the (possibly hand-edited) scaffold + its
+      // referenced files flush into the session so the editor's Definition
+      // tab shows them from turn zero (the edit IS the state — no agent
+      // re-emit).
+      source = draftSource;
+      if (Object.keys(draftFiles ?? {}).length > 0) files = draftFiles ?? {};
+    } else if (definitionId) {
+      // When revising an existing definition, hand the agent its current
+      // source so it can propose changes rather than designing from scratch.
       const detail = await fetchFlowDefinition(definitionId);
       context = `The user wants changes to this existing definition source:\n\n\`\`\`ts\n${detail.source ?? ""}\n\`\`\``;
+      source = detail.source ?? "";
       // Seed the revision session with the existing definition's referenced
       // files so the editor tabs and the agent's file tools see them.
       files =
@@ -140,6 +187,7 @@ async function startAuthoring(lucky: boolean) {
       prompt: aiPrompt.trim(),
       lucky,
       context,
+      source,
       files,
     });
     authorFlowId = flowId;
@@ -301,6 +349,68 @@ function selectTab(tab: string) {
 function handleFileEdit(event: CustomEvent<{ value: string }>) {
   editedValues[activeTab] = event.detail.value;
   saveStatus = null;
+  // The new-flow file tabs derive from the draft's declared refs: re-derive
+  // them (debounced) after each definition edit, so a ref the human just
+  // declared gets its tab and one they removed disappears.
+  if (isNew && activeTab === "definition") {
+    clearTimeout(refsTimer);
+    refsTimer = setTimeout(() => void refreshDraftRefs(), 400);
+  }
+}
+
+// Re-derives the new-flow draft's declared refs + label from its current
+// source (server-parsed — the same ref authority the compile step uses).
+async function refreshDraftRefs() {
+  if (!isNew) return;
+  const source = editedValues.definition ?? scaffoldSource;
+  if (source === "") {
+    draftRefs = [];
+    draftLabel = "";
+    return;
+  }
+  try {
+    const { refs, label } = await parseDefinitionRefs(source);
+    draftRefs = refs;
+    draftLabel = label;
+    if (activeTab !== "definition" && !refs.includes(activeTab)) {
+      activeTab = "definition";
+    }
+  } catch {
+    // Unparseable draft: no tabs can be derived; keep the definition tab.
+    draftRefs = [];
+    draftLabel = "";
+    activeTab = "definition";
+  }
+}
+
+// The hand-write path: saves the new-flow draft (the scaffold + any edited
+// referenced files) as a real definition — no agent session involved. The
+// name defaults to the draft's label (e.g. the scaffold's "My Flow" →
+// "my-flow"); the user can change it by editing the label in the module.
+async function saveNewDefinition(): Promise<boolean> {
+  if (!isNew || saving) return false;
+  const source = draftSource;
+  if (source === "") return false;
+  saving = true;
+  error = null;
+  saveStatus = null;
+  try {
+    const name = draftLabel !== "" ? draftLabel : "Untitled flow";
+    const files =
+      Object.keys(draftFiles ?? {}).length > 0 ? (draftFiles ?? {}) : undefined;
+    const result = await createFlowDefinition({ name, source, files });
+    saveStatus = "Saved";
+    // The definition now exists: leave the new-flow state and route to its
+    // edit page (the session and the instantiate form are one hop away).
+    localStorage.removeItem(authorStorageKey());
+    window.location.hash = `#/flows/${encodeURIComponent(result.id)}/edit`;
+    return true;
+  } catch (err) {
+    error = err instanceof Error ? err.message : "Failed to save definition";
+    return false;
+  } finally {
+    saving = false;
+  }
 }
 
 // The explicit save: PUT the current source + files to the definition-update
@@ -340,6 +450,20 @@ async function saveDefinition(): Promise<boolean> {
 onMount(() => {
   void load();
   void resumeAuthoring();
+  // The new-flow draft: fetch the canonical scaffold (one server-owned
+  // constant) and derive its tabs — the scaffold itself declares no refs,
+  // but its label seeds the Save default.
+  if (isNew) {
+    void fetchFlowScaffold()
+      .then((source) => {
+        scaffoldSource = source;
+        return refreshDraftRefs();
+      })
+      .catch((err) => {
+        error =
+          err instanceof Error ? err.message : "Failed to load the scaffold";
+      });
+  }
 });
 
 async function load() {
@@ -433,60 +557,42 @@ async function remove() {
       onSendMessage={handleAuthorSend}
       onPatchState={handleAuthorPatch}
     />
-  {:else if isNew}
-    <div class="start-session">
-      <p class="ai-hint">
-        Describe the flow you want. The agent will ask what is unclear, then
-        draft the definition module with you — or try "I'm feeling lucky" for a
-        one-shot attempt. The definition renders as the session's editable
-        editor; you can edit the TypeScript directly at any time (your edits ARE
-        the state — the agent's next turn reads them).
-      </p>
-      <Textarea
-        bind:value={aiPrompt}
-        placeholder="A review flow: a ready state with an approve/reject action..."
-      />
-      <div class="start-actions">
-        <Button
-          variant="azure"
-          disabled={authoring || !aiPrompt.trim()}
-          onclick={() => startAuthoring(false)}
-        >
-          {authoring ? "Starting session..." : "Start conversation"}
-        </Button>
-        <Button
-          variant="platinum"
-          disabled={authoring || !aiPrompt.trim()}
-          onclick={() => startAuthoring(true)}
-        >
-          I'm feeling lucky
-        </Button>
-      </div>
-    </div>
   {:else}
-    <!-- A saved definition with no active session: the persistent files are
-         always visible and editable — the session is a collaborator, not the
-         only way to see the flow. -->
+    <!-- The no-session files editor: for a NEW flow the canonical scaffold is
+         the editable draft (hand-write it and Save — no agent needed); for a
+         saved definition the persistent files stay visible and editable. The
+         session is a collaborator, not the only way to see the flow. -->
     <div class="session-bar">
+      {#if isNew}
+        <p class="draft-hint">
+          You start from a minimal valid scaffold — edit it directly (your edits
+          ARE the definition) and save, or describe the flow you want and let
+          the agent extend it with you.
+        </p>
+      {/if}
       <div class="session-prompt">
         <Textarea
           bind:value={aiPrompt}
           rows={1}
-          placeholder="What would you like to change about this definition? The agent reads your current source and revises it with you."
+          placeholder={isNew
+            ? "Describe the flow you want — or save the scaffold as-is"
+            : "What would you like to change about this definition? The agent reads your current source and revises it with you."}
         />
       </div>
       <div class="start-actions">
         <Button
           variant="azure"
           disabled={authoring || !aiPrompt.trim()}
-          onclick={() => startAuthoringFromFiles(false)}
+          onclick={() =>
+            isNew ? startAuthoring(false) : startAuthoringFromFiles(false)}
         >
           {authoring ? "Starting session..." : "Start conversation"}
         </Button>
         <Button
           variant="platinum"
           disabled={authoring || !aiPrompt.trim()}
-          onclick={() => startAuthoringFromFiles(true)}
+          onclick={() =>
+            isNew ? startAuthoring(true) : startAuthoringFromFiles(true)}
         >
           I'm feeling lucky
         </Button>
@@ -500,7 +606,7 @@ async function remove() {
       >
         Definition
       </button>
-      {#each filePaths as path (path)}
+      {#each draftFilePaths as path (path)}
         <button
           type="button"
           class:active={activeTab === path}
@@ -525,10 +631,14 @@ async function remove() {
       <Button
         variant="azure"
         size="small"
-        disabled={!hasPendingEdits || saving}
-        onclick={() => void saveDefinition()}
+        disabled={saving || (isNew ? draftSource === "" : !hasPendingEdits)}
+        onclick={() => void (isNew ? saveNewDefinition() : saveDefinition())}
       >
-        {saving ? "Saving..." : "Save definition"}
+        {saving
+          ? "Saving..."
+          : isNew
+            ? "Save as new flow"
+            : "Save definition"}
       </Button>
       {#if saveStatus}
         <span class="saved-status">{saveStatus}</span>
@@ -615,11 +725,11 @@ h1 {
   border-color: var(--error);
 }
 
-.start-session {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  max-width: 480px;
+.draft-hint {
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.4;
+  margin: 0 0 0.5rem;
 }
 
 .session-bar {
@@ -700,13 +810,6 @@ h1 {
 .saved-status {
   font-size: 0.625rem;
   color: var(--success);
-}
-
-.ai-hint {
-  font-size: 0.75rem;
-  color: var(--muted);
-  line-height: 1.4;
-  margin: 0;
 }
 
 .start-actions {

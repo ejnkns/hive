@@ -169,6 +169,10 @@ export async function authorFlowDefinition(input: {
   // Optional extra context for the first message (e.g. an existing definition
   // source the agent should revise).
   context?: string;
+  // The definition module the session starts from — a new flow's (possibly
+  // hand-edited) scaffold, so the editor's Definition tab shows it from turn
+  // zero and the agent's first read_definition_source sees it.
+  source?: string;
   // The referenced file set of an existing definition being revised — the
   // session seeds its module set from these so the file tabs and the agent's
   // file tools see the current files.
@@ -282,6 +286,43 @@ export async function deleteFlow(flowId: string, purge = false): Promise<void> {
   }
 }
 
+// The canonical scaffold for a new flow: the single server-owned definition
+// module the new-flow editor shows as its editable draft (the editor never
+// carries its own copy).
+export async function fetchFlowScaffold(): Promise<string> {
+  const res = await fetch("/api/flows/definitions/scaffold");
+  if (!res.ok) {
+    // Error response shape is guaranteed by the server endpoint
+    const err = (await res.json()) as { error?: string };
+    throw new Error(err.error ?? `Failed to fetch scaffold: ${res.statusText}`);
+  }
+  // Success response shape is guaranteed by the server endpoint
+  return ((await res.json()) as { source: string }).source;
+}
+
+// The declared refs + label of a draft definition module: the new-flow
+// editor derives its file tabs from the refs (declared-but-unwritten refs get
+// an empty tab, like the session editor) and defaults the hand-write Save's
+// name to the label.
+export async function parseDefinitionRefs(
+  source: string
+): Promise<{ refs: string[]; label: string }> {
+  const res = await fetch("/api/flows/definitions/refs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ source }),
+  });
+  if (!res.ok) {
+    // Error response shape is guaranteed by the server endpoint
+    const err = (await res.json()) as { error?: string };
+    throw new Error(
+      err.error ?? `Failed to parse definition: ${res.statusText}`
+    );
+  }
+  // Success response shape is guaranteed by the server endpoint
+  return (await res.json()) as { refs: string[]; label: string };
+}
+
 export async function fetchFlowDefinitions(): Promise<FlowDefinitionSummary[]> {
   const res = await fetch("/api/flows/definitions");
   if (!res.ok)
@@ -313,6 +354,9 @@ export async function createFlowDefinition(input: {
   name: string;
   description?: string;
   source: string;
+  // The referenced file set of the definition (hand-written files, saved
+  // together with the module through the same seam the session save uses).
+  files?: Record<string, string>;
 }): Promise<FlowDefinitionSummary> {
   const res = await fetch("/api/flows/definitions", {
     method: "POST",

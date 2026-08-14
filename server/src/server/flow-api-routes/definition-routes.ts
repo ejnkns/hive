@@ -3,6 +3,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
+import { collectDefinitionRefs } from "workflow-engine/compile-flow-definition";
 import { FLOW_SCAFFOLD_SOURCE } from "../flow-authoring/scaffold.ts";
 import {
   saveAuthoringDefinition,
@@ -400,6 +401,26 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
       checkWarnings,
       typeErrors,
     });
+  });
+
+  server.post("/api/flows/definitions/refs", async (request, reply) => {
+    // The declared refs + label of a definition module the no-session editor
+    // is drafting: the new-flow editor derives its file tabs from these (the
+    // same ref authority the compile step uses), and the hand-write Save
+    // defaults the definition name to the module's label.
+    const body = request.body as { source?: string } | null;
+    const source = body?.source;
+    if (typeof source !== "string" || source.trim() === "") {
+      return reply.status(400).send({ error: "source is required" });
+    }
+    try {
+      const { definition } = parseDefinition(source);
+      const refs = collectDefinitionRefs(definition).map((ref) => ref.ref);
+      return reply.send({ refs, label: definition.label ?? "" });
+    } catch {
+      // Not parseable TypeScript: no tabs can be derived from it.
+      return reply.send({ refs: [], label: "" });
+    }
   });
 
   server.post("/api/flows/definitions", async (request, reply) => {

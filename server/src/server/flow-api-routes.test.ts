@@ -966,6 +966,88 @@ describe("flow API routes", () => {
     ws.close();
   });
 
+  it("POST /api/flows/definitions/refs returns the draft's declared refs + label", async () => {
+    setFlowPersistence(noopPersistence);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const source = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "draft",
+  label: "Draft Flow",
+  description: "",
+  configSchema: [],
+  workflows: [
+    {
+      id: "items",
+      label: "Items",
+      instanceState: [{ field: "title", type: "string" }],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
+        {
+          id: "new",
+          label: "New",
+          category: "initial",
+          tasks: [
+            {
+              id: "runAgent",
+              label: "Run agent",
+              role: "ai-task",
+              systemPrompt: "Do the work and call the completion tool.",
+              tools: ["websearch"],
+            },
+          ],
+          autoTransitions: [
+            { to: "done", gate: { kind: "file", ref: "./gates/ok.ts" } },
+          ],
+        },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  tools: [{ id: "websearch", ref: "./tools/websearch.ts", writes: [] }],
+  actions: [],
+  edges: [],
+};`;
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions/refs",
+      body: { source },
+    });
+    assert.equal(response.statusCode, 200);
+    const { refs, label } = response.json() as {
+      refs: string[];
+      label: string;
+    };
+    assert.equal(label, "Draft Flow");
+    assert.deepEqual(
+      refs.sort(),
+      ["./gates/ok.ts", "./tools/websearch.ts"].sort(),
+      "the draft's declared refs drive the editor's file tabs"
+    );
+
+    // The scaffold declares no refs; its label seeds the Save default.
+    const scaffold = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions/refs",
+      body: { source: FLOW_SCAFFOLD_SOURCE },
+    });
+    const scaffoldBody = scaffold.json() as { refs: string[]; label: string };
+    assert.equal(scaffoldBody.label, "My Flow");
+    assert.deepEqual(scaffoldBody.refs, []);
+
+    // Unparseable source: no tabs can be derived.
+    const broken = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions/refs",
+      body: { source: "not a definition module at all" },
+    });
+    assert.deepEqual(broken.json(), { refs: [], label: "" });
+  });
+
   it("POST /api/flows/definitions/author creates an authoring session", async () => {
     setFlowPersistence(noopPersistence);
     registerFlowDefinition(authoringSessionFlow, { hidden: true });
