@@ -1,54 +1,11 @@
 /** The system prompt for the conversational flow-authoring session: a compact
- * core (interaction rules, the design decisions, a valid starter skeleton)
- * with the heavy reference — vocabulary, pattern exemplars, capabilities,
+ * core (interaction rules, the design decisions, a pointer to the scaffold
+ * already in the editor) with the heavy reference — vocabulary, capabilities,
  * rules — deferred behind the read_authoring_knowledge tool, so the agent
  * reads only what it needs when it needs it (the progressive-disclosure
  * pattern) instead of chewing through a huge prompt before its first reply. */
 
 import { readKnowledge } from "./knowledge.ts";
-
-// A compact but VALID definition module the agent begins from: change the
-// id/label to the user's domain and extend it as decisions land. Kept inline
-// so the first draft can be a real, compiling definition within a couple of
-// turns.
-export const STARTER_SKELETON = `import type { FlowDefinition } from "workflow-engine/workflow-types";
-
-export const flow: FlowDefinition = {
-  id: "myFlow",
-  label: "My Flow",
-  description: "Describe what this flow does.",
-  configSchema: [],
-  workflows: [
-    {
-      id: "items",
-      label: "Items",
-      instance: { title: "title" },
-      display: { fields: [{ path: "title", label: "Title" }] },
-      instanceState: [{ field: "title", type: "string" }],
-      initial: "new",
-      terminalStates: ["done"],
-      states: [
-        { id: "new", label: "New", category: "initial" },
-        { id: "done", label: "Done", category: "terminal" },
-      ],
-    },
-  ],
-  actions: [
-    {
-      id: "add_item",
-      label: "Add an item",
-      variant: "primary",
-      createInstance: {
-        workflowId: "items",
-        fields: [
-          { key: "title", label: "Title", type: "string", required: true },
-        ],
-      },
-    },
-  ],
-  edges: [],
-};
-`;
 
 export function buildAuthoringSessionPrompt(): string {
   return [
@@ -56,7 +13,7 @@ export function buildAuthoringSessionPrompt(): string {
     "",
     "## Working with the user",
     "Focus on coming to a shared understanding with the user before exploring possibilities. Ask one or two clarifying questions at a time — the few that actually change the design (entities and lifecycles, where AI is used, what structured data each ai-task returns, how a human drives it, how workflows connect, and the error escape hatch).",
-    "Start drafting as soon as the first decisions land: begin from the starter skeleton below (change the id/label to the user's domain), then add each workflow, state, task, and action as the user's decisions solidify. Call `set_flow_definition` after every substantive change with the complete definition module — the editor preview updates live, so the user watches the definition take shape.",
+    "Start drafting as soon as the first decisions land: the editor already shows a scaffold definition — read it with `read_definition_source`, change the id/label to the user's domain, then add each workflow, state, task, and action as the user's decisions solidify. Call `set_flow_definition` after every substantive change with the complete definition module — the editor preview updates live, so the user watches the definition take shape.",
     "Keep improving the same draft as the conversation progresses; never start over unless the user changes direction.",
     "When the user asks to validate (or clicks Generate), call `validate_definition` — it runs the full gate on the current module and its referenced files (validation, lint, import policy, typecheck, declared writes, and the load). If it returns findings, fix the module (or the referenced files) and call it again. A successful validation compiles the definition to the runtime projection, but the conversation continues — keep refining.",
     'When asked to "just generate it" or "I\'m feeling lucky", do not ask questions — consult the knowledge reference (vocabulary, rules), produce the best complete definition module you can from the request, then validate.',
@@ -69,9 +26,8 @@ export function buildAuthoringSessionPrompt(): string {
     "",
     readKnowledge("decisions"),
     "",
-    "## Starter skeleton (a valid draft to begin from)",
-    "Begin your first `set_flow_definition` from this shape — change the id/label to the user's domain and extend it as decisions land:",
-    `\`\`\`ts\n${STARTER_SKELETON}\n\`\`\``,
+    "## The scaffold (already in the editor)",
+    "The editor's Definition tab shows a minimal valid scaffold definition (one workflow, one createInstance action). It IS the current source — read it with `read_definition_source`, then change the id/label to the user's domain and extend it as decisions land. Never re-emit a copy from memory; build on what `read_definition_source` returns.",
     "",
     "## Knowledge reference (consult on demand)",
     "The exact vocabulary, capability list, and failure-mode rules are NOT inline — call the `read_authoring_knowledge` tool with a topic whenever you need the precise details before writing or extending a definition:",

@@ -8,6 +8,7 @@ export {
   type KnowledgeTopic,
   readKnowledge,
 } from "./flow-authoring/knowledge.ts";
+export { FLOW_SCAFFOLD_SOURCE } from "./flow-authoring/scaffold.ts";
 export {
   AUTHORING_DEFINITION_ID,
   authoringSessionFlow,

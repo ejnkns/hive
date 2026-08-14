@@ -20,7 +20,11 @@ import {
 } from "workflow-engine/runners";
 import type { ToolCall } from "workflow-engine/runners/tool-types";
 import type { TaskRunnerContext } from "workflow-engine/task-runner";
-import { parseDefinition } from "../flow-definition.ts";
+import {
+  analyzeFlowDefinition,
+  parseDefinition,
+  validateFlowDefinition,
+} from "../flow-definition.ts";
 import {
   getRegisteredFlowDefinition,
   loadUserDefinitionsFromDisk,
@@ -28,12 +32,12 @@ import {
   runtimeDefinitionsDir,
   setDefinitionsBasePathForTest,
 } from "../flow-definitions.ts";
+import { FLOW_SCAFFOLD_SOURCE } from "./scaffold.ts";
 import {
   type AuthoringItemState,
   authoringSessionFlow,
   authoringTools,
 } from "./session.ts";
-import { STARTER_SKELETON } from "./session-prompt.ts";
 
 // A definition module with one referenced tool, used to drive the file-editing
 // loop in-conversation.
@@ -503,9 +507,22 @@ describe("flow-authoring session", () => {
     assert.match(unknown.content, /Unknown topic/);
   });
 
-  it("the starter skeleton is a valid definition module the agent begins from", () => {
-    const { definition, findings } = parseDefinition(STARTER_SKELETON);
+  it("the canonical scaffold is a valid definition module with zero errors and zero warnings", () => {
+    // The scaffold is what the new-flow editor shows and every session seeds
+    // from — it must stay valid as the vocabulary evolves (the new-flow
+    // screen is unbreakable).
+    const { definition, findings } = parseDefinition(FLOW_SCAFFOLD_SOURCE);
     assert.deepEqual(findings, []);
+    assert.deepEqual(
+      validateFlowDefinition(definition),
+      [],
+      "the scaffold must have zero validation errors"
+    );
+    assert.deepEqual(
+      analyzeFlowDefinition(definition),
+      [],
+      "the scaffold must analyze clean (zero warnings)"
+    );
     assert.equal(definition.id, "myFlow");
     assert.equal(definition.workflows.length, 1);
   });

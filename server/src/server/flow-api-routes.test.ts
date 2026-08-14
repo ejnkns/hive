@@ -23,6 +23,7 @@ import { loadPresetDefinition } from "./preset-flow.ts";
 const queenBeeCompiled = (await loadPresetDefinition("queen-bee")).flow;
 
 import { registerFlowApiRoutes } from "./flow-api-routes.ts";
+import { FLOW_SCAFFOLD_SOURCE } from "./flow-authoring/scaffold.ts";
 import { authoringSessionFlow } from "./flow-authoring/session.ts";
 import {
   registerFlowDefinition,
@@ -1054,6 +1055,134 @@ describe("flow API routes", () => {
     } else {
       assert.fail("lucky drafting must run an ai-chat session");
     }
+  });
+
+  it("GET /api/flows/definitions/scaffold serves the canonical scaffold source", async () => {
+    setFlowPersistence(noopPersistence);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const response = await server.inject({
+      method: "GET",
+      url: "/api/flows/definitions/scaffold",
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(
+      (response.json() as { source?: string }).source,
+      FLOW_SCAFFOLD_SOURCE,
+      "the editor must get the same canonical constant the session seeds"
+    );
+  });
+
+  it("POST /api/flows/definitions/author seeds the canonical scaffold when no source is given", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition(authoringSessionFlow, { hidden: true });
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions/author",
+      body: { prompt: "Build a triage flow" },
+    });
+    assert.equal(response.statusCode, 201);
+    const { flowId, instanceId } = response.json() as {
+      flowId: string;
+      instanceId: string;
+    };
+    const controller = getFlowRuntime(flowId)?.getWorkflowInstance(instanceId);
+    assert.ok(controller, "the authoring session must exist");
+    const state = controller.getState().workflowInstanceState as {
+      source?: string;
+      parsedDefinition?: { id?: string };
+      previewErrors?: string[];
+    };
+    assert.equal(state.source, FLOW_SCAFFOLD_SOURCE);
+    // The Definition tab binds to the parsed definition from turn zero.
+    assert.equal(state.parsedDefinition?.id, "myFlow");
+    assert.deepEqual(state.previewErrors, []);
+  });
+
+  it("POST /api/flows/definitions/author seeds the editor's source when given", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition(authoringSessionFlow, { hidden: true });
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const source = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "triaged",
+  label: "Triage",
+  description: "hand-written before the session",
+  configSchema: [],
+  workflows: [
+    {
+      id: "tickets",
+      label: "Tickets",
+      instanceState: [{ field: "title", type: "string" }],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
+        { id: "new", label: "New", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  actions: [],
+  edges: [],
+};`;
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions/author",
+      body: { prompt: "Keep going", source },
+    });
+    assert.equal(response.statusCode, 201);
+    const { flowId, instanceId } = response.json() as {
+      flowId: string;
+      instanceId: string;
+    };
+    const controller = getFlowRuntime(flowId)?.getWorkflowInstance(instanceId);
+    assert.ok(controller, "the authoring session must exist");
+    const state = controller.getState().workflowInstanceState as {
+      source?: string;
+      parsedDefinition?: { id?: string };
+    };
+    assert.equal(state.source, source);
+    assert.equal(state.parsedDefinition?.id, "triaged");
+  });
+
+  it("POST /api/flows/definitions/author seeds no scaffold for a revision session with context", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition(authoringSessionFlow, { hidden: true });
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions/author",
+      body: {
+        prompt: "Revise this",
+        context: "The user wants changes to an existing definition source.",
+      },
+    });
+    assert.equal(response.statusCode, 201);
+    const { flowId, instanceId } = response.json() as {
+      flowId: string;
+      instanceId: string;
+    };
+    const controller = getFlowRuntime(flowId)?.getWorkflowInstance(instanceId);
+    assert.ok(controller, "the authoring session must exist");
+    const state = controller.getState().workflowInstanceState as {
+      source?: string;
+    };
+    // A revision session brings its own definition via context + files; the
+    // scaffold must not mask it.
+    assert.equal(state.source, undefined);
   });
 
   it("POST /api/flows/definitions/author/:flowId/save registers the session's generated definition synchronously", async () => {

@@ -3,6 +3,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
+import { FLOW_SCAFFOLD_SOURCE } from "../flow-authoring/scaffold.ts";
 import {
   saveAuthoringDefinition,
   savePatch,
@@ -44,6 +45,13 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
       })
     );
     return reply.send({ definitions });
+  });
+
+  server.get("/api/flows/definitions/scaffold", async (_request, reply) => {
+    // The canonical scaffold the new-flow editor shows and the authoring
+    // session seeds from: one server constant (flow-authoring/scaffold.ts)
+    // shared with the session prompt — the editor never carries its own copy.
+    return reply.send({ source: FLOW_SCAFFOLD_SOURCE });
   });
 
   server.get("/api/flows/definitions/:id", async (request, reply) => {
@@ -118,6 +126,11 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
       prompt?: string;
       lucky?: boolean;
       context?: string;
+      // The definition module the session starts from — for a new flow the
+      // editor's (possibly hand-edited) scaffold. Absent, a brand-new session
+      // (no context) seeds the canonical scaffold so the editor's Definition
+      // tab shows a valid draft from turn zero.
+      source?: string;
       // The referenced file set of an existing definition being revised — the
       // session seeds its module-set working directory from these so the file
       // tabs and the read/write tools see the current files.
@@ -154,6 +167,41 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
       // only this session's files.
       moduleSetSlug: flowId,
     });
+    // A session that brings its own definition (the editor's hand-edited
+    // scaffold for a new flow) — or, when it brings none and is not a
+    // revision, the canonical scaffold — seeds the instance state so the
+    // Definition tab binds to it from turn zero and the agent's first
+    // read_definition_source sees it instead of an empty tab.
+    const context = typeof body?.context === "string" ? body.context : "";
+    const seedSource =
+      typeof body?.source === "string" && body.source.trim() !== ""
+        ? body.source
+        : context === ""
+          ? FLOW_SCAFFOLD_SOURCE
+          : undefined;
+    if (seedSource !== undefined) {
+      try {
+        const { definition, findings } = parseDefinition(seedSource);
+        controller?.patchWorkflowInstanceState({
+          source: seedSource,
+          parsedDefinition: definition,
+          previewErrors: [
+            ...validateFlowDefinition(definition).map(
+              (e) => `definition.${e.path}: ${e.message}`
+            ),
+            ...analyzeFlowDefinition(definition).map(
+              (finding) => `flow: ${finding}`
+            ),
+            ...findings,
+          ],
+        });
+      } catch {
+        // Not parseable TypeScript: keep the source so the editor still shows
+        // it; the Definition tab binds to nothing until it parses (mirrors
+        // the /source write-back).
+        controller?.patchWorkflowInstanceState({ source: seedSource });
+      }
+    }
     // A revision session seeds the existing definition's referenced files so
     // they are visible in the editor tabs and editable in-conversation (hand
     // edits remain authoritative).
@@ -174,7 +222,6 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
     }
     const taskId = controller?.getState().runningTaskId;
     if (taskId) {
-      const context = typeof body?.context === "string" ? body.context : "";
       const firstMessage = lucky
         ? `Produce the complete flow definition module now. Do not ask clarifying questions — make reasonable assumptions, call set_flow_definition, then call validate_definition.\n\nRequest: ${prompt.trim()}${context ? `\n\n${context}` : ""}`
         : `${prompt.trim()}${context ? `\n\n${context}` : ""}`;
