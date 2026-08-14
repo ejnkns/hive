@@ -38,25 +38,6 @@ import {
   resetFlowRuntimesForTest,
   setFlowPersistence,
 } from "./flow-registry.ts";
-import { setGenerationModelCallerForTest } from "./generate-flow-definition.ts";
-
-// Parses the SSE body the generate route streams: one `data: {json}\n\n`
-// event per line.
-function parseSseEvents(body: string): Array<Record<string, unknown>> {
-  const events: Array<Record<string, unknown>> = [];
-  for (const block of body.split("\n\n")) {
-    const line = block.trim();
-    if (!line.startsWith("data: ")) continue;
-    try {
-      events.push(
-        JSON.parse(line.slice("data: ".length)) as Record<string, unknown>
-      );
-    } catch {
-      // skip malformed frames
-    }
-  }
-  return events;
-}
 
 const testWorkflow = defineWorkflow({
   id: "test-wf",
@@ -297,7 +278,6 @@ describe("flow API routes", () => {
 
   afterEach(async () => {
     await Promise.all(servers.splice(0).map((s) => s.close()));
-    setGenerationModelCallerForTest(undefined);
   });
 
   it("GET /api/flows returns flows with definitions and instances", async () => {
@@ -985,109 +965,6 @@ describe("flow API routes", () => {
     ws.close();
   });
 
-  it("POST /api/flows/definitions/generate streams progress and returns source + report", async () => {
-    // A stubbed model: the route reaches the loop through the seam.
-    const validSpec = {
-      id: "routeFlow",
-      label: "Route Flow",
-      configSchema: [],
-      workflows: [
-        {
-          id: "route",
-          label: "Route",
-          instance: { title: "title" },
-          instanceState: [{ field: "title", type: "string" }],
-          initialState: "idle",
-          terminalStates: ["done"],
-          states: [
-            {
-              id: "idle",
-              label: "Idle",
-              category: "initial",
-              actions: [
-                {
-                  id: "start",
-                  label: "Start",
-                  variant: "primary",
-                  transitionTo: "done",
-                },
-              ],
-            },
-            { id: "done", label: "Done", category: "terminal" },
-          ],
-        },
-      ],
-      actions: [
-        {
-          id: "add",
-          label: "Add item",
-          variant: "primary",
-          createInstance: {
-            workflowId: "route",
-            fields: [{ key: "title", label: "Title", type: "string" }],
-          },
-        },
-      ],
-      edges: [],
-    };
-    setGenerationModelCallerForTest(async (_messages, callbacks) => {
-      callbacks?.onDelta?.("designing the flow...");
-      return `\`\`\`json\n${JSON.stringify(validSpec)}\n\`\`\``;
-    });
-
-    const server = Fastify();
-    servers.push(server);
-    registerFlowApiRoutes(server);
-
-    const response = await server.inject({
-      method: "POST",
-      url: "/api/flows/definitions/generate",
-      body: { prompt: "a simple two-state flow" },
-    });
-
-    assert.equal(response.statusCode, 200);
-    assert.ok(
-      response.headers["content-type"]?.startsWith("text/event-stream"),
-      "generation must stream SSE"
-    );
-
-    // Parse the SSE body: stage/delta events followed by a done event.
-    const events = parseSseEvents(response.body);
-    const types = events.map((e) => e.type);
-    assert.ok(
-      types.includes("stage") &&
-        types.includes("delta") &&
-        types.includes("done"),
-      `expected stage/delta/done events, got: ${types.join(", ")}`
-    );
-    const done = events.find((e) => e.type === "done") as {
-      source: string;
-      report: { passed: boolean; attempts: number; errors: string[] };
-    };
-    assert.ok(
-      done.source.includes("defineWorkflow"),
-      "expected a rendered definition source"
-    );
-    assert.equal(done.report.passed, true);
-    assert.equal(done.report.attempts, 1);
-    assert.deepEqual(done.report.errors, []);
-  });
-
-  it("POST /api/flows/definitions/generate requires a prompt", async () => {
-    const server = Fastify();
-    servers.push(server);
-    registerFlowApiRoutes(server);
-
-    const response = await server.inject({
-      method: "POST",
-      url: "/api/flows/definitions/generate",
-      body: {},
-    });
-
-    assert.equal(response.statusCode, 400);
-    assert.equal(response.json().error, "prompt is required");
-  });
-
   it("POST /api/flows/definitions/author creates an authoring session", async () => {
     setFlowPersistence(noopPersistence);
     registerFlowDefinition(authoringSessionFlow, { hidden: true });
@@ -1550,47 +1427,32 @@ describe("flow API routes", () => {
     assert.equal(listed.name, "Custom Flow");
   });
 
-  it("POST /api/flows/definitions annotates (does not block) schema-consistency findings", async () => {
+  it("POST /api/flows/definitions annotates (does not block) definition-validator warnings", async () => {
     const server = Fastify();
     servers.push(server);
     registerFlowApiRoutes(server);
 
-    // A definition that loads fine but has a gate reading a field nothing
-    // ever writes — the check's motivating error class.
-    const inconsistentSource = `
-import { defineWorkflow } from "workflow-engine/workflow-types";
+    // A definition that loads fine but nothing ever creates an instance — the
+    // analyzer's advisory warning class (non-blocking annotation).
+    const noCreationSource = `import type { FlowDefinition } from "workflow-engine/workflow-types";
 
-type BadState = {
-  verdict?: string;
-};
-
-const wf = defineWorkflow({
-  id: "bad",
-  label: "Bad",
-  taskOutputs: {} as Record<string, never>,
-  workflowInstanceState: {} as BadState,
-  states: [
+export const flow: FlowDefinition = {
+  id: "noCreationFlow",
+  label: "No Creation Flow",
+  configSchema: [],
+  workflows: [
     {
-      id: "pending",
-      label: "Pending",
-      category: "initial",
-      autoTransitions: [
-        {
-          to: "done",
-          gate: (ctx) => ctx.workflowInstanceState.missingField === "x",
-        },
+      id: "items",
+      label: "Items",
+      instanceState: [{ field: "title", type: "string" }],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
+        { id: "new", label: "New", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
       ],
     },
-    { id: "done", label: "Done", category: "terminal" },
   ],
-  initial: "pending",
-  terminalStates: ["done"],
-});
-
-export const flow = {
-  id: "inconsistent-flow",
-  label: "Inconsistent Flow",
-  workflows: [wf],
   edges: [],
 };
 `;
@@ -1598,15 +1460,18 @@ export const flow = {
     const response = await server.inject({
       method: "POST",
       url: "/api/flows/definitions",
-      body: { name: "Inconsistent Flow", source: inconsistentSource },
+      body: { name: "No Creation Flow", source: noCreationSource },
     });
 
-    // Saved despite the findings — the annotation is non-blocking.
+    // The annotation is non-blocking — the definition registers anyway, and
+    // the warning names the missing creation path.
     assert.equal(response.statusCode, 201);
-    const json = response.json() as { checkErrors?: string[] };
+    const json = response.json() as { checkWarnings?: string[] };
     assert.ok(
-      (json.checkErrors ?? []).some((e) => e.includes("reads with no writer")),
-      `expected a read-with-no-writer annotation, got: ${json.checkErrors?.join("; ")}`
+      (json.checkWarnings ?? []).some((w) =>
+        w.includes("ever creates an instance")
+      ),
+      `expected a creation-path warning, got: ${json.checkWarnings?.join("; ")}`
     );
   });
 
@@ -1615,27 +1480,26 @@ export const flow = {
     servers.push(server);
     registerFlowApiRoutes(server);
 
-    // A clean single-file definition: loads, typechecks, holds the contract.
-    const cleanSource = `
-import { defineWorkflow } from "workflow-engine/workflow-types";
+    // A clean data definition module: loads, typechecks, holds the contract.
+    const cleanSource = `import type { FlowDefinition } from "workflow-engine/workflow-types";
 
-const wf = defineWorkflow({
-  id: "clean",
-  label: "Clean",
-  taskOutputs: {} as Record<string, never>,
-  workflowInstanceState: {} as Record<string, unknown>,
-  states: [
-    { id: "pending", label: "Pending", category: "initial" },
-    { id: "done", label: "Done", category: "terminal" },
-  ],
-  initial: "pending",
-  terminalStates: ["done"],
-});
-
-export const flow = {
-  id: "clean-flow",
+export const flow: FlowDefinition = {
+  id: "cleanFlow",
   label: "Clean Flow",
-  workflows: [wf],
+  configSchema: [],
+  workflows: [
+    {
+      id: "clean",
+      label: "Clean",
+      instanceState: [],
+      initial: "pending",
+      terminalStates: ["done"],
+      states: [
+        { id: "pending", label: "Pending", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
   edges: [],
 };
 `;

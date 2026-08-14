@@ -1,25 +1,24 @@
-// The module-set seam: a blueprint with file references goes validate → render
-// (entry + stubs) → materialize → lint → load → typecheck → execute in a real
-// FlowRuntime. Malformed references produce specific, model-actionable
-// findings; a valid set executes with the custom code behaving — the custom
-// gate decides a transition, the custom tool returns its shaped result (the
-// primitive transport is the test's stubbed executor), and the custom
-// operation/transform/extract all run.
+// The module-set seam: a pure-data definition with file references goes
+// validate (the definition validator) → materialize → lint → import policy →
+// typecheck → declared-writes verification → load (import → validate →
+// compile) → execute in a real FlowRuntime. Malformed references produce
+// specific, model-actionable findings; a valid set executes with the custom
+// code behaving — the custom gate decides a transition, the custom tool
+// returns its shaped result (the primitive transport is the test's stubbed
+// executor), and the custom operation/transform/extract all run.
 
 import assert from "node:assert/strict";
 import {
-  existsSync,
   mkdirSync,
   mkdtempSync,
-  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, sep } from "node:path";
+import { join } from "node:path";
 import { describe, it } from "node:test";
-import { fileURLToPath } from "node:url";
+import { collectDefinitionRefs } from "workflow-engine/compile-flow-definition";
 import { createFlowRuntime } from "workflow-engine/create-flow-runtime";
 import {
   createAiChatRunner,
@@ -31,40 +30,22 @@ import {
 } from "workflow-engine/runners";
 import type { ToolCall } from "workflow-engine/runners/tool-types";
 import type { TaskRunnerContext } from "workflow-engine/task-runner";
-import type { CompiledFlowDefinition } from "workflow-engine/workflow-types";
-import { queenBeeBlueprint } from "../../../presets/queen-bee/blueprint.ts";
-import { wayfinderBlueprint } from "../../../presets/wayfinder/blueprint.ts";
-import type { FlowBlueprint } from "./flow-blueprint.ts";
+import { parseDefinition } from "./flow-definition.ts";
 import {
-  collectModuleReferences,
-  validateFlowBlueprint,
-} from "./flow-blueprint.ts";
-import {
-  getRegisteredFlowDefinition,
-  loadUserDefinitionsFromDisk,
-  registerFlowDefinition,
   registerUserDefinition,
   resetFlowDefinitionsForTest,
   setDefinitionsBasePathForTest,
 } from "./flow-definitions.ts";
-import {
-  lintModuleSet,
-  loadModuleSetDefinition,
-  materializeModuleSet,
-  readModuleSetFiles,
-  runModuleSetGate,
-} from "./module-set.ts";
-import { renderFlowDefinition } from "./render-flow-definition.ts";
-import { checkDefinitionSources } from "./schema-consistency.ts";
-import { queenBeeCompiled as queenBeeFlow } from "./test-support/compiled-presets.ts";
-import { typecheckModuleSet } from "./typecheck-definition.ts";
+import { lintModuleSet, runDefinitionModuleGate } from "./module-set.ts";
+import { presetRoot, readPresetModuleSetFiles } from "./preset-flow.ts";
 
-// ─── the five-kind blueprint ──────────────────────────────────────────
+// ─── the five-kind definition module ──────────────────────────────────
 
 // A research flow whose gates, tool, operations, edge transform, and output
-// extractor are all blueprint-referenced files. The test implements the stubs
-// and runs the whole thing in a real FlowRuntime.
-export const FIVE_KIND: FlowBlueprint = {
+// extractor are all referenced files. The test implements the refs and runs
+// the whole thing in a real FlowRuntime.
+const FIVE_KIND_MODULE = `
+export const flow: FlowDefinition = {
   id: "moduleSetFlow",
   label: "Module Set Flow",
   configSchema: [],
@@ -89,7 +70,7 @@ export const FIVE_KIND: FlowBlueprint = {
         { field: "score", type: "number" },
         { field: "verdict", type: "string" },
       ],
-      initialState: "searching",
+      initial: "searching",
       terminalStates: ["done"],
       states: [
         {
@@ -202,7 +183,7 @@ export const FIVE_KIND: FlowBlueprint = {
         { field: "title", type: "string" },
         { field: "body", type: "string" },
       ],
-      initialState: "ready",
+      initial: "ready",
       terminalStates: ["ready"],
       states: [{ id: "ready", label: "Ready", category: "initial" }],
     },
@@ -229,19 +210,21 @@ export const FIVE_KIND: FlowBlueprint = {
     },
   ],
 };
+`;
 
-// ─── implemented stubs (the "implement the stub" step) ────────────────
+// The parsed data definition (the gate and the loader consume the object).
+const FIVE_KIND = parseDefinition(FIVE_KIND_MODULE).definition;
 
-export const IMPLEMENTED_GATE = `import type { GateContract } from "workflow-engine/workflow-types";
+// ─── implemented refs (the "implement the stub" step) ────────────────
+
+const IMPLEMENTED_GATE = `import type { GateContract } from "workflow-engine/workflow-types";
 
 export const approved: GateContract = (ctx) => {
   return ctx.workflowInstanceState.verdict === "approved";
 };
 `;
 
-export const IMPLEMENTED_TOOL = `import { defineTool } from "workflow-engine/runners";
-
-let websearchCalls = 0;
+const IMPLEMENTED_TOOL = `import { defineTool } from "workflow-engine/runners";
 
 export const websearchTools = [
   defineTool({
@@ -252,7 +235,6 @@ export const websearchTools = [
       required: ["query"],
     },
     executor: async (call) => {
-      websearchCalls += 1;
       return {
         toolCallId: call.id,
         content: JSON.stringify({ title: "Hive docs", snippet: "good result" }),
@@ -261,13 +243,9 @@ export const websearchTools = [
     },
   }),
 ];
-
-export function websearchCallCount(): number {
-  return websearchCalls;
-}
 `;
 
-export const IMPLEMENTED_SCORE = `import { defineOperations, type OperationContext } from "workflow-engine/runners";
+const IMPLEMENTED_SCORE = `import { defineOperations, type OperationContext } from "workflow-engine/runners";
 
 export const scoreOperations = defineOperations<Record<string, unknown>>({
   score: (task, params, ctx: OperationContext) => {
@@ -276,7 +254,7 @@ export const scoreOperations = defineOperations<Record<string, unknown>>({
 });
 `;
 
-export const IMPLEMENTED_ANNOTATE = `import { defineOperations, type OperationContext } from "workflow-engine/runners";
+const IMPLEMENTED_ANNOTATE = `import { defineOperations, type OperationContext } from "workflow-engine/runners";
 
 export const annotateOperations = defineOperations<Record<string, unknown>>({
   annotate: (task, params, ctx: OperationContext) => {
@@ -285,7 +263,7 @@ export const annotateOperations = defineOperations<Record<string, unknown>>({
 });
 `;
 
-export const IMPLEMENTED_TRANSFORM = `import type { TransformContract } from "workflow-engine/workflow-types";
+const IMPLEMENTED_TRANSFORM = `import type { TransformContract } from "workflow-engine/workflow-types";
 
 export const toSummary: TransformContract = (source) => {
   const search = source.search as { output?: { completion?: { summary?: string } } } | undefined;
@@ -293,13 +271,39 @@ export const toSummary: TransformContract = (source) => {
 };
 `;
 
-export const IMPLEMENTED_EXTRACT = `import type { OutputExtractor } from "workflow-engine/workflow-types";
+const IMPLEMENTED_EXTRACT = `import type { OutputExtractor } from "workflow-engine/workflow-types";
 
 export const parseResult: OutputExtractor = (ctx) => {
   const search = ctx.taskOutputs.search as { output?: { completion?: { summary?: string } } } | undefined;
   const summary = search?.output?.completion?.summary ?? "";
   return { verdict: summary.includes("good") ? "approved" : "needs_review" };
 };
+`;
+
+const IMPLEMENTED_FILES: Record<string, string> = {
+  "./tools/websearch.ts": IMPLEMENTED_TOOL,
+  "./ops/score.ts": IMPLEMENTED_SCORE,
+  "./ops/annotate.ts": IMPLEMENTED_ANNOTATE,
+  "./edges/to-summary.ts": IMPLEMENTED_TRANSFORM,
+  "./extractors/parse-result.ts": IMPLEMENTED_EXTRACT,
+  "./gates/approved.ts": IMPLEMENTED_GATE,
+};
+
+// A tool whose executor patches an instance-state field its writes do not
+// declare (declarations can lie — the gate must catch it).
+const IMPLEMENTED_TOOL_UNDECLARED_WRITE = `import { defineTool } from "workflow-engine/runners";
+
+export const websearchTools = [
+  defineTool({
+    name: "websearch",
+    description: "Search the web.",
+    parameters: { properties: { query: { type: "string" } }, required: ["query"] },
+    executor: async (call, ctx) => {
+      ctx.patchWorkflowInstanceState?.({ verdict: "tampered" });
+      return { toolCallId: call.id, content: "ok", isError: false };
+    },
+  }),
+];
 `;
 
 // ─── runtime harness ──────────────────────────────────────────────────
@@ -320,16 +324,9 @@ function operationContext(ctx: TaskRunnerContext): OperationContext {
 
 // The ai-chat model caller: turn 1 calls the custom websearch tool, turn 2
 // completes via complete_task with a summary the extractor can classify.
-function searchScript(): typeof createAiChatRunner extends never
-  ? never
-  : (
-      systemPrompt: string,
-      messages: unknown[],
-      tools: unknown[],
-      signal: unknown
-    ) => Promise<{ content: string; toolCalls?: ToolCall[] }> {
+function searchScript() {
   let turn = 0;
-  return async () => {
+  return async (): Promise<{ content: string; toolCalls?: ToolCall[] }> => {
     turn += 1;
     if (turn === 1) {
       return {
@@ -361,12 +358,12 @@ function searchScript(): typeof createAiChatRunner extends never
 }
 
 function buildRuntime(
-  flow: Awaited<ReturnType<typeof loadModuleSetDefinition>>,
+  flow: Awaited<ReturnType<typeof runDefinitionModuleGate>>["flow"],
   modelCaller: ReturnType<typeof searchScript>
 ) {
-  if (!("workflows" in flow)) {
+  if (!flow || !("workflows" in flow)) {
     throw new Error(
-      "expected a static definition, got a buildWorkflows factory"
+      "expected a static compiled definition, got a buildWorkflows factory"
     );
   }
   const toolMaps = toToolMaps(flow.tools ?? []);
@@ -409,475 +406,258 @@ async function waitFor(
   throw new Error("timed out waiting for the runtime");
 }
 
-function settle(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 30));
-}
-
 // ─── tests ────────────────────────────────────────────────────────────
 
-describe("module-set pipeline", () => {
-  it("materializes the module set and lints a clean blueprint clean", async () => {
-    const rendered = renderFlowDefinition(FIVE_KIND);
-    const dir = materializeModuleSet("seam-clean", rendered);
-    assert.ok(existsSync(join(dir, "flow.ts")));
-    assert.ok(existsSync(join(dir, "gates/approved.ts")));
-    assert.deepEqual(
-      lintModuleSet(collectModuleReferences(FIVE_KIND), dir),
-      []
-    );
+describe("module-set pipeline (definition modules)", () => {
+  it("lints an implemented definition clean and reports a missing referenced file", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "hive-module-set-"));
+    const emptyDir = mkdtempSync(join(tmpdir(), "hive-module-set-empty-"));
+    try {
+      await writeModuleSetFiles(dir, IMPLEMENTED_FILES);
+      const clean = lintModuleSet(collectDefinitionRefs(FIVE_KIND), dir);
+      assert.deepEqual(clean, []);
+
+      // A reference with no file on disk (a fresh empty dir): the lint
+      // reports it specifically.
+      const findings = lintModuleSet(
+        collectDefinitionRefs(FIVE_KIND),
+        emptyDir
+      );
+      assert.ok(
+        findings.some((f) => f.message.includes("does not exist")),
+        `expected a missing-file finding, got ${JSON.stringify(findings)}`
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(emptyDir, { recursive: true, force: true });
+    }
   });
 
-  it("reports a missing referenced file with a specific finding", async () => {
-    const rendered = renderFlowDefinition(FIVE_KIND);
-    const dir = materializeModuleSet("seam-missing", rendered);
-    rmSync(join(dir, "gates/approved.ts"));
-    const findings = lintModuleSet(collectModuleReferences(FIVE_KIND), dir);
-    const finding = findings.find((f) => f.ref === "./gates/approved.ts");
-    assert.ok(
-      finding,
-      `expected a finding for the gate, got ${JSON.stringify(findings)}`
-    );
-    assert.match(finding.message, /does not exist/);
+  it("reports a ref escaping the definition root and a misnamed export", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "hive-module-set-"));
+    try {
+      mkdirSync(join(dir, "gates"), { recursive: true });
+      writeFileSync(join(dir, "gates", "approved.ts"), IMPLEMENTED_GATE);
+      writeFileSync(join(dir, "gates", "renamed.ts"), IMPLEMENTED_GATE);
+
+      // The escaping ref: a transform pointing outside the root.
+      const escaping = {
+        ...FIVE_KIND,
+        edges: [
+          {
+            fromWorkflow: "research",
+            fromStates: ["done"],
+            toWorkflow: "summary",
+            transform: {
+              ref: "../escape.ts",
+              fields: ["title", "body"],
+            },
+          },
+        ],
+      };
+      const findings = lintModuleSet(collectDefinitionRefs(escaping), dir);
+      assert.ok(
+        findings.some((f) => f.message.includes("outside the definition root")),
+        `expected an escaping-ref finding, got ${JSON.stringify(findings)}`
+      );
+
+      // A missing export (the file exists but exports a different name).
+      const missingExport = {
+        ...FIVE_KIND,
+        edges: [
+          {
+            fromWorkflow: "research",
+            fromStates: ["done"],
+            toWorkflow: "summary",
+            transform: {
+              ref: "./gates/renamed.ts",
+              fields: ["title", "body"],
+            },
+          },
+        ],
+      };
+      const exportFindings = lintModuleSet(
+        collectDefinitionRefs(missingExport),
+        dir
+      );
+      assert.ok(
+        exportFindings.some((f) => f.message.includes("does not export")),
+        `expected a missing-export finding, got ${JSON.stringify(exportFindings)}`
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
-  it("reports a ref escaping the definition root", async () => {
-    const blueprint: FlowBlueprint = {
-      ...FIVE_KIND,
-      workflows: [
-        {
-          ...FIVE_KIND.workflows[0],
-          states: FIVE_KIND.workflows[0].states.map((s) =>
-            s.id === "extracting"
-              ? {
-                  ...s,
-                  autoTransitions: [
-                    {
-                      to: "done",
-                      gate: { kind: "file", ref: "../escape.ts" },
-                    },
-                    { to: "needs_review", gate: { kind: "always" } },
-                  ],
-                }
-              : s
-          ),
-        },
-        ...FIVE_KIND.workflows.slice(1),
-      ],
-    };
-    assert.deepEqual(validateFlowBlueprint(blueprint), []);
-    const rendered = renderFlowDefinition(blueprint);
-    const dir = materializeModuleSet("seam-escape", rendered);
-    // The escaping ref is never written outside the module-set directory.
-    assert.ok(!existsSync(join(dir, "../escape.ts")));
-    const findings = lintModuleSet(collectModuleReferences(blueprint), dir);
-    const finding = findings.find((f) => f.ref === "../escape.ts");
-    assert.ok(
-      finding,
-      `expected an escape finding, got ${JSON.stringify(findings)}`
-    );
-    assert.match(finding.message, /outside the definition root/);
-  });
-
-  it("reports a misnamed export", async () => {
-    const rendered = renderFlowDefinition(FIVE_KIND);
-    const dir = materializeModuleSet("seam-export", rendered);
-    writeFileSync(
-      join(dir, "gates/approved.ts"),
-      `import type { GateContract } from "workflow-engine/workflow-types";\nexport const wrongName: GateContract = () => false;\n`
-    );
-    const findings = lintModuleSet(collectModuleReferences(FIVE_KIND), dir);
-    const finding = findings.find((f) => f.ref === "./gates/approved.ts");
-    assert.ok(
-      finding,
-      `expected an export finding, got ${JSON.stringify(findings)}`
-    );
-    assert.match(finding.message, /does not export/);
-    assert.match(finding.message, /approved/);
-  });
-
-  it("reports a contract mismatch", async () => {
-    const rendered = renderFlowDefinition(FIVE_KIND);
-    const dir = materializeModuleSet("seam-contract", rendered);
-    writeFileSync(
-      join(dir, "gates/approved.ts"),
-      `import type { RuntimeGateContext } from "workflow-engine/workflow-types";\nexport const approved = (ctx: RuntimeGateContext) => "yes";\n`
-    );
-    const findings = lintModuleSet(collectModuleReferences(FIVE_KIND), dir);
-    const finding = findings.find((f) => f.ref === "./gates/approved.ts");
-    assert.ok(
-      finding,
-      `expected a contract finding, got ${JSON.stringify(findings)}`
-    );
-    assert.match(finding.message, /not assignable/);
-  });
-
-  it("typechecks the whole set and parses diagnostics with the file path", async () => {
-    const rendered = renderFlowDefinition(FIVE_KIND);
-    const dir = materializeModuleSet("seam-typecheck", rendered);
-    writeFileSync(
-      join(dir, "extractors/parse-result.ts"),
-      `import type { OutputExtractor } from "workflow-engine/workflow-types";\nexport const parseResult: OutputExtractor = (ctx) => ctx.nonexistent;\n`
-    );
-    const result = await runModuleSetGate(
-      "seam-typecheck",
+  it("the full gate passes for an implemented set and executes in a real FlowRuntime", async () => {
+    const result = await runDefinitionModuleGate(
+      "module-set-seam",
       FIVE_KIND,
-      rendered
+      FIVE_KIND_MODULE,
+      IMPLEMENTED_FILES
     );
+    assert.deepEqual(result.errors, []);
+    assert.deepEqual(result.warnings, []);
+    assert.ok(result.flow, "the gate must load (compile) the definition");
     assert.ok(
-      result.errors.some((e) =>
-        /typecheck extractors\/parse-result\.ts:\d+:\d+/.test(e)
-      ),
-      `expected a parsed typecheck diagnostic, got ${JSON.stringify(result.errors)}`
+      result.files["./gates/approved.ts"]?.includes("GateContract"),
+      "the gate returns the current file set"
     );
-  });
 
-  it("a valid implemented module set loads, typechecks, and executes in a real FlowRuntime", async () => {
-    const rendered = renderFlowDefinition(FIVE_KIND);
-    const dir = materializeModuleSet("seam-runtime", rendered);
-    writeFileSync(join(dir, "gates/approved.ts"), IMPLEMENTED_GATE);
-    writeFileSync(join(dir, "tools/websearch.ts"), IMPLEMENTED_TOOL);
-    writeFileSync(join(dir, "ops/score.ts"), IMPLEMENTED_SCORE);
-    writeFileSync(join(dir, "ops/annotate.ts"), IMPLEMENTED_ANNOTATE);
-    writeFileSync(join(dir, "edges/to-summary.ts"), IMPLEMENTED_TRANSFORM);
-    writeFileSync(join(dir, "extractors/parse-result.ts"), IMPLEMENTED_EXTRACT);
-
-    const gate = await runModuleSetGate("seam-runtime", FIVE_KIND, rendered);
-    assert.deepEqual(gate.errors, []);
-    assert.ok(gate.flow, "the module set must load");
-
-    const runtime = buildRuntime(gate.flow, searchScript());
-    const controller = runtime.addWorkflowInstance("research", {
+    // Execute: the custom tool runs, the custom gate decides the transition,
+    // the patch op records the score, the extractor writes the verdict.
+    const runtime = buildRuntime(result.flow, searchScript());
+    const instance = runtime.addWorkflowInstance("research", {
       workflowInstanceState: { query: "hive" },
     });
-    await settle();
-    assert.ok(
-      controller.getState().hasRunningTask,
-      "the search task waits for input"
+    instance.startAutoTasks();
+    // The search task is an interactive ai-chat session (startOnUserInput);
+    // release it with the query.
+    instance.sendTaskInput("search", "find hive", "user");
+    await waitFor(
+      () =>
+        instance.getState().currentState === "done" &&
+        instance.getState().workflowInstanceState.verdict === "approved"
     );
-    // Send the first user message to release the interactive search task.
-    controller.sendTaskInput("search", "find hive", "user");
-    await waitFor(() =>
-      runtime.workflowInstances.some((i) => i.currentState === "done")
-    );
-
-    const research = runtime
-      .getWorkflowInstanceEntries()
-      .find((e) => e.workflowId === "research");
-    assert.equal(research?.state.currentState, "done");
-    const state = research?.state.workflowInstanceState;
-    assert.equal(state?.score, 7, "the custom score operation ran");
+    const state = instance.getState();
+    assert.equal(state.workflowInstanceState.score, 7);
     assert.equal(
-      state?.result,
+      state.workflowInstanceState.result,
       "good result",
-      "the shaped result was recorded"
+      "the patch op recorded the completion summary"
     );
-    assert.equal(state?.verdict, "approved", "the custom extractor ran");
+    const transcript = JSON.stringify(state.taskOutputs?.search?.output ?? {});
+    assert.ok(
+      transcript.includes("Hive docs"),
+      "the custom websearch tool returned its shaped result"
+    );
 
-    // The custom gate decided the transition: verdict approved → done, and the
-    // edge transform fed the summary instance.
+    // The edge transform runs on terminal: a summary instance is created.
+    await waitFor(
+      () =>
+        runtime
+          .getWorkflowInstanceEntries()
+          .some((e) => e.workflowId === "summary"),
+      3000
+    );
     const summary = runtime
       .getWorkflowInstanceEntries()
       .find((e) => e.workflowId === "summary");
-    assert.ok(summary, "the edge transform created a summary instance");
-    assert.equal(summary.state.workflowInstanceState.title, "Summary");
-    assert.equal(summary.state.workflowInstanceState.body, "good result");
+    assert.equal(summary?.state.workflowInstanceState.body, "good result");
+  });
 
-    // The custom tool executed exactly once (the primitive transport is the
-    // test's stubbed executor) and returned its shaped result: its result
-    // content appears in the ai-chat transcript as a tool message. The runtime
-    // loads a fresh copy of the module set, so the assertion is on behavior
-    // (the transcript), not on a module-scoped counter.
-    const searchOutput = JSON.stringify(
-      research?.state.taskOutputs.search?.output ?? {}
+  it("rejects a tool executor writing an undeclared instance-state field (declarations can lie)", async () => {
+    const result = await runDefinitionModuleGate(
+      "module-set-writes",
+      FIVE_KIND,
+      FIVE_KIND_MODULE,
+      {
+        ...IMPLEMENTED_FILES,
+        "./tools/websearch.ts": IMPLEMENTED_TOOL_UNDECLARED_WRITE,
+      }
     );
     assert.ok(
-      searchOutput.includes("Hive docs"),
-      "the websearch tool's shaped result must appear in the transcript"
+      result.errors.some(
+        (e) =>
+          e.includes("verdict") &&
+          e.includes("not declared in the tool's writes")
+      ),
+      `expected a declared-writes finding, got ${JSON.stringify(result.errors)}`
     );
   });
 
-  it("the definition record stores the blueprint and file set; loading re-materializes the directory", async () => {
+  it("registers a module-set definition whose record carries the data form and the file set", async () => {
     const defsDir = mkdtempSync(join(tmpdir(), "hive-module-set-"));
     setDefinitionsBasePathForTest(defsDir);
     resetFlowDefinitionsForTest();
     try {
-      const rendered = renderFlowDefinition(FIVE_KIND);
-      const dir = materializeModuleSet("seam-record", rendered);
-      writeFileSync(join(dir, "gates/approved.ts"), IMPLEMENTED_GATE);
-      const files = readModuleSetFiles(dir);
-
       const record = await registerUserDefinition({
         name: "Module Set Flow",
-        source: rendered.entry,
-        blueprint: FIVE_KIND,
-        files,
+        source: FIVE_KIND_MODULE,
+        files: IMPLEMENTED_FILES,
       });
-      assert.equal(record.blueprint?.id, "moduleSetFlow");
-      assert.equal(record.files?.["./gates/approved.ts"], IMPLEMENTED_GATE);
-      // Persisted as a module-set directory.
+      assert.equal(record.id, "module-set-flow");
+      assert.equal(record.definition?.id, "moduleSetFlow");
       assert.ok(
-        existsSync(join(defsDir, "definitions", "module-set-flow/flow.ts"))
+        record.files?.["./gates/approved.ts"]?.includes("GateContract"),
+        "the record stores the referenced file set"
       );
-      assert.ok(
-        existsSync(
-          join(defsDir, "definitions", "module-set-flow/gates/approved.ts")
-        )
-      );
-
-      // Boot reload re-materializes and loads; the entry imports the files, so
-      // the custom gate is live.
-      resetFlowDefinitionsForTest();
-      registerFlowDefinition(queenBeeFlow, { builtIn: true });
-      await loadUserDefinitionsFromDisk();
-      const reloaded = getRegisteredFlowDefinition("module-set-flow");
-      assert.ok(reloaded, "the module-set definition must reload from disk");
-      const reloadedFlow = reloaded.flow;
-      if (!("workflows" in reloadedFlow)) {
-        throw new Error("expected a static definition");
-      }
-      const extracting = reloadedFlow.workflows
-        .find((wf) => wf.id === "research")
-        ?.states.find((s) => s.id === "extracting");
-      const gate = extracting?.autoTransitions?.find(
-        (t) => t.to === "done"
-      )?.gate;
-      assert.equal(typeof gate, "function");
-      const verdict = (gate as (ctx: unknown) => boolean)({
-        workflowInstanceState: { verdict: "approved" },
-      });
-      assert.equal(
-        verdict,
-        true,
-        "the entry imports the implemented gate file"
-      );
+      assert.ok("workflows" in record.flow);
     } finally {
       rmSync(defsDir, { recursive: true, force: true });
       resetFlowDefinitionsForTest();
     }
   });
-});
 
-// ─── the gate's custom code helpers ───────────────────────────────────
+  it("the gate refuses a definition whose referenced file imports an undeclared package; declaring it passes", async () => {
+    const TOOL_IMPORTING_LRU = `import { defineTool } from "workflow-engine/runners";
+import { LRUCache } from "lru-cache";
 
-const GATE_ALWAYS_TRUE = `import type { GateContract } from "workflow-engine/workflow-types";
-export const approved: GateContract = (ctx) => true;
+export const websearchTools = [
+  defineTool({
+    name: "websearch",
+    description: "Search.",
+    parameters: { properties: {}, required: [] },
+    executor: async (call) => ({ toolCallId: call.id, content: "ok", isError: false }),
+  }),
+];
 `;
-
-const GATE_ALWAYS_FALSE = `import type { GateContract } from "workflow-engine/workflow-types";
-export const approved: GateContract = (ctx) => false;
-`;
-
-function approvedGateOf(
-  flow: CompiledFlowDefinition
-): (ctx: unknown) => boolean {
-  if (!("workflows" in flow)) {
-    throw new Error("expected a static definition");
-  }
-  const extracting = flow.workflows
-    .find((wf) => wf.id === "research")
-    ?.states.find((s) => s.id === "extracting");
-  const gate = extracting?.autoTransitions?.find((t) => t.to === "done")?.gate;
-  assert.equal(typeof gate, "function");
-  return gate as (ctx: unknown) => boolean;
-}
-
-describe("module-set loading", () => {
-  it("re-loading a module set serves hand edits (no stale module cache)", async () => {
-    const rendered = renderFlowDefinition(FIVE_KIND);
-    const dir = materializeModuleSet("seam-reload", rendered);
-    writeFileSync(join(dir, "gates/approved.ts"), GATE_ALWAYS_TRUE);
-    const flow1 = await loadModuleSetDefinition(dir);
-    assert.equal(
-      approvedGateOf(flow1)({
-        workflowInstanceState: { verdict: "needs_review" },
-      }),
-      true,
-      "first load serves the implemented gate"
-    );
-
-    writeFileSync(join(dir, "gates/approved.ts"), GATE_ALWAYS_FALSE);
-    const flow2 = await loadModuleSetDefinition(dir);
-    assert.equal(
-      approvedGateOf(flow2)({ workflowInstanceState: { verdict: "approved" } }),
-      false,
-      "a second load serves the edited gate, not the cached first version"
-    );
-  });
-});
-
-describe("import policy", () => {
-  it("rejects a referenced file importing an undeclared package", async () => {
-    const rendered = renderFlowDefinition(FIVE_KIND);
-    const dir = materializeModuleSet("seam-import-undeclared", rendered);
-    writeFileSync(
-      join(dir, "gates/approved.ts"),
-      `import axios from "axios";\n${IMPLEMENTED_GATE}`
-    );
-    const result = await runModuleSetGate(
-      "seam-import-undeclared",
+    const rejected = await runDefinitionModuleGate(
+      "module-set-imports",
       FIVE_KIND,
-      rendered
+      FIVE_KIND_MODULE,
+      { ...IMPLEMENTED_FILES, "./tools/websearch.ts": TOOL_IMPORTING_LRU }
     );
     assert.ok(
-      result.errors.some((e) => /axios/.test(e) && /dependencies/.test(e)),
-      `expected a dependency finding, got ${JSON.stringify(result.errors)}`
+      rejected.errors.some(
+        (e) => /lru-cache/.test(e) && /dependencies/.test(e)
+      ),
+      `expected a dependency finding, got ${JSON.stringify(rejected.errors)}`
     );
+
+    const withDependency = {
+      ...FIVE_KIND,
+      dependencies: ["lru-cache"],
+    };
+    const passed = await runDefinitionModuleGate(
+      "module-set-imports-ok",
+      withDependency,
+      FIVE_KIND_MODULE,
+      { ...IMPLEMENTED_FILES, "./tools/websearch.ts": TOOL_IMPORTING_LRU }
+    );
+    assert.deepEqual(passed.errors, []);
   });
 
-  it("declaring the package in dependencies makes the same import pass", async () => {
-    // lru-cache is an installed server dependency, so a declared import of it
-    // passes the policy AND resolves at load and typecheck.
-    const blueprint = { ...FIVE_KIND, dependencies: ["lru-cache"] };
-    const rendered = renderFlowDefinition(blueprint);
-    const dir = materializeModuleSet("seam-import-declared", rendered);
-    writeFileSync(
-      join(dir, "gates/approved.ts"),
-      `import { LRUCache } from "lru-cache";\nexport const approved = (ctx: unknown): boolean => { void LRUCache; return true; };\n`
-    );
-    const result = await runModuleSetGate(
-      "seam-import-declared",
-      blueprint,
-      rendered
-    );
-    assert.deepEqual(result.errors, []);
-  });
-
-  it("allows engine primitives, node: builtins, and the flow's own files without declaration", async () => {
-    const rendered = renderFlowDefinition(FIVE_KIND);
-    const dir = materializeModuleSet("seam-import-allowed", rendered);
-    writeFileSync(
-      join(dir, "gates/helpers.ts"),
-      `import { join } from "node:path";\nexport function helper(): boolean { void join; return false; }\n`
-    );
-    writeFileSync(
-      join(dir, "gates/approved.ts"),
-      `import type { GateContract } from "workflow-engine/workflow-types";\nimport { helper } from "./helpers.ts";\nexport const approved: GateContract = (ctx) => helper();\n`
-    );
-    const result = await runModuleSetGate(
-      "seam-import-allowed",
-      FIVE_KIND,
-      rendered
-    );
-    assert.deepEqual(result.errors, []);
-  });
-
-  it("rejects a relative import escaping the module set", async () => {
-    const rendered = renderFlowDefinition(FIVE_KIND);
-    const dir = materializeModuleSet("seam-import-escape", rendered);
-    writeFileSync(
-      join(dir, "gates/approved.ts"),
-      `import { x } from "../../outside.ts";\n${IMPLEMENTED_GATE}`
-    );
-    const result = await runModuleSetGate(
-      "seam-import-escape",
-      FIVE_KIND,
-      rendered
-    );
-    assert.ok(
-      result.errors.some((e) => /resolves outside the module set/.test(e)),
-      `expected an escape finding, got ${JSON.stringify(result.errors)}`
-    );
-  });
-});
-
-// ─── the built-in presets stay gate-clean ─────────────────────────────
-
-// The presets are blueprint-defined flows: each renders into a module set
-// (entry + the preset package's referenced files) that must pass the full gate
-// with zero errors AND zero warnings — the renderer is gate-clean by
-// construction, so any finding is a defect in the preset's blueprint or
-// referenced files. This is the conversion's behavioral oracle.
-describe("rendered presets pass the module-set gate", () => {
-  const PRESETS = [
-    {
-      name: "queen-bee",
-      blueprint: queenBeeBlueprint,
-    },
-    {
-      name: "wayfinder",
-      blueprint: wayfinderBlueprint,
-    },
-  ] as const;
-
-  for (const preset of PRESETS) {
-    it(`${preset.name} renders, loads, and checks clean`, async () => {
-      const errors = validateFlowBlueprint(preset.blueprint);
-      assert.deepEqual(
-        errors.map((e) => `${e.path}: ${e.message}`),
-        [],
-        `${preset.name} blueprint validation`
+  it("the built-in presets pass the full gate (lint, imports, typecheck, writes, load)", async () => {
+    for (const presetName of ["queen-bee", "wayfinder"]) {
+      const source = readFileSync(
+        join(presetRoot(presetName), "flow.ts"),
+        "utf-8"
       );
-
-      const rendered = renderFlowDefinition(preset.blueprint);
-      const dir = materializeModuleSet(`${preset.name}-gate`, rendered);
-      const files = readPresetFiles(preset.name);
-      // Overwrite the stubs with the preset's real implementations.
-      for (const [ref, source] of Object.entries(files)) {
-        const target = join(dir, ref.replace(/^\.\//, ""));
-        mkdirSync(dirname(target), { recursive: true });
-        writeFileSync(target, source, "utf-8");
-      }
-
-      const lint = lintModuleSet(
-        collectModuleReferences(preset.blueprint),
-        dir
+      const { definition, findings } = parseDefinition(source);
+      assert.deepEqual(findings, [], `${presetName} parse findings`);
+      const result = await runDefinitionModuleGate(
+        `preset-gate-${presetName}`,
+        definition,
+        source,
+        readPresetModuleSetFiles(presetName)
       );
-      assert.deepEqual(
-        lint.map((f) => f.message),
-        [],
-        `${preset.name} reference lint`
-      );
-
-      const flow = await loadModuleSetDefinition(dir);
-      assert.ok("workflows" in flow, `${preset.name} loads as a static flow`);
-      assert.ok(flow.workflows.length >= 1, `${preset.name} has workflows`);
-
-      const typeIssues = typecheckModuleSet(dir, preset.name);
-      assert.deepEqual(
-        typeIssues.map((i) => `${i.file}:${i.line}:${i.column} ${i.message}`),
-        [],
-        `${preset.name} whole-set typecheck`
-      );
-
-      const check = checkDefinitionSources([
-        { path: "flow.ts", source: rendered.entry },
-        ...Object.entries(files).map(([path, source]) => ({ path, source })),
-      ]);
-      assert.deepEqual(check.errors, [], `${preset.name} schema errors`);
-      assert.deepEqual(check.warnings, [], `${preset.name} schema warnings`);
-    });
-  }
-});
-
-// The preset package's referenced sources (every .ts except the blueprint and
-// the rendered entry — the design artifacts), keyed `./`-style like the
-// module-set lint reports.
-function readPresetFiles(presetName: string): Record<string, string> {
-  const presetRoot = join(
-    dirname(fileURLToPath(import.meta.url)),
-    "..",
-    "..",
-    "..",
-    "presets",
-    presetName
-  );
-  const files: Record<string, string> = {};
-  const walk = (sub: string): void => {
-    for (const entry of readdirSync(sub, { withFileTypes: true })) {
-      const full = join(sub, entry.name);
-      if (entry.isDirectory()) {
-        walk(full);
-      } else if (
-        entry.name.endsWith(".ts") &&
-        entry.name !== "blueprint.ts" &&
-        entry.name !== "flow.ts" &&
-        entry.name !== "ideas-card.ts"
-      ) {
-        files[`./${relative(presetRoot, full).split(sep).join("/")}`] =
-          readFileSync(full, "utf-8");
-      }
+      assert.deepEqual(result.errors, [], `${presetName} gate errors`);
+      assert.ok(result.flow, `${presetName} must load (compile)`);
     }
-  };
-  walk(presetRoot);
-  return files;
+  });
+});
+
+// Writes a module set's files into a temp dir (the lint tests check the
+// files on disk without running the full gate).
+async function writeModuleSetFiles(
+  dir: string,
+  files: Record<string, string>
+): Promise<string> {
+  for (const [ref, source] of Object.entries(files)) {
+    const target = join(dir, ref.replace(/^\.\//, ""));
+    mkdirSync(join(target, ".."), { recursive: true });
+    writeFileSync(target, source, "utf-8");
+  }
+  return dir;
 }

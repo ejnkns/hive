@@ -2,7 +2,6 @@
  * and the generate/author/validate authoring surface. */
 
 import { randomUUID } from "node:crypto";
-import { PassThrough } from "node:stream";
 import type { FastifyInstance } from "fastify";
 import {
   saveAuthoringDefinition,
@@ -11,7 +10,11 @@ import {
   writeAuthoringModuleFile,
 } from "../flow-authoring/session.ts";
 import { AUTHORING_DEFINITION_ID } from "../flow-authoring.ts";
-import { parseDefinition } from "../flow-definition.ts";
+import {
+  analyzeFlowDefinition,
+  parseDefinition,
+  validateFlowDefinition,
+} from "../flow-definition.ts";
 import {
   DefinitionAlreadyExistsError,
   deleteUserDefinition,
@@ -27,8 +30,6 @@ import {
   getFlowPersistence,
   getFlowRuntime,
 } from "../flow-registry.ts";
-import { generateFlowDefinitionSource } from "../generate-flow-definition.ts";
-import { checkDefinitionSources } from "../schema-consistency.ts";
 import { typecheckDefinitionSource } from "../typecheck-definition.ts";
 
 export function registerDefinitionRoutes(server: FastifyInstance): void {
@@ -62,8 +63,6 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
       // The pure-data form of a definition module (the builder contract — the
       // editor's Definition tab binds to it).
       definition: record.definition,
-      // The design artifact two-artifact flows were rendered from (retiring).
-      blueprint: record.blueprint,
       // The referenced file set of a module-set definition (a revision
       // session seeds its editor tabs from these).
       files: record.files,
@@ -106,60 +105,6 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
     }
     deleteUserDefinition(id);
     return reply.send({ ok: true, id });
-  });
-
-  server.post("/api/flows/definitions/generate", async (request, reply) => {
-    // Fastify body is unknown; validated below
-    const body = request.body as { prompt?: string } | null;
-    const prompt = body?.prompt;
-    if (typeof prompt !== "string" || prompt.trim() === "") {
-      return reply.status(400).send({ error: "prompt is required" });
-    }
-
-    // Stream generation progress as SSE: the loop runs server-side while
-    // stage/delta/attempt events are piped to the client, ending with `done`
-    // (the full result) or `error`. The client disconnect aborts the loop.
-    reply.header("Content-Type", "text/event-stream; charset=utf-8");
-    reply.header("Cache-Control", "no-cache, no-transform");
-    reply.header("Connection", "keep-alive");
-    reply.header("X-Accel-Buffering", "no");
-
-    const stream = new PassThrough();
-    let finished = false;
-    const send = (event: Record<string, unknown>): void => {
-      if (finished || stream.destroyed) return;
-      stream.write(`data: ${JSON.stringify(event)}\n\n`);
-    };
-    const abort = new AbortController();
-    // A client disconnect mid-write surfaces as a stream error; the abort
-    // below is the response, and an unhandled error event would crash the
-    // process, so swallow it here.
-    stream.on("error", () => {});
-    stream.on("close", () => {
-      // The reply flushed and ended normally (finished) or the client
-      // disconnected mid-generation — abort the loop either way.
-      if (!finished) abort.abort();
-    });
-
-    void (async () => {
-      try {
-        const { source, report } = await generateFlowDefinitionSource(
-          prompt.trim(),
-          { onProgress: (event) => send(event), signal: abort.signal }
-        );
-        send({ type: "done", source, report });
-      } catch (err) {
-        send({
-          type: "error",
-          error: err instanceof Error ? err.message : "Generation failed",
-        });
-      } finally {
-        finished = true;
-        stream.end();
-      }
-    })();
-
-    return reply.send(stream);
   });
 
   server.post("/api/flows/definitions/author", async (request, reply) => {
@@ -381,8 +326,10 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
       return reply.status(400).send({ error: "source is required" });
     }
 
-    // The same gate generation runs, without registering anything: transpile
-    // + load, the schema-consistency check, and the per-definition typecheck.
+    // The definition gate runs without registering anything: the loader
+    // validates + compiles the module (the runtime surface), the definition
+    // validator reports the declared-parts findings, and the per-definition
+    // typecheck checks the module against the vocabulary types.
     try {
       await loadDefinitionFromSource("__validate__", source);
     } catch (err) {
@@ -394,12 +341,16 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
         typeErrors: [],
       });
     }
-    const check = checkDefinitionSources([{ path: "validated.ts", source }]);
+    const { definition, findings } = parseDefinition(source);
+    const checkErrors = validateFlowDefinition(definition).map(
+      (e) => `${e.path}: ${e.message}`
+    );
+    const checkWarnings = [...analyzeFlowDefinition(definition), ...findings];
     const typeErrors = typecheckDefinitionSource(source, "__validate__");
     return reply.send({
-      ok: check.errors.length === 0 && typeErrors.length === 0,
-      checkErrors: check.errors,
-      checkWarnings: check.warnings,
+      ok: checkErrors.length === 0 && typeErrors.length === 0,
+      checkErrors,
+      checkWarnings,
       typeErrors,
     });
   });
@@ -431,9 +382,7 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
         source,
         files,
       });
-      const check = checkDefinitionSources([
-        { path: `${record.id}.ts`, source },
-      ]);
+      const { definition, findings } = parseDefinition(source);
       return reply.status(201).send({
         ok: true,
         id: record.id,
@@ -441,10 +390,12 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
         builtIn: record.builtIn,
         configSchema: record.configSchema,
         // Non-blocking: the definition loads and runs; these are the
-        // schema-consistency findings (e.g. a gate reading a never-written
-        // field) the editor surfaces for the author to fix.
-        checkWarnings: check.warnings,
-        checkErrors: check.errors,
+        // definition-validator findings (advisory warnings + parse findings)
+        // the editor surfaces for the author to fix.
+        checkWarnings: [...analyzeFlowDefinition(definition), ...findings],
+        checkErrors: validateFlowDefinition(definition).map(
+          (e) => `${e.path}: ${e.message}`
+        ),
       });
     } catch (err) {
       if (err instanceof DefinitionAlreadyExistsError) {
@@ -485,17 +436,17 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
         source,
         files,
       });
-      const check = checkDefinitionSources([
-        { path: `${record.id}.ts`, source },
-      ]);
+      const { definition, findings } = parseDefinition(source);
       return reply.send({
         ok: true,
         id: record.id,
         name: record.name,
         builtIn: record.builtIn,
         configSchema: record.configSchema,
-        checkWarnings: check.warnings,
-        checkErrors: check.errors,
+        checkWarnings: [...analyzeFlowDefinition(definition), ...findings],
+        checkErrors: validateFlowDefinition(definition).map(
+          (e) => `${e.path}: ${e.message}`
+        ),
       });
     } catch (err) {
       if (err instanceof Error && err.message.includes("not found")) {

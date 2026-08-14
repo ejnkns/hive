@@ -11,10 +11,7 @@ export {
   renderPatternsPrompt,
   STRUCTURED_INTAKE_EXEMPLAR,
 } from "./flow-authoring/patterns.ts";
-export {
-  buildFlowAuthoringPrompt,
-  flowAuthoringMarkdown,
-} from "./flow-authoring/prompt.ts";
+export { flowAuthoringMarkdown } from "./flow-authoring/prompt.ts";
 export { AUTHORING_RULES } from "./flow-authoring/rules.ts";
 export {
   AUTHORING_DEFINITION_ID,

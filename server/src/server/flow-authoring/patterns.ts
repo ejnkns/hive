@@ -1,18 +1,18 @@
 /** The patterns rung of the flow-authoring knowledge: tested lifecycle shapes
  * the model copies. One full exemplar (structured-intake, embedded as a
- * validated blueprint) plus compact sketches for the rest — each sketch shows only
- * the distinctive state/task/edge/action shape, not the full JSON. The prompt
- * asks the model to pick a pattern before writing the blueprint; the loop's gate
- * keeps every copy honest. */
+ * validated definition) plus compact sketches for the rest — each sketch shows
+ * only the distinctive state/task/edge/action shape, not the full data. The
+ * authoring flow asks the model to pick a pattern before writing the
+ * definition; the validator keeps every copy honest. */
 
-import type { FlowBlueprint } from "../flow-blueprint.ts";
+import type { FlowDefinition } from "workflow-engine/workflow-types";
 
 export type FlowPattern = {
   id: string;
   name: string;
   when: string;
-  // One pattern carries its full validated blueprint as the copyable exemplar.
-  exemplar?: FlowBlueprint;
+  // One pattern carries its full validated definition as the copyable exemplar.
+  exemplar?: FlowDefinition;
   // The others carry a compact shape sketch (the distinctive parts only).
   sketch?: string;
 };
@@ -22,7 +22,7 @@ export type FlowPattern = {
 // the agent skipped the contract), taskError gates routing to a retry state,
 // and a flow-level createInstance action. The model copies this SHAPE and
 // renames the nouns for its domain.
-export const STRUCTURED_INTAKE_EXEMPLAR: FlowBlueprint = {
+export const STRUCTURED_INTAKE_EXEMPLAR: FlowDefinition = {
   id: "intake",
   label: "Item Intake",
   description: "Classify incoming items into a category and tags.",
@@ -44,7 +44,7 @@ export const STRUCTURED_INTAKE_EXEMPLAR: FlowBlueprint = {
         { field: "category", type: "string" },
         { field: "tags", type: "string[]" },
       ],
-      initialState: "inbox",
+      initial: "inbox",
       terminalStates: ["classified", "discarded"],
       states: [
         {

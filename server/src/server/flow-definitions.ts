@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { stripTypeScriptTypes } from "node:module";
-import { basename, dirname, join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { HIVE_DIR } from "shared/hive-dir";
 import { logger } from "shared/logger";
@@ -23,7 +23,6 @@ import type {
   ConfigField,
   FlowDefinition,
 } from "workflow-engine/workflow-types";
-import type { FlowBlueprint } from "./flow-blueprint.ts";
 import { validateFlowDefinition } from "./flow-definition.ts";
 
 // ── Types ──
@@ -34,12 +33,11 @@ import { validateFlowDefinition } from "./flow-definition.ts";
 // keeps a definition out of the flow library list while remaining
 // instantiable (e.g. the flow-authoring session).
 //
-// A definition generated from a data module (or a legacy blueprint-rendered
-// module set) is a module set: `source` is the entry module (flow.ts) and
-// `files` maps each referenced relative path to its source. `definition` is
-// the pure-data form a data module carries (the editor/builder bind to it);
-// `flow` is the compiled projection the runtime executes. `blueprint` is the
-// legacy design artifact two-artifact flows were rendered from (retiring).
+// A definition with file references is a module set: `source` is the entry
+// module (flow.ts) and `files` maps each referenced relative path to its
+// source. `definition` is the pure-data form a data module carries (the
+// editor/builder bind to it); `flow` is the compiled projection the runtime
+// executes.
 export type RegisteredFlowDefinition = {
   id: string;
   name: string;
@@ -51,7 +49,6 @@ export type RegisteredFlowDefinition = {
   // The pure-data form of a definition module (the builder contract).
   definition?: FlowDefinition;
   source?: string;
-  blueprint?: FlowBlueprint;
   files?: Record<string, string>;
 };
 
@@ -79,12 +76,10 @@ export function registerFlowDefinition(
     builtIn?: boolean;
     hidden?: boolean;
     // The module set of a built-in/preset flow (its entry source + referenced
-    // files) plus the blueprint it was rendered from, so built-ins are defined
-    // the same way user-generated flows are — viewable from the library
-    // instead of a dead edit button.
+    // files), so built-ins are defined the same way user-generated flows are —
+    // viewable from the library instead of a dead edit button.
     source?: string;
     files?: Record<string, string>;
-    blueprint?: FlowBlueprint;
     // The pure-data form of a data definition module.
     definition?: FlowDefinition;
   } = {}
@@ -99,7 +94,6 @@ export function registerFlowDefinition(
     flow: definition,
     definition: options.definition,
     source: options.source,
-    blueprint: options.blueprint,
     files: options.files,
   });
 }
@@ -131,7 +125,6 @@ export async function registerUserDefinition(input: {
   name: string;
   description?: string;
   source: string;
-  blueprint?: FlowBlueprint;
   files?: Record<string, string>;
 }): Promise<RegisteredFlowDefinition> {
   const slug = slugify(input.name);
@@ -163,7 +156,6 @@ export async function registerUserDefinition(input: {
     flow: loaded.flow,
     definition: loaded.definition,
     source: input.source,
-    blueprint: input.blueprint,
     files: input.files,
   };
   definitions.set(slug, record);
@@ -180,7 +172,6 @@ export async function updateUserDefinition(
     description?: string;
     source: string;
     files?: Record<string, string>;
-    blueprint?: FlowBlueprint;
   }
 ): Promise<RegisteredFlowDefinition> {
   const existing = definitions.get(id);
@@ -207,7 +198,6 @@ export async function updateUserDefinition(
     flow: loaded.flow,
     definition: loaded.definition,
     source: input.source,
-    blueprint: input.blueprint ?? existing.blueprint,
     files: input.files,
   };
   definitions.set(id, record);
@@ -342,9 +332,9 @@ export async function loadUserDefinitionsFromDisk(): Promise<void> {
 // The loader seam: import the definition module → validate (a data module's
 // declared parts are decidable) → compile (compileFlowDefinition with a ref
 // resolver that imports the referenced modules) → the compiled projection the
-// runtime executes. A legacy closure-form module (blueprint-rendered or
-// hand-authored compiled) is used directly — the runtime contract never
-// changed, only the authoring seam did.
+// runtime executes. A legacy closure-form module (hand-authored compiled) is
+// used directly — the runtime contract never changed, only the authoring seam
+// did.
 //
 // runtimeSlug names the materialized working copy; flowId is the id stamped
 // onto the loaded definition (normally equal to the slug, but a rehydrated
@@ -459,89 +449,6 @@ async function compileDataDefinition(
     (ref) => modules.get(ref) ?? {}
   );
   return { flow: { ...compiled, id: flowId }, definition };
-}
-
-// ── module-set materialization ──
-
-// Materializes a module set under the runtime definitions directory and
-// returns the directory. The entry is always written; a referenced file is
-// written only when absent — an existing (implemented) file is authoritative
-// (the file IS the truth). References that escape the module-set directory are
-// skipped defensively; the structural lint reports them.
-export function materializeModuleSet(
-  runtimeSlug: string,
-  rendered: { entry: string; files: Record<string, string> }
-): string {
-  const dir = join(runtimeDefinitionsDir(), runtimeSlug);
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "flow.ts"), rendered.entry, "utf-8");
-  for (const [ref, refSource] of Object.entries(rendered.files)) {
-    const target = refPathInDir(dir, ref);
-    if (target === undefined || existsSync(target)) continue;
-    mkdirSync(dirname(target), { recursive: true });
-    writeFileSync(target, refSource, "utf-8");
-  }
-  return dir;
-}
-
-// Imports the entry of an already-materialized module-set directory. The
-// materialized directory is copied to a nonce-named sibling before importing:
-// the entry's relative imports resolve to fresh URLs on every load, so hand
-// edits (implemented files) are never served from Node's module cache — the
-// authoring loop's write → generate → load cycle sees each edit.
-//
-// The module-set gate loads rendered (closure-form) entries through this
-// path — the raw module.flow IS the compiled projection. A data definition
-// module-set entry compiles through loadDefinitionFromSource instead.
-export async function loadModuleSetDefinition(
-  dir: string,
-  flowId?: string
-): Promise<CompiledFlowDefinition> {
-  const slug = basename(dir) || "module-set";
-  return loadModuleSetCopy(slug, dir, flowId);
-}
-
-// The module-set load shared by the working-dir loader and the record loader:
-// copy the set to a fresh directory, then import its entry. The copy is
-// removed after the import — the evaluated modules are cached by their unique
-// URL, so the scratch directory is never needed again (without this, every
-// load leaves a `-load-<nonce>` directory behind forever).
-async function loadModuleSetCopy(
-  slug: string,
-  dir: string,
-  flowId?: string
-): Promise<CompiledFlowDefinition> {
-  const loadDir = join(
-    runtimeDefinitionsDir(),
-    `${slug}-load-${nextImportNonce()}`
-  );
-  try {
-    copyModuleSetFiles(dir, loadDir);
-    const flow = await importModuleSetEntry(loadDir);
-    return flowId === undefined ? flow : { ...flow, id: flowId };
-  } finally {
-    rmSync(loadDir, { recursive: true, force: true });
-  }
-}
-
-// Copies every .ts file of a module-set directory (excluding the lint's
-// transient `__lint__` harnesses) into a fresh directory.
-function copyModuleSetFiles(dir: string, loadDir: string): void {
-  mkdirSync(loadDir, { recursive: true });
-  const walk = (sub: string): void => {
-    for (const entry of readdirSync(sub, { withFileTypes: true })) {
-      if (entry.name === "__lint__") continue;
-      const full = join(sub, entry.name);
-      if (entry.isDirectory()) {
-        walk(full);
-      } else if (entry.name.endsWith(".ts")) {
-        const target = join(loadDir, relative(dir, full));
-        mkdirSync(dirname(target), { recursive: true });
-        writeFileSync(target, readFileSync(full, "utf-8"), "utf-8");
-      }
-    }
-  };
-  walk(dir);
 }
 
 // Imports a module-set entry at <dir>/flow.ts (the raw module.flow — the
