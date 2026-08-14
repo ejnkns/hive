@@ -44,7 +44,8 @@ import { presetRoot, readPresetModuleSetFiles } from "./preset-flow.ts";
 // A research flow whose gates, tool, operations, edge transform, and output
 // extractor are all referenced files. The test implements the refs and runs
 // the whole thing in a real FlowRuntime.
-const FIVE_KIND_MODULE = `
+const FIVE_KIND_MODULE = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
 export const flow: FlowDefinition = {
   id: "moduleSetFlow",
   label: "Module Set Flow",
