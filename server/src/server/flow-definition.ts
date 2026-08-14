@@ -1,6 +1,6 @@
 /** @public — the flow definition authoring surface: the definition parser
  * (a definition module → the data FlowDefinition object) and the definition
- * validator (the blueprint validator's checks on the parsed definition).
+ * validator (the declared-parts checks on the parsed definition).
  * Import from here, not from flow-definition/ directly.
  *
  * The definition is the single pure-data artifact: what an agent writes, a UI

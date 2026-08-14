@@ -67,7 +67,7 @@ export const authoringSessionFlow = {
   id: AUTHORING_DEFINITION_ID,
   label: "Flow Authoring Session",
   description:
-    "A live conversation that designs a Hive flow definition, maintaining the blueprint draft as decisions are made.",
+    "A live conversation that designs a Hive flow definition, maintaining the definition draft as decisions are made.",
   configSchema: [],
   workflows: [sessionWorkflow],
   tools: authoringTools,

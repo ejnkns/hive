@@ -1151,8 +1151,6 @@ describe("flow API routes", () => {
     // The parsed definition rides along so the editor binds to the object.
     const parsed = state?.parsedDefinition as { id?: string } | undefined;
     assert.equal(parsed?.id, "reviewFlow");
-    // One artifact: no divergence flag, no adoption.
-    assert.equal(state?.blueprintDiverged, undefined);
   });
 
   it("POST /api/flows/definitions/author/:flowId/source rejects a non-authoring flow", async () => {
@@ -1204,8 +1202,7 @@ describe("flow API routes", () => {
         "export const ok = true;\n",
         "the write must land in the session's file set"
       );
-      // File edits are authoritative: no divergence flag.
-      assert.notEqual(state?.blueprintDiverged, true);
+      // File edits are authoritative — the write lands as-is.
       assert.equal(
         state?.moduleSetSlug,
         flowId,

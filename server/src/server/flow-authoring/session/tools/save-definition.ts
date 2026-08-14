@@ -9,13 +9,13 @@ import type { AuthoringItemState } from "../state.ts";
 export const saveDefinitionTool = defineTool<AuthoringItemState>({
   name: "save_definition",
   description:
-    "Register the current generated definition (the source in the editor) as a flow definition. Call this when the user asks to save or says it is ready — the definition registers immediately and the editor shows the saved state. The first save creates the definition (named from the blueprint's label, or the explicit name); later saves update the same definition.",
+    "Register the current generated definition (the source in the editor) as a flow definition. Call this when the user asks to save or says it is ready — the definition registers immediately and the editor shows the saved state. The first save creates the definition (named from the definition's label, or the explicit name); later saves update the same definition.",
   parameters: {
     properties: {
       name: {
         type: "string",
         description:
-          "Optional name override. Defaults to the blueprint's label (suggestedName).",
+          "Optional name override. Defaults to the definition's label (suggestedName).",
       },
     },
     required: [],

@@ -1,8 +1,9 @@
 // The compile step: a pure-data FlowDefinition → the runtime projection.
 // These tests assert the compiled shape (closures for gates/transforms, ops
 // and tools by name) and that a compiled definition runs in a real
-// FlowRuntime with the engine's operation runner — the "compiles clean, runs
-// clean" half of the corpus oracle (validation lives server-side).
+// FlowRuntime with the engine's operation runner. Definition validation lives
+// server-side; the compile step here is checked against the runtime
+// contract it produces.
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";

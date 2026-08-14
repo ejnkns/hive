@@ -109,7 +109,7 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
 
   server.post("/api/flows/definitions/author", async (request, reply) => {
     // Creates a flow-authoring session: a hidden flow instance whose ai-chat
-    // agent converges on a blueprint with the user. The session is interactive and
+    // agent converges on the definition module with the user. The session is interactive and
     // stays alive until the user closes it or leaves; the prompt (and optional
     // context, e.g. an existing definition to revise) is recorded in instance
     // state and sent as the first chat message — wrapped in the "no questions"

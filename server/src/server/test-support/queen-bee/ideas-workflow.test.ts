@@ -7,7 +7,7 @@ import { createEngineRunners } from "../../engine-bridge.ts";
 import { queenBeeCompiled as queenBeeFlow } from "../compiled-presets.ts";
 
 // The ideas workflow, extracted from the rendered definition (the old
-// ideas-workflow.ts module was absorbed into the blueprint). The IIFE keeps
+// ideas-workflow.ts module was absorbed into the flow definition). The IIFE keeps
 // the narrowing inside so the closure's type is RuntimeWorkflowConfig.
 const ideasWorkflow = (() => {
   if (!("workflows" in queenBeeFlow)) {

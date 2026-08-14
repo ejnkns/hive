@@ -1,5 +1,5 @@
-/** @private — the definition validator: the blueprint validator's checks
- * applied to the data FlowDefinition object. Declared parts are decidable
+/** @private — the definition validator: the declared-parts checks applied
+ * to the data FlowDefinition object. Declared parts are decidable
  * (closed vocabulary); referenced modules get the module-set gate separately.
  *
  * Asserts identifiers, cross-references (workflow/state/task/field/action
@@ -21,9 +21,7 @@ import type {
 import {
   BUILTIN_RENDER_KINDS,
   DOTTED_PATH,
-  ENGINE_PROVIDED,
   engineOpNames,
-  engineOpWritesByName,
   FIELD_TYPES,
   IDENTIFIER,
   infraToolNames,
@@ -31,11 +29,7 @@ import {
 } from "./constants.ts";
 import { validateEdges } from "./edges.ts";
 import { isConfigField, isDerivedDisplay, isFieldType } from "./fields.ts";
-import {
-  collectGateStateReads,
-  collectGateTaskReads,
-  validateGateSpec,
-} from "./gate.ts";
+import { collectGateTaskReads, validateGateSpec } from "./gate.ts";
 import { validateRefShape } from "./ref.ts";
 import {
   checkLiteralMatches,

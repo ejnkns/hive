@@ -13,10 +13,7 @@ import { compileFlowDefinition } from "workflow-engine/compile-flow-definition";
 import { createFlowRuntime } from "workflow-engine/create-flow-runtime";
 import { createOperationRunner } from "workflow-engine/runners";
 import type { TaskRunnerContext } from "workflow-engine/task-runner";
-import type {
-  CompiledFlowDefinition,
-  FlowDefinition,
-} from "workflow-engine/workflow-types";
+import type { CompiledFlowDefinition } from "workflow-engine/workflow-types";
 import {
   analyzeFlowDefinition,
   parseDefinition,
@@ -378,12 +375,12 @@ describe("loadDefinitionFromSource (a definition module validates → compiles �
   });
 });
 
-// ─── the expressiveness oracle ────────────────────────────────────────
+// ─── definition expressiveness ───────────────────────────────────────
 
-// A definition carrying the vocabulary the blueprint could not express — a
-// custom render kind (ui.kinds), a task render hint, a flow-level ui.view,
-// and a file gate — validates and compiles. Nothing requires a hand-off
-// because "the blueprint can't express it".
+// A definition carrying the expressive vocabulary — a custom render kind
+// (ui.kinds), a task render hint, a flow-level ui.view, and a file gate —
+// validates and compiles. The definition expresses these as data; nothing
+// requires a hand-off to a human.
 const EXPRESSIVE_MODULE = `import type { FlowDefinition } from "workflow-engine/workflow-types";
 
 export const flow: FlowDefinition = {
@@ -434,7 +431,7 @@ export const approved: GateContract = (ctx) =>
 `,
 };
 
-describe("the expressiveness oracle (vocabulary the blueprint could not express)", () => {
+describe("definition expressiveness (custom render kinds, task render hints, ui.view, file gates)", () => {
   it("a definition with a custom render kind, a task render hint, a flow-level ui.view, and a file gate validates and compiles", async () => {
     const { definition, findings } = parseDefinition(EXPRESSIVE_MODULE);
     assert.deepEqual(findings, []);

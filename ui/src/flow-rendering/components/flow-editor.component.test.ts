@@ -17,8 +17,8 @@ import { FlowEditor } from "./flow-editor.ts";
 
 // Behavior tests for the built-in authoring-session instance component: the
 // header (title from the instance's prompt), the running ai-chat, the
-// tokenized code pane bound to previewSource/previewErrors, and the action
-// row rendered from availableActions.
+// tokenized definition source pane bound to the session source + validation
+// notes, and the action row rendered from availableActions.
 
 function authoringDef(): WorkflowDefResponse {
   return {
@@ -62,9 +62,9 @@ function authoringEntry(
       taskOutputs: {},
       workflowInstanceState: {
         prompt: "Build a review flow",
-        previewSource: 'export const flow = { id: "demo" };',
+        source: 'export const flow = { id: "demo" };',
         previewErrors: [
-          "blueprint.workflows[0]: state id 'x' is not a valid identifier",
+          "definition.workflows[0]: state id 'x' is not a valid identifier",
         ],
       },
       history: [],
@@ -109,7 +109,7 @@ describe("FlowEditor", () => {
     ).toBeGreaterThan(0);
   });
 
-  it("renders the highlighted code editor bound to source ?? previewSource", async () => {
+  it("renders the highlighted code editor bound to the definition source", async () => {
     const el = await mountEditor();
     const code = queryDeep(el, ".code");
     expect(code).not.toBeNull();
@@ -126,7 +126,7 @@ describe("FlowEditor", () => {
     const notes = shadowRootOf(el).querySelectorAll(".pane-errors li");
     expect(notes.length).toBe(1);
     expect(notes[0]?.textContent).toContain(
-      "blueprint.workflows[0]: state id 'x' is not a valid identifier"
+      "definition.workflows[0]: state id 'x' is not a valid identifier"
     );
   });
 
@@ -145,12 +145,11 @@ describe("FlowEditor", () => {
     expect(shadowRootOf(el).querySelector(".pane-errors")).toBeNull();
   });
 
-  it("binds the editor to source over previewSource", async () => {
+  it("binds the editor to the session's definition source", async () => {
     const el = await mountEditor(
       authoringEntry({
         workflowInstanceState: {
           prompt: "p",
-          previewSource: "preview text",
           source: "source text",
         },
       })
@@ -238,7 +237,7 @@ describe("FlowEditor", () => {
           savedName: "Review Flow",
           saveFindings: {
             errors: [
-              "blueprint.workflows[0]: a gate reads an undeclared field",
+              "definition.workflows[0]: a gate reads an undeclared field",
             ],
             warnings: ["state 'new' has no way out"],
           },
@@ -253,7 +252,7 @@ describe("FlowEditor", () => {
       ...shadowRootOf(el).querySelectorAll(".saved-findings li"),
     ];
     expect(findings.map((f) => f.textContent)).toEqual([
-      "blueprint.workflows[0]: a gate reads an undeclared field",
+      "definition.workflows[0]: a gate reads an undeclared field",
       "1 warning(s)",
     ]);
   });
@@ -303,37 +302,44 @@ describe("FlowEditor", () => {
     expect(textarea().value).toBe("agent new");
   });
 
-  it("shows the diverged note and discard handoff while the source is manual", async () => {
+  it("shows the parsed definition summary on the source pane and no discard handoff", async () => {
     const el = await mountEditor(
       authoringEntry({
         workflowInstanceState: {
           prompt: "p",
-          source: "const a = 1;",
-          blueprintDiverged: true,
+          source: 'export const flow = { id: "demo" };',
+          parsedDefinition: { id: "demo", label: "Demo" },
         },
       })
     );
-    expect(shadowRootOf(el).querySelector(".diverged-note")).not.toBeNull();
-    const onAction = vi.fn();
-    el.onAction = onAction;
-    await el.updateComplete;
-    const discard = shadowRootOf(el).querySelector(
-      "button.discard-btn"
-    ) as HTMLButtonElement;
-    discard.dispatchEvent(click());
-    await el.updateComplete;
-    expect(onAction).toHaveBeenCalledWith("discard", undefined);
+    // The pane binds to the parsed definition object (a structured-form panel
+    // can replace the raw literal without re-plumbing).
+    expect(
+      shadowRootOf(el).querySelector(".diverged-note")?.textContent
+    ).toContain("demo");
+    // The discard/adopt handoff is gone — one artifact, the edit IS
+    // the state.
+    expect(shadowRootOf(el).querySelector("button.discard-btn")).toBeNull();
+    expect(shadowRootOf(el).querySelector("button.adopt-btn")).toBeNull();
   });
 
-  it("renders a Blueprint tab and one tab per referenced file", async () => {
+  it("renders the Definition tab and one tab per declared referenced file", async () => {
     const el = await mountEditor(
       authoringEntry({
         workflowInstanceState: {
           prompt: "p",
-          blueprint: '{ "id": "demo" }',
+          source: 'export const flow = { id: "demo" };',
+          // The parsed definition declares the refs; the file tabs derive
+          // from them (a declared-but-unwritten ref still gets a tab).
+          parsedDefinition: {
+            id: "demo",
+            label: "Demo",
+            workflows: [],
+            tools: [{ id: "search", ref: "./tools/search.ts" }],
+            edges: [],
+          },
           files: {
             "./gates/approved.ts": "export const ok = true;",
-            "./tools/search.ts": "export const tools = [];",
           },
         },
       })
@@ -343,7 +349,6 @@ describe("FlowEditor", () => {
     ).map((tab) => tab.textContent?.trim());
     expect(tabs).toEqual([
       "Definition",
-      "Blueprint",
       "./gates/approved.ts",
       "./tools/search.ts",
     ]);
@@ -355,7 +360,7 @@ describe("FlowEditor", () => {
     ).toBe("Definition");
   });
 
-  it("switches to a file tab and edits write back as files (authoritative, no divergence)", async () => {
+  it("switches to a file tab and edits write back as files (authoritative)", async () => {
     const el = await mountEditor(
       authoringEntry({
         workflowInstanceState: {
@@ -383,34 +388,6 @@ describe("FlowEditor", () => {
     await new Promise((resolve) => setTimeout(resolve, 900));
     expect(onPatchState).toHaveBeenCalledWith({
       files: { "./gates/approved.ts": "export const ok = false;" },
-    });
-  });
-
-  it("blueprint edits write back as the blueprint text", async () => {
-    const el = await mountEditor(
-      authoringEntry({
-        workflowInstanceState: { prompt: "p", blueprint: "{ }" },
-      })
-    );
-    const onPatchState = vi.fn();
-    el.onPatchState = onPatchState;
-    await el.updateComplete;
-
-    const blueprintTab = Array.from(
-      shadowRootOf(el).querySelectorAll("button.tab")
-    ).find(
-      (tab) => tab.textContent?.trim() === "Blueprint"
-    ) as HTMLButtonElement;
-    blueprintTab.dispatchEvent(click());
-    await el.updateComplete;
-
-    const textarea = queryDeep(el, "textarea") as HTMLTextAreaElement;
-    expect(textarea.value).toBe("{ }");
-    type(textarea, '{ "id": "demo" }');
-    await el.updateComplete;
-    await new Promise((resolve) => setTimeout(resolve, 900));
-    expect(onPatchState).toHaveBeenCalledWith({
-      blueprint: '{ "id": "demo" }',
     });
   });
 

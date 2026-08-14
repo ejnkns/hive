@@ -5,7 +5,7 @@ import type { RuntimeWorkflowInstanceState } from "workflow-engine/shared/workfl
 import { queenBeeWorkflows } from "../compiled-presets.ts";
 
 // The requirements workflow, extracted from the rendered definition (the old
-// requirements-workflow.ts module was absorbed into the blueprint).
+// requirements-workflow.ts module was absorbed into the flow definition).
 const requirementsWorkflow = (() => {
   const workflow = queenBeeWorkflows.find((wf) => wf.id === "requirements");
   if (workflow === undefined) {

@@ -54,8 +54,8 @@ describe("schema consistency", () => {
     it(`${preset.id} holds the state contract (definition validation + gate)`, async () => {
       // The preset is a pure-data definition module: the declared read↔write
       // invariant is the definition validator's job (the AST anchor check
-      // served the rendered two-artifact shape), the referenced files pass
-      // the module-set gate, and the whole set loads (compiles).
+      // served the old rendered shape), the referenced files pass the
+      // module-set gate, and the whole set loads (compiles).
       const presetRoot = join(PRESET_ROOT, preset.dir);
       const source = readFileSync(join(presetRoot, "flow.ts"), "utf8");
       const { definition, findings } = parseDefinition(source);

@@ -1,8 +1,8 @@
 /** @private — the flow definition: the single pure-data artifact an agent
  * writes, a UI builder edits, and the engine compiles to the runtime
- * projection at registration (compile-flow-definition.ts). The name
- * "blueprint" retired: this is the repo's FlowDefinition itself, extended
- * with the vocabulary (instanceState data, structured gates/values,
+ * projection at registration (compile-flow-definition.ts). This is the repo's
+ * FlowDefinition: the authoring surface, extended with the vocabulary
+ * (instanceState data, structured gates/values,
  * patch/completionOutput/extract task fields, task render hints, ui
  * kinds/view).
  *

@@ -139,5 +139,5 @@ CONSTRAINTS (the validator rejects violations; fix them in the same definition):
 - REFERENCED FILES ("tools"/"operations"/gate/transform/extract refs): implement the referenced file's named export — keep the name the reference derives (gates/transforms/extracts/prompts export the camel-cased file base name; tools export <id>Tools (a defineTool list); operations export <id>Operations (a defineOperations map)) — and validate again. Hand edits are authoritative — validation never overwrites a file. Gate files export (ctx) => boolean; edge transforms export a TransformContract; extractors export an OutputExtractor; prompt files export a string.`;
 
 // The legacy name kept for import compatibility during the migration (the
-// blueprint vocabulary retired with the two-artifact era).
+// blueprint vocabulary retired when the definition became the only artifact).
 export const FLOW_BLUEPRINT_SHAPE = FLOW_DEFINITION_SHAPE;

@@ -1,4 +1,4 @@
-/** @private — the output extractor contract: the context a blueprint-referenced
+/** @private — the output extractor contract: the context a definition-referenced
  * extractor receives and the function shape it implements. */
 
 // The context an output extractor runs with: the instance's completed task
@@ -11,7 +11,7 @@ export type ExtractContext = {
   workflowInstanceState: () => Record<string, unknown>;
 };
 
-// The contract a blueprint-referenced output extractor implements: task
+// The contract a definition-referenced output extractor implements: task
 // outcomes + live instance state → the declared instance-state fields. The
 // renderer emits stubs typed with this and the module-set lint checks the
 // referenced export against it.
