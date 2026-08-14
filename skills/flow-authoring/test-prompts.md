@@ -1,31 +1,31 @@
-# Flow generation test prompts
+# Flow definition test prompts
 
-Copy-paste prompts for testing flow generation in the definition editor's AI
+Copy-paste prompts for testing flow authoring in the definition editor's AI
 pane. Every prompt can be run two ways:
 
 - **Start conversation** — the agent asks clarifying questions and drafts the
-  spec with you. Good for testing the conversational loop: questions should be
-  few and design-relevant, and the spec preview should update after every
-  decision.
-- **I'm feeling lucky** — the agent produces the spec in one shot, no
+  definition with you. Good for testing the conversational loop: questions
+  should be few and design-relevant, and the definition should validate clean
+  after every decision.
+- **I'm feeling lucky** — the agent produces the definition in one shot, no
   questions. Good for testing the one-shot path: no mid-generation stalls, the
-  preview appears when the agent commits the spec, and Finalize lands the
-  gate-clean source in the editor.
+  definition lands in the editor when the agent writes it.
 
-The prompts deliberately cover different domains to test that generation is
+The prompts deliberately cover different domains to test that authoring is
 domain-agnostic, and different engine capabilities (multi-workflow + edges,
 fan-out of structured output, HITL chat, escalation/retry, git work,
-cross-instance dependencies, blueprint-referenced custom logic).
+cross-instance dependencies, definition-referenced custom logic).
 
 ## What to verify on every run
 
-- The agent's `generate_definition` passes the gate and the TypeScript lands in
-  the editor automatically (the session stays in drafting — it never ends on
-  its own).
-- **I'm feeling lucky**: the agent writes the blueprint without asking questions
-  and generates on its own.
+- The agent's `validate_definition` passes the gate (definition validation,
+  module-set lint, import policy, typecheck, declared-writes verification,
+  load) and the definition stays in the editor (the session stays in drafting
+  — it never ends on its own).
+- **I'm feeling lucky**: the agent writes the definition module without asking
+  questions and validates on its own.
 - **Conversational**: the agent asks only what actually changes the design,
-  then drafts; the editor preview updates after each `set_flow_blueprint`.
+  then drafts; the editor updates after each `set_flow_definition`.
 - The final definition has: a `systemPrompt` on every ai-task/ai-chat,
   `completionOutput` for any structured data, a `needs_review`-style escape
   hatch for fallible tasks, and zero gate warnings.
@@ -181,7 +181,7 @@ Expect: the structured-intake/human-review shape applied to an unfamiliar
 domain — the same lifecycle patterns, renamed nouns. Confirms generation is
 domain-agnostic (not idea/card/ticket-shaped by default).
 
-## 10. Research loop (blueprint-referenced custom logic)
+## 10. Research loop (definition-referenced custom logic)
 
 ```text
 A research loop flow. An AI searches the web for a query with a custom
@@ -194,8 +194,8 @@ websearch file), a `{ kind: "file", ref }` gate on the transition out of the
 extracting state (after the extractor writes the verdict the gate reads — a
 gate sharing a state with an earlier task fires too early), and the agent
 implementing the referenced files in-conversation (`write_definition_file`)
-then regenerating until the gate passes, then `save_definition`. The strongest
-end-to-end proof of the blueprint-referenced-modules capability.
+then validating until the gate passes, then `save_definition`. The strongest
+end-to-end proof of the definition-referenced-modules capability.
 
 ## 11. Responsive website audit (verification loop + persisted report)
 
