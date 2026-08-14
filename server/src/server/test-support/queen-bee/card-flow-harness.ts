@@ -16,8 +16,11 @@ import {
   createAiTaskRunner,
   type TaskRunnerContext,
 } from "workflow-engine/runners";
-import { flow as queenBeeFlow } from "../../../../../presets/queen-bee/flow.ts";
 import { createEngineRunners } from "../../engine-bridge.ts";
+import {
+  queenBeeCompiled as queenBeeFlow,
+  queenBeeWorkflows,
+} from "../compiled-presets.ts";
 
 export type CardFlowOptions = {
   basePath: string;
@@ -43,7 +46,7 @@ export function makeCardRuntime(options: CardFlowOptions) {
   });
   return createFlowRuntime(
     "project",
-    queenBeeFlow.workflows,
+    queenBeeWorkflows,
     queenBeeFlow.edges,
     {
       operation: baseRunners.operationRunner,

@@ -3,8 +3,8 @@ import { describe, it } from "node:test";
 import { createFlowRuntime } from "workflow-engine/create-flow-runtime";
 import type { AiChatModelCaller } from "workflow-engine/runners";
 import { createAiChatRunner } from "workflow-engine/runners";
-import { flow as queenBeeFlow } from "../../../../../presets/queen-bee/flow.ts";
 import { createEngineRunners } from "../../engine-bridge.ts";
+import { queenBeeCompiled as queenBeeFlow } from "../compiled-presets.ts";
 
 // The ideas workflow, extracted from the rendered definition (the old
 // ideas-workflow.ts module was absorbed into the blueprint). The IIFE keeps

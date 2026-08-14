@@ -16,7 +16,12 @@ import {
   type CompiledFlowDefinition,
   defineWorkflow,
 } from "workflow-engine/workflow-types";
-import { flow as queenBeeFlow } from "../../../presets/queen-bee/flow.ts";
+import { loadPresetDefinition } from "./preset-flow.ts";
+
+// The compiled queen-bee projection (the preset definition module through the
+// real loader seam).
+const queenBeeCompiled = (await loadPresetDefinition("queen-bee")).flow;
+
 import { registerFlowApiRoutes } from "./flow-api-routes.ts";
 import { authoringSessionFlow } from "./flow-authoring/session.ts";
 import {
@@ -2105,7 +2110,7 @@ export const flow = {
   });
 
   it("POST /api/flows rejects config missing required schema fields", async () => {
-    registerFlowDefinition(queenBeeFlow, { builtIn: true });
+    registerFlowDefinition(queenBeeCompiled, { builtIn: true });
     setFlowPersistence(noopPersistence);
     const server = Fastify();
     servers.push(server);
@@ -2127,7 +2132,7 @@ export const flow = {
   });
 
   it("POST /api/flows rejects unknown config fields", async () => {
-    registerFlowDefinition(queenBeeFlow, { builtIn: true });
+    registerFlowDefinition(queenBeeCompiled, { builtIn: true });
     setFlowPersistence(noopPersistence);
     const server = Fastify();
     servers.push(server);
@@ -2150,7 +2155,7 @@ export const flow = {
   });
 
   it("POST /api/flows rejects config fields of the wrong type", async () => {
-    registerFlowDefinition(queenBeeFlow, { builtIn: true });
+    registerFlowDefinition(queenBeeCompiled, { builtIn: true });
     setFlowPersistence(noopPersistence);
     const server = Fastify();
     servers.push(server);
@@ -2173,7 +2178,7 @@ export const flow = {
   });
 
   it("POST /api/flows accepts config matching the schema", async () => {
-    registerFlowDefinition(queenBeeFlow, { builtIn: true });
+    registerFlowDefinition(queenBeeCompiled, { builtIn: true });
     setFlowPersistence(noopPersistence);
     const server = Fastify();
     servers.push(server);

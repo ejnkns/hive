@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { flow as wayfinderFlow } from "../../../../../presets/wayfinder/flow.ts";
 import { registerFlowDefinition } from "../../flow-definitions.ts";
 import {
   dispatchFlowLevelAction,
@@ -11,6 +10,7 @@ import {
   registerFlowForTest,
   resetFlowRuntimesForTest,
 } from "../../flow-registry.ts";
+import { wayfinderCompiled as wayfinderFlow } from "../compiled-presets.ts";
 import {
   chartingCaller,
   idleModelCaller,

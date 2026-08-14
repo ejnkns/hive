@@ -11,8 +11,11 @@ import {
   createAiTaskRunner,
 } from "workflow-engine/runners";
 import type { TaskRunnerContext } from "workflow-engine/task-runner";
-import { flow as wayfinderFlow } from "../../../../../presets/wayfinder/flow.ts";
 import { createEngineRunners } from "../../engine-bridge.ts";
+import {
+  wayfinderCompiled as wayfinderFlow,
+  wayfinderWorkflows,
+} from "../compiled-presets.ts";
 
 export type MakeRuntimeOptions = {
   basePath?: string;
@@ -36,7 +39,7 @@ export function makeWayfinderRuntime(options: MakeRuntimeOptions) {
   });
   return createFlowRuntime(
     "wayfinder-test",
-    wayfinderFlow.workflows,
+    wayfinderWorkflows,
     wayfinderFlow.edges,
     {
       operation: baseRunners.operationRunner,

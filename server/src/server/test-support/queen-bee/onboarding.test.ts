@@ -10,7 +10,6 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { flow as queenBeeFlow } from "../../../../../presets/queen-bee/flow.ts";
 import { registerFlowDefinition } from "../../flow-definitions.ts";
 import {
   createFlowPersistence,
@@ -21,6 +20,7 @@ import {
   getFlowRuntime,
   setFlowPersistence,
 } from "../../flow-registry.ts";
+import { queenBeeCompiled as queenBeeFlow } from "../compiled-presets.ts";
 
 describe("queen-bee onboarding workflow", () => {
   let root: string;

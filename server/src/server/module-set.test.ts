@@ -33,7 +33,6 @@ import type { ToolCall } from "workflow-engine/runners/tool-types";
 import type { TaskRunnerContext } from "workflow-engine/task-runner";
 import type { CompiledFlowDefinition } from "workflow-engine/workflow-types";
 import { queenBeeBlueprint } from "../../../presets/queen-bee/blueprint.ts";
-import { flow as queenBeeFlow } from "../../../presets/queen-bee/flow.ts";
 import { wayfinderBlueprint } from "../../../presets/wayfinder/blueprint.ts";
 import type { FlowBlueprint } from "./flow-blueprint.ts";
 import {
@@ -57,6 +56,7 @@ import {
 } from "./module-set.ts";
 import { renderFlowDefinition } from "./render-flow-definition.ts";
 import { checkDefinitionSources } from "./schema-consistency.ts";
+import { queenBeeCompiled as queenBeeFlow } from "./test-support/compiled-presets.ts";
 import { typecheckModuleSet } from "./typecheck-definition.ts";
 
 // ─── the five-kind blueprint ──────────────────────────────────────────

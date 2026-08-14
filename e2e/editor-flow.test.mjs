@@ -634,8 +634,9 @@ test("a built-in flow definition is viewable read-only (View instead of Edit)", 
     return editor?.shadowRoot?.querySelector("textarea")?.value ?? "";
   });
   assert.ok(
-    code.includes('id: "queen-bee"') && code.includes("export const flow = {"),
-    "the preset's rendered entry source must be viewable"
+    code.includes('id: "queen-bee"') &&
+      code.includes("export const flow: FlowDefinition = {"),
+    "the preset's definition module source must be viewable"
   );
   const disabled = await page.evaluate(() => {
     const editor = document.querySelector("code-editor");

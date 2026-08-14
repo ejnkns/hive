@@ -16,23 +16,24 @@
 // produce. A third preset or a saved user flow cannot silently escape.
 
 import assert from "node:assert/strict";
-import {
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  statSync,
-} from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
+import {
+  analyzeFlowDefinition,
+  parseDefinition,
+  validateFlowDefinition,
+} from "./flow-definition.ts";
 import {
   listRegisteredDefinitions,
   registerUserDefinition,
   resetFlowDefinitionsForTest,
   setDefinitionsBasePathForTest,
 } from "./flow-definitions.ts";
+import { runDefinitionModuleGate } from "./module-set.ts";
+import { readPresetModuleSetFiles } from "./preset-flow.ts";
 import { checkDefinitionSources } from "./schema-consistency.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -46,40 +47,52 @@ const PRESETS = [
 
 const PRESET_ROOT = join(__dirname, "..", "..", "..");
 
-function collectFiles(dir: string): string[] {
-  const out: string[] = [];
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry);
-    if (statSync(full).isDirectory()) {
-      out.push(...collectFiles(full));
-    } else if (full.endsWith(".ts") && !full.endsWith(".test.ts")) {
-      out.push(full);
-    }
-  }
-  return out;
-}
-
 // ─── the suite ─────────────────────────────────────────────────────────
 
 describe("schema consistency", () => {
   for (const preset of PRESETS) {
-    it(`${preset.id} workflows hold the state contract`, () => {
+    it(`${preset.id} holds the state contract (definition validation + gate)`, async () => {
+      // The preset is a pure-data definition module: the declared read↔write
+      // invariant is the definition validator's job (the AST anchor check
+      // served the rendered two-artifact shape), the referenced files pass
+      // the module-set gate, and the whole set loads (compiles).
       const presetRoot = join(PRESET_ROOT, preset.dir);
-      const files = collectFiles(presetRoot).map((path) => ({
-        path,
-        source: readFileSync(path, "utf8"),
-      }));
-      const report = checkDefinitionSources(files);
-
-      assert.ok(
-        report.workflows.length >= 2,
-        `expected at least 2 workflows in ${preset.id}, found ${report.workflows.length}`
+      const source = readFileSync(join(presetRoot, "flow.ts"), "utf8");
+      const { definition, findings } = parseDefinition(source);
+      assert.deepEqual(findings, []);
+      const errors = validateFlowDefinition(definition);
+      assert.deepEqual(
+        errors,
+        [],
+        `${preset.id} definition validation errors: ${errors.map((e) => `${e.path}: ${e.message}`).join("; ")}`
       );
-      for (const warning of report.warnings) {
+      // Analysis warnings are advisory for the open parts: a completionOutput
+      // whose reads live in a referenced module (e.g. wayfinder's
+      // persist_research_findings reads taskOutputs.research) is invisible to
+      // the analyzer — the module-set gate checks the referenced files.
+      const warnings = analyzeFlowDefinition(definition);
+      for (const warning of warnings) {
         // eslint-disable-next-line no-console
-        console.log(`schema-consistency warning: ${warning}`);
+        console.log(`${preset.id} analysis warning: ${warning}`);
       }
-      assert.deepEqual(report.errors, []);
+      assert.ok(
+        definition.workflows.length >= 2,
+        `expected at least 2 workflows in ${preset.id}, found ${definition.workflows.length}`
+      );
+
+      const result = await runDefinitionModuleGate(
+        `preset-gate-${preset.id}`,
+        definition,
+        source,
+        readPresetModuleSetFiles(preset.id)
+      );
+      assert.deepEqual(
+        result.errors,
+        [],
+        `${preset.id} module-set gate errors`
+      );
+      assert.deepEqual(result.warnings, [], `${preset.id} gate warnings`);
+      assert.ok(result.flow, `${preset.id} must load (compile)`);
     });
   }
 

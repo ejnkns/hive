@@ -9,6 +9,7 @@
 
 import ts from "typescript";
 import type { FlowDefinition } from "workflow-engine/workflow-types";
+import { ENGINE_PROVIDED } from "../flow-definition/constants.ts";
 import {
   collectPatchWrites,
   parseFile,
@@ -32,6 +33,10 @@ export function verifyDeclaredWrites(
     const actual = toolExecutorWrites(tool.ref, `${tool.id}Tools`, files);
     if (actual === undefined) continue;
     for (const field of actual) {
+      // Engine-provided fields (worktreePath, branchName, attempt) are the
+      // engine's own writes — the invariant exempts them, so an executor
+      // patching one needs no declaration.
+      if (ENGINE_PROVIDED.has(field)) continue;
       if (!declared.has(field)) {
         findings.push({
           ref: tool.ref,
@@ -46,6 +51,7 @@ export function verifyDeclaredWrites(
     const actual = operationWrites(op.ref, `${op.id}Operations`, files);
     if (actual === undefined) continue;
     for (const field of actual) {
+      if (ENGINE_PROVIDED.has(field)) continue;
       if (!declared.has(field)) {
         findings.push({
           ref: op.ref,

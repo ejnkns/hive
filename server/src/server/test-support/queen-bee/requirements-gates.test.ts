@@ -2,17 +2,12 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { getAvailableActions } from "workflow-engine/get-available-actions";
 import type { RuntimeWorkflowInstanceState } from "workflow-engine/shared/workflow-instance-state";
-import { flow as requirementsWorkflowFlow } from "../../../../../presets/queen-bee/flow.ts";
+import { queenBeeWorkflows } from "../compiled-presets.ts";
 
 // The requirements workflow, extracted from the rendered definition (the old
 // requirements-workflow.ts module was absorbed into the blueprint).
 const requirementsWorkflow = (() => {
-  if (!("workflows" in requirementsWorkflowFlow)) {
-    throw new Error("expected a static definition");
-  }
-  const workflow = requirementsWorkflowFlow.workflows.find(
-    (wf) => wf.id === "requirements"
-  );
+  const workflow = queenBeeWorkflows.find((wf) => wf.id === "requirements");
   if (workflow === undefined) {
     throw new Error("requirements workflow not found");
   }

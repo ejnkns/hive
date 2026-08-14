@@ -25,7 +25,6 @@ import {
 } from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
 import type { ReviewPackage } from "../../../../../presets/queen-bee/cards/types.ts";
-import { flow as queenBeeFlow } from "../../../../../presets/queen-bee/flow.ts";
 import { createEngineRunners } from "../../engine-bridge.ts";
 import { registerFlowDefinition } from "../../flow-definitions.ts";
 import {
@@ -39,6 +38,10 @@ import {
   rehydrateFlow,
   setFlowPersistence,
 } from "../../flow-registry.ts";
+import {
+  queenBeeCompiled as queenBeeFlow,
+  queenBeeWorkflows,
+} from "../compiled-presets.ts";
 
 const dummyTask: TaskDefinition = { id: "t", label: "T", role: "operation" };
 
@@ -85,7 +88,7 @@ function makeRunner(
         Object.assign(instanceState, patch),
       workflowInstancesInState: () => [],
     }),
-    operations: queenBeeFlow.operations,
+    operations: queenBeeFlow.operations ?? {},
   });
 }
 
@@ -963,11 +966,11 @@ function makeCardRuntime(options: {
   };
   const baseRunners = createEngineRunners({
     tools: queenBeeFlow.tools,
-    operations: queenBeeFlow.operations,
+    operations: queenBeeFlow.operations ?? {},
   });
   return createFlowRuntime(
     "project",
-    queenBeeFlow.workflows,
+    queenBeeWorkflows,
     queenBeeFlow.edges,
     {
       operation: baseRunners.operationRunner,

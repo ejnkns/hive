@@ -10,7 +10,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import Fastify, { type FastifyInstance } from "fastify";
-import { flow as queenBeeFlow } from "../../../presets/queen-bee/flow.ts";
 import { registerBuiltinFlowDefinitions } from "../main/register-builtin-flow-definitions.ts";
 import { registerFlowApiRoutes } from "./flow-api-routes.ts";
 import {
@@ -21,6 +20,7 @@ import {
   resetFlowDefinitionsForTest,
   setDefinitionsBasePathForTest,
 } from "./flow-definitions.ts";
+import { queenBeeCompiled as queenBeeFlow } from "./test-support/compiled-presets.ts";
 
 const pingFlowSource = `
 import { defineWorkflow } from "workflow-engine/workflow-types";
@@ -220,12 +220,12 @@ describe("flow definition library", () => {
     const queenBee = getRegisteredFlowDefinition("queen-bee");
     assert.ok(queenBee, "queen-bee must register as a built-in");
     assert.equal(queenBee.builtIn, true);
-    assert.equal(queenBee.blueprint?.id, "queen-bee");
+    assert.equal(queenBee.definition?.id, "queen-bee");
     assert.ok(
       typeof queenBee.source === "string" &&
-        queenBee.source.includes("export const flow = {") &&
+        queenBee.source.includes("export const flow: FlowDefinition = {") &&
         queenBee.source.includes('id: "queen-bee"'),
-      "a preset's entry source is the rendered definition"
+      "a preset's entry source is the pure-data definition module"
     );
     assert.ok(
       queenBee.files?.["./cards/ops/build-review-package.ts"]?.includes(
@@ -238,12 +238,12 @@ describe("flow definition library", () => {
       "the preset's tools module is part of the file set"
     );
     const wayfinder = getRegisteredFlowDefinition("wayfinder");
-    assert.equal(wayfinder?.blueprint?.id, "wayfinder");
+    assert.equal(wayfinder?.definition?.id, "wayfinder");
     assert.ok(
       typeof wayfinder?.source === "string" &&
-        wayfinder.source.includes("export const flow = {") &&
+        wayfinder.source.includes("export const flow: FlowDefinition = {") &&
         wayfinder.source.includes('id: "wayfinder"'),
-      "wayfinder's source is the rendered definition"
+      "wayfinder's source is the pure-data definition module"
     );
     assert.ok(
       wayfinder?.files?.["./charting/ops/settle-chart.ts"] !== undefined,
