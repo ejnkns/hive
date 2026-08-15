@@ -9,6 +9,7 @@ import type {
   ChatMessage,
   CustomRenderKind,
 } from "workflow-engine/workflow-types";
+import { mergeFileTabs } from "../../workflow/definition-files.ts";
 import { resolvePath } from "../resolve-path.ts";
 import "./chat-session.ts";
 import "./code-editor.ts";
@@ -353,14 +354,7 @@ export class FlowEditor extends LitElement {
       files !== null && typeof files === "object" && !Array.isArray(files)
         ? (files as Record<string, string>)
         : {};
-    const merged: Record<string, string> = {};
-    for (const ref of this.definitionRefs()) {
-      merged[ref] = existing[ref] ?? "";
-    }
-    for (const [path, source] of Object.entries(existing)) {
-      if (!(path in merged)) merged[path] = source;
-    }
-    return merged;
+    return mergeFileTabs(this.definitionRefs(), existing);
   }
 
   // The referenced module paths the parsed definition declares (tool/op refs,

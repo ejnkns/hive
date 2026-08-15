@@ -503,6 +503,30 @@ export const flow: FlowDefinition = {
 };
 `;
 
+// A saved definition with no referenced files, for the hand-added-ref test.
+const ADD_REF_SOURCE = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "add-ref",
+  label: "Add Ref",
+  configSchema: [],
+  workflows: [
+    {
+      id: "items",
+      label: "Items",
+      instanceState: [],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
+        { id: "new", label: "New", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  edges: [],
+};
+`;
+
 test("closing the authoring session keeps the definition's files visible and editable", async () => {
   // Register a definition to work on (a data module with a referenced file).
   // Navigate first so the page origin matches the API host.
@@ -871,6 +895,95 @@ export const flow: FlowDefinition = {
   await waitForEditor(
     (state) => state.code.includes("export const ok = true;"),
     40_000
+  );
+});
+
+test("hand-adding a ref to a saved definition shows its tab and saves the file", async () => {
+  // A saved definition with no referenced files.
+  await page.goto(`${baseUrl}/#/flows`);
+  const created = await page.evaluate(async (source) => {
+    const res = await fetch("/api/flows/definitions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Add Ref", source }),
+    });
+    return res.ok ? await res.json() : null;
+  }, ADD_REF_SOURCE);
+  assert.ok(created, "definition registered");
+  assert.equal(created?.id, "add-ref");
+
+  // Hand-edit the source to declare a referenced tool.
+  await page.goto(`${baseUrl}/#/flows/add-ref/edit`);
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector("code-editor")
+        ?.shadowRoot?.querySelector("textarea")
+        ?.value?.includes("add-ref") ?? false,
+    { timeout: 15_000 }
+  );
+  const edited = await page.evaluate(() => {
+    const textarea = document
+      .querySelector("code-editor")
+      ?.shadowRoot?.querySelector("textarea");
+    if (!textarea) return false;
+    textarea.value = textarea.value.replace(
+      "configSchema: [],",
+      'configSchema: [],\n  tools: [{ id: "websearch", ref: "./tools/websearch.ts", writes: [] }],'
+    );
+    textarea.dispatchEvent(
+      new Event("input", { bubbles: true, composed: true })
+    );
+    return true;
+  });
+  assert.ok(edited, "the source must be editable");
+
+  // The declared-but-unwritten ref gets a tab, derived from the source.
+  await page.waitForFunction(
+    () =>
+      Array.from(document.querySelectorAll(".tab-bar button")).some(
+        (b) => b.textContent?.trim() === "./tools/websearch.ts"
+      ),
+    { timeout: 15_000 }
+  );
+
+  // Write the referenced file by hand.
+  await page.locator(".tab-bar button", { hasText: "./tools/websearch.ts" }).click();
+  await page.waitForFunction(
+    () =>
+      document.querySelector("code-editor")?.shadowRoot?.querySelector("textarea") !==
+      null,
+    { timeout: 10_000 }
+  );
+  const wrote = await page.evaluate((content) => {
+    const textarea = document
+      .querySelector("code-editor")
+      ?.shadowRoot?.querySelector("textarea");
+    if (!textarea) return false;
+    textarea.value = content;
+    textarea.dispatchEvent(
+      new Event("input", { bubbles: true, composed: true })
+    );
+    return true;
+  }, EDITED_TOOL);
+  assert.ok(wrote, "the referenced file tab must be writable");
+
+  // Save: the module + the hand-written file register together.
+  await page.locator("button", { hasText: "Save definition" }).click();
+  await page.waitForSelector(".saved-status", { timeout: 20_000 });
+
+  const definition = await page.evaluate(async () => {
+    const res = await fetch("/api/flows/definitions/add-ref");
+    return res.ok ? await res.json() : null;
+  });
+  assert.ok(definition, "the definition survives the save");
+  assert.ok(
+    definition?.source?.includes('ref: "./tools/websearch.ts"'),
+    "the edited source is persisted"
+  );
+  assert.ok(
+    definition?.files?.["./tools/websearch.ts"]?.includes("websearchTools"),
+    "the hand-written referenced file is persisted"
   );
 });
 

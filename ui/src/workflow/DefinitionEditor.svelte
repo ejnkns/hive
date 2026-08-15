@@ -24,6 +24,7 @@ import "../flow-rendering/components/code-editor.ts";
 import Button from "../shared/ui/Button.svelte";
 import Dialog from "../shared/ui/Dialog.svelte";
 import Textarea from "../shared/ui/Textarea.svelte";
+import { buildFilesPayload, mergeFileTabs } from "./definition-files.ts";
 import { flowStore } from "./flow-store.svelte";
 import LitFlowHost from "./LitFlowHost.svelte";
 
@@ -80,8 +81,21 @@ let draftRefs = $state<string[]>([]);
 let draftLabel = $state("");
 let refsTimer: ReturnType<typeof setTimeout> | undefined;
 
-const filePaths = $derived(
-  savedDetail ? Object.keys(savedDetail.files ?? {}).sort() : []
+// The tab set: the source's declared refs ∪ the persisted files (a declared-
+// but-unwritten ref gets an empty tab, like the session editor; a persisted
+// file stays even if the current source no longer references it).
+const draftFilePaths = $derived(
+  Object.keys(
+    mergeFileTabs(draftRefs, isNew ? {} : (savedDetail?.files ?? {}))
+  ).sort()
+);
+
+// The referenced files of the new-flow draft: the declared refs the human has
+// actually written (an unwritten ref simply doesn't exist — the module-set
+// gate flags the missing file on save, like the session's declared-but-
+// unwritten tabs).
+const draftFiles = $derived(
+  isNew ? buildFilesPayload({}, editedValues, new Set(draftRefs)) : null
 );
 
 // The source the no-session editor shows: the scaffold (new flow) or the
@@ -90,24 +104,6 @@ const draftSource = $derived(
   isNew
     ? (editedValues.definition ?? scaffoldSource)
     : (editedValues.definition ?? savedDetail?.source ?? "")
-);
-
-// The tabs in the new-flow state derive from the draft's declared refs; the
-// saved state derives from persisted files only.
-const draftFilePaths = $derived(isNew ? draftRefs : filePaths);
-
-// The referenced files of the new-flow draft: the declared refs the human has
-// actually written (an unwritten ref simply doesn't exist — the module-set
-// gate flags the missing file on save, like the session's declared-but-
-// unwritten tabs).
-const draftFiles = $derived(
-  isNew
-    ? Object.fromEntries(
-        draftRefs
-          .filter((ref) => (editedValues[ref] ?? "") !== "")
-          .map((ref) => [ref, editedValues[ref] ?? ""])
-      )
-    : null
 );
 
 const activeValue = $derived(
@@ -349,20 +345,23 @@ function selectTab(tab: string) {
 function handleFileEdit(event: CustomEvent<{ value: string }>) {
   editedValues[activeTab] = event.detail.value;
   saveStatus = null;
-  // The new-flow file tabs derive from the draft's declared refs: re-derive
+  // The no-session file tabs derive from the source's declared refs: re-derive
   // them (debounced) after each definition edit, so a ref the human just
   // declared gets its tab and one they removed disappears.
-  if (isNew && activeTab === "definition") {
+  if (activeTab === "definition") {
     clearTimeout(refsTimer);
     refsTimer = setTimeout(() => void refreshDraftRefs(), 400);
   }
 }
 
-// Re-derives the new-flow draft's declared refs + label from its current
-// source (server-parsed — the same ref authority the compile step uses).
+// Re-derives the no-session editor's declared refs + label from the current
+// source (server-parsed — the same ref authority the compile step uses): the
+// new-flow draft and the saved view both derive their file tabs from the refs
+// the source declares.
 async function refreshDraftRefs() {
-  if (!isNew) return;
-  const source = editedValues.definition ?? scaffoldSource;
+  const source = isNew
+    ? (editedValues.definition ?? scaffoldSource)
+    : (editedValues.definition ?? savedDetail?.source ?? "");
   if (source === "") {
     draftRefs = [];
     draftLabel = "";
@@ -372,7 +371,12 @@ async function refreshDraftRefs() {
     const { refs, label } = await parseDefinitionRefs(source);
     draftRefs = refs;
     draftLabel = label;
-    if (activeTab !== "definition" && !refs.includes(activeTab)) {
+    // The valid tabs are refs ∪ persisted (a stale persisted file is still a
+    // tab); only yank the active tab if it is neither.
+    const tabs = Object.keys(
+      mergeFileTabs(refs, isNew ? {} : (savedDetail?.files ?? {}))
+    );
+    if (activeTab !== "definition" && !tabs.includes(activeTab)) {
       activeTab = "definition";
     }
   } catch {
@@ -427,11 +431,7 @@ async function saveDefinition(): Promise<boolean> {
   error = null;
   saveStatus = null;
   const source = editedValues.definition ?? savedDetail.source ?? "";
-  const files = { ...(savedDetail.files ?? {}) };
-  for (const [path, content] of Object.entries(editedValues)) {
-    if (path === "definition") continue;
-    files[path] = content;
-  }
+  const files = buildFilesPayload(savedDetail.files ?? {}, editedValues);
   try {
     await updateFlowDefinition(definitionId, {
       name: savedDetail.name,
@@ -479,6 +479,11 @@ async function load() {
   error = null;
   try {
     await refreshDetail();
+    // Derive the saved view's tabs from the source's declared refs (today
+    // every saved ref has a persisted file, so this matches persisted files;
+    // it stays correct if a saved definition ever carries a declared-but-
+    // missing file).
+    void refreshDraftRefs();
   } catch (err) {
     error = err instanceof Error ? err.message : "Failed to load definition";
   } finally {
