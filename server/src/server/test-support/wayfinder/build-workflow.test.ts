@@ -134,7 +134,7 @@ describe("wayfinder build workflow", () => {
       aiTaskCaller: gatedReworkReviewerCaller(reviewGate),
     });
 
-    const controller = runtime.addWorkflowInstance("build-item", {
+    const controller = runtime.addWorkflowInstance("buildItem", {
       workflowInstanceState: {
         ticket: {
           title: "Wire the store",
@@ -230,7 +230,7 @@ function buildPhaseChatCaller() {
       toolCalls: [
         {
           id: "w2",
-          name: "submit_work",
+          name: "buildItem_runAgent_complete",
           arguments: JSON.stringify({
             outcome: "implemented",
             summary: "Implemented the core with a passing check.",
@@ -251,13 +251,13 @@ function buildPhaseTaskCaller() {
   ) => {
     const has = (name: string) =>
       tools.some((tool) => tool.function.name === name);
-    if (has("submit_build_plan")) {
+    if (has("build_plan_complete")) {
       return {
         content: "Plan ready",
         toolCalls: [
           {
             id: "p1",
-            name: "submit_build_plan",
+            name: "build_plan_complete",
             arguments: JSON.stringify({
               tickets: [
                 {
@@ -283,7 +283,7 @@ function buildPhaseTaskCaller() {
       toolCalls: [
         {
           id: "r1",
-          name: "submit_review",
+          name: "buildItem_review_complete",
           arguments: JSON.stringify({
             verdict: "approved",
             findings: [],
@@ -302,7 +302,7 @@ async function waitForBuildItems(
   await waitFor(() => {
     items = runtime
       .getWorkflowInstanceEntries()
-      .filter((entry) => entry.workflowId === "build-item");
+      .filter((entry) => entry.workflowId === "buildItem");
     return items.length >= count;
   });
   return items;
@@ -365,7 +365,7 @@ function gatedWorkerCaller(reworkGate: {
         toolCalls: [
           {
             id: "w2",
-            name: "submit_work",
+            name: "buildItem_runAgent_complete",
             arguments: JSON.stringify({
               outcome: "implemented",
               summary: "Implemented the core.",
@@ -380,7 +380,7 @@ function gatedWorkerCaller(reworkGate: {
       toolCalls: [
         {
           id: "w3",
-          name: "submit_work",
+          name: "buildItem_runAgent_complete",
           arguments: JSON.stringify({
             outcome: "implemented",
             summary: "Reworked per the review.",
@@ -408,7 +408,7 @@ function gatedReworkReviewerCaller(reviewGate: {
         toolCalls: [
           {
             id: "rev1",
-            name: "submit_review",
+            name: "buildItem_review_complete",
             arguments: JSON.stringify({
               verdict: "changes_requested",
               findings: [
@@ -428,7 +428,7 @@ function gatedReworkReviewerCaller(reviewGate: {
       toolCalls: [
         {
           id: "rev2",
-          name: "submit_review",
+          name: "buildItem_review_complete",
           arguments: JSON.stringify({
             verdict: "approved",
             findings: [],

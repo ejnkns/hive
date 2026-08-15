@@ -18,6 +18,7 @@ import Button from "./shared/ui/Button.svelte";
 import Dialog from "./shared/ui/Dialog.svelte";
 import DefinitionEditor from "./workflow/DefinitionEditor.svelte";
 import FlowDefinitionPage from "./workflow/FlowDefinitionPage.svelte";
+import FlowDefinitionView from "./workflow/FlowDefinitionView.svelte";
 import FlowInstancePage from "./workflow/FlowInstancePage.svelte";
 import FlowLibrary from "./workflow/FlowLibrary.svelte";
 import { flowStore } from "./workflow/flow-store.svelte";
@@ -48,6 +49,7 @@ type FlowRoute =
   | { kind: "new-definition" }
   | { kind: "definition"; flowName: string }
   | { kind: "edit-definition"; flowName: string }
+  | { kind: "view-definition"; flowName: string }
   | { kind: "new-instance"; flowName: string }
   | { kind: "instance"; flowName: string; instanceName: string };
 
@@ -66,6 +68,7 @@ function parseFlowRoute(hash: string): FlowRoute | null {
   const rest = match[2];
   if (rest === undefined) return { kind: "definition", flowName };
   if (rest === "edit") return { kind: "edit-definition", flowName };
+  if (rest === "view") return { kind: "view-definition", flowName };
   if (rest === "new") return { kind: "new-instance", flowName };
   return { kind: "instance", flowName, instanceName: decodeURIComponent(rest) };
 }
@@ -339,6 +342,8 @@ const detailChain = $derived(
     <FlowDefinitionPage definitionId={flowRoute.flowName} />
   {:else if flowRoute?.kind === "edit-definition"}
     <DefinitionEditor isNew={false} definitionId={flowRoute.flowName} />
+  {:else if flowRoute?.kind === "view-definition"}
+    <FlowDefinitionView definitionId={flowRoute.flowName} />
   {:else if flowRoute?.kind === "new-instance"}
     <InstantiateForm definitionId={flowRoute.flowName} />
   {:else if flowRoute?.kind === "instance"}

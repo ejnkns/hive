@@ -52,6 +52,9 @@ function completionFor(payload) {
   if (systemText.includes("You are the Requirements Agent")) {
     return requirementsCompletion(messages);
   }
+  if (systemText.includes("You are the Research Agent")) {
+    return researchAgentCompletion(messages);
+  }
   if (systemText.includes("You are an AI flow-design assistant")) {
     return authoringCompletion(messages);
   }
@@ -71,63 +74,129 @@ function completionFor(payload) {
   throw new Error("Mock provider received an unknown Agent Role");
 }
 
-// The flow-authoring session: set_flow_blueprint lands the live preview,
-// generate_definition runs the real engine gate and writes the source. Later
-// turns cover co-editing: the divergence gate refuses set_flow_blueprint while the
-// source is manual (the agent then proposes in chat), and after the user
-// discards, the next ask regenerates.
+// The flow-authoring session: set_flow_definition lands the definition module
+// (validated live), validate_definition runs the real definition gate and
+// compiles it. Later turns cover co-editing: the human's edits ARE the state,
+// so the agent reads the current source (read_definition_source) and builds on
+// it instead of overwriting; when asked to regenerate, it rewrites the module.
+
+// Parametrized new-session scenarios: the mock keys the authored definition
+// (and tool sequence) by the session prompt, so different prompts converge on
+// different drafts. The default path below keeps the review-flow script.
 function authoringCompletion(messages) {
+  const firstUser = messages.find((message) => message.role === "user");
+  const prompt =
+    typeof firstUser?.content === "string" ? firstUser.content : "";
+  if (prompt.includes(SCAFFOLD_SEED_PROMPT)) {
+    return scaffoldSeedCompletion(messages);
+  }
+  if (/research loop/.test(prompt)) {
+    return researchLoopCompletion(messages);
+  }
   const toolMessages = messages.filter((message) => message.role === "tool");
   const lastMessage = messages.at(-1);
+  const lastId = toolMessages.at(-1)?.tool_call_id ?? "";
   if (toolMessages.length === 0) {
     return toolCompletion(
       [
-        toolCall("author-blueprint", "set_flow_blueprint", {
-          blueprint: JSON.stringify(AUTHORING_SPEC),
+        toolCall("author-bp", "set_flow_definition", {
+          source: AUTHORING_DEFINITION,
         }),
       ],
       "mock authoring reasoning"
     );
   }
-  if (
-    lastMessage?.tool_call_id?.startsWith("author-blueprint") &&
-    !lastMessage.content.includes("manual edits")
-  ) {
-    // set_flow_blueprint succeeded (or the divergence was discarded) — generate.
+  // A fresh user message drives the next behavior (the tool-result branches
+  // below only continue the current tool chain).
+  if (lastMessage?.role === "user") {
+    const content =
+      typeof lastMessage.content === "string" ? lastMessage.content : "";
+    if (/regenerate/.test(content)) {
+      return toolCompletion(
+        [
+          toolCall("author-bp", "set_flow_definition", {
+            source: AUTHORING_DEFINITION,
+          }),
+        ],
+        "mock authoring reasoning"
+      );
+    }
+    // Any other user message: read the current source (including manual
+    // edits) and propose in chat — never overwrite the human's work.
+    return toolCompletion(
+      [toolCall("author-read", "read_definition_source", {})],
+      "mock authoring reasoning"
+    );
+  }
+  if (lastId === "author-bp") {
     return toolCompletion(
       [
-        toolCall("author-gen", "generate_definition", {
-          blueprint: JSON.stringify(AUTHORING_SPEC),
+        toolCall("author-write", "write_definition_file", {
+          path: "./tools/websearch.ts",
+          content: AUTHORING_TOOL,
         }),
       ],
+      "implementing the referenced tool"
+    );
+  }
+  if (lastId === "author-write") {
+    return toolCompletion(
+      [toolCall("author-gen", "validate_definition", {})],
       "mock authoring reasoning"
     );
   }
-  if (lastMessage?.tool_call_id?.startsWith("author-gen")) {
+  if (lastId === "author-gen") {
     return textCompletion(
       "The definition is ready — summarize it for the user."
     );
   }
-  if (
-    lastMessage?.role === "tool" &&
-    lastMessage.content.includes("manual edits")
-  ) {
-    // The divergence gate refused the blueprint update — propose in chat instead.
+  if (lastId === "author-read") {
+    // The agent reviewed the human's current source and proposes in chat
+    // without overwriting it (the edit IS the state).
     return textCompletion(
-      "I see you edited the definition by hand, so the blueprint is frozen. I'd suggest adding a reject action with a confirm; apply it yourself or discard your edits so I can take over."
-    );
-  }
-  if (lastMessage?.role === "user") {
-    return toolCompletion(
-      [
-        toolCall("author-blueprint", "set_flow_blueprint", {
-          blueprint: JSON.stringify(AUTHORING_SPEC),
-        }),
-      ],
-      "mock authoring reasoning"
+      "I reviewed the current definition module, including your manual edits. I'd suggest adding a reject action with a confirm; apply it yourself or ask me to regenerate."
     );
   }
   return textCompletion("The definition is ready.");
+}
+
+// ─── scaffold-seed scenario (new-flow editor) ─────────────────────────
+
+// The prompt that keys this scenario in the e2e: "start a conversation from
+// the scaffold" scenarios prove the session seeded from the editor's draft —
+// the mock reads the current source (which carries the human's scaffold
+// edits) and sets it back verbatim, so the editor's Definition tab shows the
+// human's draft after the agent's turn, not a mock-authored copy.
+const SCAFFOLD_SEED_PROMPT = "extend the scaffold";
+
+function scaffoldSeedCompletion(messages) {
+  const toolMessages = messages.filter((message) => message.role === "tool");
+  const lastId = toolMessages.at(-1)?.tool_call_id ?? "";
+  if (toolMessages.length === 0) {
+    // First turn: read the seeded source (proves the session started from the
+    // editor's draft — the edit IS the state from turn zero).
+    return toolCompletion(
+      [toolCall("seed-read", "read_definition_source", {})],
+      "reading the scaffold the editor seeded"
+    );
+  }
+  if (lastId === "seed-read") {
+    // The tool result carries the session's current source — the human's
+    // scaffold edits. Set it back verbatim: the editor shows the seeded
+    // draft, not a mock-authored copy.
+    const seeded = toolMessages.at(-1)?.content ?? "";
+    return toolCompletion(
+      [toolCall("seed-set", "set_flow_definition", { source: seeded })],
+      "building on the seeded scaffold"
+    );
+  }
+  if (lastId === "seed-set") {
+    return toolCompletion(
+      [toolCall("seed-validate", "validate_definition", {})],
+      "validating the seeded scaffold"
+    );
+  }
+  return textCompletion("The scaffold is ready — summarize it for the user.");
 }
 
 function requirementsCompletion(messages) {
@@ -178,19 +247,23 @@ function plannerCompletion(messages) {
   }
   if (lastMessage?.tool_call_id === "planner-read") {
     assertAssistantTurn(messages, "mock planner reasoning", 2);
-    // The plan task completes via the submit_plan completion tool; its parsed
-    // arguments become the task output the Accept-proposal gate reads.
+    // The plan task completes via the generated requirements_plan_complete
+    // completion tool; its parsed arguments become the task output the
+    // Accept-proposal gate reads. Each card is shaped for the requirements→
+    // cards fan-out: cardSpec plus the titles it blocks on.
     return toolCompletion([
-      toolCall("planner-submit", "submit_plan", {
+      toolCall("planner-submit", "requirements_plan_complete", {
         kind: "proposal",
         cards: [
           {
-            title: "Render deterministic greeting",
-            description:
-              "Render the approved greeting from the application entry point.",
-            acceptanceCriteria: [
-              "Running the application displays Hello from Hive",
-            ],
+            cardSpec: {
+              title: "Render deterministic greeting",
+              description:
+                "Render the approved greeting from the application entry point.",
+              acceptanceCriteria: [
+                "Running the application displays Hello from Hive",
+              ],
+            },
             dependencies: [],
             requirementRefs: ["FR-1", "AC-1"],
           },
@@ -231,7 +304,7 @@ function workerCompletion(messages) {
   }
   if (lastMessage?.tool_call_id === "worker-commit") {
     return toolCompletion([
-      toolCall("worker-submit", "submit_work", {
+      toolCall("worker-submit", "cards_runAgent_complete", {
         outcome: "implemented",
         verificationNotRunReason:
           "The fixture has no executable test runner; the Reviewer inspects the committed value.",
@@ -255,7 +328,7 @@ function reviewerCompletion(messages) {
   if (lastMessage?.tool_call_id === "reviewer-log") {
     assertAssistantTurn(messages, "mock reviewer reasoning", 2);
     return toolCompletion([
-      toolCall("reviewer-submit", "submit_review", {
+      toolCall("reviewer-submit", "cards_review_complete", {
         verdict: "approved",
         findings: [],
         verificationAssessment: {
@@ -378,15 +451,19 @@ Display a deterministic greeting.
 - Localized greetings.
 `;
 
-// The gate-clean FlowBlueprint the mock authoring agent produces: a review flow
-// whose items move from new to done via manual actions, with a createInstance
-// flow-level action writing the title field (the writer the title reads
-// need). The real generate_definition gate runs against it in the e2e.
-const AUTHORING_SPEC = {
+// The gate-clean definition module the mock authoring agent produces: a
+// review flow whose items move from new to done via manual actions, with a
+// createInstance flow-level action writing the title field (the writer the
+// title reads need). The real validate_definition gate runs against it in the
+// e2e. A referenced tool makes it a module set (the editor shows file tabs).
+const AUTHORING_DEFINITION = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
   id: "reviewFlow",
   label: "Review Flow",
   description: "A review flow with a ready state and approve/reject actions.",
   configSchema: [],
+  tools: [{ id: "websearch", ref: "./tools/websearch.ts" }],
   workflows: [
     {
       id: "items",
@@ -394,7 +471,7 @@ const AUTHORING_SPEC = {
       instance: { title: "title" },
       display: { fields: [{ path: "title", label: "Title" }] },
       instanceState: [{ field: "title", type: "string" }],
-      initialState: "new",
+      initial: "new",
       terminalStates: ["done"],
       states: [
         {
@@ -402,18 +479,8 @@ const AUTHORING_SPEC = {
           label: "New",
           category: "initial",
           actions: [
-            {
-              id: "complete",
-              label: "Complete",
-              variant: "primary",
-              transitionTo: "done",
-            },
-            {
-              id: "reject",
-              label: "Reject",
-              variant: "destructive",
-              transitionTo: "done",
-            },
+            { id: "complete", label: "Complete", variant: "primary", transitionTo: "done" },
+            { id: "reject", label: "Reject", variant: "destructive", transitionTo: "done" },
           ],
         },
         { id: "done", label: "Done", category: "terminal" },
@@ -427,16 +494,278 @@ const AUTHORING_SPEC = {
       variant: "primary",
       createInstance: {
         workflowId: "items",
-        fields: [
-          {
-            key: "title",
-            label: "Title",
-            type: "string",
-            required: true,
-          },
-        ],
+        fields: [{ key: "title", label: "Title", type: "string", required: true }],
       },
     },
   ],
   edges: [],
 };
+`;
+
+// The implemented websearch tool the review-flow authoring script writes
+// (the definition references it; the file IS the truth).
+const AUTHORING_TOOL = `import { defineTool } from "workflow-engine/runners";
+
+export const websearchTools = [
+  defineTool({
+    name: "websearch",
+    description: "Search the web.",
+    parameters: { properties: { query: { type: "string" } }, required: ["query"] },
+    executor: async (call) => ({
+      toolCallId: call.id,
+      content: JSON.stringify({ title: "Hive docs", snippet: "good result" }),
+      isError: false,
+    }),
+  }),
+];
+`;
+
+// ─── the research-loop flow (ticket 4) ────────────────────────────────
+
+// The definition module the research-loop authoring script converges on: a
+// custom gate file ref on the transition, a custom websearch tool ref, and an
+// output extractor that derives the verdict the gate reads.
+const RESEARCH_DEFINITION = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "researchLoop",
+  label: "Research Loop",
+  configSchema: [],
+  tools: [{ id: "websearch", ref: "./tools/websearch.ts" }],
+  workflows: [
+    {
+      id: "research",
+      label: "Research",
+      instance: { title: "query" },
+      display: {
+        fields: [
+          { path: "query", label: "Query" },
+          { path: "verdict", label: "Verdict" },
+        ],
+      },
+      instanceState: [
+        { field: "query", type: "string" },
+        { field: "verdict", type: "string" },
+      ],
+      initial: "searching",
+      terminalStates: ["done"],
+      states: [
+        {
+          id: "searching",
+          label: "Searching",
+          category: "initial",
+          tasks: [
+            {
+              id: "search",
+              label: "Search the web",
+              role: "ai-chat",
+              systemPrompt: "You are the Research Agent. Search the web for the query, then call the completion tool with the top result's summary.",
+              tools: ["websearch"],
+              completionTool: "complete_task",
+              startOnUserInput: true,
+              inputFromInstanceState: "query",
+            },
+          ],
+          // The gate transitions live in a state whose only task is the
+          // extract: auto-transitions evaluate after each task, so a gate
+          // sharing a state with the search task would fire before the
+          // extractor has written the verdict it reads.
+          autoTransitions: [
+            { to: "extracting", gate: { kind: "taskSuccess", task: "search" } },
+            { to: "needs_review", gate: { kind: "taskError", task: "search" } },
+          ],
+        },
+        {
+          id: "extracting",
+          label: "Extracting",
+          category: "active",
+          tasks: [
+            {
+              id: "extractVerdict",
+              label: "Extract verdict",
+              role: "operation",
+              extract: { ref: "./extractors/parse.ts", fields: ["verdict"] },
+            },
+          ],
+          autoTransitions: [
+            { to: "done", gate: { kind: "file", ref: "./gates/approved.ts" } },
+            { to: "needs_review", gate: { kind: "always" } },
+          ],
+        },
+        {
+          id: "needs_review",
+          label: "Needs review",
+          category: "active",
+          actions: [
+            {
+              id: "retry",
+              label: "Retry",
+              variant: "primary",
+              transitionTo: "searching",
+            },
+          ],
+        },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  edges: [],
+  actions: [
+    {
+      id: "add_research",
+      label: "Add research",
+      variant: "primary",
+      createInstance: {
+        workflowId: "research",
+        fields: [{ key: "query", label: "Query", type: "string", required: true }],
+      },
+    },
+  ],
+};
+`;
+
+// The implemented referenced files the research-loop authoring script writes
+// (the "implement the stub" step) — the transport in the websearch tool is
+// stubbed: the executor returns the shaped result directly.
+const RESEARCH_GATE = `import type { GateContract } from "workflow-engine/workflow-types";
+
+export const approved: GateContract = (ctx) => {
+  return ctx.workflowInstanceState.verdict === "approved";
+};
+`;
+
+const RESEARCH_TOOL = `import { defineTool } from "workflow-engine/runners";
+
+// The primitive transport is stubbed in the e2e: the shaped result is
+// returned directly (a real deployment would call a search endpoint here).
+export const websearchTools = [
+  defineTool({
+    name: "websearch",
+    description: "Search the web and return the top result.",
+    parameters: {
+      properties: { query: { type: "string" } },
+      required: ["query"],
+    },
+    executor: async (call) => {
+      return {
+        toolCallId: call.id,
+        content: JSON.stringify({ title: "Hive docs", snippet: "good result" }),
+        isError: false,
+      };
+    },
+  }),
+];
+`;
+
+const RESEARCH_EXTRACT = `import type { OutputExtractor } from "workflow-engine/workflow-types";
+
+export const parse: OutputExtractor = (ctx) => {
+  const search = ctx.taskOutputs.search as { output?: { completion?: { summary?: string } } } | undefined;
+  const summary = search?.output?.completion?.summary ?? "";
+  return { verdict: summary.includes("good") ? "approved" : "needs_review" };
+};
+`;
+
+// The research-loop authoring script: set the definition module → validate
+// (the gate passes with stubs in place) → write the gate, tool, and extractor
+// → validate (the implementations pass) → save. Stages are tracked by the
+// tool_call_id of the last tool result.
+function researchLoopCompletion(messages) {
+  const toolMessages = messages.filter((message) => message.role === "tool");
+  const lastId = toolMessages.at(-1)?.tool_call_id ?? "";
+  if (toolMessages.length === 0) {
+    return toolCompletion(
+      [
+        toolCall("research-bp", "set_flow_definition", {
+          source: RESEARCH_DEFINITION,
+        }),
+      ],
+      "designing the research loop"
+    );
+  }
+  if (lastId === "research-bp") {
+    return toolCompletion(
+      [toolCall("research-gen", "validate_definition", {})],
+      "validating the definition module"
+    );
+  }
+  if (lastId === "research-gen") {
+    return toolCompletion(
+      [
+        toolCall("research-write-gate", "write_definition_file", {
+          path: "./gates/approved.ts",
+          content: RESEARCH_GATE,
+        }),
+      ],
+      "implementing the gate"
+    );
+  }
+  if (lastId === "research-write-gate") {
+    return toolCompletion(
+      [
+        toolCall("research-write-tool", "write_definition_file", {
+          path: "./tools/websearch.ts",
+          content: RESEARCH_TOOL,
+        }),
+      ],
+      "implementing the websearch tool"
+    );
+  }
+  if (lastId === "research-write-tool") {
+    return toolCompletion(
+      [
+        toolCall("research-write-extract", "write_definition_file", {
+          path: "./extractors/parse.ts",
+          content: RESEARCH_EXTRACT,
+        }),
+      ],
+      "implementing the extractor"
+    );
+  }
+  if (lastId === "research-write-extract") {
+    return toolCompletion(
+      [toolCall("research-gen2", "validate_definition", {})],
+      "validating with the implementations"
+    );
+  }
+  if (lastId === "research-gen2") {
+    return toolCompletion(
+      [toolCall("research-save", "save_definition", {})],
+      "saving the definition"
+    );
+  }
+  if (lastId === "research-save") {
+    return textCompletion("The research loop flow is registered and ready.");
+  }
+  throw new Error("Unexpected research-loop authoring state");
+}
+
+// The research agent at runtime: calls the custom websearch tool, then
+// completes with a summary the extractor classifies as approved (so the custom
+// gate routes the instance to done).
+function researchAgentCompletion(messages) {
+  const toolMessages = messages.filter((message) => message.role === "tool");
+  const lastId = toolMessages.at(-1)?.tool_call_id ?? "";
+  if (toolMessages.length === 0) {
+    return toolCompletion(
+      [toolCall("research-tool", "websearch", { query: "hive" })],
+      "researching the query"
+    );
+  }
+  if (lastId === "research-tool") {
+    return toolCompletion(
+      [
+        toolCall("research-complete", "complete_task", {
+          outcome: "implemented",
+          summary: "good result",
+          rationale: "found the top result",
+        }),
+      ],
+      "completing the research"
+    );
+  }
+  if (lastId === "research-complete") {
+    return textCompletion("The research is complete.");
+  }
+  throw new Error("Unexpected Research Agent conversation state");
+}

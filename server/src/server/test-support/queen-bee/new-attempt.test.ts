@@ -62,7 +62,7 @@ function alwaysHonestWorker(): AiChatModelCaller {
       toolCalls: [
         {
           id: `s${calls}`,
-          name: "submit_work",
+          name: "cards_runAgent_complete",
           arguments: JSON.stringify({ outcome: "implemented" }),
         },
       ],

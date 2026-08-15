@@ -24,12 +24,7 @@ import {
   type ToolContext,
 } from "workflow-engine/runners";
 import type { TaskDefinition } from "workflow-engine/task-runner";
-import type { ReviewPackage } from "../../../../../presets/queen-bee/cards-workflow.ts";
-import {
-  queenBeeFlow,
-  queenBeeOperations,
-} from "../../../../../presets/queen-bee/flow.ts";
-import { queenBeeTools } from "../../../../../presets/queen-bee/tools.ts";
+import type { ReviewPackage } from "../../../../../presets/queen-bee/cards/types.ts";
 import { createEngineRunners } from "../../engine-bridge.ts";
 import { registerFlowDefinition } from "../../flow-definitions.ts";
 import {
@@ -43,6 +38,10 @@ import {
   rehydrateFlow,
   setFlowPersistence,
 } from "../../flow-registry.ts";
+import {
+  queenBeeCompiled as queenBeeFlow,
+  queenBeeWorkflows,
+} from "../compiled-presets.ts";
 
 const dummyTask: TaskDefinition = { id: "t", label: "T", role: "operation" };
 
@@ -89,12 +88,14 @@ function makeRunner(
         Object.assign(instanceState, patch),
       workflowInstancesInState: () => [],
     }),
-    operations: queenBeeOperations,
+    operations: queenBeeFlow.operations ?? {},
   });
 }
 
 function findTool(name: string): Tool {
-  const tool = queenBeeTools.find((t) => t.definition.function.name === name);
+  const tool = (queenBeeFlow.tools ?? []).find(
+    (t) => t.definition.function.name === name
+  );
   assert.ok(tool, `tool ${name} not found`);
   return tool;
 }
@@ -328,19 +329,19 @@ describe("queen-bee domain persistence", () => {
     assert.equal((result.output as { ok: boolean }).ok, true);
   });
 
-  it("submit_work acknowledges the signal without writing card events", async () => {
-    const tool = findTool("submit_work");
+  it("the completion tool acknowledges the signal without writing card events", async () => {
+    const tool = findTool("cards_runAgent_complete");
     const result = await tool.executor(
       {
         id: "c1",
-        name: "submit_work",
+        name: "cards_runAgent_complete",
         arguments: JSON.stringify({ outcome: "implemented" }),
       },
       { workspacePath: basePath, basePath: basePath, instanceId: "card-1" }
     );
 
     assert.equal(result.isError, false);
-    assert.match(result.content, /submitted/);
+    assert.match(result.content, /Task completed/);
     assert.equal(existsSync(join(basePath, ".queen-bee", "cards")), false);
   });
 
@@ -516,7 +517,7 @@ describe("queen-bee domain persistence", () => {
       toolCalls: [
         {
           id: "s1",
-          name: "submit_work",
+          name: "cards_runAgent_complete",
           arguments: JSON.stringify({ outcome: "implemented" }),
         },
       ],
@@ -591,7 +592,7 @@ describe("queen-bee domain persistence", () => {
       toolCalls: [
         {
           id: "s1",
-          name: "submit_work",
+          name: "cards_runAgent_complete",
           arguments: JSON.stringify({ outcome: "implemented" }),
         },
       ],
@@ -679,7 +680,7 @@ describe("queen-bee domain persistence", () => {
       toolCalls: [
         {
           id: "s1",
-          name: "submit_work",
+          name: "cards_runAgent_complete",
           arguments: JSON.stringify({
             outcome: "already_satisfied",
             noChangeRationale:
@@ -965,11 +966,11 @@ function makeCardRuntime(options: {
   };
   const baseRunners = createEngineRunners({
     tools: queenBeeFlow.tools,
-    operations: queenBeeOperations,
+    operations: queenBeeFlow.operations ?? {},
   });
   return createFlowRuntime(
     "project",
-    queenBeeFlow.workflows,
+    queenBeeWorkflows,
     queenBeeFlow.edges,
     {
       operation: baseRunners.operationRunner,
@@ -1044,7 +1045,7 @@ function writingWorkerCaller(): AiChatModelCaller {
       toolCalls: [
         {
           id: "w3",
-          name: "submit_work",
+          name: "cards_runAgent_complete",
           arguments: JSON.stringify({ outcome: "implemented" }),
         },
       ],
@@ -1058,7 +1059,7 @@ function approvingReviewerCaller(): AiTaskModelCaller {
     toolCalls: [
       {
         id: "r1",
-        name: "submit_review",
+        name: "cards_review_complete",
         arguments: JSON.stringify({
           verdict: "approved",
           findings: [],
@@ -1077,7 +1078,7 @@ function gatedReviewerCaller(release: Promise<void>): AiTaskModelCaller {
       toolCalls: [
         {
           id: "r1",
-          name: "submit_review",
+          name: "cards_review_complete",
           arguments: JSON.stringify({
             verdict: "approved",
             findings: [],

@@ -1,34 +1,36 @@
-# Flow generation test prompts
+# Flow definition test prompts
 
-Copy-paste prompts for testing flow generation in the definition editor's AI
+Copy-paste prompts for testing flow authoring in the definition editor's AI
 pane. Every prompt can be run two ways:
 
 - **Start conversation** — the agent asks clarifying questions and drafts the
-  spec with you. Good for testing the conversational loop: questions should be
-  few and design-relevant, and the spec preview should update after every
-  decision.
-- **I'm feeling lucky** — the agent produces the spec in one shot, no
+  definition with you. Good for testing the conversational loop: questions
+  should be few and design-relevant, and the definition should validate clean
+  after every decision.
+- **I'm feeling lucky** — the agent produces the definition in one shot, no
   questions. Good for testing the one-shot path: no mid-generation stalls, the
-  preview appears when the agent commits the spec, and Finalize lands the
-  gate-clean source in the editor.
+  definition lands in the editor when the agent writes it.
 
-The prompts deliberately cover different domains to test that generation is
+The prompts deliberately cover different domains to test that authoring is
 domain-agnostic, and different engine capabilities (multi-workflow + edges,
 fan-out of structured output, HITL chat, escalation/retry, git work,
-cross-instance dependencies).
+cross-instance dependencies, definition-referenced custom logic).
 
 ## What to verify on every run
 
-- The session reaches **done** and the gate-passed TypeScript lands in the
-  editor automatically.
-- **I'm feeling lucky**: the agent writes the spec without asking questions and
-  finalizes on its own. If it stalls, the console should show the 60s timeout
-  behavior — not a 10s kill.
+- The agent's `validate_definition` passes the gate (definition validation,
+  module-set lint, import policy, typecheck, declared-writes verification,
+  load) and the definition stays in the editor (the session stays in drafting
+  — it never ends on its own).
+- **I'm feeling lucky**: the agent writes the definition module without asking
+  questions and validates on its own.
 - **Conversational**: the agent asks only what actually changes the design,
-  then drafts; the spec preview updates after each `set_flow_spec`.
+  then drafts; the editor updates after each `set_flow_definition`.
 - The final definition has: a `systemPrompt` on every ai-task/ai-chat,
   `completionOutput` for any structured data, a `needs_review`-style escape
   hatch for fallible tasks, and zero gate warnings.
+- A referenced file's edit survives: after a `write_definition_file`, the file
+  tab shows the edit and a reload resumes the session with it.
 - **Close session** cleans up (the flow disappears from the library); reloading
   the page resumes an open session.
 
@@ -99,7 +101,7 @@ are accepted, the release is shipped. The release manager can approve all
 remaining cards at once.
 ```
 
-Expect: the git-work pattern (prepare_worktree → worker with git tools →
+Expect: a git-backed-work lifecycle (prepare_worktree → worker with git tools →
 verify_workspace → review → merge_branch), `dependsOnState` for card
 dependencies, and `dispatchToAll` for the bulk approve. This one most often
 exposes vocabulary limits — "when all cards are accepted" needs a cross-instance
@@ -117,7 +119,7 @@ due date, which a human marks done.
 
 Expect: `startOnUserInput` ai-chat (the live transcript in the UI), `object[]`
 completion output for the extracted items, and a `fanOut` edge creating one
-instance per item. Strong test of the pipeline pattern — and where a sloppy
+instance per item. Strong test of the pipeline/fan-out shape — and where a sloppy
 spec shows up fastest (e.g. forgetting the creation path, which the
 "nothing ever creates an instance" warning now catches).
 
@@ -175,9 +177,52 @@ marks the order ready; the customer picks it up and it's closed. If the AI
 suggestion fails, a human sets the time manually.
 ```
 
-Expect: the structured-intake/human-review shape applied to an unfamiliar
-domain — the same lifecycle patterns, renamed nouns. Confirms generation is
+Expect: an intake lifecycle with human review applied to an unfamiliar
+domain — the same lifecycle shapes, renamed nouns. Confirms generation is
 domain-agnostic (not idea/card/ticket-shaped by default).
+
+## 10. Research loop (definition-referenced custom logic)
+
+```text
+A research loop flow. An AI searches the web for a query with a custom
+websearch tool and extracts a verdict about the result. The verdict decides
+whether the loop is done or needs human review; a human can retry from there.
+```
+
+Expect: definition-referenced custom logic — a flow-level `tools` reference (the
+websearch file), a `{ kind: "file", ref }` gate on the transition out of the
+extracting state (after the extractor writes the verdict the gate reads — a
+gate sharing a state with an earlier task fires too early), and the agent
+implementing the referenced files in-conversation (`write_definition_file`)
+then validating until the gate passes, then `save_definition`. The strongest
+end-to-end proof of the definition-referenced-modules capability.
+
+## 11. Responsive website audit (verification loop + persisted report)
+
+```text
+A flow for auditing website responsiveness. A user submits a URL and optionally
+custom breakpoints. An AI audits the site by checking it at each breakpoint —
+mobile, tablet, desktop — and finds layout problems: content that overflows or
+gets clipped, overlapping elements, and especially controls that are visible at
+some breakpoints but not others, like a checkout button or nav link that only
+exists at one viewport. For each issue it records the severity, the breakpoint
+where it appears, and a suggested fix, and it writes a report of everything
+found. If the site is clean the audit passes on its own; otherwise the owner
+reviews the report, fixes the site, and re-audits, looping until it passes, or
+closes the audit accepting the known issues. If the audit task itself fails
+(site unreachable), the audit lands in review with retry and discard.
+```
+
+Expect: single workflow; one ai-task with `completionOutput` (verdict, issues
+`object[]`, summary) + patch op; the verdict gate (`taskOutputEquals` or
+`instanceStateEquals`) auto-routing a clean audit straight to a terminal; a
+`persist` report artifact; one `review` state serving as both the issues review
+and the taskError escape hatch, with re-audit and close actions. Loop safety
+comes from the human-driven re-audit plus an always-available accept — don't
+force `errorCountAtLeast` (it counts task errors, not fail verdicts). Watch that
+it doesn't invent browser/viewport tools: the audit agent works with the
+infrastructure tool set (`run_command` can drive a headless fetch), and unknown
+tool names fail the gate.
 
 ## Testing matrix
 
@@ -191,4 +236,6 @@ domain-agnostic (not idea/card/ticket-shaped by default).
 | 6 Invoices | decision gate, bounded correction | threshold routing |
 | 7 Recruiting | multi-stage, mixed AI roles, hold loop | bounded loops |
 | 8 Vague request | conversational clarification | agent asks, doesn't guess |
-| 9 Bakery orders | domain genericity | same patterns, new nouns |
+| 9 Bakery orders | domain genericity | same lifecycle shapes, new nouns |
+| 10 Research loop | referenced modules: custom tool + file gate | gate after the extractor; files implemented in-conversation |
+| 11 Responsive audit | verdict auto-route, verification loop, persist | no invented browser tools, loop termination |

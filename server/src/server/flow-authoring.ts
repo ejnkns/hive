@@ -1,24 +1,16 @@
-/** @public — the flow-authoring knowledge core: the single source of truth
- * for how to design and generate Hive flow definitions. Consumed by the
- * in-product generation prompt (`buildFlowAuthoringPrompt`) and rendered as
- * the human/agent-facing document (`flowAuthoringMarkdown`). Import from
- * here, not from flow-authoring/ directly. */
+/** @public — the flow-authoring session surface: the hidden authoring flow
+ * and the session system prompt. The knowledge (decisions/rules/vocabulary)
+ * lives in the self-contained skill (`skills/flow-authoring/*.md`) and is
+ * read at runtime via `flow-authoring/knowledge.ts`; import the session
+ * machinery from here, not from flow-authoring/ directly. */
 
-export { DESIGN_DECISIONS } from "./flow-authoring/decisions.ts";
 export {
-  FLOW_PATTERNS,
-  type FlowPattern,
-  renderPatternsPrompt,
-  STRUCTURED_INTAKE_EXEMPLAR,
-} from "./flow-authoring/patterns.ts";
-export {
-  buildFlowAuthoringPrompt,
-  flowAuthoringMarkdown,
-} from "./flow-authoring/prompt.ts";
-export { AUTHORING_RULES } from "./flow-authoring/rules.ts";
+  type KnowledgeTopic,
+  readKnowledge,
+} from "./flow-authoring/knowledge.ts";
+export { FLOW_SCAFFOLD_SOURCE } from "./flow-authoring/scaffold.ts";
 export {
   AUTHORING_DEFINITION_ID,
   authoringSessionFlow,
 } from "./flow-authoring/session.ts";
 export { buildAuthoringSessionPrompt } from "./flow-authoring/session-prompt.ts";
-export { FLOW_BLUEPRINT_SHAPE } from "./flow-authoring/vocabulary.ts";

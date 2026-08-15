@@ -11,11 +11,11 @@ import {
   createAiTaskRunner,
 } from "workflow-engine/runners";
 import type { TaskRunnerContext } from "workflow-engine/task-runner";
-import {
-  wayfinderFlow,
-  wayfinderOperations,
-} from "../../../../../presets/wayfinder/flow.ts";
 import { createEngineRunners } from "../../engine-bridge.ts";
+import {
+  wayfinderCompiled as wayfinderFlow,
+  wayfinderWorkflows,
+} from "../compiled-presets.ts";
 
 export type MakeRuntimeOptions = {
   basePath?: string;
@@ -35,11 +35,11 @@ export function makeWayfinderRuntime(options: MakeRuntimeOptions) {
   };
   const baseRunners = createEngineRunners({
     tools: wayfinderFlow.tools,
-    operations: wayfinderOperations,
+    operations: wayfinderFlow.operations,
   });
   return createFlowRuntime(
     "wayfinder-test",
-    wayfinderFlow.workflows,
+    wayfinderWorkflows,
     wayfinderFlow.edges,
     {
       operation: baseRunners.operationRunner,

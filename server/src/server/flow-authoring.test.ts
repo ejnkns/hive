@@ -1,78 +1,54 @@
-// The flow-authoring knowledge core: the prompt must carry every rung the
-// generation model needs (decisions → patterns → rules → vocabulary →
-// capabilities), the markdown export must carry the same core, and the
-// reference exemplar the model copies must stay valid.
+// The flow-authoring knowledge, read at runtime from the self-contained skill
+// (`skills/flow-authoring/*.md`): every rung the authoring flow needs must be
+// present and substantive, and the skill must carry no retired vocabulary
+// (the patterns rung was removed — the decisions/rules/vocabulary rungs guide
+// generation on their own).
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import {
-  AUTHORING_RULES,
-  buildFlowAuthoringPrompt,
-  DESIGN_DECISIONS,
-  FLOW_BLUEPRINT_SHAPE,
-  FLOW_PATTERNS,
-  flowAuthoringMarkdown,
-  STRUCTURED_INTAKE_EXEMPLAR,
-} from "./flow-authoring.ts";
-import { validateFlowBlueprint } from "./flow-blueprint.ts";
+import { readKnowledge } from "./flow-authoring/knowledge.ts";
 
 describe("flow-authoring knowledge", () => {
-  it("the generation prompt carries every knowledge rung in order", () => {
-    const prompt = buildFlowAuthoringPrompt();
-    const decisionIndex = prompt.indexOf(DESIGN_DECISIONS);
-    const patternsIndex = prompt.indexOf("## Patterns");
-    const rulesIndex = prompt.indexOf(AUTHORING_RULES);
-    const vocabularyIndex = prompt.indexOf(FLOW_BLUEPRINT_SHAPE);
-    const capabilitiesIndex = prompt.indexOf("## Capabilities");
-    const processIndex = prompt.indexOf("## Process");
-
-    for (const [name, index] of [
-      ["decisions", decisionIndex],
-      ["patterns", patternsIndex],
-      ["rules", rulesIndex],
-      ["vocabulary", vocabularyIndex],
-      ["capabilities", capabilitiesIndex],
-      ["process", processIndex],
-    ] as const) {
-      assert.ok(index >= 0, `prompt missing ${name}`);
+  it("reads every knowledge rung from the skill directory", () => {
+    for (const topic of ["decisions", "rules", "vocabulary"] as const) {
+      const content = readKnowledge(topic);
+      assert.ok(content.length > 200, `${topic} knowledge must be substantive`);
     }
-    assert.ok(
-      decisionIndex < patternsIndex &&
-        patternsIndex < rulesIndex &&
-        rulesIndex < vocabularyIndex &&
-        vocabularyIndex < capabilitiesIndex &&
-        capabilitiesIndex < processIndex,
-      "knowledge rungs must appear in the most-actionable-first order"
+  });
+
+  it("the decisions rung carries the design sequence, not the retired patterns", () => {
+    const decisions = readKnowledge("decisions");
+    assert.match(decisions, /## How to design a flow \(decisions, in order\)/);
+    assert.match(decisions, /1\. \*\*Entities\.\*\*/);
+    assert.match(
+      decisions,
+      /9\. \*\*Custom logic beyond the structured vocabulary/
     );
-
-    // Every pattern is named so the model can pick one.
-    for (const pattern of FLOW_PATTERNS) {
-      assert.ok(
-        prompt.includes(pattern.name),
-        `prompt missing pattern ${pattern.name}`
-      );
-    }
-    // The full exemplar is embedded, not just named.
     assert.ok(
-      prompt.includes("Item Intake"),
-      "the structured-intake exemplar must be embedded"
+      !decisions.includes("Pick the pattern"),
+      "the retired patterns rung must not leak into the decisions"
     );
   });
 
-  it("the markdown export carries the same core for humans and agents", () => {
-    const markdown = flowAuthoringMarkdown();
-    assert.ok(markdown.includes(DESIGN_DECISIONS));
-    assert.ok(markdown.includes(AUTHORING_RULES));
-    assert.ok(markdown.includes(FLOW_BLUEPRINT_SHAPE));
-    assert.ok(markdown.includes("## Patterns"));
-    assert.ok(markdown.includes("Item Intake"));
+  it("the rules rung carries the failure-mode guardrails", () => {
+    const rules = readKnowledge("rules");
+    assert.match(rules, /## Rules that make generated flows actually work/);
+    assert.match(rules, /declares a `systemPrompt`/);
+    assert.match(
+      rules,
+      /Implement a referenced file by keeping the export name and contract/
+    );
+    assert.ok(
+      !rules.includes("Choose the pattern"),
+      "the retired pattern-matching rule must not leak into the rules"
+    );
   });
 
-  it("the structured-intake exemplar validates as a blueprint", () => {
-    assert.deepEqual(
-      validateFlowBlueprint(STRUCTURED_INTAKE_EXEMPLAR),
-      [],
-      "the reference exemplar must be a valid blueprint"
-    );
+  it("the vocabulary rung carries the pure-data shape", () => {
+    const vocabulary = readKnowledge("vocabulary");
+    assert.match(vocabulary, /## FlowDefinition vocabulary/);
+    assert.match(vocabulary, /WORKFLOW: \{/);
+    assert.match(vocabulary, /CONSTRAINTS/);
+    assert.match(vocabulary, /REFERENCED FILES/);
   });
 });

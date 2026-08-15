@@ -13,16 +13,23 @@ import fastifyWebsocket from "@fastify/websocket";
 import Fastify, { type FastifyInstance } from "fastify";
 import { createFlowRuntime } from "workflow-engine/create-flow-runtime";
 import {
+  type CompiledFlowDefinition,
   defineWorkflow,
-  type FlowDefinition,
 } from "workflow-engine/workflow-types";
-import { queenBeeFlow } from "../../../presets/queen-bee/flow.ts";
+import { loadPresetDefinition } from "./preset-flow.ts";
+
+// The compiled queen-bee projection (the preset definition module through the
+// real loader seam).
+const queenBeeCompiled = (await loadPresetDefinition("queen-bee")).flow;
+
 import { registerFlowApiRoutes } from "./flow-api-routes.ts";
-import { authoringSessionFlow } from "./flow-authoring.ts";
+import { FLOW_SCAFFOLD_SOURCE } from "./flow-authoring/scaffold.ts";
+import { authoringSessionFlow } from "./flow-authoring/session.ts";
 import {
   registerFlowDefinition,
   registerUserDefinition,
   resetFlowDefinitionsForTest,
+  runtimeDefinitionsDir,
   setDefinitionsBasePathForTest,
 } from "./flow-definitions.ts";
 import type { FlowStore } from "./flow-persistence.ts";
@@ -32,25 +39,6 @@ import {
   resetFlowRuntimesForTest,
   setFlowPersistence,
 } from "./flow-registry.ts";
-import { setGenerationModelCallerForTest } from "./generate-flow-definition.ts";
-
-// Parses the SSE body the generate route streams: one `data: {json}\n\n`
-// event per line.
-function parseSseEvents(body: string): Array<Record<string, unknown>> {
-  const events: Array<Record<string, unknown>> = [];
-  for (const block of body.split("\n\n")) {
-    const line = block.trim();
-    if (!line.startsWith("data: ")) continue;
-    try {
-      events.push(
-        JSON.parse(line.slice("data: ".length)) as Record<string, unknown>
-      );
-    } catch {
-      // skip malformed frames
-    }
-  }
-  return events;
-}
 
 const testWorkflow = defineWorkflow({
   id: "test-wf",
@@ -150,7 +138,7 @@ const actionApiDefinition = {
       createInstance: { workflowId: "item" },
     },
   ],
-} satisfies FlowDefinition;
+} satisfies CompiledFlowDefinition;
 
 const editableWorkflow = defineWorkflow({
   id: "ticket",
@@ -181,27 +169,28 @@ const editableDefinition = {
   label: "Editable Definition",
   workflows: [editableWorkflow],
   edges: [],
-} satisfies FlowDefinition;
+} satisfies CompiledFlowDefinition;
 
 const flowDefinitionSource = `
-import { defineWorkflow } from "workflow-engine/workflow-types";
+import type { FlowDefinition } from "workflow-engine/workflow-types";
 
-const wf = defineWorkflow({
-  id: "custom",
-  label: "Custom",
-  taskOutputs: {} as Record<string, never>,
-  states: [
-    { id: "pending", label: "Pending", category: "initial" },
-    { id: "done", label: "Done", category: "terminal" },
-  ],
-  initial: "pending",
-  terminalStates: ["done"],
-});
-
-export const flow = {
+export const flow: FlowDefinition = {
   id: "custom-flow",
   label: "Custom Flow",
-  workflows: [wf],
+  configSchema: [],
+  workflows: [
+    {
+      id: "custom",
+      label: "Custom",
+      instanceState: [],
+      initial: "pending",
+      terminalStates: ["done"],
+      states: [
+        { id: "pending", label: "Pending", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
   edges: [],
 };
 `;
@@ -211,49 +200,49 @@ export const flow = {
 // source, transpiled by the server, and fetched by the rendering surface.
 // A gate-clean source the authoring session's save path registers (the e2e's
 // agent produces a review-flow equivalent).
-const authoringSaveSource = `import { defineWorkflow } from "workflow-engine/workflow-types";
+const authoringSaveSource = `import type { FlowDefinition } from "workflow-engine/workflow-types";
 
-const wf = defineWorkflow({
-  id: "review",
-  label: "Review",
-  taskOutputs: {} as Record<string, never>,
-  workflowInstanceState: {} as Record<string, unknown>,
-  states: [
-    { id: "new", label: "New", category: "initial" },
-    { id: "done", label: "Done", category: "terminal" },
-  ],
-  initial: "new",
-  terminalStates: ["done"],
-});
-
-export const flow = {
-  id: "review-flow",
+export const flow: FlowDefinition = {
+  id: "reviewFlow",
   label: "Review Flow",
   configSchema: [],
-  workflows: [wf],
+  workflows: [
+    {
+      id: "review",
+      label: "Review",
+      instanceState: [],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
+        { id: "new", label: "New", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
   edges: [],
 };
 `;
 
 const componentFlowSource = `
-import { defineWorkflow } from "workflow-engine/workflow-types";
+import type { FlowDefinition } from "workflow-engine/workflow-types";
 
-const wf = defineWorkflow({
-  id: "custom",
-  label: "Custom",
-  taskOutputs: {} as Record<string, never>,
-  states: [
-    { id: "pending", label: "Pending", category: "initial" },
-    { id: "done", label: "Done", category: "terminal" },
-  ],
-  initial: "pending",
-  terminalStates: ["done"],
-});
-
-export const flow = {
+export const flow: FlowDefinition = {
   id: "component-flow",
   label: "Component Flow",
-  workflows: [wf],
+  configSchema: [],
+  workflows: [
+    {
+      id: "custom",
+      label: "Custom",
+      instanceState: [],
+      initial: "pending",
+      terminalStates: ["done"],
+      states: [
+        { id: "pending", label: "Pending", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
   edges: [],
   ui: {
     components: {
@@ -292,7 +281,6 @@ describe("flow API routes", () => {
 
   afterEach(async () => {
     await Promise.all(servers.splice(0).map((s) => s.close()));
-    setGenerationModelCallerForTest(undefined);
   });
 
   it("GET /api/flows returns flows with definitions and instances", async () => {
@@ -980,107 +968,86 @@ describe("flow API routes", () => {
     ws.close();
   });
 
-  it("POST /api/flows/definitions/generate streams progress and returns source + report", async () => {
-    // A stubbed model: the route reaches the loop through the seam.
-    const validSpec = {
-      id: "routeFlow",
-      label: "Route Flow",
-      configSchema: [],
-      workflows: [
+  it("POST /api/flows/definitions/refs returns the draft's declared refs + label", async () => {
+    setFlowPersistence(noopPersistence);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const source = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "draft",
+  label: "Draft Flow",
+  description: "",
+  configSchema: [],
+  workflows: [
+    {
+      id: "items",
+      label: "Items",
+      instanceState: [{ field: "title", type: "string" }],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
         {
-          id: "route",
-          label: "Route",
-          instance: { title: "title" },
-          instanceState: [{ field: "title", type: "string" }],
-          initialState: "idle",
-          terminalStates: ["done"],
-          states: [
+          id: "new",
+          label: "New",
+          category: "initial",
+          tasks: [
             {
-              id: "idle",
-              label: "Idle",
-              category: "initial",
-              actions: [
-                {
-                  id: "start",
-                  label: "Start",
-                  variant: "primary",
-                  transitionTo: "done",
-                },
-              ],
+              id: "runAgent",
+              label: "Run agent",
+              role: "ai-task",
+              systemPrompt: "Do the work and call the completion tool.",
+              tools: ["websearch"],
             },
-            { id: "done", label: "Done", category: "terminal" },
+          ],
+          autoTransitions: [
+            { to: "done", gate: { kind: "file", ref: "./gates/ok.ts" } },
           ],
         },
+        { id: "done", label: "Done", category: "terminal" },
       ],
-      actions: [
-        {
-          id: "add",
-          label: "Add item",
-          variant: "primary",
-          createInstance: {
-            workflowId: "route",
-            fields: [{ key: "title", label: "Title", type: "string" }],
-          },
-        },
-      ],
-      edges: [],
-    };
-    setGenerationModelCallerForTest(async (_messages, callbacks) => {
-      callbacks?.onDelta?.("designing the flow...");
-      return `\`\`\`json\n${JSON.stringify(validSpec)}\n\`\`\``;
-    });
-
-    const server = Fastify();
-    servers.push(server);
-    registerFlowApiRoutes(server);
-
+    },
+  ],
+  tools: [{ id: "websearch", ref: "./tools/websearch.ts", writes: [] }],
+  actions: [],
+  edges: [],
+};`;
     const response = await server.inject({
       method: "POST",
-      url: "/api/flows/definitions/generate",
-      body: { prompt: "a simple two-state flow" },
+      url: "/api/flows/definitions/refs",
+      body: { source },
     });
-
     assert.equal(response.statusCode, 200);
-    assert.ok(
-      response.headers["content-type"]?.startsWith("text/event-stream"),
-      "generation must stream SSE"
-    );
-
-    // Parse the SSE body: stage/delta events followed by a done event.
-    const events = parseSseEvents(response.body);
-    const types = events.map((e) => e.type);
-    assert.ok(
-      types.includes("stage") &&
-        types.includes("delta") &&
-        types.includes("done"),
-      `expected stage/delta/done events, got: ${types.join(", ")}`
-    );
-    const done = events.find((e) => e.type === "done") as {
-      source: string;
-      report: { passed: boolean; attempts: number; errors: string[] };
+    const { refs, label } = response.json() as {
+      refs: string[];
+      label: string;
     };
-    assert.ok(
-      done.source.includes("defineWorkflow"),
-      "expected a rendered definition source"
+    assert.equal(label, "Draft Flow");
+    assert.deepEqual(
+      refs.sort(),
+      ["./gates/ok.ts", "./tools/websearch.ts"].sort(),
+      "the draft's declared refs drive the editor's file tabs"
     );
-    assert.equal(done.report.passed, true);
-    assert.equal(done.report.attempts, 1);
-    assert.deepEqual(done.report.errors, []);
-  });
 
-  it("POST /api/flows/definitions/generate requires a prompt", async () => {
-    const server = Fastify();
-    servers.push(server);
-    registerFlowApiRoutes(server);
-
-    const response = await server.inject({
+    // The scaffold declares no refs; its label seeds the Save default.
+    const scaffold = await server.inject({
       method: "POST",
-      url: "/api/flows/definitions/generate",
-      body: {},
+      url: "/api/flows/definitions/refs",
+      body: { source: FLOW_SCAFFOLD_SOURCE },
     });
+    const scaffoldBody = scaffold.json() as { refs: string[]; label: string };
+    assert.equal(scaffoldBody.label, "My Flow");
+    assert.deepEqual(scaffoldBody.refs, []);
 
-    assert.equal(response.statusCode, 400);
-    assert.equal(response.json().error, "prompt is required");
+    // Unparseable source: no tabs can be derived.
+    const broken = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions/refs",
+      body: { source: "not a definition module at all" },
+    });
+    assert.deepEqual(broken.json(), { refs: [], label: "" });
   });
 
   it("POST /api/flows/definitions/author creates an authoring session", async () => {
@@ -1174,6 +1141,134 @@ describe("flow API routes", () => {
     }
   });
 
+  it("GET /api/flows/definitions/scaffold serves the canonical scaffold source", async () => {
+    setFlowPersistence(noopPersistence);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const response = await server.inject({
+      method: "GET",
+      url: "/api/flows/definitions/scaffold",
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(
+      (response.json() as { source?: string }).source,
+      FLOW_SCAFFOLD_SOURCE,
+      "the editor must get the same canonical constant the session seeds"
+    );
+  });
+
+  it("POST /api/flows/definitions/author seeds the canonical scaffold when no source is given", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition(authoringSessionFlow, { hidden: true });
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions/author",
+      body: { prompt: "Build a triage flow" },
+    });
+    assert.equal(response.statusCode, 201);
+    const { flowId, instanceId } = response.json() as {
+      flowId: string;
+      instanceId: string;
+    };
+    const controller = getFlowRuntime(flowId)?.getWorkflowInstance(instanceId);
+    assert.ok(controller, "the authoring session must exist");
+    const state = controller.getState().workflowInstanceState as {
+      source?: string;
+      parsedDefinition?: { id?: string };
+      previewErrors?: string[];
+    };
+    assert.equal(state.source, FLOW_SCAFFOLD_SOURCE);
+    // The Definition tab binds to the parsed definition from turn zero.
+    assert.equal(state.parsedDefinition?.id, "myFlow");
+    assert.deepEqual(state.previewErrors, []);
+  });
+
+  it("POST /api/flows/definitions/author seeds the editor's source when given", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition(authoringSessionFlow, { hidden: true });
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const source = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "triaged",
+  label: "Triage",
+  description: "hand-written before the session",
+  configSchema: [],
+  workflows: [
+    {
+      id: "tickets",
+      label: "Tickets",
+      instanceState: [{ field: "title", type: "string" }],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
+        { id: "new", label: "New", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  actions: [],
+  edges: [],
+};`;
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions/author",
+      body: { prompt: "Keep going", source },
+    });
+    assert.equal(response.statusCode, 201);
+    const { flowId, instanceId } = response.json() as {
+      flowId: string;
+      instanceId: string;
+    };
+    const controller = getFlowRuntime(flowId)?.getWorkflowInstance(instanceId);
+    assert.ok(controller, "the authoring session must exist");
+    const state = controller.getState().workflowInstanceState as {
+      source?: string;
+      parsedDefinition?: { id?: string };
+    };
+    assert.equal(state.source, source);
+    assert.equal(state.parsedDefinition?.id, "triaged");
+  });
+
+  it("POST /api/flows/definitions/author seeds no scaffold for a revision session with context", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition(authoringSessionFlow, { hidden: true });
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions/author",
+      body: {
+        prompt: "Revise this",
+        context: "The user wants changes to an existing definition source.",
+      },
+    });
+    assert.equal(response.statusCode, 201);
+    const { flowId, instanceId } = response.json() as {
+      flowId: string;
+      instanceId: string;
+    };
+    const controller = getFlowRuntime(flowId)?.getWorkflowInstance(instanceId);
+    assert.ok(controller, "the authoring session must exist");
+    const state = controller.getState().workflowInstanceState as {
+      source?: string;
+    };
+    // A revision session brings its own definition via context + files; the
+    // scaffold must not mask it.
+    assert.equal(state.source, undefined);
+  });
+
   it("POST /api/flows/definitions/author/:flowId/save registers the session's generated definition synchronously", async () => {
     setFlowPersistence(noopPersistence);
     const definitionsDir = mkdtempSync(join(tmpdir(), "hive-defs-"));
@@ -1238,7 +1333,7 @@ describe("flow API routes", () => {
     assert.equal((again.json() as { id: string }).id, "review-flow");
   });
 
-  it("POST /api/flows/definitions/author/:flowId/source writes back the human's edits and marks the blueprint diverged", async () => {
+  it("POST /api/flows/definitions/author/:flowId/source writes back the human's edits (the edit IS the state)", async () => {
     setFlowPersistence(noopPersistence);
     registerFlowDefinition(authoringSessionFlow, { hidden: true });
     const server = Fastify();
@@ -1261,24 +1356,14 @@ describe("flow API routes", () => {
     const written = await server.inject({
       method: "POST",
       url: `/api/flows/definitions/author/${flowId}/source`,
-      payload: { source: "export const flow = {}; // hand edit" },
+      payload: { source: authoringSaveSource },
     });
     assert.equal(written.statusCode, 200);
     const state = controller?.getState().workflowInstanceState;
-    assert.equal(state?.source, "export const flow = {}; // hand edit");
-    assert.equal(state?.blueprintDiverged, true);
-
-    // Discard hands the definition back to the agent.
-    const discarded = await server.inject({
-      method: "POST",
-      url: `/api/flows/definitions/author/${flowId}/source`,
-      payload: { discard: true },
-    });
-    assert.equal(discarded.statusCode, 200);
-    assert.equal(
-      controller?.getState().workflowInstanceState.blueprintDiverged,
-      false
-    );
+    assert.equal(state?.source, authoringSaveSource);
+    // The parsed definition rides along so the editor binds to the object.
+    const parsed = state?.parsedDefinition as { id?: string } | undefined;
+    assert.equal(parsed?.id, "reviewFlow");
   });
 
   it("POST /api/flows/definitions/author/:flowId/source rejects a non-authoring flow", async () => {
@@ -1293,6 +1378,236 @@ describe("flow API routes", () => {
       payload: { source: "const a = 1;" },
     });
     assert.equal(response.statusCode, 404);
+  });
+
+  it("POST /api/flows/definitions/author/:flowId/files writes a referenced file authoritatively", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition(authoringSessionFlow, { hidden: true });
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+    const created = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions/author",
+      body: { prompt: "Build a review flow", lucky: true },
+    });
+    const { flowId, instanceId } = created.json() as {
+      flowId: string;
+      instanceId: string;
+    };
+    const runtime = getFlowRuntime(flowId);
+    const controller = runtime?.getWorkflowInstance(instanceId);
+    const workDir = join(runtimeDefinitionsDir(), flowId);
+    try {
+      const written = await server.inject({
+        method: "POST",
+        url: `/api/flows/definitions/author/${flowId}/files`,
+        payload: {
+          path: "./gates/approved.ts",
+          content: "export const ok = true;\n",
+        },
+      });
+      assert.equal(written.statusCode, 200);
+      const state = controller?.getState().workflowInstanceState;
+      const files = state?.files as Record<string, string> | undefined;
+      assert.equal(
+        files?.["./gates/approved.ts"],
+        "export const ok = true;\n",
+        "the write must land in the session's file set"
+      );
+      // File edits are authoritative — the write lands as-is.
+      assert.equal(
+        state?.moduleSetSlug,
+        flowId,
+        "the session records its own module-set slug"
+      );
+
+      // Escaping paths and the rendered entry are rejected.
+      const escapeWrite = await server.inject({
+        method: "POST",
+        url: `/api/flows/definitions/author/${flowId}/files`,
+        payload: { path: "../escape.ts", content: "x" },
+      });
+      assert.equal(escapeWrite.statusCode, 400);
+      const entryWrite = await server.inject({
+        method: "POST",
+        url: `/api/flows/definitions/author/${flowId}/files`,
+        payload: { path: "flow.ts", content: "x" },
+      });
+      assert.equal(entryWrite.statusCode, 400);
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  });
+
+  it("each authoring session has its own module-set directory (no file leakage)", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition(authoringSessionFlow, { hidden: true });
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+    const createSession = async (): Promise<{
+      flowId: string;
+      state: () => Record<string, unknown>;
+    }> => {
+      const created = await server.inject({
+        method: "POST",
+        url: "/api/flows/definitions/author",
+        body: { prompt: "Build a flow", lucky: true },
+      });
+      const { flowId, instanceId } = created.json() as {
+        flowId: string;
+        instanceId: string;
+      };
+      const runtime = getFlowRuntime(flowId);
+      const controller = runtime?.getWorkflowInstance(instanceId);
+      if (!controller) throw new Error("no controller");
+      return {
+        flowId,
+        state: () => controller.getState().workflowInstanceState,
+      };
+    };
+    const first = await createSession();
+    const second = await createSession();
+    assert.notEqual(
+      first.flowId,
+      second.flowId,
+      "sessions have distinct flow ids"
+    );
+    try {
+      // A file written to the first session must not appear in the second.
+      await server.inject({
+        method: "POST",
+        url: `/api/flows/definitions/author/${first.flowId}/files`,
+        payload: {
+          path: "./gates/approved.ts",
+          content: "export const a = 1;\n",
+        },
+      });
+      const secondState = second.state();
+      const secondFiles = secondState.files as
+        | Record<string, string>
+        | undefined;
+      assert.equal(
+        secondFiles?.["./gates/approved.ts"],
+        undefined,
+        "another session's files must not leak into this session's file set"
+      );
+      assert.notEqual(
+        secondState.moduleSetSlug,
+        first.flowId,
+        "the second session uses its own module-set directory"
+      );
+    } finally {
+      rmSync(join(runtimeDefinitionsDir(), first.flowId), {
+        recursive: true,
+        force: true,
+      });
+      rmSync(join(runtimeDefinitionsDir(), second.flowId), {
+        recursive: true,
+        force: true,
+      });
+    }
+  });
+
+  it("GET /api/flows/definitions/:id returns the referenced file set and POST registers one", async () => {
+    setFlowPersistence(noopPersistence);
+    resetFlowDefinitionsForTest();
+    const defsDir = mkdtempSync(join(tmpdir(), "hive-route-files-"));
+    setDefinitionsBasePathForTest(defsDir);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+    try {
+      const created = await server.inject({
+        method: "POST",
+        url: "/api/flows/definitions",
+        body: {
+          name: "Files Flow",
+          source: `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "files-flow",
+  label: "Files Flow",
+  configSchema: [],
+  workflows: [
+    {
+      id: "items",
+      label: "Items",
+      instanceState: [],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
+        { id: "new", label: "New", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  edges: [],
+};`,
+          files: { "./gates/approved.ts": "export const ok = true;\n" },
+        },
+      });
+      assert.equal(created.statusCode, 201);
+      const detail = await server.inject({
+        method: "GET",
+        url: "/api/flows/definitions/files-flow",
+      });
+      assert.equal(detail.statusCode, 200);
+      const body = detail.json() as { files?: Record<string, string> };
+      assert.equal(
+        body.files?.["./gates/approved.ts"],
+        "export const ok = true;\n",
+        "the definition detail must expose the referenced file set"
+      );
+    } finally {
+      rmSync(defsDir, { recursive: true, force: true });
+      rmSync(join(runtimeDefinitionsDir(), "files-flow"), {
+        recursive: true,
+        force: true,
+      });
+      resetFlowDefinitionsForTest();
+    }
+  });
+
+  it("POST /api/flows/definitions/author with files seeds the session's module set", async () => {
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition(authoringSessionFlow, { hidden: true });
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+    const created = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions/author",
+      body: {
+        prompt: "Revise a flow",
+        context: "The user wants changes to this existing definition.",
+        files: { "./gates/approved.ts": "export const ok = true;\n" },
+      },
+    });
+    const { flowId, instanceId } = created.json() as {
+      flowId: string;
+      instanceId: string;
+    };
+    const runtime = getFlowRuntime(flowId);
+    const controller = runtime?.getWorkflowInstance(instanceId);
+    const workDir = join(runtimeDefinitionsDir(), flowId);
+    try {
+      assert.equal(created.statusCode, 201);
+      const state = controller?.getState().workflowInstanceState;
+      const files = state?.files as Record<string, string> | undefined;
+      assert.equal(
+        files?.["./gates/approved.ts"],
+        "export const ok = true;\n",
+        "the revision session must carry the existing definition's files"
+      );
+      assert.ok(
+        existsSync(join(workDir, "gates/approved.ts")),
+        "the seeded files must be materialized in the session's module set"
+      );
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
   });
 
   it("POST /api/flows/definitions/author requires a prompt", async () => {
@@ -1342,47 +1657,32 @@ describe("flow API routes", () => {
     assert.equal(listed.name, "Custom Flow");
   });
 
-  it("POST /api/flows/definitions annotates (does not block) schema-consistency findings", async () => {
+  it("POST /api/flows/definitions annotates (does not block) definition-validator warnings", async () => {
     const server = Fastify();
     servers.push(server);
     registerFlowApiRoutes(server);
 
-    // A definition that loads fine but has a gate reading a field nothing
-    // ever writes — the check's motivating error class.
-    const inconsistentSource = `
-import { defineWorkflow } from "workflow-engine/workflow-types";
+    // A definition that loads fine but nothing ever creates an instance — the
+    // analyzer's advisory warning class (non-blocking annotation).
+    const noCreationSource = `import type { FlowDefinition } from "workflow-engine/workflow-types";
 
-type BadState = {
-  verdict?: string;
-};
-
-const wf = defineWorkflow({
-  id: "bad",
-  label: "Bad",
-  taskOutputs: {} as Record<string, never>,
-  workflowInstanceState: {} as BadState,
-  states: [
+export const flow: FlowDefinition = {
+  id: "noCreationFlow",
+  label: "No Creation Flow",
+  configSchema: [],
+  workflows: [
     {
-      id: "pending",
-      label: "Pending",
-      category: "initial",
-      autoTransitions: [
-        {
-          to: "done",
-          gate: (ctx) => ctx.workflowInstanceState.missingField === "x",
-        },
+      id: "items",
+      label: "Items",
+      instanceState: [{ field: "title", type: "string" }],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
+        { id: "new", label: "New", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
       ],
     },
-    { id: "done", label: "Done", category: "terminal" },
   ],
-  initial: "pending",
-  terminalStates: ["done"],
-});
-
-export const flow = {
-  id: "inconsistent-flow",
-  label: "Inconsistent Flow",
-  workflows: [wf],
   edges: [],
 };
 `;
@@ -1390,15 +1690,18 @@ export const flow = {
     const response = await server.inject({
       method: "POST",
       url: "/api/flows/definitions",
-      body: { name: "Inconsistent Flow", source: inconsistentSource },
+      body: { name: "No Creation Flow", source: noCreationSource },
     });
 
-    // Saved despite the findings — the annotation is non-blocking.
+    // The annotation is non-blocking — the definition registers anyway, and
+    // the warning names the missing creation path.
     assert.equal(response.statusCode, 201);
-    const json = response.json() as { checkErrors?: string[] };
+    const json = response.json() as { checkWarnings?: string[] };
     assert.ok(
-      (json.checkErrors ?? []).some((e) => e.includes("reads with no writer")),
-      `expected a read-with-no-writer annotation, got: ${json.checkErrors?.join("; ")}`
+      (json.checkWarnings ?? []).some((w) =>
+        w.includes("ever creates an instance")
+      ),
+      `expected a creation-path warning, got: ${json.checkWarnings?.join("; ")}`
     );
   });
 
@@ -1407,27 +1710,26 @@ export const flow = {
     servers.push(server);
     registerFlowApiRoutes(server);
 
-    // A clean single-file definition: loads, typechecks, holds the contract.
-    const cleanSource = `
-import { defineWorkflow } from "workflow-engine/workflow-types";
+    // A clean data definition module: loads, typechecks, holds the contract.
+    const cleanSource = `import type { FlowDefinition } from "workflow-engine/workflow-types";
 
-const wf = defineWorkflow({
-  id: "clean",
-  label: "Clean",
-  taskOutputs: {} as Record<string, never>,
-  workflowInstanceState: {} as Record<string, unknown>,
-  states: [
-    { id: "pending", label: "Pending", category: "initial" },
-    { id: "done", label: "Done", category: "terminal" },
-  ],
-  initial: "pending",
-  terminalStates: ["done"],
-});
-
-export const flow = {
-  id: "clean-flow",
+export const flow: FlowDefinition = {
+  id: "cleanFlow",
   label: "Clean Flow",
-  workflows: [wf],
+  configSchema: [],
+  workflows: [
+    {
+      id: "clean",
+      label: "Clean",
+      instanceState: [],
+      initial: "pending",
+      terminalStates: ["done"],
+      states: [
+        { id: "pending", label: "Pending", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
   edges: [],
 };
 `;
@@ -1902,7 +2204,7 @@ export const flow = {
   });
 
   it("POST /api/flows rejects config missing required schema fields", async () => {
-    registerFlowDefinition(queenBeeFlow, { builtIn: true });
+    registerFlowDefinition(queenBeeCompiled, { builtIn: true });
     setFlowPersistence(noopPersistence);
     const server = Fastify();
     servers.push(server);
@@ -1924,7 +2226,7 @@ export const flow = {
   });
 
   it("POST /api/flows rejects unknown config fields", async () => {
-    registerFlowDefinition(queenBeeFlow, { builtIn: true });
+    registerFlowDefinition(queenBeeCompiled, { builtIn: true });
     setFlowPersistence(noopPersistence);
     const server = Fastify();
     servers.push(server);
@@ -1947,7 +2249,7 @@ export const flow = {
   });
 
   it("POST /api/flows rejects config fields of the wrong type", async () => {
-    registerFlowDefinition(queenBeeFlow, { builtIn: true });
+    registerFlowDefinition(queenBeeCompiled, { builtIn: true });
     setFlowPersistence(noopPersistence);
     const server = Fastify();
     servers.push(server);
@@ -1970,7 +2272,7 @@ export const flow = {
   });
 
   it("POST /api/flows accepts config matching the schema", async () => {
-    registerFlowDefinition(queenBeeFlow, { builtIn: true });
+    registerFlowDefinition(queenBeeCompiled, { builtIn: true });
     setFlowPersistence(noopPersistence);
     const server = Fastify();
     servers.push(server);

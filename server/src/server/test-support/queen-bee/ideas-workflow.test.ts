@@ -3,12 +3,22 @@ import { describe, it } from "node:test";
 import { createFlowRuntime } from "workflow-engine/create-flow-runtime";
 import type { AiChatModelCaller } from "workflow-engine/runners";
 import { createAiChatRunner } from "workflow-engine/runners";
-import {
-  queenBeeFlow,
-  queenBeeOperations,
-} from "../../../../../presets/queen-bee/flow.ts";
-import { ideasWorkflow } from "../../../../../presets/queen-bee/ideas-workflow.ts";
 import { createEngineRunners } from "../../engine-bridge.ts";
+import { queenBeeCompiled as queenBeeFlow } from "../compiled-presets.ts";
+
+// The ideas workflow, extracted from the rendered definition (the old
+// ideas-workflow.ts module was absorbed into the flow definition). The IIFE keeps
+// the narrowing inside so the closure's type is RuntimeWorkflowConfig.
+const ideasWorkflow = (() => {
+  if (!("workflows" in queenBeeFlow)) {
+    throw new Error("expected a static definition");
+  }
+  const workflow = queenBeeFlow.workflows.find((wf) => wf.id === "ideas");
+  if (workflow === undefined) {
+    throw new Error("ideas workflow not found");
+  }
+  return workflow;
+})();
 
 describe("ideas workflow completion", () => {
   it("elaborate completes and advances to submitted once the agent signals IDEA_COMPLETE", async () => {
@@ -51,7 +61,7 @@ function makeIdeasRuntime(options: {
   const flowConfig = { definitionId: "queen-bee", name: "Project" };
   const baseRunners = createEngineRunners({
     tools: queenBeeFlow.tools,
-    operations: queenBeeOperations,
+    operations: queenBeeFlow.operations,
   });
   return createFlowRuntime(
     "project",

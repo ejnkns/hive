@@ -147,4 +147,47 @@ describe("WorkflowInstances board rendering", () => {
       actionId: "run",
     });
   });
+
+  it("carries the action payload through the hive-action event", async () => {
+    localStorage.clear();
+    const def = cardDef({
+      states: [
+        {
+          id: "ready",
+          label: "Ready",
+          category: "initial",
+          actions: [],
+          tasks: [],
+        },
+      ],
+    });
+    const instance = entry("c1", "ready");
+    instance.availableActions = [];
+    const el = await mount(host(def, [instance]));
+    await settle(shadowRootOf(el));
+
+    // Drive the custom component's onAction prop directly — the flow-editor's
+    // Instantiate flow button emits with a payload ({ id }).
+    const emitted = new Promise<CustomEvent>((resolve) =>
+      el.addEventListener("hive-action", resolve as EventListener, {
+        once: true,
+      })
+    );
+    const dynamicHost = mustFind(el, "dynamic-element-host");
+    const hostEl = dynamicHost as unknown as {
+      props?: {
+        onAction?: (id: string, payload?: Record<string, unknown>) => void;
+      };
+    };
+    const onAction = hostEl.props?.onAction;
+    expect(typeof onAction).toBe("function");
+    onAction?.("instantiate", { id: "review-flow" });
+    const event = await emitted;
+    expect(event.detail).toMatchObject({
+      flowId: "flow-1",
+      instanceId: "c1",
+      actionId: "instantiate",
+      payload: { id: "review-flow" },
+    });
+  });
 });

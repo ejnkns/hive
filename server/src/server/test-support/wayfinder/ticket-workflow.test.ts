@@ -44,7 +44,7 @@ describe("wayfinder ticket workflow", () => {
     const runtime = makeWayfinderRuntime({
       basePath,
       aiChatCaller: idleModelCaller(),
-      aiTaskCaller: taskCompleter("submit_findings", {
+      aiTaskCaller: taskCompleter("ticket_research_complete", {
         question: "localStorage or IndexedDB?",
         findings:
           "# Findings\nIndexedDB is the right store for the editor's large documents.",
@@ -148,7 +148,7 @@ describe("wayfinder ticket workflow", () => {
   it("claim actions are hidden until every dependsOn blocker is closed", async () => {
     const runtime = makeWayfinderRuntime({
       aiChatCaller: idleModelCaller(),
-      aiTaskCaller: taskCompleter("submit_findings", {
+      aiTaskCaller: taskCompleter("ticket_research_complete", {
         question: "Which index?",
         findings: "# Findings\nA covering index on the payload column.",
         sources: [],
@@ -204,7 +204,7 @@ describe("wayfinder ticket workflow", () => {
     const runtime = makeWayfinderRuntime({
       basePath,
       aiChatCaller: chatRespond(
-        chatToolCall("submit_resolution", {
+        chatToolCall("ticket_grillSession_complete", {
           decision: "OAuth2 with refresh tokens",
           gist: "The human confirmed the auth model over the exchange.",
         }),
@@ -230,19 +230,9 @@ describe("wayfinder ticket workflow", () => {
       "Let's settle the auth flow.",
       "user"
     );
-    // The agent records the resolution (submit_resolution), then waits; the
-    // human ends the live exchange with Done.
-    await waitFor(() => {
-      const state = controller.getState().workflowInstanceState;
-      return (
-        typeof state.resolution === "object" &&
-        state.resolution !== null &&
-        typeof (state.resolution as { decision?: unknown }).decision ===
-          "string"
-      );
-    });
-    controller.dispatchAction("done");
-
+    // The agent records the resolution via the generated completion tool, which
+    // ends the session; the auto-transition carries the ticket to recording and
+    // the assemble op builds the decision record.
     await waitFor(() => controller.getState().currentState === "closed");
     const record = readFileSync(
       join(basePath, ".wayfinder", "decisions", `${controller.id}.md`),
@@ -262,7 +252,7 @@ describe("wayfinder ticket workflow", () => {
           path: "proto.ts",
           content: "export const answer = 42;\n",
         }),
-        chatToolCall("submit_resolution", {
+        chatToolCall("ticket_prototypeSession_complete", {
           decision: "The data flow should be a single pass",
           gist: "Prototyped the logic branch; the artifact shows the full state.",
           artifactPath: "proto.ts",
@@ -303,7 +293,6 @@ describe("wayfinder ticket workflow", () => {
       "user"
     );
     await waitFor(() => existsSync(join(worktreePath, "proto.ts")));
-    controller.dispatchAction("done");
 
     await waitFor(() => controller.getState().currentState === "closed");
     const record = readFileSync(

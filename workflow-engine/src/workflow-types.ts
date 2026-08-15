@@ -25,6 +25,7 @@ export type {
 } from "./workflow-types/config-field.ts";
 export type {
   GateContext,
+  GateContract,
   ModelCallStatus,
   NoOutput,
   RunningTaskContext,
@@ -33,16 +34,47 @@ export type {
   TaskOutputMap,
 } from "./workflow-types/core.ts";
 export type {
+  ActionSpec,
+  AutoTransitionSpec,
+  CompletionContract,
+  CompletionOutputField,
+  DefinitionError,
+  DefinitionValidationContext,
+  DisplayFieldRender,
+  DisplayFieldSpec,
+  EdgeSpec,
+  EdgeTransformRefSpec,
+  ExtractRefSpec,
+  FanOutValueSpec,
+  FieldType,
+  FlowLevelActionSpec,
+  GateSpec,
+  InstanceStateField,
+  ModuleRefKind,
+  OperationRefSpec,
+  StateSpec,
+  TaskSpec,
+  ToolRefSpec,
+  ValueSpec,
+  WorkflowSpec,
+} from "./workflow-types/definition-vocabulary.ts";
+export type {
   DerivedDisplay,
   DisplayField,
   DisplayHint,
   WorkflowSummary,
 } from "./workflow-types/display.ts";
 export type {
+  ExtractContext,
+  OutputExtractor,
+} from "./workflow-types/extractor.ts";
+export type {
+  CompiledFlowDefinition,
   FlowDefinition,
   FlowEdge,
   FlowLevelAction,
   RuntimeFlowEdge,
+  TransformContract,
 } from "./workflow-types/flow-definition.ts";
 export type {
   StateTransitionEntry,

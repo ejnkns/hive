@@ -1,22 +1,12 @@
-/** @public — the schema-consistency check as a service: AST-based validation
- * that a flow definition's reads and writes respect its declared
- * workflowInstanceState contract. Import from here, not from
- * schema-consistency/ directly.
- *
- * Asserts, per workflow: the anchor exists, every authored write is a declared
- * field (writes ⊆ declared), and every read has a writer (reads ⊆ writes ∪
- * engine-provided). Dead declarations and write-without-read fields surface as
- * warnings; state-machine structure (reachability, exit) is advisory.
- *
- * The implementation lives in schema-consistency/: the AST helpers (ast), the
- * read/write extraction passes (state-access, anchors, edge-payload,
- * capability-maps), the structural-soundness pass (structure), the per-flow
- * contract + invariant evaluation (contract), and the orchestrating check
- * (check). */
+/** @private — the schema-consistency AST utilities, shared by the definition
+ * parser and the module-set declared-writes verification. The read↔write
+ * invariant itself now lives in the definition validator
+ * (flow-definition/writers.ts) and the declared-writes pass
+ * (module-set/verify-writes.ts); the closure-form workflow-contract check
+ * that used these AST helpers was retired with the definition-as-data
+ * migration. Import from here, not from schema-consistency/ directly. */
 
-export { checkDefinitionSources } from "./schema-consistency/check.ts";
-export type {
-  CheckReport,
-  SchemaCheckFile,
-  WorkflowCheckResult,
-} from "./schema-consistency/report-types.ts";
+export type { ObjectLiteral } from "./schema-consistency/ast.ts";
+export { parseFile, unwrap } from "./schema-consistency/ast.ts";
+export { resolveFn } from "./schema-consistency/capability-maps.ts";
+export { collectPatchWrites } from "./schema-consistency/state-access.ts";

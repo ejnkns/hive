@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { RequestState } from "shared/dashboard-types";
+import TruncatableText from "../../shared/TruncatableText.svelte";
 import Dialog from "../../shared/ui/Dialog.svelte";
 import { formatNumber, formatTime, sc } from "../../shared/utils.ts";
 import ConversationView from "../ConversationView.svelte";
@@ -89,7 +90,7 @@ const hasConversation = $derived(
       {#if request.prompt}
         <div class="detail-section">
           <div class="section-title">prompt</div>
-          <div class="prompt-text">{request.prompt}</div>
+          <TruncatableText text={request.prompt} />
         </div>
       {/if}
 
@@ -320,13 +321,6 @@ const hasConversation = $derived(
 .field-val.mono {
   font-family: monospace;
   font-size: 0.5625rem;
-}
-
-.prompt-text {
-  color: var(--text);
-  font-size: 0.6875rem;
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 
 .selection-header {

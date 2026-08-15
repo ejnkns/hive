@@ -69,30 +69,14 @@ export type GenerationReport = {
   warnings: string[];
 };
 
-// Live progress events the generate route streams over SSE, mirrored from the
-// server's GenerationProgressEvent so the editor can render what is actually
-// happening: the model's streamed design/blueprint, the gate stages, and any
-// rejected attempts.
-export type GenerationProgressEvent =
-  | {
-      type: "stage";
-      stage: "design" | "blueprint" | "validating" | "rendering" | "checking";
-      attempt?: number;
-      maxAttempts?: number;
-    }
-  | { type: "delta"; text: string }
-  | {
-      type: "attempt_failed";
-      attempt: number;
-      maxAttempts: number;
-      errors: string[];
-    }
-  | { type: "warnings"; findings: string[] }
-  | { type: "done"; source: string; report: GenerationReport }
-  | { type: "error"; error: string };
-
 export type FlowDefinitionDetail = FlowDefinitionSummary & {
   source: string;
+  // The referenced file set of a module-set definition (used to seed a
+  // revision session's editor tabs).
+  files?: Record<string, string>;
+  // The pure-data form of a definition module (the builder contract — the
+  // editor's Definition tab binds to it).
+  definition?: unknown;
 };
 
 export type InstancesApiResponse = {
@@ -176,14 +160,23 @@ export async function createFlow(input: {
 }
 
 // Creates a flow-authoring session (a hidden flow instance whose ai-chat
-// agent converges on a blueprint with the user) and returns the session ids. When
-// `lucky` is true the agent is told to produce the blueprint without questions.
+// agent converges on the definition module with the user) and returns the
+// session ids. When `lucky` is true the agent is told to produce the
+// definition without questions.
 export async function authorFlowDefinition(input: {
   prompt: string;
   lucky?: boolean;
   // Optional extra context for the first message (e.g. an existing definition
   // source the agent should revise).
   context?: string;
+  // The definition module the session starts from — a new flow's (possibly
+  // hand-edited) scaffold, so the editor's Definition tab shows it from turn
+  // zero and the agent's first read_definition_source sees it.
+  source?: string;
+  // The referenced file set of an existing definition being revised — the
+  // session seeds its module set from these so the file tabs and the agent's
+  // file tools see the current files.
+  files?: Record<string, string>;
 }): Promise<{ flowId: string; instanceId: string }> {
   const res = await fetch("/api/flows/definitions/author", {
     method: "POST",
@@ -236,8 +229,8 @@ export async function saveAuthoringDefinition(flowId: string): Promise<{
 }
 
 // The write-back behind the flow-editor's editable code pane: patches the
-// human's current definition source into the session (marking the blueprint
-// diverged), or clears the divergence when the human hands back.
+// human's current definition module into the session. The edit IS the state —
+// one artifact; no divergence flag, no adoption.
 export async function saveAuthoringSource(
   flowId: string,
   source: string
@@ -257,19 +250,26 @@ export async function saveAuthoringSource(
   }
 }
 
-export async function discardAuthoringSource(flowId: string): Promise<void> {
+// The write-back behind the flow-editor's file tabs: writes a referenced file
+// of the session's module set authoritatively (the file IS the truth — no
+// divergence flag).
+export async function saveAuthoringFile(
+  flowId: string,
+  path: string,
+  content: string
+): Promise<void> {
   const res = await fetch(
-    `/api/flows/definitions/author/${encodeURIComponent(flowId)}/source`,
+    `/api/flows/definitions/author/${encodeURIComponent(flowId)}/files`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ discard: true }),
+      body: JSON.stringify({ path, content }),
     }
   );
   if (!res.ok) {
     // Error response shape is guaranteed by the server endpoint
     const err = (await res.json()) as { error?: string };
-    throw new Error(err.error ?? "Failed to discard edits");
+    throw new Error(err.error ?? "Failed to save file");
   }
 }
 
@@ -284,6 +284,43 @@ export async function deleteFlow(flowId: string, purge = false): Promise<void> {
     const err = (await res.json()) as { error?: string };
     throw new Error(err.error ?? `Failed to delete flow: ${res.statusText}`);
   }
+}
+
+// The canonical scaffold for a new flow: the single server-owned definition
+// module the new-flow editor shows as its editable draft (the editor never
+// carries its own copy).
+export async function fetchFlowScaffold(): Promise<string> {
+  const res = await fetch("/api/flows/definitions/scaffold");
+  if (!res.ok) {
+    // Error response shape is guaranteed by the server endpoint
+    const err = (await res.json()) as { error?: string };
+    throw new Error(err.error ?? `Failed to fetch scaffold: ${res.statusText}`);
+  }
+  // Success response shape is guaranteed by the server endpoint
+  return ((await res.json()) as { source: string }).source;
+}
+
+// The declared refs + label of a draft definition module: the new-flow
+// editor derives its file tabs from the refs (declared-but-unwritten refs get
+// an empty tab, like the session editor) and defaults the hand-write Save's
+// name to the label.
+export async function parseDefinitionRefs(
+  source: string
+): Promise<{ refs: string[]; label: string }> {
+  const res = await fetch("/api/flows/definitions/refs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ source }),
+  });
+  if (!res.ok) {
+    // Error response shape is guaranteed by the server endpoint
+    const err = (await res.json()) as { error?: string };
+    throw new Error(
+      err.error ?? `Failed to parse definition: ${res.statusText}`
+    );
+  }
+  // Success response shape is guaranteed by the server endpoint
+  return (await res.json()) as { refs: string[]; label: string };
 }
 
 export async function fetchFlowDefinitions(): Promise<FlowDefinitionSummary[]> {
@@ -317,6 +354,9 @@ export async function createFlowDefinition(input: {
   name: string;
   description?: string;
   source: string;
+  // The referenced file set of the definition (hand-written files, saved
+  // together with the module through the same seam the session save uses).
+  files?: Record<string, string>;
 }): Promise<FlowDefinitionSummary> {
   const res = await fetch("/api/flows/definitions", {
     method: "POST",
@@ -336,7 +376,12 @@ export async function createFlowDefinition(input: {
 
 export async function updateFlowDefinition(
   id: string,
-  input: { name: string; description?: string; source: string }
+  input: {
+    name: string;
+    description?: string;
+    source: string;
+    files?: Record<string, string>;
+  }
 ): Promise<FlowDefinitionSummary> {
   const res = await fetch(`/api/flows/definitions/${encodeURIComponent(id)}`, {
     method: "PUT",
@@ -365,54 +410,6 @@ export async function deleteFlowDefinition(id: string): Promise<void> {
       err.error ?? `Failed to delete definition: ${res.statusText}`
     );
   }
-}
-
-export async function generateFlowDefinition(
-  prompt: string,
-  onEvent: (event: GenerationProgressEvent) => void = () => {}
-): Promise<{ source: string; report: GenerationReport }> {
-  const res = await fetch("/api/flows/definitions/generate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt }),
-  });
-  if (!res.ok || !res.body) {
-    // Error response shape is guaranteed by the server endpoint
-    const err = (await res.json().catch(() => null)) as {
-      error?: string;
-    } | null;
-    throw new Error(
-      err?.error ?? `Failed to generate definition: ${res.statusText}`
-    );
-  }
-
-  // Parse the SSE stream: one `data: {json}\n\n` frame per event. The stream
-  // ends with a `done` (full result) or `error` event.
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let frameEnd = buffer.indexOf("\n\n");
-    while (frameEnd !== -1) {
-      const frame = buffer.slice(0, frameEnd);
-      buffer = buffer.slice(frameEnd + 2);
-      frameEnd = buffer.indexOf("\n\n");
-      const line = frame.trim();
-      if (!line.startsWith("data: ")) continue;
-      const event = JSON.parse(
-        line.slice("data: ".length)
-      ) as GenerationProgressEvent;
-      onEvent(event);
-      if (event.type === "done") {
-        return { source: event.source, report: event.report };
-      }
-      if (event.type === "error") throw new Error(event.error);
-    }
-  }
-  throw new Error("Generation stream ended without a result");
 }
 
 // The validate-without-save gate: transpile+load, schema-consistency, and the

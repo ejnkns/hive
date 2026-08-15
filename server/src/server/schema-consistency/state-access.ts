@@ -1,71 +1,9 @@
-/** @private — extraction of workflow-instance-state reads and patch writes
- * from operation/tool function bodies. */
+/** @private — extraction of workflow-instance-state patch writes from
+ * operation/tool executor bodies. */
 
 import ts from "typescript";
 import type { ObjectLiteral } from "./ast.ts";
-import { findFirst, unwrap, walk } from "./ast.ts";
-
-function isStateBase(
-  expr: ts.Expression,
-  aliases: ReadonlySet<string>
-): boolean {
-  if (ts.isIdentifier(expr) && aliases.has(expr.text)) return true;
-  if (ts.isCallExpression(expr)) {
-    return (
-      ts.isPropertyAccessExpression(expr.expression) &&
-      expr.expression.name.text === "workflowInstanceState"
-    );
-  }
-  if (ts.isPropertyAccessExpression(expr)) {
-    return expr.name.text === "workflowInstanceState";
-  }
-  return false;
-}
-
-// Collect reads of the form <stateBase>.<field> inside a function body. Reads
-// that live in a pure helper called with the context (e.g. readResolution(ctx))
-// are walked too, bounded to two levels so helper chains can't explode.
-export function collectStateReads(
-  fn: ts.Node,
-  reads: Set<string>,
-  depth = 0
-): void {
-  // One-level aliases: `const state = ctx.workflowInstanceState()` (casts ok).
-  const aliases = new Set<string>();
-  walk(fn, (n) => {
-    if (!ts.isVariableDeclaration(n) || !ts.isIdentifier(n.name)) return;
-    if (!n.initializer) return;
-    if (isStateBase(unwrap(n.initializer), new Set())) aliases.add(n.name.text);
-  });
-
-  walk(fn, (n) => {
-    if (!ts.isPropertyAccessExpression(n)) return;
-    if (isStateBase(unwrap(n.expression), aliases) && ts.isIdentifier(n.name)) {
-      reads.add(n.name.text);
-    }
-  });
-
-  // Helpers called with the context/state alias (bounded depth): the read may
-  // live in a same-file pure function rather than the op/gate body itself.
-  if (depth >= 2) return;
-  const ctxNames = new Set([...aliases, "ctx", "rawCtx", "typed"]);
-  const file = fn.getSourceFile();
-  walk(fn, (n) => {
-    if (!ts.isCallExpression(n) || !ts.isIdentifier(n.expression)) return;
-    const callee = n.expression.text;
-    const passesContext = n.arguments.some(
-      (a) => ts.isIdentifier(a) && ctxNames.has(a.text)
-    );
-    if (!passesContext) return;
-    const helper = findFirst(
-      file,
-      (d): d is ts.FunctionDeclaration =>
-        ts.isFunctionDeclaration(d) && d.name?.text === callee
-    );
-    if (!helper) return;
-    collectStateReads(helper, reads, depth + 1);
-  });
-}
+import { unwrap, walk } from "./ast.ts";
 
 // Collect patch writes. A patch is passed to patchWorkflowInstanceState as an
 // inline literal, or via a one-level local built with assignments:
@@ -112,5 +50,3 @@ export function addLiteralKeys(literal: ObjectLiteral, out: Set<string>): void {
     else if (ts.isStringLiteral(prop.name)) out.add(prop.name.text);
   }
 }
-
-// ─── anchor resolution ─────────────────────────────────────────────────

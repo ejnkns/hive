@@ -2,7 +2,17 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { getAvailableActions } from "workflow-engine/get-available-actions";
 import type { RuntimeWorkflowInstanceState } from "workflow-engine/shared/workflow-instance-state";
-import { requirementsWorkflow } from "../../../../../presets/queen-bee/requirements-workflow.ts";
+import { queenBeeWorkflows } from "../compiled-presets.ts";
+
+// The requirements workflow, extracted from the rendered definition (the old
+// requirements-workflow.ts module was absorbed into the flow definition).
+const requirementsWorkflow = (() => {
+  const workflow = queenBeeWorkflows.find((wf) => wf.id === "requirements");
+  if (workflow === undefined) {
+    throw new Error("requirements workflow not found");
+  }
+  return workflow;
+})();
 
 function planningState(
   overrides: Partial<RuntimeWorkflowInstanceState>

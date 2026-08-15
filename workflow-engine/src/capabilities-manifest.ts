@@ -37,7 +37,7 @@ export const engineCapabilities = {
     {
       name: "completionOutput",
       description:
-        "An ai-task declares the structured fields it must return; the renderer generates a completion tool with those parameters, the agent calls it to end the task, and the parsed arguments become the task output (patch ops read output.<field>, gates compare output.<field>).",
+        "An ai-task declares the structured fields it must return; the compiler generates a completion tool with those parameters, the agent calls it to end the task, and the parsed arguments become the task output (patch ops read output.<field>, gates compare output.<field>).",
     },
     {
       name: "newAttempt",

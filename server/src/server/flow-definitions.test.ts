@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import Fastify, { type FastifyInstance } from "fastify";
-import { queenBeeFlow } from "../../../presets/queen-bee/flow.ts";
+import { registerBuiltinFlowDefinitions } from "../main/register-builtin-flow-definitions.ts";
 import { registerFlowApiRoutes } from "./flow-api-routes.ts";
 import {
   getRegisteredFlowDefinition,
@@ -20,29 +20,30 @@ import {
   resetFlowDefinitionsForTest,
   setDefinitionsBasePathForTest,
 } from "./flow-definitions.ts";
+import { queenBeeCompiled as queenBeeFlow } from "./test-support/compiled-presets.ts";
 
 const pingFlowSource = `
-import { defineWorkflow } from "workflow-engine/workflow-types";
+import type { FlowDefinition } from "workflow-engine/workflow-types";
 
-const wf = defineWorkflow({
-  id: "ping",
-  label: "Ping",
-  taskOutputs: {} as Record<string, never>,
-  states: [
-    { id: "idle", label: "Idle", category: "initial" },
-    { id: "done", label: "Done", category: "terminal" },
-  ],
-  initial: "idle",
-  terminalStates: ["done"],
-});
-
-export const flow = {
+export const flow: FlowDefinition = {
   id: "ping-flow",
   label: "Ping Flow",
   configSchema: [
     { key: "title", label: "Title", type: "string", required: true },
   ],
-  workflows: [wf],
+  workflows: [
+    {
+      id: "ping",
+      label: "Ping",
+      instanceState: [],
+      initial: "idle",
+      terminalStates: ["done"],
+      states: [
+        { id: "idle", label: "Idle", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
   edges: [],
 };
 `;
@@ -211,5 +212,43 @@ describe("flow definition library", () => {
     });
 
     assert.equal(response.statusCode, 404);
+  });
+
+  it("built-in (preset) definitions carry their module set like user flows", async () => {
+    resetFlowDefinitionsForTest();
+    await registerBuiltinFlowDefinitions();
+    const queenBee = getRegisteredFlowDefinition("queen-bee");
+    assert.ok(queenBee, "queen-bee must register as a built-in");
+    assert.equal(queenBee.builtIn, true);
+    assert.equal(queenBee.definition?.id, "queen-bee");
+    assert.ok(
+      typeof queenBee.source === "string" &&
+        queenBee.source.includes("export const flow: FlowDefinition = {") &&
+        queenBee.source.includes('id: "queen-bee"'),
+      "a preset's entry source is the pure-data definition module"
+    );
+    assert.ok(
+      queenBee.files?.["./cards/ops/build-review-package.ts"]?.includes(
+        "build_review_packageOperations"
+      ),
+      "a preset's referenced modules are captured as files"
+    );
+    assert.ok(
+      queenBee.files?.["./tools/update-requirements-draft.ts"] !== undefined,
+      "the preset's tools module is part of the file set"
+    );
+    const wayfinder = getRegisteredFlowDefinition("wayfinder");
+    assert.equal(wayfinder?.definition?.id, "wayfinder");
+    assert.ok(
+      typeof wayfinder?.source === "string" &&
+        wayfinder.source.includes("export const flow: FlowDefinition = {") &&
+        wayfinder.source.includes('id: "wayfinder"'),
+      "wayfinder's source is the pure-data definition module"
+    );
+    assert.ok(
+      wayfinder?.files?.["./charting/ops/settle-chart.ts"] !== undefined,
+      "wayfinder's referenced modules are captured as files"
+    );
+    resetFlowDefinitionsForTest();
   });
 });
