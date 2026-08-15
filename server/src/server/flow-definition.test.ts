@@ -219,13 +219,13 @@ describe("validateFlowDefinition", () => {
     const { definition } = parseDefinition(RESEARCH_MODULE);
     const errors = validateFlowDefinition(definition);
     assert.deepEqual(errors, []);
-    // One advisory: the extractor's task-output read lives in a referenced
-    // module, invisible to the analyzer (the module-set gate checks the
-    // referenced files; the definition's open parts are analyzed best-effort).
+    // No advisory: the search task's output IS read — by the referenced
+    // extractor (./extractors/parse.ts) and the file gate
+    // (./gates/approved.ts). Those reads live inside referenced modules,
+    // invisible to the analyzer, so it treats the workflow's file-backed
+    // readers as best-effort readers and stays quiet.
     const warnings = analyzeFlowDefinition(definition);
-    assert.deepEqual(warnings, [
-      'workflow "research" task "search" declares completionOutput but nothing reads its output — record it with a sibling patch op or an edge, or drop the declaration',
-    ]);
+    assert.deepEqual(warnings, []);
   });
 
   it("rejects an unknown transition target", () => {
@@ -237,6 +237,23 @@ describe("validateFlowDefinition", () => {
       errors.some((e) => e.message.includes("targets unknown state")),
       `the missing state is caught: ${errors.map((e) => e.message).join("; ")}`
     );
+  });
+
+  it("still flags a completionOutput nobody reads when no referenced file can", () => {
+    // No extract, no custom ops, no file gates, no edge transforms — the
+    // output is genuinely discarded, so the advisory must fire.
+    const { definition } = parseDefinition(DISCARDED_MODULE);
+    assert.deepEqual(analyzeFlowDefinition(definition), [
+      'workflow "items" task "research" declares completionOutput but nothing reads its output — record it with a sibling patch op or an edge, or drop the declaration',
+    ]);
+  });
+
+  it("treats referenced operations and edge transforms as best-effort readers", () => {
+    // A flow-level custom op used by a task and an edge transform from the
+    // workflow both read task outputs from inside referenced files — the
+    // advisory must stay quiet for the workflow.
+    const { definition } = parseDefinition(FILE_READER_MODULE);
+    assert.deepEqual(analyzeFlowDefinition(definition), []);
   });
 
   it("rejects a read of an undeclared instance-state field", () => {
@@ -394,6 +411,113 @@ export const flow: FlowDefinition = {
     );
   });
 });
+
+// A completionOutput task nobody reads, with no referenced files that could
+// read it: the discarded-output advisory must fire.
+const DISCARDED_MODULE = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "discardedFlow",
+  label: "Discarded Flow",
+  configSchema: [],
+  workflows: [
+    {
+      id: "items",
+      label: "Items",
+      instanceState: [{ field: "note", type: "string" }],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
+        {
+          id: "new",
+          label: "New",
+          category: "initial",
+          tasks: [
+            {
+              id: "research",
+              label: "Research",
+              role: "ai-task",
+              systemPrompt: "Research and call the completion tool.",
+              completionOutput: [{ field: "note", type: "string" }],
+            },
+          ],
+          autoTransitions: [
+            { to: "done", gate: { kind: "taskSuccess", task: "research" } },
+          ],
+        },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  actions: [
+    {
+      id: "add_item",
+      label: "Add an item",
+      variant: "primary",
+      createInstance: { workflowId: "items", fields: [] },
+    },
+  ],
+  edges: [],
+};
+`;
+
+// A workflow whose task outputs can be read from inside referenced files: a
+// flow-level custom operation used by a task (its executor receives
+// taskOutputs) and an edge transform from the workflow (the transform
+// receives the source task outputs).
+const FILE_READER_MODULE = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "fileReaderFlow",
+  label: "File Reader Flow",
+  configSchema: [],
+  operations: [{ id: "persist", ref: "./ops/persist.ts", writes: [] }],
+  workflows: [
+    {
+      id: "items",
+      label: "Items",
+      instanceState: [{ field: "note", type: "string" }],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
+        {
+          id: "new",
+          label: "New",
+          category: "initial",
+          tasks: [
+            {
+              id: "research",
+              label: "Research",
+              role: "ai-task",
+              systemPrompt: "Research and call the completion tool.",
+              completionOutput: [{ field: "note", type: "string" }],
+            },
+            {
+              id: "persistNote",
+              label: "Persist note",
+              role: "operation",
+              operations: ["persist"],
+            },
+          ],
+          autoTransitions: [
+            { to: "done", gate: { kind: "taskSuccess", task: "persistNote" } },
+          ],
+        },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  actions: [],
+  edges: [
+    {
+      fromWorkflow: "items",
+      fromStates: ["done"],
+      toWorkflow: "items",
+      transform: { ref: "./edges/to-note.ts", fields: ["note"] },
+    },
+  ],
+};
+`;
 
 // ─── definition expressiveness ───────────────────────────────────────
 

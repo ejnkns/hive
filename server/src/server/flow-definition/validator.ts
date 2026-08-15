@@ -1034,6 +1034,38 @@ function renderHintErrors(
   return errors;
 }
 
+// Whether a workflow's task outputs can be read from inside a referenced file:
+// operation executors and file gates receive a runtime context carrying
+// `taskOutputs`, an output extractor runs over the instance's task outputs,
+// and an edge transform from the workflow receives the source task outputs.
+// The analyzer only sees the declared parts, so for a workflow with any of
+// these file-backed readers the "nothing reads its output" advisory below is
+// uncertain and is skipped — the module-set gate checks the referenced files
+// themselves.
+function workflowHasFileBackedReaders(
+  wf: WorkflowSpec,
+  definition: FlowDefinition
+): boolean {
+  const customOpIds = new Set((definition.operations ?? []).map((o) => o.id));
+  for (const state of wf.states) {
+    for (const task of state.tasks ?? []) {
+      if (task.extract !== undefined) return true;
+      for (const op of task.operations ?? []) {
+        if (typeof op === "object" || customOpIds.has(op)) return true;
+      }
+      for (const transition of state.autoTransitions ?? []) {
+        if (transition.gate.kind === "file") return true;
+      }
+      for (const action of state.actions ?? []) {
+        if (action.gate?.kind === "file") return true;
+      }
+    }
+  }
+  return (definition.edges ?? []).some(
+    (edge) => edge.fromWorkflow === wf.id && edge.transform !== undefined
+  );
+}
+
 export function analyzeFlowDefinition(definition: FlowDefinition): string[] {
   const findings: string[] = [];
 
@@ -1082,6 +1114,7 @@ export function analyzeFlowDefinition(definition: FlowDefinition): string[] {
     if (edge.fanOut) readTaskIds.add(edge.fanOut.task);
   }
   for (const wf of definition.workflows) {
+    if (workflowHasFileBackedReaders(wf, definition)) continue;
     for (const state of wf.states) {
       for (const task of state.tasks ?? []) {
         if (
