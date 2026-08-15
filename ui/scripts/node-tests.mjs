@@ -27,9 +27,8 @@ function walk(dir) {
 
 walk(join(root, "src"));
 
-const result = spawnSync(
-  process.execPath,
-  ["--test", ...files],
-  { stdio: "inherit", cwd: root }
-);
+const result = spawnSync(process.execPath, ["--test", ...files], {
+  stdio: "inherit",
+  cwd: root,
+});
 process.exit(result.status ?? 1);

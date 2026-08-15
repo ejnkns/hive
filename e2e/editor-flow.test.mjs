@@ -948,11 +948,14 @@ test("hand-adding a ref to a saved definition shows its tab and saves the file",
   );
 
   // Write the referenced file by hand.
-  await page.locator(".tab-bar button", { hasText: "./tools/websearch.ts" }).click();
+  await page
+    .locator(".tab-bar button", { hasText: "./tools/websearch.ts" })
+    .click();
   await page.waitForFunction(
     () =>
-      document.querySelector("code-editor")?.shadowRoot?.querySelector("textarea") !==
-      null,
+      document
+        .querySelector("code-editor")
+        ?.shadowRoot?.querySelector("textarea") !== null,
     { timeout: 10_000 }
   );
   const wrote = await page.evaluate((content) => {

@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
+import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { connect } from "node:net";
 import { fileURLToPath } from "node:url";
 
 const repositoryPath = dirname(dirname(fileURLToPath(import.meta.url)));
