@@ -273,24 +273,25 @@ describe("flow-registry", () => {
     const persistence = getFlowPersistence();
     assert.ok(persistence);
     const source = `
-import { defineWorkflow } from "workflow-engine/workflow-types";
+import type { FlowDefinition } from "workflow-engine/workflow-types";
 
-const wf = defineWorkflow({
-  id: "wf",
-  label: "Workflow",
-  taskOutputs: {} as Record<string, never>,
-  states: [
-    { id: "idle", label: "Original Label", category: "initial" },
-    { id: "done", label: "Done", category: "terminal" },
-  ],
-  initial: "idle",
-  terminalStates: ["done"],
-});
-
-export const flow = {
+export const flow: FlowDefinition = {
   id: "snap-definition",
   label: "Snap Definition",
-  workflows: [wf],
+  configSchema: [],
+  workflows: [
+    {
+      id: "wf",
+      label: "Workflow",
+      instanceState: [],
+      initial: "idle",
+      terminalStates: ["done"],
+      states: [
+        { id: "idle", label: "Original Label", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
   edges: [],
 };
 `;
@@ -323,24 +324,25 @@ export const flow = {
     const persistence = getFlowPersistence();
     assert.ok(persistence);
     const source = `
-import { defineWorkflow } from "workflow-engine/workflow-types";
+import type { FlowDefinition } from "workflow-engine/workflow-types";
 
-const wf = defineWorkflow({
-  id: "wf",
-  label: "Workflow",
-  taskOutputs: {} as Record<string, never>,
-  states: [
-    { id: "idle", label: "Kept Label", category: "initial" },
-    { id: "done", label: "Done", category: "terminal" },
-  ],
-  initial: "idle",
-  terminalStates: ["done"],
-});
-
-export const flow = {
+export const flow: FlowDefinition = {
   id: "gone-definition",
   label: "Gone Definition",
-  workflows: [wf],
+  configSchema: [],
+  workflows: [
+    {
+      id: "wf",
+      label: "Workflow",
+      instanceState: [],
+      initial: "idle",
+      terminalStates: ["done"],
+      states: [
+        { id: "idle", label: "Kept Label", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
   edges: [],
 };
 `;

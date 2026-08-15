@@ -373,6 +373,26 @@ describe("loadDefinitionFromSource (a definition module validates → compiles �
       /validation failed/
     );
   });
+
+  it("rejects a closure-form module — the definition is the only artifact", async () => {
+    // The retired compiled shape: no instanceState anchor (workflows carry the
+    // erased workflowInstanceState), gates as closures. The loader must refuse
+    // it — only the pure-data definition is a valid module now.
+    const legacy = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "legacyFlow",
+  label: "Legacy Flow",
+  configSchema: [],
+  workflows: [{ id: "items", label: "Items" }],
+  actions: [],
+  edges: [],
+};`;
+    await assert.rejects(
+      loadDefinitionFromSource("definition-seam-legacy", legacy, "legacy", {}),
+      /not pure data/
+    );
+  });
 });
 
 // ─── definition expressiveness ───────────────────────────────────────

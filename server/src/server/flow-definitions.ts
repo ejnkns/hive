@@ -348,27 +348,27 @@ export async function loadDefinitionFromSource(
   refFiles?: Record<string, string>
 ): Promise<LoadedDefinition> {
   const form = await importDefinitionModule(runtimeSlug, source, refFiles);
-  if (isDefinitionData(form)) {
-    const dir =
-      refFiles !== undefined && Object.keys(refFiles).length > 0
-        ? writeModuleSetDir(runtimeSlug, { entry: source, files: refFiles })
-        : undefined;
-    return compileDataDefinition(form, flowId, dir);
+  // The definition is the only artifact: a module must be a pure-data
+  // definition. The closure-form compiled module (gates/transforms as
+  // closures, ops/tools by name) is retired — the authored surface, presets,
+  // and the gate all write the data form.
+  if (!isDefinitionData(form)) {
+    throw new Error(
+      "Definition module is not pure data — every workflow must declare instanceState (the closure-form module is no longer supported)"
+    );
   }
-  // Legacy compiled form (closure gates/transforms, ops/tools by name): the
-  // runtime contract is unchanged, so it registers as-is. The data module's
-  // FlowDefinition type is the backstop — a legacy module only reaches here
-  // because its shape predates the vocabulary.
-  return {
-    flow: { ...(form as CompiledFlowDefinition), id: flowId },
-  };
+  const dir =
+    refFiles !== undefined && Object.keys(refFiles).length > 0
+      ? writeModuleSetDir(runtimeSlug, { entry: source, files: refFiles })
+      : undefined;
+  return compileDataDefinition(form, flowId, dir);
 }
 
 // Whether an imported module's `flow` export is a pure-data definition (every
 // workflow declares instanceState — the data vocabulary's required anchor). A
-// legacy compiled workflow never carries instanceState (it uses the erased
-// workflowInstanceState anchor instead), so the check is unambiguous.
-export function isDefinitionData(form: unknown): form is FlowDefinition {
+// closure-form compiled workflow never carries instanceState (it uses the
+// erased workflowInstanceState anchor instead), so the check is unambiguous.
+function isDefinitionData(form: unknown): form is FlowDefinition {
   if (typeof form !== "object" || form === null) return false;
   const workflows = (form as { workflows?: unknown }).workflows;
   if (!Array.isArray(workflows) || workflows.length === 0) return false;

@@ -172,24 +172,25 @@ const editableDefinition = {
 } satisfies CompiledFlowDefinition;
 
 const flowDefinitionSource = `
-import { defineWorkflow } from "workflow-engine/workflow-types";
+import type { FlowDefinition } from "workflow-engine/workflow-types";
 
-const wf = defineWorkflow({
-  id: "custom",
-  label: "Custom",
-  taskOutputs: {} as Record<string, never>,
-  states: [
-    { id: "pending", label: "Pending", category: "initial" },
-    { id: "done", label: "Done", category: "terminal" },
-  ],
-  initial: "pending",
-  terminalStates: ["done"],
-});
-
-export const flow = {
+export const flow: FlowDefinition = {
   id: "custom-flow",
   label: "Custom Flow",
-  workflows: [wf],
+  configSchema: [],
+  workflows: [
+    {
+      id: "custom",
+      label: "Custom",
+      instanceState: [],
+      initial: "pending",
+      terminalStates: ["done"],
+      states: [
+        { id: "pending", label: "Pending", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
   edges: [],
 };
 `;
@@ -223,24 +224,25 @@ export const flow: FlowDefinition = {
 `;
 
 const componentFlowSource = `
-import { defineWorkflow } from "workflow-engine/workflow-types";
+import type { FlowDefinition } from "workflow-engine/workflow-types";
 
-const wf = defineWorkflow({
-  id: "custom",
-  label: "Custom",
-  taskOutputs: {} as Record<string, never>,
-  states: [
-    { id: "pending", label: "Pending", category: "initial" },
-    { id: "done", label: "Done", category: "terminal" },
-  ],
-  initial: "pending",
-  terminalStates: ["done"],
-});
-
-export const flow = {
+export const flow: FlowDefinition = {
   id: "component-flow",
   label: "Component Flow",
-  workflows: [wf],
+  configSchema: [],
+  workflows: [
+    {
+      id: "custom",
+      label: "Custom",
+      instanceState: [],
+      initial: "pending",
+      terminalStates: ["done"],
+      states: [
+        { id: "pending", label: "Pending", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
   edges: [],
   ui: {
     components: {
@@ -1522,7 +1524,27 @@ export const flow: FlowDefinition = {
         url: "/api/flows/definitions",
         body: {
           name: "Files Flow",
-          source: "export const flow = { id: 'files-flow' };",
+          source: `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "files-flow",
+  label: "Files Flow",
+  configSchema: [],
+  workflows: [
+    {
+      id: "items",
+      label: "Items",
+      instanceState: [],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
+        { id: "new", label: "New", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  edges: [],
+};`,
           files: { "./gates/approved.ts": "export const ok = true;\n" },
         },
       });

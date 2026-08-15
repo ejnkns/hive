@@ -2,7 +2,9 @@
  * unwrapping, walking) used by every extraction pass. */
 
 import ts from "typescript";
-import type { SchemaCheckFile } from "./report-types.ts";
+
+// The minimal file input the AST helpers parse: a path + source text.
+export type SchemaCheckFile = { path: string; source: string };
 
 export type ObjectLiteral = ts.ObjectLiteralExpression;
 

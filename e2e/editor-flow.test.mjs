@@ -480,26 +480,25 @@ const EDITED_TOOL =
   "];\n";
 
 // A gate-clean source for the existing-definition revision scenario.
-const REVISE_SOURCE = `import { defineWorkflow } from "workflow-engine/workflow-types";
+const REVISE_SOURCE = `import type { FlowDefinition } from "workflow-engine/workflow-types";
 
-const wf = defineWorkflow({
-  id: "review",
-  label: "Review",
-  taskOutputs: {} as Record<string, never>,
-  workflowInstanceState: {} as Record<string, unknown>,
-  states: [
-    { id: "new", label: "New", category: "initial" },
-    { id: "done", label: "Done", category: "terminal" },
-  ],
-  initial: "new",
-  terminalStates: ["done"],
-});
-
-export const flow = {
+export const flow: FlowDefinition = {
   id: "review-flow",
   label: "Review Flow",
   configSchema: [],
-  workflows: [wf],
+  workflows: [
+    {
+      id: "review",
+      label: "Review",
+      instanceState: [],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
+        { id: "new", label: "New", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
   edges: [],
 };
 `;
@@ -824,7 +823,27 @@ test("revising an existing definition shows its referenced files as editable tab
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: "Tab Seed",
-        source: "export const flow = { id: 'tab-seed' };",
+        source: `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "tab-seed",
+  label: "Tab Seed",
+  configSchema: [],
+  workflows: [
+    {
+      id: "items",
+      label: "Items",
+      instanceState: [],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
+        { id: "new", label: "New", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  edges: [],
+};`,
         files: { "./gates/approved.ts": "export const ok = true;\n" },
       }),
     });

@@ -1,10 +1,9 @@
-/** @private — the definition parser's literal readers (relocated from the
- * reverse renderer): find the flow object literal in a definition module and
- * read its scalar values, config fields, board columns, display fields,
- * instance-state declarations, and the vocabulary objects (gates, values,
- * tasks, edges) as data. Everything here is a plain read of the pure-data
- * module — no anchors, no type aliases, no generated machinery to reverse
- * (the definition declares them directly). */
+/** @private — the definition parser's literal readers: find the flow object
+ * literal in a definition module and read its scalar values, config fields,
+ * board columns, display fields, instance-state declarations, and the
+ * vocabulary objects (gates, values, tasks, edges) as data. Everything here is
+ * a plain read of the pure-data module — no anchors, no type aliases, no
+ * generated machinery to reverse (the definition declares them directly). */
 
 import ts from "typescript";
 import type {

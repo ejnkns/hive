@@ -23,27 +23,27 @@ import {
 import { queenBeeCompiled as queenBeeFlow } from "./test-support/compiled-presets.ts";
 
 const pingFlowSource = `
-import { defineWorkflow } from "workflow-engine/workflow-types";
+import type { FlowDefinition } from "workflow-engine/workflow-types";
 
-const wf = defineWorkflow({
-  id: "ping",
-  label: "Ping",
-  taskOutputs: {} as Record<string, never>,
-  states: [
-    { id: "idle", label: "Idle", category: "initial" },
-    { id: "done", label: "Done", category: "terminal" },
-  ],
-  initial: "idle",
-  terminalStates: ["done"],
-});
-
-export const flow = {
+export const flow: FlowDefinition = {
   id: "ping-flow",
   label: "Ping Flow",
   configSchema: [
     { key: "title", label: "Title", type: "string", required: true },
   ],
-  workflows: [wf],
+  workflows: [
+    {
+      id: "ping",
+      label: "Ping",
+      instanceState: [],
+      initial: "idle",
+      terminalStates: ["done"],
+      states: [
+        { id: "idle", label: "Idle", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
   edges: [],
 };
 `;
