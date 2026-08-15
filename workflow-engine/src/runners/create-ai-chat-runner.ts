@@ -2,54 +2,30 @@
 
 import type { ChatMessage } from "../shared/chat-message.ts";
 import type { TaskDefinition, TaskRunner } from "../task-runner.ts";
-import type { ModelCallStatus } from "../workflow-types.ts";
 import {
+  type AgentModelCaller,
+  type AgentRunnerConfig,
   type AgentTurnBehavior,
   runAgentLoop,
   safeParseArguments,
-  seedTaskInput,
+  seedTranscript,
 } from "./agent-loop.ts";
-import type { ToolCall, ToolDefinition, ToolExecutor } from "./tool-types.ts";
 
-export type AiChatModelCaller = (
-  systemPrompt: string,
-  messages: ChatMessage[],
-  tools: ToolDefinition[],
-  signal: AbortSignal,
-  // Live model-call progress (routing → dispatched → thinking → streaming →
-  // complete), reported by the caller into the running task context.
-  onStatus?: (status: ModelCallStatus) => void
-) => Promise<{ content: string; toolCalls?: ToolCall[] }>;
+// The chat model-caller contract is the shared agent-loop caller; the alias
+// keeps the public runner surface stable.
+export type AiChatModelCaller = AgentModelCaller;
 
 // A chat session is a long multi-turn exchange; the budget guards against an
 // agent that never signals completion.
 const MAX_TURNS = 200;
 
-export type AiChatRunnerConfig = {
-  modelCaller: AiChatModelCaller;
-  toolDefinitions: Record<string, ToolDefinition>;
-  toolExecutors: Record<string, ToolExecutor>;
-  completionTool?: string;
+// The ai-chat runner adds the session concerns to the shared AI-runner
+// capabilities.
+export type AiChatRunnerConfig = AgentRunnerConfig & {
   completionSignal?: string;
-  basePath?: string;
-  instanceId?: string;
-  patchWorkflowInstanceState?: (patch: Record<string, unknown>) => void;
-  // Live model-call progress into the running task context (see ModelCallStatus).
-  patchRunningTaskStatus?: (status: ModelCallStatus) => void;
-  // The instance's domain data, resolved against by @instance: workspacePath
-  // refs (e.g. "@instance:worktreePath"). A live getter, so tool/ref reads
-  // see the current state (patches by earlier turns, the flow, or the
-  // instance-state API).
-  workflowInstanceState?: () => Record<string, unknown>;
   // Syncs the live conversation into the instance state at each turn boundary
   // so observers (the flow snapshot push) render the transcript as it grows.
   patchRunningTaskMessages?: (messages: ChatMessage[]) => void;
-  // The create_instance capability, offered to the model when the task declares
-  // the tool. Takes domain state and returns the new instance id.
-  createWorkflowInstance?: (
-    workflowId: string,
-    instanceState?: Record<string, unknown>
-  ) => { id: string };
 };
 
 export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
@@ -65,12 +41,8 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
 
   return {
     async run(task: TaskDefinition) {
-      messages = [{ role: "system", content: task.systemPrompt ?? "" }];
-      seedTaskInput(
-        messages,
-        config.workflowInstanceState?.(),
-        task.inputFromInstanceState
-      );
+      messages = [];
+      seedTranscript(messages, task, config.workflowInstanceState?.());
       config.patchRunningTaskMessages?.(messages);
       if (task.startOnUserInput) {
         // Wait for the first user message before calling the model, so a
@@ -116,20 +88,10 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
 
       return {
         output: await runAgentLoop(task, messages, {
+          ...config,
           signal: abortController.signal,
-          modelCaller: config.modelCaller,
-          toolDefinitions: config.toolDefinitions,
-          toolExecutors: config.toolExecutors,
           behavior,
           maxIterations: MAX_TURNS,
-          completionTool: config.completionTool,
-          completionSignal: config.completionSignal,
-          basePath: config.basePath,
-          instanceId: config.instanceId,
-          patchWorkflowInstanceState: config.patchWorkflowInstanceState,
-          patchRunningTaskStatus: config.patchRunningTaskStatus,
-          workflowInstanceState: config.workflowInstanceState,
-          createWorkflowInstance: config.createWorkflowInstance,
         }),
       };
     },

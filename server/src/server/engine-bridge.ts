@@ -250,10 +250,12 @@ function createModelCaller(_engineTools: ToolDefinition[]) {
     signal?: AbortSignal,
     onStatus?: (status: ModelCallStatus) => void
   ): Promise<{ content: string; toolCalls?: ToolCall[] }> => {
-    const allMessages = [
-      { role: "system", content: systemPrompt } as const,
-      ...messages,
-    ];
+    const allMessages =
+      // The transcript is already self-contained (both AI runners seed the
+      // system message); prepending again would double it for the model.
+      messages[0]?.role === "system"
+        ? messages
+        : [{ role: "system", content: systemPrompt } as const, ...messages];
     const result = await handleChatCompletion(
       {
         messages: allMessages,

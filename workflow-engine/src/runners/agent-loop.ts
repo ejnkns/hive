@@ -73,22 +73,28 @@ export type AgentTurnBehavior = {
   >;
 };
 
-export type AgentLoopConfig = {
+export type AgentLoopConfig = AgentRunnerConfig & {
   signal: AbortSignal;
+  behavior: AgentTurnBehavior;
+  maxIterations: number;
+  completionSignal?: string;
+};
+
+// The capabilities every AI runner (and the loop itself) needs — declared
+// once so a new capability is threaded through one type, not three. The two
+// runner configs (create-ai-task-runner / create-ai-chat-runner) and
+// `AgentLoopConfig` all derive from this; a capability added here is required
+// at every call site by the compiler.
+export type AgentRunnerConfig = {
   modelCaller: AgentModelCaller;
   toolDefinitions: Record<string, ToolDefinition>;
   toolExecutors: Record<string, ToolExecutor>;
-  behavior: AgentTurnBehavior;
-  maxIterations: number;
   completionTool?: string;
-  completionSignal?: string;
   basePath?: string;
   instanceId?: string;
   patchWorkflowInstanceState?: (patch: Record<string, unknown>) => void;
   // Live model-call progress into the running task context (see ModelCallStatus).
   patchRunningTaskStatus?: (status: ModelCallStatus) => void;
-  // The instance's domain data, resolved against by @instance: workspacePath
-  // refs (e.g. "@instance:worktreePath").
   // The instance's domain data, resolved against by @instance: workspacePath
   // refs (e.g. "@instance:worktreePath"). A live getter, so tool/ref reads
   // see the current state (patches by earlier turns, the flow, or the
@@ -102,6 +108,49 @@ export type AgentLoopConfig = {
   ) => { id: string };
 };
 
+// Seeds a transcript with the system prompt + the task's instance-state input
+// (the first user message), uniformly for both runners — the transcript is
+// self-contained (system, injected input, then the turns), so the shapes can't
+// diverge when live sync or rendering is added.
+export function seedTranscript(
+  messages: ChatMessage[],
+  task: TaskDefinition,
+  instanceState: Record<string, unknown> | undefined
+): void {
+  messages.push({ role: "system", content: task.systemPrompt ?? "" });
+  seedTaskInput(messages, instanceState, task.inputFromInstanceState);
+}
+
+// The pre-flight guard shared by both AI runners: a task with no system prompt
+// and no input has nothing to work on. Calling the model anyway spends
+// provider calls on an effectively empty prompt (`[{role:"system",content:""}]`)
+// and can wedge the instance forever on a stream that never completes — e.g.
+// an auto-run task on an instance created with an empty payload, restarted on
+// every server boot. Fail fast so taskError gates route the instance to an
+// error/needs-review state instead of a zombie task. A declared input is the
+// same contract one level up: a task that says inputFromInstanceState must
+// actually receive it (an instance created without it has nothing to work on).
+function assertWorkableInput(
+  messages: ChatMessage[],
+  task: TaskDefinition
+): void {
+  const declaredInputMissing =
+    task.inputFromInstanceState !== undefined &&
+    !messages.some((message) => message.role === "user");
+  if (declaredInputMissing) {
+    throw new Error(
+      `task "${task.id}" declares inputFromInstanceState "${task.inputFromInstanceState}" but the instance was created without it — seed the instance with that field`
+    );
+  }
+  const hasPrompt = (task.systemPrompt ?? "").trim() !== "";
+  const hasInput = messages.some((message) => message.content.trim() !== "");
+  if (!hasPrompt && !hasInput) {
+    throw new Error(
+      `task "${task.id}" has no system prompt and no input to work on — declare a systemPrompt or inputFromInstanceState`
+    );
+  }
+}
+
 // Runs the agent loop to completion (or budget exhaustion). `messages` is the
 // runner-seeded transcript (system prompt, injected instance-state input);
 // the loop appends assistant and tool turns to it. Returns the task output
@@ -111,6 +160,7 @@ export async function runAgentLoop(
   messages: ChatMessage[],
   config: AgentLoopConfig
 ): Promise<unknown> {
+  assertWorkableInput(messages, task);
   const workspacePath = resolveWorkspacePath(
     task.workspacePath,
     config.workflowInstanceState?.(),

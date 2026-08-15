@@ -236,9 +236,10 @@ describe("createAiTaskRunner", () => {
       inputFromInstanceState: "requirementsDraft",
     });
 
-    assert.equal(seenMessages.length, 1);
-    assert.equal(seenMessages[0]?.role, "user");
-    assert.equal(seenMessages[0]?.content, "# The requirements");
+    assert.equal(seenMessages.length, 2);
+    assert.equal(seenMessages[0]?.role, "system");
+    assert.equal(seenMessages[1]?.role, "user");
+    assert.equal(seenMessages[1]?.content, "# The requirements");
   });
 
   it("rejects a declared input missing from instance state before calling the model", async () => {
@@ -334,5 +335,23 @@ describe("createAiTaskRunner", () => {
       ...dummyTask,
     });
     assert.equal((result.output as { content: string }).content, "Hello!");
+  });
+
+  it("returns a self-contained transcript (system first) when the agent finishes without a tool call", async () => {
+    const runner = createAiTaskRunner({
+      modelCaller: mockCaller([{ content: "Finished." }]),
+      toolDefinitions: {},
+      toolExecutors: {},
+      workflowInstanceState: () => ({}),
+    });
+
+    const result = await runner.run({ ...dummyTask });
+    const output = result.output as {
+      content: string;
+      messages: ChatMessage[];
+    };
+    assert.equal(output.content, "Finished.");
+    assert.equal(output.messages[0]?.role, "system");
+    assert.equal(output.messages[0]?.content, "You are a helpful assistant.");
   });
 });

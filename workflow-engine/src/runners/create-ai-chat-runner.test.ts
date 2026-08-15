@@ -526,4 +526,59 @@ describe("createAiChatRunner", () => {
       "complete",
     ]);
   });
+
+  it("fails fast without calling the model when an auto-run chat has no prompt and no input", async () => {
+    let calls = 0;
+    const runner = createAiChatRunner({
+      modelCaller: async () => {
+        calls++;
+        return { content: "Hello!" };
+      },
+      toolDefinitions: {},
+      toolExecutors: {},
+      workflowInstanceState: () => ({}),
+    });
+
+    await assert.rejects(
+      () =>
+        runner.run({
+          id: "zombie-chat",
+          label: "Zombie chat",
+          role: "ai-chat",
+          startOnUserInput: false,
+        }),
+      /no system prompt and no input/
+    );
+    assert.equal(
+      calls,
+      0,
+      "an empty auto-run chat must not spend a model call (zombie guard shared with ai-task)"
+    );
+  });
+
+  it("fails fast when a chat declares an input the instance was created without", async () => {
+    let calls = 0;
+    const runner = createAiChatRunner({
+      modelCaller: async () => {
+        calls++;
+        return { content: "Hello!" };
+      },
+      toolDefinitions: {},
+      toolExecutors: {},
+      workflowInstanceState: () => ({}),
+    });
+
+    await assert.rejects(
+      () =>
+        runner.run({
+          id: "triage-chat",
+          label: "Triage chat",
+          role: "ai-chat",
+          systemPrompt: "Triage the ticket.",
+          inputFromInstanceState: "description",
+        }),
+      /declares inputFromInstanceState .description. but the instance was created without it/
+    );
+    assert.equal(calls, 0, "no model call for a missing declared input");
+  });
 });
