@@ -34,6 +34,7 @@ A lightweight proxy daemon with agent routing and automatic failover, hiding the
 - Circuit breaker: failing providers returning `429`/`503`/`401` are temporarily taken out of rotation
 - Feature discovery: learns which `provider:model` nodes don't support features like `tools` or `response_format`, stops sending incompatible requests
 - Failover: on failure, transparently retries the next best `provider:model` node
+- Manual override: pin a `provider:model` from the dashboard header; the pinned node is tried first, falling through to auto-routing on failure
 
 ### Telemetry
 
@@ -41,14 +42,27 @@ A lightweight proxy daemon with agent routing and automatic failover, hiding the
 - Scoring uses a 100-entry, 24h window per node with exponential TTFT decay and severity-weighted error penalties (auth 2.5x, server 1.0x, rate-limit 0.5x)
 - Providers recover score gradually as successful requests accumulate (30min half-life decay)
 - Truncated streams (missing `[DONE]` / `finish_reason`) are counted as failures, not successes
+- Score composition is a weighted additive sum — `HIVE_ROUTING_STRATEGY` selects the weights (`balanced` default, `latency`, `quality`); `HIVE_CONTEXT_WINDOW_WEIGHT` (0–1, default 0) blends in a context-window bonus; `HIVE_MIN_TOKEN_TELEMETRY` (default 200) skips short prompts when benchmarking
+- Quality scoring tracks tool-call success, refusals, content-filter rate, and finish reasons
+- A heartbeat probe (`max_tokens: 1`) every 5 minutes keeps providers warm and surfaces early failures
 
 ### Orchestrator
 
 An agentic tool-calling loop that runs server-side, routing each iteration through the same provider selection pipeline. Built-in tools include file read/write and command execution, with automatic failover across providers. Results stream live to a collapsible UI panel.
 
+- Edit-loop detection: before routing, repeated edit attempts on the same file inject a "read the file first" correction
+
 ### Browser Dashboard
 
 A lightweight Web Components dashboard is served at `http://localhost:5173` showing live provider states, stability scores, activity metrics, and transient conversation history.
+
+- Session identity: `x-session-id` / `x-session-affinity` / `x-parent-session-id` headers, falling back to a SHA-256 fingerprint of the system + first user message
+- Live pipeline visualization and three-state session cards (latest request / full-expanded / sub-request expanded)
+
+### API
+
+- `/api-spec` — interactive API reference (`static/api-spec.html`)
+- `/api-spec.yaml` — raw OpenAPI spec
 
 ## Client Integration
 
