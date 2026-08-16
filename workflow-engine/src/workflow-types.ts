@@ -110,6 +110,7 @@ export type {
   FlowComponentModule,
   FlowComponentRegistrations,
   InstanceComponentProps,
+  WorkflowViewProps,
 } from "./workflow-types/served-components.ts";
 export type {
   RuntimeStateDef,

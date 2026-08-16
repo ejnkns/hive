@@ -1350,6 +1350,22 @@ export function analyzeFlowDefinition(definition: FlowDefinition): string[] {
     );
   }
 
+  // 4. A workflowComponent naming no declared served component id: the
+  //    workflow-instances section degrades to the generic grouped board/list.
+  //    Advisory, not an error — the fallback is graceful (same as an unknown
+  //    instanceComponent or render kind).
+  const declaredComponentIds = new Set(
+    Object.keys(definition.ui?.components ?? {})
+  );
+  for (const wf of definition.workflows) {
+    const componentId = wf.ui?.workflowComponent;
+    if (componentId !== undefined && !declaredComponentIds.has(componentId)) {
+      findings.push(
+        `workflow "${wf.id}" declares workflowComponent "${componentId}" which is not declared in the flow's ui.components — the workflow-instances section falls back to the generic grouped board/list`
+      );
+    }
+  }
+
   return findings;
 }
 

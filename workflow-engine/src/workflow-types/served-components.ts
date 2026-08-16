@@ -58,3 +58,27 @@ export type InstanceComponentProps = {
   // edit affordance (or handle it themselves).
   onPatchState?(values: Record<string, unknown>): void;
 };
+
+// The props contract a workflow-level custom view implements
+// (WorkflowConfig.ui.workflowComponent): a component rendering a workflow's
+// ENTIRE workflow-instances section (replacing the generic grouped board/list
+// content — the section header and the flow-instance page furniture stay
+// standard). The view may compose the canonical board under custom chrome via
+// the <workflow-board-content> element.
+export type WorkflowViewProps = {
+  workflowDef: WorkflowDefResponse;
+  // Full workflow-instance state: fields, task outputs (incl. chat
+  // transcripts), availableActions, workflowSummary counts.
+  entries: WorkflowInstanceEntry[];
+  customKinds: readonly CustomRenderKind[];
+  // The existing hive-action / hive-send-message callbacks, scoped to a
+  // workflow instance id.
+  onAction(
+    workflowInstanceId: string,
+    actionId: string,
+    payload?: Record<string, unknown>
+  ): void;
+  onSendMessage(workflowInstanceId: string, content: string): Promise<void>;
+  // NEW hive-select: the shell routes to the workflow-instance page.
+  onSelect(workflowInstanceId: string): void;
+};

@@ -167,3 +167,43 @@ describe("parseDefinition ui.components", () => {
     });
   });
 });
+
+describe("parseDefinition workflow ui", () => {
+  it("parses ui.workflowComponent (the workflow-level custom view id)", () => {
+    const { definition, findings } = parseDefinition(
+      `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "wfUiFlow",
+  label: "Wf Ui Flow",
+  configSchema: [],
+  workflows: [
+    {
+      id: "tickets",
+      label: "Tickets",
+      instanceState: [],
+      initial: "new",
+      terminalStates: ["done"],
+      ui: {
+        view: "board",
+        instanceComponent: "ticket-card",
+        workflowComponent: "frontier-board",
+      },
+      states: [
+        { id: "new", label: "New", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  edges: [],
+};
+`
+    );
+    assert.deepEqual(findings, []);
+    assert.deepEqual(definition.workflows[0]?.ui, {
+      view: "board",
+      instanceComponent: "ticket-card",
+      workflowComponent: "frontier-board",
+    });
+  });
+});

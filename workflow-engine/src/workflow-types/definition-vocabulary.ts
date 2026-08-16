@@ -254,6 +254,12 @@ export type WorkflowSpec = {
     // A served component id (a key of the flow's `ui.components`) that renders
     // this workflow's instances instead of the default card.
     instanceComponent?: string;
+    // A served component id (a key of the flow's `ui.components`) that renders
+    // this workflow's ENTIRE workflow-instances section (replacing the generic
+    // grouped board/list). The workflow-component contract is the same
+    // default-export factory; the section renderer resolves it through the
+    // component registry and falls back to the grouped board when unknown.
+    workflowComponent?: string;
     // E3: group the board by the distinct values of a declared instance-state
     // field — one column per value plus an "uncategorized" column for
     // instances missing the value. A generic partition: the engine/UI never

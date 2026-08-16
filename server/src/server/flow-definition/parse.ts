@@ -304,6 +304,9 @@ function readWorkflows(
       const instanceComponent = readString(ui, "instanceComponent");
       if (instanceComponent !== undefined)
         workflowUi.instanceComponent = instanceComponent;
+      const workflowComponent = readString(ui, "workflowComponent");
+      if (workflowComponent !== undefined)
+        workflowUi.workflowComponent = workflowComponent;
       const columns = readBoardColumns(
         readArray(ui, "columns"),
         `${wfPath}.ui.columns`,

@@ -304,6 +304,29 @@ describe("compileFlowDefinition", () => {
     assert.equal(compiled.actions?.[0]?.createInstance?.workflowId, "items");
   });
 
+  it("projects ui.workflowComponent into the workflow response ui", () => {
+    const withView: FlowDefinition = {
+      ...reviewFlow,
+      workflows: [
+        {
+          ...reviewFlow.workflows[0],
+          ui: {
+            view: "board",
+            instanceComponent: "ticket-card",
+            workflowComponent: "frontier-board",
+          },
+        },
+      ],
+    };
+    const compiled = compileFlowDefinition(withView, makeResolver());
+    const ui = compiled.workflows[0]?.ui;
+    assert.deepEqual(ui, {
+      view: "board",
+      instanceComponent: "ticket-card",
+      workflowComponent: "frontier-board",
+    });
+  });
+
   it("compiles gates to closures that evaluate against the runtime context", () => {
     const compiled = compileFlowDefinition(researchFlow, makeResolver());
     const state = compiled.workflows[0]?.states.find(

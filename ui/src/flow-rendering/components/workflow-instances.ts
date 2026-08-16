@@ -8,25 +8,19 @@ import type { CustomRenderKind } from "workflow-engine/workflow-types";
 import { getComponentRenderer } from "../renderer-registry.ts";
 import "./dynamic-element-host.ts";
 import "./flow-overview.ts";
-import { WorkflowInstanceCard } from "./workflow-instance-card.ts";
+import {
+  boardContentStyles,
+  renderBoardContent,
+} from "./workflow-instances/board-content.ts";
 import { computeFlowOverview } from "./workflow-instances/flow-overview.ts";
-import { groupInstancesByColumns } from "./workflow-instances/group-by-columns.ts";
-import { groupInstancesByField } from "./workflow-instances/group-by-field.ts";
-import { groupInstancesByState } from "./workflow-instances/group-by-state.ts";
-
-// The structural column shape the grouping modules return; declared locally
-// so the renderer does not import a type from a private grouping module.
-type Column = {
-  id: string;
-  label: string;
-  category: string;
-  entries: WorkflowInstanceEntry[];
-};
 
 // The grouped per-workflow render: one section per workflow definition, each a
 // state-column board (a derived view — instances grouped by currentState in the
 // workflow's declared state order), with flow-declared custom instance
-// components replacing the default card where one is registered.
+// components replacing the default card where one is registered. A workflow
+// declaring a workflow-level custom view (def.ui.workflowComponent — a served
+// component rendering the entire workflow-instances section) replaces the
+// middle content; the section header and page furniture stay standard.
 export class WorkflowInstances extends LitElement {
   static properties = {
     flowId: { type: String },
@@ -35,146 +29,80 @@ export class WorkflowInstances extends LitElement {
     customKinds: { attribute: false },
   };
 
-  static styles = css`
-    .flow {
-      margin-bottom: 1rem;
-    }
-
-    .flow:last-child {
-      margin-bottom: 0;
-    }
-
-    .flow-header {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.375rem 0 0.5rem;
-      border-bottom: 1px solid var(--border);
-      background: transparent;
-      border-top: none;
-      border-left: none;
-      border-right: none;
-      width: 100%;
-      text-align: left;
-      cursor: pointer;
-      font: inherit;
-    }
-
-    .flow-chevron {
-      display: inline-block;
-      width: 0;
-      height: 0;
-      border-left: 4px solid transparent;
-      border-right: 4px solid transparent;
-      border-top: 5px solid var(--muted);
-      transition: transform 0.15s;
-    }
-
-    .flow-chevron[data-collapsed="true"] {
-      transform: rotate(-90deg);
-    }
-
-    .flow-label {
-      font-size: 0.6875rem;
-      font-weight: 700;
-      color: var(--text);
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-    }
-
-    .flow-count {
-      font-size: 0.5625rem;
-      color: var(--muted);
-      font-family: monospace;
-    }
-
-    .running-pulse {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--warning);
-      animation: live-pulse 1.6s ease-in-out infinite;
-    }
-
-    @keyframes live-pulse {
-      0%,
-      100% {
-        opacity: 1;
+  static styles = [
+    css`
+      .flow {
+        margin-bottom: 1rem;
       }
-      50% {
-        opacity: 0.3;
+
+      .flow:last-child {
+        margin-bottom: 0;
       }
-    }
 
-    .flow-board {
-      display: flex;
-      align-items: flex-start;
-      gap: 0.625rem;
-      overflow-x: auto;
-      padding-top: 0.625rem;
-    }
+      .flow-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.375rem 0 0.5rem;
+        border-bottom: 1px solid var(--border);
+        background: transparent;
+        border-top: none;
+        border-left: none;
+        border-right: none;
+        width: 100%;
+        text-align: left;
+        cursor: pointer;
+        font: inherit;
+      }
 
-    .flow-list {
-      display: flex;
-      flex-direction: column;
-      gap: 0.625rem;
-      padding-top: 0.625rem;
-    }
+      .flow-chevron {
+        display: inline-block;
+        width: 0;
+        height: 0;
+        border-left: 4px solid transparent;
+        border-right: 4px solid transparent;
+        border-top: 5px solid var(--muted);
+        transition: transform 0.15s;
+      }
 
-    .board-column {
-      flex: 1 1 0;
-      min-width: 200px;
-      max-width: 300px;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
+      .flow-chevron[data-collapsed="true"] {
+        transform: rotate(-90deg);
+      }
 
-    .board-column[data-empty="true"] {
-      min-width: 150px;
-      opacity: 0.45;
-    }
+      .flow-label {
+        font-size: 0.6875rem;
+        font-weight: 700;
+        color: var(--text);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
 
-    .column-header {
-      display: flex;
-      align-items: center;
-      gap: 0.375rem;
-      padding: 0.375rem 0.5rem;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: var(--bg);
-      font-size: 0.5625rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-    }
+      .flow-count {
+        font-size: 0.5625rem;
+        color: var(--muted);
+        font-family: monospace;
+      }
 
-    .column-header[data-category="initial"] {
-      color: var(--muted);
-    }
+      .running-pulse {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--warning);
+        animation: live-pulse 1.6s ease-in-out infinite;
+      }
 
-    .column-header[data-category="terminal"] {
-      color: var(--success);
-      border-color: var(--success);
-    }
-
-    .column-header[data-category="error"] {
-      color: var(--error);
-      border-color: var(--error);
-    }
-
-    .column-count {
-      margin-left: auto;
-      color: var(--muted);
-      font-family: monospace;
-    }
-
-    .column-body {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-  `;
+      @keyframes live-pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.3;
+        }
+      }
+    `,
+    boardContentStyles,
+  ];
 
   flowId = "";
   workflowDefs: WorkflowDefResponse[] = [];
@@ -204,8 +132,6 @@ export class WorkflowInstances extends LitElement {
           if (def === undefined) return nothing;
           const collapsed = this.isCollapsed(workflowId);
           const running = entries.some((entry) => entry.state.hasRunningTask);
-          const flatView =
-            def.ui?.view !== undefined && def.ui.view !== "board";
           return html`<div class="flow" data-workflow-id=${workflowId}>
             <button
               class="flow-header"
@@ -221,27 +147,60 @@ export class WorkflowInstances extends LitElement {
               ${entries.length > 1 ? html`<span class="flow-count">${entries.length} workflow instances</span>` : nothing}
               ${running ? html`<span class="running-pulse"></span>` : nothing}
             </button>
-            ${
-              collapsed
-                ? nothing
-                : flatView
-                  ? html`<div class="flow-list">
-                      ${repeat(
-                        entries,
-                        (entry) => entry.id,
-                        (entry) => this.renderInstance(def, entry)
-                      )}
-                    </div>`
-                  : html`<div class="flow-board">
-                      ${this.groupBoard(def, entries).map((column) =>
-                        this.renderColumn(def, column)
-                      )}
-                    </div>`
-            }
+            ${collapsed ? nothing : this.renderSectionContent(def, entries)}
           </div>`;
         }
       )}
     `;
+  }
+
+  // The workflow-instances section content: the registered workflow-level
+  // custom view when the definition declares one (registry-resolved — an
+  // unknown or failed component falls back to the canonical board), otherwise
+  // the canonical grouped board/list.
+  private renderSectionContent(
+    def: WorkflowDefResponse,
+    entries: WorkflowInstanceEntry[]
+  ) {
+    const customView = getComponentRenderer(def.ui?.workflowComponent);
+    if (customView !== undefined) {
+      return html`<dynamic-element-host
+        .elementClass=${customView}
+        .props=${{
+          workflowDef: def,
+          entries,
+          customKinds: this.customKinds,
+          onAction: (
+            instanceId: string,
+            actionId: string,
+            payload?: Record<string, unknown>
+          ) => {
+            this.emitAction(instanceId, actionId, payload);
+          },
+          onSendMessage: (instanceId: string, content: string) => {
+            this.emitSendMessage(instanceId, content);
+          },
+          onSelect: (instanceId: string) => {
+            this.emitSelect(instanceId);
+          },
+        }}
+      ></dynamic-element-host>`;
+    }
+    return renderBoardContent(def, entries, this.customKinds, {
+      onAction: (
+        instanceId: string,
+        actionId: string,
+        payload?: Record<string, unknown>
+      ) => {
+        this.emitAction(instanceId, actionId, payload);
+      },
+      onSendMessage: (instanceId: string, content: string) => {
+        this.emitSendMessage(instanceId, content);
+      },
+      onPatchState: (instanceId: string, values: Record<string, unknown>) => {
+        this.emitPatchState(instanceId, values);
+      },
+    });
   }
 
   // The flow-level overview bar: shown when the flow has more than one
@@ -300,75 +259,6 @@ export class WorkflowInstances extends LitElement {
     this.requestUpdate();
   }
 
-  // Board grouping: field-value partition when the definition declares
-  // groupByField (E3 — the generic engine partitions; it never interprets
-  // values), curated columns when the definition declares them (the
-  // definition renders its canonical lanes), otherwise the default derived
-  // board — one column per state.
-  private groupBoard(
-    def: WorkflowDefResponse,
-    entries: WorkflowInstanceEntry[]
-  ): Column[] {
-    const groupByField = def.ui?.groupByField;
-    if (groupByField !== undefined) {
-      return groupInstancesByField(groupByField, entries);
-    }
-    const columns = def.ui?.columns;
-    if (columns !== undefined && columns.length > 0) {
-      return groupInstancesByColumns(def.states, columns, entries);
-    }
-    return groupInstancesByState(def.states, entries);
-  }
-
-  private renderColumn(def: WorkflowDefResponse, column: Column) {
-    return html`<div
-      class="board-column"
-      data-category=${column.category}
-      data-empty=${column.entries.length === 0 ? "true" : "false"}
-    >
-      <div class="column-header" data-category=${column.category}>
-        <span class="column-label">${column.label}</span>
-        <span class="column-count">${column.entries.length}</span>
-      </div>
-      ${
-        column.entries.length > 0
-          ? html`<div class="column-body">
-            ${repeat(
-              column.entries,
-              (entry) => entry.id,
-              (entry) => this.renderInstance(def, entry)
-            )}
-          </div>`
-          : nothing
-      }
-    </div>`;
-  }
-
-  private renderInstance(
-    def: WorkflowDefResponse,
-    entry: WorkflowInstanceEntry
-  ) {
-    const customComponent = getComponentRenderer(def.ui?.instanceComponent);
-    const component = customComponent ?? WorkflowInstanceCard;
-    return html`<dynamic-element-host
-      .elementClass=${component}
-      .props=${{
-        workflowDef: def,
-        instanceEntry: entry,
-        customKinds: this.customKinds,
-        onAction: (actionId: string, payload?: Record<string, unknown>) => {
-          this.emitAction(entry.id, actionId, payload);
-        },
-        onSendMessage: (content: string) => {
-          this.emitSendMessage(entry.id, content);
-        },
-        onPatchState: (values: Record<string, unknown>) => {
-          this.emitPatchState(entry.id, values);
-        },
-      }}
-    ></dynamic-element-host>`;
-  }
-
   private emitAction(
     instanceId: string,
     actionId: string,
@@ -400,6 +290,16 @@ export class WorkflowInstances extends LitElement {
     this.dispatchEvent(
       new CustomEvent("hive-patch-state", {
         detail: { flowId: this.flowId, instanceId, values },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  private emitSelect(instanceId: string): void {
+    this.dispatchEvent(
+      new CustomEvent("hive-select", {
+        detail: { flowId: this.flowId, instanceId },
         bubbles: true,
         composed: true,
       })

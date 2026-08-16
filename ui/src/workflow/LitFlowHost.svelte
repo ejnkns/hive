@@ -22,6 +22,7 @@ let {
   onAction,
   onSendMessage,
   onPatchState,
+  onSelect,
 }: {
   flowId: string;
   workflowDefs: WorkflowDefResponse[];
@@ -45,6 +46,8 @@ let {
     instanceId: string,
     values: Record<string, unknown>
   ) => void;
+  // A custom workflow view asked the shell to open the workflow-instance page.
+  onSelect?: (flowId: string, instanceId: string) => void;
 } = $props();
 
 let host: WorkflowInstances | null = null;
@@ -134,6 +137,13 @@ function handlePatchState(
     event.detail.values
   );
 }
+
+function handleSelect(
+  event: CustomEvent<{ flowId: string; instanceId: string }>
+) {
+  if (!event.detail.flowId || !event.detail.instanceId) return;
+  onSelect?.(event.detail.flowId, event.detail.instanceId);
+}
 </script>
 
 <workflow-instances
@@ -141,4 +151,5 @@ function handlePatchState(
   onhive-action={handleAction}
   onhive-send-message={handleSendMessage}
   onhive-patch-state={handlePatchState}
+  onhive-select={handleSelect}
 ></workflow-instances>

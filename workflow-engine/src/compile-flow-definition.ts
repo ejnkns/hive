@@ -381,6 +381,9 @@ function compileWorkflow(
             ...(wf.ui.instanceComponent !== undefined
               ? { instanceComponent: wf.ui.instanceComponent }
               : {}),
+            ...(wf.ui.workflowComponent !== undefined
+              ? { workflowComponent: wf.ui.workflowComponent }
+              : {}),
             ...(wf.ui.columns !== undefined ? { columns: wf.ui.columns } : {}),
             ...(wf.ui.groupByField !== undefined
               ? { groupByField: wf.ui.groupByField }

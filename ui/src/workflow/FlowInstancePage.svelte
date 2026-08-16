@@ -131,6 +131,14 @@ async function handlePatchState(
   }
 }
 
+// A custom workflow view asked the shell to open a workflow instance. The
+// flow-instance page IS the workflow-instance surface today; a dedicated
+// per-instance detail page is future work (the plan's flow-level custom
+// component), so the route is a no-op that keeps the seam.
+function handleSelect(_flowId: string, _instanceId: string): void {
+  // no dedicated workflow-instance page yet
+}
+
 async function removeInstance(purge: boolean) {
   if (!flow) return;
   deleteBusy = true;
@@ -271,6 +279,7 @@ function closeFlowActionForm() {
         onAction={handleAction}
         onSendMessage={handleSendMessage}
         onPatchState={handlePatchState}
+        onSelect={handleSelect}
       />
     </div>
   {/if}

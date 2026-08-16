@@ -235,6 +235,52 @@ describe("validateFlowDefinition", () => {
     assert.deepEqual(warnings, []);
   });
 
+  it("advisories a workflowComponent that names no declared component", () => {
+    const { definition } = parseDefinition(
+      RESEARCH_MODULE.replace(
+        "  configSchema: [],",
+        `  configSchema: [],
+  ui: {
+    components: {
+      "frontier-board": { ref: "./ui/frontier-board.ts" },
+    },
+  },`
+      ).replace(
+        '      initial: "searching",',
+        `      initial: "searching",
+      ui: {
+        workflowComponent: "frontier-board",
+      },`
+      )
+    );
+    const warnings = analyzeFlowDefinition(definition);
+    assert.ok(
+      !warnings.some((w) => w.includes('workflowComponent "frontier-board"')),
+      "a declared workflowComponent id is not advisory"
+    );
+
+    // An undeclared workflow component id degrades to the generic board —
+    // advisory, not an error.
+    const undeclared = parseDefinition(
+      RESEARCH_MODULE.replace(
+        '      initial: "searching",',
+        `      initial: "searching",
+      ui: {
+        workflowComponent: "mystery-view",
+      },`
+      )
+    );
+    const undeclaredWarnings = analyzeFlowDefinition(undeclared.definition);
+    assert.ok(
+      undeclaredWarnings.some(
+        (w) =>
+          w.includes('workflowComponent "mystery-view"') &&
+          w.includes("not declared in the flow's ui.components")
+      ),
+      `expected a workflowComponent advisory, got: ${undeclaredWarnings.join("; ")}`
+    );
+  });
+
   it("rejects an unknown transition target", () => {
     const { definition } = parseDefinition(
       RESEARCH_MODULE.replace('{ to: "extracting"', '{ to: "missing"')

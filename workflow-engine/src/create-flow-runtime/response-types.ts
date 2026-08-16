@@ -23,10 +23,12 @@ export type WorkflowDefResponse = {
   instance?: { title: string; subtitle?: string };
   // The workflow-instance body hint (curated workflowInstanceState fields).
   display?: DisplayHint;
-  // Per-workflow rendering hooks (e.g. a custom instance component id, the
-  // layout view, and optional curated board columns / field grouping).
+  // Per-workflow rendering hooks (e.g. a custom instance component id, a
+  // workflow-level custom view, the layout view, and optional curated board
+  // columns / field grouping).
   ui?: {
     instanceComponent?: string;
+    workflowComponent?: string;
     view?: WorkflowView;
     columns?: readonly BoardColumn[];
     // E3: board grouping by the distinct values of a declared instance-state
