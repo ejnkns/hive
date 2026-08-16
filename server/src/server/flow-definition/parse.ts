@@ -171,6 +171,41 @@ function parseFlow(
       }
       if (Object.keys(components).length > 0) ui.components = components;
     }
+    // Declarative theming tokens for the generic flow surfaces: a strictly
+    // whitelisted block (accent + emblem in v1). Anything else is an advisory
+    // finding and ignored — exactly like the unknown-field handling, so the
+    // zero-warnings bar holds. Bad values (a non-hex accent, a multi-codepoint
+    // emblem — which rejects emoji) are also advisories, ignored.
+    const themeLiteral = readObject(flowUi, "theme");
+    if (themeLiteral !== undefined) {
+      checkKeys(themeLiteral, ["accent", "emblem"], "flow.ui.theme", findings);
+      const theme: NonNullable<typeof ui.theme> = {};
+      const accent = readString(themeLiteral, "accent");
+      if (accent !== undefined) {
+        if (/^#[0-9a-fA-F]{6}$/.test(accent)) {
+          theme.accent = accent;
+        } else {
+          findings.push(
+            "flow.ui.theme.accent: not data — accent must be a #rrggbb hex color"
+          );
+        }
+      }
+      const emblem = readString(themeLiteral, "emblem");
+      if (emblem !== undefined) {
+        // Exactly one Unicode code point — this rejects emoji (multi-codepoint)
+        // and keeps the UI's no-emoji rule.
+        if (Array.from(emblem).length === 1) {
+          theme.emblem = emblem;
+        } else {
+          findings.push(
+            "flow.ui.theme.emblem: not data — emblem must be a single character (emoji are multi-codepoint and rejected)"
+          );
+        }
+      }
+      if (theme.accent !== undefined || theme.emblem !== undefined) {
+        ui.theme = theme;
+      }
+    }
     if (Object.keys(ui).length > 0) definition.ui = ui;
   }
 

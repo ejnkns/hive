@@ -53,8 +53,26 @@
   inherits: true;
   initial-value: #9a8a67;
 }
+/* The text morph is driven by PERCENTAGE tokens, not the <color> properties
+   themselves: interpolating a percentage is well-defined in every browser,
+   and --text/--muted resolve each frame as an explicit srgb color-mix of the
+   two theme values. Interpolation color space is thus never the browser's
+   choice — a browser-specific @property color-interpolation quirk cannot make
+   the text path pass through a foreign hue (the purple-flash failure mode). */
+@property --text-mix {
+  syntax: "<percentage>";
+  inherits: true;
+  initial-value: 0%;
+}
+@property --muted-mix {
+  syntax: "<percentage>";
+  inherits: true;
+  initial-value: 0%;
+}
 
-/* Theme morph: surface + text only, at --dur-slow (not all 17 properties). */
+/* Theme morph: surface + text only, at --dur-slow (not all 17 properties).
+   Text tweens via the numeric mix tokens (see above); the rest tween as
+   registered colors. */
 :root,
 html.light {
   transition:
@@ -65,8 +83,8 @@ html.light {
     --border-rgb var(--dur-slow) var(--ease-in-out),
     --accent var(--dur-slow) var(--ease-in-out),
     --accent-rgb var(--dur-slow) var(--ease-in-out),
-    --text var(--dur-slow) var(--ease-in-out),
-    --muted var(--dur-slow) var(--ease-in-out);
+    --text-mix var(--dur-slow) var(--ease-in-out),
+    --muted-mix var(--dur-slow) var(--ease-in-out);
 }
 
 /* ---------------------------------------------------------------------------
@@ -86,9 +104,21 @@ html.light {
   --on-accent: #16130a; /* text on accent fills */
   /* brand — the amber identity, kept warm in both themes */
   --brand: #f5b342;
-  /* text */
-  --text: #f2e4c5;
-  --muted: #9a8a67;
+  /* text — the morph mixes the two theme values in explicit srgb (see the
+     --text-mix/--muted-mix registrations above), so the path is browser-
+     independent and can never pass through a foreign hue. */
+  --text-mix: 0%;
+  --muted-mix: 0%;
+  --text: color-mix(
+    in srgb,
+    #f2e4c5 calc(100% - var(--text-mix)),
+    #33291a var(--text-mix)
+  );
+  --muted: color-mix(
+    in srgb,
+    #9a8a67 calc(100% - var(--muted-mix)),
+    #6f6248 var(--muted-mix)
+  );
   /* status (snap, not interpolated) */
   --success: #7cb342;
   --success-rgb: 124, 179, 66;
@@ -148,8 +178,8 @@ html.light {
   --accent-rgb: 217, 164, 6;
   --on-accent: #16130a; /* near-black reads on golden in both themes */
   --brand: #c07f0f; /* amber identity, readable on paper */
-  --text: #33291a;
-  --muted: #6f6248;
+  --text-mix: 100%;
+  --muted-mix: 100%;
   --success: #3f6b24;
   --success-rgb: 63, 107, 36;
   --error: #b71c1c;

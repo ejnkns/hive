@@ -21,6 +21,7 @@ import {
 // by the no-session files editor (the session renders its own via flow-editor).
 import type { CodeEditor } from "../flow-rendering/components/code-editor.ts";
 import "../flow-rendering/components/code-editor.ts";
+import { themeVars } from "../shared/flow-theme.ts";
 import Button from "../shared/ui/Button.svelte";
 import Dialog from "../shared/ui/Dialog.svelte";
 import Textarea from "../shared/ui/Textarea.svelte";
@@ -511,7 +512,7 @@ async function remove() {
 }
 </script>
 
-<div class="editor">
+<div class="editor" style={themeVars(savedDetail?.theme)}>
   <div class="breadcrumb">
     <a href="#/flows">flows</a>
     <span class="crumb-sep">/</span>
@@ -765,8 +766,8 @@ h1 {
 }
 :global(.editor-tab.active),
 :global(.editor-tab.active:hover) {
-  color: var(--on-accent);
-  background: var(--accent);
+  color: var(--flow-on-accent, var(--on-accent));
+  background: var(--flow-accent, var(--accent));
 }
 
 .pane {

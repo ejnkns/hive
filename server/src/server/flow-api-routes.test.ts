@@ -1899,6 +1899,65 @@ export const flow: FlowDefinition = {
     assert.equal(listed.name, "Custom Flow");
   });
 
+  it("GET /api/flows/definitions carries the declarative theme on summaries and detail", async () => {
+    setFlowPersistence(noopPersistence);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const themedSource = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "themed-flow",
+  label: "Themed Flow",
+  configSchema: [],
+  ui: { theme: { accent: "#4a9fe0", emblem: "\u25b2" } },
+  workflows: [
+    {
+      id: "items",
+      label: "Items",
+      instanceState: [],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
+        { id: "new", label: "New", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  edges: [],
+};
+`;
+
+    const created = await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions",
+      body: { name: "Themed Flow", source: themedSource },
+    });
+    assert.equal(created.statusCode, 201);
+
+    // The summary carries the theme block.
+    const listResponse = await server.inject({
+      method: "GET",
+      url: "/api/flows/definitions",
+    });
+    const listed = listResponse
+      .json()
+      .definitions.find((d: { id: string }) => d.id === "themed-flow");
+    assert.deepEqual(listed?.theme, { accent: "#4a9fe0", emblem: "\u25b2" });
+
+    // The detail carries the same top-level theme.
+    const detailResponse = await server.inject({
+      method: "GET",
+      url: "/api/flows/definitions/themed-flow",
+    });
+    assert.equal(detailResponse.statusCode, 200);
+    assert.deepEqual(detailResponse.json().theme, {
+      accent: "#4a9fe0",
+      emblem: "\u25b2",
+    });
+  });
+
   it("POST /api/flows/definitions annotates (does not block) definition-validator warnings", async () => {
     const server = Fastify();
     servers.push(server);

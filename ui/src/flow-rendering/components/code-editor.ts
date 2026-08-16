@@ -61,7 +61,7 @@ export class CodeEditor extends LitElement {
     }
 
     textarea:focus {
-      border-color: var(--accent);
+      border-color: var(--flow-accent, var(--accent));
     }
 
     textarea:disabled {
@@ -69,7 +69,7 @@ export class CodeEditor extends LitElement {
     }
 
     .code :global(.tok-keyword) {
-      color: var(--accent);
+      color: var(--flow-accent, var(--accent));
     }
 
     .code :global(.tok-string) {

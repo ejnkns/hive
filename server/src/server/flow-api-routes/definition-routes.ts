@@ -21,6 +21,7 @@ import {
   DefinitionAlreadyExistsError,
   deleteUserDefinition,
   getDefinitionComponentSource,
+  getFlowTheme,
   getRegisteredFlowDefinition,
   listRegisteredDefinitions,
   loadDefinitionFromSource,
@@ -43,6 +44,8 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
         description,
         builtIn,
         configSchema,
+        // The definition's declarative theme tokens (generic flow surfaces).
+        theme: getFlowTheme(id),
       })
     );
     return reply.send({ definitions });
@@ -68,6 +71,8 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
       description: record.description,
       builtIn: record.builtIn,
       configSchema: record.configSchema,
+      // The definition's declarative theme tokens (generic flow surfaces).
+      theme: getFlowTheme(id),
       source: record.source,
       // The pure-data form of a definition module (the builder contract — the
       // editor's Definition tab binds to it).

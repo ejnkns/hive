@@ -3,6 +3,7 @@ import { comb } from "shared/ascii-art";
 import { onMount } from "svelte";
 import type { FlowDefinitionSummary } from "../flow-api.ts";
 import { fetchFlowDefinitions } from "../flow-api.ts";
+import { themeVars } from "../shared/flow-theme.ts";
 import Button from "../shared/ui/Button.svelte";
 import Skeleton from "../shared/ui/Skeleton.svelte";
 import TextInput from "../shared/ui/TextInput.svelte";
@@ -130,7 +131,7 @@ function definitionHref(id: string): string {
   {:else}
     <div class="definition-list">
       {#each visibleDefinitions as definition (definition.id)}
-        <div class="definition-card">
+        <div class="definition-card" style={themeVars(definition.theme)}>
           <a
             class="card-link"
             href={definitionHref(definition.id)}
@@ -143,7 +144,14 @@ function definitionHref(id: string): string {
               aria-label={`open ${definition.name}`}
             >
               <div class="definition-head-info">
-                <span class="definition-name">{definition.name}</span>
+                <div class="name-row">
+                  {#if definition.theme?.emblem}
+                    <span class="flow-emblem" aria-hidden="true"
+                      >{definition.theme.emblem}</span
+                    >
+                  {/if}
+                  <span class="definition-name">{definition.name}</span>
+                </div>
                 {#if definition.description}
                   <span class="definition-description"
                     >{definition.description}</span
@@ -242,7 +250,11 @@ h1 {
   transition: border-color var(--dur-fast) var(--ease-out);
 }
 .definition-card:hover {
-  border-color: color-mix(in srgb, var(--border) 60%, var(--accent));
+  border-color: color-mix(
+    in srgb,
+    var(--border) 60%,
+    var(--flow-accent, var(--accent))
+  );
 }
 
 /* the head (name + description + trailing space) is the definition link;
@@ -263,6 +275,19 @@ h1 {
   min-width: 0;
 }
 
+.name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.flow-emblem {
+  font-family: var(--font-mono);
+  font-size: 1.1em;
+  line-height: 1;
+  color: var(--flow-accent, var(--accent));
+}
+
 .definition-name {
   font-size: var(--text-md);
   font-weight: 700;
@@ -270,7 +295,7 @@ h1 {
   transition: color var(--dur-fast) var(--ease-out);
 }
 .definition-card:hover .definition-name {
-  color: var(--accent);
+  color: var(--flow-accent, var(--accent));
 }
 
 .definition-description {
@@ -301,7 +326,7 @@ h1 {
 
 :global(.filter-btn.active),
 :global(.filter-btn.active:hover) {
-  color: var(--on-accent);
-  background: var(--accent);
+  color: var(--flow-on-accent, var(--on-accent));
+  background: var(--flow-accent, var(--accent));
 }
 </style>

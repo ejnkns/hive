@@ -84,11 +84,11 @@ export class FlowOverviewBar extends LitElement {
     }
 
     .dot-running {
-      background: var(--accent);
+      background: var(--flow-accent, var(--accent));
     }
 
     .dot-waiting {
-      background: var(--accent);
+      background: var(--flow-accent, var(--accent));
       opacity: 0.6;
     }
 

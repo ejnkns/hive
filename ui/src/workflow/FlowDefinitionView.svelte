@@ -4,6 +4,7 @@ import type { FlowDefinitionDetail } from "../flow-api.ts";
 import { fetchFlowDefinition } from "../flow-api.ts";
 // Importing the code-editor module registers the <code-editor> element.
 import type { CodeEditor } from "../flow-rendering/components/code-editor.ts";
+import { themeVars } from "../shared/flow-theme.ts";
 import Badge from "../shared/ui/Badge.svelte";
 import Button from "../shared/ui/Button.svelte";
 import "../flow-rendering/components/code-editor.ts";
@@ -48,7 +49,7 @@ $effect(() => {
 });
 </script>
 
-<div class="viewer">
+<div class="viewer" style={themeVars(detail?.theme)}>
   <div class="breadcrumb">
     <a href="#/flows">flows</a>
     <span class="crumb-sep">/</span>
@@ -165,8 +166,8 @@ h1 {
 }
 :global(.tab-btn.active),
 :global(.tab-btn.active:hover) {
-  color: var(--on-accent);
-  background: var(--accent);
+  color: var(--flow-on-accent, var(--on-accent));
+  background: var(--flow-accent, var(--accent));
 }
 
 .pane {

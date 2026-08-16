@@ -24,7 +24,7 @@ export class AgentProgress extends LitElement {
       height: 9px;
       border-radius: 50%;
       border: 1.5px solid var(--border);
-      border-top-color: var(--accent);
+      border-top-color: var(--flow-accent, var(--accent));
       animation: spin 0.8s linear infinite;
     }
 

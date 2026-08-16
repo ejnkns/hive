@@ -1,5 +1,9 @@
 <script lang="ts">
+import { onMount } from "svelte";
+import type { FlowDefinitionDetail } from "../flow-api.ts";
+import { fetchFlowDefinition } from "../flow-api.ts";
 import type { FlowCreateForm } from "../flow-rendering/components/flow-create-form.ts";
+import { themeVars } from "../shared/flow-theme.ts";
 
 // The route shell for creating a flow instance: breadcrumb + heading, then
 // the built-in <flow-create-form> (Lit) which owns the definition fetch, the
@@ -9,6 +13,19 @@ import type { FlowCreateForm } from "../flow-rendering/components/flow-create-fo
 let { definitionId }: { definitionId: string } = $props();
 
 let createForm = $state<FlowCreateForm | null>(null);
+// The definition's theme tokens (the create form owns the fetch; this shell
+// only needs the theme for the page accent).
+let definition = $state<FlowDefinitionDetail | null>(null);
+
+onMount(() => {
+  void fetchFlowDefinition(definitionId)
+    .then((detail) => {
+      definition = detail;
+    })
+    .catch(() => {
+      // No theme: the page falls back to the global accent.
+    });
+});
 
 // Svelte must not bind props onto custom elements (the LitFlowHost pattern):
 // the element's property is set imperatively.
@@ -29,7 +46,7 @@ function handleCancel() {
 }
 </script>
 
-<div class="instantiate">
+<div class="instantiate" style={themeVars(definition?.theme)}>
   <div class="breadcrumb">
     <a href="#/flows">flows</a>
     <span class="crumb-sep">/</span>

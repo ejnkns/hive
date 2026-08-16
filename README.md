@@ -21,11 +21,11 @@ _sting and they die,_
 _replaced with the alive._
 -->
 
-> **Work in progress.** This project is under active development.
+> **Work in progress.** 
 
-Automatically route OpenAI-compatible agent traffic to free model providers.
+Automatically route LLM traffic to free model providers.
 
-A lightweight proxy daemon with agent routing and automatic failover, hiding the volatility of free model providers by continuously monitoring quality and swapping providers and models automatically.
+A lightweight proxy daemon with agent routing and automatic failover, hiding the volatility of free model providers by continuously monitoring quality and swapping providers automatically.
 
 ### Dynamic Model Routing
 

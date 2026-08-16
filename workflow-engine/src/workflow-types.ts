@@ -80,6 +80,7 @@ export type {
   FlowDefinition,
   FlowEdge,
   FlowLevelAction,
+  FlowThemeSpec,
   RuntimeFlowEdge,
   TransformContract,
 } from "./workflow-types/flow-definition.ts";

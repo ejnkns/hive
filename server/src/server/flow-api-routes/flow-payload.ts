@@ -55,6 +55,9 @@ export function flowPayload(
     ui: {
       kinds: definition?.flow.ui?.kinds ?? [],
       components,
+      // Declarative theme tokens — the flow instance page themes its root
+      // with these (one accent → both themes via color-mix).
+      theme: definition?.flow.ui?.theme,
     },
     availableFlowActions: getAvailableFlowActions(flowId),
   };

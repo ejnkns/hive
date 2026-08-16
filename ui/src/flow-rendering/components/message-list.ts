@@ -42,7 +42,7 @@ export class MessageList extends LitElement {
     }
 
     .msg-user .label {
-      color: var(--accent);
+      color: var(--flow-accent, var(--accent));
     }
 
     .msg-tool .label {
@@ -79,7 +79,7 @@ export class MessageList extends LitElement {
       border: 1px solid var(--border);
       border-radius: 4px;
       background: var(--bg);
-      color: var(--accent);
+      color: var(--flow-accent, var(--accent));
       font-family: var(--font-mono, monospace);
       font-size: 0.5625rem;
       font-weight: 600;

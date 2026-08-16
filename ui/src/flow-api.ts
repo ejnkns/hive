@@ -16,6 +16,13 @@ import type {
 
 export type FlowStatus = "error" | "running" | "waiting" | "idle" | "complete";
 
+// Declarative theming tokens for the generic flow surfaces (flows-list card +
+// flow pages). One accent; the renderer derives tint/text/ring via color-mix.
+export type FlowTheme = {
+  accent?: string; // one #rrggbb hex value
+  emblem?: string; // a single character badge beside the definition name
+};
+
 // The gate-evaluated, UI-facing view of a flow-level action.
 export type FlowLevelAction = {
   id: string;
@@ -39,6 +46,8 @@ export type FlowResponse = {
     kinds?: CustomRenderKind[];
     // Declared served component ids → fetch path (transpiled module source).
     components?: Record<string, string>;
+    // Declarative theme tokens for the generic flow surfaces.
+    theme?: FlowTheme;
   };
   availableFlowActions: FlowLevelAction[];
 };
@@ -53,6 +62,8 @@ export type FlowDefinitionSummary = {
   description?: string;
   builtIn: boolean;
   configSchema: ConfigField[];
+  // The definition's declarative theme tokens (generic flow surfaces).
+  theme?: FlowTheme;
   // Schema-consistency findings from the save path (non-blocking; the
   // definition is saved regardless — these annotate it for the author).
   checkWarnings?: string[];

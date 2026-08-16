@@ -2,6 +2,7 @@
 import { onMount } from "svelte";
 import type { FlowDefinitionDetail } from "../flow-api.ts";
 import { fetchFlowDefinition } from "../flow-api.ts";
+import { themeVars } from "../shared/flow-theme.ts";
 import Badge from "../shared/ui/Badge.svelte";
 import Button from "../shared/ui/Button.svelte";
 import { flowStore } from "./flow-store.svelte";
@@ -33,7 +34,7 @@ async function load() {
 }
 </script>
 
-<div class="definition-page">
+<div class="definition-page" style={themeVars(definition?.theme)}>
   {#if loading}
     <div class="loading">loading definition...</div>
   {:else if error}
@@ -44,7 +45,14 @@ async function load() {
     {@const defId = definition.id}
     <div class="header">
       <div class="header-info">
-        <h1>{definition.name}</h1>
+        <h1>
+          {#if definition.theme?.emblem}
+            <span class="flow-emblem" aria-hidden="true"
+              >{definition.theme.emblem}</span
+            >
+          {/if}
+          {definition.name}
+        </h1>
         {#if definition.builtIn}
           <Badge variant="neutral" outline>built-in</Badge>
         {/if}
@@ -100,10 +108,20 @@ async function load() {
 }
 
 h1 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-size: var(--text-lg);
   font-weight: 700;
   color: var(--text);
   margin: 0 0 0.5rem 0;
+}
+
+.flow-emblem {
+  font-family: var(--font-mono);
+  font-size: 1.1em;
+  line-height: 1;
+  color: var(--flow-accent, var(--accent));
 }
 
 .description {

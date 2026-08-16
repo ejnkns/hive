@@ -307,6 +307,11 @@ export type FlowLevelActionSpec = {
 
 // ─── validation ───────────────────────────────────────────────────────
 
+// The flow-level theme tokens, mirrored from flow-definition.ts so the
+// vocabulary stays the complete authoring surface (same pure-data contract as
+// kinds/components — a definition may declare `ui.theme` as data).
+export type { FlowThemeSpec } from "./flow-definition.ts";
+
 export type DefinitionError = { path: string; message: string };
 
 // The cross-cutting context the definition validator builds while walking

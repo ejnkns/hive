@@ -19,26 +19,28 @@ function instanceHref(flow: FlowResponse): string {
 }
 </script>
 
-{#if flows.length > 0}
-  <div class="roster">
-    {#each flows as flow (flow.id)}
-      <a class="instance-tile" href={instanceHref(flow)}>
-        <StatusDot status={flow.status} />
-        <span class="tile-name">{flow.config?.name ?? flow.id}</span>
-      </a>
-    {/each}
-    <Button
-      variant="accent"
-      size="icon"
-      class="tile-add"
-      aria-label="new instance"
-      onclick={() =>
-        (window.location.hash = `#/flows/${encodeURIComponent(definitionId)}/new`)}
-    >
-      +
-    </Button>
-  </div>
-{/if}
+<!-- The roster always renders: with zero instances the + tile is the only
+     tile — the add affordance must exist for a definition that has no
+     instances yet (it was moved out of the card head and the definition-page
+     header, so the roster tile is the single way in). -->
+<div class="roster">
+  {#each flows as flow (flow.id)}
+    <a class="instance-tile" href={instanceHref(flow)}>
+      <StatusDot status={flow.status} />
+      <span class="tile-name">{flow.config?.name ?? flow.id}</span>
+    </a>
+  {/each}
+  <Button
+    variant="accent"
+    size="icon"
+    class="tile-add"
+    aria-label="new instance"
+    onclick={() =>
+      (window.location.hash = `#/flows/${encodeURIComponent(definitionId)}/new`)}
+  >
+    +
+  </Button>
+</div>
 
 <style>
 /* instances as content-sized tiles, wrapping; the + stays a small square */
@@ -64,8 +66,8 @@ function instanceHref(flow: FlowResponse): string {
     color var(--dur-fast) var(--ease-out);
 }
 .instance-tile:hover {
-  background: var(--accent);
-  color: var(--on-accent);
+  background: var(--flow-accent, var(--accent));
+  color: var(--flow-on-accent, var(--on-accent));
 }
 
 .tile-name {

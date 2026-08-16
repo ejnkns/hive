@@ -108,7 +108,7 @@ export class WorkflowInstanceCard extends LitElement {
     }
 
     .state-dot-active {
-      background: var(--accent);
+      background: var(--flow-accent, var(--accent));
     }
 
     .state-dot-terminal {
@@ -168,7 +168,7 @@ export class WorkflowInstanceCard extends LitElement {
     }
 
     .output-task-id {
-      color: var(--accent);
+      color: var(--flow-accent, var(--accent));
       font-family: monospace;
       font-size: 0.6875rem;
     }
@@ -209,7 +209,7 @@ export class WorkflowInstanceCard extends LitElement {
     }
 
     .domain-data-key {
-      color: var(--accent);
+      color: var(--flow-accent, var(--accent));
       font-family: monospace;
       font-weight: 600;
     }
@@ -243,7 +243,7 @@ export class WorkflowInstanceCard extends LitElement {
     .domain-progress-fill {
       height: 100%;
       border-radius: 3px;
-      background: var(--accent);
+      background: var(--flow-accent, var(--accent));
       transition: width 0.2s;
     }
 

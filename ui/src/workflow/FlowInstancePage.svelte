@@ -10,6 +10,7 @@ import {
   sendTaskInput,
 } from "../flow-api.ts";
 import type { ConfigFieldForm } from "../flow-rendering/components/config-field-form.ts";
+import { themeVars } from "../shared/flow-theme.ts";
 import Button from "../shared/ui/Button.svelte";
 import Dialog from "../shared/ui/Dialog.svelte";
 import { flowStore } from "./flow-store.svelte";
@@ -200,7 +201,7 @@ function closeFlowActionForm() {
 }
 </script>
 
-<div class="instance-page">
+<div class="instance-page" style={themeVars(flow?.ui?.theme)}>
   {#if resolving}
     <div class="loading">loading instance...</div>
   {:else if error}

@@ -78,7 +78,7 @@ export class ConfigFieldControl extends LitElement {
     }
 
     .chip.checked {
-      border-color: var(--accent);
+      border-color: var(--flow-accent, var(--accent));
       background: rgba(96, 216, 116, 0.12);
     }
 
@@ -110,7 +110,7 @@ export class ConfigFieldControl extends LitElement {
     input[type="datetime-local"]:focus,
     textarea:focus,
     select:focus {
-      border-color: var(--accent);
+      border-color: var(--flow-accent, var(--accent));
     }
   `;
 

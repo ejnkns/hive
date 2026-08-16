@@ -30,6 +30,24 @@ import type {
 import type { CustomRenderKind } from "./render-hints.ts";
 import type { RuntimeWorkflowConfig } from "./state-config.ts";
 
+// === FLOW THEME (the generic surface's declarative theming tokens) ===
+
+// Declarative theming for the generic flow surfaces (the flows-list card and
+// every flow page). Pure data, whitelisted, and generic: the renderer consumes
+// the tokens — it never special-cases a flow by name. Contrast is the
+// renderer's job (one accent → tint/text/ring via color-mix); authors never
+// manage color pairs or palettes.
+export type FlowThemeSpec = {
+  // One #rrggbb hex value. The renderer derives --flow-accent /
+  // --flow-accent-rgb / --flow-on-accent from it (both themes fall out of the
+  // mixes against the active theme's surfaces).
+  accent?: string;
+  // A single character rendered as a small badge beside the definition name
+  // (flows list + definition-page header). Emoji are rejected at parse time —
+  // they are multi-codepoint, and the UI keeps a no-emoji rule.
+  emblem?: string;
+};
+
 // === FLOW DEFINITION (the pure-data authoring artifact) ===
 
 // The complete description of one flow type, as data: its workflows, the
@@ -67,6 +85,9 @@ export type FlowDefinition = {
     components?: Record<string, string>;
     // A flow-level layout hint (the surface may fall back).
     view?: WorkflowView;
+    // Declarative theming tokens for the generic flow surfaces (flows-list
+    // card + flow pages). Pure data — rides through the compile step unchanged.
+    theme?: FlowThemeSpec;
   };
   // Custom tools and operations referenced as files; tasks reference them by
   // id/name alongside the engine's infrastructure capabilities.
@@ -157,6 +178,7 @@ export type CompiledFlowDefinition = {
     kinds?: CustomRenderKind[];
     components?: Record<string, string>;
     view?: WorkflowView;
+    theme?: FlowThemeSpec;
   };
 } & (
   | { workflows: RuntimeWorkflowConfig[] }

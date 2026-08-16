@@ -22,6 +22,7 @@ import type {
   CompiledFlowDefinition,
   ConfigField,
   FlowDefinition,
+  FlowThemeSpec,
 } from "workflow-engine/workflow-types";
 import { validateFlowDefinition } from "./flow-definition.ts";
 
@@ -113,6 +114,16 @@ export function getFlowDefinition(
 
 export function listRegisteredDefinitions(): RegisteredFlowDefinition[] {
   return Array.from(definitions.values()).filter((d) => !d.hidden);
+}
+
+// A definition's declarative theme tokens (ui.theme). The pure-data form wins
+// (the authoring contract a data module carries); module-set flows with no
+// pure-data form fall back to the compiled projection — the compile step
+// passes ui through unchanged, so both carry the same values. One source of
+// truth per flow.
+export function getFlowTheme(id: string): FlowThemeSpec | undefined {
+  const record = definitions.get(id);
+  return record?.definition?.ui?.theme ?? record?.flow.ui?.theme;
 }
 
 // ── User-definition registration ──

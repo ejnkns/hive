@@ -26,7 +26,10 @@ export const flow: FlowDefinition = {
     },
   ],
   domainDir: ".wayfinder",
-  ui: {},
+  // Declarative theme: clear sky blue accent, mountain emblem — "clearing the
+  // fog" matches wayfinder's chart-fog-then-build workflows. queen-bee /
+  // honeycomb stay on the default golden.
+  ui: { theme: { accent: "#4a9fe0", emblem: "\u25b2" } },
   tools: [
     {
       id: "submit_map",

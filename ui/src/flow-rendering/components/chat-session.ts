@@ -94,7 +94,7 @@ export class ChatSession extends LitElement {
     }
 
     input:focus {
-      border-color: var(--accent);
+      border-color: var(--flow-accent, var(--accent));
     }
 
     button {

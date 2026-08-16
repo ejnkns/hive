@@ -20,7 +20,7 @@ let { status }: { status: FlowStatus } = $props();
 }
 
 .status-running {
-  background: var(--accent);
+  background: var(--flow-accent, var(--accent));
 }
 
 .status-waiting {

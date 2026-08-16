@@ -64,7 +64,7 @@ export class FlowCreateForm extends LitElement {
     }
 
     input[type="text"]:focus {
-      border-color: var(--accent);
+      border-color: var(--flow-accent, var(--accent));
     }
 
     input[type="text"]:disabled {
