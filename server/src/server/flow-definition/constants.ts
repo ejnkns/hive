@@ -5,6 +5,10 @@ import type { FieldType } from "workflow-engine/workflow-types";
 
 export const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
+// A render-kind name: like an identifier but kebab-case is allowed
+// ("findings-report") — kinds are registry keys, never TS identifiers.
+export const KIND_IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$-]*$/;
+
 // A loose npm package name: unscoped (`axios`) or scoped (`@scope/pkg`). The
 // definition's dependencies list holds package names — imports of those
 // packages (any subpath) are allowed by the import policy.

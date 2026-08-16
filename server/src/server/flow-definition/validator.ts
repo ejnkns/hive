@@ -27,6 +27,7 @@ import {
   FIELD_TYPES,
   IDENTIFIER,
   infraToolNames,
+  KIND_IDENTIFIER,
   PACKAGE_NAME,
 } from "./constants.ts";
 import { validateEdges } from "./edges.ts";
@@ -166,11 +167,11 @@ export function validateFlowDefinition(
       if (
         typeof custom.kind !== "string" ||
         custom.kind.trim() === "" ||
-        !IDENTIFIER.test(custom.kind)
+        !KIND_IDENTIFIER.test(custom.kind)
       ) {
         error(
           `ui.kinds[${kIndex}].kind`,
-          `custom render kind must be a valid identifier (got ${JSON.stringify(custom.kind)})`
+          `custom render kind must be a valid kind name (identifier or kebab-case, got ${JSON.stringify(custom.kind)})`
         );
       }
       if (seenKinds.has(custom.kind)) {

@@ -17,6 +17,7 @@ import "./components/cards-view.ts";
 import "./components/json-view.ts";
 import "./components/workflow-instance-card.ts";
 import "./components/workflow-instances.ts";
+import "./components/workflow-board-content.ts";
 import { CardView } from "./components/card-view.ts";
 import { CardsView } from "./components/cards-view.ts";
 import { FlowEditor } from "./components/flow-editor.ts";

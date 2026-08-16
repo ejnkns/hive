@@ -6,7 +6,6 @@
  * component route; the rendering surface blob-imports and registers whatever
  * the factory returns. */
 
-import type { LitElement } from "lit";
 import type {
   FlowComponentDeps,
   FlowComponentRegistrations,
@@ -97,11 +96,10 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       }
     `;
 
-    workflowDef!: InstanceComponentProps["workflowDef"];
-    instanceEntry!: InstanceComponentProps["instanceEntry"];
-    onAction: InstanceComponentProps["onAction"] | undefined = undefined;
-    onSendMessage: InstanceComponentProps["onSendMessage"] | undefined =
-      undefined;
+    declare workflowDef: InstanceComponentProps["workflowDef"];
+    declare instanceEntry: InstanceComponentProps["instanceEntry"];
+    declare onAction: InstanceComponentProps["onAction"] | undefined;
+    declare onSendMessage: InstanceComponentProps["onSendMessage"] | undefined;
     input = "";
 
     render() {

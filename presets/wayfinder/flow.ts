@@ -28,8 +28,61 @@ export const flow: FlowDefinition = {
   domainDir: ".wayfinder",
   // Declarative theme: clear sky blue accent, mountain emblem — "clearing the
   // fog" matches wayfinder's chart-fog-then-build workflows. queen-bee /
-  // honeycomb stay on the default golden.
-  ui: { theme: { accent: "#4a9fe0", emblem: "\u25b2" } },
+  // honeycomb stay on the default golden. The served component modules (the
+  // custom cards, workflow views, and render kinds) are refs — standalone
+  // module-set files linted/typechecked by the gate and served stripped.
+  ui: {
+    theme: { accent: "#4a9fe0", emblem: "\u25b2" },
+    kinds: [
+      {
+        kind: "findings-report",
+        contract: {
+          props: [
+            { name: "findings", type: "string", scope: "output" },
+            { name: "sources", type: "string[]", scope: "output" },
+          ],
+        },
+      },
+      {
+        kind: "prototype-decision",
+        contract: {
+          props: [
+            { name: "decision", type: "string", scope: "output" },
+            { name: "gist", type: "string", scope: "output" },
+            { name: "artifactPath", type: "string", scope: "output" },
+          ],
+        },
+      },
+      {
+        kind: "plan-tickets",
+        contract: {
+          props: [{ name: "tickets", type: "array", scope: "output" }],
+        },
+      },
+      {
+        kind: "review-findings",
+        contract: {
+          props: [
+            { name: "verdict", type: "string", scope: "output" },
+            { name: "findings", type: "array", scope: "output" },
+          ],
+        },
+      },
+    ],
+    components: {
+      "ticket-card": { ref: "./ui/ticket-card.ts" },
+      "build-card": { ref: "./ui/build-card.ts" },
+      "build-item-card": { ref: "./ui/build-item-card.ts" },
+      "charting-card": { ref: "./ui/charting-card.ts" },
+      "expedition-map": { ref: "./ui/expedition-map.ts" },
+      "frontier-board": { ref: "./ui/frontier-board.ts" },
+      "build-pipeline": { ref: "./ui/build-pipeline.ts" },
+      "findings-report": { ref: "./ui/findings-report.ts" },
+      "prototype-decision": { ref: "./ui/prototype-decision.ts" },
+      "plan-tickets": { ref: "./ui/plan-tickets.ts" },
+      "review-findings": { ref: "./ui/review-findings.ts" },
+    },
+  },
   tools: [
     {
       id: "submit_map",
@@ -89,6 +142,8 @@ export const flow: FlowDefinition = {
         "Name the destination, surface the decision frontier, then chart the map.",
       ui: {
         view: "list",
+        instanceComponent: "charting-card",
+        workflowComponent: "expedition-map",
       },
       instanceState: [
         {
@@ -227,6 +282,8 @@ export const flow: FlowDefinition = {
       },
       ui: {
         view: "board",
+        instanceComponent: "ticket-card",
+        workflowComponent: "frontier-board",
         columns: [
           {
             id: "fog",
@@ -486,6 +543,10 @@ export const flow: FlowDefinition = {
               label: "Run research",
               role: "ai-task",
               tools: ["read_file", "list_directory", "search_code"],
+              render: {
+                kind: "findings-report",
+                props: { findings: "findings", sources: "sources" },
+              },
               completionOutput: [
                 {
                   field: "question",
@@ -569,6 +630,14 @@ export const flow: FlowDefinition = {
               role: "ai-chat",
               startOnUserInput: true,
               workspacePath: "@instance:worktreePath",
+              render: {
+                kind: "prototype-decision",
+                props: {
+                  decision: "completion.decision",
+                  gist: "completion.gist",
+                  artifactPath: "completion.artifactPath",
+                },
+              },
               tools: [
                 "read_file",
                 "write_file",
@@ -653,6 +722,13 @@ export const flow: FlowDefinition = {
               label: "Grilling session",
               role: "ai-chat",
               startOnUserInput: true,
+              render: {
+                kind: "prototype-decision",
+                props: {
+                  decision: "completion.decision",
+                  gist: "completion.gist",
+                },
+              },
               tools: [
                 "read_file",
                 "list_directory",
@@ -715,6 +791,13 @@ export const flow: FlowDefinition = {
               id: "taskSession",
               label: "Run task",
               role: "ai-task",
+              render: {
+                kind: "prototype-decision",
+                props: {
+                  decision: "decision",
+                  gist: "gist",
+                },
+              },
               tools: [
                 "read_file",
                 "list_directory",
@@ -776,6 +859,13 @@ export const flow: FlowDefinition = {
               label: "Task session",
               role: "ai-chat",
               startOnUserInput: true,
+              render: {
+                kind: "prototype-decision",
+                props: {
+                  decision: "completion.decision",
+                  gist: "completion.gist",
+                },
+              },
               tools: [
                 "read_file",
                 "list_directory",
@@ -882,6 +972,8 @@ export const flow: FlowDefinition = {
         "The implementation phase: spec the collapsed decisions, plan tracer-bullet tickets, quiz the breakdown, then fan out build items.",
       ui: {
         view: "list",
+        instanceComponent: "build-card",
+        workflowComponent: "build-pipeline",
       },
       instanceState: [
         {
@@ -962,6 +1054,10 @@ export const flow: FlowDefinition = {
               label: "Run planner",
               role: "ai-task",
               tools: ["read_file", "search_code"],
+              render: {
+                kind: "plan-tickets",
+                props: { tickets: "tickets" },
+              },
               completionOutput: [
                 {
                   field: "tickets",
@@ -1082,6 +1178,7 @@ export const flow: FlowDefinition = {
       },
       ui: {
         view: "board",
+        instanceComponent: "build-item-card",
       },
       display: {
         fields: [
@@ -1245,6 +1342,10 @@ export const flow: FlowDefinition = {
               label: "Run code review",
               role: "ai-task",
               workspacePath: "@instance:worktreePath",
+              render: {
+                kind: "review-findings",
+                props: { verdict: "verdict", findings: "findings" },
+              },
               tools: [
                 "read_file",
                 "list_directory",
