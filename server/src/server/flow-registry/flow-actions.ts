@@ -6,6 +6,7 @@ import type {
   FlowRuntimeAPI,
   WorkflowInstanceEntry,
 } from "workflow-engine/create-flow-runtime";
+import { evaluateGate } from "workflow-engine/create-flow-runtime";
 import type {
   ActionVariant,
   ConfigField,
@@ -50,7 +51,9 @@ export function getAvailableFlowActions(flowId: string): FlowLevelActionView[] {
   if (actions.length === 0) return [];
   const ctx = buildFlowGateContext(runtime);
   return actions
-    .filter((action) => action.gate === undefined || action.gate(ctx))
+    .filter(
+      (action) => action.gate === undefined || evaluateGate(action.gate, ctx)
+    )
     .map((action) => ({
       id: action.id,
       label: action.label,
@@ -82,7 +85,7 @@ export function dispatchFlowLevelAction(
     throw new HttpError(404, `Flow-level action "${actionId}" not found`);
 
   const ctx = buildFlowGateContext(runtime);
-  if (action.gate !== undefined && !action.gate(ctx)) {
+  if (action.gate !== undefined && !evaluateGate(action.gate, ctx)) {
     throw new HttpError(
       409,
       `Flow-level action "${actionId}" is not available`
@@ -149,8 +152,8 @@ function buildFlowGateContext(
     workflowInstanceState: {},
     flowState: runtime.getFlowState(),
     taskErrorCounts: {},
-    workflowInstancesInState: (stateId) =>
-      runtime.workflowInstancesInState(stateId),
+    workflowInstancesInState: (workflowId, stateId) =>
+      runtime.workflowInstancesInState(workflowId, stateId),
   };
 }
 
