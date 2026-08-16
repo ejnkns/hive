@@ -229,6 +229,15 @@ export function readConfigField(obj: ObjectLiteral): ConfigField | undefined {
     const options = readStringArrayFromExpr(optionsProp.initializer);
     if (options !== undefined) field.options = options;
   }
+  // E4: dynamic select options sourced from flowState (a dotted path whose
+  // first segment is a declared flowState field; the server resolves it).
+  const optionsFrom = readObject(obj, "optionsFrom");
+  if (optionsFrom !== undefined) {
+    const flowStatePath = readString(optionsFrom, "flowState");
+    if (flowStatePath !== undefined) {
+      field.optionsFrom = { flowState: flowStatePath };
+    }
+  }
   return field;
 }
 

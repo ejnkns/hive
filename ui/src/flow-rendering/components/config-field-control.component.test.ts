@@ -150,6 +150,30 @@ describe("ConfigFieldControl", () => {
     expect((await emitted).detail).toEqual({ key: "kind", value: "b" });
   });
 
+  it("renders a select when options are present (static or resolved E4)", async () => {
+    const el = await mountControl({
+      field: field({ key: "category", type: "string", options: ["infra"] }),
+    });
+    const select = el.querySelector("select") as HTMLSelectElement;
+    expect(select).toBeDefined();
+    expect(select.options.length).toBe(2); // placeholder + infra
+  });
+
+  it("renders free text when a dynamic-options field has no resolved options (E4 fallback)", async () => {
+    // The server drops optionsFrom when flowState lacks the source; the
+    // control sees no options and renders a plain text input, never a select.
+    const el = await mountControl({
+      field: field({
+        key: "category",
+        type: "string",
+        optionsFrom: { flowState: "taxonomy.categories" },
+      }),
+    });
+    const text = el.querySelector('input[type="text"]') as HTMLInputElement;
+    expect(text).toBeDefined();
+    expect(el.querySelector("select")).toBeNull();
+  });
+
   it("emits the toggled array for multiselect chips", async () => {
     const el = await mountControl({
       field: field({ key: "tags", type: "string[]", options: ["x", "y"] }),

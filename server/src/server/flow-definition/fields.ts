@@ -59,6 +59,7 @@ export function isDerivedDisplay(value: unknown): value is DerivedDisplay {
 export function isConfigField(value: unknown): value is ConfigField {
   if (typeof value !== "object" || value === null) return false;
   const field = value as Record<string, unknown>;
+  const optionsFrom = field.optionsFrom as Record<string, unknown> | undefined;
   return (
     typeof field.key === "string" &&
     typeof field.label === "string" &&
@@ -71,6 +72,10 @@ export function isConfigField(value: unknown): value is ConfigField {
       field.type === "string[]") &&
     (field.options === undefined ||
       (Array.isArray(field.options) &&
-        field.options.every((o) => typeof o === "string")))
+        field.options.every((o) => typeof o === "string"))) &&
+    (optionsFrom === undefined ||
+      (typeof optionsFrom === "object" &&
+        optionsFrom !== null &&
+        typeof optionsFrom.flowState === "string"))
   );
 }
