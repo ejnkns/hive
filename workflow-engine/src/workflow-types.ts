@@ -11,6 +11,11 @@
 
 export type { ChatMessage } from "./shared/chat-message.ts";
 export type {
+  TaskRunnerContext,
+  WorkflowInstanceProjection,
+  WorkflowInstancesInState,
+} from "./task-runner.ts";
+export type {
   ActionVariant,
   AutoTransition,
   BoardColumn,
@@ -38,6 +43,7 @@ export type {
   AutoTransitionSpec,
   CompletionContract,
   CompletionOutputField,
+  CrossInstanceWriteDecl,
   DefinitionError,
   DefinitionValidationContext,
   DisplayFieldRender,
@@ -48,6 +54,7 @@ export type {
   FanOutValueSpec,
   FieldType,
   FlowLevelActionSpec,
+  FlowStateField,
   GateSpec,
   InstanceStateField,
   ModuleRefKind,

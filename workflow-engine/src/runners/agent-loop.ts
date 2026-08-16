@@ -100,6 +100,10 @@ export type AgentRunnerConfig = {
   // see the current state (patches by earlier turns, the flow, or the
   // instance-state API).
   workflowInstanceState?: () => Record<string, unknown>;
+  // Flow-level state read (E2), threaded into the ToolContext so tools can
+  // read the flow's declared cross-entity state (e.g. the taxonomy). Tools
+  // read only — flowState writes belong to operations via patchFlowState.
+  flowState?: () => Record<string, unknown>;
   // The create_instance capability, offered to the model when the task
   // declares the tool. Takes domain state and returns the new instance id.
   createWorkflowInstance?: (
@@ -247,6 +251,7 @@ export async function runAgentLoop(
           instanceId: config.instanceId,
           patchWorkflowInstanceState: config.patchWorkflowInstanceState,
           workflowInstanceState: () => config.workflowInstanceState?.() ?? {},
+          flowState: () => config.flowState?.() ?? {},
           createWorkflowInstance: config.createWorkflowInstance,
           signal: config.signal,
         });

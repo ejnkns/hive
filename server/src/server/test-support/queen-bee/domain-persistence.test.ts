@@ -86,7 +86,10 @@ function makeRunner(
       taskOutputs: () => taskOutputs,
       patchWorkflowInstanceState: (patch) =>
         Object.assign(instanceState, patch),
+      flowState: () => ({}),
+      patchFlowState: () => {},
       workflowInstancesInState: () => [],
+      patchInstanceState: () => false,
     }),
     operations: queenBeeFlow.operations ?? {},
   });

@@ -9,7 +9,7 @@
 
 import type { BoardColumn, WorkflowView } from "./actions.ts";
 import type { ConfigField } from "./config-field.ts";
-import type { CustomRenderKind, RuntimeRenderHint } from "./render-hints.ts";
+import type { RuntimeRenderHint } from "./render-hints.ts";
 
 export type FieldType =
   | "string"
@@ -22,6 +22,13 @@ export type FieldType =
   | "object[]";
 
 export type InstanceStateField = { field: string; type: FieldType };
+
+// A declared flow-level state field (E2). FlowState is cross-entity data the
+// engine's operations write (patchFlowState) and the flow's tools read — not
+// user input — so it uses the instance-state field vocabulary (FieldType
+// includes object/object[] for structured values like a taxonomy), not the
+// ConfigField input vocabulary.
+export type FlowStateField = { field: string; type: FieldType };
 
 // A structured completion contract on an ai-task/ai-chat: the compiler
 // generates a completion tool with exactly these fields (all required); the
@@ -109,10 +116,22 @@ export type ToolRefSpec = { id: string; ref: string; writes?: string[] };
 // A custom operation the flow ships: the file's `<id>Operations` export is a
 // defineOperations map merged into the definition's operations. Tasks
 // reference the op by `id`. `writes` declares the instance-state fields the
-// op patches (the read↔write invariant counts them as writers for the
-// workflows whose tasks use the op; the module-set schema-consistency check
-// verifies against the actual op body).
-export type OperationRefSpec = { id: string; ref: string; writes?: string[] };
+// op patches on its own instance (the read↔write invariant counts them as
+// writers for the workflows whose tasks use the op; the module-set
+// schema-consistency check verifies against the actual op body).
+// `writesAcross` declares the op's cross-instance writes (E1): per target
+// workflow, the instance-state fields the op patches on SIBLING instances
+// via `ctx.patchInstanceState(instanceId, patch)`. The schema-consistency
+// check verifies those fields against the target workflow's declared
+// instanceState and the actual op body — a sibling patch the op does not
+// declare is rejected by the module-set gate.
+export type CrossInstanceWriteDecl = { workflow: string; fields: string[] };
+export type OperationRefSpec = {
+  id: string;
+  ref: string;
+  writes?: string[];
+  writesAcross?: CrossInstanceWriteDecl[];
+};
 
 // An edge transform implemented in a referenced file. `fields` declares the
 // target instance-state fields the transform produces — the compiler wraps
@@ -179,6 +198,12 @@ export type ActionSpec = {
   dependsOnState?: string;
   newAttempt?: boolean;
   completesRunningTask?: boolean;
+  // E5: the action removes the instance from the flow when it fires (no
+  // transition target). Destructive variants only; mutually exclusive with
+  // transitionTo. The engine drops the controller, deletes the persisted
+  // state, and notifies listeners; title-based references to the removed
+  // instance go stale gracefully.
+  deletesInstance?: boolean;
   // Custom wording for the two-click confirm step. Destructive actions confirm
   // by default; declaring this implies a confirm for any variant and
   // overrides the wording (the "confirm + reason" pattern pairs it with
@@ -229,6 +254,13 @@ export type WorkflowSpec = {
     // A served component id (a key of the flow's `ui.components`) that renders
     // this workflow's instances instead of the default card.
     instanceComponent?: string;
+    // E3: group the board by the distinct values of a declared instance-state
+    // field — one column per value plus an "uncategorized" column for
+    // instances missing the value. A generic partition: the engine/UI never
+    // reads or interprets the values (no labels, ordering, or semantics — the
+    // domain maps values to labels via display hints if it wants). Mutually
+    // exclusive with `columns` (field grouping replaces state columns).
+    groupByField?: string;
   };
   display?: { fields: DisplayFieldSpec[] };
   // Optional curated set of instance-state fields a user may edit in place via
@@ -243,7 +275,11 @@ export type WorkflowSpec = {
 export type EdgeSpec = {
   fromWorkflow: string;
   fromStates: string[];
-  toWorkflow: string;
+  toWorkflow?: string;
+  // E2: when true, the edge's transform output updates FlowState instead of
+  // creating new instances. The transform's declared fields must be declared
+  // flowState fields. Mutually exclusive with toWorkflow.
+  toFlowState?: boolean;
   // Value-source transforms (mutually exclusive with `transform`):
   fields?: Record<string, ValueSpec>;
   fanOut?: {
@@ -285,4 +321,9 @@ export type DefinitionValidationContext = {
   // id; the writer validator counts them for workflows whose tasks use them.
   toolWritesById: Map<string, string[]>;
   operationWritesById: Map<string, string[]>;
+  // Flow-level custom operations' declared cross-instance writes (E1), keyed
+  // by op id: per target workflow, the instance-state fields the op patches
+  // on sibling instances. The writer validator counts them for the TARGET
+  // workflows; the module-set gate verifies them against the actual bodies.
+  operationWritesAcrossById: Map<string, CrossInstanceWriteDecl[]>;
 };

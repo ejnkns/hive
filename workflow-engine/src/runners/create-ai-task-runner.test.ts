@@ -184,6 +184,41 @@ describe("createAiTaskRunner", () => {
     assert.equal(ctx.workspacePath, "/repo");
   });
 
+  it("threads flowState into the tool context for reads (E2)", async () => {
+    let resolveCtx: (ctx: ToolContext) => void = () => {};
+    const ctxPromise = new Promise<ToolContext>((resolve) => {
+      resolveCtx = resolve;
+    });
+    const runner = createAiTaskRunner({
+      modelCaller: mockCaller([
+        {
+          content: "tool",
+          toolCalls: [{ id: "c", name: "taxonomy_tool", arguments: "{}" }],
+        },
+        { content: "Done!" },
+      ]),
+      toolDefinitions: {},
+      toolExecutors: {
+        taxonomy_tool: async (call, ctx) => {
+          resolveCtx(ctx);
+          return {
+            toolCallId: call.id,
+            content: JSON.stringify(ctx.flowState?.() ?? {}),
+            isError: false,
+          };
+        },
+      },
+      flowState: () => ({ taxonomy: { categories: ["infra"] } }),
+    });
+
+    await runner.run({ ...dummyTask, tools: ["taxonomy_tool"] });
+
+    const ctx = await ctxPromise;
+    assert.deepEqual(ctx.flowState?.(), {
+      taxonomy: { categories: ["infra"] },
+    });
+  });
+
   it("resolves an @instance workspacePath ref so tools operate in the instance workspace", async () => {
     const worktree = tempDir();
     const toolDefs = createStandardToolDefinitions();

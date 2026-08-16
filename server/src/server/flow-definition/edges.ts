@@ -17,7 +17,6 @@ export function validateEdges(
   for (const [eIndex, edge] of (definition.edges ?? []).entries()) {
     const ePath = `edges[${eIndex}]`;
     const from = context.workflowById.get(edge.fromWorkflow);
-    const to = context.workflowById.get(edge.toWorkflow);
     if (!from) {
       error(
         `${ePath}.fromWorkflow`,
@@ -25,6 +24,73 @@ export function validateEdges(
       );
       continue;
     }
+
+    // E2 — a toFlowState edge writes the flow's declared cross-entity state
+    // instead of creating instances: no target workflow; the transform's
+    // declared fields must be declared flowState fields.
+    if (edge.toFlowState === true) {
+      if (edge.toWorkflow !== undefined) {
+        error(
+          `${ePath}`,
+          `a toFlowState edge updates flowState — do not also declare toWorkflow (${JSON.stringify(edge.toWorkflow)})`
+        );
+      }
+      const fromStates = context.stateIdsByWorkflow.get(from.id);
+      const fromTaskIds = context.taskIdsByWorkflow.get(from.id);
+      if (!fromStates || !fromTaskIds) continue;
+      for (const state of edge.fromStates) {
+        if (!fromStates.has(state)) {
+          error(
+            `${ePath}.fromStates`,
+            `source workflow "${from.id}" has no state ${JSON.stringify(state)}`
+          );
+        }
+      }
+      const declaredFlowState = new Set(
+        (definition.flowState ?? []).map((field) => field.field)
+      );
+      for (const field of Object.keys(edge.fields ?? {})) {
+        for (const e of validateValueSpec(
+          edge.fields?.[field] as never,
+          fromTaskIds,
+          `${ePath}.fields.${field}`,
+          context.completionOutputById.get(from.id)
+        )) {
+          error(e.path, e.message);
+        }
+        if (!declaredFlowState.has(field)) {
+          error(
+            `${ePath}.fields.${field}`,
+            `toFlowState edge writes "${field}" which is not declared in flowState (declared: ${[...declaredFlowState].join(", ")})`
+          );
+        }
+      }
+      if (edge.fanOut) {
+        error(
+          `${ePath}.fanOut`,
+          `fanOut creates instances — a toFlowState edge writes flowState, use fields or a transform instead`
+        );
+      }
+      if (edge.transform) {
+        for (const e of validateRefShape(
+          edge.transform.ref,
+          `${ePath}.transform.ref`
+        )) {
+          error(e.path, e.message);
+        }
+        for (const field of edge.transform.fields ?? []) {
+          if (!declaredFlowState.has(field)) {
+            error(
+              `${ePath}.transform.fields`,
+              `toFlowState edge transform writes "${field}" which is not declared in flowState (declared: ${[...declaredFlowState].join(", ")})`
+            );
+          }
+        }
+      }
+      continue;
+    }
+
+    const to = context.workflowById.get(edge.toWorkflow ?? "");
     if (!to) {
       error(
         `${ePath}.toWorkflow`,

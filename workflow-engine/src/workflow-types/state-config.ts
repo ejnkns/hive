@@ -84,6 +84,12 @@ export type WorkflowConfig<
   // transition, no attempt bump). Fields the engine or agents write that are
   // not listed here stay untouched and uneditable in the UI.
   editFields?: ConfigField[];
+  // The workflow's declared instance-state fields (field → type). Carried on
+  // the compiled projection so the runtime validates cross-instance patches
+  // (E1 — patchSiblingInstanceState) against the target workflow's declared
+  // fields. Absent on closure-form workflows (defineWorkflow), which have no
+  // declaration.
+  instanceState?: Array<{ field: string; type: string }>;
   // Per-workflow rendering hooks. Pure data.
   ui?: {
     // Registry-resolved custom instance renderer; falls back to the default
@@ -95,6 +101,10 @@ export type WorkflowConfig<
     // Optional board curation: ordered lanes folding states into columns.
     // Absent → the default derived board (one column per state).
     columns?: readonly BoardColumn[];
+    // E3: board grouping by the distinct values of a declared instance-state
+    // field (one column per value + uncategorized). Generic partition — the
+    // engine never interprets the values. Mutually exclusive with `columns`.
+    groupByField?: string;
   };
   taskOutputs: TTaskOutputs;
   states: readonly StateDef<TTaskOutputs, TStateId, TWorkflowInstanceState>[];

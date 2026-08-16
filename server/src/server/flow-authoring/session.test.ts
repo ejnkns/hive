@@ -241,7 +241,11 @@ function operationContext(
     taskOutputs: () => ctx.taskOutputs,
     patchWorkflowInstanceState: (patch) =>
       ctx.patchWorkflowInstanceState(patch as Record<string, unknown>),
+    flowState: () => ctx.flowState(),
+    patchFlowState: ctx.patchFlowState,
     workflowInstancesInState: ctx.workflowInstancesInState,
+    patchInstanceState: (instanceId, patch) =>
+      ctx.patchSiblingInstanceState(instanceId, patch),
   };
 }
 

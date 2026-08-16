@@ -76,4 +76,98 @@ describe("authoring guide", () => {
       "guide missing the state patch"
     );
   });
+
+  it("covers the cross-instance write capability (E1)", () => {
+    const guide = authoringGuide();
+    const writes = engineCapabilities.crossInstanceWrites;
+    assert.ok(guide.includes(writes.name), "guide missing patchInstanceState");
+    assert.ok(
+      guide.includes("writesAcross"),
+      "guide missing the writesAcross declaration"
+    );
+    assert.ok(
+      guide.includes(writes.description),
+      "guide missing the cross-instance write description"
+    );
+  });
+
+  it("covers the workflow-filtered instance query (E6)", () => {
+    const guide = authoringGuide();
+    assert.ok(
+      guide.includes("workflowInstancesInState(workflowId?, stateId?)"),
+      "guide missing the positional workflow-filtered query"
+    );
+    assert.ok(
+      guide.includes('workflowInstancesInState(undefined, "done")'),
+      "guide missing the state-only positional form"
+    );
+    assert.ok(
+      guide.includes("carries the instance's workflowId"),
+      "guide missing the workflowId in projections"
+    );
+  });
+
+  it("covers the instance deletion capability (E5)", () => {
+    const guide = authoringGuide();
+    const deletion = engineCapabilities.instanceDeletion;
+    assert.ok(guide.includes(deletion.name), "guide missing deletesInstance");
+    assert.ok(
+      guide.includes(deletion.description),
+      "guide missing the deletion description"
+    );
+    assert.ok(
+      guide.includes("removeWorkflowInstance"),
+      "guide missing the runtime remove capability"
+    );
+  });
+
+  it("covers the board grouping capability (E3)", () => {
+    const guide = authoringGuide();
+    const grouping = engineCapabilities.boardGrouping;
+    assert.ok(guide.includes(grouping.name), "guide missing groupByField");
+    assert.ok(
+      guide.includes("Uncategorized"),
+      "guide missing the uncategorized column"
+    );
+    assert.ok(
+      guide.includes("never reads or interprets"),
+      "guide missing the generic-partition guarantee"
+    );
+  });
+
+  it("covers the flowState capability (E2)", () => {
+    const guide = authoringGuide();
+    const flowState = engineCapabilities.flowState;
+    assert.ok(guide.includes(flowState.name), "guide missing flowState");
+    assert.ok(
+      guide.includes("ctx.flowState()"),
+      "guide missing the flowState read"
+    );
+    assert.ok(
+      guide.includes("ctx.patchFlowState"),
+      "guide missing the flowState write"
+    );
+    assert.ok(
+      guide.includes("toFlowState edge transforms against the declaration"),
+      "guide missing the flowState write validation"
+    );
+    assert.ok(
+      guide.includes("toFlowState"),
+      "guide missing the toFlowState edge"
+    );
+  });
+
+  it("covers the runtime edit-field options capability (E4)", () => {
+    const guide = authoringGuide();
+    const options = engineCapabilities.runtimeEditOptions;
+    assert.ok(guide.includes(options.name), "guide missing optionsFrom");
+    assert.ok(
+      guide.includes("optionsFrom: { flowState"),
+      "guide missing the optionsFrom shape"
+    );
+    assert.ok(
+      guide.includes("falls back to free text"),
+      "guide missing the free-text fallback"
+    );
+  });
 });

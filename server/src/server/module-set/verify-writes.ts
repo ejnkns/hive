@@ -11,7 +11,9 @@ import ts from "typescript";
 import type { FlowDefinition } from "workflow-engine/workflow-types";
 import { ENGINE_PROVIDED } from "../flow-definition/constants.ts";
 import {
+  collectFlowStatePatchWrites,
   collectPatchWrites,
+  collectSiblingPatchWrites,
   parseFile,
   resolveFn,
   unwrap,
@@ -56,6 +58,49 @@ export function verifyDeclaredWrites(
         findings.push({
           ref: op.ref,
           message: `operation "${op.id}" patches instance-state field "${field}" which is not declared in the operation's writes (declared: ${[...declared].join(", ") || "none"}) — declare it or the read↔write invariant undercounts the writer`,
+        });
+      }
+    }
+  }
+
+  // Cross-instance writes (E1): an op's `writesAcross` declares the sibling
+  // fields it patches via ctx.patchInstanceState — declarations can lie, so
+  // the actual sibling patches in the executor bodies must be declared.
+  for (const op of definition.operations ?? []) {
+    const declared = new Set(
+      (op.writesAcross ?? []).flatMap((decl) => decl.fields)
+    );
+    const actual = operationSiblingWrites(op.ref, `${op.id}Operations`, files);
+    if (actual === undefined) continue;
+    for (const field of actual) {
+      if (ENGINE_PROVIDED.has(field)) continue;
+      if (!declared.has(field)) {
+        findings.push({
+          ref: op.ref,
+          message: `operation "${op.id}" patches sibling-instance field "${field}" which is not declared in the operation's writesAcross (declared: ${[...declared].join(", ") || "none"}) — declare it or the cross-instance write is undeclared`,
+        });
+      }
+    }
+  }
+
+  // FlowState writes (E2): an op body's ctx.patchFlowState(...) keys must be
+  // declared flowState fields. The definition declares flowState as data; the
+  // actual patchFlowState calls are the referenced-file side of the contract.
+  const declaredFlowState = new Set(
+    (definition.flowState ?? []).map((field) => field.field)
+  );
+  for (const op of definition.operations ?? []) {
+    const actual = operationFlowStateWrites(
+      op.ref,
+      `${op.id}Operations`,
+      files
+    );
+    if (actual === undefined) continue;
+    for (const field of actual) {
+      if (!declaredFlowState.has(field)) {
+        findings.push({
+          ref: op.ref,
+          message: `operation "${op.id}" patches flowState field "${field}" which is not declared in the definition's flowState (declared: ${[...declaredFlowState].join(", ") || "none"}) — declare it in flowState or the flowState write is undeclared`,
         });
       }
     }
@@ -106,6 +151,53 @@ function operationWrites(
   for (const prop of group.properties) {
     if (!ts.isPropertyAssignment(prop)) continue;
     collectPatchWrites(resolveFn(prop.initializer, sourceFile), writes);
+  }
+  return writes;
+}
+
+// The sibling-instance fields a referenced operations map's op bodies patch
+// via ctx.patchInstanceState(instanceId, patch) (E1).
+function operationSiblingWrites(
+  ref: string,
+  exportName: string,
+  files: Record<string, string>
+): Set<string> | undefined {
+  const source = files[ref];
+  if (source === undefined) return undefined;
+  const sourceFile = parseFile({ path: ref, source });
+  const map = exportConstInitializer(sourceFile, exportName);
+  if (map === undefined) return undefined;
+  const group = opsGroupLiteral(map);
+  if (group === undefined) return undefined;
+  const writes = new Set<string>();
+  for (const prop of group.properties) {
+    if (!ts.isPropertyAssignment(prop)) continue;
+    collectSiblingPatchWrites(resolveFn(prop.initializer, sourceFile), writes);
+  }
+  return writes;
+}
+
+// The flowState fields a referenced operations map's op bodies patch via
+// ctx.patchFlowState(patch) (E2).
+function operationFlowStateWrites(
+  ref: string,
+  exportName: string,
+  files: Record<string, string>
+): Set<string> | undefined {
+  const source = files[ref];
+  if (source === undefined) return undefined;
+  const sourceFile = parseFile({ path: ref, source });
+  const map = exportConstInitializer(sourceFile, exportName);
+  if (map === undefined) return undefined;
+  const group = opsGroupLiteral(map);
+  if (group === undefined) return undefined;
+  const writes = new Set<string>();
+  for (const prop of group.properties) {
+    if (!ts.isPropertyAssignment(prop)) continue;
+    collectFlowStatePatchWrites(
+      resolveFn(prop.initializer, sourceFile),
+      writes
+    );
   }
   return writes;
 }

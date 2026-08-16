@@ -9,4 +9,8 @@
 export type { ObjectLiteral } from "./schema-consistency/ast.ts";
 export { parseFile, unwrap } from "./schema-consistency/ast.ts";
 export { resolveFn } from "./schema-consistency/capability-maps.ts";
-export { collectPatchWrites } from "./schema-consistency/state-access.ts";
+export {
+  collectFlowStatePatchWrites,
+  collectPatchWrites,
+  collectSiblingPatchWrites,
+} from "./schema-consistency/state-access.ts";

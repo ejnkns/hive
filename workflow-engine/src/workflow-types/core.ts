@@ -2,6 +2,7 @@
  * model-call status, and the gate context. */
 
 import type { ChatMessage } from "../shared/chat-message.ts";
+import type { WorkflowInstancesInState } from "../task-runner.ts";
 
 export type { ChatMessage } from "../shared/chat-message.ts";
 
@@ -106,16 +107,30 @@ export type GateContext<
   // use this to bound retry loops: a task that keeps failing escalates instead
   // of looping forever, without per-preset bookkeeping.
   taskErrorCounts: Readonly<Record<string, number>>;
-  workflowInstancesInState?: (stateId?: string) => {
-    currentState: string;
-    id: string;
-    workflowInstanceState: Record<string, unknown>;
-  }[];
+  // Cross-instance query: filter by workflow id and/or state id; every
+  // projection carries the instance's workflowId.
+  workflowInstancesInState?: WorkflowInstancesInState;
 };
 
 export type RuntimeGateContext = GateContext;
 
 // The contract a definition-referenced gate implements: a predicate over the
-// runtime gate context. The renderer emits stubs typed with this and the
-// module-set lint checks the referenced export against it.
-export type GateContract = (ctx: RuntimeGateContext) => boolean;
+// runtime gate context. Generic over the workflow's instance-state and
+// flowState shapes so a gate binds the flow's own types (mirroring
+// defineOperations<TState> / defineTool<TState>):
+//   `GateContract<IdeaState, FlowState>` — instance fields and flowState
+//   fields are typed; the erased defaults keep an un-annotated gate a
+//   predicate over Record<string, unknown>. Fields read before their writer
+//   runs are genuinely undefined at runtime, so declared types should keep
+//   fields optional (a `??`/`?.` guard is runtime truth, not type noise). The
+//   module-set lint pins the export to the erased contract, and the runtime
+//   invokes it with the erased context — both assignable (verified).
+export type GateContract<
+  TWorkflowInstanceState extends Record<string, unknown> = Record<
+    string,
+    unknown
+  >,
+  TFlowState extends Record<string, unknown> = Record<string, unknown>,
+> = (
+  ctx: GateContext<Record<string, unknown>, TWorkflowInstanceState, TFlowState>
+) => boolean;

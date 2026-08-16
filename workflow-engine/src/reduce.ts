@@ -1,4 +1,6 @@
+import { evaluateGate } from "./evaluate-gate.ts";
 import type { RuntimeWorkflowInstanceState } from "./shared/workflow-instance-state.ts";
+import type { WorkflowInstancesInState } from "./task-runner.ts";
 import type {
   RunningTaskContext,
   RuntimeGateContext,
@@ -64,11 +66,7 @@ export function reduce(
   event: WorkflowEvent,
   states: readonly RuntimeStateDef[],
   flowState?: Record<string, unknown>,
-  workflowInstancesInState?: (stateId?: string) => {
-    currentState: string;
-    id: string;
-    workflowInstanceState: Record<string, unknown>;
-  }[]
+  workflowInstancesInState?: WorkflowInstancesInState
 ): ReduceResult {
   switch (event.type) {
     case "action_triggered": {
@@ -233,11 +231,7 @@ function applyTaskOutcome(
   taskId: string,
   states: readonly RuntimeStateDef[],
   flowState?: Record<string, unknown>,
-  workflowInstancesInState?: (stateId?: string) => {
-    currentState: string;
-    id: string;
-    workflowInstanceState: Record<string, unknown>;
-  }[]
+  workflowInstancesInState?: WorkflowInstancesInState
 ): ReduceResult {
   const newOutputs = {
     ...state.taskOutputs,
@@ -320,11 +314,7 @@ function evaluateAutoTransitions(
   currentState: string,
   state: RuntimeWorkflowInstanceState,
   flowState?: Record<string, unknown>,
-  workflowInstancesInState?: (stateId?: string) => {
-    currentState: string;
-    id: string;
-    workflowInstanceState: Record<string, unknown>;
-  }[]
+  workflowInstancesInState?: WorkflowInstancesInState
 ): string | undefined {
   const stateDef = states.find((s) => s.id === currentState);
   if (!stateDef?.autoTransitions) return undefined;
@@ -340,7 +330,10 @@ function evaluateAutoTransitions(
   };
 
   for (const at of stateDef.autoTransitions) {
-    if (at.gate(ctx)) {
+    // Fail-safe: a throwing gate says "no" — it never corrupts the completing
+    // task into an error (the task's success is committed before transitions
+    // are evaluated; a crash here would discard that new state).
+    if (evaluateGate(at.gate, ctx)) {
       return at.to;
     }
   }

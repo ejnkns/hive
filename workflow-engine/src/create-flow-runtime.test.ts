@@ -15,7 +15,10 @@ import {
   type FlowRuntimeEvent,
 } from "./create-flow-runtime.ts";
 import { createAiTaskRunner } from "./runners/create-ai-task-runner.ts";
-import { createOperationRunner } from "./runners/create-operation-runner.ts";
+import {
+  createOperationRunner,
+  type OperationContext,
+} from "./runners/create-operation-runner.ts";
 import {
   createStandardToolDefinitions,
   createStandardToolRegistry,
@@ -371,8 +374,8 @@ describe("FlowRuntime", () => {
       runtime.addWorkflowInstance("source", {
         currentState: "done",
       });
-      const idle = runtime.workflowInstancesInState("idle");
-      const done = runtime.workflowInstancesInState("done");
+      const idle = runtime.workflowInstancesInState(undefined, "idle");
+      const done = runtime.workflowInstancesInState(undefined, "done");
       assert.equal(idle.length, 1);
       assert.equal(done.length, 1);
     });
@@ -380,7 +383,442 @@ describe("FlowRuntime", () => {
     it("returns empty array for unknown state", () => {
       const runtime = createFlowRuntime("test", [sourceWorkflow], [], {});
       runtime.addWorkflowInstance("source");
-      assert.deepEqual(runtime.workflowInstancesInState("nonexistent"), []);
+      assert.deepEqual(
+        runtime.workflowInstancesInState(undefined, "nonexistent"),
+        []
+      );
+    });
+
+    it("carries workflowId on every projection (E6)", () => {
+      const runtime = createFlowRuntime(
+        "test",
+        [sourceWorkflow, targetWorkflow],
+        [],
+        {}
+      );
+      runtime.addWorkflowInstance("source");
+      runtime.addWorkflowInstance("target");
+      const ids = new Set(
+        runtime.workflowInstancesInState().map((p) => p.workflowId)
+      );
+      assert.deepEqual([...ids].sort(), ["source", "target"]);
+    });
+
+    it("filters by workflowId via the object query (E6)", () => {
+      const runtime = createFlowRuntime(
+        "test",
+        [sourceWorkflow, targetWorkflow],
+        [],
+        {}
+      );
+      runtime.addWorkflowInstance("source");
+      runtime.addWorkflowInstance("source");
+      runtime.addWorkflowInstance("target");
+      const targets = runtime.workflowInstancesInState("target");
+      assert.equal(targets.length, 1);
+      assert.equal(targets[0]?.workflowId, "target");
+      assert.equal(
+        runtime.workflowInstancesInState("source", "idle").length,
+        2
+      );
+      assert.equal(
+        runtime.workflowInstancesInState("source", "done").length,
+        0
+      );
+    });
+  });
+
+  describe("cross-instance writes (E1)", () => {
+    // The writer workflow carries an operation that patches a sibling
+    // instance through the operation context's patchInstanceState.
+    const writerWorkflow = defineWorkflow({
+      id: "writer",
+      label: "Writer",
+      taskOutputs: { write: {} as { ok: boolean } },
+      states: [
+        {
+          id: "writing",
+          label: "Writing",
+          tasks: [
+            {
+              id: "write",
+              label: "Write",
+              trigger: "auto",
+              role: "operation",
+              operations: ["write"],
+            },
+          ],
+          autoTransitions: [
+            {
+              to: "done",
+              gate: (ctx) => ctx.taskOutputs.write?.status === "success",
+            },
+          ],
+        },
+        { id: "done", label: "Done" },
+      ],
+      initial: "writing",
+      terminalStates: ["done"],
+    });
+
+    const declaredTarget = defineWorkflow({
+      id: "target",
+      label: "Target",
+      instanceState: [
+        { field: "category", type: "string" },
+        { field: "title", type: "string" },
+      ],
+      taskOutputs: {} as Record<string, never>,
+      states: [{ id: "ready", label: "Ready" }],
+      initial: "ready",
+      terminalStates: ["ready"],
+    });
+
+    function writerRuntime(op: (ctx: OperationContext) => unknown) {
+      return createFlowRuntime("test", [writerWorkflow, declaredTarget], [], {
+        operation: (ctx) =>
+          createOperationRunner({
+            operations: {
+              write: (_task, _params, octx) => op(octx),
+            },
+            getContext: () => ({
+              flowConfig: () => ctx.flowConfig,
+              patchFlowConfig: ctx.patchFlowConfig,
+              instanceId: ctx.instanceId,
+              workflowId: ctx.workflowId,
+              currentState: ctx.currentState,
+              workflowInstanceState: () => ctx.workflowInstanceState(),
+              taskOutputs: () => ctx.taskOutputs,
+              patchWorkflowInstanceState: ctx.patchWorkflowInstanceState,
+              flowState: () => ctx.flowState(),
+              patchFlowState: ctx.patchFlowState,
+              workflowInstancesInState: ctx.workflowInstancesInState,
+              patchInstanceState: (instanceId, patch) =>
+                ctx.patchSiblingInstanceState(instanceId, patch),
+            }),
+          }),
+      });
+    }
+
+    async function waitForDone(runtime: ReturnType<typeof createFlowRuntime>) {
+      for (let i = 0; i < 200; i++) {
+        if (
+          runtime
+            .getWorkflowInstanceEntries()
+            .some((e) => e.state.currentState === "done")
+        ) {
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 10));
+      }
+      throw new Error("writer workflow did not finish");
+    }
+
+    it("an operation on one instance patches a sibling instance's state (E1)", async () => {
+      const writes: Array<{ id: string; patch: Record<string, unknown> }> = [];
+      const runtime = writerRuntime((ctx) => {
+        const targets = ctx.workflowInstancesInState("target");
+        const target = targets[0];
+        if (!target) return { ok: false };
+        const result = ctx.patchInstanceState(target.id, {
+          category: "infra",
+        });
+        writes.push({ id: target.id, patch: { category: "infra" } });
+        return { ok: result };
+      });
+
+      const target = runtime.addWorkflowInstance("target");
+      runtime.addWorkflowInstance("writer");
+      await waitForDone(runtime);
+
+      assert.equal(writes.length, 1);
+      assert.equal(writes[0]?.id, target.id);
+      assert.deepEqual(
+        target.getState().workflowInstanceState.category,
+        "infra"
+      );
+      // The sibling write persists + emits like an own-instance patch: the
+      // entry snapshot sees it.
+      const entry = runtime
+        .getWorkflowInstanceEntries()
+        .find((e) => e.id === target.id);
+      assert.equal(entry?.state.workflowInstanceState.category, "infra");
+    });
+
+    it("returns false for an unknown sibling instance id (NOOP)", async () => {
+      let result: unknown = null;
+      const runtime = writerRuntime((ctx) => {
+        result = ctx.patchInstanceState("no-such-instance", {
+          category: "infra",
+        });
+        return { ok: result };
+      });
+      runtime.addWorkflowInstance("target");
+      runtime.addWorkflowInstance("writer");
+      await waitForDone(runtime);
+      assert.equal(result, false);
+    });
+
+    it("throws on a sibling patch key the target workflow's instanceState does not declare", async () => {
+      let thrown = "";
+      const runtime = writerRuntime((ctx) => {
+        const target = ctx.workflowInstancesInState("target")[0];
+        if (!target) return { ok: false };
+        try {
+          ctx.patchInstanceState(target.id, { bogusField: "x" });
+        } catch (err) {
+          thrown = err instanceof Error ? err.message : String(err);
+        }
+        return { ok: true };
+      });
+      runtime.addWorkflowInstance("target");
+      runtime.addWorkflowInstance("writer");
+      await waitForDone(runtime);
+      assert.match(thrown, /bogusField/);
+      assert.match(thrown, /not declared in workflow "target" instanceState/);
+    });
+  });
+
+  describe("removeWorkflowInstance (E5)", () => {
+    it("removes the instance from the runtime and emits instance_removed", () => {
+      const runtime = createFlowRuntime("test", [sourceWorkflow], [], {});
+      const controller = runtime.addWorkflowInstance("source");
+      const events: string[] = [];
+      runtime.on((e) => events.push(e.type));
+
+      const removed = runtime.removeWorkflowInstance(controller.id);
+      assert.equal(removed, true);
+      assert.equal(runtime.getWorkflowInstance(controller.id), undefined);
+      assert.equal(runtime.workflowInstances.length, 0);
+      assert.ok(events.includes("instance_removed"));
+    });
+
+    it("returns false for an unknown instance id without erroring", () => {
+      const runtime = createFlowRuntime("test", [sourceWorkflow], [], {});
+      assert.equal(runtime.removeWorkflowInstance("no-such-instance"), false);
+    });
+
+    it("deletes the instance's persisted state", () => {
+      const deleted: string[] = [];
+      const persistence: FlowPersistence = {
+        saveFlow() {},
+        saveInstance() {},
+        deleteInstance(_flowId, instanceId) {
+          deleted.push(instanceId);
+        },
+      };
+      const runtime = createFlowRuntime(
+        "test",
+        [sourceWorkflow],
+        [],
+        {},
+        {},
+        {},
+        persistence
+      );
+      const controller = runtime.addWorkflowInstance("source");
+      runtime.removeWorkflowInstance(controller.id);
+      assert.deepEqual(deleted, [controller.id]);
+    });
+
+    it("a deletesInstance action removes the instance via the controller", async () => {
+      const deletableWorkflow = defineWorkflow({
+        id: "deletable",
+        label: "Deletable",
+        taskOutputs: {} as Record<string, never>,
+        states: [
+          {
+            id: "ready",
+            label: "Ready",
+            actions: [
+              {
+                id: "discard",
+                label: "Discard",
+                variant: "destructive",
+                deletesInstance: true,
+              },
+            ],
+          },
+        ],
+        initial: "ready",
+        terminalStates: [],
+      });
+      const runtime = createFlowRuntime("test", [deletableWorkflow], [], {});
+      const controller = runtime.addWorkflowInstance("deletable");
+      controller.dispatchAction("discard");
+      assert.equal(runtime.getWorkflowInstance(controller.id), undefined);
+    });
+  });
+
+  describe("flowState access (E2)", () => {
+    const flowStateWorkflow = defineWorkflow({
+      id: "writer",
+      label: "Writer",
+      taskOutputs: { write: {} as { ok: boolean } },
+      states: [
+        {
+          id: "writing",
+          label: "Writing",
+          tasks: [
+            {
+              id: "write",
+              label: "Write",
+              trigger: "auto",
+              role: "operation",
+              operations: ["write"],
+            },
+          ],
+          autoTransitions: [
+            {
+              to: "done",
+              gate: (ctx) => ctx.taskOutputs.write?.status === "success",
+            },
+          ],
+        },
+        { id: "done", label: "Done" },
+      ],
+      initial: "writing",
+      terminalStates: ["done"],
+    });
+
+    async function waitForDone(runtime: ReturnType<typeof createFlowRuntime>) {
+      for (let i = 0; i < 200; i++) {
+        if (
+          runtime
+            .getWorkflowInstanceEntries()
+            .some((e) => e.state.currentState === "done")
+        ) {
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 10));
+      }
+      throw new Error("writer workflow did not finish");
+    }
+
+    it("an operation reads flowState and writes it via patchFlowState", async () => {
+      const runtime = createFlowRuntime<
+        Record<string, unknown>,
+        Record<string, unknown>
+      >(
+        "test",
+        [flowStateWorkflow],
+        [],
+        {
+          operation: (ctx) =>
+            createOperationRunner({
+              operations: {
+                write: (_task, _params, octx) => {
+                  const prior = octx.flowState().taxonomy;
+                  octx.patchFlowState({
+                    taxonomy: { categories: ["infra", "launch"] },
+                    prior,
+                  });
+                  return { ok: true };
+                },
+              },
+              getContext: () => ({
+                flowConfig: () => ctx.flowConfig,
+                patchFlowConfig: ctx.patchFlowConfig,
+                instanceId: ctx.instanceId,
+                workflowId: ctx.workflowId,
+                currentState: ctx.currentState,
+                workflowInstanceState: () => ctx.workflowInstanceState(),
+                taskOutputs: () => ctx.taskOutputs,
+                patchWorkflowInstanceState: ctx.patchWorkflowInstanceState,
+                flowState: () => ctx.flowState(),
+                patchFlowState: ctx.patchFlowState,
+                workflowInstancesInState: ctx.workflowInstancesInState,
+                patchInstanceState: (instanceId, patch) =>
+                  ctx.patchSiblingInstanceState(instanceId, patch),
+              }),
+            }),
+        },
+        {},
+        { taxonomy: { categories: [] } }
+      );
+
+      runtime.addWorkflowInstance("writer");
+      await waitForDone(runtime);
+
+      const state = runtime.getFlowState();
+      assert.deepEqual(state.taxonomy, {
+        categories: ["infra", "launch"],
+      });
+      assert.deepEqual(state.prior, { categories: [] });
+    });
+  });
+
+  describe("edit-field options from flowState (E4)", () => {
+    const editableWorkflow = defineWorkflow({
+      id: "ideas",
+      label: "Ideas",
+      taskOutputs: {} as Record<string, never>,
+      editFields: [
+        {
+          key: "category",
+          label: "Category",
+          type: "string",
+          optionsFrom: { flowState: "taxonomy.categories" },
+        },
+        { key: "note", label: "Note", type: "string" },
+      ],
+      states: [{ id: "ready", label: "Ready" }],
+      initial: "ready",
+      terminalStates: ["ready"],
+    });
+
+    it("resolves optionsFrom from flowState when serializing instance entries", () => {
+      const runtime = createFlowRuntime(
+        "test",
+        [editableWorkflow],
+        [],
+        {},
+        {},
+        {
+          taxonomy: { categories: ["infra", "launch", "maintenance"] },
+        }
+      );
+      runtime.addWorkflowInstance("ideas");
+      const [entry] = runtime.getWorkflowInstanceEntries();
+      const category = entry?.editFields.find((f) => f.key === "category");
+      assert.deepEqual(category?.options, ["infra", "launch", "maintenance"]);
+      assert.equal(category?.optionsFrom, undefined);
+      // A static/no-source field passes through untouched.
+      assert.equal(
+        entry?.editFields.find((f) => f.key === "note")?.options,
+        undefined
+      );
+    });
+
+    it("falls back to free text when flowState lacks the source value", () => {
+      const runtime = createFlowRuntime(
+        "test",
+        [editableWorkflow],
+        [],
+        {},
+        {},
+        { taxonomy: {} }
+      );
+      runtime.addWorkflowInstance("ideas");
+      const [entry] = runtime.getWorkflowInstanceEntries();
+      const category = entry?.editFields.find((f) => f.key === "category");
+      assert.equal(category?.options, undefined);
+      assert.equal(category?.optionsFrom, undefined);
+    });
+
+    it("only string values become options (opaque filter)", () => {
+      const runtime = createFlowRuntime(
+        "test",
+        [editableWorkflow],
+        [],
+        {},
+        {},
+        { taxonomy: { categories: ["infra", 42, null] } }
+      );
+      runtime.addWorkflowInstance("ideas");
+      const [entry] = runtime.getWorkflowInstanceEntries();
+      const category = entry?.editFields.find((f) => f.key === "category");
+      assert.deepEqual(category?.options, ["infra"]);
     });
   });
 
@@ -447,7 +885,10 @@ describe("FlowRuntime", () => {
       assert.equal(controller.getState().currentState, "done");
       // Original instance + edge-created target instance
       assert.equal(runtime.workflowInstances.length, 2);
-      assert.equal(runtime.workflowInstancesInState("ready").length, 1);
+      assert.equal(
+        runtime.workflowInstancesInState(undefined, "ready").length,
+        1
+      );
     });
 
     it("passes transformed data as workflowInstanceState", async () => {
@@ -825,7 +1266,10 @@ describe("FlowRuntime", () => {
                 workflowInstanceState: () => ({}),
                 taskOutputs: () => ({}),
                 patchWorkflowInstanceState: () => {},
+                flowState: () => ({}),
+                patchFlowState: () => {},
                 workflowInstancesInState: () => [],
+                patchInstanceState: () => false,
               }),
               operations: {
                 save_output: () => ({ hello: "world" }),
@@ -933,7 +1377,10 @@ describe("FlowRuntime", () => {
                 workflowInstanceState: () => ({}),
                 taskOutputs: () => ({}),
                 patchWorkflowInstanceState: () => {},
+                flowState: () => ({}),
+                patchFlowState: () => {},
                 workflowInstancesInState: () => [],
+                patchInstanceState: () => false,
               }),
               operations: {
                 save_output: () => ({ hello: "world" }),

@@ -16,9 +16,14 @@ import {
 } from "./create-workflow-instance-controller.ts";
 import { summarizeWorkflowInstances } from "./derive-display.ts";
 import { evaluateEdges } from "./evaluate-edges.ts";
+import { evaluateGate } from "./evaluate-gate.ts";
 import type { RuntimeWorkflowInstanceState } from "./shared/workflow-instance-state.ts";
-import type { TaskRunnerFactory } from "./task-runner.ts";
 import type {
+  TaskRunnerFactory,
+  WorkflowInstanceProjection,
+} from "./task-runner.ts";
+import type {
+  ConfigField,
   RuntimeFlowEdge,
   RuntimeWorkflowConfig,
   WorkflowSummary,
@@ -33,6 +38,7 @@ export type {
   WorkflowInstanceEntry,
   WorkflowSummary,
 };
+export { evaluateGate };
 
 // ── Factory ──
 
@@ -68,22 +74,77 @@ export function createFlowRuntime<
     }
   }
 
-  // Cross-instance query for gates and depends-on checks. The single source of
-  // the gate-context projection: id + currentState, so callers (gate contexts,
-  // depends-on checks) can reference specific instances. The full runtime
-  // states are available via the workflowInstances getter.
-  function workflowInstancesInState(stateId?: string): {
-    currentState: string;
-    id: string;
-    workflowInstanceState: Record<string, unknown>;
-  }[] {
+  // Cross-instance query for gates and depends-on checks. Filter by workflow
+  // id and/or state id; every projection carries the instance's workflowId so
+  // callers can tell sibling workflows apart.
+  function workflowInstancesInState(
+    workflowId?: string,
+    stateId?: string
+  ): WorkflowInstanceProjection[] {
     return Array.from(controllers.entries())
       .map(([id, ctrl]) => ({
         id,
+        workflowId: instanceWorkflowIds.get(id) ?? "",
         currentState: ctrl.getState().currentState,
         workflowInstanceState: ctrl.getState().workflowInstanceState,
       }))
-      .filter((s) => stateId === undefined || s.currentState === stateId);
+      .filter(
+        (s) =>
+          (workflowId === undefined || s.workflowId === workflowId) &&
+          (stateId === undefined || s.currentState === stateId)
+      );
+  }
+
+  // Cross-instance write (E1): patches a sibling instance's state from an
+  // operation running on another instance of the same flow. Unknown id →
+  // false (a NOOP the op handles); undeclared patch keys (against the target
+  // workflow's instanceState) throw so the op errors into the flow's
+  // needs-review state instead of silently writing an undeclared field. The
+  // write goes through the target controller's patch path, so it emits
+  // instance_state_changed and persists exactly like an own-instance patch.
+  function patchSiblingInstanceState(
+    instanceId: string,
+    patch: Record<string, unknown>
+  ): boolean {
+    const controller = controllers.get(instanceId);
+    if (!controller) return false;
+    const workflowId = instanceWorkflowIds.get(instanceId);
+    const declaredFields = workflowId
+      ? (workflowMap.get(workflowId)?.instanceState ?? []).map(
+          (field) => field.field
+        )
+      : [];
+    if (declaredFields.length > 0) {
+      const declared = new Set(declaredFields);
+      for (const key of Object.keys(patch)) {
+        if (!declared.has(key)) {
+          throw new Error(
+            `sibling patch writes "${key}" which is not declared in workflow "${workflowId}" instanceState (declared: ${[...declared].join(", ")})`
+          );
+        }
+      }
+    }
+    controller.patchWorkflowInstanceState(patch);
+    return true;
+  }
+
+  // Instance removal (E5): drops the controller from the runtime maps, cancels
+  // any running task, deletes the persisted state, and notifies listeners so
+  // the snapshot push excludes the removed instance. Unknown id → false (a
+  // NOOP). References that pointed at the removed instance (title-based
+  // dependsOn entries) resolve to nothing and go stale gracefully — the
+  // depends-on gates treat a missing id as an unmet dependency, never an
+  // error.
+  function removeWorkflowInstance(instanceId: string): boolean {
+    const controller = controllers.get(instanceId);
+    if (!controller) return false;
+    const workflowId = instanceWorkflowIds.get(instanceId) ?? "";
+    controller.cancel();
+    controllers.delete(instanceId);
+    instanceWorkflowIds.delete(instanceId);
+    emit({ type: "instance_removed", instanceId, workflowId });
+    persistence?.deleteInstance?.(flowId, instanceId);
+    return true;
   }
 
   function patchFlowConfig(patch: Partial<TFlowConfig>): void {
@@ -240,6 +301,26 @@ export function createFlowRuntime<
     }));
   }
 
+  // E4: a declared edit field's dynamic options (optionsFrom) resolve from
+  // flowState when serializing instance entries — the category taxonomy the
+  // human edits against. When flowState lacks the value, the field falls
+  // back to free text (no options); the declared source is dropped from the
+  // wire shape so the UI renders a plain input.
+  function resolveEditFieldOptions(field: ConfigField): ConfigField {
+    if (field.optionsFrom === undefined) return field;
+    const source = field.optionsFrom.flowState;
+    const value = resolvePath(_flowState, source);
+    const options = Array.isArray(value)
+      ? value.filter((v): v is string => typeof v === "string")
+      : [];
+    if (options.length === 0) {
+      const { optionsFrom: _dropped, ...rest } = field;
+      return rest;
+    }
+    const { optionsFrom: _dropped, ...rest } = field;
+    return { ...rest, options };
+  }
+
   function getWorkflowInstanceEntries(): WorkflowInstanceEntry[] {
     const entries = Array.from(controllers.entries()).map(([id, ctrl]) => {
       const workflowId = instanceWorkflowIds.get(id) ?? "";
@@ -248,7 +329,9 @@ export function createFlowRuntime<
         workflowId,
         state: ctrl.getState(),
         availableActions: ctrl.getAvailableActions(),
-        editFields: workflowMap.get(workflowId)?.editFields ?? [],
+        editFields: (workflowMap.get(workflowId)?.editFields ?? []).map(
+          resolveEditFieldOptions
+        ),
         // Filled below once every entry is known.
         workflowSummary: { total: 0, byField: {} },
       };
@@ -315,6 +398,16 @@ export function createFlowRuntime<
           });
           return { id: created.id };
         },
+        patchSiblingInstanceState,
+        // E5: a deletesInstance action on this instance removes it from the
+        // flow (the controller calls back into the runtime).
+        removeInstance: () => removeWorkflowInstance(instanceId),
+        // E2: flow-level state access — the live state object (mutated in
+        // place by patchFlowState so gates/ops see updates) plus the write
+        // (persists + emits flow_state_changed).
+        flowState: () => _flowState,
+        patchFlowState: (patch: Record<string, unknown>) =>
+          patchFlowState(patch as Partial<TFlowState>),
       }
     );
 
@@ -378,6 +471,7 @@ export function createFlowRuntime<
         eventHandlers.delete(handler);
       };
     },
+    removeWorkflowInstance,
     getWorkflowDefinitions,
     getWorkflowInstanceEntries,
   };

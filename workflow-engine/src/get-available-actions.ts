@@ -1,5 +1,10 @@
+import { evaluateGate } from "./evaluate-gate.ts";
 import { resolveDottedPath } from "./runners/resolve-dotted-path.ts";
 import type { RuntimeWorkflowInstanceState } from "./shared/workflow-instance-state.ts";
+import type {
+  WorkflowInstanceProjection,
+  WorkflowInstancesInState,
+} from "./task-runner.ts";
 import type {
   RuntimeGateContext,
   RuntimeStateDef,
@@ -10,11 +15,7 @@ export function getAvailableActions(
   states: readonly RuntimeStateDef[],
   currentState: string,
   state: RuntimeWorkflowInstanceState,
-  workflowInstancesInState?: (stateId?: string) => {
-    currentState: string;
-    id: string;
-    workflowInstanceState: Record<string, unknown>;
-  }[],
+  workflowInstancesInState?: WorkflowInstancesInState,
   flowState?: Record<string, unknown>,
   instanceTitlePath?: string
 ): VisibleAction[] {
@@ -33,13 +34,16 @@ export function getAvailableActions(
 
   return stateDef.actions
     .filter((action) => {
-      if (action.gate && !action.gate(ctx)) return false;
+      // Fail-safe: a throwing visibility gate hides the action (the action
+      // cannot be evaluated, so it is not offered) instead of breaking the
+      // snapshot.
+      if (action.gate && !evaluateGate(action.gate, ctx)) return false;
       if (action.dependsOnState !== undefined && workflowInstancesInState) {
         const dependees = readDependsOn(state.workflowInstanceState);
         if (
           !dependsOnMet(
             dependees,
-            workflowInstancesInState(action.dependsOnState),
+            workflowInstancesInState(undefined, action.dependsOnState),
             instanceTitlePath
           )
         ) {
@@ -68,10 +72,7 @@ export function getAvailableActions(
 // the dependency was recorded.
 function dependsOnMet(
   dependees: string[],
-  inState: Array<{
-    id: string;
-    workflowInstanceState: Record<string, unknown>;
-  }>,
+  inState: WorkflowInstanceProjection[],
   titlePath: string | undefined
 ): boolean {
   if (dependees.length === 0) return true;

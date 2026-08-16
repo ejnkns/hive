@@ -222,7 +222,11 @@ function operationRunners(compiled: CompiledFlowDefinition) {
           workflowInstanceState: () => ctx.workflowInstanceState(),
           taskOutputs: () => ctx.taskOutputs,
           patchWorkflowInstanceState: ctx.patchWorkflowInstanceState,
+          flowState: () => ctx.flowState(),
+          patchFlowState: ctx.patchFlowState,
           workflowInstancesInState: ctx.workflowInstancesInState,
+          patchInstanceState: (instanceId, patch) =>
+            ctx.patchSiblingInstanceState(instanceId, patch),
         }),
       }),
   };
@@ -396,7 +400,10 @@ describe("compileFlowDefinition", () => {
           run: { status: "success", output: { outcome: "approved" } },
         }) as Record<string, unknown>,
       patchWorkflowInstanceState: () => {},
+      flowState: () => ({}),
+      patchFlowState: () => {},
       workflowInstancesInState: () => [],
+      patchInstanceState: () => false,
     };
     const runResult = patchOp?.(
       { id: "record", label: "Record", role: "operation" },

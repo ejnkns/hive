@@ -309,6 +309,9 @@ export function compileFlowDefinition(
     ...(form.configSchema !== undefined
       ? { configSchema: form.configSchema }
       : {}),
+    ...(form.flowState !== undefined && form.flowState.length > 0
+      ? { flowState: form.flowState }
+      : {}),
     ...(form.domainDir !== undefined ? { domainDir: form.domainDir } : {}),
     ...(form.ui !== undefined ? { ui: form.ui } : {}),
     workflows,
@@ -358,6 +361,9 @@ function compileWorkflow(
               ? { instanceComponent: wf.ui.instanceComponent }
               : {}),
             ...(wf.ui.columns !== undefined ? { columns: wf.ui.columns } : {}),
+            ...(wf.ui.groupByField !== undefined
+              ? { groupByField: wf.ui.groupByField }
+              : {}),
           },
         }
       : {}),
@@ -383,6 +389,10 @@ function compileWorkflow(
     ...(wf.editFields !== undefined && wf.editFields.length > 0
       ? { editFields: wf.editFields }
       : {}),
+    // The declared instance-state fields ride on the compiled projection so
+    // the runtime can validate cross-instance patches (E1) against the target
+    // workflow's declaration.
+    instanceState: wf.instanceState,
     taskOutputs: {},
     states,
     initial: wf.initial,
@@ -531,9 +541,11 @@ function compileAction(
 ): NonNullable<
   NonNullable<RuntimeWorkflowConfig["states"][number]["actions"]>[number]
 > {
-  if (action.transitionTo === undefined) {
+  // A deletesInstance action (E5) has no transition target — dispatching it
+  // removes the instance. Every other state action must declare one.
+  if (action.transitionTo === undefined && action.deletesInstance !== true) {
     throw new Error(
-      `state action "${action.id}" must declare transitionTo (every state action moves the acting instance)`
+      `state action "${action.id}" must declare transitionTo or deletesInstance (every state action either moves the acting instance or removes it)`
     );
   }
   return {
@@ -553,6 +565,7 @@ function compileAction(
       ? { dependsOnState: action.dependsOnState }
       : {}),
     ...(action.newAttempt === true ? { newAttempt: true } : {}),
+    ...(action.deletesInstance === true ? { deletesInstance: true } : {}),
     ...(action.completesRunningTask === true
       ? { completesRunningTask: true }
       : {}),
@@ -570,7 +583,9 @@ function compileAction(
     ...(action.fields !== undefined && action.fields.length > 0
       ? { fields: action.fields }
       : {}),
-    transitionTo: action.transitionTo,
+    ...(action.transitionTo !== undefined
+      ? { transitionTo: action.transitionTo }
+      : {}),
   };
 }
 
@@ -608,7 +623,8 @@ function compileEdge(edge: EdgeSpec, resolveRef: RefResolver): RuntimeFlowEdge {
   const base: RuntimeFlowEdge = {
     fromWorkflow: edge.fromWorkflow,
     fromStates: edge.fromStates,
-    toWorkflow: edge.toWorkflow,
+    ...(edge.toWorkflow !== undefined ? { toWorkflow: edge.toWorkflow } : {}),
+    ...(edge.toFlowState === true ? { toFlowState: true } : {}),
   };
   const hasTransform =
     Object.keys(edge.fields ?? {}).length > 0 ||

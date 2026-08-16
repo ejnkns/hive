@@ -22,6 +22,7 @@ import type {
   DefinitionValidationContext,
   EdgeSpec,
   FlowLevelActionSpec,
+  FlowStateField,
   OperationRefSpec,
   ToolRefSpec,
   WorkflowSpec,
@@ -44,6 +45,11 @@ export type FlowDefinition = {
   label: string;
   description?: string;
   configSchema?: ConfigField[];
+  // Flow-level state declaration (E2): the fields the flow's cross-entity
+  // state may carry. FlowState writes — operations' patchFlowState calls and
+  // toFlowState edge transforms — are validated against these fields like
+  // instance writes are validated against instanceState.
+  flowState?: FlowStateField[];
   // Directory under basePath that holds this instance's persisted domain
   // state; defaults to .<definition-id>.
   domainDir?: string;
@@ -133,6 +139,10 @@ export type CompiledFlowDefinition = {
   label: string;
   description?: string;
   configSchema?: ConfigField[];
+  // The declared flowState fields (E2), carried on the compiled projection so
+  // the server can resolve flowState-driven surfaces (e.g. edit-field options
+  // from flowState) and the gate can validate patchFlowState writes.
+  flowState?: FlowStateField[];
   edges: RuntimeFlowEdge[];
   tools?: readonly Tool[];
   operations?: Record<string, OperationFn>;

@@ -109,5 +109,10 @@ export type ManualAction<
   // This is how a flow declares "restart from a clean slate" (queen-bee's
   // new_changes) without owning any attempt bookkeeping.
   newAttempt?: boolean;
-  transitionTo: TStateId;
+  // E5: when true, dispatching this action removes the instance from the
+  // flow (no transitionTo — the engine drops the controller, deletes the
+  // persisted state, and emits instance_removed). Destructive variants only;
+  // references to the removed instance go stale gracefully.
+  deletesInstance?: boolean;
+  transitionTo?: TStateId;
 };

@@ -11,6 +11,8 @@
 import { refExportName } from "workflow-engine/compile-flow-definition";
 import type {
   CompletionContract,
+  ConfigField,
+  CrossInstanceWriteDecl,
   DefinitionError,
   DefinitionValidationContext,
   FieldType,
@@ -88,6 +90,43 @@ export function validateFlowDefinition(
         );
       }
     });
+  }
+
+  // ── flowState declaration (E2) ──
+  // The flow's cross-entity state: declared like instanceState (field + type,
+  // including object/object[] for structured values like a taxonomy);
+  // flowState writes (patchFlowState ops — checked by the module-set gate
+  // against the op bodies — and toFlowState edge transforms — checked in
+  // validateEdges) must reference these fields.
+  const flowStateFields = new Set<string>();
+  if (definition.flowState !== undefined) {
+    if (!Array.isArray(definition.flowState)) {
+      error("flowState", "flowState must be an array");
+    } else {
+      definition.flowState.forEach((field, i) => {
+        if (!field || !IDENTIFIER.test(field.field)) {
+          error(
+            `flowState[${i}].field`,
+            `flowState field name must be a valid identifier (got ${JSON.stringify(field?.field)})`
+          );
+          return;
+        }
+        if (!isFieldType(field.type)) {
+          error(
+            `flowState[${i}].type`,
+            `invalid flowState field type ${JSON.stringify(field.type)} (valid: ${Object.keys(FIELD_TYPES).join(", ")})`
+          );
+          return;
+        }
+        if (flowStateFields.has(field.field)) {
+          error(
+            `flowState[${i}].field`,
+            `duplicate flowState field "${field.field}"`
+          );
+        }
+        flowStateFields.add(field.field);
+      });
+    }
   }
 
   // ── flow-level ui declarations ──
@@ -184,6 +223,7 @@ export function validateFlowDefinition(
   }
   const operationIds = new Set<string>();
   const operationWritesById = new Map<string, string[]>();
+  const operationWritesAcrossById = new Map<string, CrossInstanceWriteDecl[]>();
   for (const [oIndex, op] of (definition.operations ?? []).entries()) {
     const oPath = `operations[${oIndex}]`;
     if (typeof op.id !== "string" || !IDENTIFIER.test(op.id)) {
@@ -209,6 +249,7 @@ export function validateFlowDefinition(
       }
     }
     operationWritesById.set(op.id, writes);
+    operationWritesAcrossById.set(op.id, op.writesAcross ?? []);
   }
 
   // ── dependencies (the flow's declared external packages) ──
@@ -637,6 +678,27 @@ export function validateFlowDefinition(
             `action targets unknown state ${JSON.stringify(action.transitionTo)}`
           );
         }
+        // E5: deletesInstance is destructive-only and has no transition
+        // target — the action removes the instance from the flow.
+        if (action.deletesInstance === true) {
+          if (action.variant !== "destructive") {
+            error(
+              `${aPath}.deletesInstance`,
+              `deletesInstance requires a destructive variant (removing an instance is irreversible; got variant ${JSON.stringify(action.variant)})`
+            );
+          }
+          if (action.transitionTo !== undefined) {
+            error(
+              `${aPath}.deletesInstance`,
+              `deletesInstance removes the instance — do not also declare transitionTo (${JSON.stringify(action.transitionTo)})`
+            );
+          }
+        } else if (action.transitionTo === undefined) {
+          error(
+            `${aPath}`,
+            `state action must declare transitionTo or deletesInstance (every action either moves the acting instance or removes it)`
+          );
+        }
         if (
           action.dependsOnState !== undefined &&
           !stateIds.has(action.dependsOnState)
@@ -815,6 +877,28 @@ export function validateFlowDefinition(
           `ui.instanceComponent must be a served component id (a key of the flow's ui.components)`
         );
       }
+      // E3: board grouping by field value. The field must be a declared
+      // instance-state field (the partition reads it) and must not coexist
+      // with curated columns (field grouping replaces state columns).
+      if (wf.ui.groupByField !== undefined) {
+        if (!IDENTIFIER.test(wf.ui.groupByField)) {
+          error(
+            `${wfPath}.ui.groupByField`,
+            `ui.groupByField must be a valid instance-state field name (got ${JSON.stringify(wf.ui.groupByField)})`
+          );
+        } else if (!stateTypes.has(wf.ui.groupByField)) {
+          error(
+            `${wfPath}.ui.groupByField`,
+            `ui.groupByField references undeclared state field "${wf.ui.groupByField}" (declared: ${[...stateTypes.keys()].join(", ")})`
+          );
+        }
+        if ((wf.ui.columns ?? []).length > 0) {
+          error(
+            `${wfPath}.ui`,
+            `ui declares both groupByField and columns — field grouping replaces state columns; use one or the other`
+          );
+        }
+      }
       for (const [cIndex, column] of (wf.ui.columns ?? []).entries()) {
         for (const stateId of column.states) {
           if (!stateIds.has(stateId)) {
@@ -964,6 +1048,123 @@ export function validateFlowDefinition(
     }
   }
 
+  // ── cross-instance writes (E1): every writesAcross declaration targets an
+  // existing workflow and fields declared in that workflow's instanceState —
+  // the sibling-patch counterpart of the own-instance declared-writes check.
+  for (const [oIndex, op] of (definition.operations ?? []).entries()) {
+    const oPath = `operations[${oIndex}]`;
+    for (const [waIndex, decl] of (op.writesAcross ?? []).entries()) {
+      const waPath = `${oPath}.writesAcross[${waIndex}]`;
+      if (
+        typeof decl?.workflow !== "string" ||
+        !workflowById.has(decl.workflow)
+      ) {
+        error(
+          `${waPath}.workflow`,
+          `writesAcross targets unknown workflow ${JSON.stringify(decl?.workflow)} (workflows: ${[...workflowById.keys()].join(", ")})`
+        );
+        continue;
+      }
+      const targetTypes = instanceStateById.get(decl.workflow);
+      if (!targetTypes) continue;
+      if (!Array.isArray(decl.fields) || decl.fields.length === 0) {
+        error(
+          `${waPath}.fields`,
+          `writesAcross must declare the sibling instance-state fields the operation patches (got ${JSON.stringify(decl.fields)})`
+        );
+        continue;
+      }
+      const seenFields = new Set<string>();
+      for (const [fIndex, field] of decl.fields.entries()) {
+        if (!IDENTIFIER.test(field)) {
+          error(
+            `${waPath}.fields[${fIndex}]`,
+            `writesAcross field must be a valid identifier (got ${JSON.stringify(field)})`
+          );
+        } else if (!targetTypes.has(field)) {
+          error(
+            `${waPath}.fields[${fIndex}]`,
+            `writesAcross writes "${field}" which is not declared in target workflow "${decl.workflow}" instanceState (declared: ${[...targetTypes.keys()].join(", ")})`
+          );
+        } else if (seenFields.has(field)) {
+          error(
+            `${waPath}.fields[${fIndex}]`,
+            `duplicate writesAcross field "${field}"`
+          );
+        }
+        seenFields.add(field);
+      }
+    }
+  }
+
+  // ── optionsFrom (E4) ──
+  // A ConfigField with a dynamic-options source: `optionsFrom.flowState` is a
+  // dotted path into flowState whose first segment must be a declared
+  // flowState field, and it must not coexist with static `options`. Walked
+  // after the workflows pass so the flowState declaration is known.
+  const configFields: Array<{ field: ConfigField; path: string }> = [];
+  for (const [i, field] of (definition.configSchema ?? []).entries()) {
+    configFields.push({ field, path: `configSchema[${i}]` });
+  }
+  for (const [wfIndex, wf] of definition.workflows.entries()) {
+    const wfPath = `workflows[${wfIndex}]`;
+    for (const [i, field] of (wf.editFields ?? []).entries()) {
+      configFields.push({ field, path: `${wfPath}.editFields[${i}]` });
+    }
+    for (const [sIndex, state] of wf.states.entries()) {
+      for (const [aIndex, action] of (state.actions ?? []).entries()) {
+        for (const [i, field] of (action.fields ?? []).entries()) {
+          configFields.push({
+            field,
+            path: `${wfPath}.states[${sIndex}].actions[${aIndex}].fields[${i}]`,
+          });
+        }
+        if (action.createInstance) {
+          for (const [i, field] of action.createInstance.fields.entries()) {
+            configFields.push({
+              field,
+              path: `${wfPath}.states[${sIndex}].actions[${aIndex}].createInstance.fields[${i}]`,
+            });
+          }
+        }
+      }
+    }
+  }
+  for (const [aIndex, action] of (definition.actions ?? []).entries()) {
+    if (action.createInstance) {
+      for (const [i, field] of action.createInstance.fields.entries()) {
+        configFields.push({
+          field,
+          path: `actions[${aIndex}].createInstance.fields[${i}]`,
+        });
+      }
+    }
+  }
+  for (const { field, path } of configFields) {
+    if (field.optionsFrom === undefined) continue;
+    if (field.options !== undefined) {
+      error(
+        path,
+        `a field declares both options and optionsFrom — use one or the other (static options or a runtime flowState source)`
+      );
+    }
+    const source = field.optionsFrom.flowState;
+    if (!DOTTED_PATH.test(source)) {
+      error(
+        path,
+        `optionsFrom.flowState must be a dotted path into flowState (got ${JSON.stringify(source)})`
+      );
+      continue;
+    }
+    const first = source.split(".")[0];
+    if (!flowStateFields.has(first)) {
+      error(
+        path,
+        `optionsFrom.flowState references undeclared flowState field "${first}" (declared: ${[...flowStateFields].join(", ")})`
+      );
+    }
+  }
+
   const context: DefinitionValidationContext = {
     workflowById,
     stateIdsByWorkflow,
@@ -972,6 +1173,7 @@ export function validateFlowDefinition(
     completionOutputById,
     toolWritesById,
     operationWritesById,
+    operationWritesAcrossById,
   };
   validateEdges(definition, context, error);
   validateWriters(definition, context, error);

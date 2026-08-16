@@ -18,8 +18,10 @@ const OPEN_TICKET_STATES = [
 // Start build is available only when the charting has charted the map and the
 // frontier is empty: no ticket is fog, ready, resolving, or recording.
 export const mapIsClear: GateContract = (ctx) => {
-  if (ctx.workflowInstancesInState?.("charted").length === 0) return false;
+  if (ctx.workflowInstancesInState?.(undefined, "charted").length === 0)
+    return false;
   return OPEN_TICKET_STATES.every(
-    (state) => (ctx.workflowInstancesInState?.(state).length ?? 0) === 0
+    (state) =>
+      (ctx.workflowInstancesInState?.(undefined, state).length ?? 0) === 0
   );
 };

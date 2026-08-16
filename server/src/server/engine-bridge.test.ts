@@ -43,10 +43,13 @@ function makeContext(
     workflowInstanceState: () => ({}),
     patchWorkflowInstanceState: () => {},
     taskOutputs: {},
+    flowState: () => ({}),
+    patchFlowState: () => {},
     patchRunningTaskMessages: () => {},
     patchRunningTaskStatus: () => {},
     createWorkflowInstance: () => ({ id: "new-instance" }),
     workflowInstancesInState: () => [],
+    patchSiblingInstanceState: () => false,
     ...overrides,
   };
 }
@@ -87,6 +90,69 @@ describe("createEngineRunners", () => {
       validate_completion: { ok: true },
       build_review_package: { packageId: "pkg-1" },
     });
+  });
+
+  it("threads the cross-instance write and workflow-filtered query into the operation context (E1/E6)", async () => {
+    const calls: Array<{
+      kind: "patch" | "query";
+      instanceId?: string;
+      patch?: Record<string, unknown>;
+      query?: unknown;
+    }> = [];
+    const runners = createEngineRunners({
+      operations: {
+        cross: (_task, _params, ctx) => {
+          const ok = ctx.patchInstanceState("sibling-1", {
+            category: "infra",
+          });
+          const all = ctx.workflowInstancesInState();
+          const filtered = ctx.workflowInstancesInState("ideas");
+          calls.push({ kind: "patch", instanceId: "sibling-1" });
+          calls.push({ kind: "query", query: { all, filtered } });
+          return { ok, count: all.length, filteredCount: filtered.length };
+        },
+      },
+    });
+
+    const task: TaskDefinition = {
+      id: "cross",
+      label: "Cross",
+      role: "operation",
+      operations: ["cross"],
+    };
+    const patched: Array<Record<string, unknown>> = [];
+    const result = await runners
+      .operationRunner(
+        makeContext({
+          patchSiblingInstanceState: (instanceId, patch) => {
+            if (instanceId !== "sibling-1") return false;
+            patched.push(patch);
+            return true;
+          },
+          workflowInstancesInState: (workflowId) => {
+            // The engine-bridge passes the context's query through unchanged.
+            const instances = [
+              { workflowId: "ideas", id: "i1" },
+              { workflowId: "imports", id: "i2" },
+            ];
+            if (workflowId !== undefined) {
+              return instances.filter(
+                (i) => i.workflowId === workflowId
+              ) as never;
+            }
+            return instances as never;
+          },
+        })
+      )
+      .run(task);
+
+    const output = result.output as Record<string, unknown>;
+    assert.equal(output.ok, true);
+    assert.equal(output.count, 2);
+    assert.equal(output.filteredCount, 1);
+    assert.deepEqual(patched, [{ category: "infra" }]);
+    assert.equal(calls[0]?.kind, "patch");
+    assert.equal(calls[1]?.kind, "query");
   });
 
   it("prepare_worktree prepares a sandbox workspace without a repo", async () => {

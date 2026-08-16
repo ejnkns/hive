@@ -3,5 +3,5 @@
 import type { GateContract } from "workflow-engine/workflow-types";
 
 export const frontierCharted: GateContract = (ctx) => {
-  return (ctx.workflowInstancesInState?.("charted").length ?? 0) > 0;
+  return (ctx.workflowInstancesInState?.(undefined, "charted").length ?? 0) > 0;
 };

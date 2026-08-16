@@ -1,5 +1,9 @@
 /** @private — only imported by runners.ts */
-import type { TaskDefinition, TaskRunner } from "../task-runner.ts";
+import type {
+  TaskDefinition,
+  TaskRunner,
+  WorkflowInstancesInState,
+} from "../task-runner.ts";
 
 // Operations are deterministic engine tasks. They receive the flow's runtime
 // context so they can read and patch flow config, and the identity and state
@@ -31,14 +35,25 @@ export type OperationContext<
   // the engine persists it as part of the instance. Typed as Partial<TState>
   // so a patch can only write declared fields.
   patchWorkflowInstanceState(patch: Partial<TState>): void;
-  // Queries all workflow instances in a given state, or all instances when
-  // stateId is undefined. Each result carries the instance id, current state,
-  // and domain data so operations can resolve title-based references to IDs.
-  workflowInstancesInState(stateId?: string): {
-    currentState: string;
-    id: string;
-    workflowInstanceState: Record<string, unknown>;
-  }[];
+  // Flow-level state access (E2): the flow's declared cross-entity state
+  // (e.g. the shared taxonomy in honeycomb). Live reads see the current
+  // state; patchFlowState mirrors patchFlowConfig — the write persists and
+  // emits flow_state_changed.
+  flowState(): Record<string, unknown>;
+  patchFlowState(patch: Record<string, unknown>): void;
+  // Queries workflow instances. Pass a state id (legacy) or a
+  // { workflowId?, stateId? } filter; every projection carries the instance's
+  // workflowId so an op can tell sibling workflows apart (E6).
+  workflowInstancesInState: WorkflowInstancesInState;
+  // Cross-instance write (E1): patches a sibling instance's declared state
+  // from this operation. Same-flow only. Returns false for an unknown
+  // instance id (a NOOP — the op decides, e.g. a stale title reference);
+  // throws when the patch carries a field the target workflow's
+  // instanceState does not declare.
+  patchInstanceState(
+    instanceId: string,
+    patch: Record<string, unknown>
+  ): boolean;
 };
 
 export type OperationFn<
@@ -77,7 +92,10 @@ const NOOP_CONTEXT: OperationContext = {
   workflowInstanceState: () => ({}),
   taskOutputs: () => ({}),
   patchWorkflowInstanceState: () => {},
+  flowState: () => ({}),
+  patchFlowState: () => {},
   workflowInstancesInState: () => [],
+  patchInstanceState: () => false,
 };
 
 export function createOperationRunner(

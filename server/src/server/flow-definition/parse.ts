@@ -20,9 +20,9 @@ import type {
   CompletionOutputField,
   EdgeSpec,
   FanOutValueSpec,
-  FieldType,
   FlowDefinition,
   FlowLevelActionSpec,
+  FlowStateField,
   GateSpec,
   OperationRefSpec,
   StateSpec,
@@ -36,7 +36,6 @@ import {
   type DisplayFieldRead,
   findFlowLiteral,
   literalJson,
-  literalScalar,
   parseEntrySource,
   property,
   propertyNames,
@@ -88,6 +87,7 @@ const FLOW_KEYS = [
   "label",
   "description",
   "configSchema",
+  "flowState",
   "domainDir",
   "ui",
   "tools",
@@ -114,6 +114,14 @@ function parseFlow(
     ),
     workflows: [],
   };
+  const flowState = readInstanceState(
+    readArray(flowLiteral, "flowState"),
+    "flowState",
+    findings
+  );
+  if (flowState !== undefined && flowState.length > 0) {
+    definition.flowState = flowState as FlowStateField[];
+  }
   const description = readString(flowLiteral, "description");
   if (description !== undefined) definition.description = description;
   const domainDir = readString(flowLiteral, "domainDir");
@@ -255,6 +263,8 @@ function readWorkflows(
         findings
       );
       if (columns !== undefined) workflowUi.columns = columns;
+      const groupByField = readString(ui, "groupByField");
+      if (groupByField !== undefined) workflowUi.groupByField = groupByField;
       if (Object.keys(workflowUi).length > 0) workflow.ui = workflowUi;
     }
     const display = readObject(obj, "display");
@@ -784,6 +794,7 @@ const STATE_ACTION_KEYS = [
   "dependsOnState",
   "newAttempt",
   "completesRunningTask",
+  "deletesInstance",
   "createInstance",
   "fields",
   "transitionTo",
@@ -915,6 +926,8 @@ function readAction(
   if (fields.length > 0) action.fields = fields;
   const transitionTo = readString(obj, "transitionTo");
   if (transitionTo !== undefined) action.transitionTo = transitionTo;
+  const deletesInstance = readBool(obj, "deletesInstance");
+  if (deletesInstance !== undefined) action.deletesInstance = deletesInstance;
   return action;
 }
 
@@ -951,6 +964,7 @@ const EDGE_KEYS = [
   "fromWorkflow",
   "fromStates",
   "toWorkflow",
+  "toFlowState",
   "fields",
   "fanOut",
   "transform",
@@ -972,8 +986,11 @@ function readEdges(
     const edge: EdgeSpec = {
       fromWorkflow: requiredString(obj, "fromWorkflow", ePath, findings),
       fromStates: readStringArray(obj, "fromStates") ?? [],
-      toWorkflow: requiredString(obj, "toWorkflow", ePath, findings),
     };
+    const toWorkflow = readString(obj, "toWorkflow");
+    if (toWorkflow !== undefined) edge.toWorkflow = toWorkflow;
+    const toFlowState = readBool(obj, "toFlowState");
+    if (toFlowState !== undefined) edge.toFlowState = toFlowState;
     const fields = readObject(obj, "fields");
     if (fields !== undefined) {
       const parsed: Record<string, ValueSpec> = {};
@@ -1099,6 +1116,30 @@ function readOperationRefs(
     const operation: OperationRefSpec = { id, ref };
     const writes = readStringArray(obj, "writes");
     if (writes !== undefined && writes.length > 0) operation.writes = writes;
+    // Cross-instance writes (E1): [{ workflow, fields }] per target workflow.
+    const writesAcross = readArray(obj, "writesAcross");
+    if (writesAcross !== undefined && writesAcross.length > 0) {
+      const decls: NonNullable<OperationRefSpec["writesAcross"]> = [];
+      writesAcross.forEach((declElement, waIndex) => {
+        const decl = unwrap(declElement);
+        if (!ts.isObjectLiteralExpression(decl)) {
+          findings.push(
+            `${oPath}.writesAcross[${waIndex}]: not data — a writesAcross entry must be an object literal`
+          );
+          return;
+        }
+        const workflow = readString(decl, "workflow");
+        const fields = readStringArray(decl, "fields");
+        if (workflow === undefined || fields === undefined) {
+          findings.push(
+            `${oPath}.writesAcross[${waIndex}]: not data — a writesAcross entry must carry workflow and fields`
+          );
+          return;
+        }
+        decls.push({ workflow, fields });
+      });
+      if (decls.length > 0) operation.writesAcross = decls;
+    }
     operations.push(operation);
   });
   return operations;

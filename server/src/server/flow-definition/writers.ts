@@ -12,6 +12,34 @@ export function validateWriters(
   context: DefinitionValidationContext,
   error: (path: string, message: string) => void
 ): void {
+  // Cross-instance writes (E1): every flow-level op's writesAcross declares
+  // the sibling-instance fields it patches on a target workflow. When a task
+  // uses the op, those fields have a writer on the TARGET workflow — count
+  // them there, mirroring how own-instance op writes count for the workflows
+  // whose tasks use the op.
+  const usedOps = new Set<string>();
+  for (const wf of definition.workflows) {
+    for (const state of wf.states) {
+      for (const task of state.tasks ?? []) {
+        for (const op of task.operations ?? []) {
+          if (typeof op === "string") usedOps.add(op);
+        }
+      }
+    }
+  }
+  const siblingWritesByWorkflow = new Map<string, Set<string>>();
+  for (const op of definition.operations ?? []) {
+    if (!usedOps.has(op.id)) continue;
+    for (const decl of op.writesAcross ?? []) {
+      let fields = siblingWritesByWorkflow.get(decl.workflow);
+      if (!fields) {
+        fields = new Set();
+        siblingWritesByWorkflow.set(decl.workflow, fields);
+      }
+      for (const field of decl.fields) fields.add(field);
+    }
+  }
+
   // ── the missing-writer invariant, at the definition level ──
   for (const [wfIndex, wf] of definition.workflows.entries()) {
     const wfPath = `workflows[${wfIndex}]`;
@@ -76,6 +104,12 @@ export function validateWriters(
     }
     // 5. editFields: the instance-edit form patches exactly these keys.
     for (const field of wf.editFields ?? []) writes.add(field.key);
+    // 6. cross-instance writes into this workflow (E1): sibling ops whose
+    //    writesAcross target this workflow write its fields from another
+    //    instance.
+    for (const field of siblingWritesByWorkflow.get(wf.id) ?? []) {
+      writes.add(field);
+    }
 
     const allWrites = new Set([...writes, ...ENGINE_PROVIDED]);
     const reads: Set<string> = new Set();
@@ -103,6 +137,10 @@ export function validateWriters(
     }
     for (const field of wf.display?.fields ?? []) {
       reads.add(field.path.split(".")[0]);
+    }
+    // E3: the board partition reads the grouping field's values.
+    if (wf.ui?.groupByField !== undefined) {
+      reads.add(wf.ui.groupByField);
     }
 
     for (const field of reads) {

@@ -11,6 +11,7 @@ import type {
   TaskRunner,
   TaskRunnerContext,
   TaskRunnerFactory,
+  WorkflowInstancesInState,
 } from "./task-runner.ts";
 import type {
   ChatMessage,
@@ -56,8 +57,10 @@ export type WorkflowInstanceControllerAPI = {
 // === Factory ===
 
 // Runtime-level context the controller threads into every task runner factory
-// invocation: flow config access, the instance's identity, and the flow's
-// instance-creation capability (so an agent tool can spawn fresh instances).
+// invocation: flow config access, the instance's identity, the flow's
+// instance-creation capability (so an agent tool can spawn fresh instances),
+// and the cross-instance write capability (E1 — an operation on this instance
+// patches a sibling instance's state).
 export type ControllerRuntimeContext = {
   flowConfig: Record<string, unknown>;
   patchFlowConfig(patch: Record<string, unknown>): void;
@@ -67,17 +70,24 @@ export type ControllerRuntimeContext = {
     workflowId: string,
     instanceState?: Record<string, unknown>
   ) => { id: string };
+  patchSiblingInstanceState?: (
+    instanceId: string,
+    patch: Record<string, unknown>
+  ) => boolean;
+  // E5: removes THIS instance from the flow (called when a deletesInstance
+  // action fires). Absent when the controller is not runtime-bound.
+  removeInstance?: () => void;
+  // E2: flow-level state access — a live getter plus the flowState write
+  // (the runtime's patchFlowState persists and emits flow_state_changed).
+  flowState?: () => Record<string, unknown>;
+  patchFlowState?: (patch: Record<string, unknown>) => void;
 };
 
 export function createWorkflowInstanceController(
   workflow: RuntimeWorkflowConfig,
   runners: Record<string, TaskRunnerFactory>,
   initialState?: RuntimeWorkflowInstanceState,
-  workflowInstancesInState?: (stateId?: string) => {
-    currentState: string;
-    id: string;
-    workflowInstanceState: Record<string, unknown>;
-  }[],
+  workflowInstancesInState?: WorkflowInstancesInState,
   flowState?: Record<string, unknown>,
   runtimeContext?: ControllerRuntimeContext
 ): WorkflowInstanceControllerAPI {
@@ -95,6 +105,10 @@ export function createWorkflowInstanceController(
       (() => {
         throw new Error("createWorkflowInstance requires a flow runtime");
       }),
+    patchSiblingInstanceState: runtimeContext?.patchSiblingInstanceState,
+    removeInstance: runtimeContext?.removeInstance,
+    flowState: runtimeContext?.flowState,
+    patchFlowState: runtimeContext?.patchFlowState,
   };
   let state: RuntimeWorkflowInstanceState = initialState ?? {
     currentState: workflow.initial,
@@ -343,8 +357,19 @@ export function createWorkflowInstanceController(
       patchRunningTaskMessages,
       patchRunningTaskStatus,
       createWorkflowInstance: taskContext.createWorkflowInstance,
-      workflowInstancesInState: (stateId) =>
-        workflowInstancesInState?.(stateId) ?? [],
+      workflowInstancesInState: (workflowId, stateId) =>
+        workflowInstancesInState?.(workflowId, stateId) ?? [],
+      patchSiblingInstanceState:
+        taskContext.patchSiblingInstanceState ??
+        (() => {
+          throw new Error("patchSiblingInstanceState requires a flow runtime");
+        }),
+      flowState: () => taskContext.flowState?.() ?? flowState ?? {},
+      patchFlowState:
+        taskContext.patchFlowState ??
+        ((_patch: Record<string, unknown>) => {
+          /* no runtime bound */
+        }),
     };
   }
 
@@ -391,11 +416,33 @@ export function createWorkflowInstanceController(
         patchWorkflowInstanceState(collected.values);
       }
 
+      // E5 — deletesInstance: the destructive action removes this instance
+      // from the flow; there is no transition target. The runtime callback
+      // drops the controller, deletes its persisted state, and notifies
+      // listeners; the dispatch ends here.
+      if (action.deletesInstance === true) {
+        if (taskContext.removeInstance === undefined) {
+          throw new Error(
+            "deletesInstance action requires a flow runtime (removeInstance is not bound)"
+          );
+        }
+        taskContext.removeInstance();
+        return;
+      }
+
+      // A non-deletion action always carries a transition target (the
+      // validator + compile step guarantee it); the runtime type keeps it
+      // optional so deletesInstance actions can omit it.
+      if (action.transitionTo === undefined) return;
+
       if (
         action.maxWorkflowInstancesInTarget !== undefined &&
         workflowInstancesInState
       ) {
-        const count = workflowInstancesInState(action.transitionTo).length;
+        const count = workflowInstancesInState(
+          undefined,
+          action.transitionTo
+        ).length;
         if (count >= action.maxWorkflowInstancesInTarget) return;
       }
 

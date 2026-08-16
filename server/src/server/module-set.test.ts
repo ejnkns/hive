@@ -318,6 +318,10 @@ function operationContext(ctx: TaskRunnerContext): OperationContext {
     currentState: ctx.currentState,
     workflowInstanceState: ctx.workflowInstanceState,
     taskOutputs: () => ctx.taskOutputs,
+    flowState: () => ctx.flowState(),
+    patchFlowState: ctx.patchFlowState,
+    patchInstanceState: (instanceId, patch) =>
+      ctx.patchSiblingInstanceState(instanceId, patch),
     patchWorkflowInstanceState: ctx.patchWorkflowInstanceState,
     workflowInstancesInState: ctx.workflowInstancesInState,
   };
@@ -567,6 +571,197 @@ describe("module-set pipeline (definition modules)", () => {
     );
   });
 
+  it("rejects an operation whose executor patches a sibling field its writesAcross does not declare (E1)", async () => {
+    const CROSS_MODULE = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "crossGateFlow",
+  label: "Cross Gate Flow",
+  configSchema: [],
+  operations: [
+    {
+      id: "apply",
+      ref: "./ops/apply.ts",
+      writesAcross: [{ workflow: "ideas", fields: ["category"] }],
+    },
+  ],
+  workflows: [
+    {
+      id: "organizer",
+      label: "Organizer",
+      instance: { title: "name" },
+      instanceState: [{ field: "name", type: "string" }],
+      initial: "working",
+      terminalStates: ["working"],
+      states: [
+        {
+          id: "working",
+          label: "Working",
+          category: "initial",
+          tasks: [
+            {
+              id: "run",
+              label: "Run",
+              role: "operation",
+              operations: ["apply"],
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "ideas",
+      label: "Ideas",
+      instance: { title: "title" },
+      instanceState: [
+        { field: "title", type: "string" },
+        { field: "category", type: "string" },
+      ],
+      initial: "imported",
+      terminalStates: ["imported"],
+      states: [{ id: "imported", label: "Imported" }],
+    },
+  ],
+  actions: [
+    {
+      id: "add_idea",
+      label: "Add idea",
+      createInstance: {
+        workflowId: "ideas",
+        fields: [{ key: "title", label: "Title", type: "string", required: true }],
+      },
+    },
+    {
+      id: "add_organizer",
+      label: "Add organizer",
+      createInstance: {
+        workflowId: "organizer",
+        fields: [{ key: "name", label: "Name", type: "string", required: true }],
+      },
+    },
+  ],
+};
+`;
+    const SIBLING_OP = `import { defineOperations, type OperationContext } from "workflow-engine/runners";
+import type { TaskDefinition } from "workflow-engine/task-runner";
+
+type OrganizerState = { name: string };
+
+// Patches a sibling idea's state — category is declared in writesAcross, but
+// bogusField is not: the declared-writes pass must reject the undeclared write.
+export const applyOperations = defineOperations<OrganizerState>({
+  apply: (
+    _task: TaskDefinition,
+    _params: Record<string, unknown>,
+    ctx: OperationContext<OrganizerState>
+  ) => {
+    const idea = ctx.workflowInstancesInState("ideas")[0];
+    if (!idea) return { ok: false };
+    ctx.patchInstanceState(idea.id, { category: "launch", bogusField: "x" });
+    return { ok: true };
+  },
+});
+`;
+    const { definition, findings } = parseDefinition(CROSS_MODULE);
+    assert.deepEqual(findings, [], "cross module must parse clean");
+    const result = await runDefinitionModuleGate(
+      "module-set-sibling-writes",
+      definition,
+      CROSS_MODULE,
+      { "./ops/apply.ts": SIBLING_OP }
+    );
+    assert.ok(
+      result.errors.some(
+        (e) =>
+          e.includes("bogusField") &&
+          e.includes("not declared in the operation's writesAcross")
+      ),
+      `expected a writesAcross finding, got ${JSON.stringify(result.errors)}`
+    );
+  });
+
+  it("rejects an operation whose executor patches a flowState field the definition does not declare (E2)", async () => {
+    const FLOWSTATE_MODULE = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "flowStateGateFlow",
+  label: "FlowState Gate Flow",
+  configSchema: [],
+  flowState: [{ field: "taxonomy", type: "object" }],
+  operations: [{ id: "publish", ref: "./ops/publish.ts" }],
+  workflows: [
+    {
+      id: "organize",
+      label: "Organize",
+      instance: { title: "name" },
+      instanceState: [{ field: "name", type: "string" }],
+      initial: "working",
+      terminalStates: ["working"],
+      states: [
+        {
+          id: "working",
+          label: "Working",
+          category: "initial",
+          tasks: [
+            {
+              id: "run",
+              label: "Run",
+              role: "operation",
+              operations: ["publish"],
+            },
+          ],
+        },
+      ],
+    },
+  ],
+  actions: [
+    {
+      id: "add_organizer",
+      label: "Add organizer",
+      createInstance: {
+        workflowId: "organize",
+        fields: [{ key: "name", label: "Name", type: "string", required: true }],
+      },
+    },
+  ],
+};
+`;
+    const PUBLISH_OP = `import { defineOperations, type OperationContext } from "workflow-engine/runners";
+import type { TaskDefinition } from "workflow-engine/task-runner";
+
+type OrganizeState = { name: string };
+
+export const publishOperations = defineOperations<OrganizeState>({
+  publish: (
+    _task: TaskDefinition,
+    _params: Record<string, unknown>,
+    ctx: OperationContext<OrganizeState>
+  ) => {
+    // taxonomy is declared in flowState, but mysteryField is not: the
+    // declared-writes pass must reject the undeclared flowState write.
+    ctx.patchFlowState({ taxonomy: { categories: ["infra"] }, mysteryField: 1 });
+    return { ok: true };
+  },
+});
+`;
+    const { definition, findings } = parseDefinition(FLOWSTATE_MODULE);
+    assert.deepEqual(findings, [], "flowState module must parse clean");
+    const result = await runDefinitionModuleGate(
+      "module-set-flowstate-writes",
+      definition,
+      FLOWSTATE_MODULE,
+      { "./ops/publish.ts": PUBLISH_OP }
+    );
+    assert.ok(
+      result.errors.some(
+        (e) =>
+          e.includes("mysteryField") &&
+          e.includes("not declared in the definition's flowState")
+      ),
+      `expected a flowState-writes finding, got ${JSON.stringify(result.errors)}`
+    );
+  });
+
   it("registers a module-set definition whose record carries the data form and the file set", async () => {
     const defsDir = mkdtempSync(join(tmpdir(), "hive-module-set-"));
     setDefinitionsBasePathForTest(defsDir);
@@ -630,7 +825,7 @@ export const websearchTools = [
   });
 
   it("the built-in presets pass the full gate (lint, imports, typecheck, writes, load)", async () => {
-    for (const presetName of ["queen-bee", "wayfinder"]) {
+    for (const presetName of ["queen-bee", "wayfinder", "honeycomb"]) {
       const source = readFileSync(
         join(presetRoot(presetName), "flow.ts"),
         "utf-8"

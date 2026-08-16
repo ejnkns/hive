@@ -50,7 +50,10 @@ function ctxFor(
     workflowInstanceState: () => instanceState,
     taskOutputs: () => ({}),
     patchWorkflowInstanceState: () => {},
+    flowState: () => ({}),
+    patchFlowState: () => {},
     workflowInstancesInState: () => [],
+    patchInstanceState: () => false,
   };
 }
 

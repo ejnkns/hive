@@ -63,12 +63,62 @@ export const engineCapabilities = {
   } as const,
 
   // Cross-instance capabilities: gates and actions can reference sibling
-  // instances without any domain code.
+  // instances without any domain code, and operations can query and write
+  // them.
   crossInstance: [
-    "workflowInstancesInState(stateId?) — query instances by state from gates and ops",
+    "workflowInstancesInState(workflowId?, stateId?) — query instances from gates and ops, filtered by workflow and/or state; every result carries the instance's workflowId (E6)",
+    'workflowInstancesInState("ideas") — every ideas instance; workflowInstancesInState(undefined, "done") — every done instance of any workflow',
     "maxWorkflowInstancesInTarget — engine-enforced concurrency limit on a ManualAction",
     "dependsOnState — engine backstop: resolves workflowInstanceState.dependsOn (ids or titles) against instances already in the target state",
   ] as const,
+
+  // Cross-instance writes (E1): an operation on one instance patches another
+  // instance's declared state. Same-flow only; the target workflow's declared
+  // instanceState is the write contract.
+  crossInstanceWrites: {
+    name: "patchInstanceState(instanceId, patch)",
+    description:
+      "An OperationContext capability: patches a sibling instance's state from an operation running on this instance (same-flow only). Returns false for an unknown instance id (a NOOP the op handles — e.g. a stale title reference); throws when the patch carries a field the target workflow's instanceState does not declare. The write persists and emits events exactly like an own-instance patch. Declare every sibling write in the operation ref's `writesAcross: [{ workflow, fields }]` — the module-set gate rejects a sibling patch the operation does not declare, and the definition validator checks the fields against the target workflow's instanceState.",
+  } as const,
+
+  // Instance deletion (E5): a destructive state action removes the instance.
+  instanceDeletion: {
+    name: "deletesInstance",
+    description:
+      "A ManualAction flag (destructive variants only, mutually exclusive with transitionTo): when the action fires, the engine removes the instance from the flow — the controller is dropped, its persisted state is deleted, an instance_removed event is emitted, and the instance disappears from the board. No transition target is needed. Title-based references to a deleted instance go stale gracefully (a missing id is an unmet/unknown reference, never an error). The runtime API removeWorkflowInstance(instanceId) and the REST route DELETE /api/flows/:flowId/instances/:instanceId expose the same capability.",
+  } as const,
+
+  // Board grouping by field value (E3): a workflow ui hint partitions the
+  // board by a declared instance-state field's distinct values.
+  boardGrouping: {
+    name: "ui.groupByField",
+    description:
+      'A workflow ui hint: `ui: { groupByField: "category" }` renders one board column per distinct value of that declared instance-state field, plus an Uncategorized column for instances missing the value. A GENERIC partition — the engine/UI never reads or interprets the values: no labels, ordering, or semantics (column ids/labels are the raw values); the domain maps values to labels via display hints if it wants. Mutually exclusive with ui.columns (field grouping replaces state columns).',
+  } as const,
+
+  // Flow-level state (E2): the flow's declared cross-entity state — read by
+  // operations and tools, written by operations (patchFlowState).
+  flowState: {
+    name: "flowState",
+    description:
+      "The flow's declared cross-entity state (e.g. the shared taxonomy in honeycomb) — one place instead of duplicated on instances. The definition declares its `flowState` fields (field + type, like instanceState). Operations read it via ctx.flowState() and write it via ctx.patchFlowState(patch) (mirrors patchFlowConfig: persists + emits flow_state_changed); tools read it via ctx.flowState. FlowState writes are validated like instance writes: the definition validator checks toFlowState edge transforms against the declaration, and the module-set gate checks operations' patchFlowState calls against it. Cross-entity data lives here; per-instance data stays on the instances.",
+  } as const,
+
+  // toFlowState edges (E2): an edge whose transform output updates flowState
+  // instead of creating instances.
+  toFlowStateEdges: {
+    name: "toFlowState",
+    description:
+      "An EdgeSpec flag: when true, the edge's transform output updates FlowState instead of creating new instances. The transform's declared fields must be declared flowState fields (the validator enforces it). Edges (incl. toFlowState) fire only on terminal states — a flow that needs to write flowState mid-lifecycle uses a patchFlowState operation instead.",
+  } as const,
+
+  // Runtime edit-field options (E4): a ConfigField sources its select options
+  // from flowState at runtime instead of a static list.
+  runtimeEditOptions: {
+    name: "optionsFrom",
+    description:
+      'A ConfigField shape (edit fields, and by extension createInstance fields): `optionsFrom: { flowState: "taxonomy.categories" }` sources the field\'s select options from a dotted path into flowState at runtime — e.g. the AI-proposed category taxonomy drives the human edit UI. The first path segment must be a declared flowState field; mutually exclusive with static `options`. The server resolves the path to `options` when serializing instance entries (only string values become options); when flowState lacks the value the field falls back to free text (no options).',
+  } as const,
 
   // The execution context a flow's own tools and operations receive: the
   // engine exposes live instance-state reads and writes, so a domain
@@ -205,6 +255,42 @@ export function authoringGuide(): string {
 
   push("## Cross-instance capabilities (gates and ops)");
   for (const item of engineCapabilities.crossInstance) push(`- ${item}`);
+  push();
+
+  push("## Cross-instance writes (operations)");
+  push(
+    `- ${engineCapabilities.crossInstanceWrites.name} — ${engineCapabilities.crossInstanceWrites.description}`
+  );
+  push();
+
+  push("## Instance deletion (state actions)");
+  push(
+    `- ${engineCapabilities.instanceDeletion.name} — ${engineCapabilities.instanceDeletion.description}`
+  );
+  push();
+
+  push("## Board grouping by field value (workflow ui)");
+  push(
+    `- ${engineCapabilities.boardGrouping.name} — ${engineCapabilities.boardGrouping.description}`
+  );
+  push();
+
+  push("## Flow-level state (flowState)");
+  push(
+    `- ${engineCapabilities.flowState.name} — ${engineCapabilities.flowState.description}`
+  );
+  push();
+
+  push("## toFlowState edges");
+  push(
+    `- ${engineCapabilities.toFlowStateEdges.name} — ${engineCapabilities.toFlowStateEdges.description}`
+  );
+  push();
+
+  push("## Runtime edit-field options (config fields)");
+  push(
+    `- ${engineCapabilities.runtimeEditOptions.name} — ${engineCapabilities.runtimeEditOptions.description}`
+  );
   push();
 
   push("## Instance-state access in tools and ops");

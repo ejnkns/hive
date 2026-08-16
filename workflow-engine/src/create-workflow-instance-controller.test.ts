@@ -378,6 +378,103 @@ describe("createWorkflowInstanceController", () => {
     assert.equal(controller.getState().taskOutputs.doWork?.status, "error");
   });
 
+  it("a throwing auto-transition gate says no instead of erroring the task (fail-safe)", async () => {
+    const throwingGateWorkflow = defineWorkflow({
+      id: "gated",
+      label: "Gated",
+      taskOutputs: { doWork: {} as { result: string } },
+      states: [
+        {
+          id: "working",
+          label: "Working",
+          tasks: [
+            {
+              id: "doWork",
+              label: "Do the work",
+              trigger: "auto",
+              role: "ai-task",
+            },
+          ],
+          autoTransitions: [
+            {
+              to: "done",
+              gate: () => {
+                throw new Error("boom");
+              },
+            },
+          ],
+        },
+        { id: "done", label: "Done" },
+      ],
+      initial: "working",
+      terminalStates: ["done"],
+    });
+    const runner = new MockRunner();
+    const controller = createWorkflowInstanceController(throwingGateWorkflow, {
+      "ai-task": () => runner,
+    });
+
+    // Start the initial-state auto task (the flow runtime would do this on
+    // instance creation; the controller itself does not). Complete it —
+    // before the fail-safe evaluation, the throwing gate would re-record the
+    // successful task as errored (stale running flag, unhandled rejection).
+    // Now the task commits success and the gate evaluates as "no": no
+    // transition.
+    void controller.startAutoTasks();
+    await new Promise((r) => setTimeout(r, 0));
+    runner.complete("success");
+    await new Promise((r) => setTimeout(r, 0));
+
+    assert.equal(controller.getState().currentState, "working");
+    assert.equal(controller.getState().hasRunningTask, false);
+    assert.equal(controller.getState().taskOutputs.doWork?.status, "success");
+  });
+
+  it("a throwing action-visibility gate hides the action instead of crashing", () => {
+    const throwingActionWorkflow = defineWorkflow({
+      id: "gated-action",
+      label: "Gated Action",
+      taskOutputs: {} as Record<string, never>,
+      states: [
+        {
+          id: "ready",
+          label: "Ready",
+          actions: [
+            {
+              id: "go",
+              label: "Go",
+              gate: () => {
+                throw new Error("boom");
+              },
+              transitionTo: "done",
+            },
+            {
+              id: "stay",
+              label: "Stay",
+              transitionTo: "done",
+            },
+          ],
+        },
+        { id: "done", label: "Done" },
+      ],
+      initial: "ready",
+      terminalStates: ["done"],
+    });
+    const controller = createWorkflowInstanceController(
+      throwingActionWorkflow,
+      {}
+    );
+
+    const visible = controller.getAvailableActions();
+    assert.deepEqual(
+      visible.map((a) => a.id),
+      ["stay"]
+    );
+    // Direct dispatch of the hidden (un-evaluable) action is refused.
+    controller.dispatchAction("go");
+    assert.equal(controller.getState().currentState, "ready");
+  });
+
   it("cancel action is visible while task is running", () => {
     const runner = new MockRunner();
     const controller = createWorkflowInstanceController(testWorkflow, {
@@ -883,8 +980,18 @@ describe("workflowInstancesInState", () => {
       {},
       undefined,
       () => [
-        { currentState: "active", id: "a", workflowInstanceState: {} },
-        { currentState: "active", id: "b", workflowInstanceState: {} },
+        {
+          workflowId: "wf",
+          currentState: "active",
+          id: "a",
+          workflowInstanceState: {},
+        },
+        {
+          workflowId: "wf",
+          currentState: "active",
+          id: "b",
+          workflowInstanceState: {},
+        },
       ]
     );
     const actions = controller.getAvailableActions();
@@ -983,7 +1090,12 @@ describe("dependsOnState gating", () => {
         history: [],
       },
       () => [
-        { currentState: "done", id: "target-1", workflowInstanceState: {} },
+        {
+          workflowId: "titled",
+          currentState: "done",
+          id: "target-1",
+          workflowInstanceState: {},
+        },
       ]
     );
 
@@ -1005,7 +1117,12 @@ describe("dependsOnState gating", () => {
         history: [],
       },
       () => [
-        { currentState: "done", id: "target-1", workflowInstanceState: {} },
+        {
+          workflowId: "titled",
+          currentState: "done",
+          id: "target-1",
+          workflowInstanceState: {},
+        },
       ]
     );
 
@@ -1033,6 +1150,7 @@ describe("dependsOnState gating", () => {
       },
       () => [
         {
+          workflowId: "titled",
           currentState: "done",
           id: "target-1",
           workflowInstanceState: {
@@ -1061,6 +1179,7 @@ describe("dependsOnState gating", () => {
       },
       () => [
         {
+          workflowId: "titled",
           currentState: "done",
           id: "target-1",
           workflowInstanceState: { name: "Some other card" },
@@ -1087,6 +1206,7 @@ describe("dependsOnState gating", () => {
       },
       () => [
         {
+          workflowId: "titled",
           currentState: "done",
           id: "target-1",
           workflowInstanceState: { name: "Done card title" },

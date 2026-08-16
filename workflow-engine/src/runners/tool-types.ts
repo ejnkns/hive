@@ -56,6 +56,10 @@ export type ToolContext<
   // (e.g. save_definition reading the generated source and the id of a
   // previous save) instead of requiring every input as a parameter.
   workflowInstanceState?: () => TState;
+  // Flow-level state read (E2): the flow's declared cross-entity state
+  // (e.g. the shared taxonomy). Live getter; tools read it but never write it
+  // (flowState writes belong to operations via patchFlowState).
+  flowState?: () => Record<string, unknown>;
   // Creates a new workflow instance in this flow (the capability behind the
   // create_instance tool). Absent when the task does not declare it.
   createWorkflowInstance?: (

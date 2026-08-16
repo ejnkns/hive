@@ -7,6 +7,25 @@ import type { ModelCallStatus } from "./workflow-types.ts";
 // TaskBase, so the two can never drift.
 export type { TaskDefinition, TaskRole } from "./runners/task-types.ts";
 
+// A cross-instance query filter. The legacy single-arg `(stateId?)` string
+// form has been superseded by the positional `(workflowId?, stateId?)`
+// signature below — every caller filters explicitly by workflow and/or state.
+export type WorkflowInstanceProjection = {
+  workflowId: string;
+  currentState: string;
+  id: string;
+  workflowInstanceState: Record<string, unknown>;
+};
+
+// The cross-instance query callable: filter by workflow id and/or state id,
+// either optional. `workflowInstancesInState("ideas")` returns every ideas
+// instance; `workflowInstancesInState(undefined, "done")` returns every done
+// instance regardless of workflow.
+export type WorkflowInstancesInState = (
+  workflowId?: string,
+  stateId?: string
+) => WorkflowInstanceProjection[];
+
 export type TaskRunner = {
   run(task: TaskDefinition): Promise<{
     output: unknown;
@@ -49,12 +68,24 @@ export type TaskRunnerContext = {
     instanceState?: Record<string, unknown>
   ): { id: string };
   // Cross-instance query so operations can resolve title-based dependencies
-  // to instance IDs and gates can reference specific instances.
-  workflowInstancesInState(stateId?: string): {
-    currentState: string;
-    id: string;
-    workflowInstanceState: Record<string, unknown>;
-  }[];
+  // to instance IDs and gates can reference specific instances. Filter by
+  // workflow id and/or state id; every projection carries the instance's
+  // workflowId.
+  workflowInstancesInState: WorkflowInstancesInState;
+  // Cross-instance write (E1): patches a sibling workflow instance's declared
+  // state from an operation running on this instance. Same-flow only (the
+  // context is scoped to one flow runtime). Returns false for an unknown
+  // instance id; throws when the patch carries a field the target workflow's
+  // instanceState does not declare.
+  patchSiblingInstanceState(
+    instanceId: string,
+    patch: Record<string, unknown>
+  ): boolean;
+  // Flow-level state access (E2): the flow's declared cross-entity state
+  // (live getter) and the flowState write (mirrors patchFlowConfig — persists
+  // and emits flow_state_changed).
+  flowState: () => Record<string, unknown>;
+  patchFlowState(patch: Record<string, unknown>): void;
 };
 
 export type TaskRunnerFactory = (ctx: TaskRunnerContext) => TaskRunner;

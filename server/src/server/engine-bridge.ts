@@ -343,6 +343,15 @@ export function createEngineRunners(
       taskOutputs: () => ctx.taskOutputs,
       patchWorkflowInstanceState: ctx.patchWorkflowInstanceState,
       workflowInstancesInState: ctx.workflowInstancesInState,
+      // Cross-instance write (E1): the task context carries the runtime's
+      // sibling-patch capability (same-flow only, validated against the
+      // target workflow's declared instanceState).
+      patchInstanceState: (instanceId, patch) =>
+        ctx.patchSiblingInstanceState(instanceId, patch),
+      // Flow-level state access (E2): read + write flowState from an
+      // operation (the taxonomy publish in honeycomb).
+      flowState: () => ctx.flowState(),
+      patchFlowState: ctx.patchFlowState,
     };
   }
 
@@ -380,6 +389,7 @@ export function createEngineRunners(
         instanceId: ctx.instanceId,
         patchWorkflowInstanceState: ctx.patchWorkflowInstanceState,
         workflowInstanceState: ctx.workflowInstanceState,
+        flowState: () => ctx.flowState(),
         patchRunningTaskStatus: ctx.patchRunningTaskStatus,
         createWorkflowInstance: ctx.createWorkflowInstance,
       }),
@@ -392,6 +402,7 @@ export function createEngineRunners(
         instanceId: ctx.instanceId,
         patchWorkflowInstanceState: ctx.patchWorkflowInstanceState,
         workflowInstanceState: ctx.workflowInstanceState,
+        flowState: () => ctx.flowState(),
         patchRunningTaskMessages: ctx.patchRunningTaskMessages,
         patchRunningTaskStatus: ctx.patchRunningTaskStatus,
         createWorkflowInstance: ctx.createWorkflowInstance,

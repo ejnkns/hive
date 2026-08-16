@@ -17,6 +17,14 @@ export type FlowRuntimeEvent =
       instanceId: string;
       workflowId: string;
       state: RuntimeWorkflowInstanceState;
+    }
+  // E5: an instance was removed from the flow (a deletesInstance action or
+  // the runtime's removeWorkflowInstance). Listeners drop the instance; the
+  // snapshot push excludes it.
+  | {
+      type: "instance_removed";
+      instanceId: string;
+      workflowId: string;
     };
 
 export type FlowEventHandler = (event: FlowRuntimeEvent) => void;

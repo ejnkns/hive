@@ -5,13 +5,19 @@
 // object), and the loader seam (import → validate → compile → register).
 
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { compileFlowDefinition } from "workflow-engine/compile-flow-definition";
 import { createFlowRuntime } from "workflow-engine/create-flow-runtime";
-import { createOperationRunner } from "workflow-engine/runners";
+import {
+  createAiTaskRunner,
+  createOperationRunner,
+  createStandardToolDefinitions,
+  createStandardToolRegistry,
+  toToolMaps,
+} from "workflow-engine/runners";
 import type { TaskRunnerContext } from "workflow-engine/task-runner";
 import type { CompiledFlowDefinition } from "workflow-engine/workflow-types";
 import {
@@ -25,6 +31,7 @@ import {
   resetFlowDefinitionsForTest,
   setDefinitionsBasePathForTest,
 } from "./flow-definitions.ts";
+import { loadPresetDefinition } from "./preset-flow.ts";
 
 // ─── a data definition module ─────────────────────────────────────────
 
@@ -239,6 +246,176 @@ describe("validateFlowDefinition", () => {
     );
   });
 
+  it("accepts a destructive deletesInstance action with no transition target (E5)", () => {
+    const module = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "deletableFlow",
+  label: "Deletable Flow",
+  configSchema: [],
+  workflows: [
+    {
+      id: "ideas",
+      label: "Ideas",
+      instanceState: [{ field: "title", type: "string" }],
+      initial: "imported",
+      terminalStates: ["done"],
+      states: [
+        {
+          id: "imported",
+          label: "Imported",
+          actions: [
+            {
+              id: "discard",
+              label: "Discard",
+              variant: "destructive",
+              deletesInstance: true,
+            },
+          ],
+        },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  actions: [
+    {
+      id: "add_idea",
+      label: "Add idea",
+      createInstance: {
+        workflowId: "ideas",
+        fields: [{ key: "title", label: "Title", type: "string", required: true }],
+      },
+    },
+  ],
+};
+`;
+    const { definition, findings } = parseDefinition(module);
+    assert.deepEqual(findings, []);
+    assert.deepEqual(validateFlowDefinition(definition), []);
+    assert.deepEqual(analyzeFlowDefinition(definition), []);
+  });
+
+  it("rejects deletesInstance on a non-destructive variant", () => {
+    const module = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "badDelete",
+  label: "Bad Delete",
+  configSchema: [],
+  workflows: [
+    {
+      id: "ideas",
+      label: "Ideas",
+      instanceState: [],
+      initial: "imported",
+      terminalStates: ["imported"],
+      states: [
+        {
+          id: "imported",
+          label: "Imported",
+          actions: [
+            {
+              id: "discard",
+              label: "Discard",
+              variant: "primary",
+              deletesInstance: true,
+            },
+          ],
+        },
+      ],
+    },
+  ],
+};
+`;
+    const { definition } = parseDefinition(module);
+    const errors = validateFlowDefinition(definition);
+    assert.ok(
+      errors.some((e) =>
+        e.message.includes("deletesInstance requires a destructive variant")
+      ),
+      `expected a destructive-variant finding, got ${errors.map((e) => e.message).join("; ")}`
+    );
+  });
+
+  it("rejects deletesInstance combined with a transition target", () => {
+    const module = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "badDelete",
+  label: "Bad Delete",
+  configSchema: [],
+  workflows: [
+    {
+      id: "ideas",
+      label: "Ideas",
+      instanceState: [],
+      initial: "imported",
+      terminalStates: ["imported"],
+      states: [
+        {
+          id: "imported",
+          label: "Imported",
+          actions: [
+            {
+              id: "discard",
+              label: "Discard",
+              variant: "destructive",
+              deletesInstance: true,
+              transitionTo: "done",
+            },
+          ],
+        },
+        { id: "done", label: "Done" },
+      ],
+    },
+  ],
+};
+`;
+    const { definition } = parseDefinition(module);
+    const errors = validateFlowDefinition(definition);
+    assert.ok(
+      errors.some((e) =>
+        e.message.includes("deletesInstance removes the instance")
+      ),
+      `expected a transition-conflict finding, got ${errors.map((e) => e.message).join("; ")}`
+    );
+  });
+
+  it("rejects a state action with neither transitionTo nor deletesInstance", () => {
+    const module = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "stuckAction",
+  label: "Stuck Action",
+  configSchema: [],
+  workflows: [
+    {
+      id: "ideas",
+      label: "Ideas",
+      instanceState: [],
+      initial: "imported",
+      terminalStates: ["imported"],
+      states: [
+        {
+          id: "imported",
+          label: "Imported",
+          actions: [{ id: "stuck", label: "Stuck" }],
+        },
+      ],
+    },
+  ],
+};
+`;
+    const { definition } = parseDefinition(module);
+    const errors = validateFlowDefinition(definition);
+    assert.ok(
+      errors.some((e) =>
+        e.message.includes("must declare transitionTo or deletesInstance")
+      ),
+      `expected a missing-target finding, got ${errors.map((e) => e.message).join("; ")}`
+    );
+  });
+
   it("still flags a completionOutput nobody reads when no referenced file can", () => {
     // No extract, no custom ops, no file gates, no edge transforms — the
     // output is genuinely discarded, so the advisory must fire.
@@ -254,6 +431,218 @@ describe("validateFlowDefinition", () => {
     // advisory must stay quiet for the workflow.
     const { definition } = parseDefinition(FILE_READER_MODULE);
     assert.deepEqual(analyzeFlowDefinition(definition), []);
+  });
+
+  it("accepts a board groupByField on a declared instance-state field and rejects undeclared ones (E3)", () => {
+    const base = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "groupedFlow",
+  label: "Grouped Flow",
+  configSchema: [],
+  workflows: [
+    {
+      id: "ideas",
+      label: "Ideas",
+      ui: { groupByField: "__FIELD__" },
+      instance: { title: "title" },
+      instanceState: [
+        { field: "title", type: "string" },
+        { field: "category", type: "string" },
+      ],
+      initial: "imported",
+      terminalStates: ["imported"],
+      states: [{ id: "imported", label: "Imported" }],
+    },
+  ],
+  actions: [
+    {
+      id: "add_idea",
+      label: "Add idea",
+      createInstance: {
+        workflowId: "ideas",
+        fields: [
+          { key: "title", label: "Title", type: "string", required: true },
+          { key: "category", label: "Category", type: "string" },
+        ],
+      },
+    },
+  ],
+};
+`;
+    // Declared field: validates clean (category has a writer via the
+    // createInstance payload, so the partition read is satisfied).
+    const ok = parseDefinition(base.replace("__FIELD__", "category"));
+    assert.deepEqual(ok.findings, []);
+    assert.deepEqual(validateFlowDefinition(ok.definition), []);
+
+    // Undeclared field: rejected.
+    const bad = parseDefinition(base.replace("__FIELD__", "nope"));
+    const errors = validateFlowDefinition(bad.definition);
+    assert.ok(
+      errors.some((e) =>
+        e.message.includes(
+          'ui.groupByField references undeclared state field "nope"'
+        )
+      ),
+      `expected an undeclared-field finding, got ${errors.map((e) => e.message).join("; ")}`
+    );
+  });
+
+  it("rejects a workflow declaring both groupByField and columns", () => {
+    const module = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "conflictingUi",
+  label: "Conflicting Ui",
+  configSchema: [],
+  workflows: [
+    {
+      id: "ideas",
+      label: "Ideas",
+      ui: {
+        groupByField: "category",
+        columns: [{ id: "lane", label: "Lane", states: ["imported"] }],
+      },
+      instanceState: [{ field: "category", type: "string" }],
+      initial: "imported",
+      terminalStates: ["imported"],
+      states: [{ id: "imported", label: "Imported" }],
+    },
+  ],
+};
+`;
+    const { definition } = parseDefinition(module);
+    const errors = validateFlowDefinition(definition);
+    assert.ok(
+      errors.some((e) =>
+        e.message.includes("declares both groupByField and columns")
+      ),
+      `expected a conflict finding, got ${errors.map((e) => e.message).join("; ")}`
+    );
+  });
+
+  it("accepts an edit field with optionsFrom and rejects bad flowState sources (E4)", () => {
+    const base = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "optionsFlow",
+  label: "Options Flow",
+  configSchema: [],
+  flowState: [{ field: "taxonomy", type: "object" }],
+  workflows: [
+    {
+      id: "ideas",
+      label: "Ideas",
+      instance: { title: "title" },
+      editFields: [
+        { key: "category", label: "Category", type: "string", optionsFrom: { flowState: "__SOURCE__" } },
+      ],
+      instanceState: [
+        { field: "title", type: "string" },
+        { field: "category", type: "string" },
+      ],
+      initial: "imported",
+      terminalStates: ["imported"],
+      states: [{ id: "imported", label: "Imported" }],
+    },
+  ],
+  actions: [
+    {
+      id: "add_idea",
+      label: "Add idea",
+      createInstance: {
+        workflowId: "ideas",
+        fields: [
+          { key: "title", label: "Title", type: "string", required: true },
+          { key: "category", label: "Category", type: "string" },
+        ],
+      },
+    },
+  ],
+};
+`;
+    // Declared flowState source: validates clean.
+    const ok = parseDefinition(
+      base.replace("__SOURCE__", "taxonomy.categories")
+    );
+    assert.deepEqual(ok.findings, []);
+    assert.deepEqual(validateFlowDefinition(ok.definition), []);
+
+    // Source path whose first segment is not a declared flowState field.
+    const bad = parseDefinition(base.replace("__SOURCE__", "nope.categories"));
+    const errors = validateFlowDefinition(bad.definition);
+    assert.ok(
+      errors.some((e) =>
+        e.message.includes(
+          'optionsFrom.flowState references undeclared flowState field "nope"'
+        )
+      ),
+      `expected an undeclared flowState source, got ${errors.map((e) => e.message).join("; ")}`
+    );
+
+    // Non-dotted path.
+    const badPath = parseDefinition(base.replace("__SOURCE__", "taxonomy..x"));
+    const pathErrors = validateFlowDefinition(badPath.definition);
+    assert.ok(
+      pathErrors.some((e) =>
+        e.message.includes("optionsFrom.flowState must be a dotted path")
+      ),
+      `expected a dotted-path finding, got ${pathErrors.map((e) => e.message).join("; ")}`
+    );
+  });
+
+  it("rejects a field declaring both static options and optionsFrom (E4)", () => {
+    const module = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "bothOptions",
+  label: "Both Options",
+  configSchema: [],
+  flowState: [{ field: "taxonomy", type: "object" }],
+  workflows: [
+    {
+      id: "ideas",
+      label: "Ideas",
+      instance: { title: "title" },
+      editFields: [
+        {
+          key: "category",
+          label: "Category",
+          type: "string",
+          options: ["a"],
+          optionsFrom: { flowState: "taxonomy.categories" },
+        },
+      ],
+      instanceState: [
+        { field: "title", type: "string" },
+        { field: "category", type: "string" },
+      ],
+      initial: "imported",
+      terminalStates: ["imported"],
+      states: [{ id: "imported", label: "Imported" }],
+    },
+  ],
+  actions: [
+    {
+      id: "add_idea",
+      label: "Add idea",
+      createInstance: {
+        workflowId: "ideas",
+        fields: [{ key: "title", label: "Title", type: "string", required: true }],
+      },
+    },
+  ],
+};
+`;
+    const { definition } = parseDefinition(module);
+    const errors = validateFlowDefinition(definition);
+    assert.ok(
+      errors.some((e) =>
+        e.message.includes("declares both options and optionsFrom")
+      ),
+      `expected an options-conflict finding, got ${errors.map((e) => e.message).join("; ")}`
+    );
   });
 
   it("rejects a read of an undeclared instance-state field", () => {
@@ -287,7 +676,11 @@ function operationRunners(compiled: CompiledFlowDefinition) {
           workflowInstanceState: () => ctx.workflowInstanceState(),
           taskOutputs: () => ctx.taskOutputs,
           patchWorkflowInstanceState: ctx.patchWorkflowInstanceState,
+          flowState: () => ctx.flowState(),
+          patchFlowState: ctx.patchFlowState,
           workflowInstancesInState: ctx.workflowInstancesInState,
+          patchInstanceState: (instanceId, patch) =>
+            ctx.patchSiblingInstanceState(instanceId, patch),
         }),
       }),
   };
@@ -408,6 +801,363 @@ export const flow: FlowDefinition = {
     await assert.rejects(
       loadDefinitionFromSource("definition-seam-legacy", legacy, "legacy", {}),
       /not pure data/
+    );
+  });
+
+  it("runs a cross-instance fixture: an op on the organizer patches a sibling idea by title, query filtered by workflow (E1+E6)", async () => {
+    const module = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "crossFixture",
+  label: "Cross Fixture",
+  configSchema: [],
+  operations: [
+    {
+      id: "apply_classifications",
+      ref: "./ops/apply.ts",
+      writesAcross: [{ workflow: "ideas", fields: ["category"] }],
+    },
+  ],
+  workflows: [
+    {
+      id: "organizer",
+      label: "Organizer",
+      instance: { title: "name" },
+      instanceState: [
+        { field: "name", type: "string" },
+        { field: "backlogDigest", type: "string" },
+      ],
+      initial: "assembling",
+      terminalStates: ["done"],
+      states: [
+        {
+          id: "assembling",
+          label: "Assembling",
+          category: "initial",
+          tasks: [
+            {
+              id: "assemble",
+              label: "Assemble",
+              role: "operation",
+              operations: ["apply_classifications"],
+            },
+          ],
+          autoTransitions: [
+            { to: "done", gate: { kind: "taskSuccess", task: "assemble" } },
+            { to: "failed", gate: { kind: "taskError", task: "assemble" } },
+          ],
+        },
+        { id: "failed", label: "Failed", category: "error" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+    {
+      id: "ideas",
+      label: "Ideas",
+      instance: { title: "title" },
+      display: { fields: [{ path: "category", label: "Category" }] },
+      instanceState: [
+        { field: "title", type: "string" },
+        { field: "category", type: "string" },
+      ],
+      initial: "imported",
+      terminalStates: ["imported"],
+      states: [{ id: "imported", label: "Imported", category: "active" }],
+    },
+  ],
+  edges: [],
+  actions: [
+    {
+      id: "add_idea",
+      label: "Add idea",
+      createInstance: {
+        workflowId: "ideas",
+        fields: [{ key: "title", label: "Title", type: "string", required: true }],
+      },
+    },
+    {
+      id: "add_organizer",
+      label: "Add organizer",
+      createInstance: {
+        workflowId: "organizer",
+        fields: [{ key: "name", label: "Name", type: "string", required: true }],
+      },
+    },
+  ],
+};
+`;
+    const files: Record<string, string> = {
+      "./ops/apply.ts": `import { defineOperations, type OperationContext } from "workflow-engine/runners";
+import type { TaskDefinition } from "workflow-engine/task-runner";
+
+type OrganizerState = { name: string; backlogDigest: string };
+type IdeaState = { title: string; category: string };
+
+export const apply_classificationsOperations = defineOperations<OrganizerState>({
+  apply_classifications: (
+    _task: TaskDefinition,
+    _params: Record<string, unknown>,
+    ctx: OperationContext<OrganizerState>
+  ) => {
+    // The query now carries workflowId and filters by it (E6).
+    const ideas = ctx.workflowInstancesInState("ideas");
+    const target = ideas.find((i) => i.workflowInstanceState.title === "Ship a demo");
+    if (!target) return { ok: false, count: ideas.length };
+    // Cross-instance write (E1): patch the sibling idea's declared state.
+    const ok = ctx.patchInstanceState(target.id, { category: "launch" });
+    return { ok, count: ideas.length };
+  },
+});
+`,
+    };
+
+    const loaded = await loadDefinitionFromSource(
+      "cross-fixture",
+      module,
+      "crossFixture",
+      files
+    );
+    if (!("workflows" in loaded.flow)) {
+      throw new Error("expected a static definition");
+    }
+    const runtime = createFlowRuntime(
+      "cross-flow",
+      loaded.flow.workflows,
+      loaded.flow.edges,
+      operationRunners(loaded.flow),
+      {},
+      {},
+      undefined
+    );
+    const idea = runtime.addWorkflowInstance("ideas", {
+      workflowInstanceState: { title: "Ship a demo" },
+    });
+    runtime.addWorkflowInstance("ideas", {
+      workflowInstanceState: { title: "Other idea" },
+    });
+    const organizer = runtime.addWorkflowInstance("organizer", {
+      workflowInstanceState: { name: "brain" },
+    });
+
+    // The runtime query filters by workflow (E6) and carries workflowId.
+    const ideasOnly = runtime.workflowInstancesInState("ideas");
+    assert.equal(ideasOnly.length, 2);
+    assert.ok(ideasOnly.every((p) => p.workflowId === "ideas"));
+
+    await organizer.startAutoTasks();
+    assert.equal(organizer.getState().currentState, "done");
+    assert.equal(
+      idea.getState().workflowInstanceState.category,
+      "launch",
+      "the organizer op patched the sibling idea's declared state"
+    );
+    // The other idea stayed untouched.
+    assert.equal(
+      runtime.getWorkflowInstanceEntries().find((e) => e.id !== idea.id)?.state
+        .workflowInstanceState.category,
+      undefined
+    );
+  });
+
+  it("runs a flowState fixture: a publish op reads flowState and writes the taxonomy via patchFlowState (E2)", async () => {
+    const module = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "flowStateFixture",
+  label: "FlowState Fixture",
+  configSchema: [],
+  flowState: [{ field: "taxonomy", type: "object" }],
+  operations: [
+    {
+      id: "publish_taxonomy",
+      ref: "./ops/publish.ts",
+    },
+  ],
+  workflows: [
+    {
+      id: "organize",
+      label: "Organize",
+      instance: { title: "name" },
+      instanceState: [{ field: "name", type: "string" }],
+      initial: "publishing",
+      terminalStates: ["done"],
+      states: [
+        {
+          id: "publishing",
+          label: "Publishing",
+          category: "initial",
+          tasks: [
+            {
+              id: "publish",
+              label: "Publish",
+              role: "operation",
+              operations: ["publish_taxonomy"],
+            },
+          ],
+          autoTransitions: [
+            { to: "done", gate: { kind: "taskSuccess", task: "publish" } },
+            { to: "failed", gate: { kind: "taskError", task: "publish" } },
+          ],
+        },
+        { id: "failed", label: "Failed", category: "error" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  actions: [
+    {
+      id: "add_organizer",
+      label: "Add organizer",
+      createInstance: {
+        workflowId: "organize",
+        fields: [{ key: "name", label: "Name", type: "string", required: true }],
+      },
+    },
+  ],
+};
+`;
+    const files: Record<string, string> = {
+      "./ops/publish.ts": `import { defineOperations, type OperationContext } from "workflow-engine/runners";
+import type { TaskDefinition } from "workflow-engine/task-runner";
+
+type OrganizeState = { name: string };
+
+export const publish_taxonomyOperations = defineOperations<OrganizeState>({
+  publish_taxonomy: (
+    _task: TaskDefinition,
+    _params: Record<string, unknown>,
+    ctx: OperationContext<OrganizeState>
+  ) => {
+    const existing = ctx.flowState().taxonomy;
+    ctx.patchFlowState({ taxonomy: { categories: ["infra"], prior: existing } });
+    return { ok: true, prior: existing };
+  },
+});
+`,
+    };
+
+    const loaded = await loadDefinitionFromSource(
+      "flowstate-fixture",
+      module,
+      "flowStateFixture",
+      files
+    );
+    if (!("workflows" in loaded.flow)) {
+      throw new Error("expected a static definition");
+    }
+    const runtime = createFlowRuntime(
+      "flowstate-flow",
+      loaded.flow.workflows,
+      loaded.flow.edges,
+      operationRunners(loaded.flow),
+      {},
+      { taxonomy: { categories: [] } },
+      undefined
+    );
+    const organizer = runtime.addWorkflowInstance("organize", {
+      workflowInstanceState: { name: "brain" },
+    });
+    // The instance auto-starts its initial-state auto tasks on creation; poll
+    // until the publish op's success transition lands.
+    for (let i = 0; i < 200; i++) {
+      if (organizer.getState().currentState === "done") break;
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    assert.equal(organizer.getState().currentState, "done");
+    assert.deepEqual(runtime.getFlowState().taxonomy, {
+      categories: ["infra"],
+      prior: { categories: [] },
+    });
+  });
+
+  it("rejects a toFlowState edge whose transform writes an undeclared flowState field (E2)", async () => {
+    const module = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "badFlowStateEdge",
+  label: "Bad FlowState Edge",
+  configSchema: [],
+  flowState: [{ field: "taxonomy", type: "object" }],
+  workflows: [
+    {
+      id: "source",
+      label: "Source",
+      instanceState: [],
+      initial: "done",
+      terminalStates: ["done"],
+      states: [{ id: "done", label: "Done", category: "terminal" }],
+    },
+  ],
+  edges: [
+    {
+      fromWorkflow: "source",
+      fromStates: ["done"],
+      toFlowState: true,
+      transform: { ref: "./edges/to-state.ts", fields: ["bogusField"] },
+    },
+  ],
+};
+`;
+    const files: Record<string, string> = {
+      "./edges/to-state.ts": `import type { TransformContract } from "workflow-engine/workflow-types";
+
+export const toState: TransformContract = () => ({ bogusField: 1 });
+`,
+    };
+    await assert.rejects(
+      loadDefinitionFromSource(
+        "bad-flowstate-edge",
+        module,
+        "badFlowStateEdge",
+        files
+      ),
+      /toFlowState edge transform writes "bogusField" which is not declared in flowState/
+    );
+  });
+
+  it("rejects a writesAcross declaration that targets an undeclared field", async () => {
+    const module = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "badAcross",
+  label: "Bad Across",
+  configSchema: [],
+  operations: [
+    {
+      id: "cross",
+      ref: "./ops/cross.ts",
+      writesAcross: [{ workflow: "ideas", fields: ["nope"] }],
+    },
+  ],
+  workflows: [
+    {
+      id: "ideas",
+      label: "Ideas",
+      instanceState: [{ field: "title", type: "string" }],
+      initial: "imported",
+      terminalStates: ["imported"],
+      states: [{ id: "imported", label: "Imported" }],
+    },
+  ],
+};
+`;
+    const files: Record<string, string> = {
+      "./ops/cross.ts": `import { defineOperations } from "workflow-engine/runners";
+import type { TaskDefinition } from "workflow-engine/task-runner";
+import type { OperationContext } from "workflow-engine/runners";
+
+export const crossOperations = defineOperations({
+  cross: (
+    _task: TaskDefinition,
+    _params: Record<string, unknown>,
+    ctx: OperationContext
+  ) => ctx.patchInstanceState("x", { nope: "y" }),
+});
+`,
+    };
+    await assert.rejects(
+      loadDefinitionFromSource("bad-across", module, "badAcross", files),
+      /nope.*not declared in target workflow "ideas" instanceState/
     );
   });
 });
@@ -602,3 +1352,285 @@ describe("definition expressiveness (custom render kinds, task render hints, ui.
     assert.equal(loaded.flow.ui?.view, "list");
   });
 });
+
+// ─── honeycomb preset end-to-end (the definition corpus acceptance test) ──
+// Fixture backlog → parse → taxonomy proposal → approve → global classify →
+// map.md. The ai-tasks run against a mock model caller that completes each
+// task's generated completion tool; the operations run the compiled ops.
+
+describe("honeycomb preset runs the full pipeline (paste → approve → classify → map)", () => {
+  const PRESET_SLUG = "honeycomb";
+
+  function runners(compiled: CompiledFlowDefinition) {
+    const standardDefs = createStandardToolDefinitions();
+    const standardExecs = createStandardToolRegistry();
+    const domainMaps = toToolMaps(compiled.tools ?? []);
+
+    const operationContext = (ctx: TaskRunnerContext) => ({
+      flowConfig: () => ctx.flowConfig,
+      patchFlowConfig: ctx.patchFlowConfig,
+      instanceId: ctx.instanceId,
+      workflowId: ctx.workflowId,
+      currentState: ctx.currentState,
+      workflowInstanceState: () => ctx.workflowInstanceState(),
+      taskOutputs: () => ctx.taskOutputs,
+      patchWorkflowInstanceState: ctx.patchWorkflowInstanceState,
+      flowState: () => ctx.flowState(),
+      patchFlowState: ctx.patchFlowState,
+      workflowInstancesInState: ctx.workflowInstancesInState,
+      patchInstanceState: (
+        instanceId: string,
+        patch: Record<string, unknown>
+      ) => ctx.patchSiblingInstanceState(instanceId, patch),
+    });
+
+    return {
+      operation: (ctx: TaskRunnerContext) =>
+        createOperationRunner({
+          operations: compiled.operations ?? {},
+          getContext: () => operationContext(ctx),
+        }),
+      "ai-task": (ctx: TaskRunnerContext) =>
+        createAiTaskRunner({
+          modelCaller: async (_prompt, _messages, tools) => {
+            const completion = tools.find((t) =>
+              t.function.name.endsWith("_complete")
+            );
+            const name = completion?.function.name ?? "complete";
+            const args = JSON.stringify(COMPLETIONS[name] ?? {});
+            return {
+              content: "done",
+              toolCalls: [{ id: "c1", name, arguments: args }],
+            };
+          },
+          toolDefinitions: { ...standardDefs, ...domainMaps.definitions },
+          toolExecutors: { ...standardExecs, ...domainMaps.executors },
+          basePath: readBasePath(ctx),
+          instanceId: ctx.instanceId,
+          workflowInstanceState: ctx.workflowInstanceState,
+          flowState: () => ctx.flowState(),
+          patchRunningTaskStatus: ctx.patchRunningTaskStatus,
+          createWorkflowInstance: ctx.createWorkflowInstance,
+        }),
+    };
+  }
+
+  function readBasePath(ctx: TaskRunnerContext): string | undefined {
+    const basePath = ctx.flowConfig.basePath;
+    return typeof basePath === "string" && basePath !== ""
+      ? basePath
+      : undefined;
+  }
+
+  async function waitFor(
+    runtime: ReturnType<typeof createFlowRuntime>,
+    condition: (
+      entries: ReturnType<
+        ReturnType<typeof createFlowRuntime>["getWorkflowInstanceEntries"]
+      >
+    ) => boolean,
+    label: string
+  ): Promise<void> {
+    for (let i = 0; i < 500; i++) {
+      if (condition(runtime.getWorkflowInstanceEntries())) return;
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    throw new Error(`timeout waiting for ${label}`);
+  }
+
+  it("imports → fan-out → taxonomy → approve → classify → map.md", async () => {
+    const root = mkdtempSync(join(tmpdir(), "hive-honeycomb-"));
+    const loaded = await loadPresetDefinition(PRESET_SLUG);
+    if (!("workflows" in loaded.flow)) {
+      throw new Error("expected a static definition");
+    }
+    const runtime = createFlowRuntime(
+      "honeycomb-flow",
+      loaded.flow.workflows,
+      loaded.flow.edges,
+      runners(loaded.flow),
+      { definitionId: "honeycomb", basePath: root },
+      {},
+      undefined
+    );
+
+    // Paste a backlog: the imports instance auto-runs prepare_input → parse
+    // (mock splits two ideas) → recordIdeas → done, and the fan-out edge
+    // creates one idea card per chunk.
+    runtime.addWorkflowInstance("imports", {
+      workflowInstanceState: {
+        name: "TODOs dump",
+        source: "todos",
+        rawText:
+          "- Ship a demo\n- Rewrite the onboarding copy\n- Fix the search debounce",
+      },
+    });
+    await waitFor(
+      runtime,
+      (entries) => entries.filter((e) => e.workflowId === "ideas").length === 3,
+      "idea cards from the fan-out edge"
+    );
+
+    // Start organizing: assemble digest → taxonomize (mock taxonomy) →
+    // taxonomy_proposed.
+    const organizer = runtime.addWorkflowInstance("organize", {
+      workflowInstanceState: { name: "Organizer" },
+    });
+    await waitFor(
+      runtime,
+      (entries) =>
+        entries.some(
+          (e) =>
+            e.id === organizer.id &&
+            e.state.currentState === "taxonomy_proposed"
+        ),
+      "taxonomy proposal"
+    );
+
+    // One click approves; publish → classify (mock classifications applied
+    // onto the cards by title via E1) → build map.md → done.
+    organizer.dispatchAction("approve");
+    await waitFor(
+      runtime,
+      (entries) =>
+        entries.some(
+          (e) => e.id === organizer.id && e.state.currentState === "done"
+        ),
+      "organize done"
+    );
+
+    // Every idea card received its classification on its own state.
+    const ideaEntries = runtime
+      .getWorkflowInstanceEntries()
+      .filter((e) => e.workflowId === "ideas");
+    assert.equal(ideaEntries.length, 3);
+    const classifications = (
+      COMPLETIONS.organize_classifyAll_complete as {
+        classifications: Array<{ title: string; category: string }>;
+      }
+    ).classifications;
+    for (const entry of ideaEntries) {
+      const expected = classifications.find(
+        (c) => c.title === entry.state.workflowInstanceState.title
+      );
+      assert.equal(
+        entry.state.workflowInstanceState.category,
+        expected?.category,
+        `card ${entry.state.workflowInstanceState.title} got its category`
+      );
+      assert.ok(
+        Array.isArray(entry.state.workflowInstanceState.dependents),
+        "dependents are computed per card"
+      );
+    }
+    // flowState carries the approved taxonomy (E2), not duplicated on cards.
+    const state = runtime.getFlowState() as {
+      taxonomy?: { categories?: unknown };
+    };
+    assert.deepEqual(state.taxonomy?.categories, [
+      { name: "delivery", definition: "Shippable product work" },
+      { name: "polish", definition: "Quality and copy" },
+    ]);
+
+    // E3: the ideas board declares field-value grouping by category.
+    const ideasDef = runtime
+      .getWorkflowDefinitions()
+      .find((d) => d.id === "ideas");
+    assert.equal(ideasDef?.ui?.groupByField, "category");
+
+    // E4: the category edit field's options resolve from flowState's taxonomy.
+    const ideasEntries = runtime
+      .getWorkflowInstanceEntries()
+      .filter((e) => e.workflowId === "ideas");
+    const categoryField = ideasEntries[0]?.editFields.find(
+      (f) => f.key === "category"
+    );
+    assert.deepEqual(categoryField?.options, ["delivery", "polish"]);
+    assert.equal(categoryField?.optionsFrom, undefined);
+
+    // map.md is persisted to the domain dir.
+    const mapPath = join(root, ".honeycomb", "map.md");
+    const map = readFileSync(mapPath, "utf-8");
+    assert.ok(map.includes("# Ideas Map"), "map.md header");
+    assert.ok(map.includes("Ship a demo"), "map lists the idea");
+    assert.ok(map.includes("## delivery"), "map groups by category");
+
+    rmSync(root, { recursive: true, force: true });
+  });
+});
+
+// The mock model's completions per generated completion tool.
+const COMPLETIONS: Record<string, unknown> = {
+  imports_parse_complete: {
+    ideas: [
+      { title: "Ship a demo", text: "- Ship a demo", source: "todos" },
+      {
+        title: "Rewrite onboarding copy",
+        text: "- Rewrite the onboarding copy",
+        source: "todos",
+      },
+      {
+        title: "Fix search debounce",
+        text: "- Fix the search debounce",
+        source: "todos",
+      },
+    ],
+  },
+  organize_taxonomize_complete: {
+    categories: [
+      { name: "delivery", definition: "Shippable product work" },
+      { name: "polish", definition: "Quality and copy" },
+    ],
+    priorityScale: { levels: [{ key: "p0" }, { key: "p1" }, { key: "p2" }] },
+    effortScale: { levels: [{ key: "S" }, { key: "M" }, { key: "L" }] },
+    dedupPolicy: "the same ask restated",
+  },
+  organize_classifyAll_complete: {
+    classifications: [
+      {
+        title: "Ship a demo",
+        category: "delivery",
+        tags: ["demo"],
+        priority: "p0",
+        effort: "M",
+        status: "backlog",
+        dependsOn: [],
+        duplicateOf: "",
+        summary: "Ship the demo.",
+        rationale: "Shippable work.",
+      },
+      {
+        title: "Rewrite onboarding copy",
+        category: "polish",
+        tags: ["copy"],
+        priority: "p1",
+        effort: "S",
+        status: "backlog",
+        dependsOn: [],
+        duplicateOf: "",
+        summary: "Rewrite the copy.",
+        rationale: "Quality and copy.",
+      },
+      {
+        title: "Fix search debounce",
+        category: "delivery",
+        tags: ["search"],
+        priority: "p1",
+        effort: "S",
+        status: "backlog",
+        dependsOn: ["Ship a demo"],
+        duplicateOf: "",
+        summary: "Fix the debounce.",
+        rationale: "Shippable work.",
+      },
+    ],
+  },
+  ideas_classify_complete: {
+    category: "delivery",
+    tags: ["manual"],
+    priority: "p1",
+    effort: "M",
+    status: "backlog",
+    summary: "A manually added idea.",
+  },
+};

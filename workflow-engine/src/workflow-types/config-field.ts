@@ -32,6 +32,14 @@ export type ConfigField = {
   // fields: the closed set a multi-select may choose from; absent means a free
   // tag list.
   options?: string[];
+  // E4: dynamic select options sourced from flowState at runtime (e.g. the
+  // AI-proposed category taxonomy). `flowState` is a dotted path into the
+  // flow's declared flowState (e.g. "taxonomy.categories" — the first segment
+  // must be a declared flowState field). The server resolves it to `options`
+  // when serializing instance entries; when flowState lacks the value the
+  // field falls back to free text (no options). Mutually exclusive with
+  // `options` — a field has either a static closed set or a runtime source.
+  optionsFrom?: { flowState: string };
 };
 
 // A project-level action rendered on the flow instance header. Unlike a
