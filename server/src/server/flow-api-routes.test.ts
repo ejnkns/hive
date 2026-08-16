@@ -91,6 +91,7 @@ const testWorkflow = defineWorkflow({
 const noopPersistence: FlowStore = {
   saveFlow: () => {},
   saveInstance: () => {},
+  deleteInstance: () => {},
   deleteFlow: () => {},
   loadFlow: () => null,
   loadAllFlows: () => [],
@@ -443,6 +444,194 @@ describe("flow API routes", () => {
     assert.equal(response.json().error, "Instance not found");
   });
 
+  it("DELETE /api/flows/:flowId/instances/:instanceId removes the instance (E5)", async () => {
+    const server = fixture();
+
+    const listResponse = await server.inject({
+      method: "GET",
+      url: "/api/flows/test-flow/instances",
+    });
+    const instanceId = listResponse.json().instances[0].id;
+
+    const response = await server.inject({
+      method: "DELETE",
+      url: `/api/flows/test-flow/instances/${instanceId}`,
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.json(), { deleted: true, instanceId });
+
+    const after = await server.inject({
+      method: "GET",
+      url: "/api/flows/test-flow/instances",
+    });
+    assert.equal(after.json().instances.length, 0);
+  });
+
+  it("DELETE /api/flows/:flowId/instances/:instanceId 404s for unknown ids", async () => {
+    const server = fixture();
+
+    const response = await server.inject({
+      method: "DELETE",
+      url: "/api/flows/test-flow/instances/no-such-id",
+    });
+
+    assert.equal(response.statusCode, 404);
+    assert.equal(response.json().error, "Instance not found");
+  });
+
+  it("POST action with a deletesInstance action removes the instance (E5)", async () => {
+    // A closure-form workflow with a destructive deletesInstance action.
+    const discardWorkflow = defineWorkflow({
+      id: "deletable",
+      label: "Deletable",
+      taskOutputs: {} as Record<string, never>,
+      states: [
+        {
+          id: "ready",
+          label: "Ready",
+          actions: [
+            {
+              id: "discard",
+              label: "Discard",
+              variant: "destructive",
+              deletesInstance: true,
+            },
+          ],
+        },
+      ],
+      initial: "ready",
+      terminalStates: [],
+    });
+    const runtime = createFlowRuntime(
+      "discard-flow",
+      [discardWorkflow],
+      [],
+      {},
+      {},
+      {},
+      noopPersistence
+    );
+    runtime.addWorkflowInstance("deletable");
+    registerFlowForTest("discard-flow", runtime);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const listResponse = await server.inject({
+      method: "GET",
+      url: "/api/flows/discard-flow/instances",
+    });
+    const instanceId = listResponse.json().instances[0].id;
+
+    const response = await server.inject({
+      method: "POST",
+      url: `/api/flows/discard-flow/instances/${instanceId}/action`,
+      body: { actionId: "discard" },
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json().deleted, true);
+
+    const after = await server.inject({
+      method: "GET",
+      url: "/api/flows/discard-flow/instances",
+    });
+    assert.equal(after.json().instances.length, 0);
+  });
+
+  it("GET instances serializes editFields with options resolved from flowState (E4)", async () => {
+    const editableWorkflow = defineWorkflow({
+      id: "ideas",
+      label: "Ideas",
+      taskOutputs: {} as Record<string, never>,
+      editFields: [
+        {
+          key: "category",
+          label: "Category",
+          type: "string",
+          optionsFrom: { flowState: "taxonomy.categories" },
+        },
+      ],
+      states: [{ id: "ready", label: "Ready" }],
+      initial: "ready",
+      terminalStates: ["ready"],
+    });
+    const runtime = createFlowRuntime(
+      "options-flow",
+      [editableWorkflow],
+      [],
+      {},
+      {},
+      { taxonomy: { categories: ["infra", "launch"] } },
+      noopPersistence
+    );
+    runtime.addWorkflowInstance("ideas");
+    registerFlowForTest("options-flow", runtime);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const response = await server.inject({
+      method: "GET",
+      url: "/api/flows/options-flow/instances",
+    });
+    assert.equal(response.statusCode, 200);
+    const field = response
+      .json()
+      .instances[0].editFields.find(
+        (f: { key: string }) => f.key === "category"
+      );
+    assert.deepEqual(field.options, ["infra", "launch"]);
+    assert.equal(field.optionsFrom, undefined);
+  });
+
+  it("GET instances falls back to free text when flowState lacks the source (E4)", async () => {
+    const editableWorkflow = defineWorkflow({
+      id: "ideas",
+      label: "Ideas",
+      taskOutputs: {} as Record<string, never>,
+      editFields: [
+        {
+          key: "category",
+          label: "Category",
+          type: "string",
+          optionsFrom: { flowState: "taxonomy.categories" },
+        },
+      ],
+      states: [{ id: "ready", label: "Ready" }],
+      initial: "ready",
+      terminalStates: ["ready"],
+    });
+    const runtime = createFlowRuntime(
+      "options-empty-flow",
+      [editableWorkflow],
+      [],
+      {},
+      {},
+      {},
+      noopPersistence
+    );
+    runtime.addWorkflowInstance("ideas");
+    registerFlowForTest("options-empty-flow", runtime);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const response = await server.inject({
+      method: "GET",
+      url: "/api/flows/options-empty-flow/instances",
+    });
+    assert.equal(response.statusCode, 200);
+    const field = response
+      .json()
+      .instances[0].editFields.find(
+        (f: { key: string }) => f.key === "category"
+      );
+    assert.equal(field.options, undefined);
+    assert.equal(field.optionsFrom, undefined);
+  });
+
   it("PATCH state validates against editFields and patches instance state", async () => {
     setFlowPersistence(noopPersistence);
     registerFlowDefinition(editableDefinition);
@@ -661,6 +850,59 @@ describe("flow API routes", () => {
     const response = await server.inject({
       method: "POST",
       url: `/api/flows/${flowId}/actions/gated`,
+      body: {},
+    });
+    assert.equal(response.statusCode, 409);
+  });
+
+  it("POST flow-level action with a throwing gate is refused (fail-safe), not a 500", async () => {
+    const throwingActionDefinition = {
+      id: "action-throw-def",
+      label: "Action Throw",
+      workflows: [actionItemWorkflow],
+      edges: [],
+      actions: [
+        {
+          id: "explode",
+          label: "Explode",
+          gate: () => {
+            throw new Error("boom");
+          },
+          createInstance: { workflowId: "item" },
+        },
+      ],
+    } satisfies CompiledFlowDefinition;
+    setFlowPersistence(noopPersistence);
+    registerFlowDefinition(throwingActionDefinition);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const createResponse = await server.inject({
+      method: "POST",
+      url: "/api/flows",
+      body: { definitionId: "action-throw-def", config: { name: "Throw" } },
+    });
+    const flowId = createResponse.json().flowId as string;
+
+    // The throwing gate hides the action from the header.
+    const flowResponse = await server.inject({
+      method: "GET",
+      url: `/api/flows/${flowId}`,
+    });
+    const actions = flowResponse.json().availableFlowActions as Array<{
+      id: string;
+    }>;
+    assert.equal(
+      actions.some((a) => a.id === "explode"),
+      false,
+      "a throwing gate must not list the action"
+    );
+
+    // Direct dispatch is refused with a clean 409, not a 500.
+    const response = await server.inject({
+      method: "POST",
+      url: `/api/flows/${flowId}/actions/explode`,
       body: {},
     });
     assert.equal(response.statusCode, 409);

@@ -60,6 +60,17 @@ export function registerInstanceRoutes(server: FastifyInstance): void {
           error: err instanceof Error ? err.message : "Invalid action payload",
         });
       }
+
+      // E5: a deletesInstance action removes the instance — the controller is
+      // gone from the runtime, so there is no "after" state to report.
+      if (runtime.getWorkflowInstance(instanceId) === undefined) {
+        return reply.send({
+          instanceId,
+          deleted: true,
+          previousState: before,
+        });
+      }
+
       const after = controller.getState().currentState;
 
       if (before === after) {
@@ -177,6 +188,33 @@ export function registerInstanceRoutes(server: FastifyInstance): void {
         instanceId,
         runningTaskContext: controller.getState().runningTaskContext,
       });
+    }
+  );
+
+  // ── Instance deletion (E5) ──
+  // Removes a workflow instance from the flow: the controller is dropped from
+  // the runtime, its persisted state is deleted, and listeners are notified
+  // (the snapshot push excludes it). 404s cleanly for unknown ids.
+  server.delete(
+    "/api/flows/:flowId/instances/:instanceId",
+    async (request, reply) => {
+      // Fastify params type is erased; shape guaranteed by route pattern
+      const { flowId, instanceId } = request.params as {
+        flowId: string;
+        instanceId: string;
+      };
+
+      const runtime = getFlowRuntime(flowId);
+      if (!runtime) {
+        return reply.status(404).send({ error: "Flow not found" });
+      }
+
+      const removed = runtime.removeWorkflowInstance(instanceId);
+      if (!removed) {
+        return reply.status(404).send({ error: "Instance not found" });
+      }
+
+      return reply.send({ deleted: true, instanceId });
     }
   );
 

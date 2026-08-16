@@ -26,6 +26,7 @@ export type FlowStore = {
     workflowId: string,
     state: RuntimeWorkflowInstanceState
   ): void;
+  deleteInstance(flowId: string, instanceId: string): void;
   deleteFlow(flowId: string): void;
   loadFlow(flowId: string): {
     config: unknown;
@@ -203,6 +204,12 @@ export function createFlowPersistence(
     }
   }
 
+  function deleteInstance(flowId: string, instanceId: string): void {
+    // The runtime calls this when an instance is removed (E5); the persisted
+    // file is gone so the instance cannot resurrect on the next boot.
+    rmSync(instanceFilePath(flowId, instanceId), { force: true });
+  }
+
   function deleteFlow(flowId: string): void {
     rmSync(flowDir(flowId), { recursive: true, force: true });
   }
@@ -210,6 +217,7 @@ export function createFlowPersistence(
   return {
     saveFlow,
     saveInstance,
+    deleteInstance,
     deleteFlow,
     loadFlow,
     loadAllFlows,
