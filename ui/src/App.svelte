@@ -6,15 +6,17 @@ import type { HeaderData } from "./shared/utils.ts";
 import { formatNumber, formatTime } from "./shared/utils.ts";
 import "./app.css";
 import CanvasHost from "./canvas/CanvasHost.svelte";
+import HealthStrip from "./dashboard/HealthStrip.svelte";
 import LivePipeline from "./dashboard/LivePipeline.svelte";
 import Logs from "./dashboard/Logs.svelte";
 import ModelPriorityModal from "./dashboard/ModelPriorityModal.svelte";
+import PlaygroundPage from "./dashboard/PlaygroundPage.svelte";
 import ProviderPanel from "./dashboard/ProviderPanel.svelte";
-import ProviderPlayground from "./dashboard/ProviderPlayground.svelte";
 import Sessions from "./dashboard/Sessions.svelte";
-import Stats from "./dashboard/Stats.svelte";
+import Landing from "./landing/Landing.svelte";
+import Settings from "./settings/Settings.svelte";
+import BottomBar from "./shared/BottomBar.svelte";
 import Header from "./shared/Header.svelte";
-import Button from "./shared/ui/Button.svelte";
 import Dialog from "./shared/ui/Dialog.svelte";
 import DefinitionEditor from "./workflow/DefinitionEditor.svelte";
 import FlowDefinitionPage from "./workflow/FlowDefinitionPage.svelte";
@@ -26,8 +28,7 @@ import InstantiateForm from "./workflow/InstantiateForm.svelte";
 
 let detailMetric: MetricData | null = $state(null);
 let detailAllMetrics: MetricData[] = $state([]);
-let drawerOpen = $state(false);
-let modelPriorityModalOpen = $state(false);
+let modelPriorityOpen = $state(false);
 
 let currentHash = $state(window.location.hash);
 onMount(() => {
@@ -54,7 +55,7 @@ type FlowRoute =
   | { kind: "instance"; flowName: string; instanceName: string };
 
 function parseFlowRoute(hash: string): FlowRoute | null {
-  if (hash === "#/flows" || hash === "" || hash === "#") {
+  if (hash === "#/flows") {
     return { kind: "library" };
   }
   if (hash === "#/flows/new") {
@@ -74,6 +75,14 @@ function parseFlowRoute(hash: string): FlowRoute | null {
 }
 
 const flowRoute = $derived(parseFlowRoute(currentHash));
+
+function canvasEnabled(): boolean {
+  try {
+    return localStorage.getItem("hive-canvas-enabled") !== "0";
+  } catch {
+    return true;
+  }
+}
 
 let headerData = $derived.by(() => {
   const p = dashboardSocket.providers;
@@ -182,12 +191,7 @@ const detailChain = $derived(
 
 <div class="app">
   <div class="top-bar">
-    <Header
-      data={headerData ?? undefined}
-      onOverrideSet={handleOverrideSet}
-      onOverrideClear={handleOverrideClear}
-      onOpenModelPriority={() => (modelPriorityModalOpen = true)}
-    />
+    <Header />
     {#if flowRoute && flowRoute.kind !== "library"}
       <div class="project-header">
         <div class="project-header-row">
@@ -200,172 +204,199 @@ const detailChain = $derived(
     {/if}
   </div>
 
-  {#if currentHash === '#/canvas'}
-    <CanvasHost />
-  {:else if currentHash === '#/dashboard'}
-    <div class="content">
-      <Stats data={statsData} />
-      <div>
-        <div class="section-head" style="margin-top:1.5rem">Live Sessions</div>
-        <Sessions sessions={dashboardSocket.sessions} />
-        <ProviderPanel
-          data={dashboardSocket.providers}
-          metrics={dashboardSocket.metrics}
-          {overrideKey}
-          onRowClick={handleMetricClick}
-          onToggleProvider={handleToggleProvider}
-          lastProvider={headerData?.lastProvider ?? null}
-          lastModel={headerData?.lastModel ?? null}
-        />
-      </div>
-      <div class="section-head" style="margin-top:1.5rem">Pipeline</div>
-      <LivePipeline
-        events={dashboardSocket.flowEvents}
-        providers={dashboardSocket.providers}
-      />
-      <Logs entries={dashboardSocket.logEntries} />
-    </div>
-    <div class="drawer-trigger">
-      <Button variant="azure" onclick={() => drawerOpen = true}>
-        Playground
-      </Button>
-    </div>
-    <Dialog
-      bind:open={drawerOpen}
-      label="Provider playground"
-      contentMaxWidth="700px"
-    >
-      <h3 class="drawer-title">Provider playground</h3>
-      <ProviderPlayground providers={dashboardSocket.availableProviders} />
-    </Dialog>
-    <Dialog
-      open={detailOpen}
-      onOpenChange={(v) => { if (!v) detailMetric = null }}
-      label="Request Detail"
-    >
-      <h2 class="dialog-title">Request Detail</h2>
-      {#if detailMetric}
-        <div class="detail-grid">
-          <div class="field">
-            <span class="label">Request ID</span
-            ><span class="val mono">{detailMetric.requestId}</span>
-          </div>
-          <div class="field">
-            <span class="label">Provider</span
-            ><span class="val">{detailMetric.provider}</span>
-          </div>
-          <div class="field">
-            <span class="label">Model</span
-            ><span class="val mono">{detailMetric.model}</span>
-          </div>
-          <div class="field">
-            <span class="label">Time</span
-            ><span class="val">{formatTime(detailMetric.timestamp)}</span>
-          </div>
-          <div class="field">
-            <span class="label">TTFT</span
-            ><span class="val">{formatNumber(detailMetric.ttft, "ms")}</span>
-          </div>
-          <div class="field">
-            <span class="label">Total</span
-            ><span class="val"
-              >{formatNumber(detailMetric.totalLatency, "ms")}</span
-            >
-          </div>
-          <div class="field">
-            <span class="label">Tokens I/O</span
-            ><span class="val"
-              >{detailMetric.inputTokens ?? "—"}
-              / {detailMetric.outputTokens ?? "—"}</span
-            >
-          </div>
-          <div class="field">
-            <span class="label">Thinking</span
-            ><span class="val"
-              >{detailMetric.thinkingTime != null ? `${detailMetric.thinkingTime}ms` : "—"}</span
-            >
-          </div>
-          <div class="field">
-            <span class="label">Status</span
-            ><span class="val {detailMetric.success ? 'ok' : 'err'}"
-              >{String(detailMetric.statusCode)}</span
-            >
-          </div>
-          <div class="field">
-            <span class="label">Finish</span
-            ><span class="val">{detailMetric.finishReason ?? "—"}</span>
-          </div>
-          <div class="field">
-            <span class="label">Refused</span
-            ><span class="val">{detailMetric.refused ? "Yes" : "No"}</span>
-          </div>
-          <div class="field">
-            <span class="label">Tool Err</span
-            ><span class="val"
-              >{detailMetric.toolCallFailed ? "Yes" : "No"}</span
-            >
-          </div>
-          <div class="field">
-            <span class="label">Source</span
-            ><span class="val">{detailMetric.source}</span>
-          </div>
-          {#if detailMetric.errorBody}
-            <div class="field full">
-              <span class="label">Error</span
-              ><span class="val mono">{detailMetric.errorBody}</span>
-            </div>
-          {/if}
-        </div>
-        {#if detailChain.length > 0}
-          <div class="chain-title">
-            Request Chain ({detailChain.length}
-            attempts)
-          </div>
-          {#each detailChain as m, idx}
-            <div class="chain-item">
-              <span class="chain-num">Attempt #{idx + 1}</span>
-              <span class="chain-prov">{m.provider} ({m.model})</span>
-              <span class="chain-status {m.success ? 'ok' : 'err'}"
-                >{m.statusCode ? String(m.statusCode) : "ERR"}
-                {m.errorType ? ` ${m.errorType}` : ""}</span
-              >
-              <span class="chain-ttft">{formatNumber(m.ttft, "ms")}</span>
-            </div>
-          {/each}
-        {/if}
+  <main class="app-content">
+    {#if currentHash === '#/canvas'}
+      {#if canvasEnabled()}
+        <CanvasHost />
+      {:else}
+        <Landing />
       {/if}
-    </Dialog>
-    <ModelPriorityModal bind:open={modelPriorityModalOpen} />
-  {:else if flowRoute?.kind === "new-definition"}
-    <DefinitionEditor isNew={true} />
-  {:else if flowRoute?.kind === "definition"}
-    <FlowDefinitionPage definitionId={flowRoute.flowName} />
-  {:else if flowRoute?.kind === "edit-definition"}
-    <DefinitionEditor isNew={false} definitionId={flowRoute.flowName} />
-  {:else if flowRoute?.kind === "view-definition"}
-    <FlowDefinitionView definitionId={flowRoute.flowName} />
-  {:else if flowRoute?.kind === "new-instance"}
-    <InstantiateForm definitionId={flowRoute.flowName} />
-  {:else if flowRoute?.kind === "instance"}
-    <FlowInstancePage
-      definitionId={flowRoute.flowName}
-      instanceName={flowRoute.instanceName}
-    />
-  {:else}
-    <FlowLibrary />
-  {/if}
+    {:else if currentHash === '#/dashboard'}
+      <div class="dash">
+        <section class="dash-strip" aria-label="System health">
+          <HealthStrip data={statsData} online={dashboardSocket.connected} />
+        </section>
+        <section class="dash-board" aria-label="Pipeline">
+          <div class="panel-head"><h2>pipeline</h2></div>
+          <div class="board-scroll">
+            <LivePipeline
+              events={dashboardSocket.flowEvents}
+              providers={dashboardSocket.providers}
+            />
+          </div>
+        </section>
+        <section class="dash-sessions" aria-label="Live sessions">
+          <div class="panel-head"><h2>live sessions</h2></div>
+          <Sessions sessions={dashboardSocket.sessions} />
+        </section>
+        <section class="dash-providers" aria-label="Providers">
+          <ProviderPanel
+            data={dashboardSocket.providers}
+            metrics={dashboardSocket.metrics}
+            {overrideKey}
+            onRowClick={handleMetricClick}
+            onToggleProvider={handleToggleProvider}
+            lastProvider={headerData?.lastProvider ?? null}
+            lastModel={headerData?.lastModel ?? null}
+            defaultExpanded={true}
+          />
+        </section>
+        <section class="dash-logs" aria-label="Logs">
+          <Logs entries={dashboardSocket.logEntries} />
+        </section>
+      </div>
+      <Dialog
+        open={detailOpen}
+        onOpenChange={(v) => { if (!v) detailMetric = null }}
+        label="request detail"
+      >
+        <h2 class="dialog-title">request detail</h2>
+        {#if detailMetric}
+          <div class="detail-grid">
+            <div class="field">
+              <span class="label">request id</span
+              ><span class="val mono">{detailMetric.requestId}</span>
+            </div>
+            <div class="field">
+              <span class="label">provider</span
+              ><span class="val">{detailMetric.provider}</span>
+            </div>
+            <div class="field">
+              <span class="label">model</span
+              ><span class="val mono">{detailMetric.model}</span>
+            </div>
+            <div class="field">
+              <span class="label">time</span
+              ><span class="val">{formatTime(detailMetric.timestamp)}</span>
+            </div>
+            <div class="field">
+              <span class="label">TTFT</span
+              ><span class="val">{formatNumber(detailMetric.ttft, "ms")}</span>
+            </div>
+            <div class="field">
+              <span class="label">total</span
+              ><span class="val"
+                >{formatNumber(detailMetric.totalLatency, "ms")}</span
+              >
+            </div>
+            <div class="field">
+              <span class="label">tokens i/o</span
+              ><span class="val"
+                >{detailMetric.inputTokens ?? "—"}
+                / {detailMetric.outputTokens ?? "—"}</span
+              >
+            </div>
+            <div class="field">
+              <span class="label">thinking</span
+              ><span class="val"
+                >{detailMetric.thinkingTime != null ? `${detailMetric.thinkingTime}ms` : "—"}</span
+              >
+            </div>
+            <div class="field">
+              <span class="label">status</span
+              ><span class="val {detailMetric.success ? 'ok' : 'err'}"
+                >{String(detailMetric.statusCode)}</span
+              >
+            </div>
+            <div class="field">
+              <span class="label">finish</span
+              ><span class="val">{detailMetric.finishReason ?? "—"}</span>
+            </div>
+            <div class="field">
+              <span class="label">refused</span
+              ><span class="val">{detailMetric.refused ? "Yes" : "No"}</span>
+            </div>
+            <div class="field">
+              <span class="label">tool err</span
+              ><span class="val"
+                >{detailMetric.toolCallFailed ? "Yes" : "No"}</span
+              >
+            </div>
+            <div class="field">
+              <span class="label">source</span
+              ><span class="val">{detailMetric.source}</span>
+            </div>
+            {#if detailMetric.errorBody}
+              <div class="field full">
+                <span class="label">error</span
+                ><span class="val mono">{detailMetric.errorBody}</span>
+              </div>
+            {/if}
+          </div>
+          {#if detailChain.length > 0}
+            <div class="chain-title">
+              Request Chain ({detailChain.length}
+              attempts)
+            </div>
+            {#each detailChain as m, idx}
+              <div class="chain-item">
+                <span class="chain-num">attempt #{idx + 1}</span>
+                <span class="chain-prov">{m.provider} ({m.model})</span>
+                <span class="chain-status {m.success ? 'ok' : 'err'}"
+                  >{m.statusCode ? String(m.statusCode) : "ERR"}
+                  {m.errorType ? ` ${m.errorType}` : ""}</span
+                >
+                <span class="chain-ttft">{formatNumber(m.ttft, "ms")}</span>
+              </div>
+            {/each}
+          {/if}
+        {/if}
+      </Dialog>
+    {:else if currentHash === '#/playground'}
+      <PlaygroundPage providers={dashboardSocket.availableProviders} />
+    {:else if currentHash === '#/settings'}
+      <Settings
+        serverAddr={`${dashboardSocket.serverHost}:${dashboardSocket.serverPort}`}
+        onOpenModelPriority={() => (modelPriorityOpen = true)}
+      />
+    {:else if flowRoute?.kind === "new-definition"}
+      <DefinitionEditor isNew={true} />
+    {:else if flowRoute?.kind === "definition"}
+      <FlowDefinitionPage definitionId={flowRoute.flowName} />
+    {:else if flowRoute?.kind === "edit-definition"}
+      <DefinitionEditor isNew={false} definitionId={flowRoute.flowName} />
+    {:else if flowRoute?.kind === "view-definition"}
+      <FlowDefinitionView definitionId={flowRoute.flowName} />
+    {:else if flowRoute?.kind === "new-instance"}
+      <InstantiateForm definitionId={flowRoute.flowName} />
+    {:else if flowRoute?.kind === "instance"}
+      <FlowInstancePage
+        definitionId={flowRoute.flowName}
+        instanceName={flowRoute.instanceName}
+      />
+    {:else if flowRoute?.kind === "library"}
+      <FlowLibrary />
+    {:else}
+      <Landing />
+    {/if}
+  </main>
+
+  <BottomBar
+    data={headerData ?? undefined}
+    onOverrideSet={handleOverrideSet}
+    onOverrideClear={handleOverrideClear}
+    onOpenModelPriority={() => (modelPriorityOpen = true)}
+  />
 </div>
+
+<ModelPriorityModal bind:open={modelPriorityOpen} />
 
 <style>
 .app {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
 }
 .top-bar {
-  position: sticky;
-  top: 0;
+  flex-shrink: 0;
   z-index: 100;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
+}
+.app-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 .project-header {
   max-width: 900px;
@@ -391,38 +422,84 @@ const detailChain = $derived(
   color: var(--muted);
   font-family: var(--font-mono, monospace);
 }
-.content {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-  max-width: 1200px;
+.dash {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-areas:
+    "strip strip"
+    "board board"
+    "sessions providers"
+    "logs logs";
+  gap: var(--space-4);
+  max-width: 1400px;
   margin: 0 auto;
   padding: 1.25rem;
+  align-items: start;
 }
-.section-head {
-  font-size: 0.625rem;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+@media (max-width: 1100px) {
+  .dash {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "strip"
+      "board"
+      "sessions"
+      "providers"
+      "logs";
+  }
+}
+.dash-strip {
+  grid-area: strip;
+}
+.dash-board {
+  grid-area: board;
+}
+.dash-sessions {
+  grid-area: sessions;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  align-content: start;
+}
+@media (max-width: 640px) {
+  .dash-sessions {
+    grid-template-columns: 1fr;
+  }
+}
+.dash-providers {
+  grid-area: providers;
+  min-width: 0;
+}
+.dash-providers :global(.provider-panel) {
+  max-height: min(620px, calc(100dvh - 320px));
+  min-height: 260px;
+}
+.dash-providers :global(.panel-content) {
+  max-height: calc(min(620px, 100dvh - 320px) - 41px);
+}
+.dash-logs {
+  grid-area: logs;
+}
+.panel-head {
+  margin-bottom: var(--space-2);
+}
+.panel-head h2 {
+  font-size: var(--text-xs);
   font-weight: 700;
-  margin-bottom: 0.5rem;
-  margin-top: 1.5rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin: 0;
 }
-.drawer-trigger {
-  position: fixed;
-  bottom: 1rem;
-  right: 1rem;
-  z-index: 40;
+.board-scroll {
+  max-height: 200px;
+  overflow-y: auto;
+}
+.board-scroll :global(.pipeline) {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
 }
 .dialog-title {
   margin: 0 0 0.75rem 0;
   font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-.drawer-title {
-  margin: 0 0 1rem 0;
-  font-size: 0.875rem;
   font-weight: 700;
 }
 .detail-grid {
@@ -457,7 +534,6 @@ const detailChain = $derived(
   margin-top: 1rem;
   font-size: 0.6875rem;
   font-weight: 700;
-  text-transform: uppercase;
   color: var(--muted);
   border-top: 1px solid var(--border);
   padding-top: 0.75rem;
@@ -470,7 +546,7 @@ const detailChain = $derived(
   padding: 0.25rem 0;
 }
 .chain-num {
-  color: var(--accent);
+  color: var(--text);
   font-weight: 700;
 }
 .chain-prov {

@@ -1,8 +1,8 @@
 <script lang="ts">
+import { comb } from "shared/ascii-art";
 import { onMount } from "svelte";
 import type { FlowDefinitionSummary } from "../flow-api.ts";
 import { fetchFlowDefinitions } from "../flow-api.ts";
-import Badge from "../shared/ui/Badge.svelte";
 import Button from "../shared/ui/Button.svelte";
 import Skeleton from "../shared/ui/Skeleton.svelte";
 import TextInput from "../shared/ui/TextInput.svelte";
@@ -58,22 +58,15 @@ function definitionHref(id: string): string {
 
 <div class="library">
   <div class="header">
-    <h1>Flows</h1>
-    <a class="btn-new" href="#/flows/new">New flow definition</a>
+    <h1>flows</h1>
+    <Button variant="accent" size="default">
+      <a class="btn-link" href="#/flows/new">new definition</a>
+    </Button>
   </div>
 
   {#if error}
     <div class="error">{error}</div>
   {/if}
-
-  <div class="status-legend">
-    <span class="legend-title">Instance status</span>
-    <span class="legend-item"><i class="dot dot-running"></i>running</span>
-    <span class="legend-item"><i class="dot dot-waiting"></i>waiting</span>
-    <span class="legend-item"><i class="dot dot-error"></i>error</span>
-    <span class="legend-item"><i class="dot dot-idle"></i>idle</span>
-    <span class="legend-item"><i class="dot dot-complete"></i>complete</span>
-  </div>
 
   <div class="toolbar">
     <TextInput
@@ -82,27 +75,30 @@ function definitionHref(id: string): string {
       size="small"
     />
     <div class="filter-group" role="group" aria-label="Filter definitions">
-      <button
-        type="button"
-        class:active={filter === "all"}
+      <Button
+        variant="neutral"
+        size="small"
+        class={filter === "all" ? "filter-btn active" : "filter-btn"}
         onclick={() => (filter = "all")}
       >
-        All
-      </button>
-      <button
-        type="button"
-        class:active={filter === "builtin"}
+        all
+      </Button>
+      <Button
+        variant="neutral"
+        size="small"
+        class={filter === "builtin" ? "filter-btn active" : "filter-btn"}
         onclick={() => (filter = "builtin")}
       >
-        Built-in
-      </button>
-      <button
-        type="button"
-        class:active={filter === "user"}
+        built-in
+      </Button>
+      <Button
+        variant="neutral"
+        size="small"
+        class={filter === "user" ? "filter-btn active" : "filter-btn"}
         onclick={() => (filter = "user")}
       >
-        User
-      </button>
+        user
+      </Button>
     </div>
   </div>
 
@@ -117,50 +113,49 @@ function definitionHref(id: string): string {
     </div>
   {:else if definitions.length === 0}
     <div class="empty">
-      <p>No flow definitions yet.</p>
-      <p>Author a definition to get started.</p>
+      <pre class="empty-comb" aria-hidden="true">{comb}</pre>
+      <p>no flow definitions yet.</p>
+      <p class="empty-hint">author a definition to get started.</p>
+      <div class="empty-action">
+        <Button variant="accent">
+          <a class="btn-link" href="#/flows/new">new definition</a>
+        </Button>
+      </div>
     </div>
   {:else if visibleDefinitions.length === 0}
     <div class="empty">
-      <p>No definitions match your search.</p>
+      <p>no definitions match your search.</p>
+      <p class="empty-hint">try a different query or clear the filter.</p>
     </div>
   {:else}
     <div class="definition-list">
       {#each visibleDefinitions as definition (definition.id)}
         <div class="definition-card">
+          <a
+            class="card-link"
+            href={definitionHref(definition.id)}
+            aria-label={`open ${definition.name}`}
+          ></a>
           <div class="definition-head">
-            <a class="definition-name" href={definitionHref(definition.id)}>
-              {definition.name}
-            </a>
-            {#if definition.builtIn}
-              <Badge variant="platinum" outline>built-in</Badge>
-            {/if}
-            <span class="definition-count"
-              >{instancesFor(definition.id).length}
-              instance{instancesFor(definition.id).length !== 1 ? "s" : ""}</span
+            <a
+              class="head-link"
+              href={definitionHref(definition.id)}
+              aria-label={`open ${definition.name}`}
             >
+              <div class="definition-head-info">
+                <span class="definition-name">{definition.name}</span>
+                {#if definition.description}
+                  <span class="definition-description"
+                    >{definition.description}</span
+                  >
+                {/if}
+              </div>
+            </a>
           </div>
-          {#if definition.description}
-            <div class="definition-description">{definition.description}</div>
-          {/if}
-          <div class="definition-actions">
-            <Button variant="platinum">
-              <a class="btn-link" href={definitionHref(definition.id)}>Open</a>
-            </Button>
-            <Button variant="mint">
-              <a class="btn-link" href={`${definitionHref(definition.id)}/new`}
-                >New instance</a
-              >
-            </Button>
-          </div>
-          <div class="definition-instances">
-            <InstanceRoster
-              definitionId={definition.id}
-              flows={instancesFor(definition.id)}
-              onDeleted={load}
-              onError={(err) => (error = err)}
-            />
-          </div>
+          <InstanceRoster
+            definitionId={definition.id}
+            flows={instancesFor(definition.id)}
+          />
         </div>
       {/each}
     </div>
@@ -171,103 +166,21 @@ function definitionHref(id: string): string {
 .library {
   max-width: 820px;
   margin: 0 auto;
-  padding: 2rem 1.25rem;
+  padding: var(--space-6) 1.25rem;
 }
 
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--space-4);
 }
 
 h1 {
-  font-size: 1.25rem;
-  font-weight: 600;
+  font-size: var(--text-lg);
+  font-weight: 700;
   color: var(--text);
   margin: 0;
-}
-
-.btn-new {
-  text-decoration: none;
-  font-family: monospace;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  padding: 6px 10px;
-  border: 1px solid var(--accent);
-  border-radius: 4px;
-  color: var(--bg);
-  background: var(--accent);
-}
-
-.error {
-  background: rgba(220, 60, 60, 0.1);
-  border: 1px solid rgba(220, 60, 60, 0.3);
-  color: #dc3c3c;
-  padding: 0.75rem 1rem;
-  border-radius: 6px;
-  font-size: 0.8125rem;
-  margin-bottom: 1rem;
-}
-
-.empty {
-  text-align: center;
-  padding: 3rem 1rem;
-  color: var(--muted);
-  font-size: 0.875rem;
-}
-
-.empty p {
-  margin: 0.25rem 0;
-}
-
-.definition-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.definition-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 1rem 1.25rem;
-}
-
-.definition-head {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.definition-name {
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: var(--text);
-  text-decoration: none;
-}
-
-.definition-name:hover {
-  color: var(--accent);
-}
-
-.definition-count {
-  margin-left: auto;
-  font-size: 0.625rem;
-  color: var(--muted);
-  font-family: var(--font-mono, monospace);
-}
-
-.definition-description {
-  font-size: 0.75rem;
-  color: var(--muted);
-  margin-top: 0.25rem;
-}
-
-.definition-actions {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
 }
 
 .btn-link {
@@ -275,13 +188,98 @@ h1 {
   color: inherit;
 }
 
-.status-legend {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
+.error {
+  background: rgba(var(--error-rgb), 0.08);
+  border: 1px solid rgba(var(--error-rgb), 0.3);
+  color: var(--error);
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   margin-bottom: 1rem;
-  font-size: 0.625rem;
+}
+
+.empty {
+  text-align: center;
+  padding: var(--space-6) 1rem;
   color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.empty-comb {
+  font-family: var(--font-mono);
+  font-size: clamp(0.375rem, 1.1vw, 0.5625rem);
+  line-height: 1.35;
+  color: var(--brand);
+  margin: 0 0 var(--space-4);
+  opacity: 0.55;
+}
+
+.empty p {
+  margin: 0.25rem 0;
+}
+
+.empty-hint {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.empty-action {
+  margin-top: var(--space-4);
+}
+
+.definition-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.definition-card {
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.definition-card:hover {
+  border-color: color-mix(in srgb, var(--border) 60%, var(--accent));
+}
+
+/* the head (name + description + trailing space) is the definition link;
+   the roster below is plain flow — no overlay, nothing can intercept */
+.definition-head {
+  display: flex;
+}
+.head-link {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  text-decoration: none;
+}
+.definition-head-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.definition-name {
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--text);
+  transition: color var(--dur-fast) var(--ease-out);
+}
+.definition-card:hover .definition-name {
+  color: var(--accent);
+}
+
+.definition-description {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.definition-card :global(.roster) {
+  margin-top: var(--space-3);
 }
 
 .toolbar {
@@ -301,64 +299,9 @@ h1 {
   gap: 0.25rem;
 }
 
-.filter-group button {
-  font-family: monospace;
-  font-size: 0.625rem;
-  height: 28px;
-  padding: 0 0.625rem;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--surface);
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.filter-group button:hover {
-  border-color: var(--accent);
-}
-
-.filter-group button.active {
-  color: var(--bg);
+:global(.filter-btn.active),
+:global(.filter-btn.active:hover) {
+  color: var(--on-accent);
   background: var(--accent);
-  border-color: var(--accent);
-}
-
-.legend-title {
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-weight: 700;
-}
-
-.legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.dot {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-}
-
-.dot-running {
-  background: var(--accent);
-}
-
-.dot-waiting {
-  background: var(--warning);
-}
-
-.dot-error {
-  background: var(--error);
-}
-
-.dot-idle {
-  background: var(--muted);
-}
-
-.dot-complete {
-  background: var(--success);
 }
 </style>

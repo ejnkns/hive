@@ -148,10 +148,10 @@ function routeLabel(): string {
       }}
     />
     {#if status === "running"}
-      <Button variant="rose" onclick={cancelRun}> Cancel </Button>
+      <Button variant="danger" onclick={cancelRun}> Cancel </Button>
     {:else}
       <Button
-        variant="mint"
+        variant="accent"
         onclick={() => void runPrompt()}
         disabled={!prompt.trim()}
       >
@@ -184,7 +184,8 @@ function routeLabel(): string {
 <style>
 .panel {
   border: 1px solid var(--border);
-  border-radius: 6px;
+  background: var(--card);
+  border-radius: var(--radius-md);
   padding: 1rem;
 }
 .heading {
@@ -195,14 +196,13 @@ function routeLabel(): string {
 }
 .section-head {
   color: var(--text);
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   font-weight: 700;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 p {
   color: var(--muted);
-  font-size: 0.6875rem;
+  font-size: var(--text-xs);
   margin: 0.25rem 0 0;
 }
 .route-controls {
@@ -216,7 +216,7 @@ p {
 }
 .route-label {
   color: var(--muted);
-  font-size: 0.625rem;
+  font-size: var(--text-xs);
 }
 .input-row {
   align-items: flex-start;
@@ -228,7 +228,7 @@ p {
   align-items: center;
   color: var(--muted);
   display: flex;
-  font-size: 0.6875rem;
+  font-size: var(--text-xs);
   gap: 0.5rem;
   margin-top: 0.625rem;
 }
@@ -251,12 +251,12 @@ p {
 }
 .route {
   color: var(--text);
-  font-family: monospace;
+  font-family: var(--font-mono);
 }
 .response {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--text);
   font-size: 0.8rem;
   margin-top: 0.75rem;
@@ -272,7 +272,7 @@ p {
 }
 .error {
   color: var(--error);
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   margin-top: 0.75rem;
   white-space: pre-wrap;
 }

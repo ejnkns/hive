@@ -66,20 +66,19 @@ let {
 .conv-msg {
   display: flex;
   gap: 0.375rem;
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
 }
 
 .conv-role {
-  font-size: 0.5625rem;
+  font-size: var(--text-xs);
   font-weight: 700;
   min-width: 55px;
-  text-transform: uppercase;
   color: var(--muted);
   flex-shrink: 0;
 }
 
 .conv-msg.system .conv-role {
-  color: var(--accent);
+  color: var(--text);
 }
 
 .conv-msg.user .conv-role {
@@ -111,8 +110,7 @@ let {
   font-size: 0.5rem;
   font-weight: 700;
   padding: 0.0625rem 0.25rem;
-  text-transform: uppercase;
-  color: var(--accent);
+  color: var(--text);
   background: rgba(var(--border-rgb), 0.15);
   border: 1px solid rgba(var(--border-rgb), 0.3);
 }

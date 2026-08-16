@@ -42,39 +42,40 @@ let {
 }
 
 :global(.hive-switch-root) {
-  width: 32px;
-  height: 18px;
-  border-radius: 999px;
+  width: 36px;
+  height: 20px;
+  border-radius: 999px; /* pill — sole exception to the radius scale (switch affordance) */
   background: var(--border);
   border: none;
   cursor: pointer;
   position: relative;
-  transition: background 0.15s;
+  transition: background var(--dur-fast) var(--ease-out);
   padding: 0;
 }
 :global(.hive-switch-root[data-state="checked"]) {
   background: var(--accent);
 }
 :global(.hive-switch-root[disabled]) {
-  opacity: 0.3;
+  opacity: 0.4;
+  cursor: not-allowed;
   pointer-events: none;
 }
 
 :global(.hive-switch-thumb) {
   display: block;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: var(--text);
-  transition: transform 0.15s;
+  transition: transform var(--dur-fast) var(--ease-out);
   transform: translateX(2px);
 }
 :global(.hive-switch-thumb[data-state="checked"]) {
-  transform: translateX(16px);
+  transform: translateX(18px);
 }
 
 :global(.hive-switch-label) {
-  font-size: 0.6875rem;
+  font-size: var(--text-xs);
   color: var(--text);
   cursor: pointer;
   user-select: none;

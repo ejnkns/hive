@@ -31,14 +31,14 @@ function handleCancel() {
 
 <div class="instantiate">
   <div class="breadcrumb">
-    <a href="#/flows">Flows</a>
+    <a href="#/flows">flows</a>
     <span class="crumb-sep">/</span>
     <a href={`#/flows/${encodeURIComponent(definitionId)}`}>{definitionId}</a>
     <span class="crumb-sep">/</span>
-    <span class="crumb-current">New instance</span>
+    <span class="crumb-current">new instance</span>
   </div>
 
-  <h1>New instance</h1>
+  <h1>new instance</h1>
 
   <flow-create-form
     bind:this={createForm}
@@ -58,7 +58,7 @@ function handleCancel() {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  font-size: 0.6875rem;
+  font-size: var(--text-xs);
   color: var(--muted);
   margin-bottom: 0.5rem;
 }

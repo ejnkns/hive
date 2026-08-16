@@ -32,17 +32,17 @@ function handleTimelineClick(req: RequestState) {
 </script>
 
 <Dialog bind:open label="Session Summary">
-  <h2 class="dialog-title">Session Summary</h2>
+  <h2 class="dialog-title">session summary</h2>
   <div class="modal-body">
     <div class="session-info">
-      <span class="info-label">Provider</span>
+      <span class="info-label">provider</span>
       <span class="info-val"
         >{latest?.provider ?? "—"}:{latest?.model ?? "—"}</span
       >
-      <span class="info-label">Requests</span>
+      <span class="info-label">requests</span>
       <span class="info-val">{String(requestCount)}</span>
       {#if session.fingerprint}
-        <span class="info-label">Fingerprint</span>
+        <span class="info-label">fingerprint</span>
         <span class="info-val mono">{session.fingerprint.slice(0, 8)}</span>
       {/if}
     </div>
@@ -75,9 +75,8 @@ function handleTimelineClick(req: RequestState) {
 <style>
 .dialog-title {
   margin: 0 0 0.75rem 0;
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   font-weight: 700;
-  text-transform: uppercase;
 }
 .modal-body {
   display: flex;
@@ -89,7 +88,7 @@ function handleTimelineClick(req: RequestState) {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 0.125rem 0.75rem;
-  font-size: 0.6875rem;
+  font-size: var(--text-xs);
   padding-bottom: 0.5rem;
   border-bottom: 1px solid var(--border);
 }
@@ -103,8 +102,8 @@ function handleTimelineClick(req: RequestState) {
 }
 
 .info-val.mono {
-  font-family: monospace;
-  font-size: 0.5625rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
 }
 
 .section {
@@ -114,9 +113,8 @@ function handleTimelineClick(req: RequestState) {
 }
 
 .section-title {
-  font-size: 0.5625rem;
+  font-size: var(--text-xs);
   font-weight: 700;
-  text-transform: uppercase;
   color: var(--muted);
 }
 </style>

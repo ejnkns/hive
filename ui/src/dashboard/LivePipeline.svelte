@@ -250,7 +250,7 @@ function getPathClass(session: PipelineSession): string {
 
 .no-data {
   fill: var(--muted);
-  font-size: 0.625rem;
+  font-size: var(--text-xs);
 }
 
 .ingress {
@@ -259,16 +259,15 @@ function getPathClass(session: PipelineSession): string {
 
 .ingress-label {
   fill: var(--muted);
-  font-size: 0.5625rem;
-  font-family: monospace;
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
 }
 
 .provider-header {
   fill: var(--muted);
   font-size: 0.5rem;
-  font-family: monospace;
+  font-family: var(--font-mono);
   font-weight: 700;
-  text-transform: uppercase;
   letter-spacing: 0.06em;
   dominant-baseline: middle;
 }
@@ -288,14 +287,14 @@ function getPathClass(session: PipelineSession): string {
 .model-label {
   fill: var(--muted);
   font-size: 0.5rem;
-  font-family: monospace;
+  font-family: var(--font-mono);
   dominant-baseline: middle;
 }
 
 .cooldown-label {
   fill: var(--error);
   font-size: 0.5rem;
-  font-family: monospace;
+  font-family: var(--font-mono);
   dominant-baseline: middle;
 }
 
@@ -320,7 +319,7 @@ path {
 }
 
 .path-active.path-thinking {
-  stroke: #e2a93b;
+  stroke: var(--warning);
   stroke-dasharray: 6 3;
   animation: dash-slide 1s linear infinite;
 }

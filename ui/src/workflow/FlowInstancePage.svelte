@@ -149,11 +149,11 @@ async function removeInstance(purge: boolean) {
 function actionVariant(action: FlowLevelAction): string {
   switch (action.variant) {
     case "primary":
-      return "mint";
+      return "success";
     case "destructive":
-      return "rose";
+      return "danger";
     default:
-      return "platinum";
+      return "neutral";
   }
 }
 
@@ -202,18 +202,18 @@ function closeFlowActionForm() {
 
 <div class="instance-page">
   {#if resolving}
-    <div class="loading">Loading instance...</div>
+    <div class="loading">loading instance...</div>
   {:else if error}
     <div class="error">{error}</div>
-    <button type="button" class="retry-btn" onclick={resolveFlowId}>
+    <Button variant="neutral" class="retry-btn" onclick={resolveFlowId}>
       Retry
-    </button>
+    </Button>
   {:else if !flow}
     <div class="empty">Instance not found</div>
   {:else}
     <div class="instance-header">
       <div class="breadcrumb">
-        <a href="#/flows">Flows</a>
+        <a href="#/flows">flows</a>
         <span class="crumb-sep">/</span>
         <a href={`#/flows/${encodeURIComponent(definitionId)}`}
           >{definitionId}</a
@@ -226,15 +226,19 @@ function closeFlowActionForm() {
           <StatusDot status={flow.status} />
           {flow.config?.name ?? flow.id}
         </h1>
-        <Button variant="rose" onclick={() => (deleteOpen = true)}>
-          Delete
+        <Button
+          variant="danger"
+          size="small"
+          onclick={() => (deleteOpen = true)}
+        >
+          delete
         </Button>
       </div>
       {#if flow.availableFlowActions.length > 0}
         <div class="flow-actions">
           {#each flow.availableFlowActions as action}
             <Button
-              variant={actionVariant(action) as "mint" | "rose" | "platinum"}
+              variant={actionVariant(action) as "success" | "danger" | "neutral"}
               size="small"
               disabled={actionBusy}
               onclick={() => runFlowAction(action)}
@@ -292,27 +296,31 @@ function closeFlowActionForm() {
   {/if}
 </Dialog>
 
-<Dialog bind:open={deleteOpen} label="Delete instance" contentMaxWidth="420px">
-  <h2 class="dialog-title">Delete instance</h2>
+<Dialog
+  bind:open={deleteOpen}
+  label="delete flow instance"
+  contentMaxWidth="420px"
+>
+  <h2 class="dialog-title">delete flow instance</h2>
   <p class="dialog-text">
-    "Delete instance" removes Hive's operational state. "Delete instance and its
-    data" also removes the flow's persisted domain state in the repository and
-    cannot be undone.
+    "delete flow instance" removes Hive's operational state. "delete flow
+    instance and its data" also removes the flow's persisted domain state in the
+    repository and cannot be undone.
   </p>
   <div class="dialog-actions">
     <Button
-      variant="platinum"
+      variant="neutral"
       disabled={deleteBusy}
       onclick={() => removeInstance(false)}
     >
-      Delete instance
+      delete flow instance
     </Button>
     <Button
-      variant="rose"
+      variant="danger"
       disabled={deleteBusy}
       onclick={() => removeInstance(true)}
     >
-      Delete instance and its data
+      delete flow instance and its data
     </Button>
   </div>
 </Dialog>
@@ -332,7 +340,7 @@ function closeFlowActionForm() {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  font-size: 0.6875rem;
+  font-size: var(--text-xs);
   color: var(--muted);
   margin-bottom: 0.5rem;
 }
@@ -390,33 +398,31 @@ h1 {
   gap: 0.375rem;
   padding: 0.25rem 0.5rem;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
 }
 
 .summary-label {
-  font-size: 0.5625rem;
+  font-size: var(--text-xs);
   font-weight: 700;
   color: var(--muted);
-  text-transform: uppercase;
   letter-spacing: 0.06em;
 }
 
 .summary-count {
   font-family: var(--font-mono, monospace);
-  font-size: 0.625rem;
+  font-size: var(--text-xs);
   color: var(--text);
 }
 
 .dialog-title {
   margin: 0 0 0.75rem 0;
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   font-weight: 700;
-  text-transform: uppercase;
 }
 
 .dialog-text {
-  font-size: 0.8125rem;
+  font-size: var(--text-base);
   color: var(--muted);
   line-height: 1.5;
   margin: 0 0 1rem 0;
@@ -454,25 +460,14 @@ h1 {
   border: 1px solid rgba(220, 60, 60, 0.3);
   color: #dc3c3c;
   padding: 0.75rem 1rem;
-  border-radius: 6px;
-  font-size: 0.8125rem;
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
   margin-bottom: 1rem;
 }
 
-.retry-btn {
+:global(.retry-btn) {
   display: block;
   margin: 1rem auto;
   padding: 0.5rem 1rem;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--surface);
-  color: var(--text);
-  font-family: monospace;
-  font-size: 0.75rem;
-  cursor: pointer;
-}
-
-.retry-btn:hover {
-  background: var(--border);
 }
 </style>

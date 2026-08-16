@@ -35,17 +35,18 @@ async function load() {
 
 <div class="definition-page">
   {#if loading}
-    <div class="loading">Loading definition...</div>
+    <div class="loading">loading definition...</div>
   {:else if error}
     <div class="error">{error}</div>
   {:else if !definition}
-    <div class="empty">Definition not found</div>
+    <div class="empty">definition not found</div>
   {:else}
+    {@const defId = definition.id}
     <div class="header">
       <div class="header-info">
         <h1>{definition.name}</h1>
         {#if definition.builtIn}
-          <Badge variant="platinum" outline>built-in</Badge>
+          <Badge variant="neutral" outline>built-in</Badge>
         {/if}
         {#if definition.description}
           <div class="description">{definition.description}</div>
@@ -53,40 +54,28 @@ async function load() {
       </div>
       <div class="header-actions">
         {#if definition.builtIn}
-          <Button variant="platinum">
+          <Button variant="neutral">
             <a
               class="btn-link"
               href={`#/flows/${encodeURIComponent(definition.id)}/view`}
-              >View</a
+              >view</a
             >
           </Button>
         {:else}
-          <Button variant="platinum">
+          <Button variant="neutral">
             <a
               class="btn-link"
               href={`#/flows/${encodeURIComponent(definition.id)}/edit`}
-              >Edit</a
+              >edit</a
             >
           </Button>
         {/if}
-        <Button variant="mint">
-          <a
-            class="btn-link"
-            href={`#/flows/${encodeURIComponent(definition.id)}/new`}
-            >New instance</a
-          >
-        </Button>
       </div>
     </div>
 
     <div class="instances">
-      <div class="section-title">Instances</div>
-      <InstanceRoster
-        definitionId={definition.id}
-        {flows}
-        onDeleted={load}
-        onError={(err) => (error = err)}
-      />
+      <div class="section-title">flow instances</div>
+      <InstanceRoster definitionId={definition.id} {flows} />
     </div>
   {/if}
 </div>
@@ -95,7 +84,7 @@ async function load() {
 .definition-page {
   max-width: 820px;
   margin: 0 auto;
-  padding: 2rem 1.25rem;
+  padding: var(--space-6) 1.25rem;
 }
 
 .header {
@@ -111,14 +100,14 @@ async function load() {
 }
 
 h1 {
-  font-size: 1.25rem;
-  font-weight: 600;
+  font-size: var(--text-lg);
+  font-weight: 700;
   color: var(--text);
   margin: 0 0 0.5rem 0;
 }
 
 .description {
-  font-size: 0.8125rem;
+  font-size: var(--text-base);
   color: var(--muted);
   margin-top: 0.5rem;
 }
@@ -135,19 +124,19 @@ h1 {
 }
 
 .section-title {
-  font-size: 0.625rem;
+  font-size: var(--text-xs);
   color: var(--muted);
-  text-transform: uppercase;
   letter-spacing: 0.08em;
   font-weight: 700;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--space-2);
 }
 
+/* matches the flows list: card container */
 .instances {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 1rem 1.25rem;
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
 }
 
 .loading,
@@ -155,16 +144,16 @@ h1 {
   text-align: center;
   padding: 3rem 1rem;
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: var(--text-base);
 }
 
 .error {
-  background: rgba(220, 60, 60, 0.1);
-  border: 1px solid rgba(220, 60, 60, 0.3);
-  color: #dc3c3c;
+  background: rgba(var(--error-rgb), 0.08);
+  border: 1px solid rgba(var(--error-rgb), 0.3);
+  color: var(--error);
   padding: 0.75rem 1rem;
-  border-radius: 6px;
-  font-size: 0.8125rem;
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
   margin-bottom: 1rem;
 }
 </style>

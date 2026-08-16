@@ -44,8 +44,8 @@ const displayText = $derived(
 }
 .text {
   margin: 0;
-  font-family: monospace;
-  font-size: 0.625rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
   color: var(--text);
   white-space: pre-wrap;
   word-break: break-word;
@@ -55,15 +55,14 @@ const displayText = $derived(
   background: none;
   border: 1px solid var(--border);
   color: var(--muted);
-  font-family: monospace;
-  font-size: 0.5625rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
   cursor: pointer;
   padding: 0.0625rem 0.375rem;
-  text-transform: uppercase;
   align-self: flex-start;
 }
 .toggle-btn:hover {
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--text);
 }
 </style>

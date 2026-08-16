@@ -10,7 +10,7 @@ let { children }: { children?: import("svelte").Snippet } = $props();
 .card {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 0.75rem;
 }
 </style>

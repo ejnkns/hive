@@ -5,6 +5,7 @@ import { fetchFlowDefinition } from "../flow-api.ts";
 // Importing the code-editor module registers the <code-editor> element.
 import type { CodeEditor } from "../flow-rendering/components/code-editor.ts";
 import Badge from "../shared/ui/Badge.svelte";
+import Button from "../shared/ui/Button.svelte";
 import "../flow-rendering/components/code-editor.ts";
 
 let {
@@ -49,7 +50,7 @@ $effect(() => {
 
 <div class="viewer">
   <div class="breadcrumb">
-    <a href="#/flows">Flows</a>
+    <a href="#/flows">flows</a>
     <span class="crumb-sep">/</span>
     <a href={`#/flows/${encodeURIComponent(definitionId)}`}>{definitionId}</a>
     <span class="crumb-sep">/</span>
@@ -58,30 +59,32 @@ $effect(() => {
 
   <div class="header-row">
     <h1>{detail?.name ?? definitionId}</h1>
-    <Badge variant="platinum" outline>built-in</Badge>
+    <Badge variant="neutral" outline>built-in</Badge>
   </div>
 
   {#if error}
     <div class="error">{error}</div>
   {:else if loading}
-    <div class="loading">Loading definition...</div>
+    <div class="loading">loading definition...</div>
   {:else}
     <div class="tab-bar">
-      <button
-        type="button"
-        class:active={activeTab === "definition"}
+      <Button
+        variant="neutral"
+        size="small"
+        class={activeTab === "definition" ? "tab-btn active" : "tab-btn"}
         onclick={() => (activeTab = "definition")}
       >
         Definition
-      </button>
+      </Button>
       {#each filePaths as path (path)}
-        <button
-          type="button"
-          class:active={activeTab === path}
+        <Button
+          variant="neutral"
+          size="small"
+          class={activeTab === path ? "tab-btn active" : "tab-btn"}
           onclick={() => (activeTab = path)}
         >
           {path}
-        </button>
+        </Button>
       {/each}
     </div>
     <div class="pane">
@@ -111,7 +114,7 @@ $effect(() => {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  font-size: 0.6875rem;
+  font-size: var(--text-xs);
   color: var(--muted);
   margin-bottom: 0.5rem;
 }
@@ -154,36 +157,21 @@ h1 {
   margin-bottom: 0.5rem;
 }
 
-.tab-bar button {
-  font-family: inherit;
-  font-size: 0.625rem;
-  height: 24px;
-  padding: 0 0.5rem;
-  border-radius: 4px 4px 0 0;
-  border: 1px solid var(--border);
-  border-bottom: none;
-  background: transparent;
+:global(.tab-btn) {
   color: var(--muted);
-  cursor: pointer;
   max-width: 14rem;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
-
-.tab-bar button:hover {
-  color: var(--text);
-}
-
-.tab-bar button.active {
-  background: var(--bg);
-  color: var(--text);
-  font-weight: 600;
+:global(.tab-btn.active),
+:global(.tab-btn.active:hover) {
+  color: var(--on-accent);
+  background: var(--accent);
 }
 
 .pane {
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 0.5rem;
 }
 
@@ -196,15 +184,14 @@ h1 {
 }
 
 .pane-title {
-  font-size: 0.5625rem;
+  font-size: var(--text-xs);
   color: var(--muted);
-  text-transform: uppercase;
   letter-spacing: 0.08em;
   font-weight: 700;
 }
 
 .pane-note {
-  font-size: 0.5625rem;
+  font-size: var(--text-xs);
   color: var(--muted);
 }
 
@@ -220,8 +207,8 @@ h1 {
   border: 1px solid rgba(220, 60, 60, 0.3);
   color: #dc3c3c;
   padding: 0.75rem 1rem;
-  border-radius: 6px;
-  font-size: 0.8125rem;
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
   margin-bottom: 1rem;
 }
 </style>

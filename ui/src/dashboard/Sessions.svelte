@@ -58,9 +58,9 @@ function toggleArchive() {
   {/if}
 
   {#if archived.length > 0}
-    <Button variant="platinum" onclick={toggleArchive}>
+    <Button variant="neutral" onclick={toggleArchive}>
       <span class="archive-arrow">{archiveOpen ? "▾" : "▸"}</span>
-      Previous Sessions ({archived.length})
+      previous sessions ({archived.length})
     </Button>
     {#if archiveOpen}
       {#each archived as session (session.sessionId)}
@@ -75,9 +75,9 @@ function toggleArchive() {
   padding: 1.5rem;
   text-align: center;
   color: var(--muted);
-  font-size: 0.8125rem;
+  font-size: var(--text-base);
 }
 .archive-arrow {
-  font-size: 0.625rem;
+  font-size: var(--text-xs);
 }
 </style>

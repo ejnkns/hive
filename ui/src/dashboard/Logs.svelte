@@ -5,7 +5,8 @@ import Button from "../shared/ui/Button.svelte";
 let { entries = $bindable([] as LogEntry[]) } = $props();
 
 let autoScroll = $state(true);
-let logContainer: HTMLDivElement;
+let open = $state(false);
+let logContainer = $state<HTMLDivElement | undefined>();
 
 function clearLogs() {
   entries = [];
@@ -18,42 +19,78 @@ $effect(() => {
 });
 </script>
 
-<div class="log-header">
-  <span>Console Stream</span>
-  <div class="controls">
+<div class="log-panel">
+  <div class="log-header">
     <Button
-      variant={autoScroll ? "mint" : "platinum"}
-      onclick={() => autoScroll = !autoScroll}
+      variant="neutral"
+      size="small"
+      class="log-toggle"
+      onclick={() => (open = !open)}
     >
-      Auto-scroll {autoScroll ? 'ON' : 'OFF'}
+      <span class="log-chevron" aria-hidden="true">{open ? "▾" : "▸"}</span>
+      <span>console stream</span>
+      <span class="log-count">{entries.length} lines</span>
     </Button>
-    <Button variant="platinum" onclick={clearLogs}> Clear </Button>
-  </div>
-</div>
-<div class="log-lines" bind:this={logContainer}>
-  {#each entries as entry}
-    <div class="log-line {entry.level}">
-      <span class="log-time"
-        >[{new Date(entry.timestamp).toLocaleTimeString()}]</span
+    <div class="controls">
+      <Button
+        variant={autoScroll ? "success" : "neutral"}
+        onclick={() => (autoScroll = !autoScroll)}
       >
-      <span class="log-level">[bzz:{entry.level}]</span>
-      <span class="log-msg">{entry.message}</span>
+        Auto-scroll {autoScroll ? 'on' : 'off'}
+      </Button>
+      <Button variant="neutral" onclick={clearLogs}> clear </Button>
     </div>
-  {/each}
+  </div>
+  {#if open}
+    <div class="log-lines" bind:this={logContainer}>
+      {#each entries as entry}
+        <div class="log-line {entry.level}">
+          <span class="log-time"
+            >[{new Date(entry.timestamp).toLocaleTimeString()}]</span
+          >
+          <span class="log-level">[bzz:{entry.level}]</span>
+          <span class="log-msg">{entry.message}</span>
+        </div>
+      {/each}
+    </div>
+  {/if}
 </div>
 
 <style>
+.log-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
 .log-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: var(--card);
   padding: 0.375rem 0.75rem;
-  border-bottom: 1px solid var(--border);
-  font-size: 0.625rem;
+  font-size: var(--text-xs);
   font-weight: 700;
-  text-transform: uppercase;
   letter-spacing: 0.08em;
+  color: var(--muted);
+}
+:global(.log-toggle) {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--muted);
+}
+:global(.log-toggle:hover) {
+  color: var(--text);
+  background: none;
+  border-color: transparent;
+}
+.log-chevron {
+  font-size: var(--text-xs);
+}
+.log-count {
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
   color: var(--muted);
 }
 .controls {
@@ -62,11 +99,12 @@ $effect(() => {
 }
 .log-lines {
   padding: 0.5rem;
-  max-height: 200px;
+  max-height: 220px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 0.125rem;
+  border-top: 1px solid var(--border);
 }
 .log-line {
   white-space: pre-wrap;
@@ -80,7 +118,7 @@ $effect(() => {
   font-weight: bold;
 }
 .info .log-level {
-  color: var(--accent);
+  color: var(--text);
 }
 .warn .log-level {
   color: var(--warning);

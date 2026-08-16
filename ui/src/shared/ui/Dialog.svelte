@@ -44,7 +44,8 @@ let {
   position: fixed;
   inset: 0;
   z-index: 1000;
-  background: rgba(0, 0, 0, 0.12);
+  background: var(--overlay);
+  animation: dialog-fade-in var(--dur) var(--ease-out);
 }
 
 :global(.hive-dialog-content) {
@@ -59,11 +60,32 @@ let {
   overflow-y: auto;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 1.25rem;
   box-shadow:
-    0 0 80px rgba(var(--accent-rgb), 0.15),
+    0 0 80px rgba(var(--accent-rgb), 0.12),
     0 8px 32px rgba(0, 0, 0, 0.4);
+  animation: dialog-rise-in var(--dur) var(--ease-out);
+}
+
+@keyframes dialog-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dialog-rise-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 4px));
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
 }
 
 :global(.hive-dialog-close) {

@@ -1,27 +1,37 @@
+/* ==========================================================================
+   hive design tokens — docs/design-plan.md §2
+   The terminal that watches the hive: warm amber in a dark combshop,
+   monospace throughout, motion only where something is alive.
+   ========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   Interpolable color tokens (registered so the theme morph can tween them).
+   Only surface/text tokens are registered — status colors snap on theme change.
+   --------------------------------------------------------------------------- */
 @property --bg {
   syntax: "<color>";
   inherits: true;
-  initial-value: #1b1601;
+  initial-value: #16130a;
 }
 @property --card {
   syntax: "<color>";
   inherits: true;
-  initial-value: #0d0c06;
+  initial-value: #1f1a0f;
 }
 @property --surface {
   syntax: "<color>";
   inherits: true;
-  initial-value: #231c06;
+  initial-value: #241e11;
 }
 @property --border {
   syntax: "<color>";
   inherits: true;
-  initial-value: #2e2508;
+  initial-value: #352b16;
 }
 @property --border-rgb {
   syntax: "<number>#";
   inherits: true;
-  initial-value: 58, 46, 10;
+  initial-value: 53, 43, 22;
 }
 @property --accent {
   syntax: "<color>";
@@ -36,110 +46,191 @@
 @property --text {
   syntax: "<color>";
   inherits: true;
-  initial-value: #f5e6c8;
+  initial-value: #f2e4c5;
 }
 @property --muted {
   syntax: "<color>";
   inherits: true;
-  initial-value: #8a7a5c;
-}
-@property --success {
-  syntax: "<color>";
-  inherits: true;
-  initial-value: #7cb342;
-}
-@property --success-rgb {
-  syntax: "<number>#";
-  inherits: true;
-  initial-value: 124, 179, 66;
-}
-@property --error {
-  syntax: "<color>";
-  inherits: true;
-  initial-value: #a44022;
-}
-@property --error-rgb {
-  syntax: "<number>#";
-  inherits: true;
-  initial-value: 212, 69, 26;
-}
-@property --warning {
-  syntax: "<color>";
-  inherits: true;
-  initial-value: #6a603b;
-}
-@property --logo-text {
-  syntax: "<color>";
-  inherits: true;
-  initial-value: #ff0;
+  initial-value: #9a8a67;
 }
 
+/* Theme morph: surface + text only, at --dur-slow (not all 17 properties). */
+:root,
+html.light {
+  transition:
+    --bg var(--dur-slow) var(--ease-in-out),
+    --card var(--dur-slow) var(--ease-in-out),
+    --surface var(--dur-slow) var(--ease-in-out),
+    --border var(--dur-slow) var(--ease-in-out),
+    --border-rgb var(--dur-slow) var(--ease-in-out),
+    --accent var(--dur-slow) var(--ease-in-out),
+    --accent-rgb var(--dur-slow) var(--ease-in-out),
+    --text var(--dur-slow) var(--ease-in-out),
+    --muted var(--dur-slow) var(--ease-in-out);
+}
+
+/* ---------------------------------------------------------------------------
+   Dark — default identity. 60-30-10: 60% bg/surface, 30% card/border/text,
+   10% accent + status. Accent marks the one thing per screen.
+   --------------------------------------------------------------------------- */
+:root {
+  /* surface */
+  --bg: #16130a;
+  --card: #1f1a0f; /* lighter than bg — elevation, not inversion */
+  --surface: #241e11;
+  --border: #352b16;
+  --border-rgb: 53, 43, 22;
+  /* accent — the golden marker: fills, rings, borders, dots */
+  --accent: #f5b342;
+  --accent-rgb: 245, 179, 66;
+  --on-accent: #16130a; /* text on accent fills */
+  /* brand — the amber identity, kept warm in both themes */
+  --brand: #f5b342;
+  /* text */
+  --text: #f2e4c5;
+  --muted: #9a8a67;
+  /* status (snap, not interpolated) */
+  --success: #7cb342;
+  --success-rgb: 124, 179, 66;
+  --error: #e2573c;
+  --error-rgb: 226, 87, 60;
+  --warning: #e2a93b;
+  --warning-rgb: 226, 169, 59;
+
+  /* overlay scrim for dialogs */
+  --overlay: rgba(0, 0, 0, 0.55);
+
+  /* type — mono-only scale, docs/design-plan.md §2.2 */
+  --font-mono:
+    ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono",
+    monospace;
+  --text-xs: 0.6875rem; /* 11px — floor; labels, meta, eyebrows */
+  --text-sm: 0.75rem; /* 12px — secondary data */
+  --text-base: 0.8125rem; /* 13px — body default (dev-tool density) */
+  --text-md: 0.9375rem; /* 15px — card titles */
+  --text-lg: 1.125rem; /* 18px — page titles */
+  --text-xl: 1.5rem; /* 24px — display (landing wordmark) */
+
+  /* space — 4px base */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  /* shape — inner radius = outer minus gap */
+  --radius-sm: 4px; /* buttons, inputs, badges */
+  --radius-md: 6px; /* cards, selects */
+  --radius-lg: 8px; /* dialogs, large panels */
+
+  /* motion — docs/design-plan.md §2.4. Transform + opacity only. */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1); /* entering */
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1); /* moving */
+  --dur-fast: 120ms; /* hover, press, micro */
+  --dur: 240ms; /* standard entrances, state changes */
+  --dur-slow: 400ms; /* panels, theme switch */
+
+  color-scheme: dark;
+}
+
+/* ---------------------------------------------------------------------------
+   Light — co-equal citizen, not a courtesy inversion.
+   --------------------------------------------------------------------------- */
+html.light {
+  --bg: #f4efdf;
+  --card: #fdfaf0;
+  --surface: #ede7d3;
+  --border: #e0d5b8;
+  --border-rgb: 224, 213, 184;
+  --accent: #d9a406; /* bright golden — same family as dark */
+  --accent-rgb: 217, 164, 6;
+  --on-accent: #16130a; /* near-black reads on golden in both themes */
+  --brand: #c07f0f; /* amber identity, readable on paper */
+  --text: #33291a;
+  --muted: #6f6248;
+  --success: #3f6b24;
+  --success-rgb: 63, 107, 36;
+  --error: #b71c1c;
+  --error-rgb: 183, 28, 28;
+  --warning: #9a5a06;
+  --warning-rgb: 154, 90, 6;
+
+  --overlay: rgba(30, 24, 12, 0.35);
+
+  color-scheme: light;
+}
+
+/* ---------------------------------------------------------------------------
+   Base
+   --------------------------------------------------------------------------- */
 * {
   box-sizing: border-box;
 }
 
+html,
 body {
   margin: 0;
   padding: 0;
-  font-family: monospace;
+}
+
+body {
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  line-height: 1.5;
   background: var(--bg);
   color: var(--text);
-  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
-:root,
-html.light {
-  transition:
-    --bg var(--duration) ease-out,
-    --card var(--duration) ease-out,
-    --surface var(--duration) ease-out,
-    --border var(--duration) ease-out,
-    --border-rgb var(--duration) ease-out,
-    --accent var(--duration) ease-out,
-    --accent-rgb var(--duration) ease-out,
-    --text var(--duration) ease-out,
-    --muted var(--duration) ease-out,
-    --success var(--duration) ease-out,
-    --success-rgb var(--duration) ease-out,
-    --error var(--duration) ease-out,
-    --error-rgb var(--duration) ease-out,
-    --warning var(--duration) ease-out,
-    --logo-text var(--duration) ease-out;
+/* Selection reads as hive light, not system blue. */
+::selection {
+  background: var(--accent);
+  color: var(--bg);
 }
 
-:root {
-  --duration: 0.4s;
-  --bg: #1b1601;
-  --card: #0d0c06;
-  --surface: #231c06;
-  --border: #2e2508;
-  --border-rgb: 58, 46, 10;
-  --accent: #f5b342;
-  --accent-rgb: 245, 179, 66;
-  --text: #f5e6c8;
-  --muted: #8a7a5c;
-  --success: #7cb342;
-  --success-rgb: 124, 179, 66;
-  --error: #a44022;
-  --error-rgb: 212, 69, 26;
-  --warning: #6a603b;
-  --logo-text: var(--accent);
+/* Accessibility floor: every interactive element earns a visible focus ring.
+   Components must never set outline: none without replacing it. The ring mixes
+   accent with text so it stays visible on cream (light) and charcoal (dark). */
+:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, var(--text));
+  outline-offset: 2px;
 }
 
-html.light {
-  --bg: #f5f0e3;
-  --card: #fdfaef;
-  --surface: #f5f0e3;
-  --border: #ebe0c4;
-  --border-rgb: 212, 197, 160;
-  --accent: #f5b342;
-  --accent-rgb: 245, 179, 66;
-  --text: #2c2410;
-  --muted: #8a7a5c;
-  --success: #4a7c2e;
-  --success-rgb: 74, 124, 46;
-  --error: #b71c1c;
-  --error-rgb: 183, 28, 28;
-  --warning: #bd9223;
-  --logo-text: #000000;
+/* Terminal scrollbars — thin, comb-colored, quiet. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Reduced motion: collapse the whole system to instant. Boot sequences skip
+   to their final frame; pipeline dashes go static; pulses stop. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: required reduced-motion override */
+    animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: required reduced-motion override */
+    animation-iteration-count: 1 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: required reduced-motion override */
+    transition-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: required reduced-motion override */
+    scroll-behavior: auto !important;
+  }
 }

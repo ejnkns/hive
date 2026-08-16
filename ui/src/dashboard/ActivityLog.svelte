@@ -58,19 +58,18 @@ let {
   padding: 1rem;
   text-align: center;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
 }
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
 }
 th {
   background: var(--surface);
   padding: 0.25rem 0.5rem;
-  font-size: 0.5625rem;
+  font-size: var(--text-xs);
   color: var(--muted);
-  text-transform: uppercase;
   letter-spacing: 0.05em;
   text-align: left;
   border-bottom: 2px solid var(--border);
@@ -90,20 +89,19 @@ tr:hover td {
   background: rgba(var(--accent-rgb), 0.03);
 }
 .mono {
-  font-family: monospace;
-  font-size: 0.625rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
 }
 .model {
-  font-family: monospace;
-  font-size: 0.625rem;
-  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--muted);
 }
 .badge {
   display: inline-block;
-  font-size: 0.5625rem;
+  font-size: var(--text-xs);
   font-weight: 700;
   padding: 0.0625rem 0.25rem;
-  text-transform: uppercase;
   margin-right: 0.125rem;
 }
 .badge.ok {
@@ -118,8 +116,8 @@ tr:hover td {
 }
 .badge.finish-length {
   background: rgba(226, 169, 59, 0.12);
-  color: #e2a93b;
-  border: 1px solid #e2a93b;
+  color: var(--warning);
+  border: 1px solid var(--warning);
 }
 .badge.finish-content-filter {
   background: rgba(var(--error-rgb), 0.12);

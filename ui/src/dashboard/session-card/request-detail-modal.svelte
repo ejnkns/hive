@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { RequestState } from "shared/dashboard-types";
 import TruncatableText from "../../shared/TruncatableText.svelte";
+import Button from "../../shared/ui/Button.svelte";
 import Dialog from "../../shared/ui/Dialog.svelte";
 import { formatNumber, formatTime, sc } from "../../shared/utils.ts";
 import ConversationView from "../ConversationView.svelte";
@@ -40,22 +41,23 @@ const hasConversation = $derived(
 );
 </script>
 
-<Dialog bind:open label="Request {label}">
-  <h2 class="dialog-title">Request {label}</h2>
+<Dialog bind:open label="request {label}">
+  <h2 class="dialog-title">request {label}</h2>
   <div class="modal-body">
     {#if requests.length > 1}
       <div class="tabs">
         {#each requests as req, i}
-          <button
-            type="button"
-            class="tab {req.requestId === activeRequestId ? 'tab-active' : ''}"
+          <Button
+            variant="neutral"
+            size="small"
+            class={req.requestId === activeRequestId ? "tab tab-active" : "tab"}
             onclick={() => onSelectRequest?.(req.requestId)}
           >
             {#if req.requestId === activeRequestId}
               <span class="tab-current"></span>
             {/if}
             {isTerminal(req.path.at(-1) ?? "complete") ? `#${i + 1}` : `#${i + 1} (active)`}
-          </button>
+          </Button>
         {/each}
       </div>
     {/if}
@@ -65,19 +67,19 @@ const hasConversation = $derived(
         <div class="section-title">metadata</div>
         <div class="detail-grid">
           <div class="field">
-            <span class="field-label">Request ID</span>
+            <span class="field-label">request id</span>
             <span class="field-val mono">{request.requestId}</span>
           </div>
           <div class="field">
-            <span class="field-label">Provider</span>
+            <span class="field-label">provider</span>
             <span class="field-val">{request.provider ?? "—"}</span>
           </div>
           <div class="field">
-            <span class="field-label">Model</span>
+            <span class="field-label">model</span>
             <span class="field-val mono">{request.model ?? "—"}</span>
           </div>
           <div class="field">
-            <span class="field-label">Time</span>
+            <span class="field-label">time</span>
             <span class="field-val">{formatTime(request.timestamp)}</span>
           </div>
         </div>
@@ -159,7 +161,7 @@ const hasConversation = $derived(
           <div class="section-title">response</div>
           <div class="detail-grid">
             <div class="field">
-              <span class="field-label">Status</span>
+              <span class="field-label">status</span>
               <span
                 class="field-val"
                 style="color:{request.response.success
@@ -178,7 +180,7 @@ const hasConversation = $derived(
               >
             </div>
             <div class="field">
-              <span class="field-label">Total</span>
+              <span class="field-label">total</span>
               <span class="field-val"
                 >{formatNumber(request.response.totalLatency, "ms")}</span
               >
@@ -246,9 +248,8 @@ const hasConversation = $derived(
 <style>
 .dialog-title {
   margin: 0 0 0.75rem 0;
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   font-weight: 700;
-  text-transform: uppercase;
 }
 .modal-body {
   display: flex;
@@ -264,26 +265,18 @@ const hasConversation = $derived(
   border-bottom: 1px solid var(--border);
 }
 
-.tab {
+:global(.tab) {
   background: none;
-  border: 1px solid var(--border);
   color: var(--muted);
-  font-family: monospace;
-  font-size: 0.5625rem;
-  cursor: pointer;
-  padding: 0.0625rem 0.375rem;
-  text-transform: uppercase;
 }
 
-.tab:hover {
+:global(.tab:hover) {
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--text);
 }
-
-.tab-active {
-  border-color: var(--accent);
-  color: var(--accent);
-  font-weight: 700;
+:global(.tab.tab-active) {
+  color: var(--on-accent);
+  background: var(--accent);
 }
 
 .detail-section {
@@ -293,9 +286,8 @@ const hasConversation = $derived(
 }
 
 .section-title {
-  font-size: 0.5625rem;
+  font-size: var(--text-xs);
   font-weight: 700;
-  text-transform: uppercase;
   color: var(--muted);
 }
 
@@ -303,7 +295,7 @@ const hasConversation = $derived(
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 0.125rem 0.75rem;
-  font-size: 0.6875rem;
+  font-size: var(--text-xs);
 }
 
 .field {
@@ -319,14 +311,13 @@ const hasConversation = $derived(
 }
 
 .field-val.mono {
-  font-family: monospace;
-  font-size: 0.5625rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
 }
 
 .selection-header {
   color: var(--muted);
-  font-size: 0.5625rem;
-  text-transform: uppercase;
+  font-size: var(--text-xs);
 }
 
 .candidate-row {
@@ -334,7 +325,7 @@ const hasConversation = $derived(
   align-items: center;
   gap: 0.5rem;
   padding: 0.125rem 0;
-  font-size: 0.625rem;
+  font-size: var(--text-xs);
 }
 
 .candidate-selected {
@@ -347,9 +338,9 @@ const hasConversation = $derived(
 }
 
 .cand-model {
-  font-family: monospace;
-  color: var(--accent);
-  font-size: 0.5625rem;
+  font-family: var(--font-mono);
+  color: var(--text);
+  font-size: var(--text-xs);
 }
 
 .badge {
@@ -357,7 +348,6 @@ const hasConversation = $derived(
   font-size: 0.5rem;
   font-weight: 700;
   padding: 0.0625rem 0.25rem;
-  text-transform: uppercase;
 }
 
 .badge.ineligible {
@@ -367,13 +357,13 @@ const hasConversation = $derived(
 }
 
 .badge.failover {
-  color: #e2a93b;
+  color: var(--warning);
   background: rgba(226, 169, 59, 0.1);
   border: 1px solid rgba(226, 169, 59, 0.2);
 }
 
 .failovers {
-  font-size: 0.625rem;
+  font-size: var(--text-xs);
   display: flex;
   gap: 0.25rem;
   flex-wrap: wrap;
@@ -386,13 +376,13 @@ const hasConversation = $derived(
 }
 
 .od-prov {
-  font-family: monospace;
-  font-size: 0.625rem;
-  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text);
 }
 
 .od-status {
-  font-size: 0.5625rem;
+  font-size: var(--text-xs);
   color: var(--error);
   font-weight: 700;
 }
@@ -400,13 +390,12 @@ const hasConversation = $derived(
 .od-type {
   font-size: 0.5rem;
   color: var(--muted);
-  text-transform: uppercase;
 }
 
 .od-body {
-  font-size: 0.5625rem;
+  font-size: var(--text-xs);
   color: var(--muted);
-  font-family: monospace;
+  font-family: var(--font-mono);
   white-space: pre-wrap;
   word-break: break-word;
   max-height: 100px;
@@ -420,9 +409,9 @@ const hasConversation = $derived(
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  font-size: 0.625rem;
+  font-size: var(--text-xs);
   color: var(--muted);
-  font-family: monospace;
+  font-family: var(--font-mono);
 }
 
 .dot-sep {

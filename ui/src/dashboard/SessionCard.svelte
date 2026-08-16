@@ -186,37 +186,37 @@ function handleSelectRequest(requestId: string) {
 }
 
 .summary-prov {
-  color: var(--accent);
-  font-family: monospace;
-  font-size: 0.75rem;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
   font-weight: 700;
   margin-right: auto;
 }
 
 .summary-status {
-  font-family: monospace;
-  font-size: 0.6875rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
   font-weight: 700;
 }
 
 .summary-latency {
   color: var(--muted);
-  font-family: monospace;
-  font-size: 0.6875rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
 }
 
 .summary-prompt {
   color: var(--text);
-  font-size: 0.6875rem;
+  font-size: var(--text-xs);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .override-error {
-  color: #e2a93b;
-  font-family: monospace;
-  font-size: 0.5625rem;
+  color: var(--warning);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
   padding: 0.125rem 0.375rem;
   background: rgba(226, 169, 59, 0.08);
   border: 1px solid rgba(226, 169, 59, 0.15);
@@ -233,8 +233,8 @@ function handleSelectRequest(requestId: string) {
   background: none;
   border: none;
   color: var(--muted);
-  font-family: monospace;
-  font-size: 0.5625rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
   cursor: pointer;
   padding: 0;
   width: 100%;
@@ -242,11 +242,11 @@ function handleSelectRequest(requestId: string) {
 }
 
 .list-toggle:hover {
-  color: var(--accent);
+  color: var(--text);
 }
 
 .list-arrow {
-  font-size: 0.625rem;
+  font-size: var(--text-xs);
 }
 
 .request-list {
@@ -267,8 +267,8 @@ function handleSelectRequest(requestId: string) {
   border: none;
   cursor: pointer;
   text-align: left;
-  font-family: monospace;
-  font-size: 0.5625rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
   color: var(--text);
   width: 100%;
 }
@@ -278,14 +278,14 @@ function handleSelectRequest(requestId: string) {
 }
 
 .row-label {
-  color: var(--accent);
+  color: var(--text);
   font-weight: 700;
   width: 28px;
   flex-shrink: 0;
 }
 
 .row-prov {
-  color: var(--accent);
+  color: var(--text);
   font-size: 0.5rem;
 }
 

@@ -98,15 +98,23 @@ let {
   align-items: center;
   gap: 4px;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--text);
   cursor: pointer;
-  font-family: monospace;
+  font-family: var(--font-mono);
   min-width: 100px;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
 }
 :global(.hive-select-trigger:hover) {
   border-color: var(--accent);
+}
+:global(.hive-select-trigger:focus-visible) {
+  outline: none; /* replaced by halo below */
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.15);
 }
 :global(.hive-select-trigger[disabled]) {
   opacity: 0.3;
@@ -114,15 +122,15 @@ let {
 }
 
 :global(.hive-select-small) {
-  height: 28px;
-  padding: 0 8px;
-  font-size: 0.6875rem;
+  height: 32px;
+  padding: 0 var(--space-2);
+  font-size: var(--text-xs);
 }
 
 :global(.hive-select-default) {
   height: 36px;
-  padding: 0 12px;
-  font-size: 0.8125rem;
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
 }
 
 :global(.hive-select-chevron) {
@@ -134,11 +142,11 @@ let {
 :global(.hive-select-content) {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   max-height: 240px;
   overflow-y: auto;
-  padding: 4px;
+  padding: var(--space-1);
   z-index: 1001;
   min-width: var(--bits-select-anchor-width);
 }
@@ -147,11 +155,11 @@ let {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: 0.6875rem;
+  gap: var(--space-2);
+  padding: 4px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
   color: var(--text);
   cursor: pointer;
   outline: none;

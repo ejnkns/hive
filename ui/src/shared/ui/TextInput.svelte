@@ -28,28 +28,33 @@ let {
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 4px;
-  font-family: monospace;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
   outline: none;
   width: 100%;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
 }
 .text-input:focus {
   border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.15);
 }
 .text-input[disabled] {
-  opacity: 0.3;
+  opacity: 0.4;
+  cursor: not-allowed;
   pointer-events: none;
 }
 
 .text-input-small {
-  height: 28px;
-  padding: 0 8px;
-  font-size: 0.6875rem;
+  height: 32px;
+  padding: 0 var(--space-2);
+  font-size: var(--text-xs);
 }
 
 .text-input-default {
   height: 36px;
-  padding: 0 12px;
-  font-size: 0.8125rem;
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
 }
 </style>

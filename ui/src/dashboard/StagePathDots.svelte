@@ -82,9 +82,8 @@ const lineClass = $derived(
   }
 
   .section-title {
-    font-size: 0.5625rem;
+    font-size: var(--text-xs);
     color: var(--muted);
-    text-transform: uppercase;
     letter-spacing: 0.05em;
     margin-bottom: 0.25rem;
   }
@@ -132,7 +131,6 @@ const lineClass = $derived(
   .dot-label {
     font-size: 0.4375rem;
     color: var(--muted);
-    text-transform: uppercase;
     text-align: center;
   }
 

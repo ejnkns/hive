@@ -13,8 +13,21 @@ let {
 <style>
 .skeleton {
   background: var(--surface);
-  border-radius: 4px;
-  animation: skeleton-pulse 2s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+  position: relative;
+  overflow: hidden;
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--border) 60%, transparent),
+    transparent
+  );
+  animation: skeleton-shimmer 1.6s var(--ease-in-out) infinite;
 }
 
 .skeleton-line {
@@ -27,13 +40,12 @@ let {
   aspect-ratio: 16 / 9;
 }
 
-@keyframes skeleton-pulse {
-  0%,
-  100% {
-    opacity: 0.4;
+@keyframes skeleton-shimmer {
+  from {
+    transform: translateX(-100%);
   }
-  50% {
-    opacity: 0.7;
+  to {
+    transform: translateX(100%);
   }
 }
 </style>

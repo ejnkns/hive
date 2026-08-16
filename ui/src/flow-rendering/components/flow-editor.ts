@@ -158,15 +158,15 @@ export class FlowEditor extends LitElement {
       padding: 0 0.5rem;
       border-radius: 4px;
       border: 1px solid var(--accent);
-      background: transparent;
-      color: var(--accent);
+      background: rgba(var(--accent-rgb), 0.18);
+      color: var(--text);
       cursor: pointer;
       flex: none;
     }
 
     button.instantiate-btn:hover {
       background: var(--accent);
-      color: var(--bg);
+      color: var(--on-accent);
     }
 
     .tab-bar {

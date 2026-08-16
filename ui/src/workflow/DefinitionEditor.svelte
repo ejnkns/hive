@@ -513,23 +513,23 @@ async function remove() {
 
 <div class="editor">
   <div class="breadcrumb">
-    <a href="#/flows">Flows</a>
+    <a href="#/flows">flows</a>
     <span class="crumb-sep">/</span>
     {#if isNew}
-      <span class="crumb-current">New flow definition</span>
+      <span class="crumb-current">new definition</span>
     {:else}
       <a href={`#/flows/${encodeURIComponent(definitionId ?? "")}`}
         >{definitionId}</a
       >
       <span class="crumb-sep">/</span>
-      <span class="crumb-current">Edit</span>
+      <span class="crumb-current">edit</span>
     {/if}
   </div>
 
   <div class="header-row">
-    <h1>{isNew ? "New flow definition" : `Edit ${definitionId}`}</h1>
+    <h1>{isNew ? "new definition" : `edit ${definitionId}`}</h1>
     {#if !isNew && !isBuiltIn}
-      <Button variant="rose" size="small" onclick={() => (deleteOpen = true)}>
+      <Button variant="danger" size="small" onclick={() => (deleteOpen = true)}>
         Delete this flow definition
       </Button>
     {/if}
@@ -540,7 +540,7 @@ async function remove() {
   {/if}
 
   {#if loading}
-    <div class="loading">Loading definition...</div>
+    <div class="loading">loading definition...</div>
   {:else if isBuiltIn}
     <div class="builtin-notice">
       Built-in flow definitions ship with the server and cannot be edited.
@@ -552,9 +552,9 @@ async function remove() {
          definition module. The shell only mounts the rendering surface and
          owns the session lifecycle. -->
     <div class="author-toolbar">
-      <button type="button" class="author-close" onclick={closeAuthoring}>
+      <Button variant="neutral" class="author-close" onclick={closeAuthoring}>
         Close session
-      </button>
+      </Button>
     </div>
     <LitFlowHost
       flowId={authorFlow.id}
@@ -590,7 +590,7 @@ async function remove() {
       </div>
       <div class="start-actions">
         <Button
-          variant="azure"
+          variant="accent"
           disabled={authoring || !aiPrompt.trim()}
           onclick={() =>
             isNew ? startAuthoring(false) : startAuthoringFromFiles(false)}
@@ -598,7 +598,7 @@ async function remove() {
           {authoring ? "Starting session..." : "Start conversation"}
         </Button>
         <Button
-          variant="platinum"
+          variant="neutral"
           disabled={authoring || !aiPrompt.trim()}
           onclick={() =>
             isNew ? startAuthoring(true) : startAuthoringFromFiles(true)}
@@ -608,21 +608,23 @@ async function remove() {
       </div>
     </div>
     <div class="tab-bar">
-      <button
-        type="button"
-        class:active={activeTab === "definition"}
+      <Button
+        variant="neutral"
+        size="small"
+        class={activeTab === "definition" ? "editor-tab active" : "editor-tab"}
         onclick={() => selectTab("definition")}
       >
         Definition
-      </button>
+      </Button>
       {#each draftFilePaths as path (path)}
-        <button
-          type="button"
-          class:active={activeTab === path}
+        <Button
+          variant="neutral"
+          size="small"
+          class={activeTab === path ? "editor-tab active" : "editor-tab"}
           onclick={() => selectTab(path)}
         >
           {path}
-        </button>
+        </Button>
       {/each}
     </div>
     <div class="pane">
@@ -638,7 +640,7 @@ async function remove() {
     </div>
     <div class="files-actions">
       <Button
-        variant="azure"
+        variant="accent"
         size="small"
         disabled={saving || (isNew ? draftSource === "" : !hasPendingEdits)}
         onclick={() => void (isNew ? saveNewDefinition() : saveDefinition())}
@@ -656,13 +658,13 @@ async function remove() {
   {/if}
 </div>
 
-<Dialog bind:open={deleteOpen} label="Delete flow definition">
-  <h2 class="dialog-title">Delete flow definition</h2>
+<Dialog bind:open={deleteOpen} label="delete definition">
+  <h2 class="dialog-title">delete definition</h2>
   <p class="dialog-text">
     Existing instances keep their snapshot of this definition, but the
     definition will no longer be listed or instantiable.
   </p>
-  <Button variant="rose" onclick={remove}>Delete definition</Button>
+  <Button variant="danger" onclick={remove}>delete definition</Button>
 </Dialog>
 
 <style>
@@ -676,7 +678,7 @@ async function remove() {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  font-size: 0.6875rem;
+  font-size: var(--text-xs);
   color: var(--muted);
   margin-bottom: 0.5rem;
 }
@@ -719,23 +721,18 @@ h1 {
   margin-bottom: 0.5rem;
 }
 
-.author-close {
+:global(.author-close) {
   background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 4px;
   color: var(--muted);
-  font-size: 0.625rem;
-  padding: 0.25rem 0.5rem;
-  cursor: pointer;
 }
-
-.author-close:hover {
+:global(.author-close:hover) {
   color: var(--error);
   border-color: var(--error);
+  background: transparent;
 }
 
 .draft-hint {
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   color: var(--muted);
   line-height: 1.4;
   margin: 0 0 0.5rem;
@@ -760,36 +757,21 @@ h1 {
   margin-bottom: 0.375rem;
 }
 
-.tab-bar button {
-  font-family: inherit;
-  font-size: 0.625rem;
-  height: 24px;
-  padding: 0 0.5rem;
-  border-radius: 4px 4px 0 0;
-  border: 1px solid var(--border);
-  border-bottom: none;
-  background: transparent;
+:global(.editor-tab) {
   color: var(--muted);
-  cursor: pointer;
   max-width: 14rem;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
-
-.tab-bar button:hover {
-  color: var(--text);
-}
-
-.tab-bar button.active {
-  background: var(--bg);
-  color: var(--text);
-  font-weight: 600;
+:global(.editor-tab.active),
+:global(.editor-tab.active:hover) {
+  color: var(--on-accent);
+  background: var(--accent);
 }
 
 .pane {
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 0.5rem;
 }
 
@@ -802,9 +784,8 @@ h1 {
 }
 
 .pane-title {
-  font-size: 0.5625rem;
+  font-size: var(--text-xs);
   color: var(--muted);
-  text-transform: uppercase;
   letter-spacing: 0.08em;
   font-weight: 700;
 }
@@ -817,7 +798,7 @@ h1 {
 }
 
 .saved-status {
-  font-size: 0.625rem;
+  font-size: var(--text-xs);
   color: var(--success);
 }
 
@@ -837,9 +818,9 @@ h1 {
 .builtin-notice {
   background: rgba(250, 200, 60, 0.08);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--muted);
-  font-size: 0.8125rem;
+  font-size: var(--text-base);
   line-height: 1.5;
   padding: 1rem 1.25rem;
 }
@@ -849,20 +830,19 @@ h1 {
   border: 1px solid rgba(220, 60, 60, 0.3);
   color: #dc3c3c;
   padding: 0.75rem 1rem;
-  border-radius: 6px;
-  font-size: 0.8125rem;
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
   margin-bottom: 1rem;
 }
 
 .dialog-title {
   margin: 0 0 0.75rem 0;
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   font-weight: 700;
-  text-transform: uppercase;
 }
 
 .dialog-text {
-  font-size: 0.8125rem;
+  font-size: var(--text-base);
   color: var(--muted);
   line-height: 1.5;
   margin: 0 0 1rem 0;

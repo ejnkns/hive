@@ -131,31 +131,30 @@ function nodeLabel(req: RequestState, i: number): string {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-family: monospace;
-  font-size: 0.625rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
 }
 
 .node-label {
-  color: var(--accent);
+  color: var(--text);
   font-weight: 700;
-  text-transform: uppercase;
 }
 
 .node-time {
   color: var(--muted);
-  font-size: 0.5625rem;
+  font-size: var(--text-xs);
 }
 
 .node-meta {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-family: monospace;
-  font-size: 0.5625rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
 }
 
 .node-prov {
-  color: var(--accent);
+  color: var(--text);
   font-size: 0.5rem;
 }
 

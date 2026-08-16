@@ -190,11 +190,11 @@ function handleProviderInputBlur() {
 }
 </script>
 
-<Dialog bind:open label="Model Priority" contentMaxWidth="600px">
-  <h2 class="dialog-title">Model Priority</h2>
+<Dialog bind:open label="model priority" contentMaxWidth="600px">
+  <h2 class="dialog-title">model priority</h2>
   <div class="presets-body">
     {#if !dataLoaded && dashboardSocket.connected}
-      <div class="loading">Loading available models...</div>
+      <div class="loading">loading available models...</div>
     {:else}
       <div class="list-section">
         <div class="list-items">
@@ -213,20 +213,20 @@ function handleProviderInputBlur() {
               </div>
               <div class="row-actions">
                 <Button
-                  variant="platinum"
+                  variant="neutral"
                   disabled={i === 0}
                   onclick={() => { if (i > 0) moveModel(i, -1); }}
                 >
                   ↑
                 </Button>
                 <Button
-                  variant="platinum"
+                  variant="neutral"
                   disabled={i === modelItems.length - 1}
                   onclick={() => { if (i < modelItems.length - 1) moveModel(i, 1); }}
                 >
                   ↓
                 </Button>
-                <Button variant="rose" onclick={() => removeModel(i)}>
+                <Button variant="danger" onclick={() => removeModel(i)}>
                   ×
                 </Button>
               </div>
@@ -246,7 +246,7 @@ function handleProviderInputBlur() {
             <div class="dropdown">
               {#each filteredModels as suggestion}
                 <Button
-                  variant="platinum"
+                  variant="neutral"
                   block
                   onclick={() => addModel(suggestion)}
                 >
@@ -283,20 +283,20 @@ function handleProviderInputBlur() {
                 </div>
                 <div class="row-actions">
                   <Button
-                    variant="platinum"
+                    variant="neutral"
                     disabled={i === 0}
                     onclick={() => { if (i > 0) moveProvider(i, -1); }}
                   >
                     ↑
                   </Button>
                   <Button
-                    variant="platinum"
+                    variant="neutral"
                     disabled={i === providerItems.length - 1}
                     onclick={() => { if (i < providerItems.length - 1) moveProvider(i, 1); }}
                   >
                     ↓
                   </Button>
-                  <Button variant="rose" onclick={() => removeProvider(i)}>
+                  <Button variant="danger" onclick={() => removeProvider(i)}>
                     ×
                   </Button>
                 </div>
@@ -316,7 +316,7 @@ function handleProviderInputBlur() {
               <div class="dropdown">
                 {#each filteredProviders as suggestion}
                   <Button
-                    variant="platinum"
+                    variant="neutral"
                     block
                     onclick={() => addProvider(suggestion)}
                   >
@@ -331,8 +331,12 @@ function handleProviderInputBlur() {
     {/if}
 
     <div class="modal-actions">
-      <Button variant="platinum" onclick={cancel}>Cancel</Button>
-      <Button variant="mint" onclick={save} disabled={modelItems.length === 0}>
+      <Button variant="neutral" onclick={cancel}>cancel</Button>
+      <Button
+        variant="accent"
+        onclick={save}
+        disabled={modelItems.length === 0}
+      >
         Save
       </Button>
     </div>
@@ -342,9 +346,8 @@ function handleProviderInputBlur() {
 <style>
 .dialog-title {
   margin: 0 0 0.75rem 0;
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   font-weight: 700;
-  text-transform: uppercase;
 }
 .presets-body {
   display: flex;
@@ -357,9 +360,8 @@ function handleProviderInputBlur() {
   gap: 0.375rem;
 }
 .section-label {
-  font-size: 0.625rem;
+  font-size: var(--text-xs);
   font-weight: 700;
-  text-transform: uppercase;
   color: var(--muted);
   display: flex;
   align-items: center;
@@ -378,8 +380,8 @@ function handleProviderInputBlur() {
   padding: 0.25rem 0.375rem;
   border: 1px solid var(--border);
   background: var(--surface);
-  font-family: monospace;
-  font-size: 0.6875rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
   border-radius: 16px;
 }
 .list-row.invalid {
@@ -393,7 +395,7 @@ function handleProviderInputBlur() {
   min-width: 0;
 }
 .item-text {
-  color: var(--accent);
+  color: var(--text);
   flex-shrink: 0;
 }
 .item-badges {
@@ -440,7 +442,7 @@ function handleProviderInputBlur() {
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  font-size: 0.625rem;
+  font-size: var(--text-xs);
 }
 .dropdown-item-providers {
   font-size: 0.5rem;
@@ -454,7 +456,7 @@ function handleProviderInputBlur() {
   border-top: 1px solid var(--border);
 }
 .loading {
-  font-size: 0.6875rem;
+  font-size: var(--text-xs);
   color: var(--muted);
   padding: 0.5rem 0;
   text-align: center;

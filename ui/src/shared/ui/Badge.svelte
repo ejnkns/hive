@@ -1,8 +1,8 @@
 <script lang="ts">
-type Variant = "mint" | "rose" | "platinum" | "amber";
+type Variant = "success" | "danger" | "warning" | "neutral";
 
 let {
-  variant = "platinum",
+  variant = "neutral",
   size = "small",
   outline = false,
   live = false,
@@ -29,8 +29,8 @@ let {
 .badge {
   display: inline-flex;
   align-items: center;
-  border-radius: 4px;
-  font-family: monospace;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -44,48 +44,54 @@ let {
 .badge-default {
   height: 22px;
   padding: 0 6px;
-  font-size: 0.6875rem;
+  font-size: var(--text-xs);
 }
 
 .badge-outline {
   background: transparent;
 }
 
-.badge-mint {
+.badge-success {
   background: var(--success);
   color: var(--bg);
 }
-.badge-mint.badge-outline {
+.badge-success.badge-outline {
   background: transparent;
   color: var(--success);
   border: 1px solid var(--success);
 }
 
-.badge-rose {
+.badge-danger {
   background: var(--error);
-  color: white;
+  color: var(--bg);
 }
-.badge-rose.badge-outline {
+.badge-danger.badge-outline {
   background: transparent;
   color: var(--error);
   border: 1px solid var(--error);
 }
 
-.badge-platinum {
+.badge-warning {
+  background: var(--warning);
+  color: var(--bg);
+}
+.badge-warning.badge-outline {
+  background: transparent;
+  color: var(--warning);
+  border: 1px solid var(--warning);
+}
+
+.badge-neutral {
   background: var(--surface);
   color: var(--text);
 }
-.badge-platinum.badge-outline {
+.badge-neutral.badge-outline {
   background: transparent;
   color: var(--muted);
   border: 1px solid var(--border);
 }
 
-.badge-amber {
-  background: var(--warning);
-  color: var(--bg);
-}
-
+/* subdued pulse — the hive is alive, not alarmed */
 .badge-live {
   position: relative;
 }
@@ -97,7 +103,7 @@ let {
   border-radius: 50%;
   margin-right: 3px;
   background: currentColor;
-  animation: live-pulse 2s ease-in-out infinite;
+  animation: live-pulse 2s var(--ease-in-out) infinite;
 }
 
 .sr-only {
@@ -115,7 +121,7 @@ let {
     opacity: 1;
   }
   50% {
-    opacity: 0.3;
+    opacity: 0.6;
   }
 }
 </style>

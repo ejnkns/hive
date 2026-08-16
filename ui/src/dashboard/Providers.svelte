@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { MetricData, ProviderPayload } from "shared/dashboard-types";
+import Button from "../shared/ui/Button.svelte";
 import { formatNumber, healthColor, sc } from "../shared/utils.ts";
 import ActivityLog from "./ActivityLog.svelte";
 import { groupProviders } from "./group-providers.ts";
@@ -73,13 +74,14 @@ function toggleConsole(name: string) {
             <span class="key-badge disabled">disabled</span>
           {/if}
           {#if group.keyConfigured}
-            <button
-              type="button"
+            <Button
+              variant="neutral"
+              size="small"
               class="toggle-btn"
               onclick={() => onToggleProvider?.(group.name, !group.disabled)}
             >
               {group.disabled ? "enable" : "disable"}
-            </button>
+            </Button>
           {/if}
         </div>
         <div class="wmet">
@@ -98,15 +100,14 @@ function toggleConsole(name: string) {
       </div>
 
       <div class="models-section">
-        <button
-          type="button"
+        <Button
+          variant="row"
           class="models-toggle"
           onclick={() => toggleModels(group.name)}
-          onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && toggleModels(group.name)}
         >
           <span>Models ({group.entries.length})</span>
           <span class="toggle-icon">{isModelsExpanded ? "▲" : "▼"}</span>
-        </button>
+        </Button>
         {#if isModelsExpanded}
           <div class="mrows">
             {#each group.entries as e}
@@ -192,15 +193,14 @@ function toggleConsole(name: string) {
 
       {#if group.keyConfigured}
         <div class="console-section">
-          <button
-            type="button"
+          <Button
+            variant="row"
             class="console-toggle"
             onclick={() => toggleConsole(group.name)}
-            onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && toggleConsole(group.name)}
           >
             <span>Provider Console</span>
             <span class="toggle-icon">{isExpanded ? "▲" : "▼"}</span>
-          </button>
+          </Button>
           {#if isExpanded}
             <div class="console-content">
               <ActivityLog
@@ -220,7 +220,7 @@ function toggleConsole(name: string) {
   padding: 1.5rem;
   text-align: center;
   color: var(--muted);
-  font-size: 0.8125rem;
+  font-size: var(--text-base);
 }
 .worker {
   background: var(--card);
@@ -243,11 +243,11 @@ function toggleConsole(name: string) {
   min-width: 150px;
 }
 .worker-name {
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: 700;
 }
 .key-badge {
-  font-size: 0.5625rem;
+  font-size: var(--text-xs);
   padding: 0.0625rem 0.375rem;
   font-weight: 700;
   border: 1px solid currentColor;
@@ -263,29 +263,14 @@ function toggleConsole(name: string) {
   background: transparent;
 }
 .key-badge.disabled {
-  color: #e2a93b;
-  border-color: #e2a93b;
-  background: rgba(226, 169, 59, 0.08);
-}
-.toggle-btn {
-  background: none;
-  border: 1px solid var(--border);
-  color: var(--muted);
-  font-family: monospace;
-  font-size: 0.5625rem;
-  cursor: pointer;
-  padding: 0.0625rem 0.375rem;
-  text-transform: uppercase;
-}
-.toggle-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  color: var(--warning);
+  border-color: var(--warning);
+  background: rgba(var(--warning-rgb), 0.08);
 }
 .rank-badge {
-  font-size: 0.625rem;
+  font-size: var(--text-xs);
   font-weight: 700;
   padding: 0.125rem 0.375rem;
-  text-transform: uppercase;
   flex-shrink: 0;
 }
 .wmet {
@@ -299,9 +284,8 @@ function toggleConsole(name: string) {
   min-width: 60px;
 }
 .wmet-item .l {
-  font-size: 0.5625rem;
+  font-size: var(--text-xs);
   color: var(--muted);
-  text-transform: uppercase;
 }
 .wmet-item .v {
   font-size: 0.875rem;
@@ -312,22 +296,8 @@ function toggleConsole(name: string) {
   border-top: 1px solid var(--border);
   padding-top: 0.5rem;
 }
-.models-toggle {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  color: var(--muted);
-  text-transform: uppercase;
-  cursor: pointer;
-  padding: 0.25rem 0.5rem;
-  background: rgba(var(--border-rgb), 0.15);
-  user-select: none;
-}
-.models-toggle:hover {
-  color: var(--accent);
-  background: rgba(var(--border-rgb), 0.25);
+.toggle-icon {
+  font-size: var(--text-xs);
 }
 .mrows {
   border-top: 1px solid var(--border);
@@ -340,7 +310,7 @@ function toggleConsole(name: string) {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   padding: 0.25rem 0.5rem;
   background: rgba(var(--border-rgb), 0.1);
   border: 1px solid rgba(var(--border-rgb), 0.3);
@@ -354,9 +324,9 @@ function toggleConsole(name: string) {
   justify-content: space-between;
 }
 .mname {
-  color: var(--accent);
-  font-family: monospace;
-  font-size: 0.6875rem;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
   font-weight: 500;
   display: inline-flex;
   align-items: center;
@@ -366,7 +336,7 @@ function toggleConsole(name: string) {
   display: flex;
   gap: 0.75rem;
   color: var(--muted);
-  font-size: 0.625rem;
+  font-size: var(--text-xs);
   align-items: center;
 }
 .health-dot {
@@ -402,23 +372,6 @@ function toggleConsole(name: string) {
   border-top: 1px solid var(--border);
   padding-top: 0.5rem;
 }
-.console-toggle {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  color: var(--muted);
-  text-transform: uppercase;
-  cursor: pointer;
-  padding: 0.25rem 0.5rem;
-  background: rgba(var(--border-rgb), 0.15);
-  user-select: none;
-}
-.console-toggle:hover {
-  color: var(--accent);
-  background: rgba(var(--border-rgb), 0.25);
-}
 .console-content {
   margin-top: 0.5rem;
   border: 1px solid var(--border);
@@ -427,11 +380,10 @@ function toggleConsole(name: string) {
 
 .badge {
   display: inline-block;
-  font-size: 0.5rem;
+  font-size: var(--text-xs);
   font-weight: 700;
   padding: 0.0625rem 0.25rem;
-  text-transform: uppercase;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
 }
 .badge.tripped {
   background: rgba(var(--error-rgb), 0.15);
@@ -439,11 +391,11 @@ function toggleConsole(name: string) {
 }
 .badge.unsupported {
   background: rgba(var(--accent-rgb), 0.15);
-  color: var(--accent);
+  color: var(--text);
 }
 .badge.pinned {
   background: rgba(var(--accent-rgb), 0.15);
-  color: var(--accent);
+  color: var(--text);
   border: 1px solid var(--accent);
 }
 </style>

@@ -257,7 +257,7 @@ async function performStreamingRequest(
         }}
       />
       <Button
-        variant="mint"
+        variant="accent"
         onclick={submitPrompt}
         disabled={isStreaming || !promptInput.trim()}
       >
@@ -294,7 +294,7 @@ async function performStreamingRequest(
   max-width: 600px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 1rem;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   z-index: 9999;
@@ -314,13 +314,13 @@ async function performStreamingRequest(
 .msg {
   font-size: 0.8rem;
   padding: 0.25rem 0.5rem;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: rgba(0, 0, 0, 0.05);
 }
 
 .user-msg {
   font-weight: 500;
-  color: var(--accent);
+  color: var(--text);
 }
 
 .assistant-msg {
