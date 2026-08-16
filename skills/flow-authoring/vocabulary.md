@@ -7,13 +7,14 @@ The flow definition is the single pure-data artifact: `export const flow: FlowDe
   label: "Review Flow",
   description: "optional",
   configSchema: [ { key: "basePath", label: "Base path", type: "string", required: true } ],
+  flowState: [ { field: "taxonomy", type: "object" } ],   // optional (E2); the flow's declared cross-entity state — field + type like instanceState (object/object[] for structured values). FlowState writes (patchFlowState ops and toFlowState edge transforms) are validated against these fields; cross-entity data lives here, never duplicated on instances
   domainDir: ".review-flow",     // optional; defaults to .<definition-id>
   ui: { "view": "board", "kinds": [ { kind: "score", contract: { props: [...] } } ], "components": { "idea-card": "<Lit module source>" } },  // optional
   workflows: [ WORKFLOW, ... ],
   edges: [ EDGE, ... ],          // optional
   actions: [ FLOW_ACTION, ... ], // optional
   tools: [ { id: "websearch", ref: "./tools/websearch.ts", writes: ["result"] } ],  // optional; custom tools implemented as referenced files. "writes" declares the instance-state fields the tool executors patch (the read↔write invariant counts them as writers; the gate verifies the declared writes against the actual executor bodies)
-  operations: [ { id: "score", ref: "./ops/score.ts", writes: ["score"] } ],       // optional; custom operations implemented as referenced files (same writer rule)
+  operations: [ { id: "score", ref: "./ops/score.ts", writes: ["score"], writesAcross: [ { workflow: "ideas", fields: ["category"] } ] } ],       // optional; custom operations implemented as referenced files (same writer rule). "writesAcross" (E1) declares the instance-state fields the op patches on SIBLING instances of another workflow via ctx.patchInstanceState(instanceId, patch) — the validator checks the fields against the target workflow's instanceState, and the module-set gate verifies the actual op body against the declaration
   dependencies: [ "axios" ],     // optional; external packages the referenced files may import (the import policy)
 }
 
@@ -25,7 +26,7 @@ WORKFLOW: {
   terminalStates: ["done"],
   states: [ STATE, ... ],
   instance: { title: "title" },   // optional; dotted path into instanceState
-  ui: { view: "board", columns: [ { id: "ready", label: "Ready", states: ["ready"] } ], instanceComponent: "idea-card" },  // optional; instanceComponent is a served component id (a key of the flow's ui.components)
+  ui: { view: "board", columns: [ { id: "ready", label: "Ready", states: ["ready"] } ], groupByField: "category", instanceComponent: "idea-card" },  // optional; instanceComponent is a served component id (a key of the flow's ui.components). groupByField (E3) partitions the board by the distinct values of a declared instance-state field — one column per value plus an "Uncategorized" column for empties. A GENERIC partition: the engine never reads or interprets the values (no labels, ordering, or semantics — column ids/labels are the raw values; the domain maps values to labels via display hints). Mutually exclusive with columns
   display: { fields: [ { path: "description", label: "Description", render: "markdown" } ] },  // optional; a field may add "render" or "derive" (see DERIVED DISPLAY below) — render is a builtin kind ("markdown"/"text"/"card"/"cards"/"json") as a bare string OR the object form { kind, props } binding prop names to dotted paths. Custom kinds declared in the flow's ui.kinds are also valid
   editFields: [ CONFIG FIELD, ... ]  // optional; the instance-state fields a user may edit in place via the "Edit details" form. Keys MUST be declared in instanceState. Each entry is a CONFIG FIELD (below)
 }
@@ -35,6 +36,7 @@ CONFIG FIELD (configSchema entries and createInstance "fields"; validated — ty
   // textarea: multiline string. date: "YYYY-MM-DD". datetime: "YYYY-MM-DDTHH:mm".
   // string[]: multi-select; with "options" a closed set (each chosen value must be in it), without a free tag list.
   // "options": ["a", "b"] on a string field renders a single select; on string[] a multi-select.
+  // "optionsFrom": { flowState: "taxonomy.categories" } (E4): dynamic select options sourced from flowState at runtime (e.g. the AI-proposed category taxonomy drives the human edit UI). The path's first segment must be a declared flowState field; the server resolves it to options when serializing instance entries; when flowState lacks the value the field falls back to free text. Mutually exclusive with static "options".
   // "placeholder": "…" (input placeholder) and "defaultValue": … (pre-fill) are optional on any field.
 
 DERIVED DISPLAY (optional "derive" on a display field; computes from the resolved path value — an array):
@@ -89,6 +91,7 @@ STATE_ACTION: {
   newAttempt: true,               // optional: engine bumps the attempt counter and discards the abandoned workspace
   completesRunningTask: true,     // optional: a human "Done" ends a running ai-chat session; the transcript is the output
   dependsOnState: "done",         // optional: engine blocks until instances reach this state
+  deletesInstance: true,          // optional (E5): destructive-only, no transitionTo — the action removes the instance from the flow when it fires (controller dropped, persisted state deleted, instance_removed emitted; the board drops it). Title-based references to the removed instance go stale gracefully
   confirmText: "Archive permanently?",  // optional: custom wording for the two-click confirm. Destructive variants confirm by default; declaring it adds a confirm step to any variant. Pair with "fields" for the "confirm + reason" pattern (collect a justification, then confirm)
   createInstance: { workflowId: "items", fields: [ { key: "title", label: "Title", type: "string", required: true } ] }  // optional
 }
@@ -105,7 +108,7 @@ GATE (structured predicates — NO expression language, one of):
   { kind: "taskOutputEquals", task: "runAgent", path: "output.completion.outcome", value: "approved" }   // path MUST start with "output"
   { kind: "instanceStateEquals", field: "verdict", value: "approved" }   // field declared in instanceState; scalar value must match its type
   { kind: "errorCountAtLeast", task: "validateCompletion", count: 3 }
-  { kind: "file", ref: "./gates/approved.ts" }   // a gate implemented in a referenced file: the file exports (ctx) => boolean, and the engine calls it with the runtime gate context. Keep the transition in a state whose tasks are all complete — auto-transitions evaluate after each task
+  { kind: "file", ref: "./gates/approved.ts" }   // a gate implemented in a referenced file: the file exports (ctx) => boolean (type it `GateContract<IdeaState, FlowState>` to bind the flow's own state types — instance and flowState fields become typed, no casts; keep fields optional, since a field is genuinely undefined until its writer runs, and guard with ??/?. — runtime truth, not type noise). The engine evaluates it with the runtime gate context; a gate that throws evaluates as FALSE (fail-safe: it says "no", it never errors the completing task). Keep the transition in a state whose tasks are all complete — auto-transitions evaluate after each task
   { kind: "not", gate: GATE } | { kind: "and", gates: [ GATE, ... ] } | { kind: "or", gates: [ GATE, ... ] }
 
 VALUE SOURCES (patch and edge field values):
@@ -113,16 +116,28 @@ VALUE SOURCES (patch and edge field values):
   { kind: "taskOutput", task: "runAgent", path: "output.verdict" }   // dotted path into the task's outcome
   { kind: "instanceId" }                     // patch ops only, string fields only
 
+OPERATION CONTEXT (what a referenced operation receives via ctx — E1/E6/E2):
+  ctx.workflowInstanceState() / ctx.patchWorkflowInstanceState(patch)   // own instance state
+  ctx.flowState() / ctx.patchFlowState(patch)                          // flow-level state (E2): read + write the flow's declared cross-entity state (e.g. the taxonomy). The write mirrors patchFlowConfig — persists + emits flow_state_changed. Declare the fields in the definition's flowState; the module-set gate rejects an undeclared patchFlowState key
+  ctx.workflowInstancesInState()                                      // every instance of the flow; each carries id + workflowId + currentState + workflowInstanceState
+  ctx.workflowInstancesInState("ideas")                              // filter by workflow (E6): every ideas instance
+  ctx.workflowInstancesInState(undefined, "done")                    // filter by state: every done instance of any workflow
+  ctx.workflowInstancesInState("ideas", "done")                      // both filters
+  ctx.patchInstanceState(instanceId, patch)                           // cross-instance write (E1): patches a SIBLING instance's declared state, same-flow only. Returns false for an unknown id (a NOOP the op handles); throws on a field the target workflow's instanceState does not declare. The write persists and emits like an own-instance patch. Every sibling write must be declared in the operation's writesAcross — the module-set gate rejects undeclared ones.
+  ctx.flowConfig() / ctx.patchFlowConfig(patch) / ctx.taskOutputs()   // flow config and completed sibling task outputs
+
 EDGE: {
   fromWorkflow: "planning", fromStates: ["done"], toWorkflow: "items",
   fields: { title: { kind: "taskOutput", task: "planWork", path: "output" } },   // optional
   fanOut: { task: "planWork", path: "output.items", fields: { title: { kind: "itemPath", path: "title" }, dependsOn: { kind: "itemPath", path: "dependencies" } } }  // optional; one items instance per array item
   transform: { ref: "./edges/to-summary.ts", fields: ["title", "body"] }  // optional; the edge transform implemented in a referenced file (mutually exclusive with fields/fanOut). "fields" declares the target instance-state fields the transform produces
+  toFlowState: true,   // optional (E2): the transform output updates flowState instead of creating instances — no toWorkflow. The transform's declared fields must be declared flowState fields. Edges (incl. toFlowState) fire only on terminal states; write flowState mid-lifecycle with a patchFlowState op instead
 }
 
 CONSTRAINTS (the validator rejects violations; fix them in the same definition):
-- Every instance-state field that is READ (gates, instance/display hints, inputFromInstanceState, "@instance:" refs, dependsOnState) must have a WRITER: a patch op on an operation task, an edge field into that workflow, a createInstance payload key, or an engine op. Fields the engine provides (worktreePath, branchName, attempt) need no writer.
-- Every write (patch key, edge field, createInstance key) must be declared in the target workflow's instanceState.
+- Every instance-state field that is READ (gates, instance/display hints, inputFromInstanceState, "@instance:" refs, dependsOnState) must have a WRITER: a patch op on an operation task, an edge field into that workflow, a createInstance payload key, an engine op, or a cross-instance write declared in an op's writesAcross. Fields the engine provides (worktreePath, branchName, attempt) need no writer.
+- Every write (patch key, edge field, createInstance key, writesAcross field) must be declared in the target workflow's instanceState.
+- Every state action declares transitionTo or deletesInstance (a deletesInstance action is destructive-only and mutually exclusive with transitionTo).
 - Only engine operations and infrastructure tools from the capabilities list may be referenced.
 - completionTool must be a tool the task can call — UNLESS the task declares "completionOutput", in which case the compiler generates the completion tool and completionTool must be omitted.
 - gate taskOutputEquals paths start with "output" (the task's output); reads of a completionOutput task's output must reference a declared field through the role's wrapper (ai-task: output.<field>; ai-chat: output.completion.<field>).
