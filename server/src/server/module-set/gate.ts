@@ -49,7 +49,11 @@ export async function runDefinitionModuleGate(
   }
 
   // 1b. Import policy.
-  const importFindings = lintImportPolicy(definition.dependencies ?? [], dir);
+  const importFindings = lintImportPolicy(
+    definition.dependencies ?? [],
+    dir,
+    collectDefinitionRefs(definition)
+  );
   if (importFindings.length > 0) {
     return {
       dir,

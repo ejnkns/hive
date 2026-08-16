@@ -413,6 +413,120 @@ async function waitFor(
 
 // ─── tests ────────────────────────────────────────────────────────────
 
+describe("module-set components (served modules)", () => {
+  // A definition declaring a ref-form served component (the primary
+  // authoring path): the module is a module-set member with the same
+  // lifecycle as a tool/operation file — linted, import-policied,
+  // typechecked, and loadable.
+  const COMPONENT_MODULE = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "componentModuleFlow",
+  label: "Component Module Flow",
+  configSchema: [],
+  ui: {
+    components: {
+      "ticket-card": { ref: "./ui/ticket-card.ts" },
+    },
+  },
+  workflows: [
+    {
+      id: "tickets",
+      label: "Tickets",
+      instanceState: [],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
+        { id: "new", label: "New", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  edges: [],
+};
+`;
+  const COMPONENT_DEFINITION = parseDefinition(COMPONENT_MODULE).definition;
+
+  // A contract-clean component module: default-export factory, type-only
+  // imports from the allowlist (lit + the engine contract types).
+  const IMPLEMENTED_COMPONENT = `import type { LitElement } from "lit";
+import type {
+  FlowComponentDeps,
+  FlowComponentRegistrations,
+} from "workflow-engine/workflow-types";
+
+export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
+  const { LitElement: Base, html } = lit;
+  class TicketCard extends Base {
+    render() {
+      return html\`<div class="ticket">ticket</div>\`;
+    }
+  }
+  return { components: { "ticket-card": TicketCard } };
+}
+`;
+
+  it("lints a component module clean and reports a missing default export", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "hive-module-set-"));
+    try {
+      await writeModuleSetFiles(dir, {
+        "./ui/ticket-card.ts": IMPLEMENTED_COMPONENT,
+      });
+      const clean = lintModuleSet(
+        collectDefinitionRefs(COMPONENT_DEFINITION),
+        dir
+      );
+      assert.deepEqual(clean, []);
+
+      // The file exists but has no default export: the lint reports it.
+      await writeModuleSetFiles(dir, {
+        "./ui/ticket-card.ts": "export const notAFactory = 42;\n",
+      });
+      const findings = lintModuleSet(
+        collectDefinitionRefs(COMPONENT_DEFINITION),
+        dir
+      );
+      assert.ok(
+        findings.some((f) => f.message.includes("default export")),
+        `expected a default-export finding, got ${JSON.stringify(findings)}`
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a component module with a value import (served modules are import-free)", async () => {
+    const VALUE_IMPORT_COMPONENT = `import { LitElement } from "lit";
+
+export default function (lit) {
+  return { components: {} };
+}
+`;
+    const result = await runDefinitionModuleGate(
+      "module-set-component-value-import",
+      COMPONENT_DEFINITION,
+      COMPONENT_MODULE,
+      { "./ui/ticket-card.ts": VALUE_IMPORT_COMPONENT }
+    );
+    assert.ok(
+      result.errors.some(
+        (e) => e.includes("ticket-card.ts") && e.includes("value import")
+      ),
+      `expected a value-import finding, got ${JSON.stringify(result.errors)}`
+    );
+  });
+
+  it("passes a component module whose type-only imports come from the allowlist (lit + engine types)", async () => {
+    const result = await runDefinitionModuleGate(
+      "module-set-component-clean",
+      COMPONENT_DEFINITION,
+      COMPONENT_MODULE,
+      { "./ui/ticket-card.ts": IMPLEMENTED_COMPONENT }
+    );
+    assert.deepEqual(result.errors, [], `got ${JSON.stringify(result.errors)}`);
+  });
+});
+
 describe("module-set pipeline (definition modules)", () => {
   it("lints an implemented definition clean and reports a missing referenced file", async () => {
     const dir = mkdtempSync(join(tmpdir(), "hive-module-set-"));

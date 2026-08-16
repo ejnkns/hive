@@ -259,6 +259,39 @@ describe("compileFlowDefinition", () => {
     );
   });
 
+  it("collects ref-form served components as component refs and skips inline source", () => {
+    const withComponents: FlowDefinition = {
+      ...reviewFlow,
+      ui: {
+        components: {
+          "ticket-card": { ref: "./ui/ticket-card.ts" },
+          // An inline source string stays a served inline module — no ref.
+          legacy: "export default function (lit) { return {}; }",
+        },
+      },
+    };
+    const refs = collectDefinitionRefs(withComponents);
+    const components = refs.filter((ref) => ref.kind === "component");
+    assert.deepEqual(
+      components.map(({ kind, ref, id, path, exportName }) => ({
+        kind,
+        ref,
+        id,
+        path,
+        exportName,
+      })),
+      [
+        {
+          kind: "component",
+          ref: "./ui/ticket-card.ts",
+          id: "ticket-card",
+          path: 'ui.components["ticket-card"]',
+          exportName: "default",
+        },
+      ]
+    );
+  });
+
   it("compiles a pure-data definition into the runtime projection", () => {
     const compiled = compileFlowDefinition(reviewFlow, makeResolver());
     assert.equal(compiled.id, "reviewFlow");

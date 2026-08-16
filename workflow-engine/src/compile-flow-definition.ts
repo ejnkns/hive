@@ -94,6 +94,17 @@ export type DefinitionReference =
       workflowId: string;
       taskId: string;
       path: string;
+    }
+  | {
+      kind: "component";
+      ref: string;
+      // The component module contract is a default-export factory (the lit
+      // runtime is injected); the module-set lint pins the default export.
+      exportName: "default";
+      // The component id — the ui.components key the definition and the
+      // serve path both key on.
+      id: string;
+      path: string;
     };
 
 // ─── ref naming (the reference-identity authority) ────────────────────
@@ -191,6 +202,16 @@ export function collectDefinitionRefs(
       exportName: refExportName("operation", { id: op.id, ref: op.ref }),
       id: op.id,
       path: `operations[${oIndex}]`,
+    });
+  }
+  for (const [componentId, spec] of Object.entries(form.ui?.components ?? {})) {
+    if (typeof spec === "string") continue;
+    add({
+      kind: "component",
+      ref: spec.ref,
+      exportName: "default",
+      id: componentId,
+      path: `ui.components["${componentId}"]`,
     });
   }
   for (const [wfIndex, wf] of form.workflows.entries()) {

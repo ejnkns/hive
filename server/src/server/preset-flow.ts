@@ -23,8 +23,8 @@ export function presetRoot(presetName: string): string {
 
 // Reads a preset package's referenced TypeScript sources as the module set's
 // file map (relative path → source, `./`-prefixed like the module-set lint
-// reports). The definition module (flow.ts) and the design artifacts
-// (the component-source module ideas-card.ts) are not module-set members. Degrades to an empty set (a built-in without viewable source) when
+// reports). The definition module (flow.ts) is not a module-set member.
+// Degrades to an empty set (a built-in without viewable source) when
 // the preset directory is not available (e.g. a packaged-only install).
 export function readPresetModuleSetFiles(
   presetName: string
@@ -36,11 +36,7 @@ export function readPresetModuleSetFiles(
       const full = join(dir, entry.name);
       if (entry.isDirectory()) {
         walk(full);
-      } else if (
-        entry.name.endsWith(".ts") &&
-        entry.name !== "flow.ts" &&
-        entry.name !== "ideas-card.ts"
-      ) {
+      } else if (entry.name.endsWith(".ts") && entry.name !== "flow.ts") {
         files[
           `./${full
             .slice(root.length + 1)

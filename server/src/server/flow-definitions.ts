@@ -244,13 +244,21 @@ function transpileComponentSource(source: string): string {
 }
 
 // The transpiled ESM source for a definition's declared component, or
-// undefined when the definition (or the component id) is unknown.
+// undefined when the definition (or the component id) is unknown. An inline
+// source string is served as-is; a ref-form component ({ ref }) resolves the
+// file from the definition's module-set file map (the same authority the
+// editor tabs and the refs endpoint derive from).
 export function getDefinitionComponentSource(
   definitionId: string,
   componentId: string
 ): string | undefined {
-  const definition = getFlowDefinition(definitionId);
-  const source = definition?.ui?.components?.[componentId];
+  const record = definitions.get(definitionId);
+  const spec =
+    record?.definition?.ui?.components?.[componentId] ??
+    record?.flow.ui?.components?.[componentId];
+  if (typeof spec === "string") return transpileComponentSource(spec);
+  if (spec === undefined || record?.files === undefined) return undefined;
+  const source = record.files[spec.ref];
   if (source === undefined) return undefined;
   return transpileComponentSource(source);
 }

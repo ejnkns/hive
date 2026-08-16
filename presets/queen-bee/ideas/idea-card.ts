@@ -1,13 +1,22 @@
-/** The served-at-runtime ideas card module source. */
-// A standalone module (no value imports): the rendering surface injects its
-// lit runtime through the default factory's argument and registers whatever
-// the factory returns. See ROADMAP "Custom components" and
-// ui/src/flow-rendering/load-flow-components.ts for the contract.
+/** The served ideas card module (FlowDefinition.ui.components "idea-card").
+ * A standalone erasable-syntax module: type-only imports from the module-set
+ * allowlist (lit + the engine contract types), default-export factory
+ * receiving the app's lit runtime. The module-set gate lints, import-policies,
+ * and typechecks this file; the server strips types and serves it at the
+ * component route; the rendering surface blob-imports and registers whatever
+ * the factory returns. */
 
-export const ideaCardComponentSource = `export default function (lit) {
-  const { LitElement, html, css } = lit;
+import type { LitElement } from "lit";
+import type {
+  FlowComponentDeps,
+  FlowComponentRegistrations,
+  InstanceComponentProps,
+} from "workflow-engine/workflow-types";
 
-  class IdeaCard extends LitElement {
+export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
+  const { LitElement: Base, html, css } = lit;
+
+  class IdeaCard extends Base {
     static properties = {
       workflowDef: { attribute: false },
       instanceEntry: { attribute: false },
@@ -15,7 +24,7 @@ export const ideaCardComponentSource = `export default function (lit) {
       onSendMessage: { attribute: false },
     };
 
-    static styles = css\`
+    static styles = css`
       :host {
         display: block;
       }
@@ -86,7 +95,14 @@ export const ideaCardComponentSource = `export default function (lit) {
         flex-wrap: wrap;
         gap: 0.375rem;
       }
-    \`;
+    `;
+
+    workflowDef!: InstanceComponentProps["workflowDef"];
+    instanceEntry!: InstanceComponentProps["instanceEntry"];
+    onAction: InstanceComponentProps["onAction"] | undefined = undefined;
+    onSendMessage: InstanceComponentProps["onSendMessage"] | undefined =
+      undefined;
+    input = "";
 
     render() {
       const state = this.instanceEntry.state;
@@ -96,65 +112,67 @@ export const ideaCardComponentSource = `export default function (lit) {
       );
       const elaborate = state.taskOutputs.elaborate;
       const spec =
-        elaborate !== undefined &&
-        elaborate.status === "success" &&
-        elaborate.output !== undefined
-          ? (elaborate.output.elaboratedSpec ?? "")
+        elaborate !== undefined && elaborate.status === "success"
+          ? readOutputString(elaborate.output, "elaboratedSpec")
           : "";
       const actions = this.instanceEntry.availableActions ?? [];
       const running =
         state.hasRunningTask && state.runningTaskContext !== null
           ? state.runningTaskContext
           : null;
-      return html\`
+      return html`
         <div class="idea">
-          <div class="idea-title">\${title}</div>
+          <div class="idea-title">${title}</div>
           <div class="idea-state">
-            \${stateDef !== undefined ? stateDef.label : state.currentState}
+            ${stateDef !== undefined ? stateDef.label : state.currentState}
           </div>
-          \${running !== null && running.role === "ai-chat"
-            ? html\`<div class="idea-chat">
-                \${(running.messages ?? []).map(
+          ${
+            running !== null && running.role === "ai-chat"
+              ? html`<div class="idea-chat">
+                ${(running.messages ?? []).map(
                   (m) =>
-                    html\`<div class="idea-msg">\${m.role}: \${m.content}</div>\`
+                    html`<div class="idea-msg">${m.role}: ${m.content}</div>`
                 )}
                 <div class="idea-input-row">
                   <input
                     placeholder="Message the elaborating agent..."
-                    @input=\${(e) => {
-                      this.input = e.target.value;
+                    @input=${(e: Event) => {
+                      this.input = (e.target as HTMLInputElement).value;
                     }}
-                    @keydown=\${(e) => {
+                    @keydown=${(e: KeyboardEvent) => {
                       if (e.key === "Enter") this.send();
                     }}
                   />
                   <button
-                    @click=\${() => {
+                    @click=${() => {
                       this.send();
                     }}
                   >
                     Send
                   </button>
                 </div>
-              </div>\`
-            : ""}
-          \${spec !== "" ? html\`<pre class="idea-spec">\${spec}</pre>\` : ""}
-          \${actions.length > 0
-            ? html\`<div class="idea-actions">
-                \${actions.map(
+              </div>`
+              : ""
+          }
+          ${spec !== "" ? html`<pre class="idea-spec">${spec}</pre>` : ""}
+          ${
+            actions.length > 0
+              ? html`<div class="idea-actions">
+                ${actions.map(
                   (a) =>
-                    html\`<button
-                      @click=\${() => {
+                    html`<button
+                      @click=${() => {
                         if (this.onAction !== undefined) this.onAction(a.id);
                       }}
                     >
-                      \${a.label}
-                    </button>\`
+                      ${a.label}
+                    </button>`
                 )}
-              </div>\`
-            : ""}
+              </div>`
+              : ""
+          }
         </div>
-      \`;
+      `;
     }
 
     send() {
@@ -168,4 +186,12 @@ export const ideaCardComponentSource = `export default function (lit) {
 
   return { components: { "idea-card": IdeaCard } };
 }
-`;
+
+// Reads a string field off a task-completion output object (the task output
+// shape is open; the read is defensive — an absent or non-string value is
+// rendered as empty).
+function readOutputString(output: unknown, field: string): string {
+  if (output === null || typeof output !== "object") return "";
+  const value = (output as Record<string, unknown>)[field];
+  return typeof value === "string" ? value : "";
+}

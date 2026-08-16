@@ -48,6 +48,12 @@ export type FlowThemeSpec = {
   emblem?: string;
 };
 
+// A served component module: either inline erasable-syntax source (the
+// legacy form — served transpiled as-is) or a definition ref to a module
+// file (the primary authoring path — same ref lifecycle as tools/operations:
+// collected into the module set, linted, typechecked, and served stripped).
+export type ServedComponentSpec = string | { ref: string };
+
 // === FLOW DEFINITION (the pure-data authoring artifact) ===
 
 // The complete description of one flow type, as data: its workflows, the
@@ -77,12 +83,11 @@ export type FlowDefinition = {
     // surface validates resolved props against each contract and falls back to
     // json on mismatch.
     kinds?: CustomRenderKind[];
-    // Served-at-runtime component modules: component id → TypeScript module
-    // source (erasable syntax). Each module default-exports a factory that
-    // receives the app's lit runtime and returns the component/kinds it
-    // registers. Opaque to the engine — the server transpiles and serves it;
-    // the rendering surface fetches, evaluates, and registers the result.
-    components?: Record<string, string>;
+    // Served-at-runtime component modules keyed by component id: either
+    // inline module source (legacy) or a module-file ref — the server
+    // transpiles and serves whichever form; the rendering surface fetches,
+    // evaluates, and registers the result. Opaque to the engine.
+    components?: Record<string, ServedComponentSpec>;
     // A flow-level layout hint (the surface may fall back).
     view?: WorkflowView;
     // Declarative theming tokens for the generic flow surfaces (flows-list
@@ -176,7 +181,7 @@ export type CompiledFlowDefinition = {
   // step unchanged).
   ui?: {
     kinds?: CustomRenderKind[];
-    components?: Record<string, string>;
+    components?: Record<string, ServedComponentSpec>;
     view?: WorkflowView;
     theme?: FlowThemeSpec;
   };

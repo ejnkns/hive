@@ -2139,6 +2139,82 @@ export const flow: FlowDefinition = {
     rmSync(definitionsDir, { recursive: true, force: true });
   });
 
+  it("serves a ref-form component from its module-set file, stripped", async () => {
+    setFlowPersistence(noopPersistence);
+    const definitionsDir = mkdtempSync(join(tmpdir(), "hive-defs-"));
+    setDefinitionsBasePathForTest(definitionsDir);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const refComponentFlowSource = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "ref-component-flow",
+  label: "Ref Component Flow",
+  configSchema: [],
+  ui: {
+    components: {
+      "ticket-card": { ref: "./ui/ticket-card.ts" },
+    },
+  },
+  workflows: [
+    {
+      id: "tickets",
+      label: "Tickets",
+      instanceState: [],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
+        { id: "new", label: "New", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  edges: [],
+};
+`;
+    const ticketCardSource =
+      'import type { FlowComponentDeps } from "workflow-engine/workflow-types";\n\n' +
+      "export default function (lit: FlowComponentDeps) {\n" +
+      "  const { LitElement } = lit;\n" +
+      '  return { components: { "ticket-card": class TicketCard extends LitElement {} } };\n' +
+      "}\n";
+
+    await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions",
+      body: {
+        name: "Ref Component Flow",
+        source: refComponentFlowSource,
+        files: { "./ui/ticket-card.ts": ticketCardSource },
+      },
+    });
+
+    const response = await server.inject({
+      method: "GET",
+      url: "/api/flows/definitions/ref-component-flow/components/ticket-card",
+    });
+    assert.equal(response.statusCode, 200);
+    assert.match(response.headers["content-type"] ?? "", /text\/javascript/);
+    assert.ok(
+      response.body.includes("TicketCard"),
+      "serves the ref file's module source"
+    );
+    assert.ok(
+      !response.body.includes("FlowComponentDeps"),
+      "type-only imports are stripped from the served module"
+    );
+
+    const missing = await server.inject({
+      method: "GET",
+      url: "/api/flows/definitions/ref-component-flow/components/unknown",
+    });
+    assert.equal(missing.statusCode, 404);
+
+    rmSync(definitionsDir, { recursive: true, force: true });
+  });
+
   it("flow payloads list the definition's declared components with serve paths", async () => {
     setFlowPersistence(noopPersistence);
     const definitionsDir = mkdtempSync(join(tmpdir(), "hive-defs-"));

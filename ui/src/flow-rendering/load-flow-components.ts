@@ -1,7 +1,12 @@
 /** @public — loads and registers a definition's served-at-runtime components. */
 
 import { css, html, LitElement, nothing } from "lit";
-import type { ElementConstructor } from "./components/dynamic-element-host.ts";
+import type {
+  ElementConstructor,
+  FlowComponentDeps,
+  FlowComponentModule,
+  FlowComponentRegistrations,
+} from "workflow-engine/workflow-types";
 import {
   getComponentRenderer,
   getKindRenderer,
@@ -11,27 +16,14 @@ import {
   unregisterKindRenderer,
 } from "./renderer-registry.ts";
 
-// The lit runtime handed to a served component factory. A served module is
-// evaluated as a standalone blob module (no imports), so the factory receives
-// everything it needs to build Lit custom elements.
-export type FlowComponentDeps = {
-  LitElement: typeof LitElement;
-  html: typeof html;
-  css: typeof css;
-  nothing: typeof nothing;
-};
-
-// The registrations a served component module returns: instance components
-// (resolved by WorkflowConfig.ui.instanceComponent) and kind renderers
-// (resolved by custom render hints).
-export type FlowComponentRegistrations = {
-  components?: Record<string, ElementConstructor>;
-  kinds?: Record<string, ElementConstructor>;
-};
-
-// The served module's contract: a default export factory.
-export type FlowComponentModule = {
-  default?: (deps: FlowComponentDeps) => FlowComponentRegistrations;
+// The served-module contract types now live in the engine (the allowlist the
+// module-set gate typechecks component files against); the UI re-exports them
+// unchanged so the rendering surface keeps one import surface.
+export type {
+  ElementConstructor,
+  FlowComponentDeps,
+  FlowComponentModule,
+  FlowComponentRegistrations,
 };
 
 // Evaluates a served module's transpiled source into its module record. The

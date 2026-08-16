@@ -1,6 +1,7 @@
 import { css, html, LitElement } from "lit";
+import type { ElementConstructor } from "workflow-engine/workflow-types";
 
-export type ElementConstructor = new () => HTMLElement;
+export type { ElementConstructor };
 
 // Mounts an element class instance with the given props into its own shadow
 // root. The instance is reused across renders while the class stays the same

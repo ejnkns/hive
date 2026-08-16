@@ -30,6 +30,7 @@
   "devDependencies": {
     "@types/node": "^26.1.0",
     "@types/ws": "^8.18.1",
-    "tsdown": "^0.22.14"
+    "tsdown": "^0.22.14",
+    "lit": "^3.3.3"
   }
 }

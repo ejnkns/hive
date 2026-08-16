@@ -35,6 +35,33 @@ export const flow: FlowDefinition = {
 `;
 }
 
+// A minimal definition module whose ui.components block is swapped per test.
+function componentsModule(components: string): string {
+  return `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "componentsFlow",
+  label: "Components Flow",
+  configSchema: [],
+  ui: { components: ${components} },
+  workflows: [
+    {
+      id: "items",
+      label: "Items",
+      instanceState: [],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
+        { id: "new", label: "New", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  edges: [],
+};
+`;
+}
+
 describe("parseDefinition ui.theme", () => {
   it("parses a valid theme (accent + emblem) into the data definition", () => {
     const { definition, findings } = parseDefinition(
@@ -93,5 +120,50 @@ describe("parseDefinition ui.theme", () => {
     const { definition, findings } = parseDefinition(themedModule("{}"));
     assert.deepEqual(findings, []);
     assert.equal(definition.ui, undefined);
+  });
+});
+
+describe("parseDefinition ui.components", () => {
+  it("parses an inline source string as the legacy component form", () => {
+    const { definition, findings } = parseDefinition(
+      componentsModule(
+        '{ "idea-card": "export default function (lit) { return {}; }" }'
+      )
+    );
+    assert.deepEqual(findings, []);
+    assert.deepEqual(definition.ui?.components, {
+      "idea-card": "export default function (lit) { return {}; }",
+    });
+  });
+
+  it("parses a ref-form component ({ ref }) into the data definition", () => {
+    const { definition, findings } = parseDefinition(
+      componentsModule('{ "ticket-card": { ref: "./ui/ticket-card.ts" } }')
+    );
+    assert.deepEqual(findings, []);
+    assert.deepEqual(definition.ui?.components, {
+      "ticket-card": { ref: "./ui/ticket-card.ts" },
+    });
+  });
+
+  it("flags a non-data component value as an advisory and ignores it", () => {
+    const { definition, findings } = parseDefinition(
+      componentsModule(
+        '{ "broken": 42, "ticket-card": { ref: "./ui/ticket-card.ts" } }'
+      )
+    );
+    assert.ok(
+      findings.some(
+        (f) =>
+          f.includes("flow.ui.components") &&
+          f.includes('"broken"') &&
+          f.includes("source string or a { ref }")
+      ),
+      `expected a component finding, got: ${findings.join("; ")}`
+    );
+    // The representable ref survives; the bad entry is dropped.
+    assert.deepEqual(definition.ui?.components, {
+      "ticket-card": { ref: "./ui/ticket-card.ts" },
+    });
   });
 });

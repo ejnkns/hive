@@ -82,6 +82,7 @@ export type {
   FlowLevelAction,
   FlowThemeSpec,
   RuntimeFlowEdge,
+  ServedComponentSpec,
   TransformContract,
 } from "./workflow-types/flow-definition.ts";
 export type {
@@ -103,6 +104,13 @@ export type {
   RuntimeRenderHint,
 } from "./workflow-types/render-hints.ts";
 export { builtinRenderContracts } from "./workflow-types/render-hints.ts";
+export type {
+  ElementConstructor,
+  FlowComponentDeps,
+  FlowComponentModule,
+  FlowComponentRegistrations,
+  InstanceComponentProps,
+} from "./workflow-types/served-components.ts";
 export type {
   RuntimeStateDef,
   RuntimeWorkflowConfig,

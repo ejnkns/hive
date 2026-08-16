@@ -142,16 +142,20 @@ export function validateFlowDefinition(
     }
   }
   if (definition.ui?.components !== undefined) {
-    for (const [componentId, source] of Object.entries(
+    for (const [componentId, spec] of Object.entries(
       definition.ui.components
     )) {
       if (typeof componentId !== "string" || componentId.trim() === "") {
         error("ui.components", "component ids must be non-empty strings");
       }
+      // A served component is inline source (legacy) or a module-file ref
+      // ({ ref }); both must be non-empty.
+      const source =
+        typeof spec === "string" ? spec : (spec?.ref as string | undefined);
       if (typeof source !== "string" || source.trim() === "") {
         error(
           `ui.components.${componentId}`,
-          `component "${componentId}" must be a non-empty source string`
+          `component "${componentId}" must be a non-empty source string or a { ref } module reference`
         );
       }
     }

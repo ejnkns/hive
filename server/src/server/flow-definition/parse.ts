@@ -151,7 +151,7 @@ function parseFlow(
     }
     const componentsLiteral = readObject(flowUi, "components");
     if (componentsLiteral !== undefined) {
-      const components: Record<string, string> = {};
+      const components: NonNullable<typeof ui.components> = {};
       for (const prop of componentsLiteral.properties) {
         if (!ts.isPropertyAssignment(prop)) continue;
         const id = ts.isStringLiteral(prop.name)
@@ -160,14 +160,26 @@ function parseFlow(
             ? prop.name.text
             : undefined;
         const value = unwrap(prop.initializer);
-        const source = ts.isStringLiteral(value) ? value.text : undefined;
-        if (id === undefined || source === undefined) {
+        // A served component is either inline module source (the legacy form)
+        // or a ref to a module file ({ ref: "./ui/ticket-card.ts" } — the
+        // primary authoring path). Anything else is an advisory, ignored.
+        let spec: NonNullable<typeof ui.components>[string] | undefined;
+        if (
+          ts.isStringLiteral(value) ||
+          ts.isNoSubstitutionTemplateLiteral(value)
+        ) {
+          spec = value.text;
+        } else if (ts.isObjectLiteralExpression(value)) {
+          const ref = readString(value, "ref");
+          if (ref !== undefined) spec = { ref };
+        }
+        if (id === undefined || spec === undefined) {
           findings.push(
-            "flow.ui.components: not data — a served component must map an id to a source string"
+            `flow.ui.components: not data — "${id ?? "<unnamed>"}" must map to a source string or a { ref } module reference`
           );
           continue;
         }
-        components[id] = source;
+        components[id] = spec;
       }
       if (Object.keys(components).length > 0) ui.components = components;
     }

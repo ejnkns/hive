@@ -83,7 +83,9 @@ export function lintModuleSet(
     const detail = messages.join("; ");
     const message = detail.includes("has no exported member")
       ? `referenced file ${ref.ref} does not export "${ref.exportName}" — the entry imports that exact name (${detail})`
-      : `export "${ref.exportName}" in ${ref.ref} does not match the ${ref.kind} contract: ${detail}`;
+      : ref.kind === "component" && detail.includes("has no default export")
+        ? `referenced file ${ref.ref} does not export a default factory — the served component contract is a default-export factory (${detail})`
+        : `export "${ref.exportName}" in ${ref.ref} does not match the ${ref.kind} contract: ${detail}`;
     findings.push({ kind: ref.kind, ref: ref.ref, path: ref.path, message });
   }
   return findings;
@@ -111,5 +113,11 @@ function harnessSource(ref: DefinitionReference): string {
       // a non-string export fails the lint (an empty TODO stub passes — the
       // prompt-less analysis catches a task that never gets its prompt).
       return `import { ${ref.exportName} } from "${specifier}";\nconst _check: string = ${ref.exportName};\n`;
+    case "component":
+      // The served-module contract: a default-export factory receiving the
+      // app's lit runtime. The harness pins the default export to the
+      // contract type (a missing default export surfaces as "has no default
+      // export"; a non-factory as a contract mismatch).
+      return `import factory from "${specifier}";\nimport type { FlowComponentModule } from "workflow-engine/workflow-types";\nconst _check: NonNullable<FlowComponentModule["default"]> = factory;\n`;
   }
 }
