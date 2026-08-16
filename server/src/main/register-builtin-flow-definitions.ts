@@ -17,6 +17,7 @@ export async function registerBuiltinFlowDefinitions(): Promise<void> {
   // compiled projection (what runs) and the data form (the library view).
   await registerPresetDefinition("queen-bee");
   await registerPresetDefinition("wayfinder");
+  await registerPresetDefinition("honeycomb");
   // The flow-authoring session is a built-in definition but never shown in
   // the flow library — the definition editor drives it directly.
   registerFlowDefinition(authoringSessionFlow, { builtIn: true, hidden: true });

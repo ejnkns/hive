@@ -1,4 +1,4 @@
 {
   "extends": "../tsconfig.base.json",
-  "include": ["queen-bee/**/*.ts", "wayfinder/**/*.ts"]
+  "include": ["queen-bee/**/*.ts", "wayfinder/**/*.ts", "honeycomb/**/*.ts"]
 }

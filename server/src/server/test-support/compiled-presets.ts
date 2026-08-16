@@ -14,9 +14,15 @@ export const wayfinderCompiled: CompiledFlowDefinition = (
   await loadPresetDefinition("wayfinder")
 ).flow;
 
+export const honeycombCompiled: CompiledFlowDefinition = (
+  await loadPresetDefinition("honeycomb")
+).flow;
+
 // The static workflows of each preset (the compiled projection is always
 // static — the data form is; the union needs a guard at the access site).
 export const queenBeeWorkflows =
   "workflows" in queenBeeCompiled ? queenBeeCompiled.workflows : [];
 export const wayfinderWorkflows =
   "workflows" in wayfinderCompiled ? wayfinderCompiled.workflows : [];
+export const honeycombWorkflows =
+  "workflows" in honeycombCompiled ? honeycombCompiled.workflows : [];
