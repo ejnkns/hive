@@ -11,6 +11,7 @@ import "./flow-overview.ts";
 import { WorkflowInstanceCard } from "./workflow-instance-card.ts";
 import { computeFlowOverview } from "./workflow-instances/flow-overview.ts";
 import { groupInstancesByColumns } from "./workflow-instances/group-by-columns.ts";
+import { groupInstancesByField } from "./workflow-instances/group-by-field.ts";
 import { groupInstancesByState } from "./workflow-instances/group-by-state.ts";
 
 // The structural column shape the grouping modules return; declared locally
@@ -299,13 +300,19 @@ export class WorkflowInstances extends LitElement {
     this.requestUpdate();
   }
 
-  // Board grouping: curated columns when the definition declares them (the
+  // Board grouping: field-value partition when the definition declares
+  // groupByField (E3 — the generic engine partitions; it never interprets
+  // values), curated columns when the definition declares them (the
   // definition renders its canonical lanes), otherwise the default derived
   // board — one column per state.
   private groupBoard(
     def: WorkflowDefResponse,
     entries: WorkflowInstanceEntry[]
   ): Column[] {
+    const groupByField = def.ui?.groupByField;
+    if (groupByField !== undefined) {
+      return groupInstancesByField(groupByField, entries);
+    }
     const columns = def.ui?.columns;
     if (columns !== undefined && columns.length > 0) {
       return groupInstancesByColumns(def.states, columns, entries);

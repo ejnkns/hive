@@ -75,6 +75,69 @@ describe("WorkflowInstances board rendering", () => {
     ]);
   });
 
+  it("renders one column per distinct field value with groupByField (E3)", async () => {
+    const def = cardDef({ ui: { view: "board", groupByField: "category" } });
+    const instances = [
+      entry("a", "ready", {
+        workflowInstanceState: { category: "infra", title: "A" },
+      }),
+      entry("b", "ready", {
+        workflowInstanceState: { category: "infra", title: "B" },
+      }),
+      entry("c", "ready", {
+        workflowInstanceState: { category: "launch", title: "C" },
+      }),
+      entry("d", "ready", {
+        workflowInstanceState: { title: "D" },
+      }),
+    ];
+    const el = await mount(host(def, instances));
+    await settle(shadowRootOf(el));
+
+    const headers = [...shadowRootOf(el).querySelectorAll(".column-label")];
+    expect(headers.map((h) => h.textContent)).toEqual([
+      "infra",
+      "launch",
+      "Uncategorized",
+    ]);
+    const counts = [...shadowRootOf(el).querySelectorAll(".column-count")].map(
+      (h) => h.textContent
+    );
+    expect(counts).toEqual(["2", "1", "1"]);
+  });
+
+  it("re-partitions when the grouping field changes (cards move columns in place)", async () => {
+    const def = cardDef({ ui: { view: "board", groupByField: "category" } });
+    const el = await mount(
+      host(def, [
+        entry("a", "ready", {
+          workflowInstanceState: { category: "infra", title: "A" },
+        }),
+      ])
+    );
+    await settle(shadowRootOf(el));
+    expect(
+      [...shadowRootOf(el).querySelectorAll(".column-label")].map(
+        (h) => h.textContent
+      )
+    ).toEqual(["infra"]);
+
+    // The human edits the category in place; the snapshot arrives with the
+    // new value and the partition moves the card to its new column.
+    el.instances = [
+      entry("a", "ready", {
+        workflowInstanceState: { category: "launch", title: "A" },
+      }),
+    ];
+    await el.updateComplete;
+    await settle(shadowRootOf(el));
+    expect(
+      [...shadowRootOf(el).querySelectorAll(".column-label")].map(
+        (h) => h.textContent
+      )
+    ).toEqual(["launch"]);
+  });
+
   it("renders a flat list for the list view", async () => {
     const def = cardDef({ ui: { view: "list" } });
     const el = await mount(
