@@ -50,14 +50,6 @@ $effect(() => {
 </script>
 
 <div class="viewer" style={themeVars(detail?.theme)}>
-  <div class="breadcrumb">
-    <a href="#/flows">flows</a>
-    <span class="crumb-sep">/</span>
-    <a href={`#/flows/${encodeURIComponent(definitionId)}`}>{definitionId}</a>
-    <span class="crumb-sep">/</span>
-    <span class="crumb-current">View</span>
-  </div>
-
   <div class="header-row">
     <h1>{detail?.name ?? definitionId}</h1>
     <Badge variant="neutral" outline>built-in</Badge>
@@ -109,32 +101,6 @@ $effect(() => {
   max-width: 1000px;
   margin: 0 auto;
   padding: 2rem 1.25rem;
-}
-
-.breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  font-size: var(--text-xs);
-  color: var(--muted);
-  margin-bottom: 0.5rem;
-}
-
-.breadcrumb a {
-  color: var(--muted);
-  text-decoration: none;
-}
-
-.breadcrumb a:hover {
-  color: var(--text);
-}
-
-.crumb-sep {
-  opacity: 0.5;
-}
-
-.crumb-current {
-  color: var(--text);
 }
 
 .header-row {

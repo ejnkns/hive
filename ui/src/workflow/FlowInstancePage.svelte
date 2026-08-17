@@ -221,28 +221,21 @@ function closeFlowActionForm() {
     <div class="empty">Instance not found</div>
   {:else}
     <div class="instance-header">
-      <div class="breadcrumb">
-        <a href="#/flows">flows</a>
-        <span class="crumb-sep">/</span>
-        <a href={`#/flows/${encodeURIComponent(definitionId)}`}
-          >{definitionId}</a
-        >
-        <span class="crumb-sep">/</span>
-        <span class="crumb-current">{flow.config?.name ?? flow.id}</span>
-      </div>
       <div class="header-row">
-        <h1>
+        <span class="status-group">
           <StatusDot status={flow.status} />
-          {flow.config?.name ?? flow.id}
-        </h1>
+          <span class="status-text">{flow.status}</span>
+        </span>
         <Button
-          variant="danger"
+          variant="neutral"
           size="small"
           onclick={() => (deleteOpen = true)}
         >
-          delete
+          manage
         </Button>
       </div>
+      <!-- Interim shell strip: the flow-level actions + summary chips. The
+           first thing the future flow-level custom component replaces. -->
       {#if flow.availableFlowActions.length > 0}
         <div class="flow-actions">
           {#each flow.availableFlowActions as action}
@@ -346,46 +339,22 @@ function closeFlowActionForm() {
   margin-bottom: 1rem;
 }
 
-.breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  font-size: var(--text-xs);
-  color: var(--muted);
-  margin-bottom: 0.5rem;
-}
-
-.breadcrumb a {
-  color: var(--muted);
-  text-decoration: none;
-}
-
-.breadcrumb a:hover {
-  color: var(--text);
-}
-
-.crumb-sep {
-  opacity: 0.5;
-}
-
-.crumb-current {
-  color: var(--text);
-}
-
 .header-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
-h1 {
-  display: flex;
+.status-group {
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--text);
-  margin: 0;
+  gap: 0.375rem;
+}
+
+.status-text {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  text-transform: capitalize;
 }
 
 .flow-actions {

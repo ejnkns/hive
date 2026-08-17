@@ -23,6 +23,8 @@ import FlowDefinitionPage from "./workflow/FlowDefinitionPage.svelte";
 import FlowDefinitionView from "./workflow/FlowDefinitionView.svelte";
 import FlowInstancePage from "./workflow/FlowInstancePage.svelte";
 import FlowLibrary from "./workflow/FlowLibrary.svelte";
+import type { FlowRoute } from "./workflow/flow-breadcrumb.ts";
+import { flowBreadcrumb } from "./workflow/flow-breadcrumb.ts";
 import { flowStore } from "./workflow/flow-store.svelte";
 import InstantiateForm from "./workflow/InstantiateForm.svelte";
 
@@ -45,15 +47,6 @@ onMount(() => {
   };
 });
 
-type FlowRoute =
-  | { kind: "library" }
-  | { kind: "new-definition" }
-  | { kind: "definition"; flowName: string }
-  | { kind: "edit-definition"; flowName: string }
-  | { kind: "view-definition"; flowName: string }
-  | { kind: "new-instance"; flowName: string }
-  | { kind: "instance"; flowName: string; instanceName: string };
-
 function parseFlowRoute(hash: string): FlowRoute | null {
   if (hash === "#/flows") {
     return { kind: "library" };
@@ -75,6 +68,24 @@ function parseFlowRoute(hash: string): FlowRoute | null {
 }
 
 const flowRoute = $derived(parseFlowRoute(currentHash));
+
+// The instance route's flow snapshot, resolved reactively from the store so
+// the breadcrumb leaf shows the pretty instance name (config.name) instead of
+// the URL slug. Null on non-instance routes and until the store hydrates.
+const instanceFlow = $derived.by(() => {
+  if (flowRoute?.kind !== "instance") return null;
+  return flowStore.findFlow(flowRoute.flowName, flowRoute.instanceName);
+});
+
+const instanceLabel = $derived.by(() => {
+  if (!instanceFlow) return undefined;
+  const name = instanceFlow.config?.name;
+  return typeof name === "string" ? name : instanceFlow.id;
+});
+
+const breadcrumbs = $derived(
+  flowRoute ? flowBreadcrumb(flowRoute, instanceLabel) : []
+);
 
 function canvasEnabled(): boolean {
   try {
@@ -192,15 +203,19 @@ const detailChain = $derived(
 <div class="app">
   <div class="top-bar">
     <Header />
-    {#if flowRoute && flowRoute.kind !== "library"}
-      <div class="project-header">
-        <div class="project-header-row">
-          <a href="#/flows" class="back-link">&larr; Flows</a>
-          {#if flowRoute.kind === "definition" || flowRoute.kind === "edit-definition" || flowRoute.kind === "new-instance" || flowRoute.kind === "instance"}
-            <span class="project-id">{flowRoute.flowName}</span>
+    {#if breadcrumbs.length > 0}
+      <nav class="breadcrumb" aria-label="breadcrumb">
+        {#each breadcrumbs as crumb, index}
+          {#if index > 0}
+            <span class="crumb-sep">/</span>
           {/if}
-        </div>
-      </div>
+          {#if crumb.href !== undefined}
+            <a class="crumb-link" href={crumb.href}>{crumb.label}</a>
+          {:else}
+            <span class="crumb-current">{crumb.label}</span>
+          {/if}
+        {/each}
+      </nav>
     {/if}
   </div>
 
@@ -398,29 +413,28 @@ const detailChain = $derived(
   min-height: 0;
   overflow-y: auto;
 }
-.project-header {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 0.75rem 1.25rem 0.75rem;
-}
-.project-header-row {
+.breadcrumb {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.5rem;
+  gap: 0.375rem;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0.75rem 1.25rem;
+  font-size: var(--text-xs);
+  color: var(--muted);
 }
-.back-link {
-  font-size: 0.8125rem;
+.crumb-link {
   color: var(--muted);
   text-decoration: none;
 }
-.back-link:hover {
+.crumb-link:hover {
   color: var(--text);
 }
-.project-id {
-  font-size: 0.75rem;
-  color: var(--muted);
-  font-family: var(--font-mono, monospace);
+.crumb-sep {
+  opacity: 0.5;
+}
+.crumb-current {
+  color: var(--text);
 }
 .dash {
   display: grid;
