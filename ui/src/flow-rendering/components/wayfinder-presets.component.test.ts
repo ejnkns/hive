@@ -9,7 +9,6 @@ import type {
   FlowComponentRegistrations,
 } from "workflow-engine/workflow-types";
 import buildItemCardModule from "../../../../presets/wayfinder/ui/build-item-card.ts";
-import buildPipelineModule from "../../../../presets/wayfinder/ui/build-pipeline.ts";
 import expeditionMapModule from "../../../../presets/wayfinder/ui/expedition-map.ts";
 import flowComponentModule from "../../../../presets/wayfinder/ui/flow-component.ts";
 import frontierBoardModule from "../../../../presets/wayfinder/ui/frontier-board.ts";
@@ -18,13 +17,7 @@ import { defineFlowRenderingComponents } from "../define-components.ts";
 import type { FlowComponentEvaluator } from "../load-flow-components.ts";
 import { loadFlowComponents } from "../load-flow-components.ts";
 import { cardDef, entry } from "../test-fixtures.ts";
-import {
-  mount,
-  mustFind,
-  queryAllDeep,
-  settle,
-  shadowRootOf,
-} from "../test-utils.ts";
+import { mount, queryAllDeep, settle, shadowRootOf } from "../test-utils.ts";
 import { WorkflowInstances } from "./workflow-instances.ts";
 
 // The preset modules' default export IS the served factory; the fake
@@ -452,21 +445,9 @@ describe("wayfinder served modules", () => {
       "fetch",
       vi.fn(async () => ({ ok: true, text: async () => "" }))
     );
-    const restore1 = await loadFlowComponents(
+    const restore = await loadFlowComponents(
       { "flow-component": "/api/.../flow-component" },
       load(flowComponentModule)
-    );
-    const restore2 = await loadFlowComponents(
-      { "expedition-map": "/api/.../expedition-map" },
-      load(expeditionMapModule)
-    );
-    const restore3 = await loadFlowComponents(
-      { "frontier-board": "/api/.../frontier-board" },
-      load(frontierBoardModule)
-    );
-    const restore4 = await loadFlowComponents(
-      { "build-pipeline": "/api/.../build-pipeline" },
-      load(buildPipelineModule)
     );
     try {
       const charting = cardDef({
@@ -557,17 +538,10 @@ describe("wayfinder served modules", () => {
       expect(
         queryAllDeep(el, "markdown-view")[0]?.shadowRoot?.textContent
       ).toContain("pick a router");
-      // Each workflow section delegates to its component (or the canonical
-      // board for buildItem).
-      expect(queryAllDeep(el, "expedition-map").length).toBe(1);
-      expect(queryAllDeep(el, "frontier-board").length).toBe(1);
-      expect(queryAllDeep(el, "build-pipeline").length).toBe(1);
-      expect(queryAllDeep(el, "workflow-board-content").length).toBe(1);
+      // Each workflow section composes the canonical board under the chrome.
+      expect(queryAllDeep(el, "workflow-board-content").length).toBe(4);
     } finally {
-      restore1();
-      restore2();
-      restore3();
-      restore4();
+      restore();
     }
   });
 });

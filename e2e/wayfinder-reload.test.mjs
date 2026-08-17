@@ -45,7 +45,10 @@ async function chatDump() {
     const mapPresent = (() => {
       const found = [];
       const deep = (root) => {
-        for (const el of root.querySelectorAll(".map-header, .destination")) {
+        // The flow-level custom view's root — the expedition dashboard the
+        // served flow-component renders (it replaced the per-workflow
+        // expedition-map view when the flow component shipped).
+        for (const el of root.querySelectorAll(".expedition")) {
           found.push(el.className);
         }
         for (const el of root.querySelectorAll("*")) {

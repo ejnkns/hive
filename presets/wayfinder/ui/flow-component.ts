@@ -2,10 +2,12 @@
  * flow-level custom view rendering the WHOLE flow-instance page body. The
  * expedition chrome — a header (emblem, destination, status, flow actions), the
  * real charted map (the persisted map.md), and a frontier status line — above
- * each workflow's section, delegated to its workflow-view component (the
- * expedition map, frontier board, build pipeline) or the canonical board
- * (buildItem). Composition happens through the global custom-element registry
- * (no value imports). */
+ * each workflow's section. Sections compose the canonical
+ * <workflow-board-content> (a DEFAULT element — served modules can only
+ * reference default elements by tag; the served instance cards resolve through
+ * the registry inside it). The per-workflow workflow-view components
+ * (expedition-map, frontier-board, build-pipeline) remain the fallback layer
+ * if this component fails to load. */
 
 import type {
   FlowComponentDeps,
@@ -154,10 +156,10 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       return html`<div class="expedition">
         ${this.renderHeader()}
         ${this.renderMapCard()}
-        <div class="section">${this.renderCharting()}</div>
-        <div class="section">${this.renderTicket()}</div>
-        <div class="section">${this.renderBuild()}</div>
-        <div class="section">${this.renderBuildItems()}</div>
+        <div class="section">${this.renderSection("charting")}</div>
+        <div class="section">${this.renderSection("ticket")}</div>
+        <div class="section">${this.renderSection("build")}</div>
+        <div class="section">${this.renderSection("buildItem")}</div>
       </div>`;
     }
 
@@ -214,48 +216,11 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       </div>`;
     }
 
-    private renderCharting() {
-      const { workflowDef, entries } = this.section("charting");
-      if (workflowDef === undefined) return nothing;
-      return html`<expedition-map
-        .workflowDef=${workflowDef}
-        .entries=${entries}
-        .customKinds=${this.customKinds}
-        .workflowCounts=${this.workflowCounts}
-        .onAction=${this.onAction}
-        .onSendMessage=${this.onSendMessage}
-        .onSelect=${this.onSelect}
-      ></expedition-map>`;
-    }
-
-    private renderTicket() {
-      const { workflowDef, entries } = this.section("ticket");
-      if (workflowDef === undefined) return nothing;
-      return html`<frontier-board
-        .workflowDef=${workflowDef}
-        .entries=${entries}
-        .customKinds=${this.customKinds}
-        .onAction=${this.onAction}
-        .onSendMessage=${this.onSendMessage}
-        .onSelect=${this.onSelect}
-      ></frontier-board>`;
-    }
-
-    private renderBuild() {
-      const { workflowDef, entries } = this.section("build");
-      if (workflowDef === undefined) return nothing;
-      return html`<build-pipeline
-        .workflowDef=${workflowDef}
-        .entries=${entries}
-        .customKinds=${this.customKinds}
-        .onAction=${this.onAction}
-        .onSendMessage=${this.onSendMessage}
-        .onSelect=${this.onSelect}
-      ></build-pipeline>`;
-    }
-
-    private renderBuildItems() {
-      const { workflowDef, entries } = this.section("buildItem");
+    // A workflow's section: the canonical board/list (with its served
+    // instance card resolved through the registry), composed under the
+    // expedition chrome.
+    private renderSection(workflowId: string) {
+      const { workflowDef, entries } = this.section(workflowId);
       if (workflowDef === undefined) return nothing;
       return html`<workflow-board-content
         .workflowDef=${workflowDef}
