@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   renameSync,
   writeFileSync,
@@ -84,6 +85,31 @@ export function readPersistedOutput(
     vars ?? { instanceId: "", attempt: 1 }
   );
   return existsSync(target) ? readFileSync(target, "utf-8") : "";
+}
+
+// Lists and reads a persisted directory back at basePath/<domainDir>/<dir>,
+// returning { fileName → contents } one level deep (non-recursive) — the
+// decisions/ drill-in. Returns {} when the directory does not exist. Mirrors
+// readPersistedOutput: the engine owns resolution, so the UI reads exactly the
+// files the flow persisted.
+export function readPersistedDirectory(
+  flowConfig: Record<string, unknown>,
+  directoryPath: string
+): Record<string, string> {
+  const settings = readFlowSettings(flowConfig);
+  if (!settings.basePath || !settings.domainDir) return {};
+  const target = resolveDomainPath(
+    settings.basePath,
+    settings.domainDir,
+    directoryPath
+  );
+  if (!existsSync(target)) return {};
+  const files: Record<string, string> = {};
+  for (const entry of readdirSync(target, { withFileTypes: true })) {
+    if (!entry.isFile()) continue;
+    files[entry.name] = readFileSync(join(target, entry.name), "utf-8");
+  }
+  return files;
 }
 
 // Rejects absolute paths and any resolved path that escapes the domain root.

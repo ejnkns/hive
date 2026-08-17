@@ -93,6 +93,12 @@ export type FlowDefinition = {
     // Declarative theming tokens for the generic flow surfaces (flows-list
     // card + flow pages). Pure data — rides through the compile step unchanged.
     theme?: FlowThemeSpec;
+    // Persisted domain files the UI may read, relative to domainDir: fixed
+    // paths (map.md, spec.md, build-plan.md) and directory names whose files
+    // the UI may list + read (decisions/). The server ships their contents in
+    // the flow snapshot; served components receive them as props. Pure data.
+    persistedOutputs?: string[];
+    persistedOutputDirs?: string[];
   };
   // Custom tools and operations referenced as files; tasks reference them by
   // id/name alongside the engine's infrastructure capabilities.
@@ -184,6 +190,8 @@ export type CompiledFlowDefinition = {
     components?: Record<string, ServedComponentSpec>;
     view?: WorkflowView;
     theme?: FlowThemeSpec;
+    persistedOutputs?: string[];
+    persistedOutputDirs?: string[];
   };
 } & (
   | { workflows: RuntimeWorkflowConfig[] }

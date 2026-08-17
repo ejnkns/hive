@@ -1,15 +1,17 @@
 import assert from "node:assert/strict";
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
-import { persistOutput } from "./persist-output.ts";
+import { persistOutput, readPersistedDirectory } from "./persist-output.ts";
 
 describe("persistOutput", () => {
   let root: string;
@@ -104,6 +106,51 @@ describe("persistOutput", () => {
         instanceId: "i1",
         attempt: 1,
       })
+    );
+  });
+});
+
+describe("readPersistedDirectory", () => {
+  let root: string;
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("lists and reads each file in a declared directory", () => {
+    root = mkdtempSync(join(tmpdir(), "persist-"));
+    const dir = join(root, ".flow", "decisions");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "a.md"), "# A");
+    writeFileSync(join(dir, "b.md"), "# B");
+
+    assert.deepEqual(
+      readPersistedDirectory(
+        { basePath: root, domainDir: ".flow" },
+        "decisions"
+      ),
+      { "a.md": "# A", "b.md": "# B" }
+    );
+  });
+
+  it("returns an empty record for a missing directory", () => {
+    root = mkdtempSync(join(tmpdir(), "persist-"));
+    assert.deepEqual(
+      readPersistedDirectory(
+        { basePath: root, domainDir: ".flow" },
+        "decisions"
+      ),
+      {}
+    );
+  });
+
+  it("rejects a directory path that escapes the domain root", () => {
+    root = mkdtempSync(join(tmpdir(), "persist-"));
+    assert.throws(() =>
+      readPersistedDirectory(
+        { basePath: root, domainDir: ".flow" },
+        "../outside"
+      )
     );
   });
 });

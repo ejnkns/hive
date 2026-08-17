@@ -207,3 +207,39 @@ export const flow: FlowDefinition = {
     });
   });
 });
+
+describe("parseDefinition ui persisted outputs", () => {
+  it("parses persistedOutputs and persistedOutputDirs into the data definition", () => {
+    const { definition, findings } = parseDefinition(
+      `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "persistUiFlow",
+  label: "Persist Ui Flow",
+  configSchema: [],
+  ui: {
+    persistedOutputs: ["map.md", "spec.md"],
+    persistedOutputDirs: ["decisions"],
+  },
+  workflows: [
+    {
+      id: "items",
+      label: "Items",
+      instanceState: [],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
+        { id: "new", label: "New", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  edges: [],
+};
+`
+    );
+    assert.deepEqual(findings, []);
+    assert.deepEqual(definition.ui?.persistedOutputs, ["map.md", "spec.md"]);
+    assert.deepEqual(definition.ui?.persistedOutputDirs, ["decisions"]);
+  });
+});

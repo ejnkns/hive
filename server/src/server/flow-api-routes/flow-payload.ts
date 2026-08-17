@@ -1,6 +1,10 @@
 /** @private — the whole-flow snapshot payload (config, workflows, instances,
  * status, ui declarations, available flow-level actions). */
 
+import {
+  readPersistedDirectory,
+  readPersistedOutput,
+} from "workflow-engine/runners";
 import { getRegisteredFlowDefinition } from "../flow-definitions.ts";
 import {
   getAvailableFlowActions,
@@ -42,6 +46,28 @@ export function flowPayload(
       `/api/flows/definitions/${encodeURIComponent(definitionSlug)}/components/${encodeURIComponent(componentId)}`,
     ])
   );
+  // Persisted domain files the UI may read (declared by the definition as
+  // ui.persistedOutputs / ui.persistedOutputDirs). Read through the engine's
+  // persisted-output seam so resolution never drifts; a declared path that
+  // escapes the domain root degrades to empty rather than breaking the
+  // snapshot (the definition validator flags it as an advisory).
+  const flowUi = definition?.flow.ui;
+  const persistedOutputs: Record<string, string> = {};
+  for (const path of flowUi?.persistedOutputs ?? []) {
+    try {
+      persistedOutputs[path] = readPersistedOutput(cfg, path);
+    } catch {
+      persistedOutputs[path] = "";
+    }
+  }
+  const persistedOutputDirs: Record<string, Record<string, string>> = {};
+  for (const dir of flowUi?.persistedOutputDirs ?? []) {
+    try {
+      persistedOutputDirs[dir] = readPersistedDirectory(cfg, dir);
+    } catch {
+      persistedOutputDirs[dir] = {};
+    }
+  }
   return {
     id: flowId,
     label: (cfg.name as string) ?? flowId,
@@ -58,6 +84,10 @@ export function flowPayload(
       // Declarative theme tokens — the flow instance page themes its root
       // with these (one accent → both themes via color-mix).
       theme: definition?.flow.ui?.theme,
+      ...(Object.keys(persistedOutputs).length > 0 ? { persistedOutputs } : {}),
+      ...(Object.keys(persistedOutputDirs).length > 0
+        ? { persistedOutputDirs }
+        : {}),
     },
     availableFlowActions: getAvailableFlowActions(flowId),
   };

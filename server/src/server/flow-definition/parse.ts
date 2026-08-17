@@ -218,6 +218,17 @@ function parseFlow(
         ui.theme = theme;
       }
     }
+    // Persisted domain files the UI may read: fixed paths and directory names,
+    // both relative to domainDir (the server confines reads and ships the
+    // contents in the flow snapshot).
+    const persistedOutputs = readStringArray(flowUi, "persistedOutputs");
+    if (persistedOutputs !== undefined && persistedOutputs.length > 0) {
+      ui.persistedOutputs = persistedOutputs;
+    }
+    const persistedOutputDirs = readStringArray(flowUi, "persistedOutputDirs");
+    if (persistedOutputDirs !== undefined && persistedOutputDirs.length > 0) {
+      ui.persistedOutputDirs = persistedOutputDirs;
+    }
     if (Object.keys(ui).length > 0) definition.ui = ui;
   }
 

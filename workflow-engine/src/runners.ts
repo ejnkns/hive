@@ -37,6 +37,7 @@ export {
 export {
   type PersistPathVars,
   persistOutput,
+  readPersistedDirectory,
   readPersistedOutput,
   resolvePersistedPath,
 } from "./runners/persist-output.ts";

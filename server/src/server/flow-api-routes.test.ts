@@ -1019,6 +1019,56 @@ describe("flow API routes", () => {
     });
   });
 
+  it("GET flow payload carries declared persisted outputs and directories", async () => {
+    const basePath = mkdtempSync(join(tmpdir(), "persist-ui-"));
+    try {
+      const domainDir = join(basePath, ".persist-ui-def");
+      mkdirSync(join(domainDir, "decisions"), { recursive: true });
+      writeFileSync(join(domainDir, "map.md"), "# Map\nfog: 2");
+      writeFileSync(join(domainDir, "decisions", "a.md"), "# Decision A");
+
+      setFlowPersistence(noopPersistence);
+      registerFlowDefinition({
+        id: "persist-ui-def",
+        label: "Persist UI Definition",
+        workflows: [testWorkflow],
+        edges: [],
+        configSchema: [{ key: "basePath", label: "Base Path", type: "string" }],
+        ui: {
+          persistedOutputs: ["map.md"],
+          persistedOutputDirs: ["decisions"],
+        },
+      });
+      const server = Fastify();
+      servers.push(server);
+      registerFlowApiRoutes(server);
+
+      const createResponse = await server.inject({
+        method: "POST",
+        url: "/api/flows",
+        body: {
+          definitionId: "persist-ui-def",
+          config: { name: "Persist UI Flow", basePath },
+        },
+      });
+      const flowId = createResponse.json().flowId as string;
+
+      const response = await server.inject({
+        method: "GET",
+        url: `/api/flows/${flowId}`,
+      });
+      assert.equal(response.statusCode, 200);
+      assert.deepEqual(response.json().ui.persistedOutputs, {
+        "map.md": "# Map\nfog: 2",
+      });
+      assert.deepEqual(response.json().ui.persistedOutputDirs, {
+        decisions: { "a.md": "# Decision A" },
+      });
+    } finally {
+      rmSync(basePath, { recursive: true, force: true });
+    }
+  });
+
   it("POST /api/flows accepts integrationBranch and branchPrefix declared in configSchema", async () => {
     setFlowPersistence(noopPersistence);
     registerFlowDefinition({

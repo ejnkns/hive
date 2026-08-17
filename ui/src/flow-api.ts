@@ -48,6 +48,11 @@ export type FlowResponse = {
     components?: Record<string, string>;
     // Declarative theme tokens for the generic flow surfaces.
     theme?: FlowTheme;
+    // Persisted domain files the UI may read (declared by the definition as
+    // ui.persistedOutputs / ui.persistedOutputDirs): fixed paths → contents,
+    // and directory names → file name → contents.
+    persistedOutputs?: Record<string, string>;
+    persistedOutputDirs?: Record<string, Record<string, string>>;
   };
   availableFlowActions: FlowLevelAction[];
 };

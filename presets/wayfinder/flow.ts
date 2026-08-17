@@ -37,6 +37,12 @@ export const flow: FlowDefinition = {
   // module-set files linted/typechecked by the gate and served stripped.
   ui: {
     theme: { accent: "#4a9fe0", emblem: "\u25b2" },
+    // Persisted domain files the UI reads: the charted map (the expedition
+    // map renders it), the build spec/plan (the build cards render them), and
+    // the decision records (the frontier's Decisions-so-far drill-in). The
+    // server ships their contents in the flow snapshot.
+    persistedOutputs: ["map.md", "spec.md", "build-plan.md"],
+    persistedOutputDirs: ["decisions"],
     kinds: [
       {
         kind: "findings-report",
