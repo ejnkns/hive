@@ -171,21 +171,24 @@ export class ChatSession extends LitElement {
   }
 
   protected override firstUpdated(): void {
-    this.scrollToBottom();
+    this.scheduleScrollToBottom();
   }
 
   protected override updated(changed: PropertyValues<this>): void {
-    // Auto-scroll only while the user is pinned to the bottom; an upward
-    // scroll (reading history) is preserved on subsequent updates instead of
-    // being yanked down by new content.
+    // Auto-scroll only while pinned to the bottom (reading at the newest
+    // message); an upward scroll to history is preserved. The scroll is
+    // deferred to the next frame: at `updated` time the child message-list
+    // may not have rendered (or laid out) the new content yet, so reading
+    // scrollHeight immediately would land at a stale top.
     if (changed.has("messages") && this.pinnedToBottom) {
-      this.scrollToBottom();
+      this.scheduleScrollToBottom();
     }
   }
 
   // True while the user is at (or near) the bottom of the transcript.
   private pinnedToBottom = true;
   private readonly PIN_THRESHOLD_PX = 48;
+  private scrollFrame: number | undefined = undefined;
 
   private handleScroll = (): void => {
     const el = this.scrollRef.value;
@@ -193,6 +196,16 @@ export class ChatSession extends LitElement {
     this.pinnedToBottom =
       el.scrollHeight - el.scrollTop - el.clientHeight <= this.PIN_THRESHOLD_PX;
   };
+
+  // One scroll per update cycle: after the frame, the full tree (children
+  // included) has laid out and scrollHeight is measurable.
+  private scheduleScrollToBottom(): void {
+    if (this.scrollFrame !== undefined) return;
+    this.scrollFrame = requestAnimationFrame(() => {
+      this.scrollFrame = undefined;
+      this.scrollToBottom();
+    });
+  }
 
   private scrollToBottom(): void {
     const el = this.scrollRef.value;

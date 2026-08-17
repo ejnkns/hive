@@ -82,6 +82,17 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         flex-wrap: wrap;
         gap: 0.375rem;
       }
+      .charting-actions button {
+        font-family: inherit;
+        font-size: 0.625rem;
+        height: 24px;
+        padding: 0 0.5rem;
+        border-radius: 4px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text);
+        cursor: pointer;
+      }
     `;
 
     declare workflowDef: InstanceComponentProps["workflowDef"];

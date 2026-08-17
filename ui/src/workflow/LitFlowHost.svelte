@@ -1,4 +1,5 @@
 <script lang="ts">
+import { untrack } from "svelte";
 import type {
   WorkflowDefResponse,
   WorkflowInstanceEntry,
@@ -60,15 +61,23 @@ $effect(() => {
   host.customKinds = customKinds;
 });
 
+// The declared component ids, as a stable signature: a fresh snapshot object
+// with the same components must not re-run the load — re-registering would
+// produce fresh served classes and recreate every mounted custom element
+// (resetting the chat scroll to the top on every push).
+const componentsSignature = $derived(Object.keys(components).sort().join(","));
+
 // Load the flow's served components when the flow (or its declared component
 // set) changes; unload the previous flow's registrations on teardown. Loading
 // is async, so the host is re-synced once the registrations land — the next
 // render resolves ui.instanceComponent / custom kinds through the registry.
 $effect(() => {
-  // Reading flowId makes the effect re-run (and clean up the previous flow's
-  // registrations) when the flow changes even if the component set is shared.
+  // Reading flowId and the signature makes the effect re-run (and clean up
+  // the previous flow's registrations) only when the flow or its declared
+  // component set actually changes — not on every snapshot.
   void flowId;
-  const declared = components;
+  void componentsSignature;
+  const declared = untrack(() => components);
   let cleanup: (() => void) | undefined;
   let disposed = false;
   void loadFlowComponents(declared).then((restore) => {
