@@ -247,7 +247,12 @@ export const flow: FlowDefinition = {
               // message, so the frontier survey starts from the charted map
               // (not a cold, empty session after the naming Done).
               inputFromInstanceState: "destination",
-              tools: ["list_directory", "read_file", "search_code"],
+              tools: [
+                "list_directory",
+                "read_file",
+                "search_code",
+                "create_instance",
+              ],
               systemPromptRef: "./charting/prompts/frontier.ts",
             },
           ],

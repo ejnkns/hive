@@ -125,6 +125,15 @@ export function chatToolCall(
   });
 }
 
+export function chatToolCalls(
+  calls: Array<{ name: string; args: Record<string, unknown> }>
+): () => ModelResponse {
+  return () => ({
+    content: "Calling tools",
+    toolCalls: calls.map((call) => toolCall(call.name, call.args)),
+  });
+}
+
 export function chatReply(content: string): () => ModelResponse {
   return () => ({ content });
 }
