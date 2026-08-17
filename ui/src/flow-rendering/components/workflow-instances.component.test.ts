@@ -26,6 +26,7 @@ function host(def = cardDef(), instances = [entry("c1", "ready")]) {
     workflowDefs: [def],
     instances,
     customKinds: [],
+    availableFlowActions: [],
   });
 }
 
@@ -251,6 +252,75 @@ describe("WorkflowInstances board rendering", () => {
       instanceId: "c1",
       actionId: "instantiate",
       payload: { id: "review-flow" },
+    });
+  });
+
+  it("renders the flow-actions bar when flow-level actions are available", async () => {
+    localStorage.clear();
+    const el = await mount(
+      Object.assign(host(), {
+        availableFlowActions: [
+          { id: "add_ticket", label: "Add ticket", variant: "primary" },
+        ],
+      })
+    );
+    await settle(shadowRootOf(el));
+
+    expect(mustFind(el, "flow-actions-bar")).toBeDefined();
+  });
+
+  it("emits hive-create for a createInstance flow action", async () => {
+    localStorage.clear();
+    const el = await mount(
+      Object.assign(host(), {
+        availableFlowActions: [
+          {
+            id: "add_ticket",
+            label: "Add ticket",
+            variant: "primary",
+            createInstance: { workflowId: "ticket", fields: [] },
+          },
+        ],
+      })
+    );
+    await settle(shadowRootOf(el));
+
+    const emitted = new Promise<CustomEvent>((resolve) =>
+      el.addEventListener("hive-create", resolve as EventListener, {
+        once: true,
+      })
+    );
+    const bar = mustFind(el, "flow-actions-bar") as HTMLElement;
+    const button = mustQuery(shadowRootOf(bar), "button") as HTMLButtonElement;
+    button.dispatchEvent(click());
+    expect((await emitted).detail).toEqual({
+      flowId: "flow-1",
+      actionId: "add_ticket",
+    });
+  });
+
+  it("emits hive-flow-action for a non-create flow action", async () => {
+    localStorage.clear();
+    const el = await mount(
+      Object.assign(host(), {
+        availableFlowActions: [
+          { id: "start_build", label: "Start build", variant: "primary" },
+        ],
+      })
+    );
+    await settle(shadowRootOf(el));
+
+    const emitted = new Promise<CustomEvent>((resolve) =>
+      el.addEventListener("hive-flow-action", resolve as EventListener, {
+        once: true,
+      })
+    );
+    const bar = mustFind(el, "flow-actions-bar") as HTMLElement;
+    const button = mustQuery(shadowRootOf(bar), "button") as HTMLButtonElement;
+    button.dispatchEvent(click());
+    expect((await emitted).detail).toEqual({
+      flowId: "flow-1",
+      actionId: "start_build",
     });
   });
 });

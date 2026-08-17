@@ -33,8 +33,6 @@ let deleteBusy = $state(false);
 
 let actionDialogOpen = $state(false);
 let activeFlowAction = $state<FlowLevelAction | null>(null);
-let actionBusy = $state(false);
-let activeDispatchId = $state<string | null>(null);
 let actionForm = $state<ConfigFieldForm | null>(null);
 
 // The dialog body is <config-field-form> (the shared Lit form); the element's
@@ -49,23 +47,6 @@ $effect(() => {
 // The flow renders from the store so every snapshot pushes live. Commands keep
 // their REST calls; the resulting snapshot arrives over WS (no refetch).
 const flow = $derived(flowId ? flowStore.getFlow(flowId) : null);
-
-// A compact per-workflow instance count for the header, derived from the flow
-// snapshot (label from the workflow definitions, counts from its instances).
-const workflowCounts = $derived.by(() => {
-  if (!flow) return [];
-  const labelById = new Map(
-    flow.workflows.map((workflow) => [workflow.id, workflow.label])
-  );
-  const counts = new Map<string, number>();
-  for (const instance of flow.instances) {
-    counts.set(instance.workflowId, (counts.get(instance.workflowId) ?? 0) + 1);
-  }
-  return [...counts.entries()].map(([workflowId, count]) => ({
-    label: labelById.get(workflowId) ?? workflowId,
-    count,
-  }));
-});
 
 onMount(() => {
   void resolveFlowId();
@@ -155,42 +136,33 @@ async function removeInstance(purge: boolean) {
   }
 }
 
-function actionVariant(action: FlowLevelAction): string {
-  switch (action.variant) {
-    case "primary":
-      return "success";
-    case "destructive":
-      return "danger";
-    default:
-      return "neutral";
-  }
-}
-
-function runFlowAction(action: FlowLevelAction) {
-  if (action.createInstance) {
-    activeFlowAction = action;
-    actionDialogOpen = true;
-    return;
-  }
-  void executeFlowAction(action, {});
-}
-
 async function executeFlowAction(
   action: FlowLevelAction,
   payload: Record<string, unknown>
 ) {
   if (!flow) return;
-  actionBusy = true;
-  activeDispatchId = action.id;
   error = null;
   try {
     await dispatchFlowAction(flow.id, action.id, payload);
   } catch (err) {
     error = err instanceof Error ? err.message : "Flow action failed";
-  } finally {
-    actionBusy = false;
-    activeDispatchId = null;
   }
+}
+
+// The Lit flow-actions bar signalled a createInstance action: open the shared
+// create-form dialog for that action.
+function handleCreate(_flowId: string, actionId: string) {
+  const action = flow?.availableFlowActions.find((a) => a.id === actionId);
+  if (action?.createInstance === undefined) return;
+  activeFlowAction = action;
+  actionDialogOpen = true;
+}
+
+// The Lit flow-actions bar signalled a non-create action: dispatch it.
+function handleFlowAction(_flowId: string, actionId: string) {
+  const action = flow?.availableFlowActions.find((a) => a.id === actionId);
+  if (action === undefined) return;
+  void executeFlowAction(action, {});
 }
 
 function submitFlowActionForm(
@@ -234,32 +206,6 @@ function closeFlowActionForm() {
           manage
         </Button>
       </div>
-      <!-- Interim shell strip: the flow-level actions + summary chips. The
-           first thing the future flow-level custom component replaces. -->
-      {#if flow.availableFlowActions.length > 0}
-        <div class="flow-actions">
-          {#each flow.availableFlowActions as action}
-            <Button
-              variant={actionVariant(action) as "success" | "danger" | "neutral"}
-              size="small"
-              disabled={actionBusy}
-              onclick={() => runFlowAction(action)}
-            >
-              {activeDispatchId === action.id ? "Running..." : action.label}
-            </Button>
-          {/each}
-        </div>
-      {/if}
-      {#if workflowCounts.length > 0}
-        <div class="workflow-summary">
-          {#each workflowCounts.filter((entry) => entry.count > 1) as entry}
-            <span class="summary-item">
-              <span class="summary-label">{entry.label}</span>
-              <span class="summary-count">{entry.count}</span>
-            </span>
-          {/each}
-        </div>
-      {/if}
     </div>
 
     <div class="flow-sections">
@@ -269,10 +215,13 @@ function closeFlowActionForm() {
         instances={flow.instances}
         customKinds={flow.ui?.kinds ?? []}
         components={flow.ui?.components ?? {}}
+        availableFlowActions={flow.availableFlowActions}
         onAction={handleAction}
         onSendMessage={handleSendMessage}
         onPatchState={handlePatchState}
         onSelect={handleSelect}
+        onCreate={handleCreate}
+        onFlowAction={handleFlowAction}
       />
     </div>
   {/if}
@@ -355,43 +304,6 @@ function closeFlowActionForm() {
   font-size: var(--text-xs);
   color: var(--muted);
   text-transform: capitalize;
-}
-
-.flow-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.375rem;
-  margin-top: 0.75rem;
-}
-
-.workflow-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.375rem;
-  margin-top: 0.75rem;
-}
-
-.summary-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.25rem 0.5rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-}
-
-.summary-label {
-  font-size: var(--text-xs);
-  font-weight: 700;
-  color: var(--muted);
-  letter-spacing: 0.06em;
-}
-
-.summary-count {
-  font-family: var(--font-mono, monospace);
-  font-size: var(--text-xs);
-  color: var(--text);
 }
 
 .dialog-title {

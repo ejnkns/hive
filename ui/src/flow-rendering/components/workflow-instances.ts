@@ -8,8 +8,10 @@ import type {
   CustomRenderKind,
   WorkflowViewProps,
 } from "workflow-engine/workflow-types";
+import type { FlowLevelAction } from "../../flow-api.ts";
 import { getComponentRenderer } from "../renderer-registry.ts";
 import "./dynamic-element-host.ts";
+import "./flow-actions-bar.ts";
 import "./flow-overview.ts";
 import {
   boardContentStyles,
@@ -111,6 +113,7 @@ export class WorkflowInstances extends LitElement {
   workflowDefs: WorkflowDefResponse[] = [];
   instances: WorkflowInstanceEntry[] = [];
   customKinds: readonly CustomRenderKind[] = [];
+  availableFlowActions: FlowLevelAction[] = [];
 
   // Collapsed workflow sections, persisted to localStorage per flow. Lazy-loaded
   // so the set reflects each flow's stored state without a separate pass.
@@ -126,6 +129,7 @@ export class WorkflowInstances extends LitElement {
     }
 
     return html`
+      ${this.renderFlowActions()}
       ${this.renderOverview()}
       ${repeat(
         [...entriesByWorkflow.entries()],
@@ -232,6 +236,18 @@ export class WorkflowInstances extends LitElement {
         byState,
       };
     });
+  }
+
+  // The flow-level action strip (Add ticket / fog / build). The bar only
+  // signals intent — the create-form dialog and the dispatch live in the
+  // Svelte shell, which handles the hive-create / hive-flow-action events.
+  private renderFlowActions() {
+    if (this.availableFlowActions.length === 0) return nothing;
+    return html`<flow-actions-bar
+      .actions=${this.availableFlowActions}
+      .onFlowAction=${(actionId: string) => this.emitFlowAction(actionId)}
+      .onCreate=${(actionId: string) => this.emitCreate(actionId)}
+    ></flow-actions-bar>`;
   }
 
   // The flow-level overview bar: shown when the flow has more than one
@@ -345,6 +361,26 @@ export class WorkflowInstances extends LitElement {
     this.dispatchEvent(
       new CustomEvent("hive-select", {
         detail: { flowId: this.flowId, instanceId },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  private emitFlowAction(actionId: string): void {
+    this.dispatchEvent(
+      new CustomEvent("hive-flow-action", {
+        detail: { flowId: this.flowId, actionId },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  private emitCreate(actionId: string): void {
+    this.dispatchEvent(
+      new CustomEvent("hive-create", {
+        detail: { flowId: this.flowId, actionId },
         bubbles: true,
         composed: true,
       })

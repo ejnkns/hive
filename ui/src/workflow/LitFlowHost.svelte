@@ -5,6 +5,7 @@ import type {
   WorkflowInstanceEntry,
 } from "workflow-engine/create-flow-runtime";
 import type { CustomRenderKind } from "workflow-engine/workflow-types";
+import type { FlowLevelAction } from "../flow-api.ts";
 import { loadFlowComponents } from "../flow-rendering/load-flow-components.ts";
 import type { WorkflowInstances } from "../flow-rendering.ts";
 
@@ -20,10 +21,13 @@ let {
   instances,
   customKinds,
   components,
+  availableFlowActions,
   onAction,
   onSendMessage,
   onPatchState,
   onSelect,
+  onCreate,
+  onFlowAction,
 }: {
   flowId: string;
   workflowDefs: WorkflowDefResponse[];
@@ -31,6 +35,7 @@ let {
   customKinds: readonly CustomRenderKind[];
   // Served component ids → fetch path, from the flow snapshot's ui.components.
   components: Record<string, string>;
+  availableFlowActions?: FlowLevelAction[];
   onAction?: (
     flowId: string,
     instanceId: string,
@@ -49,6 +54,10 @@ let {
   ) => void;
   // A custom workflow view asked the shell to open the workflow-instance page.
   onSelect?: (flowId: string, instanceId: string) => void;
+  // A flow-level createInstance action asked the shell to open the create form.
+  onCreate?: (flowId: string, actionId: string) => void;
+  // A flow-level action (non-create) asked the shell to dispatch it.
+  onFlowAction?: (flowId: string, actionId: string) => void;
 } = $props();
 
 let host: WorkflowInstances | null = null;
@@ -59,6 +68,7 @@ $effect(() => {
   host.workflowDefs = workflowDefs;
   host.instances = instances;
   host.customKinds = customKinds;
+  host.availableFlowActions = availableFlowActions ?? [];
 });
 
 // The declared component ids, as a stable signature: a fresh snapshot object
@@ -153,6 +163,20 @@ function handleSelect(
   if (!event.detail.flowId || !event.detail.instanceId) return;
   onSelect?.(event.detail.flowId, event.detail.instanceId);
 }
+
+function handleCreate(
+  event: CustomEvent<{ flowId: string; actionId: string }>
+) {
+  if (!event.detail.flowId || !event.detail.actionId) return;
+  onCreate?.(event.detail.flowId, event.detail.actionId);
+}
+
+function handleFlowAction(
+  event: CustomEvent<{ flowId: string; actionId: string }>
+) {
+  if (!event.detail.flowId || !event.detail.actionId) return;
+  onFlowAction?.(event.detail.flowId, event.detail.actionId);
+}
 </script>
 
 <workflow-instances
@@ -161,4 +185,6 @@ function handleSelect(
   onhive-send-message={handleSendMessage}
   onhive-patch-state={handlePatchState}
   onhive-select={handleSelect}
+  onhive-create={handleCreate}
+  onhive-flow-action={handleFlowAction}
 ></workflow-instances>
