@@ -71,7 +71,30 @@ function completionFor(payload) {
   if (systemText.includes("You are the Reviewer Agent")) {
     return reviewerCompletion(messages);
   }
+  if (systemText.includes("You are the wayfinder's naming step")) {
+    return wayfinderChartingCompletion(messages, "naming");
+  }
+  if (systemText.includes("You are the wayfinder's frontier step")) {
+    return wayfinderChartingCompletion(messages, "frontier");
+  }
   throw new Error("Mock provider received an unknown Agent Role");
+}
+
+// The wayfinder charting sessions (naming + frontier) are interactive and
+// agent-initiating now: they call the model on entry (seeded with the
+// destination). Reply with the settled destination so the session lands in
+// the interactive wait state instead of erroring.
+function wayfinderChartingCompletion(messages, step) {
+  const lastUser = [...messages]
+    .reverse()
+    .find((message) => message.role === "user");
+  const destination = lastUser
+    ? String(lastUser.content).slice(0, 200)
+    : "the destination";
+  const prefix = step === "naming" ? "Naming" : "Frontier";
+  return textCompletion(
+    `${prefix} step: I have the destination as "${destination}". Press Done to continue charting the map.`
+  );
 }
 
 // The flow-authoring session: set_flow_definition lands the definition module

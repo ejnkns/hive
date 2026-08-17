@@ -7,6 +7,7 @@
 
 import type { LitElement } from "lit";
 import type {
+  ChatMessage,
   FlowComponentDeps,
   FlowComponentRegistrations,
   InstanceComponentProps,
@@ -150,28 +151,22 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         border-top: 1px dashed var(--border);
         padding-top: 0.5rem;
       }
-      .chat-msg {
-        font-size: 0.625rem;
-        color: var(--text);
-      }
-      .chat-msg .role {
-        color: var(--muted);
-        font-family: var(--font-mono, monospace);
-      }
-      .chat-input-row {
+      .session-header {
         display: flex;
-        gap: 0.375rem;
+        flex-direction: column;
+        gap: 0.125rem;
       }
-      input {
-        flex: 1;
-        font-family: inherit;
+      .session-label {
+        font-size: 0.5625rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--flow-accent, var(--accent));
+      }
+      .session-desc {
         font-size: 0.625rem;
-        padding: 0.25rem 0.5rem;
-        border: 1px solid var(--border);
-        border-radius: 4px;
-        background: var(--bg);
-        color: var(--text);
-        outline: none;
+        color: var(--muted);
+        margin: 0;
       }
       button {
         font-family: inherit;
@@ -199,7 +194,6 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
     declare customKinds: InstanceComponentProps["customKinds"];
     declare onAction: InstanceComponentProps["onAction"] | undefined;
     declare onSendMessage: InstanceComponentProps["onSendMessage"] | undefined;
-    input = "";
 
     render() {
       const state = this.instanceEntry.state;
@@ -312,45 +306,40 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       }
       const ctx = state.runningTaskContext;
       if (ctx.role !== "ai-chat" || ctx.interactive !== true) return nothing;
+      const stateDef = this.workflowDef.states.find(
+        (s) => s.id === state.currentState
+      );
       return html`<div class="ticket-chat">
-        ${ctx.messages.map(
-          (m) =>
-            html`<div class="chat-msg">
-              <span class="role">${m.role}:</span> ${m.content}
-            </div>`
-        )}
-        <div class="chat-input-row">
-          <input
-            placeholder="Message the session..."
-            @input=${(e: Event) => {
-              this.input = (e.target as HTMLInputElement).value;
-            }}
-            @keydown=${(e: KeyboardEvent) => {
-              if (e.key === "Enter") this.send();
-            }}
-          />
-          <button
-            type="button"
-            @click=${() => {
-              this.send();
-            }}
-          >
-            Send
-          </button>
+        <div class="session-header">
+          <span class="session-label">${stateDef?.label ?? state.currentState}</span>
+          ${
+            stateDef?.description !== undefined && stateDef.description !== ""
+              ? html`<p class="session-desc">${stateDef.description}</p>`
+              : nothing
+          }
         </div>
+        <chat-session
+          .messages=${ctx.messages}
+          .sessionId=${ctx.sessionId}
+          .interactive=${ctx.interactive}
+          .thinking=${agentIsThinking(ctx.messages)}
+          .modelStatus=${ctx.modelStatus}
+          @hive-send-message=${(event: CustomEvent<{ content: string }>) => {
+            this.onSendMessage?.(event.detail.content);
+          }}
+        ></chat-session>
       </div>`;
-    }
-
-    send() {
-      const text = this.input.trim();
-      if (text !== "" && this.onSendMessage !== undefined) {
-        this.onSendMessage(text);
-        this.input = "";
-      }
     }
   }
 
   return { components: { "ticket-card": TicketCard } };
+}
+
+// The agent is composing its next reply while the transcript ends on anything
+// but an assistant message.
+function agentIsThinking(messages: readonly ChatMessage[]): boolean {
+  const last = messages[messages.length - 1];
+  return last !== undefined && last.role !== "assistant";
 }
 
 // Reads a string field off a task-outcome output (the output shape is open;

@@ -40,18 +40,20 @@ describe("wayfinder charting workflow", () => {
     });
     assert.equal(controller.getState().currentState, "naming");
 
-    // The naming session runs with the destination as its opening message;
-    // the human adds more, and the session sharpens the destination.
+    // The seeded destination opens the naming session as its first user
+    // message — the agent engages immediately (no wait for the human to
+    // start), sharpening the destination from the seed alone.
     await waitFor(() => controller.getState().runningTaskId === "nameSession");
+    await waitFor(() => {
+      const state = controller.getState().workflowInstanceState;
+      return state.destination === "Ship the code editor";
+    });
+    // The human reacts to the sharpened destination, then presses Done.
     controller.sendTaskInput(
       "nameSession",
       "It is the editor work we keep deferring.",
       "user"
     );
-    await waitFor(() => {
-      const state = controller.getState().workflowInstanceState;
-      return state.destination === "Ship the code editor";
-    });
     controller.dispatchAction("done");
 
     // Entering frontier runs the settle operation (patches flow config and

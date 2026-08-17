@@ -236,6 +236,10 @@ export const flow: FlowDefinition = {
               label: "Frontier session",
               role: "ai-chat",
               startOnUserInput: true,
+              // The settled destination opens the session as its first user
+              // message, so the frontier survey starts from the charted map
+              // (not a cold, empty session after the naming Done).
+              inputFromInstanceState: "destination",
               tools: ["list_directory", "read_file", "search_code"],
               systemPromptRef: "./charting/prompts/frontier.ts",
             },

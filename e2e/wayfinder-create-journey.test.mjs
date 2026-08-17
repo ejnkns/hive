@@ -46,11 +46,16 @@ async function pageState() {
         (el) => el.tagName === "INPUT" && (el.placeholder ?? "").length > 0
       )
       .map((el) => el.placeholder);
+    // The shared chat-session renders a session header naming the running
+    // phase (e.g. the Naming step) above the transcript.
+    const sessionLabels = all
+      .filter((el) => el.classList?.contains("session-label"))
+      .map((el) => el.textContent?.trim());
     const overviewPresent =
       document
         .querySelector("workflow-instances")
         ?.shadowRoot?.querySelector(".overview") !== null;
-    return { mapTitles, chatInputs, overviewPresent };
+    return { mapTitles, chatInputs, sessionLabels, overviewPresent };
   });
 }
 
@@ -86,10 +91,12 @@ test("creating a wayfinder instance starts the charting session with the destina
     `the map must show the creation destination (got ${JSON.stringify(state.mapTitles)})`
   );
   // The charting session started on submission — the naming chat is live
-  // (no "Start charting" click needed).
+  // (no "Start charting" click needed), with the phase named in its header.
   assert.ok(
-    state.chatInputs.some((p) => p.includes("session")),
-    `the naming session chat must be open (got ${JSON.stringify(state.chatInputs)})`
+    state.sessionLabels.some((label) =>
+      label?.toLowerCase().includes("naming")
+    ),
+    `the naming session chat must be open (got ${JSON.stringify(state.sessionLabels)})`
   );
   // A single active workflow: no overview bar (it would be redundant).
   assert.equal(

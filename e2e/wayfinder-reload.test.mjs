@@ -29,9 +29,13 @@ after(async () => {
 async function chatDump() {
   return page.evaluate(() => {
     const inputs = [];
+    const sessionLabels = [];
     const walk = (root) => {
       for (const el of root.querySelectorAll("input, textarea")) {
         inputs.push(el.placeholder ?? "");
+      }
+      for (const el of root.querySelectorAll(".session-label")) {
+        sessionLabels.push(el.textContent?.trim() ?? "");
       }
       for (const el of root.querySelectorAll("*")) {
         if (el.shadowRoot) walk(el.shadowRoot);
@@ -51,7 +55,7 @@ async function chatDump() {
       deep(document);
       return found.length > 0;
     })();
-    return { inputs, mapPresent };
+    return { inputs, sessionLabels, mapPresent };
   });
 }
 
@@ -103,7 +107,11 @@ test("charting session and expedition map survive reload", async () => {
     "the expedition map must survive reload"
   );
   assert.ok(
-    after.inputs.some((p) => p.includes("session")),
-    `the session chat input must survive reload (got ${JSON.stringify(after.inputs)})`
+    after.sessionLabels.length > 0,
+    `the session chat must survive reload (got ${JSON.stringify(after.sessionLabels)})`
+  );
+  assert.ok(
+    after.inputs.some((p) => p.includes("Type a message")),
+    `the session input must survive reload (got ${JSON.stringify(after.inputs)})`
   );
 });

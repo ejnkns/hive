@@ -47,8 +47,16 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
       if (task.startOnUserInput) {
         // Wait for the first user message before calling the model, so a
         // transient provider failure cannot break the session before it
-        // starts. The first sendMessage releases this.
-        await waitForInput();
+        // starts. A session seeded with a user message (inputFromInstanceState
+        // — the human's opening statement, e.g. the creation destination) has
+        // something to work on and starts the model call immediately; only a
+        // session with no user message yet waits for the first sendMessage.
+        const hasSeededUserMessage = messages.some(
+          (message) => message.role === "user"
+        );
+        if (!hasSeededUserMessage) {
+          await waitForInput();
+        }
       }
 
       // The chat contract: the output wraps the transcript; completion via the

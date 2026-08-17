@@ -158,9 +158,21 @@ describe("wayfinder served modules", () => {
       );
       await settle(shadowRootOf(el));
 
-      const messages = queryAllDeep(el, ".chat-msg");
+      const messages = queryAllDeep(el, ".msg");
       expect(messages.length).toBe(2);
-      expect(messages[1]?.textContent).toContain("Offline-first it is.");
+      // Both message bodies render as markdown inside nested shadows.
+      const markdowns = queryAllDeep(el, "markdown-view");
+      expect(markdowns.length).toBe(2);
+      expect(markdowns[1]?.shadowRoot?.textContent).toContain(
+        "Offline-first it is."
+      );
+      // The shared chat-session component (the authoring chat) renders the
+      // transcript with a session header naming the running phase, and an
+      // interactive input.
+      expect(queryAllDeep(el, ".session-label").length).toBe(1);
+      expect(
+        queryAllDeep(el, "input[placeholder='Type a message...']").length
+      ).toBe(1);
       expect(queryAllDeep(el, ".hitl-marker").length).toBe(1);
     } finally {
       restore();

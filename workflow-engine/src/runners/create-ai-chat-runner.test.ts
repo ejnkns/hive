@@ -276,6 +276,34 @@ describe("createAiChatRunner", () => {
     );
   });
 
+  it("starts an interactive session immediately when a user message is seeded (inputFromInstanceState)", async () => {
+    let calls = 0;
+    const modelCaller: AiChatModelCaller = async (_prompt, msgs) => {
+      calls++;
+      const hasUser = msgs.some((m) => m.role === "user");
+      return { content: hasUser ? "##COMPLETE##" : "unexpected" };
+    };
+    const runner = createAiChatRunner({
+      modelCaller,
+      toolDefinitions: {},
+      toolExecutors: {},
+      workflowInstanceState: () => ({ brief: "My idea" }),
+      completionSignal: "##COMPLETE##",
+    });
+
+    const result = await runner.run({
+      ...dummyTask,
+      startOnUserInput: true,
+      inputFromInstanceState: "brief",
+    });
+    // The seeded user message is the human's opening statement — the session
+    // starts the model call instead of waiting for another message.
+    assert.equal(calls, 1, "the seeded message starts the model call");
+    assert.ok(
+      (result.output as { content: string }).content.includes("##COMPLETE##")
+    );
+  });
+
   it("waits for the first user message before calling the model with startOnUserInput", async () => {
     let calls = 0;
     const modelCaller: AiChatModelCaller = async (
