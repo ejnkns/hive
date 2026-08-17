@@ -60,6 +60,17 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         letter-spacing: 0.08em;
         color: var(--text);
       }
+      .map-heading {
+        display: flex;
+        flex-direction: column;
+        gap: 0.125rem;
+        min-width: 0;
+      }
+      .map-subtitle {
+        font-size: 0.625rem;
+        color: var(--muted);
+        margin: 0;
+      }
       .map-progress {
         margin-left: auto;
         font-size: 0.5625rem;
@@ -188,7 +199,15 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       return html`<div class="map">
         <div class="map-header">
           <span class="map-emblem">▲</span>
-          <span class="map-title">Expedition map</span>
+          <div class="map-heading">
+            <span class="map-title">Expedition map</span>
+            ${
+              this.workflowDef.description !== undefined &&
+              this.workflowDef.description !== ""
+                ? html`<p class="map-subtitle">${this.workflowDef.description}</p>`
+                : nothing
+            }
+          </div>
           <span class="map-progress"
             >${charted} of ${this.entries.length} charted</span
           >

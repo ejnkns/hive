@@ -63,7 +63,7 @@ describe("computeFlowOverview", () => {
       waiting: 0,
       error: 1,
       terminal: 1,
-      decisions: 1,
+      actionable: 1,
     });
     assert.equal(overview.byWorkflow.length, 2);
   });
@@ -106,12 +106,12 @@ describe("computeFlowOverview", () => {
     assert.equal(overview.totals.instances, 0);
   });
 
-  it("counts decisions only where actions are available", () => {
+  it("counts actionable instances only where actions are available", () => {
     const overview = computeFlowOverview(defs, [
       entry("cards", "ready", { actions: 3 }),
       entry("cards", "done", { actions: 0 }),
       entry("ideas", "backlog"),
     ]);
-    assert.equal(overview.byWorkflow[1].decisions, 1);
+    assert.equal(overview.byWorkflow[1].actionable, 1);
   });
 });

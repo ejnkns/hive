@@ -5,9 +5,11 @@ import type {
 } from "./workflow-instances/flow-overview.ts";
 
 // The flow-level overview bar: a derived, at-a-glance summary of the whole
-// flow instance — flow totals plus one chip per workflow (label, count, status
-// dot, open-decision marker). Rendered above the per-workflow boards by
-// workflow-instances; clicking a chip focuses that workflow's section.
+// flow instance — flow totals plus one chip per workflow WITH instances
+// (label, count, status dot, actionable marker). Rendered above the
+// per-workflow boards by workflow-instances; clicking a chip focuses that
+// workflow's section. Workflows with no instances render no chip — an empty
+// section has nothing to focus.
 export class FlowOverviewBar extends LitElement {
   static properties = {
     overview: { attribute: false },
@@ -100,7 +102,7 @@ export class FlowOverviewBar extends LitElement {
       font-weight: 700;
     }
 
-    .chip-decisions {
+    .chip-actionable {
       color: var(--muted);
       border-left: 1px solid var(--border);
       padding-left: 0.375rem;
@@ -114,7 +116,7 @@ export class FlowOverviewBar extends LitElement {
       waiting: 0,
       error: 0,
       terminal: 0,
-      decisions: 0,
+      actionable: 0,
     },
     byWorkflow: [],
   };
@@ -140,13 +142,15 @@ export class FlowOverviewBar extends LitElement {
             : nothing
         }
         ${
-          totals.decisions > 0
-            ? html`<span class="total"><b>${totals.decisions}</b> open decisions</span>`
+          totals.actionable > 0
+            ? html`<span class="total"><b>${totals.actionable}</b> actionable</span>`
             : nothing
         }
       </div>
       <div class="chips">
-        ${this.overview.byWorkflow.map((workflow) => this.renderWorkflow(workflow))}
+        ${this.overview.byWorkflow
+          .filter((workflow) => workflow.total > 0)
+          .map((workflow) => this.renderWorkflow(workflow))}
       </div>
     </div>`;
   }
@@ -163,8 +167,8 @@ export class FlowOverviewBar extends LitElement {
       <span class="chip-label">${workflow.label}</span>
       <span class="chip-count">${workflow.total}</span>
       ${
-        workflow.decisions > 0
-          ? html`<span class="chip-decisions">${workflow.decisions} open</span>`
+        workflow.actionable > 0
+          ? html`<span class="chip-actionable">${workflow.actionable} actionable</span>`
           : nothing
       }
     </button>`;

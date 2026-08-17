@@ -1,8 +1,8 @@
 /** @private — only imported by workflow-instances.ts */
 
 // The flow-level overview derivation: aggregates across a flow's workflows
-// (instance counts, running work, open decisions, error/terminal) from the
-// same snapshot the boards render — a derived view, no server involvement.
+// (instance counts, running work, actionable instances, error/terminal) from
+// the same snapshot the boards render — a derived view, no server involvement.
 
 export type OverviewStatus =
   | "error"
@@ -19,7 +19,7 @@ export type WorkflowOverview = {
   waiting: number; // active ai-chat sessions awaiting input
   error: number; // instances in a category-"error" state
   terminal: number; // instances in the workflow's terminal states
-  decisions: number; // instances with available actions (awaiting a user click)
+  actionable: number; // instances with available actions (awaiting a user click)
   status: OverviewStatus;
 };
 
@@ -30,7 +30,7 @@ export type FlowOverview = {
     waiting: number;
     error: number;
     terminal: number;
-    decisions: number;
+    actionable: number;
   };
   byWorkflow: WorkflowOverview[];
 };
@@ -76,7 +76,7 @@ export function computeFlowOverview(
     waiting: 0,
     error: 0,
     terminal: 0,
-    decisions: 0,
+    actionable: 0,
   };
   for (const workflow of byWorkflow) {
     totals.instances += workflow.total;
@@ -84,7 +84,7 @@ export function computeFlowOverview(
     totals.waiting += workflow.waiting;
     totals.error += workflow.error;
     totals.terminal += workflow.terminal;
-    totals.decisions += workflow.decisions;
+    totals.actionable += workflow.actionable;
   }
   return { totals, byWorkflow };
 }
@@ -104,7 +104,7 @@ function overviewForWorkflow(
   let waiting = 0;
   let error = 0;
   let terminal = 0;
-  let decisions = 0;
+  let actionable = 0;
   for (const entry of entries) {
     if (entry.state.hasRunningTask) {
       if (entry.state.runningTaskContext?.role === "ai-chat") waiting++;
@@ -112,7 +112,7 @@ function overviewForWorkflow(
     }
     if (errorStates.has(entry.state.currentState)) error++;
     if (terminalStates.has(entry.state.currentState)) terminal++;
-    if (entry.availableActions.length > 0) decisions++;
+    if (entry.availableActions.length > 0) actionable++;
   }
 
   // Mirrors the server's computeInstanceStatus precedence (instance-status.ts).
@@ -135,7 +135,7 @@ function overviewForWorkflow(
     waiting,
     error,
     terminal,
-    decisions,
+    actionable,
     status,
   };
 }

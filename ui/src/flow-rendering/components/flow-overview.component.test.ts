@@ -17,7 +17,7 @@ function overview(overrides: Partial<FlowOverview> = {}): FlowOverview {
       waiting: 1,
       error: 1,
       terminal: 2,
-      decisions: 2,
+      actionable: 2,
     },
     byWorkflow: [
       {
@@ -28,7 +28,7 @@ function overview(overrides: Partial<FlowOverview> = {}): FlowOverview {
         waiting: 1,
         error: 0,
         terminal: 1,
-        decisions: 0,
+        actionable: 0,
         status: "waiting",
       },
       {
@@ -39,8 +39,20 @@ function overview(overrides: Partial<FlowOverview> = {}): FlowOverview {
         waiting: 0,
         error: 1,
         terminal: 1,
-        decisions: 2,
+        actionable: 2,
         status: "error",
+      },
+      // An empty workflow renders no chip (nothing to focus).
+      {
+        workflowId: "empty",
+        label: "Empty",
+        total: 0,
+        running: 0,
+        waiting: 0,
+        error: 0,
+        terminal: 0,
+        actionable: 0,
+        status: "idle",
       },
     ],
     ...overrides,
@@ -60,11 +72,11 @@ describe("FlowOverviewBar", () => {
       "1 running",
       "1 waiting",
       "1 error",
-      "2 open decisions",
+      "2 actionable",
     ]);
     const chips = [...shadowRootOf(el).querySelectorAll(".chip")];
     const chipText = (c: Element) => (c.textContent ?? "").replace(/\s+/g, "");
-    expect(chips.map(chipText)).toEqual(["Ideas2", "Cards32open"]);
+    expect(chips.map(chipText)).toEqual(["Ideas2", "Cards32actionable"]);
   });
 
   it("omits zero totals", async () => {
@@ -77,7 +89,7 @@ describe("FlowOverviewBar", () => {
             waiting: 0,
             error: 0,
             terminal: 0,
-            decisions: 0,
+            actionable: 0,
           },
         }),
       })
