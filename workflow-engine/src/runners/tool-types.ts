@@ -41,6 +41,10 @@ export type ToolContext<
   // knows it. Tools that persist flow-level state (a requirements draft, a
   // board) write relative to this; falls back to workspacePath when unset.
   basePath?: string;
+  // Additional read-only directories the file tools may access alongside the
+  // workspace — paths the human granted in chat (a user message that is
+  // itself a path) and any the flow declares in its config. Resolved absolute.
+  extraReadRoots?: readonly string[];
   // The workflow instance this task runs in (e.g. the card id) when known.
   instanceId?: string;
   // Patches the workflow instance's domain data. Tools use this to record

@@ -1,7 +1,7 @@
 /** @public — one-time engine wiring. Creates configured runners with server-side dependencies. */
 
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import type { Readable } from "node:stream";
 import type {
   OperationContext,
@@ -364,6 +364,23 @@ export function createEngineRunners(
       : undefined;
   }
 
+  // The flow's declared extra read roots (the file tools may read within them
+  // alongside the workspace). Resolved absolute relative to basePath; the
+  // session-granted paths from chat are added in the runner itself.
+  function readExtraReadRoots(ctx: TaskRunnerContext): string[] | undefined {
+    const raw = ctx.flowConfig.extraReadRoots;
+    if (!Array.isArray(raw)) return undefined;
+    const basePath = readBasePath(ctx);
+    const roots = raw
+      .filter((entry): entry is string => typeof entry === "string")
+      .map((entry) => entry.trim())
+      .filter((entry) => entry !== "")
+      .map((entry) =>
+        isAbsolute(entry) ? entry : resolve(basePath ?? process.cwd(), entry)
+      );
+    return roots.length > 0 ? roots : undefined;
+  }
+
   return {
     // Factories: each task execution gets an isolated runner instance so
     // concurrent ai-chat/ai-task sessions in one flow do not share state.
@@ -386,6 +403,7 @@ export function createEngineRunners(
         toolDefinitions,
         toolExecutors,
         basePath: readBasePath(ctx),
+        extraReadRoots: readExtraReadRoots(ctx),
         instanceId: ctx.instanceId,
         patchWorkflowInstanceState: ctx.patchWorkflowInstanceState,
         workflowInstanceState: ctx.workflowInstanceState,
@@ -399,6 +417,7 @@ export function createEngineRunners(
         toolDefinitions,
         toolExecutors,
         basePath: readBasePath(ctx),
+        extraReadRoots: readExtraReadRoots(ctx),
         instanceId: ctx.instanceId,
         patchWorkflowInstanceState: ctx.patchWorkflowInstanceState,
         workflowInstanceState: ctx.workflowInstanceState,

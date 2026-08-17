@@ -20,6 +20,7 @@
 import type { ChatMessage } from "../shared/chat-message.ts";
 import type { TaskDefinition } from "../task-runner.ts";
 import type { ModelCallStatus } from "../workflow-types.ts";
+import { resolveGrantedRoots } from "./read-grants.ts";
 import { resolveDottedPath } from "./resolve-dotted-path.ts";
 import { resolveWorkspacePath } from "./resolve-workspace-path.ts";
 import type {
@@ -91,6 +92,9 @@ export type AgentRunnerConfig = {
   toolExecutors: Record<string, ToolExecutor>;
   completionTool?: string;
   basePath?: string;
+  // Declared read-only roots the file tools may access alongside the
+  // workspace (from the flow config), resolved absolute.
+  extraReadRoots?: readonly string[];
   instanceId?: string;
   patchWorkflowInstanceState?: (patch: Record<string, unknown>) => void;
   // Live model-call progress into the running task context (see ModelCallStatus).
@@ -170,6 +174,14 @@ export async function runAgentLoop(
     config.workflowInstanceState?.(),
     config.basePath
   );
+  // The file tools' read roots: the flow's declared roots plus every path the
+  // human granted in chat (a user message that is itself a path). Computed
+  // per tool call from the live transcript, so a path typed mid-session takes
+  // effect immediately.
+  const extraReadRoots = [
+    ...(config.extraReadRoots ?? []),
+    ...resolveGrantedRoots(messages, config.basePath),
+  ];
   const toolDefs = (task.tools ?? [])
     .map((name) => config.toolDefinitions[name])
     .filter(Boolean);
@@ -248,6 +260,7 @@ export async function runAgentLoop(
         result = await executor(call, {
           workspacePath,
           basePath: config.basePath,
+          extraReadRoots,
           instanceId: config.instanceId,
           patchWorkflowInstanceState: config.patchWorkflowInstanceState,
           workflowInstanceState: () => config.workflowInstanceState?.() ?? {},

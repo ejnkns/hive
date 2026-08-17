@@ -20,3 +20,4 @@ architecture-review-*.html
 graphify-out/
 TODOs/
 .DS_Store
+effect/

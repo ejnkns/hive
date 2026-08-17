@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { readdirSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { join, relative } from "node:path";
+import { resolveReadPath } from "../resolve-read-path.ts";
 import type { ToolDefinition, ToolExecutor } from "../tool-types.ts";
 
 export const definition: ToolDefinition = {
@@ -56,7 +57,18 @@ export const execute: ToolExecutor = async (call, ctx) => {
     };
   }
 
-  const dirPath = resolve(ctx.workspacePath, requested);
+  const dirPath = resolveReadPath(
+    requested,
+    ctx.workspacePath,
+    ctx.extraReadRoots
+  );
+  if (dirPath === undefined) {
+    return {
+      toolCallId: call.id,
+      content: "Path escapes the workspace and every granted read root",
+      isError: true,
+    };
+  }
   const entries = readdirSync(dirPath, { withFileTypes: true });
   // Hidden entries are included: the flow's domain state lives in a dot
   // directory (.queen-bee/requirements.md is the authoritative spec a worker

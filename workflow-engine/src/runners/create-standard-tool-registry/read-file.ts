@@ -1,7 +1,8 @@
 /** @private — only imported by create-standard-tool-registry.ts */
 import { execFileSync } from "node:child_process";
 import { readFileSync, statSync } from "node:fs";
-import { isAbsolute, relative, resolve, sep } from "node:path";
+
+import { resolveReadPath } from "../resolve-read-path.ts";
 import type { ToolDefinition, ToolExecutor } from "../tool-types.ts";
 
 export const definition: ToolDefinition = {
@@ -49,11 +50,15 @@ export const execute: ToolExecutor = async (call, ctx) => {
     return { toolCallId: call.id, content, isError: false };
   }
 
-  const filePath = resolve(ctx.workspacePath, args.path);
-  if (!isWithinWorkspace(ctx.workspacePath, filePath)) {
+  const filePath = resolveReadPath(
+    args.path,
+    ctx.workspacePath,
+    ctx.extraReadRoots
+  );
+  if (filePath === undefined) {
     return {
       toolCallId: call.id,
-      content: "Path escapes workspace directory",
+      content: "Path escapes the workspace and every granted read root",
       isError: true,
     };
   }
@@ -82,14 +87,6 @@ export const execute: ToolExecutor = async (call, ctx) => {
     isError: false,
   };
 };
-
-function isWithinWorkspace(workspacePath: string, targetPath: string): boolean {
-  const rel = relative(resolve(workspacePath), targetPath);
-  return (
-    rel === "" ||
-    (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel))
-  );
-}
 
 function normalizePath(path: string): string {
   const normalized = path.replace(/^\.\//, "").replace(/\/$/, "") || ".";

@@ -21,6 +21,13 @@ export const flow: FlowDefinition = {
       hint: "The repository wayfinder is bound to — charting and build sessions read and write code here. Leave empty to work in the current directory.",
       placeholder: "e.g. . or a repo path",
     },
+    {
+      key: "extraReadRoots",
+      label: "Reference paths",
+      type: "string[]",
+      hint: "Extra directories the agents may READ beyond the base path — e.g. a library you want the charting session to study. Absolute paths or paths relative to the base path. You can also grant one mid-session by typing the path as its own chat message.",
+      placeholder: "e.g. effect/",
+    },
   ],
   domainDir: ".wayfinder",
   // Declarative theme: clear sky blue accent, mountain emblem — "clearing the
