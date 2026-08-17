@@ -77,6 +77,11 @@ function completionFor(payload) {
   if (systemText.includes("You are the wayfinder's frontier step")) {
     return wayfinderChartingCompletion(messages, "frontier");
   }
+  if (
+    systemText.includes("You are a research agent burning down one question")
+  ) {
+    return wayfinderResearchCompletion(messages);
+  }
   throw new Error("Mock provider received an unknown Agent Role");
 }
 
@@ -95,6 +100,26 @@ function wayfinderChartingCompletion(messages, step) {
   return textCompletion(
     `${prefix} step: I have the destination as "${destination}". Press Done to continue charting the map.`
   );
+}
+
+// The wayfinder research ticket's one-shot agent: completes on the first turn
+// with a cited report (the ai-task runner ends on the completion tool).
+function wayfinderResearchCompletion(messages) {
+  const toolMessages = messages.filter((message) => message.role === "tool");
+  if (toolMessages.length === 0) {
+    return toolCompletion(
+      [
+        toolCall("wf-research-complete", "ticket_research_complete", {
+          question: "Which store should the editor use?",
+          findings:
+            "# Findings\nIndexedDB is the right store for the editor's large documents.",
+          sources: ["src/editor.ts"],
+        }),
+      ],
+      "completing the research"
+    );
+  }
+  return textCompletion("Research complete.");
 }
 
 // The flow-authoring session: set_flow_definition lands the definition module
