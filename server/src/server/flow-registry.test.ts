@@ -127,6 +127,106 @@ describe("flow-registry", () => {
     );
   });
 
+  it("createFlow copies creation inputs into the seeded instance's declared state fields", () => {
+    const charting = defineWorkflow({
+      id: "charting",
+      label: "Charting",
+      taskOutputs: {} as Record<string, never>,
+      instanceState: [
+        { field: "destination", type: "string" },
+        { field: "notes", type: "string" },
+      ],
+      states: [{ id: "naming", label: "Naming", category: "initial" }],
+      initial: "naming",
+      terminalStates: [],
+    });
+    const definition = {
+      id: "charting-def",
+      label: "Charting Def",
+      workflows: [charting],
+      edges: [],
+    } satisfies CompiledFlowDefinition;
+    registerFlowDefinition(definition);
+
+    const persistence = getFlowPersistence();
+    assert.ok(persistence);
+    createFlow("flow-chart", "charting-def", persistence, {
+      name: "flow-chart",
+      destination: "A spec to hand off",
+      notes: "Offline-first",
+    });
+
+    const persisted = persistence.loadFlow("flow-chart");
+    assert.ok(persisted);
+    assert.equal(persisted.instances.length, 1);
+    assert.equal(
+      persisted.instances[0].state.workflowInstanceState.destination,
+      "A spec to hand off",
+      "the creation destination seeds the first instance"
+    );
+    assert.equal(
+      persisted.instances[0].state.workflowInstanceState.notes,
+      "Offline-first"
+    );
+  });
+
+  it("createFlow seeds an input-driven initial ai-task when its input is provided in the flow config", () => {
+    const charting = defineWorkflow({
+      id: "charting",
+      label: "Charting",
+      taskOutputs: {} as Record<string, never>,
+      instanceState: [{ field: "destination", type: "string" }],
+      states: [
+        {
+          id: "naming",
+          label: "Naming",
+          category: "initial",
+          tasks: [
+            {
+              id: "nameSession",
+              label: "Naming session",
+              trigger: "auto",
+              role: "ai-chat",
+              startOnUserInput: true,
+              systemPrompt: "Sharpen the destination.",
+              inputFromInstanceState: "destination",
+            },
+          ],
+        },
+      ],
+      initial: "naming",
+      terminalStates: [],
+    });
+    const definition = {
+      id: "charting-def",
+      label: "Charting Def",
+      workflows: [charting],
+      edges: [],
+    } satisfies CompiledFlowDefinition;
+    registerFlowDefinition(definition);
+
+    const persistence = getFlowPersistence();
+    assert.ok(persistence);
+    const runtime = createFlow("flow-chart", "charting-def", persistence, {
+      name: "flow-chart",
+      destination: "A spec to hand off",
+    });
+
+    assert.equal(runtime.workflowInstances.length, 1);
+    const instance = runtime.workflowInstances[0];
+    assert.equal(
+      instance.workflowInstanceState.destination,
+      "A spec to hand off"
+    );
+    // The inputful session is provided its input, so it starts immediately
+    // (interactive — waiting for the human's first reply).
+    assert.equal(
+      instance.hasRunningTask,
+      true,
+      "the naming session starts on creation"
+    );
+  });
+
   it("rehydrateFlow rebuilds a runtime from its registered definition", async () => {
     const persistence = getFlowPersistence();
     assert.ok(persistence);

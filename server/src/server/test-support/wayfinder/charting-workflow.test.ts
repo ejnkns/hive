@@ -33,23 +33,24 @@ describe("wayfinder charting workflow", () => {
       aiTaskCaller: idleModelCaller(),
     });
 
-    const controller = runtime.addWorkflowInstance("charting");
-    assert.equal(controller.getState().currentState, "no_session");
-
-    controller.dispatchAction("start_charting");
+    // Creation seeds the charting instance in the naming state with the
+    // creation-time destination; the naming session starts immediately.
+    const controller = runtime.addWorkflowInstance("charting", {
+      workflowInstanceState: { destination: "A loose effort", notes: "" },
+    });
     assert.equal(controller.getState().currentState, "naming");
 
-    // The naming session sharpens the destination. The charting caller records
-    // the destination via submit_map on its first call, then waits.
+    // The naming session runs with the destination as its opening message;
+    // the human adds more, and the session sharpens the destination.
     await waitFor(() => controller.getState().runningTaskId === "nameSession");
     controller.sendTaskInput(
       "nameSession",
-      "Sharpen the destination for the effort.",
+      "It is the editor work we keep deferring.",
       "user"
     );
     await waitFor(() => {
       const state = controller.getState().workflowInstanceState;
-      return typeof state.destination === "string" && state.destination !== "";
+      return state.destination === "Ship the code editor";
     });
     controller.dispatchAction("done");
 

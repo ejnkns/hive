@@ -4,7 +4,10 @@ import type {
   WorkflowDefResponse,
   WorkflowInstanceEntry,
 } from "workflow-engine/create-flow-runtime";
-import type { CustomRenderKind } from "workflow-engine/workflow-types";
+import type {
+  CustomRenderKind,
+  WorkflowViewProps,
+} from "workflow-engine/workflow-types";
 import { getComponentRenderer } from "../renderer-registry.ts";
 import "./dynamic-element-host.ts";
 import "./flow-overview.ts";
@@ -170,6 +173,7 @@ export class WorkflowInstances extends LitElement {
           workflowDef: def,
           entries,
           customKinds: this.customKinds,
+          workflowCounts: this.workflowCounts(),
           onAction: (
             instanceId: string,
             actionId: string,
@@ -203,12 +207,53 @@ export class WorkflowInstances extends LitElement {
     });
   }
 
+  // The cross-workflow state counts the custom workflow views receive: per
+  // workflow, the instance count by current state. A derived view over the
+  // same snapshot the sections render — a workflow-level view uses it to
+  // render sibling-workflow context (the expedition map's frontier summary).
+  private workflowCounts(): WorkflowViewProps["workflowCounts"] {
+    const entriesByWorkflow = new Map<string, WorkflowInstanceEntry[]>();
+    for (const entry of this.instances) {
+      const list = entriesByWorkflow.get(entry.workflowId) ?? [];
+      list.push(entry);
+      entriesByWorkflow.set(entry.workflowId, list);
+    }
+    return this.workflowDefs.map((def) => {
+      const entries = entriesByWorkflow.get(def.id) ?? [];
+      const byState: Record<string, number> = {};
+      for (const entry of entries) {
+        byState[entry.state.currentState] =
+          (byState[entry.state.currentState] ?? 0) + 1;
+      }
+      return {
+        workflowId: def.id,
+        label: def.label,
+        total: entries.length,
+        byState,
+      };
+    });
+  }
+
   // The flow-level overview bar: shown when the flow has more than one
   // workflow or more than one instance — a single bare workflow needs no
   // at-a-glance summary.
   private renderOverview() {
     const overview = computeFlowOverview(this.workflowDefs, this.instances);
-    if (overview.byWorkflow.length <= 1 && overview.totals.instances <= 1) {
+    // The overview summarizes breadth or urgency; it is noise when there is
+    // nothing to summarize. A single workflow with instances (or none) needs
+    // no at-a-glance bar — the section header shows the count, the boards
+    // show the work, and a custom workflow view (the map) is already the
+    // center. Show it only when several workflows hold instances, or any
+    // workflow is running / waiting / errored.
+    const activeWorkflows = overview.byWorkflow.filter(
+      (workflow) => workflow.total > 0
+    );
+    const hasBreadth = activeWorkflows.length >= 2;
+    const hasUrgency =
+      overview.totals.running > 0 ||
+      overview.totals.waiting > 0 ||
+      overview.totals.error > 0;
+    if (!hasBreadth && !hasUrgency) {
       return nothing;
     }
     return html`<flow-overview

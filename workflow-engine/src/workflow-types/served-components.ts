@@ -71,6 +71,16 @@ export type WorkflowViewProps = {
   // transcripts), availableActions, workflowSummary counts.
   entries: WorkflowInstanceEntry[];
   customKinds: readonly CustomRenderKind[];
+  // Cross-workflow context: every workflow of the flow with its instance
+  // count by current state — so a workflow-level view can render
+  // sibling-workflow state (e.g. the expedition map shows the ticket
+  // frontier/fog/decisions). Includes the view's own workflow.
+  workflowCounts: ReadonlyArray<{
+    workflowId: string;
+    label: string;
+    total: number;
+    byState: Readonly<Record<string, number>>;
+  }>;
   // The existing hive-action / hive-send-message callbacks, scoped to a
   // workflow instance id.
   onAction(

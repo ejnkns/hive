@@ -6,14 +6,11 @@
  * nothing: the map IS the charting section's content (the list view it
  * replaces was the generic fallback). */
 
-import type { LitElement } from "lit";
 import type {
   FlowComponentDeps,
   FlowComponentRegistrations,
   WorkflowViewProps,
 } from "workflow-engine/workflow-types";
-
-const FRONTIER_SESSION = "frontierSession";
 
 export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
   const { LitElement: Base, html, css, nothing } = lit;
@@ -186,6 +183,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
     declare workflowDef: WorkflowViewProps["workflowDef"];
     declare entries: WorkflowViewProps["entries"];
     declare customKinds: WorkflowViewProps["customKinds"];
+    declare workflowCounts: WorkflowViewProps["workflowCounts"];
     declare onAction: WorkflowViewProps["onAction"] | undefined;
     declare onSendMessage: WorkflowViewProps["onSendMessage"] | undefined;
     declare onSelect: WorkflowViewProps["onSelect"] | undefined;
@@ -215,7 +213,50 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         <div class="map-destinations">
           ${this.entries.map((entry) => this.renderDestination(entry))}
         </div>
+        ${charted > 0 ? this.renderFrontierSummary() : nothing}
       </div>`;
+    }
+
+    // The frontier, once the map is charted: the ticket workflow's state
+    // counts — fog, frontier (ready), resolving, decisions so far (closed),
+    // out of scope. The ticket workflow may not exist yet (nothing created);
+    // the chips render zeros then.
+    private renderFrontierSummary() {
+      const ticket = this.workflowCounts.find(
+        (workflow) => workflow.workflowId === "ticket"
+      );
+      const byState = ticket?.byState ?? {};
+      const fog = byState["fog"] ?? 0;
+      const frontier = byState["ready"] ?? 0;
+      const resolving =
+        (byState["resolving_research"] ?? 0) +
+        (byState["resolving_prototype"] ?? 0) +
+        (byState["resolving_grilling"] ?? 0) +
+        (byState["resolving_task"] ?? 0) +
+        (byState["resolving_task_hitl"] ?? 0) +
+        (byState["recording"] ?? 0);
+      const decisions = byState["closed"] ?? 0;
+      const outOfScope = byState["out_of_scope"] ?? 0;
+      return html`<div class="frontier-summary">
+        <div class="frontier-summary-label">Frontier</div>
+        <div class="frontier-chips">
+          ${this.chip("fog", "fog", fog)}
+          ${this.chip("frontier", "frontier", frontier)}
+          ${this.chip("resolving", "resolving", resolving)}
+          ${this.chip("decisions", "decisions", decisions)}
+          ${this.chip("out-of-scope", "out of scope", outOfScope)}
+        </div>
+      </div>`;
+    }
+
+    private chip(
+      kind: "fog" | "frontier" | "resolving" | "decisions" | "out-of-scope",
+      label: string,
+      count: number
+    ) {
+      return html`<span class="frontier-chip" data-kind=${kind}
+        >${label} <span class="count">${count}</span></span
+      >`;
     }
 
     private renderDestination(entry: WorkflowViewProps["entries"][number]) {
@@ -297,7 +338,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         )}
         <div class="chat-input-row">
           <input
-            placeholder="Message the frontier session..."
+            placeholder="Message the session..."
             @input=${(e: Event) => {
               this.input = (e.target as HTMLInputElement).value;
             }}

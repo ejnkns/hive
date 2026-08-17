@@ -3,14 +3,11 @@
  * and the frontier session's live chat. Self-contained; the lit runtime
  * arrives via the factory. */
 
-import type { LitElement } from "lit";
 import type {
   FlowComponentDeps,
   FlowComponentRegistrations,
   InstanceComponentProps,
 } from "workflow-engine/workflow-types";
-
-const FRONTIER_SESSION = "frontierSession";
 
 export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
   const { LitElement: Base, html, css, nothing } = lit;
@@ -166,7 +163,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         )}
         <div class="chat-input-row">
           <input
-            placeholder="Message the frontier session..."
+            placeholder="Message the session..."
             @input=${(e: Event) => {
               this.input = (e.target as HTMLInputElement).value;
             }}

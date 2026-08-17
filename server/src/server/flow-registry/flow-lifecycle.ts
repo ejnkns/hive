@@ -2,6 +2,7 @@
  * first instance), and rehydrateFlow (rebuild a runtime from persistence). */
 
 import { logger } from "shared/logger";
+import { readPath } from "workflow-engine/compile-flow-definition";
 import type { FlowRuntimeAPI } from "workflow-engine/create-flow-runtime";
 import { createFlowRuntime } from "workflow-engine/create-flow-runtime";
 import type { OperationFn, Tool } from "workflow-engine/runners";
@@ -93,28 +94,55 @@ export function createFlow(
 
   // Seed one instance of the first workflow so the flow is immediately
   // renderable (queen-bee: the onboarding workflow; custom defs: the
-  // single workflow). Fresh instances auto-run their initial-state tasks —
-  // but only seed when doing so cannot start a pointless AI run: an empty
-  // seed in a workflow whose initial state auto-runs an AI task that declares
-  // instance input would run the agent with nothing to work on (a phantom
+  // single workflow). Creation inputs (the flow config) seed the instance's
+  // declared state fields, so a fresh instance starts with its domain data
+  // (e.g. wayfinder's destination lands on the map and opens the charting
+  // session). Fresh instances auto-run their initial-state tasks — but only
+  // seed when doing so cannot start a pointless AI run: an input-driven
+  // initial AI task (inputFromInstanceState) whose input the creation config
+  // does not provide would run the agent with nothing to work on (a phantom
   // instance that burns a model call). Auto operation tasks are fine —
   // queen-bee's onboarding configures the flow from nothing.
   const seedWorkflow = workflows[0];
   const seedInitial = seedWorkflow?.states.find(
     (state) => state.id === seedWorkflow.initial
   );
-  const seedStartsInputlessAi = (seedInitial?.tasks ?? []).some(
+  const seedState = seedWorkflow
+    ? seedInstanceState(seedWorkflow, flowConfig)
+    : undefined;
+  const seedInputMissing = (seedInitial?.tasks ?? []).some(
     (task) =>
       task.trigger === "auto" &&
       (task.role === "ai-task" || task.role === "ai-chat") &&
-      task.inputFromInstanceState !== undefined
+      task.inputFromInstanceState !== undefined &&
+      readPath(flowConfig, task.inputFromInstanceState) === undefined
   );
-  if (seedWorkflow && !seedStartsInputlessAi) {
-    runtime.addWorkflowInstance(seedWorkflow.id);
+  if (seedWorkflow && !seedInputMissing) {
+    runtime.addWorkflowInstance(seedWorkflow.id, {
+      workflowInstanceState: seedState ?? {},
+    });
   }
 
   persistence.saveFlow(flowId, flowConfig, {});
   return runtime;
+}
+
+// The seed's instance state: creation inputs (flow config) copied into the
+// first workflow's declared instance-state fields. Config keys that are not
+// declared instance fields stay config-only (the definition decides what an
+// instance carries).
+function seedInstanceState(
+  seedWorkflow: RuntimeWorkflowConfig,
+  flowConfig: Record<string, unknown>
+): Record<string, unknown> {
+  const declared = new Set(
+    (seedWorkflow.instanceState ?? []).map((field) => field.field)
+  );
+  const state: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(flowConfig)) {
+    if (declared.has(key)) state[key] = value;
+  }
+  return state;
 }
 
 export async function rehydrateFlow(

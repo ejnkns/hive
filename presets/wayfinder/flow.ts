@@ -15,18 +15,11 @@ export const flow: FlowDefinition = {
       placeholder: "e.g. A routing-layer spec, reviewed and locked",
     },
     {
-      key: "notes",
-      label: "Notes",
-      type: "textarea",
-      hint: "Domain; standing preferences for this effort; whether execution is carried into the map (else wayfinding plans and doesn't do).",
-      placeholder: "e.g. Offline-first; ship on Fridays",
-    },
-    {
       key: "basePath",
       label: "Base path",
       type: "string",
-      hint: "The destination directory (a repo or scratch dir). Required for the build phase to persist decision records; leave empty for planning-only.",
-      placeholder: "e.g. ./ or a repo path",
+      hint: "The repository wayfinder is bound to — charting and build sessions read and write code here. Leave empty to work in the current directory.",
+      placeholder: "e.g. . or a repo path",
     },
   ],
   domainDir: ".wayfinder",
@@ -188,6 +181,9 @@ export const flow: FlowDefinition = {
               label: "Naming session",
               role: "ai-chat",
               startOnUserInput: true,
+              // The creation-time destination opens the session as its first
+              // user message (the user can add more); the session sharpens it.
+              inputFromInstanceState: "destination",
               tools: [
                 "list_directory",
                 "read_file",
@@ -274,7 +270,7 @@ export const flow: FlowDefinition = {
             "The map is charted. Add tickets, graduate fog, resolve the frontier, then Start build.",
         },
       ],
-      initial: "no_session",
+      initial: "naming",
     },
     {
       id: "ticket",

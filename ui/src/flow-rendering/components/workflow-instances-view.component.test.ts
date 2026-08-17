@@ -16,20 +16,27 @@ import { WorkflowInstances } from "./workflow-instances.ts";
 // A served workflow-level custom view (WorkflowConfig.ui.workflowComponent):
 // renders the workflow's ENTIRE workflow-instances section instead of the
 // generic grouped board/list. Receives the full workflow-instance data plus
-// the action/message/select callbacks.
+// the action/message/select callbacks and the cross-workflow state counts.
 class FrontierBoard extends LitElement {
   static properties = {
     workflowDef: { attribute: false },
     entries: { attribute: false },
     customKinds: { attribute: false },
+    workflowCounts: { attribute: false },
     onSelect: { attribute: false },
   };
   workflowDef: { label: string } = { label: "" };
   entries: Array<{ id: string }> = [];
   customKinds: unknown[] = [];
+  workflowCounts: Array<{ workflowId: string; label: string; total: number }> =
+    [];
   onSelect: ((instanceId: string) => void) | undefined = undefined;
   render() {
+    const siblingCounts = this.workflowCounts
+      .map((workflow) => `${workflow.workflowId}:${workflow.total}`)
+      .join(",");
     return html`<div class="frontier-board">
+      <span class="frontier-summary-counts">${siblingCounts}</span>
       ${this.entries.map(
         (e) =>
           html`<button
@@ -89,6 +96,46 @@ describe("WorkflowInstances workflowComponent (custom workflow view)", () => {
       expect(queryAllDeep(el, ".frontier-entry").length).toBe(2);
       // The generic board/list content is replaced, not rendered underneath.
       expect(shadowRootOf(el).querySelector(".flow-board")).toBeNull();
+    } finally {
+      restore();
+    }
+  });
+
+  it("passes cross-workflow state counts to the custom view", async () => {
+    defineFlowRenderingComponents();
+    localStorage.clear();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, text: async () => "" }))
+    );
+    const restore = await loadFlowComponents(
+      { "frontier-board": "/api/.../frontier-board" },
+      async () => ({
+        default: () => ({
+          components: { "frontier-board": FrontierBoard },
+        }),
+      })
+    );
+    try {
+      const def = ticketsDef("frontier-board");
+      const ticket = entry("t-1", "ready");
+      ticket.workflowId = "tickets";
+      const other = entry("o-1", "ready");
+      other.workflowId = "charting";
+      const el = await mount(
+        Object.assign(new WorkflowInstances(), {
+          flowId: "flow-1",
+          workflowDefs: [def, cardDef({ id: "charting", label: "Charting" })],
+          instances: [ticket, other],
+          customKinds: [],
+        })
+      );
+      await settle(shadowRootOf(el));
+      // The custom view sees every workflow's count (including its own); it
+      // filters its own out.
+      const counts = mustFind(el, ".frontier-summary-counts");
+      expect(counts.textContent).toContain("charting:1");
+      expect(counts.textContent).toContain("tickets:1");
     } finally {
       restore();
     }
