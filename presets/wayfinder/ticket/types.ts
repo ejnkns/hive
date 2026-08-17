@@ -12,6 +12,9 @@ export type TicketState = {
   // Whether a task-type ticket runs as a live ai-chat session (true) or an
   // AFK one-shot ai-task (false/absent).
   hitl?: boolean;
+  // The charting agent's sharp-ticket marker: a fog ticket with graduated:
+  // true auto-advances to the frontier (ready); fog entries omit it.
+  graduated?: boolean;
   // Written by the engine's workspace ops (prepare_prototype_workspace); read
   // by @instance: worktree refs and merge_branch.
   worktreePath?: string;

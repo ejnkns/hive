@@ -37,7 +37,17 @@ function normalizeTicketOp(
   const question =
     readString(state.question) ?? readString(state.brief) ?? title;
   const dependsOn = readDependsOn(state.dependsOn);
-  ctx.patchWorkflowInstanceState({ title, question, type, dependsOn });
+  // graduated (the charting agent's sharp-ticket marker) rides through so the
+  // fog auto-transition can graduate it; the writer declaration keeps the
+  // validator's read↔write invariant honest.
+  const graduated = state.graduated === true;
+  ctx.patchWorkflowInstanceState({
+    title,
+    question,
+    type,
+    dependsOn,
+    graduated,
+  });
   return { ok: true, type, dependsOn };
 }
 

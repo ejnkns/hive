@@ -107,6 +107,7 @@ describe("wayfinder charting workflow", () => {
                 title: "Effect dep mode",
                 question: "npm publish or source link to ./effect?",
                 type: "research",
+                graduated: true,
               },
             },
           },
@@ -118,6 +119,7 @@ describe("wayfinder charting workflow", () => {
                 title: "Plain registry",
                 question: "How to record intentionally-plain modules?",
                 type: "grilling",
+                graduated: true,
               },
             },
           },
@@ -152,28 +154,41 @@ describe("wayfinder charting workflow", () => {
     await waitFor(() => controller.getState().currentState === "frontier");
 
     // The frontier session creates the tickets automatically; each lands in
-    // the fog state (the ticket workflow's initial) and is normalized.
+    // the fog state (the ticket workflow's initial) and is normalized, then
+    // the graduated sharp tickets auto-advance to the frontier while the fog
+    // entry stays put.
     await waitFor(
       () =>
         runtime
           .getWorkflowInstanceEntries()
           .filter((entry) => entry.workflowId === "ticket").length === 3
     );
+    await waitFor(
+      () =>
+        runtime
+          .getWorkflowInstanceEntries()
+          .filter(
+            (entry) =>
+              entry.workflowId === "ticket" &&
+              entry.state.currentState === "ready"
+          ).length === 2
+    );
     const tickets = runtime
       .getWorkflowInstanceEntries()
       .filter((entry) => entry.workflowId === "ticket");
-    assert.ok(
-      tickets.every((ticket) => ticket.state.currentState === "fog"),
-      "created tickets start in the fog"
+    const stateByTitle = new Map(
+      tickets.map((ticket) => [
+        ticket.state.workflowInstanceState.title,
+        ticket.state.currentState,
+      ])
     );
-    const titles = tickets
-      .map((ticket) => ticket.state.workflowInstanceState.title)
-      .sort();
-    assert.deepEqual(titles, [
-      "Effect dep mode",
-      "Fog item we cannot sharpen yet",
-      "Plain registry",
-    ]);
+    assert.equal(stateByTitle.get("Effect dep mode"), "ready");
+    assert.equal(stateByTitle.get("Plain registry"), "ready");
+    assert.equal(
+      stateByTitle.get("Fog item we cannot sharpen yet"),
+      "fog",
+      "fog entries without the marker stay in the fog"
+    );
     const research = tickets.find(
       (ticket) => ticket.state.workflowInstanceState.title === "Effect dep mode"
     );

@@ -107,7 +107,7 @@ export const flow: FlowDefinition = {
     {
       id: "normalize_ticket",
       ref: "./ticket/ops/normalize-ticket.ts",
-      writes: ["title", "question", "type", "dependsOn"],
+      writes: ["title", "question", "type", "dependsOn", "graduated"],
     },
     {
       id: "prepare_prototype_workspace",
@@ -376,6 +376,13 @@ export const flow: FlowDefinition = {
           type: "boolean",
         },
         {
+          // The charting agent's sharp tickets arrive with graduated: true and
+          // the fog state auto-graduates them to the frontier (the human only
+          // graduates tickets it created itself). Fog entries omit it.
+          field: "graduated",
+          type: "boolean",
+        },
+        {
           field: "worktreePath",
           type: "string",
         },
@@ -397,6 +404,16 @@ export const flow: FlowDefinition = {
               label: "Normalize ticket",
               role: "operation",
               operations: ["normalize_ticket"],
+            },
+          ],
+          autoTransitions: [
+            {
+              to: "ready",
+              gate: {
+                kind: "instanceStateEquals",
+                field: "graduated",
+                value: true,
+              },
             },
           ],
           actions: [

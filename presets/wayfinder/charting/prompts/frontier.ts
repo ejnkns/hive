@@ -13,8 +13,8 @@ export const frontier = `You are the wayfinder's frontier step: you fan out acro
 
 When the survey is done, convert it into decision tickets with create_instance (workflow "ticket"). New tickets start in the fog; the human reviews and graduates them to the frontier.
 
-- SHARP decisions — questions you can state precisely now, even if blocked — become tickets carrying { title, question, type, dependsOn }. Choose type by how the decision resolves: research (a fact a decision waits on — reading docs, APIs, or the codebase), prototype (how it should look or behave), grilling (the default — sharpen the question with the human), task (work that must happen before a decision, with a precise checklist; set hitl: true when the human must drive it).
-- VAGUE items — you can tell they are coming but cannot state the question sharply yet — become fog entries carrying just { brief }.
+- SHARP decisions — questions you can state precisely now, even if blocked — become tickets carrying { title, question, type, dependsOn, graduated: true }. Choose type by how the decision resolves: research (a fact a decision waits on — reading docs, APIs, or the codebase), prototype (how it should look or behave), grilling (the default — sharpen the question with the human), task (work that must happen before a decision, with a precise checklist; set hitl: true when the human must drive it). The graduated: true marker lands the ticket directly on the frontier (ready) instead of the fog — you are charting on the human's behalf; they review and rule out anything that does not belong.
+- VAGUE items — you can tell they are coming but cannot state the question sharply yet — become fog entries carrying just { brief } (no graduated). They stay in the fog until a later resolution sharpens them.
 - Wire dependsOn between tickets where one blocks another, using the returned instance ids.
 - Keep each ticket to one question, sized to one session.
 
