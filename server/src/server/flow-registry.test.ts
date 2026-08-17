@@ -369,6 +369,74 @@ describe("flow-registry", () => {
     assert.equal(after.instances.length, 1);
   });
 
+  it("rehydrateFlow resets a persisted instance whose state no longer exists to the workflow's initial state", async () => {
+    const persistence = getFlowPersistence();
+    assert.ok(persistence);
+    createFlow("flow-a", "test-def", persistence);
+
+    // Simulate definition drift: an instance persisted under an old state id
+    // the current definition no longer declares (e.g. the authoring session's
+    // retired drafting → finalizing → done lifecycle).
+    persistence.saveInstance("flow-a", "legacy-instance", "test-wf", {
+      currentState: "archived",
+      taskOutputs: {},
+      hasRunningTask: false,
+      runningTaskId: null,
+      runningTaskContext: null,
+      workflowInstanceState: {},
+      history: [],
+      taskErrorCounts: {},
+    });
+
+    const persisted = persistence.loadFlow("flow-a");
+    assert.ok(persisted);
+    const runtime = await rehydrateFlow(
+      persistence,
+      "flow-a",
+      persisted.config,
+      persisted.state,
+      persisted.instances
+    );
+
+    assert.ok(runtime);
+    assert.equal(
+      runtime.getWorkflowInstance("legacy-instance")?.getState().currentState,
+      "idle"
+    );
+  });
+
+  it("rehydrateFlow skips a persisted instance whose workflow no longer exists", async () => {
+    const persistence = getFlowPersistence();
+    assert.ok(persistence);
+    createFlow("flow-a", "test-def", persistence);
+
+    // Definition drift: an instance persisted under a workflow id the current
+    // definition no longer declares (the workflow was removed entirely).
+    persistence.saveInstance("flow-a", "removed-instance", "removed-wf", {
+      currentState: "idle",
+      taskOutputs: {},
+      hasRunningTask: false,
+      runningTaskId: null,
+      runningTaskContext: null,
+      workflowInstanceState: {},
+      history: [],
+      taskErrorCounts: {},
+    });
+
+    const persisted = persistence.loadFlow("flow-a");
+    assert.ok(persisted);
+    const runtime = await rehydrateFlow(
+      persistence,
+      "flow-a",
+      persisted.config,
+      persisted.state,
+      persisted.instances
+    );
+
+    assert.ok(runtime);
+    assert.equal(runtime.getWorkflowInstance("removed-instance"), undefined);
+  });
+
   it("rehydrate uses the creation-time snapshot, not a later definition edit", async () => {
     const persistence = getFlowPersistence();
     assert.ok(persistence);

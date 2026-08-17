@@ -231,8 +231,38 @@ export async function rehydrateFlow(
   registerRuntime(flowId, runtime);
 
   for (const instance of instances) {
+    // A definition can change between writes (e.g. the authoring session's
+    // lifecycle was simplified from drafting → finalizing/revising → done to
+    // a single never-ending drafting state). A persisted instance whose
+    // currentState no longer exists must not crash the boot: reset it to the
+    // workflow's initial state so its history and domain data survive, and
+    // drop instances whose workflow was removed entirely.
+    const workflow = workflows.find((wf) => wf.id === instance.workflowId);
+    if (!workflow) {
+      logger.warn(
+        `Flow "${flowId}" instance "${instance.instanceId}" references missing workflow "${instance.workflowId}"; skipping`
+      );
+      continue;
+    }
+    const declaredStates = new Set(workflow.states.map((state) => state.id));
+    const persistedCurrentState =
+      typeof instance.state.currentState === "string"
+        ? instance.state.currentState
+        : undefined;
+    const currentState =
+      persistedCurrentState !== undefined &&
+      declaredStates.has(persistedCurrentState)
+        ? persistedCurrentState
+        : workflow.initial;
+    if (currentState !== persistedCurrentState) {
+      logger.warn(
+        `Flow "${flowId}" instance "${instance.instanceId}" state "${persistedCurrentState}" is no longer declared by workflow "${instance.workflowId}"; restoring in "${currentState}"`
+      );
+    }
+
     const restoredState = {
       ...instance.state,
+      currentState,
       // Running tasks cannot survive a server restart — the in-memory
       // runner is gone. Clear the running flag but preserve the
       // runningTaskContext (chat messages, session transcript) so the
