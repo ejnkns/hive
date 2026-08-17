@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
+import { wayfinderWorkflows } from "../compiled-presets.ts";
 import {
   chatReply,
   chatRespond,
@@ -21,6 +22,21 @@ describe("wayfinder ticket workflow", () => {
     tempDirs.push(dir);
     return dir;
   }
+
+  it("grants the research task the web_fetch tool (docs/APIs are research sources)", () => {
+    const researchWorkflow = wayfinderWorkflows.find(
+      (workflow) => workflow.id === "ticket"
+    );
+    assert.ok(researchWorkflow);
+    const researchTask = researchWorkflow.states
+      .flatMap((state) => state.tasks ?? [])
+      .find((task) => task.id === "research");
+    assert.ok(researchTask);
+    assert.ok(
+      (researchTask.tools ?? []).includes("web_fetch"),
+      "research must carry web_fetch so it can read external docs and APIs"
+    );
+  });
 
   // Graduate honors the gate contract: the ticket's fog state runs an auto
   // normalize task on entry, so graduate (gated on !hasRunningTask) only
