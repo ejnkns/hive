@@ -101,6 +101,17 @@ function registerAll(
     else registerKindRenderer(key, element);
     restores.push(() => {
       undefineServedElement(tag);
+      // Only undo this element's own registration: an overlapping load (the
+      // reload race — the host disposes a stale load whose restore runs after
+      // a newer load registered the same key) must not clobber the newer
+      // element. The registry's current holder is authoritative — if it is
+      // still this element, undo (or restore the prior); otherwise a newer
+      // registration owns the key and this stale cleanup leaves it alone.
+      const current =
+        kind === "components"
+          ? getComponentRenderer(key)
+          : getKindRenderer(key);
+      if (current !== element) return;
       if (prior === undefined) {
         if (kind === "components") unregisterComponentRenderer(key);
         else unregisterKindRenderer(key);

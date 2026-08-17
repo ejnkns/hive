@@ -28,6 +28,20 @@ class DemoCard extends LitElement {
   }
 }
 
+// A second served class under the same component key — the class identity a
+// stale cleanup must respect when deciding whether it still owns the key.
+class NewerDemoCard extends LitElement {
+  static properties = {
+    workflowDef: { attribute: false },
+    instanceEntry: { attribute: false },
+  };
+  workflowDef: unknown = null;
+  instanceEntry: { id: string } = { id: "" };
+  render() {
+    return html`<div class="newer-demo-card">newer ${this.instanceEntry.id}</div>`;
+  }
+}
+
 const evaluate: FlowComponentEvaluator = async () => ({
   default: () => ({ components: { "demo-card": DemoCard } }),
 });
@@ -182,6 +196,54 @@ describe("loadFlowComponents", () => {
       notAFactory
     );
     expect(getComponentRenderer("not-a-factory")).toBeUndefined();
+  });
+
+  it("a stale cleanup does not clobber a newer registration of the same key", async () => {
+    // The reload race: LitFlowHost's load effect starts a load, a store
+    // update (the WS init replace) re-runs the effect, and the FIRST load's
+    // .then — seeing itself disposed — calls its restore(). If that restore
+    // unregisters by key it wipes the SECOND load's registration (the served
+    // components silently vanish on reload). The restore must only undo its
+    // own element: an identity check before unregistering.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, text: async () => "" }))
+    );
+    const oldEvaluate: FlowComponentEvaluator = async () => ({
+      default: () => ({ components: { "demo-card": DemoCard } }),
+    });
+    const newEvaluate: FlowComponentEvaluator = async () => ({
+      default: () => ({
+        components: { "demo-card": NewerDemoCard },
+      }),
+    });
+
+    // The first load registers (and captures prior = undefined), then a
+    // second load registers the newer class over it. Invoking the FIRST
+    // load's restore afterwards (the disposed-batch cleanup) must leave the
+    // newer registration in place.
+    const staleRestore = await loadFlowComponents(
+      { "demo-card": "/api/.../demo-card" },
+      oldEvaluate
+    );
+    const currentRestore = await loadFlowComponents(
+      { "demo-card": "/api/.../demo-card" },
+      newEvaluate
+    );
+    expect(getComponentRenderer("demo-card")).toBe(NewerDemoCard);
+
+    staleRestore();
+    expect(getComponentRenderer("demo-card")).toBe(NewerDemoCard);
+
+    // The live (second) load's cleanup restores what preceded it — the first
+    // batch's element (stack semantics for sequential load/unload).
+    currentRestore();
+    expect(getComponentRenderer("demo-card")).toBe(DemoCard);
+
+    // The restored element belongs to the first batch, whose own cleanup is
+    // idempotent: the registry now holds it again, so invoking it unregisters.
+    staleRestore();
+    expect(getComponentRenderer("demo-card")).toBeUndefined();
   });
 
   it("degrades when the evaluator throws while loading", async () => {
