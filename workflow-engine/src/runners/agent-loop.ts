@@ -112,7 +112,8 @@ export type AgentRunnerConfig = {
   // declares the tool. Takes domain state and returns the new instance id.
   createWorkflowInstance?: (
     workflowId: string,
-    instanceState?: Record<string, unknown>
+    instanceState?: Record<string, unknown>,
+    stateId?: string
   ) => { id: string };
 };
 

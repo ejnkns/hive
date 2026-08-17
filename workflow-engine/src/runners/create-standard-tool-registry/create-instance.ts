@@ -5,7 +5,7 @@ export const definition: ToolDefinition = {
   function: {
     name: "create_instance",
     description:
-      "Create a new workflow instance in this flow (e.g. graduate fog into a fresh decision ticket). The instance starts in its workflow's initial state; the supplied object becomes its domain state. Only available where the task declares this tool.",
+      "Create a new workflow instance in this flow (e.g. graduate fog into a fresh decision ticket). The instance starts in the workflow's initial state (or the declared stateId when given); the supplied object becomes its domain state. Only available where the task declares this tool.",
     parameters: {
       type: "object",
       properties: {
@@ -17,6 +17,11 @@ export const definition: ToolDefinition = {
           type: "object",
           description: "Initial domain state for the new instance.",
         },
+        stateId: {
+          type: "string",
+          description:
+            "Optional: the workflow state to start the instance in (defaults to the workflow's initial state).",
+        },
       },
       required: ["workflowId"],
     },
@@ -27,6 +32,7 @@ export const execute: ToolExecutor = async (call, ctx) => {
   const args = JSON.parse(call.arguments) as {
     workflowId?: string;
     instanceState?: Record<string, unknown>;
+    stateId?: string;
   };
   if (typeof args.workflowId !== "string" || args.workflowId === "") {
     return {
@@ -45,7 +51,8 @@ export const execute: ToolExecutor = async (call, ctx) => {
   try {
     const created = ctx.createWorkflowInstance(
       args.workflowId,
-      args.instanceState ?? {}
+      args.instanceState ?? {},
+      args.stateId
     );
     return {
       toolCallId: call.id,

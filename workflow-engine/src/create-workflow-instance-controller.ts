@@ -68,7 +68,8 @@ export type ControllerRuntimeContext = {
   workflowId: string;
   createWorkflowInstance: (
     workflowId: string,
-    instanceState?: Record<string, unknown>
+    instanceState?: Record<string, unknown>,
+    stateId?: string
   ) => { id: string };
   patchSiblingInstanceState?: (
     instanceId: string,

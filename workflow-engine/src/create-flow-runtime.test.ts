@@ -196,6 +196,15 @@ describe("FlowRuntime", () => {
       });
     });
 
+    it("rejects an unknown starting state (the create_instance stateId guard)", () => {
+      const runtime = createFlowRuntime("test", [sourceWorkflow], [], {});
+      assert.throws(
+        () =>
+          runtime.addWorkflowInstance("source", { currentState: "missing" }),
+        /has no state "missing" to start an instance in/
+      );
+    });
+
     it("throws for unknown workflow id", () => {
       const runtime = createFlowRuntime("test", [sourceWorkflow], [], {});
       assert.throws(

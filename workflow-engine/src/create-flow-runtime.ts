@@ -368,6 +368,17 @@ export function createFlowRuntime<
 
     const instanceId = restoreId ?? crypto.randomUUID();
 
+    // An explicit starting state must be one the workflow declares — an
+    // unknown stateId is an authoring/runtime error, not a silent default.
+    if (instanceState?.currentState !== undefined) {
+      const declaredStates = new Set(workflow.states.map((state) => state.id));
+      if (!declaredStates.has(instanceState.currentState)) {
+        throw new Error(
+          `Workflow "${workflowId}" has no state "${instanceState.currentState}" to start an instance in`
+        );
+      }
+    }
+
     const initialState: RuntimeWorkflowInstanceState = {
       currentState: instanceState?.currentState ?? workflow.initial,
       taskOutputs: instanceState?.taskOutputs ?? {},
@@ -392,8 +403,9 @@ export function createFlowRuntime<
         workflowId,
         // Expose instance creation to agents via the create_instance tool: the
         // caller's domain state becomes the new instance's workflowInstanceState.
-        createWorkflowInstance: (newWorkflowId, domainState) => {
+        createWorkflowInstance: (newWorkflowId, domainState, stateId) => {
           const created = addWorkflowInstance(newWorkflowId, {
+            ...(stateId !== undefined ? { currentState: stateId } : {}),
             workflowInstanceState: domainState ?? {},
           });
           return { id: created.id };

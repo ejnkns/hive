@@ -36,6 +36,47 @@ describe("create_instance", () => {
     ]);
   });
 
+  it("passes a stateId through so the instance starts in a declared state", async () => {
+    const created: Array<{
+      workflowId: string;
+      instanceState: Record<string, unknown>;
+      stateId?: string;
+    }> = [];
+    const ctx: ToolContext = {
+      workspacePath: "/workspace",
+      createWorkflowInstance: (workflowId, instanceState, stateId) => {
+        created.push({
+          workflowId,
+          instanceState: instanceState ?? {},
+          stateId,
+        });
+        return { id: "ticket-123" };
+      },
+    };
+
+    const result = await execute(
+      {
+        id: "c1",
+        name: "create_instance",
+        arguments: JSON.stringify({
+          workflowId: "ticket",
+          instanceState: { title: "Ready ticket" },
+          stateId: "ready",
+        }),
+      },
+      ctx
+    );
+
+    assert.equal(result.isError, false);
+    assert.deepEqual(created, [
+      {
+        workflowId: "ticket",
+        instanceState: { title: "Ready ticket" },
+        stateId: "ready",
+      },
+    ]);
+  });
+
   it("errors when the capability is unavailable", async () => {
     const ctx: ToolContext = { workspacePath: "/workspace" };
     const result = await execute(

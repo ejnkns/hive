@@ -68,7 +68,11 @@ export type ToolContext<
   // create_instance tool). Absent when the task does not declare it.
   createWorkflowInstance?: (
     workflowId: string,
-    instanceState?: Record<string, unknown>
+    instanceState?: Record<string, unknown>,
+    // Optional: the workflow state to start the instance in (defaults to the
+    // workflow's initial state). Validated against the workflow's declared
+    // states by the runtime.
+    stateId?: string
   ) => { id: string };
   signal?: AbortSignal;
   baseCommit?: string;

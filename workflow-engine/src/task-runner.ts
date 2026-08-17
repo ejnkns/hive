@@ -65,7 +65,10 @@ export type TaskRunnerContext = {
   // instance's domain data; returns the new instance id.
   createWorkflowInstance(
     workflowId: string,
-    instanceState?: Record<string, unknown>
+    instanceState?: Record<string, unknown>,
+    // Optional: the workflow state to start the instance in (defaults to the
+    // workflow's initial state).
+    stateId?: string
   ): { id: string };
   // Cross-instance query so operations can resolve title-based dependencies
   // to instance IDs and gates can reference specific instances. Filter by
