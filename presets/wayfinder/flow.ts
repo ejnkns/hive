@@ -542,7 +542,12 @@ export const flow: FlowDefinition = {
               id: "research",
               label: "Run research",
               role: "ai-task",
-              tools: ["read_file", "list_directory", "search_code"],
+              tools: [
+                "read_file",
+                "list_directory",
+                "search_code",
+                "web_fetch",
+              ],
               render: {
                 kind: "findings-report",
                 props: { findings: "findings", sources: "sources" },

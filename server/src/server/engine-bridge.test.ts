@@ -70,6 +70,37 @@ describe("createEngineRunners", () => {
     assert.ok(runners.toolDefinitions.git_diff);
   });
 
+  it("a domain tool overrides an infrastructure tool of the same name", async () => {
+    // The modular web story: a flow supplies its own web_fetch and the
+    // engine's built-in executor is replaced by name.
+    const customWebFetch: Tool = {
+      definition: {
+        type: "function",
+        function: {
+          name: "web_fetch",
+          description: "Custom fetch",
+          parameters: { type: "object", properties: {}, required: [] },
+        },
+      },
+      executor: async (call) => ({
+        toolCallId: call.id,
+        content: "custom web fetch ran",
+        isError: false,
+      }),
+    };
+    const runners = createEngineRunners({ tools: [customWebFetch] });
+
+    assert.ok(
+      runners.toolExecutors.web_fetch,
+      "web_fetch is offered (custom or built-in)"
+    );
+    const result = await runners.toolExecutors.web_fetch(
+      { id: "c1", name: "web_fetch", arguments: "{}" },
+      { workspacePath: "/tmp" }
+    );
+    assert.equal(result.content, "custom web fetch ran");
+  });
+
   it("executes domain operations through the operation runner", async () => {
     const runners = createEngineRunners({
       operations: {

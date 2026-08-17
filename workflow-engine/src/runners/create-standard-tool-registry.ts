@@ -45,6 +45,10 @@ import {
   execute as searchCodeExec,
 } from "./create-standard-tool-registry/search-code.ts";
 import {
+  definition as webFetchDef,
+  execute as webFetchExec,
+} from "./create-standard-tool-registry/web-fetch.ts";
+import {
   definition as writeFileDef,
   execute as writeFileExec,
 } from "./create-standard-tool-registry/write-file.ts";
@@ -64,6 +68,7 @@ export function createStandardToolDefinitions(): Record<
     search_code: searchCodeDef,
     write_file: writeFileDef,
     run_command: runCommandDef,
+    web_fetch: webFetchDef,
     git_status: gitStatusDef,
     git_diff: gitDiffDef,
     git_log: gitLogDef,
@@ -84,6 +89,7 @@ export function createStandardToolRegistry(): Record<
     search_code: searchCodeExec,
     write_file: writeFileExec,
     run_command: runCommandExec,
+    web_fetch: webFetchExec,
     git_status: gitStatusExec,
     git_diff: gitDiffExec,
     git_log: gitLogExec,
