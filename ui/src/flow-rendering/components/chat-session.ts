@@ -133,7 +133,7 @@ export class ChatSession extends LitElement {
     const statusLine = this.renderStatus();
     return html`
       <div class="chat">
-        <div class="scroll" ${ref(this.scrollRef)}>
+        <div class="scroll" ${ref(this.scrollRef)} @scroll=${this.handleScroll}>
           <message-list .messages=${this.messages}></message-list>
         </div>
         ${statusLine}
@@ -170,13 +170,35 @@ export class ChatSession extends LitElement {
     `;
   }
 
-  protected override updated(changed: PropertyValues<this>): void {
-    if (changed.has("messages")) this.scrollToBottom();
+  protected override firstUpdated(): void {
+    this.scrollToBottom();
   }
+
+  protected override updated(changed: PropertyValues<this>): void {
+    // Auto-scroll only while the user is pinned to the bottom; an upward
+    // scroll (reading history) is preserved on subsequent updates instead of
+    // being yanked down by new content.
+    if (changed.has("messages") && this.pinnedToBottom) {
+      this.scrollToBottom();
+    }
+  }
+
+  // True while the user is at (or near) the bottom of the transcript.
+  private pinnedToBottom = true;
+  private readonly PIN_THRESHOLD_PX = 48;
+
+  private handleScroll = (): void => {
+    const el = this.scrollRef.value;
+    if (el === undefined) return;
+    this.pinnedToBottom =
+      el.scrollHeight - el.scrollTop - el.clientHeight <= this.PIN_THRESHOLD_PX;
+  };
 
   private scrollToBottom(): void {
     const el = this.scrollRef.value;
-    if (el !== undefined) el.scrollTop = el.scrollHeight;
+    if (el === undefined) return;
+    this.pinnedToBottom = true;
+    el.scrollTop = el.scrollHeight;
   }
 
   // The status row above the input: the live model-call progress when the

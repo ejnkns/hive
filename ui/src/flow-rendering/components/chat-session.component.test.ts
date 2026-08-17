@@ -27,6 +27,48 @@ const messages: ChatMessage[] = [
 ];
 
 describe("ChatSession", () => {
+  it("pins to the bottom on new messages but preserves an upward scroll", async () => {
+    const el = await mount(
+      Object.assign(new ChatSession(), {
+        messages: messages.slice(0, 2),
+        sessionId: "s1",
+        interactive: true,
+      })
+    );
+    await settle(shadowRootOf(el));
+    const scroll = mustQuery(shadowRootOf(el), ".scroll") as HTMLElement;
+
+    // Layout metrics jsdom cannot compute; stub them.
+    Object.defineProperty(scroll, "scrollHeight", {
+      value: 1000,
+      configurable: true,
+    });
+    Object.defineProperty(scroll, "clientHeight", {
+      value: 200,
+      configurable: true,
+    });
+
+    // The user scrolls up to read history; a scroll event records the
+    // position as unpinned.
+    scroll.scrollTop = 300;
+    scroll.dispatchEvent(new Event("scroll"));
+
+    // New content arrives — the position is preserved, not yanked to bottom.
+    el.messages = messages;
+    await el.updateComplete;
+    expect(scroll.scrollTop).toBe(300);
+
+    // Back at the bottom, new content auto-scrolls down.
+    scroll.scrollTop = scroll.scrollHeight;
+    scroll.dispatchEvent(new Event("scroll"));
+    el.messages = [
+      ...messages,
+      { role: "assistant", content: "more", tool_calls: undefined },
+    ];
+    await el.updateComplete;
+    expect(scroll.scrollTop).toBe(scroll.scrollHeight);
+  });
+
   it("renders message bodies and tool-call chips", async () => {
     const el = await mount(Object.assign(new ChatSession(), { messages }));
     await settle(shadowRootOf(el));
