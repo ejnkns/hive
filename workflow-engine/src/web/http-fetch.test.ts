@@ -113,6 +113,37 @@ describe("createHttpFetch", () => {
     assert.ok(result.body.content.length <= LIMITS.maxBodyChars);
   });
 
+  it("requests markdown first via Accept: text/markdown, falling back to html", async () => {
+    let sentAccept = "";
+    const fetchImpl: FetchLike = async (_url, init) => {
+      sentAccept = new Headers(init?.headers).get("accept") ?? "";
+      return htmlResponse("<p>docs</p>");
+    };
+    const fetchWeb = createHttpFetch(fetchImpl, LIMITS);
+    await fetchWeb("https://example.com/docs");
+    // Markdown preferred (RFC 7763 content negotiation), HTML as the fallback.
+    assert.ok(
+      sentAccept.includes("text/markdown"),
+      `expected text/markdown in Accept, got ${JSON.stringify(sentAccept)}`
+    );
+    assert.ok(
+      sentAccept.includes("text/html;q="),
+      `expected an html q-value fallback, got ${JSON.stringify(sentAccept)}`
+    );
+  });
+
+  it("classifies a text/markdown response as markdown (no html conversion)", async () => {
+    const fetchImpl: FetchLike = async () =>
+      new Response("# Title\n\nSome **markdown** body.", {
+        status: 200,
+        headers: { "content-type": "text/markdown; charset=utf-8" },
+      });
+    const fetchWeb = createHttpFetch(fetchImpl, LIMITS);
+    const result = await fetchWeb("https://example.com/page");
+    assert.equal(result.body.kind, "markdown");
+    assert.ok(result.body.content.includes("**markdown**"));
+  });
+
   it("rejects invalid URLs before any network access", async () => {
     let called = false;
     const fetchImpl: FetchLike = async () => {

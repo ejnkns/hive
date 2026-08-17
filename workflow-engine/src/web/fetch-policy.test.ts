@@ -63,9 +63,16 @@ describe("isSameOrigin", () => {
 });
 
 describe("classifyContentType", () => {
-  it("classifies html, text, and structured text", () => {
+  it("classifies html, text, markdown, and structured text", () => {
     assert.equal(classifyContentType("text/html; charset=utf-8"), "html");
     assert.equal(classifyContentType("application/xhtml+xml"), "html");
+    // Accept: text/markdown negotiation (RFC 7763) — a markdown body is
+    // already agent-ready and passes through without HTML conversion.
+    assert.equal(
+      classifyContentType("text/markdown; charset=utf-8"),
+      "markdown"
+    );
+    assert.equal(classifyContentType("text/x-markdown"), "markdown");
     assert.equal(classifyContentType("text/plain"), "text");
     assert.equal(classifyContentType("application/json"), "text");
     assert.equal(classifyContentType("application/problem+json"), "text");

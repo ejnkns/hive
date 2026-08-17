@@ -28,7 +28,7 @@ export class FetchError extends Error {
   }
 }
 
-export type FetchBodyKind = "html" | "text";
+export type FetchBodyKind = "html" | "text" | "markdown";
 
 export const MAX_URL_LENGTH = 2_000;
 
@@ -77,6 +77,9 @@ export function classifyContentType(
 ): FetchBodyKind | undefined {
   const mime = (contentType ?? "").replace(/;.*$/s, "").trim().toLowerCase();
   if (mime === "text/html" || mime === "application/xhtml+xml") return "html";
+  // Markdown (RFC 7763) is its own kind: already agent-ready, passes through
+  // without HTML conversion (the Accept: text/markdown negotiation result).
+  if (mime === "text/markdown" || mime === "text/x-markdown") return "markdown";
   if (mime.startsWith("text/")) return "text";
   if (
     mime === "application/json" ||

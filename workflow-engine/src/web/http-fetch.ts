@@ -29,7 +29,7 @@ export type WebFetchLimits = {
 };
 
 export type WebFetchBody = {
-  kind: "html" | "text";
+  kind: "html" | "text" | "markdown";
   content: string;
 };
 
@@ -126,8 +126,12 @@ async function requestOnce(
       redirect: "manual",
       headers: {
         "user-agent": "hive-agent/0.1 (web_fetch)",
+        // Markdown-first content negotiation (RFC 7763 / acceptmarkdown.com):
+        // a server that supports Accept: text/markdown returns the page as
+        // clean markdown, skipping the HTML conversion entirely; everything
+        // else falls back to html with a q-value.
         accept:
-          "text/html,application/xhtml+xml,text/*;q=0.9,application/json;q=0.8",
+          "text/markdown,text/html;q=0.9,application/xhtml+xml;q=0.9,text/*;q=0.8,application/json;q=0.7",
       },
       signal,
     });

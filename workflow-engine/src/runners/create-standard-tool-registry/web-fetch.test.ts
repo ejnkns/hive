@@ -95,6 +95,24 @@ describe("web_fetch tool", () => {
     assert.ok(result.content.includes("connection refused"));
   });
 
+  it("passes a text/markdown body through verbatim (no html conversion)", async () => {
+    const execute = createWebFetchExecutor(
+      async () =>
+        new Response("# Title\n\nA **markdown** body.", {
+          status: 200,
+          headers: { "content-type": "text/markdown; charset=utf-8" },
+        }),
+      { maxOutputChars: 1_000 }
+    );
+    const result = await execute(
+      { ...call, arguments: JSON.stringify({ url: "https://example.com/md" }) },
+      ctx
+    );
+    assert.equal(result.isError, false);
+    assert.ok(result.content.includes("# Title"), result.content);
+    assert.ok(result.content.includes("**markdown**"), result.content);
+  });
+
   it("rejects a blank url", async () => {
     const execute = createWebFetchExecutor(async () => htmlResponse(""), {});
     const result = await execute(
