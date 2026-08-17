@@ -46,6 +46,8 @@ export type FlowResponse = {
     kinds?: CustomRenderKind[];
     // Declared served component ids → fetch path (transpiled module source).
     components?: Record<string, string>;
+    // A served component id rendering the whole flow-instance page body.
+    flowComponent?: string;
     // Declarative theme tokens for the generic flow surfaces.
     theme?: FlowTheme;
     // Persisted domain files the UI may read (declared by the definition as

@@ -11,6 +11,8 @@ import type {
   WorkflowDefResponse,
   WorkflowInstanceEntry,
 } from "../create-flow-runtime.ts";
+import type { ActionVariant } from "./actions.ts";
+import type { ConfigField } from "./config-field.ts";
 import type { CustomRenderKind } from "./render-hints.ts";
 
 // The class contract a served element must satisfy: a parameterless
@@ -91,4 +93,59 @@ export type WorkflowViewProps = {
   onSendMessage(workflowInstanceId: string, content: string): Promise<void>;
   // NEW hive-select: the shell routes to the workflow-instance page.
   onSelect(workflowInstanceId: string): void;
+};
+
+// The flow-level status projected into the payload (error > running > waiting
+// > complete > idle, computed by the server's instance-status).
+export type FlowStatus = "error" | "running" | "waiting" | "idle" | "complete";
+
+// The trimmed flow projection a flow-level component receives: identity,
+// status, and config — not the whole FlowResponse (no ui, no definitionSource,
+// no delete surface).
+export type FlowViewFlow = {
+  id: string;
+  label: string;
+  status: FlowStatus;
+  config: Record<string, unknown>;
+};
+
+// The gate-evaluated, UI-facing view of a flow-level action (no gate function
+// — the payload carries only what the page body's buttons need).
+export type FlowActionView = {
+  id: string;
+  label: string;
+  variant: ActionVariant;
+  createInstance?: { workflowId: string; fields: ConfigField[] };
+  dispatchToAll?: { workflowId: string; actionId: string };
+};
+
+// The props contract a flow-level custom component implements
+// (FlowDefinition.ui.flowComponent): a component rendering the WHOLE
+// flow-instance page body (replacing the default actions bar + overview +
+// per-workflow sections). Delete/status/breadcrumb stay shell-side and are
+// NOT exposed here — a served module cannot hide them.
+export type FlowViewProps = {
+  flow: FlowViewFlow;
+  workflowDefs: WorkflowDefResponse[];
+  entries: WorkflowInstanceEntry[];
+  customKinds: readonly CustomRenderKind[];
+  workflowCounts: WorkflowViewProps["workflowCounts"];
+  availableFlowActions: readonly FlowActionView[];
+  persistedOutputs: Readonly<Record<string, string>>;
+  persistedOutputDirs: Readonly<
+    Record<string, Readonly<Record<string, string>>>
+  >;
+  onAction(
+    workflowInstanceId: string,
+    actionId: string,
+    payload?: Record<string, unknown>
+  ): void;
+  onSendMessage(workflowInstanceId: string, content: string): Promise<void>;
+  onPatchState(
+    workflowInstanceId: string,
+    values: Record<string, unknown>
+  ): void;
+  onSelect(workflowInstanceId: string): void;
+  onFlowAction(actionId: string): void;
+  onCreate(actionId: string): void;
 };

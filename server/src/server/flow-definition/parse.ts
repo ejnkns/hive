@@ -134,6 +134,8 @@ function parseFlow(
     const ui: NonNullable<FlowDefinition["ui"]> = {};
     const view = readString(flowUi, "view");
     if (view !== undefined) ui.view = view as NonNullable<typeof ui.view>;
+    const flowComponent = readString(flowUi, "flowComponent");
+    if (flowComponent !== undefined) ui.flowComponent = flowComponent;
     const kinds = readArray(flowUi, "kinds");
     if (kinds !== undefined) {
       const parsedKinds = kinds

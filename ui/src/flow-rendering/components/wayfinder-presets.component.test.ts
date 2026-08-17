@@ -9,7 +9,9 @@ import type {
   FlowComponentRegistrations,
 } from "workflow-engine/workflow-types";
 import buildItemCardModule from "../../../../presets/wayfinder/ui/build-item-card.ts";
+import buildPipelineModule from "../../../../presets/wayfinder/ui/build-pipeline.ts";
 import expeditionMapModule from "../../../../presets/wayfinder/ui/expedition-map.ts";
+import flowComponentModule from "../../../../presets/wayfinder/ui/flow-component.ts";
 import frontierBoardModule from "../../../../presets/wayfinder/ui/frontier-board.ts";
 import ticketCardModule from "../../../../presets/wayfinder/ui/ticket-card.ts";
 import { defineFlowRenderingComponents } from "../define-components.ts";
@@ -440,6 +442,132 @@ describe("wayfinder served modules", () => {
       expect(queryAllDeep(el, ".flow-board").length).toBe(1);
     } finally {
       restore();
+    }
+  });
+
+  it("flow-component renders the expedition chrome and delegates each section", async () => {
+    defineFlowRenderingComponents();
+    localStorage.clear();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, text: async () => "" }))
+    );
+    const restore1 = await loadFlowComponents(
+      { "flow-component": "/api/.../flow-component" },
+      load(flowComponentModule)
+    );
+    const restore2 = await loadFlowComponents(
+      { "expedition-map": "/api/.../expedition-map" },
+      load(expeditionMapModule)
+    );
+    const restore3 = await loadFlowComponents(
+      { "frontier-board": "/api/.../frontier-board" },
+      load(frontierBoardModule)
+    );
+    const restore4 = await loadFlowComponents(
+      { "build-pipeline": "/api/.../build-pipeline" },
+      load(buildPipelineModule)
+    );
+    try {
+      const charting = cardDef({
+        id: "charting",
+        label: "Charting",
+        terminalStates: ["charted"],
+        ui: { view: "list", workflowComponent: "expedition-map" },
+      });
+      const chartedEntry = entry("c-1", "charted");
+      chartedEntry.workflowId = "charting";
+      chartedEntry.state.workflowInstanceState = {
+        destination: "hive router",
+        notes: "offline-first",
+      };
+
+      const ticket = cardDef({
+        id: "ticket",
+        label: "Ticket",
+        ui: {
+          view: "board",
+          workflowComponent: "frontier-board",
+          columns: [
+            { id: "fog", label: "Fog", states: ["fog"] },
+            { id: "frontier", label: "Frontier", states: ["ready"] },
+          ],
+        },
+      });
+      const ticketInstance = entry("t-1", "ready");
+      ticketInstance.workflowId = "ticket";
+      ticketInstance.state.workflowInstanceState = {
+        title: "Pick the router",
+        type: "research",
+      };
+
+      const build = cardDef({
+        id: "build",
+        label: "Build",
+        terminalStates: ["accepted"],
+        ui: { view: "list", workflowComponent: "build-pipeline" },
+      });
+      const buildEntry = entry("b-1", "accepted");
+      buildEntry.workflowId = "build";
+      buildEntry.state.workflowInstanceState = { spec: "spec text" };
+
+      const buildItem = cardDef({
+        id: "buildItem",
+        label: "Build Item",
+        ui: { view: "board" },
+      });
+      const itemEntry = entry("bi-1", "ready");
+      itemEntry.workflowId = "buildItem";
+
+      const el = await mount(
+        Object.assign(new WorkflowInstances(), {
+          flowId: "flow-1",
+          flow: {
+            id: "flow-1",
+            label: "Wayfinder",
+            status: "idle",
+            config: {},
+          },
+          flowComponent: "flow-component",
+          workflowDefs: [charting, ticket, build, buildItem],
+          instances: [chartedEntry, ticketInstance, buildEntry, itemEntry],
+          customKinds: [],
+          availableFlowActions: [
+            {
+              id: "add_ticket",
+              label: "Add ticket",
+              variant: "primary",
+              createInstance: { workflowId: "ticket", fields: [] },
+            },
+          ],
+          persistedOutputs: { "map.md": "# Map\n- pick a router" },
+        })
+      );
+      await settle(shadowRootOf(el));
+
+      // The expedition header: destination title + status + flow actions.
+      expect(queryAllDeep(el, ".title")[0]?.textContent).toBe("Wayfinder");
+      expect(queryAllDeep(el, ".actions button")[0]?.textContent?.trim()).toBe(
+        "Add ticket"
+      );
+      // The real map renders from the persisted map.md.
+      expect(queryAllDeep(el, ".map-title")[0]?.textContent).toBe(
+        "Expedition map"
+      );
+      expect(
+        queryAllDeep(el, "markdown-view")[0]?.shadowRoot?.textContent
+      ).toContain("pick a router");
+      // Each workflow section delegates to its component (or the canonical
+      // board for buildItem).
+      expect(queryAllDeep(el, "expedition-map").length).toBe(1);
+      expect(queryAllDeep(el, "frontier-board").length).toBe(1);
+      expect(queryAllDeep(el, "build-pipeline").length).toBe(1);
+      expect(queryAllDeep(el, "workflow-board-content").length).toBe(1);
+    } finally {
+      restore1();
+      restore2();
+      restore3();
+      restore4();
     }
   });
 });

@@ -211,11 +211,15 @@ function closeFlowActionForm() {
     <div class="flow-sections">
       <LitFlowHost
         flowId={flow.id}
+        flow={{ id: flow.id, label: flow.label, status: flow.status, config: flow.config ?? {} }}
+        flowComponent={flow.ui?.flowComponent}
         workflowDefs={flow.workflows}
         instances={flow.instances}
         customKinds={flow.ui?.kinds ?? []}
         components={flow.ui?.components ?? {}}
         availableFlowActions={flow.availableFlowActions}
+        persistedOutputs={flow.ui?.persistedOutputs ?? {}}
+        persistedOutputDirs={flow.ui?.persistedOutputDirs ?? {}}
         onAction={handleAction}
         onSendMessage={handleSendMessage}
         onPatchState={handlePatchState}

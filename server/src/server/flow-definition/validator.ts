@@ -1367,6 +1367,15 @@ export function analyzeFlowDefinition(definition: FlowDefinition): string[] {
     }
   }
 
+  // 5. A flowComponent naming no declared served component id: the whole page
+  //    body degrades to the default (actions bar + overview + sections).
+  const flowComponent = definition.ui?.flowComponent;
+  if (flowComponent !== undefined && !declaredComponentIds.has(flowComponent)) {
+    findings.push(
+      `flow declares flowComponent "${flowComponent}" which is not declared in the flow's ui.components — the page body falls back to the default surface`
+    );
+  }
+
   return findings;
 }
 

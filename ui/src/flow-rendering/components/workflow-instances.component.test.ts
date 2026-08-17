@@ -1,5 +1,7 @@
+import { html, LitElement } from "lit";
 import { beforeAll, describe, expect, it } from "vitest";
 import { defineFlowRenderingComponents } from "../define-components.ts";
+import { registerComponentRenderer } from "../renderer-registry.ts";
 import { action, boardDef, cardDef, entry } from "../test-fixtures.ts";
 import {
   click,
@@ -19,6 +21,13 @@ beforeAll(() => {
   // markdown-view) that the app defines once at boot via this call.
   defineFlowRenderingComponents();
 });
+
+class FlowViewTest extends LitElement {
+  render() {
+    return html`<div class="flow-view"></div>`;
+  }
+}
+customElements.define("flow-view-test", FlowViewTest);
 
 function host(def = cardDef(), instances = [entry("c1", "ready")]) {
   return Object.assign(new WorkflowInstances(), {
@@ -322,5 +331,36 @@ describe("WorkflowInstances board rendering", () => {
       flowId: "flow-1",
       actionId: "start_build",
     });
+  });
+
+  it("replaces the default body with the flow-level component when declared", async () => {
+    registerComponentRenderer("flow-page-test", FlowViewTest);
+
+    const el = await mount(
+      Object.assign(host(), {
+        flow: { id: "flow-1", label: "Wayfinder", status: "idle", config: {} },
+        flowComponent: "flow-page-test",
+        persistedOutputs: { "map.md": "# Map" },
+      })
+    );
+    await settle(shadowRootOf(el));
+
+    // The default board/list body is replaced entirely by the flow view.
+    expect(shadowRootOf(el).querySelector(".flow-header")).toBeNull();
+    const dynamicHost = mustFind(el, "dynamic-element-host");
+    const props = (
+      dynamicHost as unknown as { props?: Record<string, unknown> }
+    ).props;
+    expect(props).toBeDefined();
+    expect((props?.flow as { label: string }).label).toBe("Wayfinder");
+    expect(props?.persistedOutputs).toEqual({ "map.md": "# Map" });
+  });
+
+  it("falls back to the default body when the flowComponent is unknown", async () => {
+    const el = await mount(
+      Object.assign(host(), { flowComponent: "mystery-page" })
+    );
+    await settle(shadowRootOf(el));
+    expect(shadowRootOf(el).querySelector(".flow-header")).not.toBeNull();
   });
 });

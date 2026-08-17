@@ -281,6 +281,45 @@ describe("validateFlowDefinition", () => {
     );
   });
 
+  it("advisories a flowComponent that names no declared component", () => {
+    const declared = parseDefinition(
+      RESEARCH_MODULE.replace(
+        "  configSchema: [],",
+        `  configSchema: [],
+  ui: {
+    components: {
+      "flow-page": { ref: "./ui/flow-page.ts" },
+    },
+    flowComponent: "flow-page",
+  },`
+      )
+    );
+    const warnings = analyzeFlowDefinition(declared.definition);
+    assert.ok(
+      !warnings.some((w) => w.includes('flowComponent "flow-page"')),
+      "a declared flowComponent id is not advisory"
+    );
+
+    const undeclared = parseDefinition(
+      RESEARCH_MODULE.replace(
+        "  configSchema: [],",
+        `  configSchema: [],
+  ui: {
+    flowComponent: "mystery-page",
+  },`
+      )
+    );
+    const undeclaredWarnings = analyzeFlowDefinition(undeclared.definition);
+    assert.ok(
+      undeclaredWarnings.some(
+        (w) =>
+          w.includes('flowComponent "mystery-page"') &&
+          w.includes("not declared in the flow's ui.components")
+      ),
+      `expected a flowComponent advisory, got: ${undeclaredWarnings.join("; ")}`
+    );
+  });
+
   it("rejects an unknown transition target", () => {
     const { definition } = parseDefinition(
       RESEARCH_MODULE.replace('{ to: "extracting"', '{ to: "missing"')

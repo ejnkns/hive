@@ -88,6 +88,10 @@ export type FlowDefinition = {
     // transpiles and serves whichever form; the rendering surface fetches,
     // evaluates, and registers the result. Opaque to the engine.
     components?: Record<string, ServedComponentSpec>;
+    // A served component id (a key of ui.components) that renders the WHOLE
+    // flow-instance page body — the flow owns its hero, actions, and workflow
+    // sections. Unknown id → the default body.
+    flowComponent?: string;
     // A flow-level layout hint (the surface may fall back).
     view?: WorkflowView;
     // Declarative theming tokens for the generic flow surfaces (flows-list
@@ -188,6 +192,7 @@ export type CompiledFlowDefinition = {
   ui?: {
     kinds?: CustomRenderKind[];
     components?: Record<string, ServedComponentSpec>;
+    flowComponent?: string;
     view?: WorkflowView;
     theme?: FlowThemeSpec;
     persistedOutputs?: string[];

@@ -4,7 +4,10 @@ import type {
   WorkflowDefResponse,
   WorkflowInstanceEntry,
 } from "workflow-engine/create-flow-runtime";
-import type { CustomRenderKind } from "workflow-engine/workflow-types";
+import type {
+  CustomRenderKind,
+  FlowViewFlow,
+} from "workflow-engine/workflow-types";
 import type { FlowLevelAction } from "../flow-api.ts";
 import { loadFlowComponents } from "../flow-rendering/load-flow-components.ts";
 import type { WorkflowInstances } from "../flow-rendering.ts";
@@ -17,11 +20,15 @@ import type { WorkflowInstances } from "../flow-rendering.ts";
 
 let {
   flowId,
+  flow,
+  flowComponent,
   workflowDefs,
   instances,
   customKinds,
   components,
   availableFlowActions,
+  persistedOutputs,
+  persistedOutputDirs,
   onAction,
   onSendMessage,
   onPatchState,
@@ -30,12 +37,16 @@ let {
   onFlowAction,
 }: {
   flowId: string;
+  flow?: FlowViewFlow;
+  flowComponent?: string;
   workflowDefs: WorkflowDefResponse[];
   instances: WorkflowInstanceEntry[];
   customKinds: readonly CustomRenderKind[];
   // Served component ids → fetch path, from the flow snapshot's ui.components.
   components: Record<string, string>;
   availableFlowActions?: FlowLevelAction[];
+  persistedOutputs?: Record<string, string>;
+  persistedOutputDirs?: Record<string, Record<string, string>>;
   onAction?: (
     flowId: string,
     instanceId: string,
@@ -65,10 +76,14 @@ let host: WorkflowInstances | null = null;
 $effect(() => {
   if (!host) return;
   host.flowId = flowId;
+  host.flow = flow;
+  host.flowComponent = flowComponent;
   host.workflowDefs = workflowDefs;
   host.instances = instances;
   host.customKinds = customKinds;
   host.availableFlowActions = availableFlowActions ?? [];
+  host.persistedOutputs = persistedOutputs ?? {};
+  host.persistedOutputDirs = persistedOutputDirs ?? {};
 });
 
 // The declared component ids, as a stable signature: a fresh snapshot object

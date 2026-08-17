@@ -106,9 +106,13 @@ export type {
 export { builtinRenderContracts } from "./workflow-types/render-hints.ts";
 export type {
   ElementConstructor,
+  FlowActionView,
   FlowComponentDeps,
   FlowComponentModule,
   FlowComponentRegistrations,
+  FlowStatus,
+  FlowViewFlow,
+  FlowViewProps,
   InstanceComponentProps,
   WorkflowViewProps,
 } from "./workflow-types/served-components.ts";

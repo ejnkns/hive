@@ -43,6 +43,9 @@ export const flow: FlowDefinition = {
     // server ships their contents in the flow snapshot.
     persistedOutputs: ["map.md", "spec.md", "build-plan.md"],
     persistedOutputDirs: ["decisions"],
+    // The flow-level custom view: renders the whole page body (the
+    // expedition chrome + map, then each workflow's section).
+    flowComponent: "flow-component",
     kinds: [
       {
         kind: "findings-report",
@@ -91,6 +94,7 @@ export const flow: FlowDefinition = {
       "prototype-decision": { ref: "./ui/prototype-decision.ts" },
       "plan-tickets": { ref: "./ui/plan-tickets.ts" },
       "review-findings": { ref: "./ui/review-findings.ts" },
+      "flow-component": { ref: "./ui/flow-component.ts" },
     },
   },
   tools: [

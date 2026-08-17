@@ -243,3 +243,38 @@ export const flow: FlowDefinition = {
     assert.deepEqual(definition.ui?.persistedOutputDirs, ["decisions"]);
   });
 });
+
+describe("parseDefinition ui flowComponent", () => {
+  it("parses ui.flowComponent into the data definition", () => {
+    const { definition, findings } = parseDefinition(
+      `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "flowPageFlow",
+  label: "Flow Page Flow",
+  configSchema: [],
+  ui: {
+    components: { "flow-page": { ref: "./ui/flow-page.ts" } },
+    flowComponent: "flow-page",
+  },
+  workflows: [
+    {
+      id: "items",
+      label: "Items",
+      instanceState: [],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
+        { id: "new", label: "New", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  edges: [],
+};
+`
+    );
+    assert.deepEqual(findings, []);
+    assert.equal(definition.ui?.flowComponent, "flow-page");
+  });
+});

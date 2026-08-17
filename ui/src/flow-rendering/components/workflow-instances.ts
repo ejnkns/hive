@@ -6,6 +6,7 @@ import type {
 } from "workflow-engine/create-flow-runtime";
 import type {
   CustomRenderKind,
+  FlowViewProps,
   WorkflowViewProps,
 } from "workflow-engine/workflow-types";
 import type { FlowLevelAction } from "../../flow-api.ts";
@@ -29,9 +30,14 @@ import { computeFlowOverview } from "./workflow-instances/flow-overview.ts";
 export class WorkflowInstances extends LitElement {
   static properties = {
     flowId: { type: String },
+    flow: { attribute: false },
+    flowComponent: { type: String },
     workflowDefs: { attribute: false },
     instances: { attribute: false },
     customKinds: { attribute: false },
+    availableFlowActions: { attribute: false },
+    persistedOutputs: { attribute: false },
+    persistedOutputDirs: { attribute: false },
   };
 
   static styles = [
@@ -110,16 +116,27 @@ export class WorkflowInstances extends LitElement {
   ];
 
   flowId = "";
+  flow: FlowViewProps["flow"] | undefined = undefined;
+  flowComponent: string | undefined = undefined;
   workflowDefs: WorkflowDefResponse[] = [];
   instances: WorkflowInstanceEntry[] = [];
   customKinds: readonly CustomRenderKind[] = [];
   availableFlowActions: FlowLevelAction[] = [];
+  persistedOutputs: Record<string, string> = {};
+  persistedOutputDirs: Record<string, Record<string, string>> = {};
 
   // Collapsed workflow sections, persisted to localStorage per flow. Lazy-loaded
   // so the set reflects each flow's stored state without a separate pass.
   private collapsedIds = new Set<string>();
 
   render() {
+    const flowView = getComponentRenderer(this.flowComponent);
+    if (flowView !== undefined) {
+      return html`<dynamic-element-host
+        .elementClass=${flowView}
+        .props=${this.flowViewProps()}
+      ></dynamic-element-host>`;
+    }
     const defById = new Map(this.workflowDefs.map((def) => [def.id, def]));
     const entriesByWorkflow = new Map<string, WorkflowInstanceEntry[]>();
     for (const entry of this.instances) {
@@ -159,6 +176,37 @@ export class WorkflowInstances extends LitElement {
         }
       )}
     `;
+  }
+
+  // The whole-body props a flow-level custom component receives (the trimmed
+  // flow projection, every workflow + instance, the cross-workflow counts, the
+  // declared persisted outputs, and the shell callbacks).
+  private flowViewProps(): FlowViewProps {
+    return {
+      flow: this.flow ?? {
+        id: this.flowId,
+        label: this.flowId,
+        status: "idle",
+        config: {},
+      },
+      workflowDefs: this.workflowDefs,
+      entries: this.instances,
+      customKinds: this.customKinds,
+      workflowCounts: this.workflowCounts(),
+      availableFlowActions: this.availableFlowActions,
+      persistedOutputs: this.persistedOutputs,
+      persistedOutputDirs: this.persistedOutputDirs,
+      onAction: (instanceId, actionId, payload) =>
+        this.emitAction(instanceId, actionId, payload),
+      onSendMessage: async (instanceId, content) => {
+        this.emitSendMessage(instanceId, content);
+      },
+      onPatchState: (instanceId, values) =>
+        this.emitPatchState(instanceId, values),
+      onSelect: (instanceId) => this.emitSelect(instanceId),
+      onFlowAction: (actionId) => this.emitFlowAction(actionId),
+      onCreate: (actionId) => this.emitCreate(actionId),
+    };
   }
 
   // The workflow-instances section content: the registered workflow-level

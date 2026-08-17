@@ -1035,6 +1035,7 @@ describe("flow API routes", () => {
         edges: [],
         configSchema: [{ key: "basePath", label: "Base Path", type: "string" }],
         ui: {
+          flowComponent: "flow-page",
           persistedOutputs: ["map.md"],
           persistedOutputDirs: ["decisions"],
         },
@@ -1058,6 +1059,7 @@ describe("flow API routes", () => {
         url: `/api/flows/${flowId}`,
       });
       assert.equal(response.statusCode, 200);
+      assert.equal(response.json().ui.flowComponent, "flow-page");
       assert.deepEqual(response.json().ui.persistedOutputs, {
         "map.md": "# Map\nfog: 2",
       });
