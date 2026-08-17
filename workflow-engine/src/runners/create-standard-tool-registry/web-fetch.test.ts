@@ -113,6 +113,41 @@ describe("web_fetch tool", () => {
     assert.ok(result.content.includes("**markdown**"), result.content);
   });
 
+  it("uses the Link-declared markdown alternate and reports its url", async () => {
+    const execute = createWebFetchExecutor(
+      async (url) => {
+        if (String(url).endsWith(".md")) {
+          return new Response("# Alternate\n\n**clean** body.", {
+            status: 200,
+            headers: { "content-type": "text/markdown; charset=utf-8" },
+          });
+        }
+        return new Response("<html><body><h1>HTML</h1></body></html>", {
+          status: 200,
+          headers: {
+            "content-type": "text/html; charset=utf-8",
+            link: '<https://example.com/page.md>; rel="alternate"; type="text/markdown"',
+          },
+        });
+      },
+      { maxOutputChars: 1_000 }
+    );
+    const result = await execute(
+      {
+        ...call,
+        arguments: JSON.stringify({ url: "https://example.com/page" }),
+      },
+      ctx
+    );
+    assert.equal(result.isError, false);
+    assert.ok(
+      result.content.includes("Fetched https://example.com/page.md"),
+      result.content
+    );
+    assert.ok(result.content.includes("# Alternate"), result.content);
+    assert.ok(result.content.includes("**clean**"), result.content);
+  });
+
   it("rejects a blank url", async () => {
     const execute = createWebFetchExecutor(async () => htmlResponse(""), {});
     const result = await execute(

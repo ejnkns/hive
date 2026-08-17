@@ -9,6 +9,7 @@ import { describe, it } from "node:test";
 import {
   classifyContentType,
   isSameOrigin,
+  markdownAlternateFromLink,
   parseCharset,
   validateFetchUrl,
 } from "../web/fetch-policy.ts";
@@ -91,5 +92,46 @@ describe("parseCharset", () => {
     assert.equal(parseCharset("text/html; charset=utf-8"), "utf-8");
     assert.equal(parseCharset('text/html; charset="iso-8859-1"'), "iso-8859-1");
     assert.equal(parseCharset("text/html"), undefined);
+  });
+});
+
+describe("markdownAlternateFromLink", () => {
+  it("returns the first rel=alternate; type=text/markdown target", () => {
+    const header =
+      '<https://example.com/posts/1>; rel="canonical", ' +
+      '<https://example.com/posts/1.md>; rel="alternate"; type="text/markdown"';
+    assert.equal(
+      markdownAlternateFromLink(header),
+      "https://example.com/posts/1.md"
+    );
+  });
+
+  it("ignores alternates that are not markdown, and markdown links that are not alternates", () => {
+    assert.equal(
+      markdownAlternateFromLink(
+        '<https://example.com/x.pdf>; rel="alternate"; type="application/pdf"'
+      ),
+      undefined
+    );
+    assert.equal(
+      markdownAlternateFromLink(
+        '<https://example.com/x.md>; rel="stylesheet"; type="text/markdown"'
+      ),
+      undefined
+    );
+  });
+
+  it("matches markdown types with parameters and quoted rel lists", () => {
+    assert.equal(
+      markdownAlternateFromLink(
+        '<https://example.com/x.md>; rel="alternate stylesheet"; type="text/markdown; variant=CommonMark"'
+      ),
+      "https://example.com/x.md"
+    );
+  });
+
+  it("returns undefined for no header or no matching link", () => {
+    assert.equal(markdownAlternateFromLink(null), undefined);
+    assert.equal(markdownAlternateFromLink("not a link header"), undefined);
   });
 });

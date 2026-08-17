@@ -9,6 +9,7 @@ import {
   decoderForCharset,
   FetchError,
   isSameOrigin,
+  markdownAlternateFromLink,
   parseCharset,
   validateFetchUrl,
 } from "./fetch-policy.ts";
@@ -65,14 +66,70 @@ async function followAndRead(
   initialUrl: string,
   externalSignal: AbortSignal | undefined,
   fetchImpl: FetchLike,
-  limits: WebFetchLimits
+  limits: WebFetchLimits,
+  alternateBudget = 1
 ): Promise<WebFetchResult> {
-  let currentUrl = validateFetchUrl(initialUrl);
   const timeoutSignal = AbortSignal.timeout(limits.timeoutMs);
   const signal =
     externalSignal !== undefined
       ? AbortSignal.any([externalSignal, timeoutSignal])
       : timeoutSignal;
+  const { response, finalUrl } = await followRedirects(
+    initialUrl,
+    fetchImpl,
+    signal,
+    limits
+  );
+  const primary = await readBody(response, finalUrl, signal, limits);
+
+  // A page that advertises a markdown alternate via Link (RFC 8288,
+  // `rel="alternate"; type="text/markdown"`) but does not negotiate on
+  // Accept: fetch the alternate directly — clean markdown beats converting
+  // the HTML. Same-origin only (a cross-origin alternate is a new origin the
+  // agent should fetch itself), one hop, and any failure degrades to the
+  // primary HTML body.
+  if (primary.body.kind === "html" && alternateBudget > 0) {
+    const alternate = markdownAlternateFromLink(response.headers.get("link"));
+    if (alternate !== undefined) {
+      try {
+        // The Link target is a URI-reference (RFC 8288) — resolve it against
+        // the response URL before validating and comparing origin.
+        const target = validateFetchUrl(
+          new URL(alternate, finalUrl).toString()
+        );
+        if (isSameOrigin(target, finalUrl)) {
+          const alt = await followAndRead(
+            target.toString(),
+            externalSignal,
+            fetchImpl,
+            limits,
+            0
+          );
+          // Only a successful, non-HTML alternate replaces the primary body;
+          // a 404/5xx or an html alternate degrades to the converted HTML.
+          if (
+            alt.statusCode >= 200 &&
+            alt.statusCode < 300 &&
+            alt.body.kind !== "html"
+          ) {
+            return alt;
+          }
+        }
+      } catch {
+        // The alternate is unusable — keep the primary body.
+      }
+    }
+  }
+  return primary;
+}
+
+async function followRedirects(
+  initialUrl: string,
+  fetchImpl: FetchLike,
+  signal: AbortSignal,
+  limits: WebFetchLimits
+): Promise<{ response: Response; finalUrl: URL }> {
+  let currentUrl = validateFetchUrl(initialUrl);
 
   let redirects = 0;
   for (;;) {
@@ -111,7 +168,7 @@ async function followAndRead(
       continue;
     }
 
-    return readBody(response, currentUrl, signal, limits);
+    return { response, finalUrl: currentUrl };
   }
 }
 

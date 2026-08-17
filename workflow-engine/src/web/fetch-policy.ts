@@ -112,3 +112,118 @@ export function decoderForCharset(charset: string | undefined): TextDecoder {
     );
   }
 }
+
+// ── Link header (RFC 8288) ─────────────────────────────────────────────
+
+// The first target of a `Link` header advertising a markdown alternate
+// (`rel="alternate"` with `type="text/markdown"`, optionally with a
+// `variant` parameter per RFC 7764), or undefined. A page that advertises its
+// .md representation this way — without negotiating on `Accept` — is served
+// directly to the agent instead of converting its HTML.
+export function markdownAlternateFromLink(
+  linkHeader: string | null
+): string | undefined {
+  if (linkHeader === null) return undefined;
+  for (const link of parseLinkHeader(linkHeader)) {
+    const rel = (link.params.get("rel") ?? "").toLowerCase();
+    const type = (link.params.get("type") ?? "")
+      .split(";")[0]
+      ?.trim()
+      .toLowerCase();
+    if (
+      rel.split(/\s+/).includes("alternate") &&
+      (type === "text/markdown" || type === "text/x-markdown")
+    ) {
+      return link.target;
+    }
+  }
+  return undefined;
+}
+
+type LinkHeaderLink = {
+  target: string;
+  params: Map<string, string>;
+};
+
+// Splits a Link header into its links on commas that are not inside the
+// angle-bracketed target or a quoted parameter value.
+function parseLinkHeader(header: string): LinkHeaderLink[] {
+  const links: LinkHeaderLink[] = [];
+  let depth = 0;
+  let quote: string | undefined;
+  let current = "";
+  const flush = (): void => {
+    const trimmed = current.trim();
+    current = "";
+    const parsed = parseLink(trimmed);
+    if (parsed !== undefined) links.push(parsed);
+  };
+  for (const char of header) {
+    if (quote !== undefined) {
+      current += char;
+      if (char === quote) quote = undefined;
+    } else if (char === '"' || char === "'") {
+      current += char;
+      quote = char;
+    } else if (char === "<") {
+      depth += 1;
+      current += char;
+    } else if (char === ">") {
+      depth -= 1;
+      current += char;
+    } else if (char === "," && depth === 0) {
+      flush();
+    } else {
+      current += char;
+    }
+  }
+  flush();
+  return links;
+}
+
+function parseLink(link: string): LinkHeaderLink | undefined {
+  const open = link.indexOf("<");
+  const close = link.indexOf(">", open + 1);
+  if (open === -1 || close === -1) return undefined;
+  const target = link.slice(open + 1, close);
+  const params = new Map<string, string>();
+  for (const part of splitLinkParams(link.slice(close + 1))) {
+    const eq = part.indexOf("=");
+    if (eq === -1) continue;
+    const key = part.slice(0, eq).trim().toLowerCase();
+    let value = part.slice(eq + 1).trim();
+    if (
+      value.length >= 2 &&
+      ((value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'")))
+    ) {
+      value = value.slice(1, -1);
+    }
+    if (key !== "") params.set(key, value);
+  }
+  return { target, params };
+}
+
+// Splits a link's parameter section on `;`, respecting quoted values (a
+// `type="text/markdown; variant=CommonMark"` value keeps its inner `;`).
+function splitLinkParams(rest: string): string[] {
+  const parts: string[] = [];
+  let current = "";
+  let quote: string | undefined;
+  for (const char of rest) {
+    if (quote !== undefined) {
+      current += char;
+      if (char === quote) quote = undefined;
+    } else if (char === '"' || char === "'") {
+      current += char;
+      quote = char;
+    } else if (char === ";") {
+      parts.push(current);
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  if (current.trim() !== "") parts.push(current);
+  return parts;
+}

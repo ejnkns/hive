@@ -144,6 +144,76 @@ describe("createHttpFetch", () => {
     assert.ok(result.body.content.includes("**markdown**"));
   });
 
+  it("follows a Link rel=alternate; type=text/markdown for the body", async () => {
+    const fetchImpl: FetchLike = async (url) => {
+      const u = String(url);
+      if (u === "https://example.com/post.md") {
+        return new Response("# Markdown version\n\nClean body.", {
+          status: 200,
+          headers: { "content-type": "text/markdown; charset=utf-8" },
+        });
+      }
+      return new Response("<html><body><h1>HTML version</h1></body></html>", {
+        status: 200,
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+          link: '<https://example.com/post.md>; rel="alternate"; type="text/markdown"',
+        },
+      });
+    };
+    const fetchWeb = createHttpFetch(fetchImpl, LIMITS);
+    const result = await fetchWeb("https://example.com/post");
+    assert.equal(result.body.kind, "markdown");
+    assert.ok(
+      result.body.content.includes("# Markdown version"),
+      result.body.content
+    );
+    assert.equal(result.url, "https://example.com/post.md");
+  });
+
+  it("ignores a cross-origin markdown alternate and keeps the html body", async () => {
+    const fetchImpl: FetchLike = async (url) => {
+      const u = String(url);
+      if (u.startsWith("https://example.com/start")) {
+        return new Response("<html><body><p>primary</p></body></html>", {
+          status: 200,
+          headers: {
+            "content-type": "text/html; charset=utf-8",
+            link: '<https://evil.example.com/x.md>; rel="alternate"; type="text/markdown"',
+          },
+        });
+      }
+      throw new Error("the alternate must not be fetched");
+    };
+    const fetchWeb = createHttpFetch(fetchImpl, LIMITS);
+    const result = await fetchWeb("https://example.com/start");
+    assert.equal(result.body.kind, "html");
+    assert.ok(result.body.content.includes("primary"));
+  });
+
+  it("degrades to the primary html when the alternate fetch fails", async () => {
+    let alternateRequests = 0;
+    const fetchImpl: FetchLike = async (url) => {
+      const u = String(url);
+      if (u.startsWith("https://example.com/start")) {
+        return new Response("<html><body><p>primary</p></body></html>", {
+          status: 200,
+          headers: {
+            "content-type": "text/html; charset=utf-8",
+            link: '<https://example.com/missing.md>; rel="alternate"; type="text/markdown"',
+          },
+        });
+      }
+      alternateRequests += 1;
+      return new Response("not found", { status: 404 });
+    };
+    const fetchWeb = createHttpFetch(fetchImpl, LIMITS);
+    const result = await fetchWeb("https://example.com/start");
+    assert.equal(result.body.kind, "html");
+    assert.ok(result.body.content.includes("primary"));
+    assert.equal(alternateRequests, 1);
+  });
+
   it("rejects invalid URLs before any network access", async () => {
     let called = false;
     const fetchImpl: FetchLike = async () => {
