@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowInstances } from "./components/workflow-instances.ts";
 import { defineFlowRenderingComponents } from "./define-components.ts";
 import {
+  type FlowComponentDeps,
   type FlowComponentEvaluator,
   type FlowComponentModule,
   loadFlowComponents,
@@ -259,5 +260,20 @@ describe("loadFlowComponents", () => {
       throwing
     );
     expect(getComponentRenderer("demo-card")).toBeUndefined();
+  });
+
+  it("hands served modules the svg runtime for SVG templates", async () => {
+    let received: FlowComponentDeps | undefined;
+    restore = await loadFlowComponents(
+      { probe: "/api/.../probe" },
+      async () => ({
+        default: (deps: FlowComponentDeps) => {
+          received = deps;
+          return {};
+        },
+      })
+    );
+    expect(received).toBeDefined();
+    expect(typeof received?.svg).toBe("function");
   });
 });

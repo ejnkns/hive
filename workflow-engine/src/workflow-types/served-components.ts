@@ -6,7 +6,7 @@
  * files can type their modules with a type-only import from the allowlist
  * (workflow-engine/workflow-types) — the module-set gate typechecks them. */
 
-import type { css, html, LitElement, nothing } from "lit";
+import type { css, html, LitElement, nothing, svg } from "lit";
 import type {
   WorkflowDefResponse,
   WorkflowInstanceEntry,
@@ -28,6 +28,10 @@ export type FlowComponentDeps = {
   html: typeof html;
   css: typeof css;
   nothing: typeof nothing;
+  // The svg template tag: renders SVG-namespace elements (the html tag cannot
+  // — SVG is a distinct XML namespace, so its elements must be created with
+  // createElementNS). The map view uses it for the semantic backdrop.
+  svg: typeof svg;
 };
 
 // The registrations a served component module returns: instance components

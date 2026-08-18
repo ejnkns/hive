@@ -1,6 +1,6 @@
 /** @public — loads and registers a definition's served-at-runtime components. */
 
-import { css, html, LitElement, nothing } from "lit";
+import { css, html, LitElement, nothing, svg } from "lit";
 import type {
   ElementConstructor,
   FlowComponentDeps,
@@ -56,7 +56,7 @@ export async function loadFlowComponents(
   components: Record<string, string>,
   evaluate: FlowComponentEvaluator = evaluateBlobModule
 ): Promise<() => void> {
-  const deps: FlowComponentDeps = { LitElement, html, css, nothing };
+  const deps: FlowComponentDeps = { LitElement, html, css, nothing, svg };
   const restores: Array<() => void> = [];
 
   for (const [componentId, path] of Object.entries(components)) {
