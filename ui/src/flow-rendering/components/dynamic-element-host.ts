@@ -14,6 +14,10 @@ export class DynamicElementHost extends LitElement {
   };
 
   static styles = css`
+    :host {
+      display: block;
+      height: 100%;
+    }
     .mount {
       display: contents;
     }

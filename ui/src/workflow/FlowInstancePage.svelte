@@ -181,7 +181,11 @@ function closeFlowActionForm() {
 }
 </script>
 
-<div class="instance-page" style={themeVars(flow?.ui?.theme)}>
+<div
+  class="instance-page"
+  class:owns-page={!!flow?.ui?.flowComponent}
+  style={themeVars(flow?.ui?.theme)}
+>
   {#if resolving}
     <div class="loading">loading instance...</div>
   {:else if error}
@@ -283,7 +287,6 @@ function closeFlowActionForm() {
 
 <style>
 .instance-page {
-  max-width: 820px;
   margin: 0 auto;
   padding: 1.25rem;
 }
@@ -340,6 +343,30 @@ function closeFlowActionForm() {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+.flow-sections :global(workflow-instances) {
+  flex: 1;
+  min-height: 0;
+}
+
+/* A flow that owns its whole page body (ui.flowComponent) gets the full
+   viewport: the flow's served component is responsible for its own internal
+   scrolling (the wayfinder table-top scrolls its columns, not the page). */
+.instance-page.owns-page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.instance-page.owns-page .instance-header {
+  flex-shrink: 0;
+}
+
+.instance-page.owns-page .flow-sections {
+  flex: 1;
+  min-height: 0;
 }
 
 .loading,

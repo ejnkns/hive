@@ -427,8 +427,10 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
     static styles = css`
       :host {
         display: block;
+        height: 100%;
       }
       .expedition {
+        height: 100%;
         display: flex;
         flex-direction: column;
         gap: 0.75rem;
@@ -461,6 +463,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       }
 
       .header {
+        flex-shrink: 0;
         display: flex;
         align-items: center;
         gap: 0.625rem;
@@ -522,10 +525,13 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       }
 
       .table {
+        flex: 1;
+        min-height: 0;
         display: grid;
-        grid-template-columns: 300px 1fr 280px;
+        grid-template-columns: minmax(0, 300px) minmax(0, 1fr) minmax(0, 280px);
         gap: 1rem;
-        align-items: start;
+        align-items: stretch;
+        overflow: hidden;
         border-radius: 18px;
         padding: 1.25rem;
         border: 1px solid var(--border);
@@ -537,9 +543,16 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
           ),
           var(--wf-paper);
       }
-      @media (max-width: 980px) {
+      @media (max-width: 900px) {
+        .expedition {
+          height: auto;
+        }
         .table {
           grid-template-columns: 1fr;
+          overflow: visible;
+        }
+        .column {
+          overflow-y: visible;
         }
       }
 
@@ -548,6 +561,11 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         flex-direction: column;
         gap: 1.1rem;
         min-width: 0;
+        min-height: 0;
+        overflow-y: auto;
+      }
+      .column.center {
+        overflow: hidden;
       }
       .station-head {
         font-size: 0.68rem;
@@ -575,6 +593,30 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         font-size: 0.68rem;
         color: var(--muted);
         padding: 0.4rem 0;
+      }
+      .card .t,
+      .card .lbl,
+      .crate .t,
+      .crate .lbl,
+      .journal .txt,
+      .dest-note .name,
+      .dest-note .sub,
+      .node .cap,
+      .panel .entry .t,
+      .panel .entry .meta {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .card .body {
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+      }
+      .journal .txt,
+      .panel .entry .t {
+        min-width: 0;
       }
 
       .card {
@@ -760,6 +802,9 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       }
 
       .map-card {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
         border: 1px solid var(--border);
         border-radius: 14px;
         padding: 0.9rem;
@@ -772,6 +817,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         position: relative;
       }
       .map-card .map-head {
+        flex-shrink: 0;
         display: flex;
         align-items: center;
         gap: 0.375rem;
@@ -814,23 +860,29 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       .map-card svg {
         display: block;
         width: 100%;
-        height: auto;
+        height: 100%;
+        flex: 1;
+        min-height: 0;
       }
 
       .map-layout {
+        flex: 1;
+        min-height: 0;
         display: grid;
         grid-template-columns: 1fr 300px;
-        min-height: 620px;
       }
       @media (max-width: 880px) {
         .map-layout {
           grid-template-columns: 1fr;
         }
+        .canvas {
+          min-height: 60vh;
+        }
       }
       .canvas {
         position: relative;
         overflow: hidden;
-        min-height: 620px;
+        min-height: 0;
         border: 1px solid var(--border);
         border-radius: 14px;
         background: #0a0e15;
