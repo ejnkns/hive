@@ -298,8 +298,103 @@ function buildGroups(nodes: WayfinderNode[]): WayfinderGroup[] {
   }));
 }
 
+// === The three expedition themes (skins over the same data) ===
+
+type ExpeditionTheme = "mountain" | "topo" | "stars";
+
+const EXPEDITION_THEMES: readonly ExpeditionTheme[] = [
+  "mountain",
+  "topo",
+  "stars",
+];
+
+// Glyphs are single-codepoint dingbats, never emoji (the repo's no-emoji
+// rule). The fog node is always a "?" — a crisp question mark sitting on top
+// of the visible fog region.
+const THEME_GLYPHS: Record<
+  ExpeditionTheme,
+  {
+    base: string;
+    summit: string;
+    decision: string;
+    implementation: string;
+    outOfScope: string;
+  }
+> = {
+  mountain: {
+    base: "⌂",
+    summit: "▲",
+    decision: "▴",
+    implementation: "▲",
+    outOfScope: "⊘",
+  },
+  topo: {
+    base: "⌂",
+    summit: "◉",
+    decision: "▴",
+    implementation: "▲",
+    outOfScope: "⊘",
+  },
+  stars: {
+    base: "◈",
+    summit: "◉",
+    decision: "◍",
+    implementation: "◍",
+    outOfScope: "⊘",
+  },
+};
+
+const THEME_ACCENT: Record<ExpeditionTheme, string> = {
+  mountain: "#4a9fe0",
+  topo: "#58a06a",
+  stars: "#5bc0e8",
+};
+
+function resolveTheme(config: Record<string, unknown>): ExpeditionTheme {
+  const value = config.expeditionTheme;
+  if (
+    typeof value === "string" &&
+    EXPEDITION_THEMES.includes(value as ExpeditionTheme)
+  ) {
+    return value as ExpeditionTheme;
+  }
+  return "mountain";
+}
+
+// A triangle peak path (apex at x,y; base at y+height).
+function peak(x: number, y: number, halfWidth: number, height: number): string {
+  return `M ${x - halfWidth} ${y + height} L ${x} ${y} L ${x + halfWidth} ${
+    y + height
+  } Z`;
+}
+
+// The trail sequence: base -> fog -> frontier -> the ordered ascent -> summit.
+function trailNodes(nodes: WayfinderNode[]): WayfinderNode[] {
+  const base = nodes.find((node) => node.kind === "base");
+  const fog = nodes.filter((node) => node.kind === "fog");
+  const ready = nodes
+    .filter((node) => node.kind === "ready")
+    .sort((a, b) => a.x - b.x);
+  const ascent = nodes
+    .filter((node) => node.order !== undefined)
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const summit = nodes.find((node) => node.kind === "summit");
+  return [base, ...fog, ...ready, ...ascent, summit].filter(
+    (node): node is WayfinderNode => node !== undefined
+  );
+}
+
+// The first non-empty line of a markdown file, for the depot crates' titles.
+function firstLine(text: string): string {
+  const first = text
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => line !== "");
+  return first ?? text.slice(0, 60);
+}
+
 export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
-  const { LitElement: Base, html, css, nothing } = lit;
+  const { LitElement: Base, html, css, nothing, svg } = lit;
 
   class FlowComponent extends Base {
     static properties = {
@@ -317,6 +412,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       onSelect: { attribute: false },
       onFlowAction: { attribute: false },
       onCreate: { attribute: false },
+      mapOpen: { attribute: false },
     };
 
     static styles = css`
@@ -327,7 +423,34 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         display: flex;
         flex-direction: column;
         gap: 0.75rem;
+        --wf-accent: #4a9fe0;
+        --wf-paper: #241f18;
+        --wf-paper-edge: #352d22;
+        --wf-ink: #f0ead9;
+        --wf-body: #b7ad97;
       }
+      .expedition[data-theme="mountain"] {
+        --wf-accent: #4a9fe0;
+        --wf-paper: #241f18;
+        --wf-paper-edge: #352d22;
+        --wf-ink: #f0ead9;
+        --wf-body: #b7ad97;
+      }
+      .expedition[data-theme="topo"] {
+        --wf-accent: #58a06a;
+        --wf-paper: #25221a;
+        --wf-paper-edge: #3a3426;
+        --wf-ink: #f0ead9;
+        --wf-body: #b7ad97;
+      }
+      .expedition[data-theme="stars"] {
+        --wf-accent: #5bc0e8;
+        --wf-paper: #10161f;
+        --wf-paper-edge: #1e2a3a;
+        --wf-ink: #d6e6f5;
+        --wf-body: #8ba6c2;
+      }
+
       .header {
         display: flex;
         align-items: center;
@@ -340,7 +463,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       }
       .emblem {
         font-family: var(--font-mono, monospace);
-        color: var(--flow-accent, var(--accent));
+        color: var(--wf-accent);
         font-size: 1.25rem;
         line-height: 1;
       }
@@ -388,35 +511,400 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         color: white;
         border-color: transparent;
       }
+
+      .table {
+        display: grid;
+        grid-template-columns: 300px 1fr 280px;
+        gap: 1rem;
+        align-items: start;
+        border-radius: 18px;
+        padding: 1.25rem;
+        border: 1px solid var(--border);
+        background:
+          radial-gradient(
+            120% 90% at 50% 10%,
+            rgba(255, 255, 255, 0.03),
+            transparent 60%
+          ),
+          var(--wf-paper);
+      }
+      @media (max-width: 980px) {
+        .table {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .column {
+        display: flex;
+        flex-direction: column;
+        gap: 1.1rem;
+        min-width: 0;
+      }
+      .station-head {
+        font-size: 0.68rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--wf-body);
+        margin: 0 0 0.55rem;
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+      }
+      .station-head::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: rgba(203, 185, 143, 0.25);
+      }
+      .pile {
+        display: flex;
+        flex-direction: column;
+        gap: 0.7rem;
+        min-height: 40px;
+      }
+      .empty {
+        font-size: 0.68rem;
+        color: var(--muted);
+        padding: 0.4rem 0;
+      }
+
+      .card {
+        background: var(--wf-paper);
+        border: 1px solid var(--wf-paper-edge);
+        border-radius: 10px;
+        padding: 0.75rem 0.85rem;
+        box-shadow:
+          0 3px 0 rgba(0, 0, 0, 0.3),
+          0 10px 24px rgba(0, 0, 0, 0.35);
+        transform: rotate(var(--rot, 0deg));
+        transition:
+          transform 0.15s ease,
+          box-shadow 0.15s ease,
+          border-color 0.15s;
+      }
+      .card:hover {
+        transform: rotate(0deg) translateY(-2px);
+      }
+      .card .t {
+        font-weight: 600;
+        font-size: 0.84rem;
+        color: var(--wf-ink);
+      }
+      .card .body {
+        font-size: 0.7rem;
+        color: var(--wf-body);
+        margin-top: 0.28rem;
+      }
+      .stamp {
+        display: inline-block;
+        font-family: var(--font-mono, monospace);
+        font-size: 0.56rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--wf-accent);
+        border: 1.5px solid var(--wf-accent);
+        border-radius: 4px;
+        padding: 0.06rem 0.34rem;
+        margin-top: 0.5rem;
+        transform: rotate(-3deg);
+      }
+      .claim {
+        font: inherit;
+        font-size: 0.68rem;
+        margin-top: 0.55rem;
+        padding: 0.26rem 0.6rem;
+        border-radius: 6px;
+        border: 1px solid var(--wf-accent);
+        background: transparent;
+        color: var(--wf-accent);
+        cursor: pointer;
+      }
+
+      .fog-card {
+        background: linear-gradient(165deg, #2a2620, #211e19);
+        border: 2px dashed rgba(138, 147, 160, 0.5);
+      }
+      .expedition[data-theme="stars"] .fog-card {
+        background: linear-gradient(165deg, #141b26, #0e141d);
+        border-color: rgba(140, 170, 200, 0.45);
+      }
+      .fog-card .q {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        border: 1.5px solid #f0ead9;
+        color: #f0ead9;
+        font-weight: 700;
+        font-size: 0.85rem;
+        margin-right: 0.35rem;
+        box-shadow:
+          0 0 0 4px rgba(138, 147, 160, 0.16),
+          0 0 14px rgba(138, 147, 160, 0.35);
+      }
+      .fog-card .tag {
+        display: inline-block;
+        margin-top: 0.4rem;
+        font-size: 0.56rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #f0ead9;
+        background: rgba(138, 147, 160, 0.25);
+        border-radius: 999px;
+        padding: 0.06rem 0.45rem;
+      }
+
+      .journal {
+        background: var(--wf-paper);
+        border: 1px solid var(--wf-paper-edge);
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+      }
+      .journal .entry {
+        padding: 0.6rem 0.8rem;
+        border-bottom: 1px dashed #3a3226;
+        display: flex;
+        gap: 0.6rem;
+        align-items: baseline;
+      }
+      .journal .entry:last-child {
+        border-bottom: none;
+      }
+      .journal .cairn {
+        color: var(--success);
+        font-family: var(--font-mono, monospace);
+      }
+      .journal .txt {
+        font-size: 0.8rem;
+        color: var(--wf-ink);
+      }
+
+      .crate {
+        background: var(--wf-paper);
+        border: 1px solid var(--wf-paper-edge);
+        border-radius: 10px;
+        padding: 0.7rem 0.8rem;
+        border-top: 3px solid var(--warning);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+      }
+      .crate.spec {
+        border-top-color: var(--wf-accent);
+      }
+      .crate .lbl {
+        font-size: 0.6rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .crate .t {
+        font-weight: 600;
+        font-size: 0.8rem;
+        color: var(--wf-ink);
+      }
+
       .map-card {
         border: 1px solid var(--border);
-        border-radius: 8px;
-        background: var(--surface);
-        padding: 0.75rem 0.875rem;
+        border-radius: 14px;
+        padding: 0.9rem;
+        background: radial-gradient(
+          120% 90% at 70% 20%,
+          #172030 0%,
+          #10151d 55%,
+          #0c1015 100%
+        );
+        position: relative;
       }
-      .map-head {
+      .map-card .map-head {
         display: flex;
         align-items: center;
         gap: 0.375rem;
-        margin-bottom: 0.375rem;
+        margin-bottom: 0.5rem;
       }
-      .map-title {
+      .map-card .map-title {
         font-size: 0.6875rem;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.08em;
         color: var(--text);
       }
-      .map-frontier {
-        margin-left: auto;
-        font-size: 0.5625rem;
-        font-family: var(--font-mono, monospace);
+      .map-card .dest-note {
+        position: absolute;
+        left: 18px;
+        top: 14px;
+        max-width: 30ch;
+      }
+      .map-card .dest-note .name {
+        font-weight: 700;
+        font-size: 0.8rem;
+      }
+      .map-card .dest-note .sub {
+        font-size: 0.66rem;
         color: var(--muted);
       }
-      .section {
-        display: flex;
-        flex-direction: column;
-        gap: 0.375rem;
+      .map-card .open-map {
+        position: absolute;
+        right: 14px;
+        top: 14px;
+        font: inherit;
+        font-size: 0.68rem;
+        padding: 0.32rem 0.6rem;
+        border-radius: 6px;
+        border: 1px solid var(--wf-accent);
+        background: rgba(91, 192, 232, 0.12);
+        color: var(--wf-accent);
+        cursor: pointer;
+      }
+      .map-card svg {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
+      .map-layout {
+        display: grid;
+        grid-template-columns: 1fr 300px;
+        min-height: 620px;
+      }
+      @media (max-width: 880px) {
+        .map-layout {
+          grid-template-columns: 1fr;
+        }
+      }
+      .canvas {
+        position: relative;
+        overflow: hidden;
+        min-height: 620px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: #0a0e15;
+      }
+      .canvas svg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+      .back-link {
+        position: absolute;
+        left: 14px;
+        top: 14px;
+        z-index: 6;
+        font: inherit;
+        font-size: 0.7rem;
+        padding: 0.32rem 0.6rem;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text);
+        cursor: pointer;
+      }
+      .node {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        text-align: center;
+        cursor: pointer;
+        z-index: 3;
+      }
+      .node .glyph {
+        line-height: 1;
+      }
+      .node .cap {
+        font-size: 0.62rem;
+        color: var(--text);
+        margin-top: 3px;
+        max-width: 17ch;
+        line-height: 1.2;
+      }
+      .node.summit .glyph {
+        font-size: 2.3rem;
+        color: var(--wf-accent);
+      }
+      .node.summit .cap {
+        font-weight: 700;
+      }
+      .node.decision .glyph {
+        font-size: 1.1rem;
+        color: var(--success);
+      }
+      .node.implementation .glyph {
+        font-size: 1.2rem;
+        color: var(--wf-accent);
+      }
+      .node.base .glyph {
+        font-size: 1.5rem;
+        color: var(--muted);
+      }
+      .node.out-of-scope .glyph {
+        font-size: 1.2rem;
+        color: var(--muted);
+      }
+      .node.fog .glyph {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: var(--surface);
+        border: 2px solid #e6edf3;
+        color: #e6edf3;
+        font-weight: 700;
+        font-size: 0.82rem;
+        box-shadow:
+          0 0 0 5px rgba(138, 147, 160, 0.16),
+          0 0 0 11px rgba(138, 147, 160, 0.08);
+      }
+      .node.ready .glyph {
+        display: inline-block;
+        width: 13px;
+        height: 13px;
+        border-radius: 50%;
+        background: var(--wf-accent);
+        box-shadow:
+          0 0 0 3px rgba(91, 192, 232, 0.25),
+          0 0 16px var(--wf-accent);
+      }
+      .node.resolving .glyph {
+        display: inline-block;
+        width: 13px;
+        height: 13px;
+        border-radius: 50%;
+        background: var(--warning);
+      }
+
+      .panel {
+        border-left: 1px solid var(--border);
+        padding: 0.9rem;
+        background: var(--surface);
+        overflow-y: auto;
+      }
+      .panel .group {
+        margin-bottom: 0.8rem;
+      }
+      .panel .gh {
+        font-size: 0.66rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 0.7rem 0 0.3rem;
+      }
+      .panel .entry {
+        font-size: 0.78rem;
+        padding: 0.38rem 0.5rem;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        cursor: pointer;
+      }
+      .panel .entry .t {
+        font-weight: 600;
+        color: var(--text);
+      }
+      .panel .entry .meta {
+        font-size: 0.64rem;
+        color: var(--muted);
       }
     `;
 
@@ -434,16 +922,75 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
     declare onSelect: FlowViewProps["onSelect"];
     declare onFlowAction: FlowViewProps["onFlowAction"];
     declare onCreate: FlowViewProps["onCreate"];
+    declare mapOpen: boolean;
+
+    private get theme(): ExpeditionTheme {
+      return resolveTheme(this.flow.config);
+    }
+
+    private get model(): WayfinderMap {
+      return deriveWayfinderMap(this.entries);
+    }
 
     render() {
-      return html`<div class="expedition">
+      const theme = this.theme;
+      return this.mapOpen
+        ? this.renderMapView(theme)
+        : this.renderTableView(theme);
+    }
+
+    private renderTableView(theme: ExpeditionTheme) {
+      const model = this.model;
+      return html`<div class="expedition" data-theme=${theme}>
         ${this.renderHeader()}
-        ${this.renderMapCard()}
-        <div class="section">${this.renderSection("charting")}</div>
-        <div class="section">${this.renderSection("ticket")}</div>
-        <div class="section">${this.renderSection("build")}</div>
-        <div class="section">${this.renderSection("buildItem")}</div>
+        <div class="table">
+          <div class="column left">
+            ${this.renderBriefingDeck()} ${this.renderFogTray()}
+          </div>
+          <div class="column center">${this.renderMapCard(model, theme)}</div>
+          <div class="column right">
+            ${this.renderJournal()} ${this.renderDepot()}
+            ${this.renderOutOfScope()}
+          </div>
+        </div>
       </div>`;
+    }
+
+    private renderMapView(theme: ExpeditionTheme) {
+      const model = this.model;
+      return html`<div class="expedition" data-theme=${theme}>
+        <div class="map-layout">
+          <div class="canvas">
+            <button class="back-link" type="button" @click=${this.closeMap}>
+              ← Back to the table
+            </button>
+            ${this.mapBackdrop(model.nodes, theme)}
+            ${this.mapPaths(model.nodes, theme)}
+            ${model.nodes.map((node) => this.renderNode(node, theme))}
+          </div>
+          <aside class="panel">${this.renderPanel(model)}</aside>
+        </div>
+      </div>`;
+    }
+
+    private mapBackdrop(nodes: WayfinderNode[], theme: ExpeditionTheme) {
+      return svg`<svg
+        viewBox="0 0 1000 660"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        ${this.drawBackdrop(nodes, theme, 10, 6.6)}
+      </svg>`;
+    }
+
+    private mapPaths(nodes: WayfinderNode[], theme: ExpeditionTheme) {
+      return svg`<svg
+        viewBox="0 0 1000 660"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        ${this.drawPaths(nodes, theme, 10, 6.6)}
+      </svg>`;
     }
 
     private renderHeader() {
@@ -455,18 +1002,14 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         </div>
         <div class="actions">
           ${this.availableFlowActions.map((action) => {
-            const onCreate =
+            const onClick =
               action.createInstance !== undefined
                 ? () => this.onCreate(action.id)
-                : undefined;
-            const onFlowAction =
-              action.createInstance === undefined
-                ? () => this.onFlowAction(action.id)
-                : undefined;
+                : () => this.onFlowAction(action.id);
             return html`<button
               class=${action.variant}
               type="button"
-              @click=${onCreate ?? onFlowAction}
+              @click=${onClick}
             >
               ${action.label}
             </button>`;
@@ -475,54 +1018,449 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       </div>`;
     }
 
-    // The expedition map card: the real persisted map.md (the charting agent's
-    // settled map), with a frontier status line derived from the ticket
-    // workflow's counts. The map is markdown; markdown-view renders it.
-    private renderMapCard() {
-      const map = this.persistedOutputs["map.md"] ?? "";
-      const ticket = this.workflowCounts.find(
-        (workflow) => workflow.workflowId === "ticket"
-      );
-      const byState = ticket?.byState ?? {};
-      const fog = byState["fog"] ?? 0;
-      const frontier = byState["ready"] ?? 0;
-      const decisions = byState["closed"] ?? 0;
-      if (map === "" && ticket === undefined) return nothing;
-      return html`<div class="map-card">
-        <div class="map-head">
-          <span class="map-title">Expedition map</span>
-          <span class="map-frontier"
-            >fog ${fog} · frontier ${frontier} · decisions ${decisions}</span
-          >
+    private renderBriefingDeck() {
+      const ready = this.ticketsInState("ready");
+      return html`<div class="station">
+        <h2 class="station-head">The briefing deck</h2>
+        <div class="pile">
+          ${ready.map((entry) => this.renderDossierCard(entry))}
+          ${
+            ready.length === 0
+              ? html`<div class="empty">No claimable tickets yet.</div>`
+              : nothing
+          }
         </div>
-        ${map !== "" ? html`<markdown-view .content=${map}></markdown-view>` : nothing}
       </div>`;
     }
 
-    // A workflow's section: the canonical board/list (with its served
-    // instance card resolved through the registry), composed under the
-    // expedition chrome.
-    private renderSection(workflowId: string) {
-      const { workflowDef, entries } = this.section(workflowId);
-      if (workflowDef === undefined) return nothing;
-      return html`<workflow-board-content
-        .workflowDef=${workflowDef}
-        .entries=${entries}
-        .customKinds=${this.customKinds}
-        .onAction=${this.onAction}
-        .onSendMessage=${this.onSendMessage}
-        .onPatchState=${this.onPatchState}
-      ></workflow-board-content>`;
+    private renderDossierCard(entry: FlowViewProps["entries"][number]) {
+      const state = entry.state.workflowInstanceState;
+      const title = ticketTitle(entry);
+      const question =
+        typeof state.question === "string" ? state.question : undefined;
+      const type = typeof state.type === "string" ? state.type : undefined;
+      const claim = entry.availableActions.find((action) =>
+        action.id.startsWith("claim_")
+      );
+      return html`<div class="card" style=${`--rot:${-1.2 + (entry.id.length % 3) * 0.9}deg`}>
+        <div class="t">${title}</div>
+        ${
+          question !== undefined && question !== ""
+            ? html`<div class="body">${question}</div>`
+            : nothing
+        }
+        ${
+          type !== undefined
+            ? html`<span class="stamp">${type}</span>`
+            : nothing
+        }
+        ${
+          claim !== undefined
+            ? html`<button
+              class="claim"
+              type="button"
+              @click=${() => this.onAction(entry.id, claim.id)}
+            >
+              Claim
+            </button>`
+            : nothing
+        }
+      </div>`;
     }
 
-    private section(workflowId: string) {
-      const workflowDef = this.workflowDefs.find(
-        (def) => def.id === workflowId
+    private renderFogTray() {
+      const fog = this.ticketsInState("fog");
+      return html`<div class="station">
+        <h2 class="station-head">The fog tray</h2>
+        <div class="pile">
+          ${fog.map((entry) => this.renderFogCard(entry))}
+          ${
+            fog.length === 0
+              ? html`<div class="empty">The fog is clear.</div>`
+              : nothing
+          }
+        </div>
+      </div>`;
+    }
+
+    private renderFogCard(entry: FlowViewProps["entries"][number]) {
+      return html`<div class="card fog-card">
+        <div class="t"><span class="q">?</span>${ticketTitle(entry)}</div>
+        <span class="tag">needs clarity</span>
+      </div>`;
+    }
+
+    private renderJournal() {
+      const closed = this.ticketsInState("closed");
+      return html`<div class="station">
+        <h2 class="station-head">The journal</h2>
+        <div class="journal">
+          ${closed.map(
+            (entry) => html`<div class="entry">
+              <span class="cairn">▴</span>
+              <span class="txt">${ticketTitle(entry)}</span>
+            </div>`
+          )}
+          ${
+            closed.length === 0
+              ? html`<div class="empty">No decisions recorded yet.</div>`
+              : nothing
+          }
+        </div>
+      </div>`;
+    }
+
+    private renderDepot() {
+      const builds = this.entries.filter(
+        (entry) => entry.workflowId === "build"
       );
-      const entries = this.entries.filter(
-        (entry) => entry.workflowId === workflowId
+      const buildItems = this.entries.filter(
+        (entry) => entry.workflowId === "buildItem"
       );
-      return { workflowDef, entries };
+      const spec = this.persistedOutputs["spec.md"];
+      const plan = this.persistedOutputs["build-plan.md"];
+      const hasSpec = spec !== undefined && spec !== "";
+      const hasPlan = plan !== undefined && plan !== "";
+      const hasAny =
+        hasSpec || hasPlan || builds.length > 0 || buildItems.length > 0;
+      return html`<div class="station">
+        <h2 class="station-head">The supply depot</h2>
+        <div class="pile">
+          ${
+            hasSpec
+              ? html`<div class="crate spec">
+                <div class="lbl">manifest · spec</div>
+                <div class="t">${firstLine(spec ?? "")}</div>
+              </div>`
+              : nothing
+          }
+          ${
+            hasPlan
+              ? html`<div class="crate">
+                <div class="lbl">route plan</div>
+                <div class="t">${firstLine(plan ?? "")}</div>
+              </div>`
+              : nothing
+          }
+          ${builds.map(
+            (entry) => html`<div class="crate">
+              <div class="lbl">build · ${entry.state.currentState}</div>
+              <div class="t">The implementation phase</div>
+            </div>`
+          )}
+          ${buildItems.map(
+            (entry) => html`<div class="crate">
+              <div class="lbl">gear · build item</div>
+              <div class="t">${implementationTitle(entry)}</div>
+            </div>`
+          )}
+          ${
+            hasAny
+              ? nothing
+              : html`<div class="empty">No supplies yet — start a build.</div>`
+          }
+        </div>
+      </div>`;
+    }
+
+    private renderOutOfScope() {
+      const outOfScope = this.ticketsInState("out_of_scope");
+      return html`<div class="station">
+        <h2 class="station-head">Do not enter</h2>
+        <div class="pile">
+          ${outOfScope.map(
+            (entry) => html`<div class="card">
+              <div class="t">⊘ ${ticketTitle(entry)}</div>
+              <span class="stamp">ruled out</span>
+            </div>`
+          )}
+          ${
+            outOfScope.length === 0
+              ? html`<div class="empty">Nothing ruled out.</div>`
+              : nothing
+          }
+        </div>
+      </div>`;
+    }
+
+    private renderMapCard(model: WayfinderMap, theme: ExpeditionTheme) {
+      return html`<div class="map-card">
+        <div class="map-head">
+          <span class="map-title">The map</span>
+        </div>
+        <div class="dest-note">
+          <div class="name">${model.destination}</div>
+          <div class="sub">Destination</div>
+        </div>
+        <button class="open-map" type="button" @click=${this.openMap}>
+          Open the map view →
+        </button>
+        ${this.miniMap(model, theme)}
+      </div>`;
+    }
+
+    private miniMap(model: WayfinderMap, theme: ExpeditionTheme) {
+      const glyphs = THEME_GLYPHS[theme];
+      const accent = THEME_ACCENT[theme];
+      const sx = 5.6;
+      const sy = 4;
+      const summit = model.nodes.find((node) => node.kind === "summit");
+      return svg`<svg viewBox="0 0 560 400" role="img" aria-label="Expedition map">
+        ${this.drawBackdrop(model.nodes, theme, sx, sy)}
+        ${this.drawFrontier(model.nodes, sx, sy, accent)}
+        ${this.drawTrail(model.nodes, sx, sy, accent)}
+        ${
+          summit !== undefined
+            ? svg`<text
+                x=${summit.x * sx}
+                y=${summit.y * sy - 6}
+                text-anchor="middle"
+                font-size="20"
+                fill=${accent}
+              >${glyphs.summit}</text>`
+            : nothing
+        }
+        ${model.nodes
+          .filter((node) => node.kind !== "base" && node.kind !== "summit")
+          .map((node) => this.drawMarker(node, sx, sy))}
+      </svg>`;
+    }
+
+    private renderNode(node: WayfinderNode, theme: ExpeditionTheme) {
+      const glyphs = THEME_GLYPHS[theme];
+      const glyph =
+        node.kind === "summit"
+          ? glyphs.summit
+          : node.kind === "base"
+            ? glyphs.base
+            : node.kind === "decision"
+              ? glyphs.decision
+              : node.kind === "implementation"
+                ? glyphs.implementation
+                : node.kind === "out-of-scope"
+                  ? glyphs.outOfScope
+                  : "";
+      const caption =
+        node.kind === "fog"
+          ? html`<span class="tag">needs clarity</span>`
+          : nothing;
+      return html`<div
+        class="node ${node.kind}"
+        style=${`left:${node.x}%;top:${node.y}%`}
+        data-id=${node.id}
+      >
+        <div class="glyph">
+          ${
+            node.kind === "fog" ||
+            node.kind === "ready" ||
+            node.kind === "resolving"
+              ? ""
+              : glyph
+          }
+        </div>
+        <div class="cap">${node.title}</div>
+        ${caption}
+      </div>`;
+    }
+
+    private renderPanel(model: WayfinderMap) {
+      return html`${model.groups.map(
+        (group) => html`<div class="group">
+          <div class="gh">${group.label}</div>
+          ${group.nodes.map(
+            (node) => html`<div class="entry" data-id=${node.id}>
+              <div class="t">${node.title}</div>
+              <div class="meta">${node.kind} · ${node.meta}</div>
+            </div>`
+          )}
+        </div>`
+      )}`;
+    }
+
+    // --- SVG drawing (shared by the mini-map and the full map) ---
+
+    private drawBackdrop(
+      nodes: WayfinderNode[],
+      theme: ExpeditionTheme,
+      sx: number,
+      sy: number
+    ) {
+      const summit = nodes.find((node) => node.kind === "summit");
+      const cx = summit?.x ?? 84;
+      const cy = summit?.y ?? 10;
+      if (theme === "mountain") {
+        const conquered = nodes.filter(
+          (node) => node.kind === "decision" || node.kind === "implementation"
+        );
+        return svg`<g>
+          ${
+            summit !== undefined
+              ? svg`<path
+                  d=${peak(cx * sx, cy * sy, 60, 120)}
+                  fill="rgba(74,159,224,.15)"
+                ></path>`
+              : nothing
+          }
+          ${conquered.map(
+            (node) => svg`<path
+              d=${peak(node.x * sx, node.y * sy, 16, 30)}
+              fill="rgba(74,159,224,.12)"
+            ></path>`
+          )}
+        </g>`;
+      }
+      if (theme === "topo") {
+        return svg`<g>
+          ${[0, 1, 2, 3, 4].map(
+            (i) => svg`<ellipse
+              cx=${cx * sx}
+              cy=${cy * sy}
+              rx=${(46 + i * 34) * (sx / 10)}
+              ry=${(46 + i * 34) * (sy / 6.6)}
+              fill="none"
+              stroke="rgba(88,160,106,.16)"
+              stroke-width="1"
+            ></ellipse>`
+          )}
+          <rect
+            x="14"
+            y="14"
+            width="${sx * 100 - 28}"
+            height="${sy * 100 - 28}"
+            fill="none"
+            stroke="rgba(255,255,255,.12)"
+            stroke-width="2"
+          ></rect>
+        </g>`;
+      }
+      // stars: a starfield + the destination as the system's sun.
+      const stars: Array<{ x: number; y: number; r: number; o: number }> = [];
+      for (let i = 0; i < 90; i += 1) {
+        stars.push({
+          x: ((i * 137) % 1000) * (sx / 10),
+          y: ((i * 61) % 660) * (sy / 6.6),
+          r: 0.4 + ((i * 7) % 10) / 10,
+          o: 0.08 + ((i * 11) % 30) / 100,
+        });
+      }
+      return svg`<g>
+        ${stars.map(
+          (star) => svg`<circle
+            cx=${star.x.toFixed(1)}
+            cy=${star.y.toFixed(1)}
+            r=${star.r.toFixed(2)}
+            fill="rgba(230,237,243,${star.o.toFixed(2)})"
+          ></circle>`
+        )}
+        ${
+          summit !== undefined
+            ? svg`<circle
+                cx=${cx * sx}
+                cy=${cy * sy}
+                r=${26 * (sx / 10)}
+                fill="rgba(91,192,232,.22)"
+              ></circle>`
+            : nothing
+        }
+      </g>`;
+    }
+
+    private drawFrontier(
+      nodes: WayfinderNode[],
+      sx: number,
+      sy: number,
+      accent: string
+    ) {
+      const ready = nodes.filter((node) => node.kind === "ready");
+      const y = ready.length > 0 ? ready[0].y : 60;
+      const xs = ready.map((node) => node.x);
+      const minX = xs.length > 0 ? Math.min(...xs) : 20;
+      const maxX = xs.length > 0 ? Math.max(...xs) : 52;
+      return svg`<path
+        d=${`M ${12 * sx} ${y * sy} Q ${((minX + maxX) / 2) * sx} ${
+          (y - 4) * sy
+        } ${(maxX + 8) * sx} ${y * sy}`}
+        fill="none"
+        stroke=${accent}
+        stroke-width="1.4"
+        stroke-dasharray="2 6"
+      ></path>`;
+    }
+
+    private drawTrail(
+      nodes: WayfinderNode[],
+      sx: number,
+      sy: number,
+      accent: string
+    ) {
+      const trail = trailNodes(nodes);
+      if (trail.length < 2) return nothing;
+      const d = trail
+        .map((node, index) => {
+          const command = index === 0 ? "M" : "L";
+          return `${command} ${(node.x * sx).toFixed(1)} ${(node.y * sy).toFixed(1)}`;
+        })
+        .join(" ");
+      return svg`<path
+        d=${d}
+        fill="none"
+        stroke=${accent}
+        stroke-width="1.6"
+        stroke-dasharray="5 7"
+        stroke-linecap="round"
+        opacity="0.55"
+      ></path>`;
+    }
+
+    private drawMarker(node: WayfinderNode, sx: number, sy: number) {
+      const colors: Record<string, string> = {
+        decision: "#3fb950",
+        implementation: THEME_ACCENT[this.theme],
+        ready: THEME_ACCENT[this.theme],
+        resolving: "#d29922",
+        fog: "#f0ead9",
+        "out-of-scope": "#9aa4ad",
+      };
+      const fill = colors[node.kind] ?? "#9aa4ad";
+      const radius = node.kind === "fog" ? 5 : 4;
+      const isFog = node.kind === "fog";
+      return svg`<circle
+        cx=${node.x * sx}
+        cy=${node.y * sy}
+        r=${radius}
+        fill=${isFog ? "none" : fill}
+        stroke=${isFog ? "#f0ead9" : "none"}
+        stroke-width=${isFog ? "1.6" : "0"}
+        data-id=${node.id}
+      ></circle>`;
+    }
+
+    private drawPaths(
+      nodes: WayfinderNode[],
+      theme: ExpeditionTheme,
+      sx: number,
+      sy: number
+    ) {
+      const accent = THEME_ACCENT[theme];
+      return svg`<g>
+        ${this.drawFrontier(nodes, sx, sy, accent)}
+        ${this.drawTrail(nodes, sx, sy, accent)}
+      </g>`;
+    }
+
+    private ticketsInState(state: string) {
+      return this.entries.filter(
+        (entry) =>
+          entry.workflowId === "ticket" && entry.state.currentState === state
+      );
+    }
+
+    private openMap() {
+      this.mapOpen = true;
+    }
+
+    private closeMap() {
+      this.mapOpen = false;
     }
   }
 

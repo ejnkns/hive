@@ -438,7 +438,7 @@ describe("wayfinder served modules", () => {
     }
   });
 
-  it("flow-component renders the expedition chrome and delegates each section", async () => {
+  it("flow-component renders the cartographer's table: dossier, fog, journal, depot, do-not-enter, and map", async () => {
     defineFlowRenderingComponents();
     localStorage.clear();
     vi.stubGlobal(
@@ -466,20 +466,35 @@ describe("wayfinder served modules", () => {
       const ticket = cardDef({
         id: "ticket",
         label: "Ticket",
-        ui: {
-          view: "board",
-          workflowComponent: "frontier-board",
-          columns: [
-            { id: "fog", label: "Fog", states: ["fog"] },
-            { id: "frontier", label: "Frontier", states: ["ready"] },
-          ],
-        },
+        ui: { view: "board", workflowComponent: "frontier-board" },
       });
-      const ticketInstance = entry("t-1", "ready");
-      ticketInstance.workflowId = "ticket";
-      ticketInstance.state.workflowInstanceState = {
+      const readyTicket = entry("t-1", "ready");
+      readyTicket.workflowId = "ticket";
+      readyTicket.state.workflowInstanceState = {
         title: "Pick the router",
         type: "research",
+      };
+      readyTicket.availableActions = [
+        {
+          id: "claim_research",
+          label: "Claim for research",
+          variant: "primary",
+        },
+      ];
+      const fogTicket = entry("t-2", "fog");
+      fogTicket.workflowId = "ticket";
+      fogTicket.state.workflowInstanceState = { brief: "metrics to Effect?" };
+      const closedTicket = entry("t-3", "closed");
+      closedTicket.workflowId = "ticket";
+      closedTicket.state.workflowInstanceState = {
+        title: "Pilot is concurrency-first",
+        type: "research",
+      };
+      const outOfScopeTicket = entry("t-4", "out_of_scope");
+      outOfScopeTicket.workflowId = "ticket";
+      outOfScopeTicket.state.workflowInstanceState = {
+        title: "Carve-out audit",
+        type: "task",
       };
 
       const build = cardDef({
@@ -490,15 +505,13 @@ describe("wayfinder served modules", () => {
       });
       const buildEntry = entry("b-1", "accepted");
       buildEntry.workflowId = "build";
-      buildEntry.state.workflowInstanceState = { spec: "spec text" };
 
-      const buildItem = cardDef({
-        id: "buildItem",
-        label: "Build Item",
-        ui: { view: "board" },
-      });
-      const itemEntry = entry("bi-1", "ready");
+      const buildItem = cardDef({ id: "buildItem", label: "Build Item" });
+      const itemEntry = entry("bi-1", "done");
       itemEntry.workflowId = "buildItem";
+      itemEntry.state.workflowInstanceState = {
+        ticket: { title: "Retry loop" },
+      };
 
       const el = await mount(
         Object.assign(new WorkflowInstances(), {
@@ -511,7 +524,15 @@ describe("wayfinder served modules", () => {
           },
           flowComponent: "flow-component",
           workflowDefs: [charting, ticket, build, buildItem],
-          instances: [chartedEntry, ticketInstance, buildEntry, itemEntry],
+          instances: [
+            chartedEntry,
+            readyTicket,
+            fogTicket,
+            closedTicket,
+            outOfScopeTicket,
+            buildEntry,
+            itemEntry,
+          ],
           customKinds: [],
           availableFlowActions: [
             {
@@ -521,25 +542,127 @@ describe("wayfinder served modules", () => {
               createInstance: { workflowId: "ticket", fields: [] },
             },
           ],
-          persistedOutputs: { "map.md": "# Map\n- pick a router" },
+          persistedOutputs: {
+            "spec.md": "# Retry loop\nRetry transient failures.",
+            "build-plan.md": "# Plan\nThree build items.",
+          },
         })
       );
       await settle(shadowRootOf(el));
 
-      // The expedition header: destination title + status + flow actions.
+      // Header: expedition identity + flow actions.
       expect(queryAllDeep(el, ".title")[0]?.textContent).toBe("Wayfinder");
       expect(queryAllDeep(el, ".actions button")[0]?.textContent?.trim()).toBe(
         "Add ticket"
       );
-      // The real map renders from the persisted map.md.
-      expect(queryAllDeep(el, ".map-title")[0]?.textContent).toBe(
-        "Expedition map"
-      );
+      // The table defaults to the mountain theme.
       expect(
-        queryAllDeep(el, "markdown-view")[0]?.shadowRoot?.textContent
-      ).toContain("pick a router");
-      // Each workflow section composes the canonical board under the chrome.
-      expect(queryAllDeep(el, "workflow-board-content").length).toBe(4);
+        queryAllDeep(el, ".expedition")[0]?.getAttribute("data-theme")
+      ).toBe("mountain");
+
+      // All five stations are present.
+      const heads = queryAllDeep(el, ".station-head").map(
+        (head) => head.textContent ?? ""
+      );
+      expect(heads).toContain("The briefing deck");
+      expect(heads).toContain("The fog tray");
+      expect(heads).toContain("The journal");
+      expect(heads).toContain("The supply depot");
+      expect(heads).toContain("Do not enter");
+
+      // Briefing deck: the ready ticket with a type stamp and a claim button.
+      expect(queryAllDeep(el, ".stamp")[0]?.textContent).toBe("research");
+      expect(queryAllDeep(el, ".claim").length).toBe(1);
+      // Fog tray: highlighted, always visible, never blurred.
+      expect(queryAllDeep(el, ".fog-card").length).toBe(1);
+      expect(queryAllDeep(el, ".fog-card .tag")[0]?.textContent).toBe(
+        "needs clarity"
+      );
+      // Journal + do-not-enter keep decisions and ruled-out tickets separate.
+      expect(queryAllDeep(el, ".journal .entry").length).toBe(1);
+      expect(queryAllDeep(el, ".journal .txt")[0]?.textContent).toBe(
+        "Pilot is concurrency-first"
+      );
+      // Depot: spec, plan, build, and build-item crates.
+      expect(queryAllDeep(el, ".crate").length).toBeGreaterThanOrEqual(3);
+      // The map card carries the destination and an SVG mini-map.
+      expect(queryAllDeep(el, ".dest-note .name")[0]?.textContent).toBe(
+        "hive router"
+      );
+      expect(queryAllDeep(el, ".map-card svg").length).toBe(1);
+      expect(queryAllDeep(el, ".open-map").length).toBe(1);
+    } finally {
+      restore();
+    }
+  });
+
+  it("flow-component applies the expeditionTheme and drills into the map view", async () => {
+    defineFlowRenderingComponents();
+    localStorage.clear();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, text: async () => "" }))
+    );
+    const restore = await loadFlowComponents(
+      { "flow-component": "/api/.../flow-component" },
+      load(flowComponentModule)
+    );
+    try {
+      const charting = cardDef({ id: "charting", label: "Charting" });
+      const chartedEntry = entry("c-1", "charted");
+      chartedEntry.workflowId = "charting";
+      chartedEntry.state.workflowInstanceState = { destination: "hive router" };
+
+      const ticket = cardDef({ id: "ticket", label: "Ticket" });
+      const fogTicket = entry("t-1", "fog");
+      fogTicket.workflowId = "ticket";
+      fogTicket.state.workflowInstanceState = { brief: "metrics to Effect?" };
+
+      const el = await mount(
+        Object.assign(new WorkflowInstances(), {
+          flowId: "flow-1",
+          flow: {
+            id: "flow-1",
+            label: "Wayfinder",
+            status: "idle",
+            config: { expeditionTheme: "stars" },
+          },
+          flowComponent: "flow-component",
+          workflowDefs: [charting, ticket],
+          instances: [chartedEntry, fogTicket],
+          customKinds: [],
+          availableFlowActions: [],
+        })
+      );
+      await settle(shadowRootOf(el));
+
+      // The config's expeditionTheme selects the stars skin.
+      expect(
+        queryAllDeep(el, ".expedition")[0]?.getAttribute("data-theme")
+      ).toBe("stars");
+
+      // Drilling in: the map card's open-map affordance zooms to the full map.
+      const openButton = queryAllDeep(el, ".open-map")[0] as
+        | HTMLElement
+        | undefined;
+      openButton?.click();
+      await settle(shadowRootOf(el));
+      expect(queryAllDeep(el, ".map-layout").length).toBe(1);
+      expect(queryAllDeep(el, ".panel").length).toBe(1);
+      expect(queryAllDeep(el, ".back-link").length).toBe(1);
+      // The summit node renders the destination text.
+      expect(queryAllDeep(el, ".node.summit .cap")[0]?.textContent).toBe(
+        "hive router"
+      );
+
+      // Back to the table.
+      const backButton = queryAllDeep(el, ".back-link")[0] as
+        | HTMLElement
+        | undefined;
+      backButton?.click();
+      await settle(shadowRootOf(el));
+      expect(queryAllDeep(el, ".map-layout").length).toBe(0);
+      expect(queryAllDeep(el, ".table").length).toBe(1);
     } finally {
       restore();
     }
