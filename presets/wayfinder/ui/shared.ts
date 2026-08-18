@@ -3,11 +3,10 @@
  * #4a9fe0) against the warm base surfaces, the mountain emblem, a
  * fog → frontier → clear progression, and per-ticket-type badges.
  *
- * Served component modules are import-free at runtime (evaluated standalone,
- * the lit runtime injected through the factory), so this module carries only
- * TYPES — the modules import it type-only (erasable, stripped before serving)
- * and inline their own css/html fragments. The badges/chips/inline-chat
- * primitives are deliberately small so the per-module copies stay honest. */
+ * Ref-form served modules may value-import sibling module-set files (the
+ * server serves the tree to the browser); this module stays TYPE-ONLY by
+ * choice — the shared primitives are small so each served module inlines its
+ * own css/html fragments, and the type-only imports are erasable. */
 
 import type { WorkflowInstanceEntry } from "workflow-engine/create-flow-runtime";
 

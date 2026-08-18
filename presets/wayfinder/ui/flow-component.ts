@@ -18,13 +18,15 @@ import type {
 
 // === The map derivation (pure, exported for tests) ===
 //
-// The served module cannot value-import a separate helper (served modules are
-// standalone blobs), so the derivation lives here as a named export: the test
-// suite imports it directly as TypeScript, while the served blob reads only
-// the default factory. Both the table's mini-map and the full map render from
-// the same model. Hardcoded wayfinder state ids are fine here — this IS
-// wayfinder (the no-hardcoding invariant applies to the generic surface, not
-// to a preset's own data mapping).
+// The pure map model (deriveWayfinderMap + helpers, types, RESOLVING_STATES) is
+// planned to move to a sibling module (wayfinder-map.ts) so it stays
+// unit-testable and reusable — ref-form served modules may value-import
+// module-set files with relative imports, which the server serves to the
+// browser (rewritten to absolute versioned URLs). While it still lives here it
+// stays a named export so the test suite imports it directly as TypeScript.
+// Hardcoded wayfinder state ids are fine here — this IS wayfinder (the
+// no-hardcoding invariant applies to the generic surface, not to a preset's own
+// data mapping).
 
 export type WayfinderNodeKind =
   | "base"

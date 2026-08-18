@@ -2,8 +2,8 @@
  * decision ticket: type badge, question, dependsOn chips, HITL marker,
  * worktree/branch when the resolution workspace exists, the resolved-decision
  * preview from whichever resolution task ran, live HITL chat, and the state
- * actions. Self-contained (no value imports); the lit runtime arrives through
- * the default-export factory. */
+ * actions. Self-contained (no value imports — the lit runtime arrives through
+ * the default-export factory). */
 
 import type { LitElement } from "lit";
 import type {
