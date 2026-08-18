@@ -38,10 +38,9 @@ async function pageState() {
       return out;
     };
     const all = walk(document);
-    // The charting card (inside the flow component's canonical list) shows the
-    // seeded destination.
+    // The map card's destination note shows the seeded destination.
     const mapTitles = all
-      .filter((el) => el.classList?.contains("charting-title"))
+      .filter((el) => el.classList?.contains("dest-note"))
       .map((el) => el.textContent?.trim());
     const chatInputs = all
       .filter(

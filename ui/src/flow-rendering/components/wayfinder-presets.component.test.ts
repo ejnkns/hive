@@ -560,19 +560,24 @@ describe("wayfinder served modules", () => {
         queryAllDeep(el, ".expedition")[0]?.getAttribute("data-theme")
       ).toBe("mountain");
 
-      // All five stations are present.
+      // All stations are present (base camp, briefing, fog, on expedition,
+      // journal, depot, do-not-enter).
       const heads = queryAllDeep(el, ".station-head").map(
         (head) => head.textContent ?? ""
       );
+      expect(heads).toContain("Base camp");
       expect(heads).toContain("The briefing deck");
       expect(heads).toContain("The fog tray");
+      expect(heads).toContain("On expedition");
       expect(heads).toContain("The journal");
       expect(heads).toContain("The supply depot");
       expect(heads).toContain("Do not enter");
 
       // Briefing deck: the ready ticket with a type stamp and a claim button.
       expect(queryAllDeep(el, ".stamp")[0]?.textContent).toBe("research");
-      expect(queryAllDeep(el, ".claim").length).toBe(1);
+      expect(
+        queryAllDeep(el, ".card-actions button")[0]?.textContent?.trim()
+      ).toBe("Claim for research");
       // Fog tray: highlighted, always visible, never blurred.
       expect(queryAllDeep(el, ".fog-card").length).toBe(1);
       expect(queryAllDeep(el, ".fog-card .tag")[0]?.textContent).toBe(

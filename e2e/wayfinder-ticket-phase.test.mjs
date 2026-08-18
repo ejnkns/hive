@@ -82,6 +82,32 @@ async function deepHasText(className, text, timeoutMs = 20_000) {
   return false;
 }
 
+// Clicks the first element with the class, across nested shadow roots.
+async function clickClass(className, timeoutMs = 20_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const clicked = await page.evaluate((className) => {
+      const walk = (root) => {
+        for (const el of root.querySelectorAll(`.${className}`)) {
+          el.dispatchEvent(
+            new MouseEvent("click", { bubbles: true, composed: true })
+          );
+          return true;
+        }
+        for (const el of root.querySelectorAll("*")) {
+          if (el.shadowRoot && walk(el.shadowRoot)) return true;
+        }
+        return false;
+      };
+      const host = document.querySelector("workflow-instances");
+      return walk(host?.shadowRoot ?? document);
+    }, className);
+    if (clicked) return true;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  return false;
+}
+
 // Submits the flow-action create form (the shared Svelte dialog).
 async function submitFlowActionForm() {
   await page.waitForSelector(".dialog-actions button", { timeout: 10_000 });
@@ -115,6 +141,21 @@ test("wayfinder ticket phase: chart → add research ticket → graduate → cla
   await page.waitForSelector("workflow-instances", { timeout: 30_000 });
   await page.waitForTimeout(2_000);
 
+  // The table renders the map card, and the map view drills in and back.
+  assert.ok(
+    await deepHasText("map-title", "The map"),
+    "the table shows the map card"
+  );
+  assert.ok(
+    await clickClass("open-map"),
+    "open the map view from the map card"
+  );
+  assert.ok(
+    await deepHasText("back-link", "Back to the table"),
+    "the map view has a back link"
+  );
+  assert.ok(await clickClass("back-link"), "return to the table");
+
   // Chart: the naming session is agent-initiating (the mock answers it), so
   // Done → frontier, then Done → charted.
   assert.ok(await waitAndClick("Done"), "naming session Done");
@@ -130,15 +171,21 @@ test("wayfinder ticket phase: chart → add research ticket → graduate → cla
   await page.locator("#cf-type").selectOption("research");
   await submitFlowActionForm();
 
-  // The ticket lands in fog (normalize runs), then the graduate action opens.
+  // The ticket lands in the fog tray (normalize runs), highlighted as needing
+  // clarity, then the graduate action opens.
   assert.ok(
-    await deepHasText("type-badge", "research"),
-    "the served ticket card renders the research type badge"
+    await deepHasText("fog-card", "Choose the store"),
+    "the fog tray shows the new ticket"
   );
   assert.ok(await waitAndClick("Graduate to ready"), "graduate the fog ticket");
 
-  // Claim the ready research ticket; the one-shot research agent resolves it
-  // (the mock completes it), then assemble closes the ticket.
+  // The ready ticket sits in the briefing deck with its research stamp; claim
+  // it, and the one-shot research agent resolves it (the mock completes it),
+  // then assemble closes the ticket.
+  assert.ok(
+    await deepHasText("stamp", "research"),
+    "the briefing deck stamps the ready ticket research"
+  );
   assert.ok(await waitAndClick("Claim for research"), "claim the ticket");
 
   // Once the ticket closes the map is clear, so Start build becomes available.
@@ -148,9 +195,9 @@ test("wayfinder ticket phase: chart → add research ticket → graduate → cla
   );
   await submitFlowActionForm();
 
-  // The build workflow starts in its specing state.
+  // The build workflow starts in its specing state; the depot shows its crate.
   assert.ok(
-    await deepHasText("build-state", "Specing"),
-    "the build section shows the specing state"
+    await deepHasText("crate", "specing"),
+    "the depot shows the specing build crate"
   );
 });
