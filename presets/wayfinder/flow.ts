@@ -28,6 +28,14 @@ export const flow: FlowDefinition = {
       hint: "Extra directories the agents may READ beyond the base path — e.g. a library you want the charting session to study. Absolute paths or paths relative to the base path. You can also grant one mid-session by typing the path as its own chat message.",
       placeholder: "e.g. effect/",
     },
+    {
+      key: "expeditionTheme",
+      label: "Map style",
+      type: "string",
+      defaultValue: "mountain",
+      options: ["mountain", "topo", "stars"],
+      hint: "The skin the cartographer's table and expedition map use — mountain (base-camp table), topo (surveyor's drafting desk), or stars (ship's control panel).",
+    },
   ],
   domainDir: ".wayfinder",
   // Declarative theme: clear sky blue accent, mountain emblem — "clearing the
