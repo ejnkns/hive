@@ -369,6 +369,25 @@ function peak(x: number, y: number, halfWidth: number, height: number): string {
   } Z`;
 }
 
+// An organic contour ring (a slightly wobbled ellipse) — the topo theme's
+// contour lines, drawn from a small number of perturbed radii so they read as
+// hand-surveyed terrain rather than perfect circles.
+function wobblePath(cx: number, cy: number, r: number, seed: number): string {
+  const n = 60;
+  let d = "";
+  for (let i = 0; i <= n; i += 1) {
+    const a = (i / n) * Math.PI * 2;
+    const rr =
+      r +
+      Math.sin(a * 5 + seed) * r * 0.08 +
+      Math.sin(a * 9 + seed * 2) * r * 0.04;
+    const x = cx + Math.cos(a) * rr;
+    const y = cy + Math.sin(a) * rr * 0.82;
+    d += `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)} `;
+  }
+  return `${d}Z`;
+}
+
 // The trail sequence: base -> fog -> frontier -> the ordered ascent -> summit.
 function trailNodes(nodes: WayfinderNode[]): WayfinderNode[] {
   const base = nodes.find((node) => node.kind === "base");
@@ -447,7 +466,10 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         --wf-paper-edge: #352d22;
         --wf-ink: #f0ead9;
         --wf-body: #b7ad97;
-        --wf-font: "Charter", "Bitstream Charter", Georgia, serif;
+        --wf-font:
+          system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+          sans-serif;
+        font-family: var(--wf-font);
       }
       .expedition[data-theme="mountain"] {
         --wf-accent: #4a9fe0;
@@ -504,7 +526,6 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         background: var(--surface);
       }
       .emblem {
-        font-family: var(--font-mono, monospace);
         color: var(--wf-accent);
         font-size: 1.25rem;
         line-height: 1;
@@ -554,7 +575,6 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         border-color: transparent;
       }
       .theme-cycle {
-        font-family: var(--font-mono, monospace);
         font-size: 0.5625rem;
         height: 24px;
         padding: 0 0.5rem;
@@ -744,7 +764,6 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       }
       .stamp {
         display: inline-block;
-        font-family: var(--font-mono, monospace);
         font-size: 0.56rem;
         letter-spacing: 0.1em;
         text-transform: uppercase;
@@ -867,7 +886,6 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       }
       .journal .cairn {
         color: var(--success);
-        font-family: var(--font-mono, monospace);
       }
       .journal .txt {
         font-size: 0.8rem;
@@ -956,7 +974,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         display: grid;
         grid-template-columns: 1fr 300px;
       }
-      @media (max-width: 880px) {
+      @media (max-width: 900px) {
         .map-layout {
           grid-template-columns: 1fr;
         }
@@ -1004,7 +1022,8 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       }
       .node .cap {
         font-size: 0.62rem;
-        color: var(--text);
+        color: #e6edf3;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
         margin-top: 3px;
         max-width: 17ch;
         line-height: 1.2;
@@ -1630,17 +1649,44 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         </g>`;
       }
       if (theme === "topo") {
+        const conquered = nodes.filter(
+          (node) => node.kind === "decision" || node.kind === "implementation"
+        );
+        const graticule: string[] = [];
+        for (let i = 1; i < 10; i += 1) {
+          const px = i * sx * 10;
+          const py = i * sy * 10;
+          graticule.push(
+            `M ${px.toFixed(1)} 0 L ${px.toFixed(1)} ${(sy * 100).toFixed(1)} M 0 ${py.toFixed(1)} L ${(sx * 100).toFixed(1)} ${py.toFixed(1)}`
+          );
+        }
         return svg`<g>
+          <path
+            d=${graticule.join(" ")}
+            fill="none"
+            stroke="rgba(255,255,255,.04)"
+            stroke-width="1"
+          ></path>
           ${[0, 1, 2, 3, 4].map(
-            (i) => svg`<ellipse
-              cx=${cx * sx}
-              cy=${cy * sy}
-              rx=${(46 + i * 34) * (sx / 10)}
-              ry=${(46 + i * 34) * (sy / 6.6)}
+            (i) => svg`<path
+              d=${wobblePath(cx * sx, cy * sy, (46 + i * 34) * (sx / 10), i)}
               fill="none"
-              stroke="rgba(88,160,106,.16)"
+              stroke="rgba(88,160,106,${(0.12 + i * 0.035).toFixed(3)})"
               stroke-width="1"
-            ></ellipse>`
+            ></path>`
+          )}
+          ${conquered.map(
+            (node, index) => svg`<path
+              d=${wobblePath(
+                node.x * sx,
+                node.y * sy,
+                18 * (sx / 10),
+                node.x + node.y + index
+              )}
+              fill="none"
+              stroke="rgba(88,160,106,.3)"
+              stroke-width="1"
+            ></path>`
           )}
           <rect
             x="14"
@@ -1651,6 +1697,13 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
             stroke="rgba(255,255,255,.12)"
             stroke-width="2"
           ></rect>
+          <text
+            x=${(60 * sx) / 10}
+            y=${(70 * sy) / 6.6}
+            text-anchor="middle"
+            font-size="22"
+            fill="rgba(203,185,143,.6)"
+          >✦</text>
         </g>`;
       }
       // stars: a starfield + the destination as the system's sun.

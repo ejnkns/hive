@@ -369,6 +369,13 @@ function closeFlowActionForm() {
   min-height: 0;
 }
 
+@media (max-width: 900px) {
+  .instance-page.owns-page {
+    height: auto;
+    overflow: visible;
+  }
+}
+
 .loading,
 .empty {
   text-align: center;
