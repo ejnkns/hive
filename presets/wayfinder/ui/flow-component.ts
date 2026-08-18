@@ -470,6 +470,12 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
           system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
           sans-serif;
         font-family: var(--wf-font);
+        transition:
+          --wf-accent var(--dur-slow) var(--ease-in-out),
+          --wf-paper var(--dur-slow) var(--ease-in-out),
+          --wf-paper-edge var(--dur-slow) var(--ease-in-out),
+          --wf-ink var(--dur-slow) var(--ease-in-out),
+          --wf-body var(--dur-slow) var(--ease-in-out);
       }
       .expedition[data-theme="mountain"] {
         --wf-accent: #4a9fe0;
@@ -660,6 +666,11 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         }
         .column.center {
           order: -1;
+          overflow: visible;
+        }
+        .map-card {
+          height: auto;
+          min-height: 60vh;
         }
       }
 
@@ -670,9 +681,11 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         min-width: 0;
         min-height: 0;
         overflow-y: auto;
+        padding: 0.5rem 0.625rem 0.75rem;
       }
       .column.center {
         overflow: hidden;
+        padding: 0;
       }
       .station-head {
         font-size: 0.68rem;
@@ -839,7 +852,17 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         );
         border: 2px dashed var(--wf-body);
       }
+      .fog-title {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+      }
+      .fog-title .t {
+        flex: 1;
+        min-width: 0;
+      }
       .fog-card .q {
+        flex-shrink: 0;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -850,7 +873,6 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         color: var(--wf-ink);
         font-weight: 700;
         font-size: 0.85rem;
-        margin-right: 0.35rem;
         box-shadow:
           0 0 0 4px color-mix(in srgb, var(--wf-body) 18%, transparent),
           0 0 14px color-mix(in srgb, var(--wf-body) 35%, transparent);
@@ -976,6 +998,8 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       }
       @media (max-width: 900px) {
         .map-layout {
+          flex: none;
+          height: auto;
           grid-template-columns: 1fr;
         }
         .canvas {
@@ -1416,7 +1440,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       index: number
     ) {
       return html`<div class="card fog-card" style=${`--rot:${cardRotation(index)}`}>
-        <div class="t"><span class="q">?</span>${ticketTitle(entry)}</div>
+        <div class="fog-title"><span class="q">?</span><span class="t">${ticketTitle(entry)}</span></div>
         <span class="tag">needs clarity</span>
         ${this.renderActions(entry)}
       </div>`;

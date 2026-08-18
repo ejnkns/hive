@@ -70,6 +70,35 @@
   initial-value: 0%;
 }
 
+/* Wayfinder served-component theme tokens — registered so the expedition
+   paper/ink morph with the light/dark theme (the served component's shadow DOM
+   inherits these and transitions them like the surface tokens above). */
+@property --wf-accent {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #4a9fe0;
+}
+@property --wf-paper {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #241f18;
+}
+@property --wf-paper-edge {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #352d22;
+}
+@property --wf-ink {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #f0ead9;
+}
+@property --wf-body {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #b7ad97;
+}
+
 /* Theme morph: surface + text only, at --dur-slow (not all 17 properties).
    Text tweens via the numeric mix tokens (see above); the rest tween as
    registered colors. */
