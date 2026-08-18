@@ -17,6 +17,7 @@ import {
 import { typecheckModuleSet } from "../typecheck-definition.ts";
 import { lintImportPolicy } from "./import-policy.ts";
 import { lintModuleSet } from "./lint.ts";
+import { lintExplicitAny } from "./no-any.ts";
 import { verifyDeclaredWrites } from "./verify-writes.ts";
 
 export async function runDefinitionModuleGate(
@@ -59,6 +60,21 @@ export async function runDefinitionModuleGate(
       dir,
       files: readModuleSetFiles(dir),
       errors: importFindings.map((f) => `import ${f.file}: ${f.message}`),
+      warnings: [],
+    };
+  }
+
+  // 1c. Explicit-`any` check — an explicit `any` disables the typecheck for
+  // that position (noImplicitAny only catches the implicit form), so it is
+  // rejected before the whole-set typecheck runs.
+  const anyFindings = lintExplicitAny(dir);
+  if (anyFindings.length > 0) {
+    return {
+      dir,
+      files: readModuleSetFiles(dir),
+      errors: anyFindings.map(
+        (f) => `any ${f.file}:${f.line}:${f.column} — ${f.message}`
+      ),
       warnings: [],
     };
   }

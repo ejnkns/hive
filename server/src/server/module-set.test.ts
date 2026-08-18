@@ -938,6 +938,31 @@ export const websearchTools = [
     assert.deepEqual(passed.errors, []);
   });
 
+  it("the gate rejects an explicit `any` in a referenced file (the typecheck escape hatch)", async () => {
+    const OP_WITH_ANY = `import { defineOperations } from "workflow-engine/runners";
+
+export const scoreOperations = defineOperations<Record<string, unknown>>({
+  score: async (task: any) => {
+    const s = task.workflowInstanceState();
+    return { score: s ? 7 : 0 };
+  },
+});
+`;
+    const result = await runDefinitionModuleGate(
+      "module-set-any",
+      FIVE_KIND,
+      FIVE_KIND_MODULE,
+      { ...IMPLEMENTED_FILES, "./ops/score.ts": OP_WITH_ANY }
+    );
+    assert.ok(
+      result.errors.some(
+        (e) =>
+          e.startsWith("any ") && e.includes('explicit "any" is not allowed')
+      ),
+      `expected an explicit-any finding, got ${JSON.stringify(result.errors)}`
+    );
+  });
+
   it("the built-in presets pass the full gate (lint, imports, typecheck, writes, load)", async () => {
     for (const presetName of ["queen-bee", "wayfinder", "honeycomb"]) {
       const source = readFileSync(

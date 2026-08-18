@@ -143,8 +143,9 @@ function packageNameOf(specifier: string): string {
 // Every .ts file under the module-set dir (excluding the lint's transient
 // `__lint__` harnesses), as relative-path → source. The entry is included —
 // it is renderer-generated (only engine + ref imports) but the policy holds
-// every file to the same standard.
-function moduleSetSources(dir: string): Array<[string, string]> {
+// every file to the same standard. Exported so the explicit-`any` pass reuses
+// the same file set.
+export function moduleSetSources(dir: string): Array<[string, string]> {
   const out: Array<[string, string]> = [];
   const walk = (sub: string): void => {
     for (const entry of readdirSync(sub, { withFileTypes: true })) {

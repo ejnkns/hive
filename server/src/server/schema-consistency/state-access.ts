@@ -5,6 +5,25 @@ import ts from "typescript";
 import type { ObjectLiteral } from "./ast.ts";
 import { unwrap, walk } from "./ast.ts";
 
+// Whether a call is `<method>()` / `<method>?.()` on the context parameter
+// (`ctx.<method>(...)`). The receiver must be `ctx` — the engine passes the
+// runtime context as the third op argument (and the second tool-executor
+// argument) conventionally named `ctx`; a state patch on any other receiver
+// (e.g. `task.patchWorkflowInstanceState`, where `task` is a `TaskDefinition`
+// with no state methods) is a bug the declared-writes pass must not count as
+// a writer.
+function isCtxMethodCall(call: ts.CallExpression, methodName: string): boolean {
+  const expr = call.expression;
+  if (!ts.isPropertyAccessExpression(expr) && !ts.isPropertyAccessChain(expr)) {
+    return false;
+  }
+  return (
+    expr.name.text === methodName &&
+    ts.isIdentifier(expr.expression) &&
+    expr.expression.text === "ctx"
+  );
+}
+
 // Collect patch writes. A patch is passed to patchWorkflowInstanceState as an
 // inline literal, or via a one-level local built with assignments:
 //   const patch: Partial<X> = {};  patch.spec = args.spec;  ...(patch)
@@ -12,12 +31,7 @@ export function collectPatchWrites(fn: ts.Node, writes: Set<string>): void {
   const patchAliases = new Set<string>();
   walk(fn, (n) => {
     if (!ts.isCallExpression(n)) return;
-    if (
-      !ts.isPropertyAccessExpression(n.expression) ||
-      n.expression.name.text !== "patchWorkflowInstanceState"
-    ) {
-      return;
-    }
+    if (!isCtxMethodCall(n, "patchWorkflowInstanceState")) return;
     const arg = n.arguments[0];
     if (!arg) return;
     const literal = unwrap(arg);
@@ -49,12 +63,7 @@ export function collectSiblingPatchWrites(
   const patchAliases = new Set<string>();
   walk(fn, (n) => {
     if (!ts.isCallExpression(n)) return;
-    if (
-      !ts.isPropertyAccessExpression(n.expression) ||
-      n.expression.name.text !== "patchInstanceState"
-    ) {
-      return;
-    }
+    if (!isCtxMethodCall(n, "patchInstanceState")) return;
     const arg = n.arguments[1];
     if (!arg) return;
     const literal = unwrap(arg);
@@ -85,12 +94,7 @@ export function collectFlowStatePatchWrites(
   const patchAliases = new Set<string>();
   walk(fn, (n) => {
     if (!ts.isCallExpression(n)) return;
-    if (
-      !ts.isPropertyAccessExpression(n.expression) ||
-      n.expression.name.text !== "patchFlowState"
-    ) {
-      return;
-    }
+    if (!isCtxMethodCall(n, "patchFlowState")) return;
     const arg = n.arguments[0];
     if (!arg) return;
     const literal = unwrap(arg);
