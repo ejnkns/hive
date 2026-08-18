@@ -1,5 +1,6 @@
 /** @public — the flow definition library. Owns the registry, user-definition persistence, and TS loading. */
 
+import { createHash } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -9,11 +10,12 @@ import {
   writeFileSync,
 } from "node:fs";
 import { stripTypeScriptTypes } from "node:module";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { dirname, join, posix, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { HIVE_DIR } from "shared/hive-dir";
 import { logger } from "shared/logger";
 import { slugify } from "shared/slugify";
+import ts from "typescript";
 import {
   collectDefinitionRefs,
   compileFlowDefinition,
@@ -230,37 +232,188 @@ export function deleteUserDefinition(id: string): void {
   writeManifest(manifest);
 }
 
-// ── Served component transpilation ──
+// ── Served module transpilation and versioning ──
 //
 // Definition-declared components (FlowDefinition.ui.components) are authored
 // as erasable-syntax TypeScript modules in the definition source and served to
 // the browser as plain ESM JS. Node's type stripping erases type annotations
-// and type-only imports without a transpiler dependency; the served module
-// must not use value imports (the rendering surface injects its lit runtime
-// through the factory argument).
+// and type-only imports without a transpiler dependency; the rendering
+// surface injects its lit runtime through the factory argument, and a
+// ref-form component's relative imports resolve over HTTP from the
+// module-set file route (no bundler, no import map).
 
 function transpileComponentSource(source: string): string {
   return stripTypeScriptTypes(source);
 }
 
+// The stateless version of a definition's module set (the entry module plus
+// its referenced files): a content hash that rides in served-module URLs as
+// `?v=…`. One shared function — the payload builder and the serve routes
+// compute the same version, so a definition save changes every URL and busts
+// the browser module cache. No revision state is persisted.
+export function definitionModuleVersion(
+  source: string,
+  files: Record<string, string> | undefined
+): string {
+  const hash = createHash("sha256");
+  hash.update(source);
+  for (const [path, fileSource] of Object.entries(files ?? {})) {
+    hash.update(path);
+    hash.update(fileSource);
+  }
+  return hash.digest("hex").slice(0, 16);
+}
+
 // The transpiled ESM source for a definition's declared component, or
 // undefined when the definition (or the component id) is unknown. An inline
-// source string is served as-is; a ref-form component ({ ref }) resolves the
-// file from the definition's module-set file map (the same authority the
-// editor tabs and the refs endpoint derive from).
+// source string keeps the legacy single-blob route (transpiled, never
+// rewritten — the inline form does not support imports); a ref-form component
+// ({ ref }) resolves the file from the definition's module-set file map (the
+// same authority the editor tabs and the refs endpoint derive from) and
+// serves it as a module-graph entry: relative imports rewritten to absolute
+// versioned URLs.
 export function getDefinitionComponentSource(
   definitionId: string,
-  componentId: string
+  componentId: string,
+  version: string
 ): string | undefined {
   const record = definitions.get(definitionId);
   const spec =
     record?.definition?.ui?.components?.[componentId] ??
     record?.flow.ui?.components?.[componentId];
   if (typeof spec === "string") return transpileComponentSource(spec);
-  if (spec === undefined || record?.files === undefined) return undefined;
-  const source = record.files[spec.ref];
+  if (spec === undefined) return undefined;
+  return getDefinitionModuleSource(definitionId, spec.ref, version);
+}
+
+// The transpiled ESM source for a module-set file (a component entry or any
+// referenced file), with relative import specifiers rewritten to absolute
+// versioned URLs, or undefined when the definition or the file is unknown.
+// The module-set file map (record.files) is the authority — the same one the
+// editor tabs and the refs endpoint derive from.
+export function getDefinitionModuleSource(
+  definitionId: string,
+  filePath: string,
+  version: string
+): string | undefined {
+  const files = definitions.get(definitionId)?.files;
+  if (files === undefined) return undefined;
+  const key = filePath.startsWith("./") ? filePath : `./${filePath}`;
+  // The exact file first, then the `.ts` extension — the module-set typecheck
+  // (bundler resolution) also resolves an extensionless relative import, so
+  // serving resolves it the same way.
+  const source =
+    files[key] ??
+    files[filePath] ??
+    files[`${key}.ts`] ??
+    files[`${filePath}.ts`];
   if (source === undefined) return undefined;
-  return transpileComponentSource(source);
+  return transpileModuleFileSource(source, key, definitionId, version);
+}
+
+// Node type stripping plus the relative-specifier rewrite. The rewrite runs
+// on the original source (its positions come from that parse) before the
+// type-only syntax is erased.
+function transpileModuleFileSource(
+  source: string,
+  filePath: string,
+  definitionId: string,
+  version: string
+): string {
+  return stripTypeScriptTypes(
+    rewriteRelativeImports(source, filePath, definitionId, version)
+  );
+}
+
+// Rewrites relative import specifiers (`./`, `../`) in a served module's
+// source to absolute versioned URLs:
+// `/api/flows/definitions/<id>/modules/<file>?v=<version>`. Bare specifiers
+// are left untouched — they are reserved for the future import-map rung, so
+// the two layers compose. A rewritten module tree resolves over HTTP with no
+// bundler and no import map: the client still blob-evaluates each entry, and
+// only its rewritten imports resolve against the module-set file route.
+function rewriteRelativeImports(
+  source: string,
+  filePath: string,
+  definitionId: string,
+  version: string
+): string {
+  const sourceFile = ts.createSourceFile(
+    filePath,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS
+  );
+  const baseUrl = `/api/flows/definitions/${encodeURIComponent(definitionId)}/modules/`;
+  const dir = posix.dirname(filePath);
+  const replacements: Array<{ start: number; end: number; text: string }> = [];
+  for (const specifier of relativeSpecifierLiterals(sourceFile)) {
+    if (!specifier.text.startsWith("./") && !specifier.text.startsWith("../")) {
+      continue;
+    }
+    const resolved = posix.normalize(posix.join(dir, specifier.text));
+    if (resolved === "." || resolved.startsWith("..")) continue;
+    const url =
+      baseUrl +
+      resolved
+        .split("/")
+        .map((segment) => encodeURIComponent(segment))
+        .join("/") +
+      `?v=${version}`;
+    replacements.push({
+      start: specifier.start,
+      end: specifier.end,
+      text: JSON.stringify(url),
+    });
+  }
+  let rewritten = source;
+  // Apply the replacements from last position to first so the earlier offsets
+  // stay valid against the not-yet-edited prefix.
+  for (const replacement of replacements.reverse()) {
+    rewritten =
+      rewritten.slice(0, replacement.start) +
+      replacement.text +
+      rewritten.slice(replacement.end);
+  }
+  return rewritten;
+}
+
+// The string-literal import specifiers of a module — static imports,
+// re-exports, side-effect imports, and dynamic import() calls — with their
+// source positions (the rewriter needs exact offsets into the raw source).
+function relativeSpecifierLiterals(
+  sourceFile: ts.SourceFile
+): Array<{ start: number; end: number; text: string }> {
+  const specifiers: Array<{
+    start: number;
+    end: number;
+    text: string;
+  }> = [];
+  const visit = (node: ts.Node): void => {
+    let literal: ts.StringLiteral | undefined;
+    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+      if (node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+        literal = node.moduleSpecifier;
+      }
+    } else if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword
+    ) {
+      const arg = node.arguments[0];
+      if (arg && ts.isStringLiteral(arg)) literal = arg;
+    }
+    if (literal !== undefined) {
+      specifiers.push({
+        start: literal.getStart(sourceFile),
+        end: literal.end,
+        text: literal.text,
+      });
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return specifiers;
 }
 
 // ── Boot loading ──

@@ -1,10 +1,13 @@
 /** @private — the import policy for definition-referenced modules: a file in
  * the module set may import engine primitives (`workflow-engine/*`), the
  * flow's own files (relative imports staying inside the module set), `node:`
- * builtins, and packages declared in the definition's `dependencies`. Anything
- * else is rejected with a readable, model-actionable finding — the declaration
- * is the legibility (the flow's capabilities are readable from the
- * definition), the gate is the enforcement. */
+ * builtins, and packages declared in the definition's `dependencies`. The
+ * component closure (a served component entry plus the module-set files it
+ * value-imports) is the browser module set: it may value-import only the
+ * flow's own files; the type-only allowlist is unchanged. Anything else is
+ * rejected with a readable, model-actionable finding — the declaration is the
+ * legibility (the flow's capabilities are readable from the definition), the
+ * gate is the enforcement. */
 
 import { readdirSync, readFileSync } from "node:fs";
 import { isBuiltin } from "node:module";
@@ -28,49 +31,31 @@ export function lintImportPolicy(
   const findings: ImportFinding[] = [];
   const declared = new Set(dependencies);
   const root = resolve(dir);
-  // Served component modules are stricter than the rest of the module set:
-  // the transpiled module is evaluated as a standalone blob (no import map),
-  // so they may carry type-only imports from the allowlist only — never a
-  // value import. The file set is keyed the same way the walk below reports
-  // (relative, no ./ prefix).
-  const componentFiles = new Set(
+  const sources = new Map(moduleSetSources(dir));
+  // The browser module set: served component modules are stricter than the
+  // rest of the module set. The transpiled module graph is evaluated by the
+  // browser (the entry as a blob, its value-imported siblings over HTTP from
+  // the module-set file route — no import map, no node builtins, no engine
+  // code), so the component closure — the component entry files plus every
+  // file they transitively value-import inside the module set — may
+  // value-import only the flow's own files. The type-only allowlist (lit,
+  // workflow-engine/*, the flow's own files) is unchanged. The file set is
+  // keyed the same way the findings below report (relative, no ./ prefix).
+  const componentEntries = new Set(
     refs
       .filter((ref) => ref.kind === "component")
       .map((ref) => ref.ref.replace(/^\.\//, ""))
   );
-  for (const [relPath, source] of moduleSetSources(dir)) {
+  const closure = collectComponentClosure(dir, componentEntries, sources);
+  for (const [relPath, source] of sources) {
     const sourceFile = ts.createSourceFile(
       relPath,
       source,
       ts.ScriptTarget.Latest,
       true
     );
-    if (componentFiles.has(relPath)) {
-      for (const { specifier, typeOnly } of collectComponentSpecifiers(
-        sourceFile
-      )) {
-        if (!typeOnly) {
-          findings.push({
-            file: relPath,
-            specifier,
-            message: `value import "${specifier}" — served component modules are evaluated standalone and may only carry type-only imports from the allowlist (lit, workflow-engine/workflow-types, the flow's own files)`,
-          });
-          continue;
-        }
-        const verdict = importVerdict(
-          specifier,
-          declared,
-          join(root, relPath),
-          root
-        );
-        // The component type-only allowlist is lit + the engine contract
-        // types (importVerdict allows workflow-engine/* and the flow's own
-        // files); lit is the app's injected runtime, so a type-only import
-        // of it is always allowed.
-        if (!verdict.ok && specifier !== "lit") {
-          findings.push({ file: relPath, specifier, message: verdict.message });
-        }
-      }
+    if (closure.has(relPath)) {
+      lintComponentClosureFile(findings, relPath, sourceFile, declared, root);
       continue;
     }
     for (const specifier of collectSpecifiers(sourceFile)) {
@@ -86,6 +71,93 @@ export function lintImportPolicy(
     }
   }
   return findings;
+}
+
+// The import policy of one browser module-set member (a component entry or a
+// transitively value-imported module-set file).
+function lintComponentClosureFile(
+  findings: ImportFinding[],
+  relPath: string,
+  sourceFile: ts.SourceFile,
+  declared: Set<string>,
+  root: string
+): void {
+  for (const { specifier, typeOnly } of collectComponentSpecifiers(
+    sourceFile
+  )) {
+    const verdict = importVerdict(
+      specifier,
+      declared,
+      join(root, relPath),
+      root
+    );
+    if (typeOnly) {
+      // The component type-only allowlist is lit + the engine contract types
+      // (importVerdict allows workflow-engine/* and the flow's own files,
+      // plus node builtins and declared packages — unchanged). lit is the
+      // app's injected runtime, so a type-only import of it is always allowed.
+      if (!verdict.ok && specifier !== "lit") {
+        findings.push({ file: relPath, specifier, message: verdict.message });
+      }
+      continue;
+    }
+    // A value import in the browser module set may reach only the flow's own
+    // files (a relative import staying inside the module set).
+    if (specifier.startsWith("./") || specifier.startsWith("../")) {
+      if (!verdict.ok) {
+        findings.push({ file: relPath, specifier, message: verdict.message });
+      }
+      continue;
+    }
+    findings.push({
+      file: relPath,
+      specifier,
+      message: `value import "${specifier}" — a served module graph runs in the browser and may value-import only the flow's own files (relative imports inside the module set); bare and node: specifiers resolve through the import map (a later rung) — make the import relative or type-only`,
+    });
+  }
+}
+
+// The component closure: the component entry files plus every module-set file
+// they transitively reach through value imports (static imports, re-exports,
+// side-effect imports, and dynamic import() calls with relative in-set
+// specifiers). Type-only imports are erased before serving and are not runtime
+// edges. Files outside the closure keep the normal module-set policy.
+function collectComponentClosure(
+  dir: string,
+  entries: Set<string>,
+  sources: Map<string, string>
+): Set<string> {
+  const root = resolve(dir);
+  const closure = new Set(entries);
+  const visited = new Set(entries);
+  const queue = [...entries];
+  while (queue.length > 0) {
+    const relPath = queue.shift() ?? "";
+    const source = sources.get(relPath);
+    if (source === undefined) continue;
+    const sourceFile = ts.createSourceFile(
+      relPath,
+      source,
+      ts.ScriptTarget.Latest,
+      true
+    );
+    for (const { specifier, typeOnly } of collectComponentSpecifiers(
+      sourceFile
+    )) {
+      if (typeOnly) continue;
+      if (!specifier.startsWith("./") && !specifier.startsWith("../")) {
+        continue;
+      }
+      const target = resolve(dirname(join(root, relPath)), specifier);
+      if (!target.startsWith(root + sep)) continue;
+      const next = relative(root, target).split(sep).join("/");
+      if (visited.has(next)) continue;
+      visited.add(next);
+      closure.add(next);
+      queue.push(next);
+    }
+  }
+  return closure;
 }
 
 function importVerdict(

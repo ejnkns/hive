@@ -2,6 +2,7 @@
  * and the generate/author/validate authoring surface. */
 
 import { randomUUID } from "node:crypto";
+import { posix } from "node:path";
 import type { FastifyInstance } from "fastify";
 import { collectDefinitionRefs } from "workflow-engine/compile-flow-definition";
 import { FLOW_SCAFFOLD_SOURCE } from "../flow-authoring/scaffold.ts";
@@ -19,8 +20,10 @@ import {
 } from "../flow-definition.ts";
 import {
   DefinitionAlreadyExistsError,
+  definitionModuleVersion,
   deleteUserDefinition,
   getDefinitionComponentSource,
+  getDefinitionModuleSource,
   getFlowTheme,
   getRegisteredFlowDefinition,
   listRegisteredDefinitions,
@@ -86,7 +89,11 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
   // Served component module: the transpiled ESM source of a definition-declared
   // Lit component (FlowDefinition.ui.components). Consumed by the rendering
   // surface via fetch + dynamic import; 404 when the definition or component id
-  // is unknown so the client degrades to the generic defaults.
+  // is unknown so the client degrades to the generic defaults. A ref-form
+  // component serves as a module-graph entry — its relative imports are
+  // rewritten to absolute versioned URLs (the same content hash the payload
+  // builder stamps on the component path, recomputed here — the route ignores
+  // any `?v=` it receives, it is a cache-buster only).
   server.get(
     "/api/flows/definitions/:id/components/:componentId",
     async (request, reply) => {
@@ -94,7 +101,12 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
         id: string;
         componentId: string;
       };
-      const source = getDefinitionComponentSource(id, componentId);
+      const record = getRegisteredFlowDefinition(id);
+      const version = definitionModuleVersion(
+        record?.source ?? "",
+        record?.files
+      );
+      const source = getDefinitionComponentSource(id, componentId, version);
       if (source === undefined) {
         return reply.status(404).send({ error: "Component not found" });
       }
@@ -104,6 +116,37 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
         .send(source);
     }
   );
+
+  // A module-set file served into a served-module graph: transpiled, with
+  // relative imports rewritten to absolute versioned URLs so a component
+  // entry's value imports resolve over HTTP. Path-safe — the requested path is
+  // confined to the module-set root (traversal rejected), and unknown
+  // definitions/files 404. The `?v=` query is a cache-buster only; the route
+  // computes its own version (the same shared content hash the payload builder
+  // uses), so a definition save changes every URL and busts the browser
+  // module cache.
+  server.get("/api/flows/definitions/:id/modules/*", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const record = getRegisteredFlowDefinition(id);
+    if (!record) {
+      return reply.status(404).send({ error: "Module not found" });
+    }
+    const filePath = moduleSetFilePath(
+      (request.params as Record<string, string>)["*"] ?? ""
+    );
+    if (filePath === undefined) {
+      return reply.status(404).send({ error: "Module not found" });
+    }
+    const version = definitionModuleVersion(record.source ?? "", record.files);
+    const source = getDefinitionModuleSource(id, filePath, version);
+    if (source === undefined) {
+      return reply.status(404).send({ error: "Module not found" });
+    }
+    return reply
+      .header("Content-Type", "text/javascript; charset=utf-8")
+      .header("Cache-Control", "no-store")
+      .send(source);
+  });
 
   server.delete("/api/flows/definitions/:id", async (request, reply) => {
     // Fastify params type is erased; shape guaranteed by route pattern
@@ -530,4 +573,32 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
       });
     }
   });
+}
+
+// The module-set file path a request names, or undefined when the path is
+// empty, absolute, or escapes the module-set root (`..` segments, a path that
+// normalizes upward, or a path that normalizes to a directory). Fastify
+// already URL-decodes the wildcard; this confines the result to the module
+// set before the file map lookup.
+function moduleSetFilePath(rawPath: string): string | undefined {
+  if (rawPath === "/" || rawPath === "." || rawPath === "..") {
+    return undefined;
+  }
+  const segments = rawPath.split("/");
+  if (
+    segments.some(
+      (segment) => segment === "" || segment === "." || segment === ".."
+    )
+  ) {
+    return undefined;
+  }
+  const normalized = posix.normalize(segments.join("/"));
+  if (
+    posix.isAbsolute(normalized) ||
+    normalized === "." ||
+    normalized.startsWith("..")
+  ) {
+    return undefined;
+  }
+  return normalized;
 }

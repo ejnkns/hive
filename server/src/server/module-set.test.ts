@@ -495,7 +495,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
     }
   });
 
-  it("rejects a component module with a value import (served modules are import-free)", async () => {
+  it("rejects a component module with a bare value import (only module-set files may be value-imported)", async () => {
     const VALUE_IMPORT_COMPONENT = `import { LitElement } from "lit";
 
 export default function (lit) {
@@ -514,6 +514,152 @@ export default function (lit) {
       ),
       `expected a value-import finding, got ${JSON.stringify(result.errors)}`
     );
+  });
+
+  it("passes a component module whose entry value-imports a sibling module-set file (the multi-file pattern)", async () => {
+    const MULTIFILE_ENTRY = `import { ticketTitle } from "./ticket-title.ts";
+import type { LitElement } from "lit";
+import type {
+  FlowComponentDeps,
+  FlowComponentRegistrations,
+} from "workflow-engine/workflow-types";
+
+export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
+  const { LitElement: Base, html } = lit;
+  class TicketCard extends Base {
+    render() {
+      return html\`<div class="ticket">\${ticketTitle("ticket")}</div>\`;
+    }
+  }
+  return { components: { "ticket-card": TicketCard } };
+}
+`;
+    const result = await runDefinitionModuleGate(
+      "module-set-component-multifile",
+      COMPONENT_DEFINITION,
+      COMPONENT_MODULE,
+      {
+        "./ui/ticket-card.ts": MULTIFILE_ENTRY,
+        "./ui/ticket-title.ts": `export function ticketTitle(raw: string): string {
+  return raw.trim().toUpperCase();
+}
+`,
+      }
+    );
+    assert.deepEqual(result.errors, [], `got ${JSON.stringify(result.errors)}`);
+  });
+
+  // The component closure is the browser module set: a sibling file a
+  // component entry value-imports runs in the browser too, so node builtins,
+  // engine code, and undeclared packages are rejected there even though the
+  // same imports are legal for non-closure module-set files.
+  it("rejects a closure file's node builtin value import", async () => {
+    const result = await runDefinitionModuleGate(
+      "module-set-closure-node",
+      COMPONENT_DEFINITION,
+      COMPONENT_MODULE,
+      {
+        "./ui/ticket-card.ts": `import { labelFor } from "./labels.ts";
+
+export default function (lit) {
+  return { components: {} };
+}
+`,
+        "./ui/labels.ts": `import { readFileSync } from "node:fs";
+
+export function labelFor(input: string): string {
+  return readFileSync(input, "utf-8");
+}
+`,
+      }
+    );
+    assert.ok(
+      result.errors.some(
+        (e) => e.includes("ui/labels.ts") && e.includes("value import")
+      ),
+      `expected a closure value-import finding, got ${JSON.stringify(result.errors)}`
+    );
+  });
+
+  it("rejects a closure file's engine value import (workflow-engine is server-side)", async () => {
+    const result = await runDefinitionModuleGate(
+      "module-set-closure-engine",
+      COMPONENT_DEFINITION,
+      COMPONENT_MODULE,
+      {
+        "./ui/ticket-card.ts": `import { loadIcon } from "./labels.ts";
+
+export default function (lit) {
+  return { components: {} };
+}
+`,
+        "./ui/labels.ts": `import { defineTool } from "workflow-engine/runners";
+
+export function loadIcon(input: string): string {
+  return input;
+}
+`,
+      }
+    );
+    assert.ok(
+      result.errors.some(
+        (e) => e.includes("ui/labels.ts") && e.includes("value import")
+      ),
+      `expected a closure value-import finding, got ${JSON.stringify(result.errors)}`
+    );
+  });
+
+  it("rejects a closure file's undeclared package value import", async () => {
+    const result = await runDefinitionModuleGate(
+      "module-set-closure-dep",
+      COMPONENT_DEFINITION,
+      COMPONENT_MODULE,
+      {
+        "./ui/ticket-card.ts": `import { labelFor } from "./labels.ts";
+
+export default function (lit) {
+  return { components: {} };
+}
+`,
+        "./ui/labels.ts": `import { LRUCache } from "lru-cache";
+
+export function labelFor(input: string): string {
+  return input;
+}
+`,
+      }
+    );
+    assert.ok(
+      result.errors.some(
+        (e) => e.includes("ui/labels.ts") && e.includes("value import")
+      ),
+      `expected a closure value-import finding, got ${JSON.stringify(result.errors)}`
+    );
+  });
+
+  it("keeps a non-closure module-set file's normal import policy in a mixed set", async () => {
+    const result = await runDefinitionModuleGate(
+      "module-set-mixed",
+      COMPONENT_DEFINITION,
+      COMPONENT_MODULE,
+      {
+        "./ui/ticket-card.ts": `import type { FlowComponentDeps } from "workflow-engine/workflow-types";
+
+export default function (lit: FlowComponentDeps) {
+  return { components: {} };
+}
+`,
+        // A sibling the component never imports: it stays out of the browser
+        // closure and keeps the normal module-set policy (node builtins OK).
+        "./ui/server-helper.ts": `import { readFileSync } from "node:fs";
+
+export function helper(): string {
+  return readFileSync("/dev/null", "utf-8");
+}
+`,
+      }
+    );
+    assert.deepEqual(result.errors, [], `got ${JSON.stringify(result.errors)}`);
   });
 
   it("passes a component module whose type-only imports come from the allowlist (lit + engine types)", async () => {

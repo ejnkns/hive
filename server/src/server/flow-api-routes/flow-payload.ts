@@ -5,7 +5,10 @@ import {
   readPersistedDirectory,
   readPersistedOutput,
 } from "workflow-engine/runners";
-import { getRegisteredFlowDefinition } from "../flow-definitions.ts";
+import {
+  definitionModuleVersion,
+  getRegisteredFlowDefinition,
+} from "../flow-definitions.ts";
 import {
   getAvailableFlowActions,
   type getFlowRuntime,
@@ -40,11 +43,22 @@ export function flowPayload(
       ? (definition?.flow.ui?.components ?? {})
       : {};
   const definitionSlug = typeof definitionId === "string" ? definitionId : "";
+  // The module-set version (a stateless content hash of the entry + referenced
+  // files) stamps the ref-form component paths, so a definition save changes
+  // the URLs and busts the browser module cache. Inline-string components keep
+  // the legacy single-blob route (no imports — nothing to version).
+  const version = definitionModuleVersion(
+    definition?.source ?? "",
+    definition?.files
+  );
   const components = Object.fromEntries(
-    Object.keys(declaredComponents).map((componentId) => [
-      componentId,
-      `/api/flows/definitions/${encodeURIComponent(definitionSlug)}/components/${encodeURIComponent(componentId)}`,
-    ])
+    Object.entries(declaredComponents).map(([componentId, spec]) => {
+      const base = `/api/flows/definitions/${encodeURIComponent(definitionSlug)}/components/${encodeURIComponent(componentId)}`;
+      return [
+        componentId,
+        typeof spec === "string" ? base : `${base}?v=${version}`,
+      ];
+    })
   );
   // Persisted domain files the UI may read (declared by the definition as
   // ui.persistedOutputs / ui.persistedOutputDirs). Read through the engine's

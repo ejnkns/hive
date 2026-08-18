@@ -2309,6 +2309,371 @@ export const flow: FlowDefinition = {
     rmSync(definitionsDir, { recursive: true, force: true });
   });
 
+  it("serves a ref-form component's module graph: relative imports rewritten to absolute versioned URLs", async () => {
+    setFlowPersistence(noopPersistence);
+    const definitionsDir = mkdtempSync(join(tmpdir(), "hive-defs-"));
+    setDefinitionsBasePathForTest(definitionsDir);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const multiFileFlowSource = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "multi-file-component-flow",
+  label: "Multi File Component Flow",
+  configSchema: [],
+  ui: {
+    components: {
+      "ticket-card": { ref: "./ui/ticket-card.ts" },
+    },
+  },
+  workflows: [
+    {
+      id: "tickets",
+      label: "Tickets",
+      instanceState: [],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
+        { id: "new", label: "New", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  edges: [],
+};
+`;
+    const ticketCardSource =
+      'import { ticketTitle } from "./ticket-title.ts";\n' +
+      'import type { FlowComponentDeps } from "workflow-engine/workflow-types";\n' +
+      "\n" +
+      "export default function (lit: FlowComponentDeps) {\n" +
+      "  const { LitElement } = lit;\n" +
+      '  return { components: { "ticket-card": class TicketCard extends LitElement { title = ticketTitle("x"); } } };\n' +
+      "}\n";
+    const ticketTitleSource =
+      "export function ticketTitle(raw: string): string {\n" +
+      "  return raw.trim().toUpperCase();\n" +
+      "}\n";
+
+    await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions",
+      body: {
+        name: "Multi File Component Flow",
+        source: multiFileFlowSource,
+        files: {
+          "./ui/ticket-card.ts": ticketCardSource,
+          "./ui/ticket-title.ts": ticketTitleSource,
+        },
+      },
+    });
+
+    const entry = await server.inject({
+      method: "GET",
+      url: "/api/flows/definitions/multi-file-component-flow/components/ticket-card",
+    });
+    assert.equal(entry.statusCode, 200);
+    const versionMatch = entry.body.match(/\?v=([0-9a-f]{16})/);
+    assert.ok(versionMatch, "rewritten imports carry a content-hash version");
+    const version = versionMatch?.[1] ?? "";
+    assert.ok(
+      entry.body.includes(
+        `/api/flows/definitions/multi-file-component-flow/modules/ui/ticket-title.ts?v=${version}`
+      ),
+      `the relative import is rewritten to the versioned module URL, got ${entry.body.split("\n")[0]}`
+    );
+    assert.ok(
+      entry.body.includes('ticketTitle("x")'),
+      "the value import body is preserved"
+    );
+    assert.ok(
+      !entry.body.includes("FlowComponentDeps"),
+      "type-only imports are stripped from the served module"
+    );
+
+    // The rewritten import resolves over HTTP: fetching it serves the sibling
+    // transpiled (it has no relative imports of its own, so nothing rewrites).
+    const sibling = await server.inject({
+      method: "GET",
+      url: `/api/flows/definitions/multi-file-component-flow/modules/ui/ticket-title.ts?v=${version}`,
+    });
+    assert.equal(sibling.statusCode, 200);
+    assert.match(sibling.headers["content-type"] ?? "", /text\/javascript/);
+    assert.ok(
+      sibling.body.includes("ticketTitle"),
+      "serves the sibling source"
+    );
+    assert.ok(
+      !sibling.body.includes(": string"),
+      "the served sibling has type annotations stripped"
+    );
+    // An extensionless request resolves like the module-set typecheck (bundler
+    // resolution) does — the `.ts` fallback.
+    const extensionless = await server.inject({
+      method: "GET",
+      url: `/api/flows/definitions/multi-file-component-flow/modules/ui/ticket-title?v=${version}`,
+    });
+    assert.equal(extensionless.statusCode, 200);
+
+    rmSync(definitionsDir, { recursive: true, force: true });
+  });
+
+  it("serves module-set files path-safely: traversal rejected, unknown files 404", async () => {
+    setFlowPersistence(noopPersistence);
+    const definitionsDir = mkdtempSync(join(tmpdir(), "hive-defs-"));
+    setDefinitionsBasePathForTest(definitionsDir);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions",
+      body: {
+        name: "Multi File Component Flow",
+        source: `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "multi-file-component-flow",
+  label: "Multi File Component Flow",
+  configSchema: [],
+  ui: { components: { "ticket-card": { ref: "./ui/ticket-card.ts" } } },
+  workflows: [
+    {
+      id: "tickets",
+      label: "Tickets",
+      instanceState: [],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
+        { id: "new", label: "New", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  edges: [],
+};
+`,
+        files: {
+          "./ui/ticket-card.ts":
+            "export default function (lit: any) { return { components: {} }; }\n",
+        },
+      },
+    });
+
+    // Traversal (raw and encoded), absolute paths, and unknown files all 404
+    // — the module-set root is the containment boundary.
+    const forbidden = [
+      "/api/flows/definitions/multi-file-component-flow/modules/../flow.ts",
+      "/api/flows/definitions/multi-file-component-flow/modules/ui/../flow.ts",
+      "/api/flows/definitions/multi-file-component-flow/modules/ui/../../flow.ts",
+      "/api/flows/definitions/multi-file-component-flow/modules/ui/%2e%2e/flow.ts",
+      "/api/flows/definitions/multi-file-component-flow/modules/ui/%2e%2e%2f%2e%2e%2fflow.ts",
+      "/api/flows/definitions/multi-file-component-flow/modules/nope.ts",
+      "/api/flows/definitions/nope/modules/ui/ticket-card.ts",
+    ];
+    for (const url of forbidden) {
+      const response = await server.inject({ method: "GET", url });
+      assert.equal(
+        response.statusCode,
+        404,
+        `expected 404 for ${url}, got ${response.statusCode}`
+      );
+    }
+
+    // A real module-set file serves.
+    const ok = await server.inject({
+      method: "GET",
+      url: "/api/flows/definitions/multi-file-component-flow/modules/ui/ticket-card.ts",
+    });
+    assert.equal(ok.statusCode, 200);
+
+    rmSync(definitionsDir, { recursive: true, force: true });
+  });
+
+  it("payloads version ref-form component paths, keeps inline paths legacy, and a save bumps the version", async () => {
+    setFlowPersistence(noopPersistence);
+    const definitionsDir = mkdtempSync(join(tmpdir(), "hive-defs-"));
+    setDefinitionsBasePathForTest(definitionsDir);
+
+    const mixedFlowSource = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "mixed-component-flow",
+  label: "Mixed Component Flow",
+  configSchema: [],
+  ui: {
+    components: {
+      "demo-card": "export default function (lit: any) { const { LitElement } = lit; return { components: { 'demo-card': class Demo extends LitElement {} } }; }",
+      "ticket-card": { ref: "./ui/ticket-card.ts" },
+    },
+  },
+  workflows: [
+    {
+      id: "tickets",
+      label: "Tickets",
+      instanceState: [],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
+        { id: "new", label: "New", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  edges: [],
+};
+`;
+
+    await registerUserDefinition({
+      name: "Mixed Component Flow",
+      source: mixedFlowSource,
+      files: {
+        "./ui/ticket-card.ts":
+          'import type { FlowComponentDeps } from "workflow-engine/workflow-types";\n\nexport default function (lit: FlowComponentDeps) { return { components: {} }; }\n',
+      },
+    });
+
+    const runtime = createFlowRuntime(
+      "mixed-flow-run",
+      [testWorkflow],
+      [],
+      {},
+      { name: "Mixed Run", definitionId: "mixed-component-flow" },
+      {},
+      noopPersistence
+    );
+    runtime.addWorkflowInstance("test-wf");
+    registerFlowForTest("mixed-flow-run", runtime);
+
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const componentsOf = async (): Promise<Record<string, string>> => {
+      const response = await server.inject({
+        method: "GET",
+        url: "/api/flows",
+      });
+      assert.equal(response.statusCode, 200);
+      const flow = response
+        .json()
+        .flows.find((entry: { id: string }) => entry.id === "mixed-flow-run");
+      assert.ok(flow);
+      return flow.ui.components;
+    };
+
+    const first = await componentsOf();
+    assert.equal(
+      first["demo-card"],
+      "/api/flows/definitions/mixed-component-flow/components/demo-card",
+      "inline-string components keep the legacy single-blob route"
+    );
+    const versionPattern =
+      /^\/api\/flows\/definitions\/mixed-component-flow\/components\/ticket-card\?v=[0-9a-f]{16}$/;
+    assert.match(
+      first["ticket-card"],
+      versionPattern,
+      "ref-form components are addressed through the versioned route"
+    );
+
+    // Saving the definition with a changed referenced file changes the version
+    // (and thus every served URL) — the browser module cache busts on any save.
+    const updated = await server.inject({
+      method: "PUT",
+      url: "/api/flows/definitions/mixed-component-flow",
+      body: {
+        name: "Mixed Component Flow",
+        source: mixedFlowSource,
+        files: {
+          "./ui/ticket-card.ts":
+            'import type { FlowComponentDeps } from "workflow-engine/workflow-types";\n\nexport default function (lit: FlowComponentDeps) {\n  const { LitElement } = lit;\n  return { components: { "ticket-card": class TicketCard extends LitElement {} } };\n}\n',
+        },
+      },
+    });
+    assert.equal(updated.statusCode, 200);
+
+    const second = await componentsOf();
+    assert.notEqual(second["ticket-card"], first["ticket-card"]);
+    assert.match(second["ticket-card"], versionPattern);
+    assert.equal(
+      second["demo-card"],
+      first["demo-card"],
+      "an inline component keeps its legacy route across saves"
+    );
+
+    rmSync(definitionsDir, { recursive: true, force: true });
+  });
+
+  it("rewrites a nested import's `../` specifier against its own directory", async () => {
+    setFlowPersistence(noopPersistence);
+    const definitionsDir = mkdtempSync(join(tmpdir(), "hive-defs-"));
+    setDefinitionsBasePathForTest(definitionsDir);
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    await server.inject({
+      method: "POST",
+      url: "/api/flows/definitions",
+      body: {
+        name: "Nested Component Flow",
+        source: `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "nested-component-flow",
+  label: "Nested Component Flow",
+  configSchema: [],
+  ui: { components: { "ticket-card": { ref: "./ui/cards/ticket-card.ts" } } },
+  workflows: [
+    {
+      id: "tickets",
+      label: "Tickets",
+      instanceState: [],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
+        { id: "new", label: "New", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  edges: [],
+};
+`,
+        files: {
+          "./ui/cards/ticket-card.ts":
+            'import { theme } from "../theme.ts";\n\nexport default function (lit: any) { return { components: {} }; }\n',
+          "./ui/theme.ts": 'export const theme = "mountain";\n',
+        },
+      },
+    });
+
+    const entry = await server.inject({
+      method: "GET",
+      url: "/api/flows/definitions/nested-component-flow/components/ticket-card",
+    });
+    assert.equal(entry.statusCode, 200);
+    assert.ok(
+      entry.body.includes(
+        "/api/flows/definitions/nested-component-flow/modules/ui/theme.ts?v="
+      ),
+      `the \`../\` import resolves upward into the module-set root, got ${entry.body.split("\n")[0]}`
+    );
+    assert.ok(
+      !entry.body.includes('"../theme.ts"'),
+      "no relative specifier remains in the served source"
+    );
+    assert.ok(
+      !entry.body.includes('"theme.ts"'),
+      "a bare-looking import is never invented"
+    );
+
+    rmSync(definitionsDir, { recursive: true, force: true });
+  });
+
   it("PUT /api/flows/definitions/:id edits an existing user definition", async () => {
     const server = Fastify();
     servers.push(server);
