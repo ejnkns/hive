@@ -617,17 +617,6 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         margin-top: 0.5rem;
         transform: rotate(-3deg);
       }
-      .claim {
-        font: inherit;
-        font-size: 0.68rem;
-        margin-top: 0.55rem;
-        padding: 0.26rem 0.6rem;
-        border-radius: 6px;
-        border: 1px solid var(--wf-accent);
-        background: transparent;
-        color: var(--wf-accent);
-        cursor: pointer;
-      }
       .card .lbl {
         font-size: 0.6rem;
         letter-spacing: 0.08em;
