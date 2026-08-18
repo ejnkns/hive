@@ -202,21 +202,22 @@ const detailChain = $derived(
 
 <div class="app">
   <div class="top-bar">
-    <Header />
-    {#if breadcrumbs.length > 0}
-      <nav class="breadcrumb" aria-label="breadcrumb">
-        {#each breadcrumbs as crumb, index}
-          {#if index > 0}
-            <span class="crumb-sep">/</span>
-          {/if}
-          {#if crumb.href !== undefined}
-            <a class="crumb-link" href={crumb.href}>{crumb.label}</a>
-          {:else}
-            <span class="crumb-current">{crumb.label}</span>
-          {/if}
-        {/each}
-      </nav>
-    {/if}
+    <Header>
+      {#if breadcrumbs.length > 0}
+        <nav class="breadcrumb" aria-label="breadcrumb">
+          {#each breadcrumbs as crumb, index}
+            {#if index > 0}
+              <span class="crumb-sep">/</span>
+            {/if}
+            {#if crumb.href !== undefined}
+              <a class="crumb-link" href={crumb.href}>{crumb.label}</a>
+            {:else}
+              <span class="crumb-current">{crumb.label}</span>
+            {/if}
+          {/each}
+        </nav>
+      {/if}
+    </Header>
   </div>
 
   <main class="app-content">
@@ -417,11 +418,11 @@ const detailChain = $derived(
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 0.75rem 1.25rem;
   font-size: var(--text-xs);
   color: var(--muted);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
 }
 .crumb-link {
   color: var(--muted);

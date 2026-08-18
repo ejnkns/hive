@@ -143,7 +143,7 @@ test("wayfinder ticket phase: chart → add research ticket → graduate → cla
 
   // The table renders the map card, and the map view drills in and back.
   assert.ok(
-    await deepHasText("map-title", "The map"),
+    await deepHasText("open-map", "Open the map view"),
     "the table shows the map card"
   );
   assert.ok(

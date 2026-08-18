@@ -402,6 +402,13 @@ function agentIsThinking(messages: readonly ChatMessage[]): boolean {
   return last !== undefined && last.role !== "assistant";
 }
 
+// Cards on the table sit at alternating small rotations (papers laid on a
+// desk) — the sign flips per index so neighbours tilt opposite ways.
+function cardRotation(index: number): string {
+  const magnitude = 0.4 + ((index * 3) % 4) * 0.3;
+  return `${index % 2 === 0 ? -magnitude : magnitude}deg`;
+}
+
 export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
   const { LitElement: Base, html, css, nothing, svg } = lit;
 
@@ -422,6 +429,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       onFlowAction: { attribute: false },
       onCreate: { attribute: false },
       mapOpen: { attribute: false },
+      themeOverride: { attribute: false },
     };
 
     static styles = css`
@@ -439,6 +447,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         --wf-paper-edge: #352d22;
         --wf-ink: #f0ead9;
         --wf-body: #b7ad97;
+        --wf-font: "Charter", "Bitstream Charter", Georgia, serif;
       }
       .expedition[data-theme="mountain"] {
         --wf-accent: #4a9fe0;
@@ -461,6 +470,27 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         --wf-ink: #d6e6f5;
         --wf-body: #8ba6c2;
       }
+      :host-context(html.light) .expedition {
+        --wf-accent: #2f7bb5;
+        --wf-paper: #f2ead9;
+        --wf-paper-edge: #d9c7a3;
+        --wf-ink: #2a2418;
+        --wf-body: #6b5f4a;
+      }
+      :host-context(html.light) .expedition[data-theme="topo"] {
+        --wf-accent: #3f7d4d;
+        --wf-paper: #f0f2e6;
+        --wf-paper-edge: #ccd2b0;
+        --wf-ink: #23281a;
+        --wf-body: #5f6b4a;
+      }
+      :host-context(html.light) .expedition[data-theme="stars"] {
+        --wf-accent: #2f86b5;
+        --wf-paper: #e8eef4;
+        --wf-paper-edge: #c3d0e0;
+        --wf-ink: #1a2430;
+        --wf-body: #4a5b6a;
+      }
 
       .header {
         flex-shrink: 0;
@@ -468,7 +498,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         align-items: center;
         gap: 0.625rem;
         flex-wrap: wrap;
-        padding: 0.75rem 0.875rem;
+        padding: 0.5rem 0.75rem;
         border: 1px solid var(--border);
         border-radius: 8px;
         background: var(--surface);
@@ -523,6 +553,19 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         color: white;
         border-color: transparent;
       }
+      .theme-cycle {
+        font-family: var(--font-mono, monospace);
+        font-size: 0.5625rem;
+        height: 24px;
+        padding: 0 0.5rem;
+        border-radius: 4px;
+        border: 1px dashed var(--wf-accent);
+        background: transparent;
+        color: var(--wf-accent);
+        cursor: pointer;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
 
       .table {
         flex: 1;
@@ -535,11 +578,52 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         border-radius: 18px;
         padding: 1.25rem;
         border: 1px solid var(--border);
+        background: var(--wf-paper);
+      }
+      .expedition[data-theme="mountain"] .table {
         background:
           radial-gradient(
             120% 90% at 50% 10%,
-            rgba(255, 255, 255, 0.03),
+            rgba(255, 255, 255, 0.05),
             transparent 60%
+          ),
+          repeating-linear-gradient(
+            90deg,
+            rgba(0, 0, 0, 0.05) 0 2px,
+            transparent 2px 6px
+          ),
+          var(--wf-paper);
+      }
+      .expedition[data-theme="topo"] .table {
+        background:
+          radial-gradient(
+            120% 90% at 50% 10%,
+            rgba(255, 255, 255, 0.04),
+            transparent 60%
+          ),
+          repeating-linear-gradient(
+            0deg,
+            rgba(0, 0, 0, 0.04) 0 1px,
+            transparent 1px 28px
+          ),
+          repeating-linear-gradient(
+            90deg,
+            rgba(0, 0, 0, 0.04) 0 1px,
+            transparent 1px 28px
+          ),
+          var(--wf-paper);
+      }
+      .expedition[data-theme="stars"] .table {
+        background:
+          radial-gradient(
+            120% 100% at 50% 0%,
+            rgba(91, 192, 232, 0.08),
+            transparent 60%
+          ),
+          repeating-linear-gradient(
+            90deg,
+            rgba(0, 0, 0, 0.06) 0 8px,
+            transparent 8px 16px
           ),
           var(--wf-paper);
       }
@@ -553,6 +637,9 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         }
         .column {
           overflow-y: visible;
+        }
+        .column.center {
+          order: -1;
         }
       }
 
@@ -646,6 +733,15 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         color: var(--wf-body);
         margin-top: 0.28rem;
       }
+      .card .t,
+      .card .body,
+      .journal .txt,
+      .crate .t,
+      .dest-note .name,
+      .node .cap,
+      .panel .entry .t {
+        font-family: var(--wf-font);
+      }
       .stamp {
         display: inline-block;
         font-family: var(--font-mono, monospace);
@@ -717,12 +813,12 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       }
 
       .fog-card {
-        background: linear-gradient(165deg, #2a2620, #211e19);
-        border: 2px dashed rgba(138, 147, 160, 0.5);
-      }
-      .expedition[data-theme="stars"] .fog-card {
-        background: linear-gradient(165deg, #141b26, #0e141d);
-        border-color: rgba(140, 170, 200, 0.45);
+        background: linear-gradient(
+          165deg,
+          var(--wf-paper),
+          var(--wf-paper-edge)
+        );
+        border: 2px dashed var(--wf-body);
       }
       .fog-card .q {
         display: inline-flex;
@@ -731,14 +827,14 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         width: 20px;
         height: 20px;
         border-radius: 50%;
-        border: 1.5px solid #f0ead9;
-        color: #f0ead9;
+        border: 1.5px solid var(--wf-ink);
+        color: var(--wf-ink);
         font-weight: 700;
         font-size: 0.85rem;
         margin-right: 0.35rem;
         box-shadow:
-          0 0 0 4px rgba(138, 147, 160, 0.16),
-          0 0 14px rgba(138, 147, 160, 0.35);
+          0 0 0 4px color-mix(in srgb, var(--wf-body) 18%, transparent),
+          0 0 14px color-mix(in srgb, var(--wf-body) 35%, transparent);
       }
       .fog-card .tag {
         display: inline-block;
@@ -746,8 +842,8 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         font-size: 0.56rem;
         letter-spacing: 0.08em;
         text-transform: uppercase;
-        color: #f0ead9;
-        background: rgba(138, 147, 160, 0.25);
+        color: var(--wf-ink);
+        background: color-mix(in srgb, var(--wf-body) 25%, transparent);
         border-radius: 999px;
         padding: 0.06rem 0.45rem;
       }
@@ -761,7 +857,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       }
       .journal .entry {
         padding: 0.6rem 0.8rem;
-        border-bottom: 1px dashed #3a3226;
+        border-bottom: 1px dashed var(--wf-paper-edge);
         display: flex;
         gap: 0.6rem;
         align-items: baseline;
@@ -816,25 +912,16 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         );
         position: relative;
       }
-      .map-card .map-head {
+      .map-card .map-top {
         flex-shrink: 0;
         display: flex;
-        align-items: center;
-        gap: 0.375rem;
+        align-items: flex-start;
+        gap: 0.75rem;
         margin-bottom: 0.5rem;
       }
-      .map-card .map-title {
-        font-size: 0.6875rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: var(--text);
-      }
       .map-card .dest-note {
-        position: absolute;
-        left: 18px;
-        top: 14px;
-        max-width: 30ch;
+        flex: 1;
+        min-width: 0;
       }
       .map-card .dest-note .name {
         font-weight: 700;
@@ -845,9 +932,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         color: var(--muted);
       }
       .map-card .open-map {
-        position: absolute;
-        right: 14px;
-        top: 14px;
+        flex-shrink: 0;
         font: inherit;
         font-size: 0.68rem;
         padding: 0.32rem 0.6rem;
@@ -1029,9 +1114,17 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
     declare onFlowAction: FlowViewProps["onFlowAction"];
     declare onCreate: FlowViewProps["onCreate"];
     declare mapOpen: boolean;
+    declare themeOverride: ExpeditionTheme | undefined;
 
     private get theme(): ExpeditionTheme {
-      return resolveTheme(this.flow.config);
+      return this.themeOverride ?? resolveTheme(this.flow.config);
+    }
+
+    // Dev-only: cycle the expedition skin without editing the flow config.
+    private cycleTheme() {
+      const index = EXPEDITION_THEMES.indexOf(this.theme);
+      this.themeOverride =
+        EXPEDITION_THEMES[(index + 1) % EXPEDITION_THEMES.length];
     }
 
     private get model(): WayfinderMap {
@@ -1108,6 +1201,14 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
           <span class="status">${this.flow.status}</span>
         </div>
         <div class="actions">
+          <button
+            class="theme-cycle"
+            type="button"
+            title="dev: cycle the expedition theme"
+            @click=${this.cycleTheme}
+          >
+            ${this.theme}
+          </button>
           ${this.availableFlowActions.map((action) => {
             const onClick =
               action.createInstance !== undefined
@@ -1134,9 +1235,9 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       return html`<div class="station">
         <h2 class="station-head">Base camp</h2>
         <div class="pile">
-          ${charting.map((entry) => {
+          ${charting.map((entry, index) => {
             const destination = entry.state.workflowInstanceState.destination;
-            return html`<div class="card">
+            return html`<div class="card" style=${`--rot:${cardRotation(index)}`}>
               <div class="lbl">${entry.state.currentState}</div>
               <div class="t">${
                 typeof destination === "string" && destination !== ""
@@ -1167,7 +1268,10 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         <h2 class="station-head">On expedition</h2>
         <div class="pile">
           ${resolving.map(
-            (entry) => html`<div class="card">
+            (
+              entry,
+              index
+            ) => html`<div class="card" style=${`--rot:${cardRotation(index)}`}>
               <div class="lbl">${resolvingLabel(entry.state.currentState)}</div>
               <div class="t">${ticketTitle(entry)}</div>
               ${this.renderActions(entry)} ${this.renderChat(entry)}
@@ -1238,7 +1342,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       return html`<div class="station">
         <h2 class="station-head">The briefing deck</h2>
         <div class="pile">
-          ${ready.map((entry) => this.renderDossierCard(entry))}
+          ${ready.map((entry, index) => this.renderDossierCard(entry, index))}
           ${
             ready.length === 0
               ? html`<div class="empty">No claimable tickets yet.</div>`
@@ -1248,13 +1352,16 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       </div>`;
     }
 
-    private renderDossierCard(entry: FlowViewProps["entries"][number]) {
+    private renderDossierCard(
+      entry: FlowViewProps["entries"][number],
+      index: number
+    ) {
       const state = entry.state.workflowInstanceState;
       const title = ticketTitle(entry);
       const question =
         typeof state.question === "string" ? state.question : undefined;
       const type = typeof state.type === "string" ? state.type : undefined;
-      return html`<div class="card" style=${`--rot:${-1.2 + (entry.id.length % 3) * 0.9}deg`}>
+      return html`<div class="card" style=${`--rot:${cardRotation(index)}`}>
         <div class="t">${title}</div>
         ${
           question !== undefined && question !== ""
@@ -1275,7 +1382,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       return html`<div class="station">
         <h2 class="station-head">The fog tray</h2>
         <div class="pile">
-          ${fog.map((entry) => this.renderFogCard(entry))}
+          ${fog.map((entry, index) => this.renderFogCard(entry, index))}
           ${
             fog.length === 0
               ? html`<div class="empty">The fog is clear.</div>`
@@ -1285,8 +1392,11 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       </div>`;
     }
 
-    private renderFogCard(entry: FlowViewProps["entries"][number]) {
-      return html`<div class="card fog-card">
+    private renderFogCard(
+      entry: FlowViewProps["entries"][number],
+      index: number
+    ) {
+      return html`<div class="card fog-card" style=${`--rot:${cardRotation(index)}`}>
         <div class="t"><span class="q">?</span>${ticketTitle(entry)}</div>
         <span class="tag">needs clarity</span>
         ${this.renderActions(entry)}
@@ -1346,14 +1456,20 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
               : nothing
           }
           ${builds.map(
-            (entry) => html`<div class="crate">
+            (
+              entry,
+              index
+            ) => html`<div class="crate" style=${`--rot:${cardRotation(index)}`}>
               <div class="lbl">build · ${entry.state.currentState}</div>
               <div class="t">The implementation phase</div>
               ${this.renderActions(entry)} ${this.renderChat(entry)}
             </div>`
           )}
           ${buildItems.map(
-            (entry) => html`<div class="crate">
+            (
+              entry,
+              index
+            ) => html`<div class="crate" style=${`--rot:${cardRotation(index)}`}>
               <div class="lbl">gear · build item</div>
               <div class="t">${implementationTitle(entry)}</div>
               ${this.renderActions(entry)}
@@ -1390,16 +1506,15 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
 
     private renderMapCard(model: WayfinderMap, theme: ExpeditionTheme) {
       return html`<div class="map-card">
-        <div class="map-head">
-          <span class="map-title">The map</span>
+        <div class="map-top">
+          <div class="dest-note">
+            <div class="name">${model.destination}</div>
+            <div class="sub">Destination</div>
+          </div>
+          <button class="open-map" type="button" @click=${this.openMap}>
+            Open the map view →
+          </button>
         </div>
-        <div class="dest-note">
-          <div class="name">${model.destination}</div>
-          <div class="sub">Destination</div>
-        </div>
-        <button class="open-map" type="button" @click=${this.openMap}>
-          Open the map view →
-        </button>
         ${this.miniMap(model, theme)}
       </div>`;
     }

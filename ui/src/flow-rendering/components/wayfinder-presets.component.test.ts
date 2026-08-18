@@ -552,9 +552,13 @@ describe("wayfinder served modules", () => {
 
       // Header: expedition identity + flow actions.
       expect(queryAllDeep(el, ".title")[0]?.textContent).toBe("Wayfinder");
-      expect(queryAllDeep(el, ".actions button")[0]?.textContent?.trim()).toBe(
-        "Add ticket"
+      expect(queryAllDeep(el, ".theme-cycle")[0]?.textContent?.trim()).toBe(
+        "mountain"
       );
+      const actionLabels = queryAllDeep(el, ".actions button").map((button) =>
+        button.textContent?.trim()
+      );
+      expect(actionLabels).toContain("Add ticket");
       // The table defaults to the mountain theme.
       expect(
         queryAllDeep(el, ".expedition")[0]?.getAttribute("data-theme")

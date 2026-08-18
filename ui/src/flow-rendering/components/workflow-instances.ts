@@ -42,6 +42,10 @@ export class WorkflowInstances extends LitElement {
 
   static styles = [
     css`
+      :host {
+        display: block;
+        height: 100%;
+      }
       .flow {
         margin-bottom: 1rem;
       }

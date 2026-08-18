@@ -292,7 +292,7 @@ function closeFlowActionForm() {
 }
 
 .instance-header {
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
 }
 
 .header-row {
