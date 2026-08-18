@@ -26,25 +26,22 @@ export type {
   FlowComponentRegistrations,
 };
 
-// Evaluates a served module's transpiled source into its module record. The
-// default implementation imports the source as a blob ESM module (native
-// browser behavior); tests inject a fake evaluator since Node's module runner
-// cannot import blob URLs.
+// Evaluates a served module's module URL into its module record. The default
+// implementation imports the module over HTTP: a served module's rewritten
+// relative imports are path-only absolute URLs (e.g.
+// `/api/flows/definitions/<id>/modules/ui/helper.ts?v=<hash>`), which need a
+// hierarchical base URL to resolve — a blob module's base is a
+// non-hierarchical blob: URL, so the entry cannot be blob-evaluated once it
+// imports siblings. Tests inject a fake evaluator since Node's module runner
+// cannot import HTTP URLs.
 export type FlowComponentEvaluator = (
-  source: string
+  moduleUrl: string
 ) => Promise<FlowComponentModule>;
 
-async function evaluateBlobModule(
-  source: string
+async function evaluateModuleByUrl(
+  moduleUrl: string
 ): Promise<FlowComponentModule> {
-  const url = URL.createObjectURL(
-    new Blob([source], { type: "text/javascript" })
-  );
-  try {
-    return (await import(/* @vite-ignore */ url)) as FlowComponentModule;
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+  return (await import(/* @vite-ignore */ moduleUrl)) as FlowComponentModule;
 }
 
 // Loads a definition's served component modules (id → fetch path), evaluates
@@ -54,25 +51,25 @@ async function evaluateBlobModule(
 // module that fails to load degrades to the generic defaults and is logged.
 export async function loadFlowComponents(
   components: Record<string, string>,
-  evaluate: FlowComponentEvaluator = evaluateBlobModule
+  evaluate: FlowComponentEvaluator = evaluateModuleByUrl
 ): Promise<() => void> {
   const deps: FlowComponentDeps = { LitElement, html, css, nothing, svg };
   const restores: Array<() => void> = [];
 
   for (const [componentId, path] of Object.entries(components)) {
     try {
-      const response = await fetch(path);
-      if (!response.ok) continue;
-      const source = await response.text();
-      const module = await evaluate(source);
+      // Importing the URL serves the transpiled module (its relative imports
+      // already rewritten server-side); the ?v= version busts the module
+      // cache on every definition save.
+      const module = await evaluate(path);
       const factory = module.default;
       if (typeof factory !== "function") continue;
       const registrations = factory(deps);
       registerAll(restores, "components", registrations.components);
       registerAll(restores, "kinds", registrations.kinds);
     } catch (error) {
-      // A failed component module degrades to the generic defaults; log and
-      // keep loading the remaining modules.
+      // A failed component module (404, network error, syntax) degrades to
+      // the generic defaults; log and keep loading the remaining modules.
       console.warn(`Failed to load flow component "${componentId}":`, error);
     }
   }

@@ -109,19 +109,14 @@ describe("loadFlowComponents", () => {
     );
   });
 
-  it("skips modules that 404, export no factory, or fail to fetch", async () => {
-    const fetchMock = vi.fn(async (path: string) => {
-      if (path.includes("missing")) return { ok: false, text: async () => "" };
-      throw new Error("network down");
-    });
-    vi.stubGlobal("fetch", fetchMock);
+  it("skips modules whose URL import fails", async () => {
+    const failing: FlowComponentEvaluator = async () => {
+      throw new TypeError("Failed to fetch dynamically imported module");
+    };
 
     restore = await loadFlowComponents(
-      {
-        missing: "/api/.../missing",
-        down: "/api/.../down",
-      },
-      evaluate
+      { missing: "/api/.../missing", down: "/api/.../down" },
+      failing
     );
     expect(getComponentRenderer("missing")).toBeUndefined();
     expect(getComponentRenderer("down")).toBeUndefined();
@@ -165,7 +160,7 @@ describe("loadFlowComponents", () => {
       { "demo-card": "/api/.../demo-card" },
       deferred
     );
-    // The loader fetches (microtask) before evaluating; settle, then release.
+    // The evaluator runs synchronously inside the loop; settle, then release.
     await new Promise((resolve) => setTimeout(resolve, 0));
     resolveEvaluate({
       default: () => ({ components: { "demo-card": DemoCard } }),

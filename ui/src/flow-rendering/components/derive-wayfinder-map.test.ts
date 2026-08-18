@@ -1,13 +1,13 @@
 // The wayfinder map derivation: entries -> nodes/groups/positions — the pure
 // core both the table view and the map view render from. Tested at the pure
-// seam (a named export of the served flow-component module, imported directly
-// as TypeScript) rather than through the DOM, so the group-membership logic
-// has deterministic coverage before any SVG is drawn.
+// seam (a named export of the wayfinder-map module, imported directly as
+// TypeScript) rather than through the DOM, so the group-membership logic has
+// deterministic coverage before any SVG is drawn.
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { WorkflowInstanceEntry } from "workflow-engine/create-flow-runtime";
-import { deriveWayfinderMap } from "../../../../presets/wayfinder/ui/flow-component.ts";
+import { deriveWayfinderMap } from "../../../../presets/wayfinder/ui/wayfinder-map.ts";
 
 // A minimal full WorkflowInstanceEntry for a wayfinder instance (the fields the
 // derivation reads are workflowId, currentState, and workflowInstanceState).
