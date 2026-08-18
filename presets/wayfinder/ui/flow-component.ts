@@ -745,8 +745,8 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         border-radius: 10px;
         padding: 0.75rem 0.85rem;
         box-shadow:
-          0 3px 0 rgba(0, 0, 0, 0.3),
-          0 10px 24px rgba(0, 0, 0, 0.35);
+          0 2px 0 rgba(0, 0, 0, 0.3),
+          0 5px 10px rgba(0, 0, 0, 0.3);
         transform: rotate(var(--rot, 0deg));
         transition:
           transform 0.15s ease,
@@ -894,7 +894,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         border: 1px solid var(--wf-paper-edge);
         border-radius: 10px;
         overflow: hidden;
-        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
       }
       .journal .entry {
         padding: 0.6rem 0.8rem;
@@ -920,7 +920,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         border-radius: 10px;
         padding: 0.7rem 0.8rem;
         border-top: 3px solid var(--warning);
-        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
       }
       .crate.spec {
         border-top-color: var(--wf-accent);
@@ -1009,7 +1009,6 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       .canvas {
         position: relative;
         overflow: hidden;
-        min-height: 0;
         border: 1px solid var(--border);
         border-radius: 14px;
         background: #0a0e15;
