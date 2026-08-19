@@ -29,67 +29,65 @@ after(async () => {
   await mock.close();
 });
 
-// Clicks a button whose text equals `label`, across nested shadow roots.
-async function waitAndClick(buttonLabel, timeoutMs = 40_000) {
+// Runs `body` (page code) with one shared shadow-DOM walker: `hiveAll` holds
+// every element under workflow-instances' shadow root, across nested shadow
+// roots, in document order. The single walker keeps the deep queries in one
+// place instead of duplicating the recursion per helper. The body is an
+// expression — Playwright's string evaluate wraps it as `return (body);`, so
+// the inner IIFE below needs its own explicit `return` for that to surface.
+async function deepEval(body) {
+  return page.evaluate(`(() => {
+    const hiveAll = [];
+    const hiveWalk = (root) => {
+      for (const el of root.querySelectorAll("*")) {
+        hiveAll.push(el);
+        if (el.shadowRoot) hiveWalk(el.shadowRoot);
+      }
+    };
+    hiveWalk(document.querySelector("workflow-instances")?.shadowRoot ?? document);
+    return (${body});
+  })()`);
+}
+
+// Clicks the first button whose trimmed text equals `label`.
+async function clickButton(label, timeoutMs = 40_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const clicked = await page.evaluate((buttonLabel) => {
-      const walk = (root) => {
-        for (const el of root.querySelectorAll("button")) {
-          if (el.textContent?.trim() === buttonLabel) return el;
-        }
-        for (const el of root.querySelectorAll("*")) {
-          if (el.shadowRoot) {
-            const found = walk(el.shadowRoot);
-            if (found) return found;
-          }
-        }
-        return null;
-      };
-      const host = document.querySelector("workflow-instances");
-      const button = walk(host?.shadowRoot ?? document);
+    const clicked = await deepEval(`(() => {
+      const button = hiveAll.find(
+        (el) => el.tagName === "BUTTON" && el.textContent?.trim() === ${JSON.stringify(label)}
+      );
       if (!button) return false;
       button.dispatchEvent(
         new MouseEvent("click", { bubbles: true, composed: true })
       );
       return true;
-    }, buttonLabel);
+    })()`);
     if (clicked) return true;
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   return false;
 }
 
-// Clicks the first element matching `selector` anywhere in the shadow tree.
-async function clickDeep(selector, timeoutMs = 20_000) {
+// Clicks the first element matching `selector` (CSS, applied via the walker).
+async function clickSelector(selector, timeoutMs = 20_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const clicked = await page.evaluate((selector) => {
-      const walk = (root) => {
-        for (const el of root.querySelectorAll(selector)) return el;
-        for (const el of root.querySelectorAll("*")) {
-          if (el.shadowRoot) {
-            const found = walk(el.shadowRoot);
-            if (found) return found;
-          }
-        }
-        return null;
-      };
-      const host = document.querySelector("workflow-instances");
-      const el = walk(host?.shadowRoot ?? document);
-      if (!el) return false;
-      el.dispatchEvent(
-        new MouseEvent("click", { bubbles: true, composed: true })
+    const clicked = await deepEval(`(() => {
+      const el = hiveAll.find((candidate) =>
+        candidate.matches(${JSON.stringify(selector)})
       );
+      if (!el) return false;
+      el.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
       return true;
-    }, selector);
+    })()`);
     if (clicked) return true;
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   return false;
 }
 
-// Waits until an element matching `selector` exists deep in the shadow tree.
+// Waits until at least one element matches `selector` in the shadow tree.
 async function waitForDeep(selector, timeoutMs = 30_000) {
   await page.waitForFunction(
     (sel) => {
@@ -105,24 +103,6 @@ async function waitForDeep(selector, timeoutMs = 30_000) {
     selector,
     { timeout: timeoutMs }
   );
-}
-
-// Submits the flow-action create form (the shared Svelte dialog).
-async function submitFlowActionForm() {
-  await page.waitForSelector(".dialog-actions button", { timeout: 10_000 });
-  await page
-    .locator(".dialog-actions button", { hasText: "Run" })
-    .first()
-    .click();
-}
-
-// Adds a fog entry through the flow action form.
-async function addFogEntry(brief) {
-  await page.locator("button", { hasText: "Add fog entry" }).first().click();
-  await page.waitForSelector("#cf-brief", { timeout: 10_000 });
-  await page.locator("#cf-brief").fill(brief);
-  await submitFlowActionForm();
-  await page.waitForTimeout(400);
 }
 
 // The mounted served surface: dynamic-element-host's .mount child inside
@@ -153,40 +133,23 @@ async function surfaceStillMounted() {
 // A snapshot of the surface's observable state: map view open, active theme,
 // rendered fog order, and whether the default per-workflow boards are showing.
 async function surfaceState() {
-  return page.evaluate(() => {
-    const walk = (root, out) => {
-      for (const el of root.querySelectorAll("*")) {
-        if (el.classList?.contains("expedition")) {
-          out.push({ kind: "expedition", theme: el.dataset?.theme ?? null });
-        }
-        if (el.classList?.contains("theme-cycle")) {
-          out.push({
-            kind: "theme-cycle",
-            text: el.textContent?.trim() ?? null,
-          });
-        }
-        if (el.classList?.contains("fog-card")) {
-          out.push({ kind: "fog-card", id: el.dataset?.id ?? null });
-        }
-        if (el.shadowRoot) walk(el.shadowRoot, out);
-      }
-      return out;
-    };
-    const out = [];
-    walk(document, out);
-    const expedition = out.find((e) => e.kind === "expedition");
-    const themeCycle = out.find((e) => e.kind === "theme-cycle");
-    const host = document.querySelector("workflow-instances");
-    return {
-      mapOpen: expedition !== undefined,
-      theme: expedition?.theme ?? themeCycle?.text ?? null,
-      fogOrder: out
-        .filter((e) => e.kind === "fog-card")
-        .map((e) => e.id)
-        .join(","),
-      defaultBoards: host?.shadowRoot?.querySelector(".flow") !== null,
-    };
-  });
+  return deepEval(`({
+    mapOpen: hiveAll.some((el) => el.classList?.contains("back-link")),
+    theme:
+      hiveAll.find((el) => el.classList?.contains("expedition"))?.dataset
+        ?.theme ??
+      hiveAll.find((el) => el.classList?.contains("theme-cycle"))?.textContent
+        ?.trim() ??
+      null,
+    fogOrder: hiveAll
+      .filter((el) => el.classList?.contains("fog-card"))
+      .map((el) => el.dataset?.id ?? "")
+      .join(","),
+    defaultBoards:
+      document.querySelector("workflow-instances")?.shadowRoot?.querySelector(
+        ".flow"
+      ) !== null,
+  })`);
 }
 
 // Opens a second socket to the flow WS endpoint and counts flow_snapshot
@@ -247,50 +210,51 @@ test("wayfinder surface stays mounted with view state intact through churn and r
   await page.waitForTimeout(1_500);
   await openSnapshotCounter();
 
-  // Chart the map first: the naming and frontier sessions run the agent
-  // against the mock provider (real snapshot churn) and unlock the
-  // add_fog_entry action (gated on the frontier being charted).
-  assert.ok(await waitAndClick("Done"), "naming session done");
-  await page.waitForTimeout(4_000);
-  assert.ok(await waitAndClick("Done"), "frontier session done");
-  await page.waitForTimeout(2_000);
+  // Chart the map: the naming session runs the agent against the mock
+  // provider; approve it, then approve the frontier session that auto-starts
+  // (its file gate is what unlocks the add_fog_entry action).
+  const namingDone = await clickButton("Done");
+  if (!namingDone) {
+    const dump = await deepEval(`hiveAll
+      .filter((el) => el.tagName === "BUTTON")
+      .map((el) => el.textContent?.trim())
+      .join("|")`);
+    assert.ok(
+      namingDone,
+      `naming session done; buttons at failure: ${JSON.stringify(dump)}`
+    );
+  }
+  assert.ok(await clickButton("Done"), "frontier session done");
+  await page.waitForTimeout(1_500);
 
-  // The churn window: each fog-entry creation is a flow event that emits a
-  // coalesced flow_snapshot frame, so the stability assertions below run
-  // against real snapshot pressure.
-  const churnStart = await snapshotCount(flowId);
-  await addFogEntry("First fog card");
-  await addFogEntry("Second fog card");
+  // Seed the two fog entries the reorder will work on (via the action API —
+  // each dispatch is itself a flow event that emits a snapshot frame).
+  const addFogViaApi = (brief) =>
+    page.evaluate(
+      async ({ flowId, brief }) => {
+        const res = await fetch(`/api/flows/${flowId}/actions/add_fog_entry`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ brief }),
+        });
+        return res.ok;
+      },
+      { flowId, brief }
+    );
+  assert.equal(await addFogViaApi("First fog card"), true, "first fog entry");
+  assert.equal(await addFogViaApi("Second fog card"), true, "second fog entry");
+  await page.waitForTimeout(800);
 
   // Drag the second fog card above the first into a session-local clear
   // order (dispatched events on real geometry, as in the interactions e2e).
   const fogIds = () =>
-    page.evaluate(() => {
-      const walk = (root, out) => {
-        for (const el of root.querySelectorAll("*")) {
-          if (el.classList?.contains("fog-card")) {
-            out.push(el.dataset?.id ?? "");
-          }
-          if (el.shadowRoot) walk(el.shadowRoot, out);
-        }
-        return out;
-      };
-      return walk(document, []).join(",");
-    });
+    deepEval(`hiveAll
+      .filter((el) => el.classList?.contains("fog-card"))
+      .map((el) => el.dataset?.id ?? "")
+      .join(",")`);
   const fogBefore = await fogIds();
-  await page.evaluate(async () => {
-    const flush = () => new Promise((resolve) => setTimeout(resolve, 60));
-    const walk = (root) => {
-      const found = [];
-      for (const el of root.querySelectorAll("*")) {
-        if (el.classList?.contains("fog-card")) found.push(el);
-        if (el.shadowRoot) found.push(...walk(el.shadowRoot));
-      }
-      return found;
-    };
-    const cards = walk(document).filter((el) =>
-      el.classList?.contains("fog-card")
-    );
+  await deepEval(`(() => {
+    const cards = hiveAll.filter((el) => el.classList?.contains("fog-card"));
     const first = cards[0];
     const second = cards[1];
     const pile = second?.parentElement;
@@ -303,22 +267,18 @@ test("wayfinder surface stays mounted with view state intact through churn and r
       new MouseEvent("dragover", { bubbles: true, composed: true })
     );
     pile?.dispatchEvent(
-      new MouseEvent("drop", {
-        bubbles: true,
-        composed: true,
-        clientY: dropY,
-      })
+      new MouseEvent("drop", { bubbles: true, composed: true, clientY: dropY })
     );
     pile?.dispatchEvent(
       new MouseEvent("dragend", { bubbles: true, composed: true })
     );
-    await flush();
-  });
+    return true;
+  })()`);
   // The drop re-renders the pile from the new clear order; poll until it
   // flips (the interactions e2e does the same).
-  const deadline = Date.now() + 10_000;
+  const flipDeadline = Date.now() + 10_000;
   let fogAfter = fogBefore;
-  while (Date.now() < deadline) {
+  while (Date.now() < flipDeadline) {
     fogAfter = await fogIds();
     if (fogAfter !== fogBefore) break;
     await new Promise((resolve) => setTimeout(resolve, 300));
@@ -328,16 +288,12 @@ test("wayfinder surface stays mounted with view state intact through churn and r
     fogBefore,
     `the fog drag must reorder the pile (before=${fogBefore}, after=${fogAfter})`
   );
-  const churnEnd = await snapshotCount(flowId);
-  assert.ok(
-    churnEnd > churnStart,
-    `snapshot churn must actually arrive during the window (before=${churnStart}, after=${churnEnd})`
-  );
 
-  // Cycle the expedition theme once (mountain → topo), then open the map
-  // view — the theme button lives in the header, which the map view replaces.
-  assert.ok(await clickDeep(".theme-cycle"), "theme cycle clicked");
-  assert.ok(await clickDeep(".open-map"), "map opened");
+  // Cycle the expedition theme once (mountain → topo) and open the map view
+  // BEFORE the churn window, so the churn exercises them. The theme button
+  // lives in the header, which the map view replaces — click it first.
+  assert.ok(await clickSelector(".theme-cycle"), "theme cycle clicked");
+  assert.ok(await clickSelector(".open-map"), "map opened");
   await page.waitForTimeout(500);
   assert.ok(await captureSurface(), "the custom surface is mounted");
 
@@ -349,6 +305,46 @@ test("wayfinder surface stays mounted with view state intact through churn and r
     false,
     "the default boards are not showing"
   );
+
+  // Churn with the map open: each add_fog_entry dispatch is a flow event
+  // that coalesces into a flow_snapshot frame. Sample the surface identity
+  // and view state across the window — the same element instance must stay
+  // mounted the whole time, and the reordered fog order must survive.
+  const churnStart = await snapshotCount(flowId);
+  const deadline = Date.now() + 12_000;
+  let samples = 0;
+  let churnEntries = 0;
+  while (Date.now() < deadline) {
+    if (churnEntries < 4) {
+      assert.equal(
+        await addFogViaApi(`Churn fog entry ${churnEntries + 1}`),
+        true,
+        "churn fog entry"
+      );
+      churnEntries += 1;
+      await new Promise((resolve) => setTimeout(resolve, 1_200));
+    }
+    assert.equal(
+      await surfaceStillMounted(),
+      true,
+      "the surface element identity is stable through churn"
+    );
+    const mid = await surfaceState();
+    assert.equal(mid.mapOpen, true, "the map view stays open through churn");
+    assert.equal(mid.theme, "topo", "the theme stays cycled through churn");
+    assert.equal(mid.defaultBoards, false, "no default-UI flash through churn");
+    samples += 1;
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+  }
+  const churnEnd = await snapshotCount(flowId);
+  assert.ok(
+    churnEnd > churnStart,
+    `snapshot churn must actually arrive during the window (before=${churnStart}, after=${churnEnd})`
+  );
+  assert.ok(
+    samples >= 5,
+    `sampled the surface across the churn window (${samples} samples)`
+  );
   const storedFog = await page.evaluate(
     (id) => sessionStorage.getItem(`hive:view:${id}:fog-order`) ?? "",
     flowId
@@ -359,10 +355,39 @@ test("wayfinder surface stays mounted with view state intact through churn and r
     `the fog clear order persists through churn (stored=${storedFog}, reordered=${fogAfter})`
   );
 
+  // Close the map (its back-link) so the header comes back: the fog tray must
+  // render the reordered pile, and the cycled theme + map-open state must
+  // restore when the map is reopened.
+  assert.ok(await clickSelector(".back-link"), "map closed");
+  await page.waitForTimeout(300);
+  const closed = await surfaceState();
+  assert.equal(closed.mapOpen, false, "the map view is closed");
+  assert.equal(closed.theme, "topo", "the theme survives the close");
+  assert.ok(
+    closed.fogOrder === fogAfter || closed.fogOrder.startsWith(`${fogAfter},`),
+    `the reordered fog pile renders after the churn (order=${closed.fogOrder})`
+  );
+
+  assert.ok(await clickSelector(".open-map"), "map reopened");
+  await page.waitForTimeout(300);
+  const reopened = await surfaceState();
+  assert.equal(reopened.mapOpen, true, "the map view reopens");
+  assert.equal(reopened.theme, "topo", "the theme survives the close/reopen");
+
   // Reconnect: dropping the network closes the app's WebSocket (the app
   // reconnects with backoff and the server re-sends init); the flow must
-  // never drop out, so the surface element stays the same instance.
+  // never drop out, so the surface element stays the same instance. Prove
+  // the emulation actually took the network down first.
   await page.context().setOffline(true);
+  const offlineProbe = await page.evaluate(async () => {
+    try {
+      await fetch("/api/flows", { cache: "no-store" });
+      return false;
+    } catch {
+      return true;
+    }
+  });
+  assert.equal(offlineProbe, true, "offline emulation is active");
   await page.waitForTimeout(4_000);
   await page.context().setOffline(false);
   await page.waitForTimeout(14_000);
