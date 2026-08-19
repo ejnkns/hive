@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, rmdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  readFileSync,
+  rmdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer } from "node:http";
 import { connect } from "node:net";
 import { dirname, join } from "node:path";
@@ -74,6 +80,7 @@ try {
   );
 
   await verifyWatchRootHygiene();
+  await verifyTsdownWatchHygiene();
 } finally {
   vite.kill("SIGTERM");
   await closeServer(backend);
@@ -142,6 +149,70 @@ async function verifyWatchRootHygiene() {
         // non-empty or already gone — best-effort cleanup only
       }
     }
+  }
+}
+
+// The backend dev server (tsdown --watch) side of watch-root hygiene: the dev
+// script re-runs `node ... start` on every rebuild, so an agent write under an
+// excluded path must not rebuild (which would restart the dev server mid-run),
+// while a write to a watched source file must. Spawns the real tsdown watch
+// on the server package and counts its rebuilds. The exclusion is
+// prophylactic-by-construction today (server/.runtime is not in the module
+// graph), but the observable contract — an agent-path write never rebuilds —
+// is exactly what the dev-stability ticket asks for.
+async function verifyTsdownWatchHygiene() {
+  const serverDir = join(repositoryPath, "server");
+  const tsdown = spawn(
+    join(serverDir, "node_modules", ".bin", "tsdown"),
+    ["--watch", "--clearScreen", "false"],
+    {
+      cwd: serverDir,
+      env: { ...process.env, NO_COLOR: "1" },
+      stdio: ["ignore", "pipe", "pipe"],
+    }
+  );
+  let tsdownOutput = "";
+  tsdown.stdout.on("data", (chunk) => (tsdownOutput += String(chunk)));
+  tsdown.stderr.on("data", (chunk) => (tsdownOutput += String(chunk)));
+  const builds = () => (tsdownOutput.match(/Rebuilt in/g) ?? []).length;
+
+  const probeDir = join(serverDir, ".runtime", "watch-probe");
+  const probeFile = join(probeDir, "probe.ts");
+  const watchedFile = join(serverDir, "src", "server", "flow-definitions.ts");
+  const original = readFileSync(watchedFile, "utf8");
+
+  try {
+    await waitFor(
+      () => builds() >= 1,
+      20_000,
+      `tsdown watch did not build:\n${tsdownOutput}`
+    );
+
+    const beforeIgnoredWrite = builds();
+    mkdirSync(probeDir, { recursive: true });
+    writeFileSync(probeFile, "export const probe = 1;\n", "utf-8");
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+    assert.equal(
+      builds(),
+      beforeIgnoredWrite,
+      `an agent-path write must not rebuild the backend, got:\n${tsdownOutput.slice(-800)}`
+    );
+
+    const beforeWatchedWrite = builds();
+    writeFileSync(watchedFile, `${original}\n// tsdown-watch-probe\n`, "utf-8");
+    await waitFor(
+      () => builds() > beforeWatchedWrite,
+      20_000,
+      `a watched source write must rebuild the backend, got:\n${tsdownOutput.slice(-800)}`
+    );
+
+    console.log(
+      "tsdown watch-root hygiene passed: agent-path writes ignored, watched writes rebuild"
+    );
+  } finally {
+    writeFileSync(watchedFile, original);
+    rmSync(probeDir, { recursive: true, force: true });
+    tsdown.kill("SIGTERM");
   }
 }
 

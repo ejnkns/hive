@@ -57,7 +57,7 @@ export async function loadFlowComponents(
   const cleanups: Array<() => void> = [];
 
   for (const [componentId, path] of Object.entries(components)) {
-    const cleanup = await loadServedPath(componentId, path, evaluate, deps);
+    const cleanup = await loadServedPath({ componentId, path, evaluate, deps });
     if (cleanup !== undefined) cleanups.push(cleanup);
   }
 
@@ -90,12 +90,17 @@ const servedModuleCache = new Map<string, ServedModuleCacheEntry>();
 // Loads one served module path and registers its components/kinds. The
 // evaluated factory result is cached per versioned path; the returned cleanup
 // releases this load's share of the cache entry.
-async function loadServedPath(
-  componentId: string,
-  path: string,
-  evaluate: FlowComponentEvaluator,
-  deps: FlowComponentDeps
-): Promise<(() => void) | undefined> {
+async function loadServedPath({
+  componentId,
+  path,
+  evaluate,
+  deps,
+}: {
+  componentId: string;
+  path: string;
+  evaluate: FlowComponentEvaluator;
+  deps: FlowComponentDeps;
+}): Promise<(() => void) | undefined> {
   const cached = servedModuleCache.get(path);
   if (cached !== undefined) {
     cached.refcount += 1;

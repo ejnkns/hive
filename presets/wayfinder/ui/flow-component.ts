@@ -1503,15 +1503,20 @@ function storedThemeOverride(
   stored: string | null
 ): ExpeditionTheme | undefined {
   const configured = config.expeditionTheme;
-  if (
-    typeof configured === "string" &&
-    EXPEDITION_THEMES.includes(configured as ExpeditionTheme)
-  ) {
-    return undefined;
-  }
+  if (isExpeditionTheme(configured)) return undefined;
   if (stored === null) return undefined;
-  if (!EXPEDITION_THEMES.includes(stored as ExpeditionTheme)) return undefined;
-  return stored as ExpeditionTheme;
+  if (!isExpeditionTheme(stored)) return undefined;
+  return stored;
+}
+
+// The only way an unknown string becomes a valid ExpeditionTheme: membership
+// in the known themes list. The cast is safe because the includes check
+// (against the exhaustive theme list) ran first — the guard's whole job.
+function isExpeditionTheme(value: unknown): value is ExpeditionTheme {
+  return (
+    typeof value === "string" &&
+    EXPEDITION_THEMES.includes(value as ExpeditionTheme)
+  );
 }
 
 // The stored fog clear order is a JSON id list; malformed or non-list values
