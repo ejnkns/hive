@@ -72,8 +72,6 @@ export async function loadFlowComponents(
 // so the renderer registry never sees a new identity for the same version
 // and the mounted surface survives data churn. Only a version change (a
 // definition save bumps `?v=`) is a new cache key and re-evaluates.
-const servedModuleCache = new Map<string, ServedModuleCacheEntry>();
-
 type ServedModuleCacheEntry = {
   // The factory result: the component/kinds classes keyed by registration
   // key. The classes are cached, not just the module, because served
@@ -86,6 +84,8 @@ type ServedModuleCacheEntry = {
   // unregistered by a sibling cleanup.
   refcount: number;
 };
+
+const servedModuleCache = new Map<string, ServedModuleCacheEntry>();
 
 // Loads one served module path and registers its components/kinds. The
 // evaluated factory result is cached per versioned path; the returned cleanup
