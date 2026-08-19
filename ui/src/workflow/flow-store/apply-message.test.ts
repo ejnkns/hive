@@ -16,14 +16,37 @@ function flow(id: string, name: string): FlowResponse {
 }
 
 describe("flow-store applyMessage", () => {
-  it("init replaces the whole store", () => {
+  it("init upserts a flow present in both the store and the frame", () => {
+    const next = applyMessage([flow("a", "A"), flow("b", "B")], {
+      type: "init",
+      flows: [flow("a", "Renamed")],
+    });
+    assert.deepEqual(
+      next.map((f) => f.id),
+      ["a", "b"]
+    );
+    assert.equal(next[0].label, "Renamed");
+  });
+
+  it("init keeps a flow in the store but absent from the frame", () => {
+    const next = applyMessage([flow("a", "A"), flow("b", "B")], {
+      type: "init",
+      flows: [flow("b", "B")],
+    });
+    assert.deepEqual(
+      next.map((f) => f.id),
+      ["a", "b"]
+    );
+  });
+
+  it("init adds a flow present in the frame but not yet in the store", () => {
     const next = applyMessage([flow("a", "A")], {
       type: "init",
       flows: [flow("b", "B")],
     });
     assert.deepEqual(
       next.map((f) => f.id),
-      ["b"]
+      ["a", "b"]
     );
   });
 

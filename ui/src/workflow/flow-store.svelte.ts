@@ -2,8 +2,10 @@
 // flow WebSocket. The server sends whole-flow snapshots (init on connect,
 // flow_snapshot on any flow change, flow_deleted on removal); the store applies
 // each directly and pages render from it with no per-event REST refetch. On
-// reconnect the server re-sends init, which replaces the store and closes the
-// missed-events hole during a drop.
+// reconnect the server re-sends init, which merges into the store — upserting
+// the frame's flows in place and keeping flows the frame is momentarily
+// missing — closing the missed-events hole during a drop without ever dropping
+// a flow mid-session; flow_deleted remains the only removal path.
 
 import { slugify } from "shared/slugify";
 import type { FlowResponse, FlowWsMessage } from "../flow-api.ts";

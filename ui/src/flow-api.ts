@@ -122,9 +122,10 @@ export type PatchInstanceStateResult = {
 };
 
 // Push-authoritative frames the flow WebSocket sends. The server pushes
-// self-contained whole-flow snapshots; the client replaces its store entry
-// directly instead of refetching over REST. init replaces the whole store on
-// connect and reconnect re-sync.
+// self-contained whole-flow snapshots; the client applies them to its store
+// entry directly instead of refetching over REST. init merges non-destructively
+// on connect and reconnect (upserting the frame's flows, keeping flows the
+// frame is momentarily missing); flow_deleted is the only removal path.
 export type FlowWsMessage =
   | { type: "init"; flows: FlowResponse[] }
   | { type: "flow_snapshot"; flow: FlowResponse }
