@@ -66,34 +66,22 @@ function ticketEntry(id: string, currentState: string) {
   return e;
 }
 
-// Mounts the served flow-component through the fake evaluator with charting +
-// ticket definitions and the given instances; returns the settled host and the
-// module-registry restore the caller must run in a finally.
-async function mountFlowComponent(
+// Mounts a fresh host (a new WorkflowInstances element) for the
+// flow-component class registered by mountFlowComponent — the remount half of
+// the view-state tests, simulating a class swap or page reload within the
+// same session.
+async function mountFlowComponentHost(
   instances: WorkflowInstanceEntry[],
-  config: Record<string, unknown> = {}
+  options: { flowId?: string; config?: Record<string, unknown> } = {}
 ) {
+  const flowId = options.flowId ?? "flow-1";
+  const config = options.config ?? {};
   const charting = cardDef({ id: "charting", label: "Charting" });
   const ticket = cardDef({ id: "ticket", label: "Ticket" });
-  defineFlowRenderingComponents();
-  localStorage.clear();
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () => ({ ok: true, text: async () => "" }))
-  );
-  const restore = await loadFlowComponents(
-    { "flow-component": "/api/.../flow-component" },
-    load(flowComponentModule)
-  );
   const el = await mount(
     Object.assign(new WorkflowInstances(), {
-      flowId: "flow-1",
-      flow: {
-        id: "flow-1",
-        label: "Wayfinder",
-        status: "idle",
-        config,
-      },
+      flowId,
+      flow: { id: flowId, label: "Wayfinder", status: "idle", config },
       flowComponent: "flow-component",
       workflowDefs: [charting, ticket],
       instances,
@@ -103,7 +91,61 @@ async function mountFlowComponent(
     })
   );
   await settle(shadowRootOf(el));
+  return el;
+}
+
+// Mounts the served flow-component through the fake evaluator with charting +
+// ticket definitions and the given instances; returns the settled host and the
+// module-registry restore the caller must run in a finally.
+async function mountFlowComponent(
+  instances: WorkflowInstanceEntry[],
+  config: Record<string, unknown> = {}
+) {
+  defineFlowRenderingComponents();
+  localStorage.clear();
+  sessionStorage.clear();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({ ok: true, text: async () => "" }))
+  );
+  const restore = await loadFlowComponents(
+    { "flow-component": "/api/.../flow-component" },
+    load(flowComponentModule)
+  );
+  const el = await mountFlowComponentHost(instances, { config });
   return { el, restore };
+}
+
+// Drags the second fog card (t-3) above the first (t-2) in the rendered host:
+// jsdom rects are all zeros, so per-card geometry is stubbed (first spans y
+// 0..40, second y 40..80) to make the insertion deterministic.
+async function dragSecondFogFirst(el: WorkflowInstances): Promise<void> {
+  const firstCard = queryAllDeep(el, '.fog-card[data-id="t-2"]')[0];
+  const secondCard = queryAllDeep(el, '.fog-card[data-id="t-3"]')[0];
+  const pile = firstCard?.parentElement;
+  expect(firstCard).toBeDefined();
+  expect(secondCard).toBeDefined();
+  expect(pile).toBeDefined();
+  vi.spyOn(firstCard, "getBoundingClientRect").mockReturnValue(
+    new DOMRect(0, 0, 0, 40)
+  );
+  vi.spyOn(secondCard, "getBoundingClientRect").mockReturnValue(
+    new DOMRect(0, 40, 0, 40)
+  );
+  secondCard?.dispatchEvent(
+    new MouseEvent("dragstart", { bubbles: true, composed: true })
+  );
+  pile?.dispatchEvent(
+    new MouseEvent("dragover", { bubbles: true, composed: true })
+  );
+  pile?.dispatchEvent(
+    new MouseEvent("drop", { bubbles: true, composed: true, clientY: 10 })
+  );
+  pile?.dispatchEvent(
+    new MouseEvent("dragend", { bubbles: true, composed: true })
+  );
+  await settle(shadowRootOf(el));
+  vi.restoreAllMocks();
 }
 
 function mouseEnter(): MouseEvent {
@@ -956,6 +998,211 @@ describe("wayfinder served modules", () => {
       } finally {
         vi.restoreAllMocks();
       }
+    } finally {
+      restore();
+    }
+  });
+
+  it("flow-component keeps the default table view, theme, and fog order when no view state is stored", async () => {
+    const charted = entry("c-1", "charted");
+    charted.workflowId = "charting";
+    charted.state.workflowInstanceState = { destination: "hive router" };
+    const first = ticketEntry("t-2", "fog");
+    first.state.workflowInstanceState = { brief: "metrics to Effect?" };
+    const second = ticketEntry("t-3", "fog");
+    second.state.workflowInstanceState = { brief: "reorder the map?" };
+    const { el, restore } = await mountFlowComponent([charted, first, second]);
+    try {
+      expect(queryAllDeep(el, ".map-layout").length).toBe(0);
+      expect(queryAllDeep(el, ".table").length).toBe(1);
+      expect(
+        queryAllDeep(el, ".expedition")[0]?.getAttribute("data-theme")
+      ).toBe("mountain");
+      const order = queryAllDeep(el, ".fog-card").map((card) =>
+        card.getAttribute("data-id")
+      );
+      expect(order).toEqual(["t-2", "t-3"]);
+    } finally {
+      restore();
+    }
+  });
+
+  it("flow-component persists the open map view and restores it on a fresh mount", async () => {
+    const charted = entry("c-1", "charted");
+    charted.workflowId = "charting";
+    charted.state.workflowInstanceState = { destination: "hive router" };
+    const fogTicket = ticketEntry("t-2", "fog");
+    fogTicket.state.workflowInstanceState = { brief: "metrics to Effect?" };
+    const { el, restore } = await mountFlowComponent([charted, fogTicket]);
+    try {
+      const openButton = queryAllDeep(el, ".open-map")[0] as
+        | HTMLElement
+        | undefined;
+      openButton?.click();
+      await settle(shadowRootOf(el));
+      expect(queryAllDeep(el, ".map-layout").length).toBe(1);
+      expect(sessionStorage.getItem("hive:view:flow-1:map-open")).toBe("1");
+
+      // A fresh mount within the same session restores the map view.
+      el.remove();
+      const remounted = await mountFlowComponentHost([charted, fogTicket]);
+      expect(queryAllDeep(remounted, ".map-layout").length).toBe(1);
+      expect(queryAllDeep(remounted, ".table").length).toBe(0);
+    } finally {
+      restore();
+    }
+  });
+
+  it("flow-component persists the theme override and restores it on a fresh mount", async () => {
+    const charted = entry("c-1", "charted");
+    charted.workflowId = "charting";
+    charted.state.workflowInstanceState = { destination: "hive router" };
+    const fogTicket = ticketEntry("t-2", "fog");
+    fogTicket.state.workflowInstanceState = { brief: "metrics to Effect?" };
+    const { el, restore } = await mountFlowComponent([charted, fogTicket]);
+    try {
+      const cycleButton = queryAllDeep(el, ".theme-cycle")[0] as
+        | HTMLElement
+        | undefined;
+      cycleButton?.click();
+      await settle(shadowRootOf(el));
+      expect(
+        queryAllDeep(el, ".expedition")[0]?.getAttribute("data-theme")
+      ).toBe("topo");
+      expect(sessionStorage.getItem("hive:view:flow-1:theme-override")).toBe(
+        "topo"
+      );
+
+      // A fresh mount within the same session restores the override.
+      el.remove();
+      const remounted = await mountFlowComponentHost([charted, fogTicket]);
+      expect(
+        queryAllDeep(remounted, ".expedition")[0]?.getAttribute("data-theme")
+      ).toBe("topo");
+    } finally {
+      restore();
+    }
+  });
+
+  it("flow-component keeps the config's expedition theme over a stored override", async () => {
+    const charted = entry("c-1", "charted");
+    charted.workflowId = "charting";
+    charted.state.workflowInstanceState = { destination: "hive router" };
+    const fogTicket = ticketEntry("t-2", "fog");
+    fogTicket.state.workflowInstanceState = { brief: "metrics to Effect?" };
+    const { el, restore } = await mountFlowComponent([charted, fogTicket]);
+    try {
+      // A previous mount stored a theme override.
+      const cycleButton = queryAllDeep(el, ".theme-cycle")[0] as
+        | HTMLElement
+        | undefined;
+      cycleButton?.click();
+      await settle(shadowRootOf(el));
+      expect(sessionStorage.getItem("hive:view:flow-1:theme-override")).toBe(
+        "topo"
+      );
+      el.remove();
+
+      // The config's own theme still wins when it provides one.
+      const configured = await mountFlowComponentHost([charted, fogTicket], {
+        config: { expeditionTheme: "stars" },
+      });
+      expect(
+        queryAllDeep(configured, ".expedition")[0]?.getAttribute("data-theme")
+      ).toBe("stars");
+    } finally {
+      restore();
+    }
+  });
+
+  it("flow-component persists the fog clear order and restores it on a fresh mount", async () => {
+    const charted = entry("c-1", "charted");
+    charted.workflowId = "charting";
+    charted.state.workflowInstanceState = { destination: "hive router" };
+    const first = ticketEntry("t-2", "fog");
+    first.state.workflowInstanceState = { brief: "metrics to Effect?" };
+    const second = ticketEntry("t-3", "fog");
+    second.state.workflowInstanceState = { brief: "reorder the map?" };
+    const { el, restore } = await mountFlowComponent([charted, first, second]);
+    try {
+      await dragSecondFogFirst(el);
+      expect(sessionStorage.getItem("hive:view:flow-1:fog-order")).toBe(
+        '["t-3","t-2"]'
+      );
+
+      // A fresh mount within the same session restores the clear order.
+      el.remove();
+      const remounted = await mountFlowComponentHost([charted, first, second]);
+      const order = queryAllDeep(remounted, ".fog-card").map((card) =>
+        card.getAttribute("data-id")
+      );
+      expect(order).toEqual(["t-3", "t-2"]);
+    } finally {
+      restore();
+    }
+  });
+
+  it("flow-component view state is flow-scoped: one flow's state never leaks into another", async () => {
+    const charted = entry("c-1", "charted");
+    charted.workflowId = "charting";
+    charted.state.workflowInstanceState = { destination: "hive router" };
+    const first = ticketEntry("t-2", "fog");
+    first.state.workflowInstanceState = { brief: "metrics to Effect?" };
+    const second = ticketEntry("t-3", "fog");
+    second.state.workflowInstanceState = { brief: "reorder the map?" };
+    const { el, restore } = await mountFlowComponent([charted, first, second]);
+    try {
+      // Set all three pieces of view state for flow-1.
+      const cycleButton = queryAllDeep(el, ".theme-cycle")[0] as
+        | HTMLElement
+        | undefined;
+      cycleButton?.click();
+      await dragSecondFogFirst(el);
+      const openButton = queryAllDeep(el, ".open-map")[0] as
+        | HTMLElement
+        | undefined;
+      openButton?.click();
+      await settle(shadowRootOf(el));
+      expect(sessionStorage.getItem("hive:view:flow-1:map-open")).toBe("1");
+      expect(sessionStorage.getItem("hive:view:flow-1:theme-override")).toBe(
+        "topo"
+      );
+      expect(sessionStorage.getItem("hive:view:flow-1:fog-order")).toBe(
+        '["t-3","t-2"]'
+      );
+
+      // A different flow mounts with its own defaults: nothing leaks over.
+      el.remove();
+      const other = await mountFlowComponentHost([charted, first, second], {
+        flowId: "flow-2",
+      });
+      expect(queryAllDeep(other, ".map-layout").length).toBe(0);
+      expect(queryAllDeep(other, ".table").length).toBe(1);
+      expect(
+        queryAllDeep(other, ".expedition")[0]?.getAttribute("data-theme")
+      ).toBe("mountain");
+      const otherOrder = queryAllDeep(other, ".fog-card").map((card) =>
+        card.getAttribute("data-id")
+      );
+      expect(otherOrder).toEqual(["t-2", "t-3"]);
+
+      // flow-1 still restores its own state on a fresh mount.
+      other.remove();
+      const again = await mountFlowComponentHost([charted, first, second]);
+      expect(queryAllDeep(again, ".map-layout").length).toBe(1);
+      expect(
+        queryAllDeep(again, ".expedition")[0]?.getAttribute("data-theme")
+      ).toBe("topo");
+      // The map view is open, so step back to the table to see the tray.
+      const backButton = queryAllDeep(again, ".back-link")[0] as
+        | HTMLElement
+        | undefined;
+      backButton?.click();
+      await settle(shadowRootOf(again));
+      const againOrder = queryAllDeep(again, ".fog-card").map((card) =>
+        card.getAttribute("data-id")
+      );
+      expect(againOrder).toEqual(["t-3", "t-2"]);
     } finally {
       restore();
     }

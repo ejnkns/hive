@@ -14,6 +14,7 @@
  * (expedition-map, frontier-board, build-pipeline) remain the fallback layer
  * if this component fails to load. */
 
+import type { PropertyValues } from "lit";
 import type {
   ChatMessage,
   FlowComponentDeps,
@@ -770,6 +771,46 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
     // property (a re-render on dragstart would cancel the drag).
     private draggedFogId: string | undefined;
 
+    // The flow id whose durable view state has been restored into this
+    // instance; undefined until the flow prop arrives, so a reused instance
+    // re-restores when the mount host points it at a different flow.
+    private viewStateFlowId: string | undefined;
+
+    // Restore the durable view state once per flow id, before the first
+    // render: the mount host assigns the flow prop before this first update
+    // runs, so the restore lands before the user ever sees a default frame.
+    protected override willUpdate(
+      _changedProperties: PropertyValues<this>
+    ): void {
+      const flow = this.flow;
+      if (flow === undefined || flow.id === this.viewStateFlowId) return;
+      this.viewStateFlowId = flow.id;
+      this.restoreViewState(flow);
+    }
+
+    // The durable view state (map open, theme override, fog clear order)
+    // lives in sessionStorage keyed by flow id: the mount host can tear the
+    // element down on a class swap or remount, so the user's view must
+    // survive in storage, not in fields. Writes happen at the mutation
+    // sites; restores read the keys back before the first render.
+    private restoreViewState(flow: FlowViewProps["flow"]): void {
+      this.mapOpen =
+        sessionStorage.getItem(viewStateKey(flow.id, "map-open")) === "1";
+      this.themeOverride = storedThemeOverride(
+        flow.config,
+        sessionStorage.getItem(viewStateKey(flow.id, "theme-override"))
+      );
+      this.fogOrder = storedFogOrder(
+        sessionStorage.getItem(viewStateKey(flow.id, "fog-order"))
+      );
+    }
+
+    private persistViewState(suffix: string, value: string): void {
+      const flowId = this.flow?.id;
+      if (flowId === undefined) return;
+      sessionStorage.setItem(viewStateKey(flowId, suffix), value);
+    }
+
     private focusTimer: ReturnType<typeof setTimeout> | undefined;
 
     private get theme(): ExpeditionTheme {
@@ -779,8 +820,9 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
     // Dev-only: cycle the expedition skin without editing the flow config.
     private cycleTheme() {
       const index = EXPEDITION_THEMES.indexOf(this.theme);
-      this.themeOverride =
-        EXPEDITION_THEMES[(index + 1) % EXPEDITION_THEMES.length];
+      const next = EXPEDITION_THEMES[(index + 1) % EXPEDITION_THEMES.length];
+      this.themeOverride = next;
+      this.persistViewState("theme-override", next);
     }
 
     private get model(): WayfinderMap {
@@ -855,7 +897,9 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
             middle: rect.top + rect.height / 2,
           };
         });
-      this.fogOrder = fogDropOrder(this.draggedFogId, remaining, event.clientY);
+      const order = fogDropOrder(this.draggedFogId, remaining, event.clientY);
+      this.fogOrder = order;
+      this.persistViewState("fog-order", JSON.stringify(order));
     }
 
     private onFogDragEnd(event: DragEvent) {
@@ -1402,10 +1446,12 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
 
     private openMap() {
       this.mapOpen = true;
+      this.persistViewState("map-open", "1");
     }
 
     private closeMap() {
       this.mapOpen = false;
+      this.persistViewState("map-open", "0");
     }
   }
 
@@ -1440,9 +1486,56 @@ function cardRotation(index: number): string {
 // The click-focus pulse plays for ~1s twice, then the focus state clears.
 const FOCUS_CLEAR_MS = 2_000;
 
+// The durable view-state keys are session-scoped per flow id: a remount or a
+// page reload within the session restores the user's map view, theme
+// override, and fog clear order, and one flow's state never leaks into
+// another flow's keys.
+function viewStateKey(flowId: string, suffix: string): string {
+  return `hive:view:${flowId}:${suffix}`;
+}
+
+// The stored theme override restores only when the flow config does not
+// itself provide the expedition theme: the override is a dev/testing
+// affordance, so a saved override wins over the default, but the config's
+// own theme still wins when it provides one.
+function storedThemeOverride(
+  config: Record<string, unknown>,
+  stored: string | null
+): ExpeditionTheme | undefined {
+  const configured = config.expeditionTheme;
+  if (
+    typeof configured === "string" &&
+    EXPEDITION_THEMES.includes(configured as ExpeditionTheme)
+  ) {
+    return undefined;
+  }
+  if (stored === null) return undefined;
+  if (!EXPEDITION_THEMES.includes(stored as ExpeditionTheme)) return undefined;
+  return stored as ExpeditionTheme;
+}
+
+// The stored fog clear order is a JSON id list; malformed or non-list values
+// fall back to the natural order (a missing or empty list is the default —
+// entries absent from the list keep their natural relative order).
+function storedFogOrder(stored: string | null): string[] {
+  if (stored === null) return [];
+  try {
+    const parsed: unknown = JSON.parse(stored);
+    if (
+      Array.isArray(parsed) &&
+      parsed.every((value: unknown) => typeof value === "string")
+    ) {
+      return parsed as string[];
+    }
+  } catch {
+    // Malformed storage falls back to the natural order.
+  }
+  return [];
+}
+
 // Orders the fog tickets by the stored clear-order id list; entries absent
 // from the list keep their natural relative order. The list is session-local
-// only — it survives re-renders but is never persisted.
+// — it survives re-renders and persists in sessionStorage keyed by flow id.
 function inClearOrder<T extends { id: string }>(
   items: readonly T[],
   order: readonly string[]
