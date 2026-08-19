@@ -32,7 +32,6 @@ import {
 } from "./wayfinder-map.ts";
 import type { ExpeditionTheme } from "./wayfinder-themes.ts";
 import {
-  EXPEDITION_THEMES,
   resolveTheme,
   THEME_ACCENT,
   THEME_GLYPHS,
@@ -60,7 +59,9 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       onFlowAction: { attribute: false },
       onCreate: { attribute: false },
       mapOpen: { attribute: false },
-      themeOverride: { attribute: false },
+      hoverId: { attribute: false },
+      focusId: { attribute: false },
+      fogOrder: { attribute: false },
     };
 
     static styles = [
@@ -192,18 +193,6 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
           background: var(--error);
           color: white;
           border-color: transparent;
-        }
-        .theme-cycle {
-          font-size: 0.5625rem;
-          height: 24px;
-          padding: 0 0.5rem;
-          border-radius: 4px;
-          border: 1px dashed var(--wf-accent);
-          background: transparent;
-          color: var(--wf-accent);
-          cursor: pointer;
-          text-transform: uppercase;
-          letter-spacing: 0.06em;
         }
 
         .table {
@@ -365,6 +354,40 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         .card:hover {
           transform: rotate(0deg) translateY(-2px);
         }
+        .card.hl,
+        .crate.hl,
+        .journal .entry.hl {
+          border-color: var(--wf-accent);
+          box-shadow:
+            0 0 0 2px color-mix(in srgb, var(--wf-accent) 60%, transparent),
+            0 6px 14px rgba(0, 0, 0, 0.35);
+        }
+        .card.focus,
+        .crate.focus,
+        .journal .entry.focus {
+          animation: cardglow 1s ease-in-out 2;
+        }
+        @keyframes cardglow {
+          0%, 100% {
+            box-shadow:
+              0 0 0 0 color-mix(in srgb, var(--wf-accent) 0%, transparent);
+          }
+          50% {
+            box-shadow:
+              0 0 0 6px color-mix(in srgb, var(--wf-accent) 55%, transparent);
+          }
+        }
+        .card,
+        .crate,
+        .journal .entry {
+          cursor: pointer;
+        }
+        .card:focus-visible,
+        .crate:focus-visible,
+        .journal .entry:focus-visible {
+          outline: 2px solid color-mix(in srgb, var(--wf-accent) 55%, transparent);
+          outline-offset: 1px;
+        }
         .card .t {
           font-weight: 600;
           font-size: 0.84rem;
@@ -458,6 +481,10 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
             var(--wf-paper-edge)
           );
           border: 2px dashed var(--wf-body);
+          cursor: grab;
+        }
+        .fog-card.dragging {
+          opacity: 0.4;
         }
         .fog-title {
           display: flex;
@@ -596,6 +623,22 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
           flex: 1;
           min-height: 0;
         }
+        .marker {
+          transition: transform 0.15s ease, opacity 0.15s ease;
+          transform-box: fill-box;
+          transform-origin: center;
+          cursor: pointer;
+        }
+        .marker.hl {
+          transform: scale(1.7);
+        }
+        .marker.focus {
+          animation: markerpulse 1s ease-in-out 2;
+        }
+        @keyframes markerpulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(2); }
+        }
       `,
       MapCanvas.styles,
     ];
@@ -615,21 +658,108 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
     declare onFlowAction: FlowViewProps["onFlowAction"];
     declare onCreate: FlowViewProps["onCreate"];
     declare mapOpen: boolean;
-    declare themeOverride: ExpeditionTheme | undefined;
+    declare hoverId: string | undefined;
+    declare focusId: string | undefined;
+    declare fogOrder: string[];
 
-    private get theme(): ExpeditionTheme {
-      return this.themeOverride ?? resolveTheme(this.flow.config);
+    constructor() {
+      super();
+      this.fogOrder = [];
     }
 
-    // Dev-only: cycle the expedition skin without editing the flow config.
-    private cycleTheme() {
-      const index = EXPEDITION_THEMES.indexOf(this.theme);
-      this.themeOverride =
-        EXPEDITION_THEMES[(index + 1) % EXPEDITION_THEMES.length];
+    // The fog card currently being dragged — deliberately not a reactive
+    // property (a re-render on dragstart would cancel the drag).
+    private draggedFogId: string | undefined;
+
+    private focusTimer: ReturnType<typeof setTimeout> | undefined;
+
+    private get theme(): ExpeditionTheme {
+      return resolveTheme(this.flow.config);
     }
 
     private get model(): WayfinderMap {
       return deriveWayfinderMap(this.entries);
+    }
+
+    // Hover sync is one reactive id: every surfaced element (card, node,
+    // entry, marker) renders the .hl class when its data-id is the hovered
+    // id, so the paired elements light up together in both views.
+    private hover(id: string | undefined) {
+      this.hoverId = id;
+    }
+
+    // Click focus lights the target's .hl too, pulses it via .focus, and
+    // clears itself after a beat (the timer is replaced on each new focus).
+    private setFocus(id: string) {
+      this.hoverId = id;
+      this.focusId = id;
+      if (this.focusTimer !== undefined) clearTimeout(this.focusTimer);
+      this.focusTimer = setTimeout(() => {
+        this.focusId = undefined;
+        this.hoverId = undefined;
+      }, FOCUS_CLEAR_MS);
+    }
+
+    // Enter/Space focus an element the same way a click does; focus/blur
+    // already mirror hover through the @focus/@blur listeners.
+    private focusFromKey(event: KeyboardEvent, id: string) {
+      if (event.key === "Enter" || event.key === " ") this.setFocus(id);
+    }
+
+    // The hl/focus class suffix shared by every card-family surface.
+    private hotClass(id: string): string {
+      if (this.focusId === id) return " hl focus";
+      if (this.hoverId === id) return " hl";
+      return "";
+    }
+
+    // The fog tray's drag-to-reorder: the dragged id stays a plain field so
+    // dragstart never re-renders (which would cancel the drag); the .dragging
+    // class is added imperatively and removed on dragend.
+    private onFogDragStart(event: DragEvent) {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const card = target.closest(".fog-card");
+      if (card === null) return;
+      const id = card.getAttribute("data-id");
+      if (id === null) return;
+      this.draggedFogId = id;
+      card.classList.add("dragging");
+      event.dataTransfer?.setData?.("text/plain", id);
+    }
+
+    private onFogDragOver(event: DragEvent) {
+      event.preventDefault();
+    }
+
+    // On drop, the dragged id re-enters before the first remaining card whose
+    // vertical middle sits below the pointer, and the tray re-renders from
+    // the new fogOrder id-list.
+    private onFogDrop(event: DragEvent) {
+      event.preventDefault();
+      if (this.draggedFogId === undefined) return;
+      const pile = event.currentTarget;
+      if (!(pile instanceof Element)) return;
+      const remaining = [...pile.querySelectorAll(".fog-card")]
+        .filter((card) => card.getAttribute("data-id") !== this.draggedFogId)
+        .map((card) => {
+          const rect = card.getBoundingClientRect();
+          return {
+            id: card.getAttribute("data-id") ?? "",
+            middle: rect.top + rect.height / 2,
+          };
+        });
+      this.fogOrder = fogDropOrder(this.draggedFogId, remaining, event.clientY);
+    }
+
+    private onFogDragEnd(event: DragEvent) {
+      const pile = event.currentTarget;
+      if (pile instanceof Element) {
+        for (const card of pile.querySelectorAll(".fog-card.dragging")) {
+          card.classList.remove("dragging");
+        }
+      }
+      this.draggedFogId = undefined;
     }
 
     render() {
@@ -664,6 +794,10 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
           model,
           theme,
           onClose: () => this.closeMap(),
+          hoverId: this.hoverId,
+          focusId: this.focusId,
+          onHover: (id) => this.hover(id),
+          onFocus: (id) => this.setFocus(id),
         }).render()}
       </div>`;
     }
@@ -676,14 +810,6 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
           <span class="status">${this.flow.status}</span>
         </div>
         <div class="actions">
-          <button
-            class="theme-cycle"
-            type="button"
-            title="dev: cycle the expedition theme"
-            @click=${this.cycleTheme}
-          >
-            ${this.theme}
-          </button>
           ${this.availableFlowActions.map((action) => {
             const onClick =
               action.createInstance !== undefined
@@ -712,7 +838,19 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         <div class="pile">
           ${charting.map((entry, index) => {
             const destination = entry.state.workflowInstanceState.destination;
-            return html`<div class="card" style=${`--rot:${cardRotation(index)}`}>
+            return html`<div
+              class="card${this.hotClass("base")}"
+              style=${`--rot:${cardRotation(index)}`}
+              data-id="base"
+              tabindex="0"
+              @mouseenter=${() => this.hover("base")}
+              @mouseleave=${() => this.hover(undefined)}
+              @focus=${() => this.hover("base")}
+              @blur=${() => this.hover(undefined)}
+              @click=${() => this.setFocus("base")}
+              @keydown=${(event: KeyboardEvent) =>
+                this.focusFromKey(event, "base")}
+            >
               <div class="lbl">${entry.state.currentState}</div>
               <div class="t">${
                 typeof destination === "string" && destination !== ""
@@ -742,16 +880,25 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       return html`<div class="station">
         <h2 class="station-head">On expedition</h2>
         <div class="pile">
-          ${resolving.map(
-            (
-              entry,
-              index
-            ) => html`<div class="card" style=${`--rot:${cardRotation(index)}`}>
+          ${resolving.map((entry, index) => {
+            const id = entry.id;
+            return html`<div
+              class="card${this.hotClass(id)}"
+              style=${`--rot:${cardRotation(index)}`}
+              data-id=${id}
+              tabindex="0"
+              @mouseenter=${() => this.hover(id)}
+              @mouseleave=${() => this.hover(undefined)}
+              @focus=${() => this.hover(id)}
+              @blur=${() => this.hover(undefined)}
+              @click=${() => this.setFocus(id)}
+              @keydown=${(event: KeyboardEvent) => this.focusFromKey(event, id)}
+            >
               <div class="lbl">${resolvingLabel(entry.state.currentState)}</div>
               <div class="t">${ticketTitle(entry)}</div>
               ${this.renderActions(entry)} ${this.renderChat(entry)}
-            </div>`
-          )}
+            </div>`;
+          })}
           ${
             resolving.length === 0
               ? html`<div class="empty">Nothing in flight.</div>`
@@ -836,7 +983,19 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       const question =
         typeof state.question === "string" ? state.question : undefined;
       const type = typeof state.type === "string" ? state.type : undefined;
-      return html`<div class="card" style=${`--rot:${cardRotation(index)}`}>
+      const id = entry.id;
+      return html`<div
+        class="card${this.hotClass(id)}"
+        style=${`--rot:${cardRotation(index)}`}
+        data-id=${id}
+        tabindex="0"
+        @mouseenter=${() => this.hover(id)}
+        @mouseleave=${() => this.hover(undefined)}
+        @focus=${() => this.hover(id)}
+        @blur=${() => this.hover(undefined)}
+        @click=${() => this.setFocus(id)}
+        @keydown=${(event: KeyboardEvent) => this.focusFromKey(event, id)}
+      >
         <div class="t">${title}</div>
         ${
           question !== undefined && question !== ""
@@ -853,10 +1012,16 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
     }
 
     private renderFogTray() {
-      const fog = this.ticketsInState("fog");
+      const fog = inClearOrder(this.ticketsInState("fog"), this.fogOrder);
       return html`<div class="station">
         <h2 class="station-head">The fog tray</h2>
-        <div class="pile">
+        <div
+          class="pile"
+          @dragstart=${this.onFogDragStart}
+          @dragover=${this.onFogDragOver}
+          @drop=${this.onFogDrop}
+          @dragend=${this.onFogDragEnd}
+        >
           ${fog.map((entry, index) => this.renderFogCard(entry, index))}
           ${
             fog.length === 0
@@ -871,7 +1036,20 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       entry: FlowViewProps["entries"][number],
       index: number
     ) {
-      return html`<div class="card fog-card" style=${`--rot:${cardRotation(index)}`}>
+      const id = entry.id;
+      return html`<div
+        class="card fog-card${this.hotClass(id)}"
+        style=${`--rot:${cardRotation(index)}`}
+        data-id=${id}
+        draggable="true"
+        tabindex="0"
+        @mouseenter=${() => this.hover(id)}
+        @mouseleave=${() => this.hover(undefined)}
+        @focus=${() => this.hover(id)}
+        @blur=${() => this.hover(undefined)}
+        @click=${() => this.setFocus(id)}
+        @keydown=${(event: KeyboardEvent) => this.focusFromKey(event, id)}
+      >
         <div class="fog-title"><span class="q">?</span><span class="t">${ticketTitle(entry)}</span></div>
         <span class="tag">needs clarity</span>
         ${this.renderActions(entry)}
@@ -883,12 +1061,23 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       return html`<div class="station">
         <h2 class="station-head">The journal</h2>
         <div class="journal">
-          ${closed.map(
-            (entry) => html`<div class="entry">
+          ${closed.map((entry) => {
+            const id = entry.id;
+            return html`<div
+              class="entry${this.hotClass(id)}"
+              data-id=${id}
+              tabindex="0"
+              @mouseenter=${() => this.hover(id)}
+              @mouseleave=${() => this.hover(undefined)}
+              @focus=${() => this.hover(id)}
+              @blur=${() => this.hover(undefined)}
+              @click=${() => this.setFocus(id)}
+              @keydown=${(event: KeyboardEvent) => this.focusFromKey(event, id)}
+            >
               <span class="cairn">▴</span>
               <span class="txt">${ticketTitle(entry)}</span>
-            </div>`
-          )}
+            </div>`;
+          })}
           ${
             closed.length === 0
               ? html`<div class="empty">No decisions recorded yet.</div>`
@@ -930,26 +1119,44 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
               </div>`
               : nothing
           }
-          ${builds.map(
-            (
-              entry,
-              index
-            ) => html`<div class="crate" style=${`--rot:${cardRotation(index)}`}>
+          ${builds.map((entry, index) => {
+            const id = entry.id;
+            return html`<div
+              class="crate${this.hotClass(id)}"
+              style=${`--rot:${cardRotation(index)}`}
+              data-id=${id}
+              tabindex="0"
+              @mouseenter=${() => this.hover(id)}
+              @mouseleave=${() => this.hover(undefined)}
+              @focus=${() => this.hover(id)}
+              @blur=${() => this.hover(undefined)}
+              @click=${() => this.setFocus(id)}
+              @keydown=${(event: KeyboardEvent) => this.focusFromKey(event, id)}
+            >
               <div class="lbl">build · ${entry.state.currentState}</div>
               <div class="t">The implementation phase</div>
               ${this.renderActions(entry)} ${this.renderChat(entry)}
-            </div>`
-          )}
-          ${buildItems.map(
-            (
-              entry,
-              index
-            ) => html`<div class="crate" style=${`--rot:${cardRotation(index)}`}>
+            </div>`;
+          })}
+          ${buildItems.map((entry, index) => {
+            const id = entry.id;
+            return html`<div
+              class="crate${this.hotClass(id)}"
+              style=${`--rot:${cardRotation(index)}`}
+              data-id=${id}
+              tabindex="0"
+              @mouseenter=${() => this.hover(id)}
+              @mouseleave=${() => this.hover(undefined)}
+              @focus=${() => this.hover(id)}
+              @blur=${() => this.hover(undefined)}
+              @click=${() => this.setFocus(id)}
+              @keydown=${(event: KeyboardEvent) => this.focusFromKey(event, id)}
+            >
               <div class="lbl">gear · build item</div>
               <div class="t">${implementationTitle(entry)}</div>
               ${this.renderActions(entry)}
-            </div>`
-          )}
+            </div>`;
+          })}
           ${
             hasAny
               ? nothing
@@ -964,12 +1171,23 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       return html`<div class="station">
         <h2 class="station-head">Do not enter</h2>
         <div class="pile">
-          ${outOfScope.map(
-            (entry) => html`<div class="card">
+          ${outOfScope.map((entry) => {
+            const id = entry.id;
+            return html`<div
+              class="card${this.hotClass(id)}"
+              data-id=${id}
+              tabindex="0"
+              @mouseenter=${() => this.hover(id)}
+              @mouseleave=${() => this.hover(undefined)}
+              @focus=${() => this.hover(id)}
+              @blur=${() => this.hover(undefined)}
+              @click=${() => this.setFocus(id)}
+              @keydown=${(event: KeyboardEvent) => this.focusFromKey(event, id)}
+            >
               <div class="t">⊘ ${ticketTitle(entry)}</div>
               <span class="stamp">ruled out</span>
-            </div>`
-          )}
+            </div>`;
+          })}
           ${
             outOfScope.length === 0
               ? html`<div class="empty">Nothing ruled out.</div>`
@@ -1017,7 +1235,18 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         }
         ${model.nodes
           .filter((node) => node.kind !== "base" && node.kind !== "summit")
-          .map((node) => drawing.drawMarker(node, sx, sy, theme))}
+          .map((node) => {
+            const id = node.id;
+            return drawing.drawMarker(node, sx, sy, theme, {
+              className: `marker${this.hotClass(id)}`,
+              onEnter: () => this.hover(id),
+              onLeave: () => this.hover(undefined),
+              onClick: () => this.setFocus(id),
+              onFocus: () => this.hover(id),
+              onBlur: () => this.hover(undefined),
+              onKeydown: (event) => this.focusFromKey(event, id),
+            });
+          })}
       </svg>`;
     }
 
@@ -1045,6 +1274,46 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
 function cardRotation(index: number): string {
   const magnitude = 0.4 + ((index * 3) % 4) * 0.3;
   return `${index % 2 === 0 ? -magnitude : magnitude}deg`;
+}
+
+// The click-focus pulse plays for ~1s twice, then the focus state clears.
+const FOCUS_CLEAR_MS = 2_000;
+
+// Orders the fog tickets by the stored clear-order id list; entries absent
+// from the list keep their natural relative order. The list is session-local
+// only — it survives re-renders but is never persisted.
+function inClearOrder<T extends { id: string }>(
+  items: readonly T[],
+  order: readonly string[]
+): T[] {
+  const rank = new Map<string, number>();
+  order.forEach((id, index) => {
+    rank.set(id, index);
+  });
+  return [...items].sort((a, b) => {
+    const ar = rank.get(a.id);
+    const br = rank.get(b.id);
+    if (ar === undefined && br === undefined) return 0;
+    if (ar === undefined) return 1;
+    if (br === undefined) return -1;
+    return ar - br;
+  });
+}
+
+// The new clear order after a fog drop: the dragged id re-enters before the
+// first remaining card whose vertical middle sits below the pointer, or at
+// the pile's end when the drop lands past every card.
+function fogDropOrder(
+  draggedId: string,
+  remaining: ReadonlyArray<{ id: string; middle: number }>,
+  dropY: number
+): string[] {
+  const rest = remaining.map((card) => card.id);
+  const before = remaining.find((card) => dropY < card.middle);
+  const at = before === undefined ? rest.length : rest.indexOf(before.id);
+  const next = [...rest];
+  next.splice(at, 0, draggedId);
+  return next;
 }
 
 // The first non-empty line of a markdown file, for the depot crates' titles.

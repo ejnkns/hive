@@ -17,6 +17,10 @@ export type MapCanvasProps = {
   model: WayfinderMap;
   theme: ExpeditionTheme;
   onClose: () => void;
+  hoverId: string | undefined;
+  focusId: string | undefined;
+  onHover: (id: string | undefined) => void;
+  onFocus: (id: string) => void;
 };
 
 export function createMapCanvas(lit: FlowComponentDeps) {
@@ -75,16 +79,47 @@ export function createMapCanvas(lit: FlowComponentDeps) {
         cursor: pointer;
         z-index: 3;
       }
+      .node.hl {
+        transform: translate(-50%, -50%) scale(1.18);
+      }
+      .node.hl .cap {
+        color: #ffffff;
+      }
+      .node.focus {
+        animation: focuspulse 1s ease-in-out 2;
+      }
+      @keyframes focuspulse {
+        0%, 100% { transform: translate(-50%, -50%) scale(1); }
+        50% { transform: translate(-50%, -50%) scale(1.45); }
+      }
+      .node:focus-visible {
+        outline: 2px solid rgba(91, 192, 232, 0.45);
+        border-radius: 8px;
+      }
       .node .glyph {
         line-height: 1;
       }
       .node .cap {
+        display: none;
         font-size: 0.62rem;
         color: #e6edf3;
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
         margin-top: 3px;
         max-width: 17ch;
         line-height: 1.2;
+      }
+      .node .tag {
+        display: none;
+      }
+      .node.hl .cap,
+      .node.focus .cap,
+      .node:focus-within .cap {
+        display: block;
+      }
+      .node.hl .tag,
+      .node.focus .tag,
+      .node:focus-within .tag {
+        display: inline-block;
       }
       .node.summit .glyph {
         font-size: 2.3rem;
@@ -166,6 +201,23 @@ export function createMapCanvas(lit: FlowComponentDeps) {
         border: 1px solid transparent;
         cursor: pointer;
       }
+      .panel .entry.hl {
+        background: rgba(91, 192, 232, 0.1);
+        border-color: rgba(91, 192, 232, 0.3);
+      }
+      .panel .entry.hl .t {
+        color: #ffffff;
+      }
+      .panel .entry.focus {
+        animation: entrypulse 1s ease-in-out 2;
+      }
+      @keyframes entrypulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.06); }
+      }
+      .panel .entry:focus-visible {
+        outline: 1px solid rgba(91, 192, 232, 0.5);
+      }
       .panel .entry .t {
         font-weight: 600;
         color: var(--text);
@@ -194,6 +246,25 @@ export function createMapCanvas(lit: FlowComponentDeps) {
 
     constructor(props: MapCanvasProps) {
       this.props = props;
+    }
+
+    // The hl/focus class suffix: a focused element stays lit until its pulse
+    // clears, and hovering lights the counterpart in the other surface.
+    private hotClass(
+      id: string,
+      hoverId: string | undefined,
+      focusId: string | undefined
+    ): string {
+      if (focusId === id) return " hl focus";
+      if (hoverId === id) return " hl";
+      return "";
+    }
+
+    // Enter/Space focus an element the same way a click does, so keyboard
+    // navigation gets the pulse too.
+    private keydownFocus(event: KeyboardEvent, id: string) {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      this.props.onFocus(id);
     }
 
     render() {
@@ -253,10 +324,19 @@ export function createMapCanvas(lit: FlowComponentDeps) {
         node.kind === "fog"
           ? html`<span class="tag">needs clarity</span>`
           : nothing;
+      const { hoverId, focusId, onHover, onFocus } = this.props;
+      const id = node.id;
       return html`<div
-        class="node ${node.kind}"
+        class="node ${node.kind}${this.hotClass(id, hoverId, focusId)}"
         style=${`left:${node.x}%;top:${node.y}%`}
-        data-id=${node.id}
+        data-id=${id}
+        tabindex="0"
+        @mouseenter=${() => onHover(id)}
+        @mouseleave=${() => onHover(undefined)}
+        @focus=${() => onHover(id)}
+        @blur=${() => onHover(undefined)}
+        @click=${() => onFocus(id)}
+        @keydown=${(event: KeyboardEvent) => this.keydownFocus(event, id)}
       >
         <div class="glyph">
           ${
@@ -273,11 +353,23 @@ export function createMapCanvas(lit: FlowComponentDeps) {
     }
 
     private renderPanel(model: WayfinderMap) {
+      const { hoverId, focusId, onHover, onFocus } = this.props;
       return html`${model.groups.map(
         (group) => html`<div class="group">
           <div class="gh">${group.label}</div>
           ${group.nodes.map(
-            (node) => html`<div class="entry" data-id=${node.id}>
+            (node) => html`<div
+              class="entry${this.hotClass(node.id, hoverId, focusId)}"
+              data-id=${node.id}
+              tabindex="0"
+              @mouseenter=${() => onHover(node.id)}
+              @mouseleave=${() => onHover(undefined)}
+              @focus=${() => onHover(node.id)}
+              @blur=${() => onHover(undefined)}
+              @click=${() => onFocus(node.id)}
+              @keydown=${(event: KeyboardEvent) =>
+                this.keydownFocus(event, node.id)}
+            >
               <div class="t">${node.title}</div>
               <div class="meta">${node.kind} · ${node.meta}</div>
             </div>`

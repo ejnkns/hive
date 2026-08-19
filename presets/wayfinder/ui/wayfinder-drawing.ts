@@ -62,6 +62,18 @@ export function trailNodes(nodes: WayfinderNode[]): WayfinderNode[] {
   );
 }
 
+// Optional interactivity for a marker circle: the mini-map wires these from
+// the entry's hover/focus state so the drawing builders stay pure.
+export type MarkerInteractions = {
+  className?: string;
+  onEnter?: () => void;
+  onLeave?: () => void;
+  onClick?: () => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
+  onKeydown?: (event: KeyboardEvent) => void;
+};
+
 // Binds the svg/nothing template tags once and returns the shared draw
 // methods. Theme-dependent methods take the theme as a parameter — the entry
 // and the map view both call these, so component state never leaks in.
@@ -234,7 +246,8 @@ export function createWayfinderDrawing(deps: FlowComponentDeps) {
       node: WayfinderNode,
       sx: number,
       sy: number,
-      theme: ExpeditionTheme
+      theme: ExpeditionTheme,
+      interactions: MarkerInteractions = {}
     ) {
       const colors: Record<string, string> = {
         decision: "#3fb950",
@@ -247,6 +260,7 @@ export function createWayfinderDrawing(deps: FlowComponentDeps) {
       const fill = colors[node.kind] ?? "#9aa4ad";
       const radius = node.kind === "fog" ? 5 : 4;
       const isFog = node.kind === "fog";
+      const interactive = interactions.onClick !== undefined;
       return svg`<circle
         cx=${node.x * sx}
         cy=${node.y * sy}
@@ -255,6 +269,14 @@ export function createWayfinderDrawing(deps: FlowComponentDeps) {
         stroke=${isFog ? "#f0ead9" : "none"}
         stroke-width=${isFog ? "1.6" : "0"}
         data-id=${node.id}
+        class=${interactions.className ?? "marker"}
+        tabindex=${interactive ? "0" : undefined}
+        @mouseenter=${interactions.onEnter}
+        @mouseleave=${interactions.onLeave}
+        @click=${interactions.onClick}
+        @focus=${interactions.onFocus}
+        @blur=${interactions.onBlur}
+        @keydown=${interactions.onKeydown}
       ></circle>`;
     },
   };

@@ -4,6 +4,7 @@
 // surface. These are behavior tests over the actual shipped components.
 
 import { describe, expect, it, vi } from "vitest";
+import type { WorkflowInstanceEntry } from "workflow-engine/create-flow-runtime";
 import type {
   FlowComponentDeps,
   FlowComponentRegistrations,
@@ -17,7 +18,13 @@ import { defineFlowRenderingComponents } from "../define-components.ts";
 import type { FlowComponentEvaluator } from "../load-flow-components.ts";
 import { loadFlowComponents } from "../load-flow-components.ts";
 import { cardDef, entry } from "../test-fixtures.ts";
-import { mount, queryAllDeep, settle, shadowRootOf } from "../test-utils.ts";
+import {
+  click,
+  mount,
+  queryAllDeep,
+  settle,
+  shadowRootOf,
+} from "../test-utils.ts";
 import { WorkflowInstances } from "./workflow-instances.ts";
 
 // The preset modules' default export IS the served factory; the fake
@@ -57,6 +64,54 @@ function ticketEntry(id: string, currentState: string) {
   const e = entry(id, currentState);
   e.workflowId = "ticket";
   return e;
+}
+
+// Mounts the served flow-component through the fake evaluator with charting +
+// ticket definitions and the given instances; returns the settled host and the
+// module-registry restore the caller must run in a finally.
+async function mountFlowComponent(
+  instances: WorkflowInstanceEntry[],
+  config: Record<string, unknown> = {}
+) {
+  const charting = cardDef({ id: "charting", label: "Charting" });
+  const ticket = cardDef({ id: "ticket", label: "Ticket" });
+  defineFlowRenderingComponents();
+  localStorage.clear();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({ ok: true, text: async () => "" }))
+  );
+  const restore = await loadFlowComponents(
+    { "flow-component": "/api/.../flow-component" },
+    load(flowComponentModule)
+  );
+  const el = await mount(
+    Object.assign(new WorkflowInstances(), {
+      flowId: "flow-1",
+      flow: {
+        id: "flow-1",
+        label: "Wayfinder",
+        status: "idle",
+        config,
+      },
+      flowComponent: "flow-component",
+      workflowDefs: [charting, ticket],
+      instances,
+      customKinds: [],
+      availableFlowActions: [],
+      persistedOutputs: {},
+    })
+  );
+  await settle(shadowRootOf(el));
+  return { el, restore };
+}
+
+function mouseEnter(): MouseEvent {
+  return new MouseEvent("mouseenter", { bubbles: true, composed: true });
+}
+
+function mouseLeave(): MouseEvent {
+  return new MouseEvent("mouseleave", { bubbles: true, composed: true });
 }
 
 describe("wayfinder served modules", () => {
@@ -552,9 +607,6 @@ describe("wayfinder served modules", () => {
 
       // Header: expedition identity + flow actions.
       expect(queryAllDeep(el, ".title")[0]?.textContent).toBe("Wayfinder");
-      expect(queryAllDeep(el, ".theme-cycle")[0]?.textContent?.trim()).toBe(
-        "mountain"
-      );
       const actionLabels = queryAllDeep(el, ".actions button").map((button) =>
         button.textContent?.trim()
       );
@@ -672,6 +724,184 @@ describe("wayfinder served modules", () => {
       await settle(shadowRootOf(el));
       expect(queryAllDeep(el, ".map-layout").length).toBe(0);
       expect(queryAllDeep(el, ".table").length).toBe(1);
+    } finally {
+      restore();
+    }
+  });
+
+  it("flow-component syncs hover between table cards and mini-map markers, both directions", async () => {
+    const charted = entry("c-1", "charted");
+    charted.workflowId = "charting";
+    charted.state.workflowInstanceState = { destination: "hive router" };
+    const fogTicket = ticketEntry("t-2", "fog");
+    fogTicket.state.workflowInstanceState = { brief: "metrics to Effect?" };
+    const { el, restore } = await mountFlowComponent([charted, fogTicket]);
+    try {
+      const fogCard = queryAllDeep(el, ".fog-card")[0];
+      const marker = queryAllDeep(el, '.marker[data-id="t-2"]')[0];
+      expect(fogCard?.getAttribute("data-id")).toBe("t-2");
+      expect(marker).toBeDefined();
+
+      // Card -> marker: hovering the fog card lights its marker up.
+      fogCard?.dispatchEvent(mouseEnter());
+      await settle(shadowRootOf(el));
+      expect(fogCard?.classList.contains("hl")).toBe(true);
+      expect(marker?.classList.contains("hl")).toBe(true);
+      fogCard?.dispatchEvent(mouseLeave());
+      await settle(shadowRootOf(el));
+      expect(fogCard?.classList.contains("hl")).toBe(false);
+      expect(marker?.classList.contains("hl")).toBe(false);
+
+      // Marker -> card: hovering the marker lights its card up.
+      marker?.dispatchEvent(mouseEnter());
+      await settle(shadowRootOf(el));
+      expect(fogCard?.classList.contains("hl")).toBe(true);
+      expect(marker?.classList.contains("hl")).toBe(true);
+      marker?.dispatchEvent(mouseLeave());
+      await settle(shadowRootOf(el));
+      expect(fogCard?.classList.contains("hl")).toBe(false);
+      expect(marker?.classList.contains("hl")).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
+  it("flow-component syncs hover between map nodes and sidebar entries, with keyboard focus mirroring", async () => {
+    const charted = entry("c-1", "charted");
+    charted.workflowId = "charting";
+    charted.state.workflowInstanceState = { destination: "hive router" };
+    const fogTicket = ticketEntry("t-2", "fog");
+    fogTicket.state.workflowInstanceState = { brief: "metrics to Effect?" };
+    const { el, restore } = await mountFlowComponent([charted, fogTicket]);
+    try {
+      const openButton = queryAllDeep(el, ".open-map")[0] as
+        | HTMLElement
+        | undefined;
+      openButton?.click();
+      await settle(shadowRootOf(el));
+
+      const node = queryAllDeep(el, '.node[data-id="t-2"]')[0];
+      const entryRow = queryAllDeep(el, '.panel .entry[data-id="t-2"]')[0];
+      expect(node).toBeDefined();
+      expect(entryRow).toBeDefined();
+
+      // Node -> entry: hovering the map node lights its sidebar entry.
+      node?.dispatchEvent(mouseEnter());
+      await settle(shadowRootOf(el));
+      expect(node?.classList.contains("hl")).toBe(true);
+      expect(entryRow?.classList.contains("hl")).toBe(true);
+      node?.dispatchEvent(mouseLeave());
+      await settle(shadowRootOf(el));
+      expect(node?.classList.contains("hl")).toBe(false);
+      expect(entryRow?.classList.contains("hl")).toBe(false);
+
+      // Entry -> node: hovering the sidebar entry lights its map node.
+      entryRow?.dispatchEvent(mouseEnter());
+      await settle(shadowRootOf(el));
+      expect(node?.classList.contains("hl")).toBe(true);
+      expect(entryRow?.classList.contains("hl")).toBe(true);
+      entryRow?.dispatchEvent(mouseLeave());
+      await settle(shadowRootOf(el));
+      expect(node?.classList.contains("hl")).toBe(false);
+
+      // Keyboard focus mirrors hover through the tabindex + focus/blur pair.
+      entryRow?.dispatchEvent(new FocusEvent("focus"));
+      await settle(shadowRootOf(el));
+      expect(node?.classList.contains("hl")).toBe(true);
+      entryRow?.dispatchEvent(new FocusEvent("blur"));
+      await settle(shadowRootOf(el));
+      expect(node?.classList.contains("hl")).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
+  it("flow-component pulses a clicked card into focus and auto-clears it", async () => {
+    const charted = entry("c-1", "charted");
+    charted.workflowId = "charting";
+    charted.state.workflowInstanceState = { destination: "hive router" };
+    const fogTicket = ticketEntry("t-2", "fog");
+    fogTicket.state.workflowInstanceState = { brief: "metrics to Effect?" };
+    const { el, restore } = await mountFlowComponent([charted, fogTicket]);
+    try {
+      const fogCard = queryAllDeep(el, ".fog-card")[0];
+      const marker = queryAllDeep(el, '.marker[data-id="t-2"]')[0];
+      vi.useFakeTimers();
+      try {
+        fogCard?.dispatchEvent(click());
+        await vi.advanceTimersByTimeAsync(0);
+        await Promise.resolve();
+        expect(fogCard?.classList.contains("focus")).toBe(true);
+        expect(fogCard?.classList.contains("hl")).toBe(true);
+        expect(marker?.classList.contains("focus")).toBe(true);
+        // The focus state clears itself without any further interaction.
+        await vi.advanceTimersByTimeAsync(2_100);
+        await Promise.resolve();
+        expect(fogCard?.classList.contains("focus")).toBe(false);
+        expect(fogCard?.classList.contains("hl")).toBe(false);
+        expect(marker?.classList.contains("focus")).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    } finally {
+      restore();
+    }
+  });
+
+  it("flow-component reorders fog cards by drag into a session-local clear order", async () => {
+    const charted = entry("c-1", "charted");
+    charted.workflowId = "charting";
+    charted.state.workflowInstanceState = { destination: "hive router" };
+    const first = ticketEntry("t-2", "fog");
+    first.state.workflowInstanceState = { brief: "metrics to Effect?" };
+    const second = ticketEntry("t-3", "fog");
+    second.state.workflowInstanceState = { brief: "reorder the map?" };
+    const { el, restore } = await mountFlowComponent([charted, first, second]);
+    try {
+      const firstCard = queryAllDeep(el, '.fog-card[data-id="t-2"]')[0];
+      const secondCard = queryAllDeep(el, '.fog-card[data-id="t-3"]')[0];
+      const pile = firstCard?.parentElement;
+      expect(firstCard).toBeDefined();
+      expect(secondCard).toBeDefined();
+      expect(pile).toBeDefined();
+
+      // jsdom rects are all zeros, so stub per-card geometry (first spans y
+      // 0..40, second y 40..80) to make the insertion deterministic.
+      vi.spyOn(firstCard, "getBoundingClientRect").mockReturnValue(
+        new DOMRect(0, 0, 0, 40)
+      );
+      vi.spyOn(secondCard, "getBoundingClientRect").mockReturnValue(
+        new DOMRect(0, 40, 0, 40)
+      );
+      try {
+        secondCard?.dispatchEvent(
+          new MouseEvent("dragstart", { bubbles: true, composed: true })
+        );
+        expect(secondCard?.classList.contains("dragging")).toBe(true);
+
+        pile?.dispatchEvent(
+          new MouseEvent("dragover", { bubbles: true, composed: true })
+        );
+        // Dropping just above the first card's middle reorders second first.
+        pile?.dispatchEvent(
+          new MouseEvent("drop", {
+            bubbles: true,
+            composed: true,
+            clientY: 10,
+          })
+        );
+        pile?.dispatchEvent(
+          new MouseEvent("dragend", { bubbles: true, composed: true })
+        );
+        await settle(shadowRootOf(el));
+
+        const order = queryAllDeep(el, ".fog-card").map((card) =>
+          card.getAttribute("data-id")
+        );
+        expect(order).toEqual(["t-3", "t-2"]);
+      } finally {
+        vi.restoreAllMocks();
+      }
     } finally {
       restore();
     }
