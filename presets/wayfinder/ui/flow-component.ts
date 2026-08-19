@@ -19,6 +19,7 @@ import type {
   FlowComponentDeps,
   FlowComponentRegistrations,
   FlowViewProps,
+  ModelCallStatus,
 } from "workflow-engine/workflow-types";
 import { createMapCanvas } from "./map-canvas.ts";
 import { createWayfinderDrawing } from "./wayfinder-drawing.ts";
@@ -525,6 +526,33 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
           border-color: var(--border);
           color: var(--muted);
         }
+        .task-status {
+          display: flex;
+          align-items: center;
+          gap: 0.4rem;
+          margin-top: 0.45rem;
+          font-size: 0.62rem;
+          color: var(--wf-body);
+        }
+        .task-status .pulse {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: var(--warning);
+          animation: task-pulse 1.4s ease-in-out infinite;
+        }
+        @keyframes task-pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.3; }
+        }
+        .task-error {
+          margin-top: 0.45rem;
+          font-size: 0.62rem;
+          color: var(--error);
+          border: 1px solid color-mix(in srgb, var(--error) 45%, transparent);
+          border-radius: 6px;
+          padding: 0.3rem 0.5rem;
+        }
         .card-chat {
           display: flex;
           flex-direction: column;
@@ -982,6 +1010,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
             >
               <div class="lbl">${resolvingLabel(entry.state.currentState)}</div>
               <div class="t">${ticketTitle(entry)}</div>
+              ${this.renderTaskStatus(entry)} ${this.renderTaskError(entry)}
               ${this.renderActions(entry)} ${this.renderChat(entry)}
             </div>`;
           })}
@@ -992,6 +1021,34 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
           }
         </div>
       </div>`;
+    }
+
+    // The live agent progress for an AFK task (research/prototype/grilling):
+    // the model status is pushed into runningTaskContext as the call moves
+    // routing -> dispatched -> thinking -> streaming, so the card shows the
+    // agent is alive instead of looking frozen while upstream retries.
+    private renderTaskStatus(entry: FlowViewProps["entries"][number]) {
+      const state = entry.state;
+      if (!state.hasRunningTask || state.runningTaskContext === null) {
+        return nothing;
+      }
+      const ctx = state.runningTaskContext;
+      if (ctx.role !== "ai-task") return nothing;
+      const label = modelStatusLabel(ctx.modelStatus);
+      return html`<div class="task-status">
+        <span class="pulse"></span>
+        <span>${label}</span>
+      </div>`;
+    }
+
+    // The last agent failure: an errored research task leaves its error in
+    // taskOutputs, so the card names the reason the run stopped (the retry
+    // action sits right below).
+    private renderTaskError(entry: FlowViewProps["entries"][number]) {
+      if (entry.state.hasRunningTask) return nothing;
+      const research = entry.state.taskOutputs.research;
+      if (research === undefined || research.status !== "error") return nothing;
+      return html`<div class="task-error">${research.error}</div>`;
     }
 
     // A workflow instance's available state actions (everything is data — the
@@ -1353,6 +1410,24 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
   }
 
   return { components: { "flow-component": FlowComponent } };
+}
+
+// The live model-call stage, human-readable for the card's status line.
+function modelStatusLabel(status: ModelCallStatus | undefined): string {
+  switch (status?.stage) {
+    case "dispatched":
+      return `researching via ${status.provider} · ${status.model}`;
+    case "thinking":
+      return "thinking…";
+    case "streaming":
+      return "writing the report…";
+    case "complete":
+      return "finalizing…";
+    case "error":
+      return `research error: ${status.message}`;
+    default:
+      return "routing the research call…";
+  }
 }
 
 // Cards on the table sit at alternating small rotations (papers laid on a

@@ -97,6 +97,29 @@ const noopPersistence: FlowStore = {
   loadAllFlows: () => [],
 };
 
+// A same-state action (a retry re-entering its own state, re-running the
+// failed task) must be accepted: it records a state_transition entry even
+// though currentState is unchanged.
+const retryWorkflow = defineWorkflow({
+  id: "retry-wf",
+  label: "Retry Workflow",
+  taskOutputs: {} as Record<string, never>,
+  states: [
+    {
+      id: "working",
+      label: "Working",
+      category: "initial",
+      actions: [
+        { id: "retry", label: "Retry", transitionTo: "working" },
+        { id: "advance", label: "Advance", transitionTo: "done" },
+      ],
+    },
+    { id: "done", label: "Done", category: "terminal" },
+  ],
+  initial: "working",
+  terminalStates: ["done"],
+});
+
 const actionItemWorkflow = defineWorkflow({
   id: "item",
   label: "Item",
@@ -416,6 +439,62 @@ describe("flow API routes", () => {
 
     assert.equal(response.statusCode, 400);
     assert.equal(response.json().error, "actionId is required");
+  });
+
+  it("POST action accepts a same-state retry instead of rejecting it", async () => {
+    const runtime = createFlowRuntime(
+      "retry-flow",
+      [retryWorkflow],
+      [],
+      {},
+      { name: "Retry Flow", basePath: "/tmp/test-repo" },
+      {},
+      noopPersistence
+    );
+    let instanceId = "";
+    runtime.on((event) => {
+      if (event.type === "instance_created") instanceId = event.instanceId;
+    });
+    runtime.addWorkflowInstance("retry-wf");
+    registerFlowForTest("retry-flow", runtime);
+
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+
+    const response = await server.inject({
+      method: "POST",
+      url: `/api/flows/retry-flow/instances/${instanceId}/action`,
+      body: { actionId: "retry" },
+    });
+
+    // The retry re-enters "working": same state string, but the dispatch
+    // recorded a transition so it is accepted (200), not rejected (409).
+    assert.equal(response.statusCode, 200);
+    const body = response.json();
+    assert.equal(body.previousState, "working");
+    assert.equal(body.currentState, "working");
+  });
+
+  it("POST action returns 409 when the action is not performable", async () => {
+    const server = fixture();
+
+    const listResponse = await server.inject({
+      method: "GET",
+      url: "/api/flows/test-flow/instances",
+    });
+    const instanceId = listResponse.json().instances[0].id;
+
+    // "finish" belongs to the running state; dispatching it from pending
+    // performs nothing (no transition recorded) and must be rejected.
+    const response = await server.inject({
+      method: "POST",
+      url: `/api/flows/test-flow/instances/${instanceId}/action`,
+      body: { actionId: "finish" },
+    });
+
+    assert.equal(response.statusCode, 409);
+    assert.equal(response.json().error, "Action rejected or unavailable");
   });
 
   it("POST action returns 404 for unknown flow", async () => {

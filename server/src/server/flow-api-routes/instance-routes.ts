@@ -45,7 +45,8 @@ export function registerInstanceRoutes(server: FastifyInstance): void {
         return reply.status(404).send({ error: "Instance not found" });
       }
 
-      const before = controller.getState().currentState;
+      const previousState = controller.getState().currentState;
+      const before = controller.getState().history.length;
       try {
         controller.dispatchAction(
           actionId,
@@ -67,13 +68,18 @@ export function registerInstanceRoutes(server: FastifyInstance): void {
         return reply.send({
           instanceId,
           deleted: true,
-          previousState: before,
+          previousState,
         });
       }
 
-      const after = controller.getState().currentState;
+      // The action was accepted iff the dispatch recorded a transition in the
+      // instance history. currentState equality is not a rejection: retry
+      // actions legitimately re-enter their own state (re-running a failed
+      // task) and still record a state_transition entry.
+      const after = controller.getState();
+      const performed = after.history.length > before;
 
-      if (before === after) {
+      if (!performed) {
         return reply.status(409).send({
           error: "Action rejected or unavailable",
           actionId,
@@ -82,9 +88,9 @@ export function registerInstanceRoutes(server: FastifyInstance): void {
 
       return reply.send({
         instanceId,
-        previousState: before,
-        currentState: after,
-        state: controller.getState(),
+        previousState,
+        currentState: after.currentState,
+        state: after,
         availableActions: controller.getAvailableActions(),
       });
     }

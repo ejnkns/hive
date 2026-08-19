@@ -851,6 +851,57 @@ describe("wayfinder served modules", () => {
     }
   });
 
+  it("flow-component shows live agent status and the last error on the resolving card", async () => {
+    const charted = entry("c-1", "charted");
+    charted.workflowId = "charting";
+    charted.state.workflowInstanceState = { destination: "hive router" };
+    const running = ticketEntry("t-1", "resolving_research");
+    running.state.workflowInstanceState = {
+      title: "Pick the router",
+      type: "research",
+    };
+    running.state.hasRunningTask = true;
+    running.state.runningTaskContext = {
+      role: "ai-task",
+      messages: [],
+      modelStatus: {
+        stage: "dispatched",
+        provider: "groq",
+        model: "gpt-oss-120b",
+      },
+    };
+    const failed = ticketEntry("t-2", "resolving_research");
+    failed.state.workflowInstanceState = {
+      title: "Pick the store",
+      type: "research",
+    };
+    failed.state.taskOutputs = {
+      research: {
+        status: "error",
+        error: "Model call failed",
+        output: undefined,
+      },
+    };
+    const { el, restore } = await mountFlowComponent([
+      charted,
+      running,
+      failed,
+    ]);
+    try {
+      // The running research card names the dispatched node.
+      const statuses = queryAllDeep(el, ".task-status");
+      expect(statuses[0]?.textContent).toContain("groq");
+      expect(statuses[0]?.textContent).toContain("gpt-oss-120b");
+      // The failed research card surfaces the agent error next to the retry.
+      const errors = queryAllDeep(el, ".task-error");
+      expect(errors[0]?.textContent).toBe("Model call failed");
+      expect(queryAllDeep(el, ".task-status").length).toBe(1);
+      expect(queryAllDeep(el, ".task-error").length).toBe(1);
+    } finally {
+      restore();
+    }
+  });
+
   it("flow-component reorders fog cards by drag into a session-local clear order", async () => {
     const charted = entry("c-1", "charted");
     charted.workflowId = "charting";

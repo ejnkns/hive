@@ -28,6 +28,9 @@ let {
 let flowId = $state<string | null>(null);
 let resolving = $state(true);
 let error = $state<string | null>(null);
+// A transient action/patch failure — shown as a banner above the flow so a
+// rejected action never replaces the page the way a load failure does.
+let actionError = $state<string | null>(null);
 let deleteOpen = $state(false);
 let deleteBusy = $state(false);
 
@@ -87,8 +90,9 @@ async function handleAction(
 ) {
   try {
     await dispatchAction(flowId, instanceId, actionId, payload);
+    actionError = null;
   } catch (err) {
-    error = err instanceof Error ? err.message : "Action failed";
+    actionError = err instanceof Error ? err.message : "Action failed";
   }
 }
 
@@ -107,8 +111,9 @@ async function handlePatchState(
 ) {
   try {
     await patchInstanceState(flowId, instanceId, values);
+    actionError = null;
   } catch (err) {
-    error = err instanceof Error ? err.message : "State patch failed";
+    actionError = err instanceof Error ? err.message : "State patch failed";
   }
 }
 
@@ -142,10 +147,11 @@ async function executeFlowAction(
 ) {
   if (!flow) return;
   error = null;
+  actionError = null;
   try {
     await dispatchFlowAction(flow.id, action.id, payload);
   } catch (err) {
-    error = err instanceof Error ? err.message : "Flow action failed";
+    actionError = err instanceof Error ? err.message : "Flow action failed";
   }
 }
 
@@ -196,6 +202,18 @@ function closeFlowActionForm() {
   {:else if !flow}
     <div class="empty">Instance not found</div>
   {:else}
+    {#if actionError}
+      <div class="action-error" role="alert">
+        <span class="action-error-text">{actionError}</span>
+        <Button
+          variant="neutral"
+          size="small"
+          onclick={() => (actionError = null)}
+        >
+          Dismiss
+        </Button>
+      </div>
+    {/if}
     <div class="instance-header">
       <div class="header-row">
         <span class="status-group">
@@ -289,6 +307,23 @@ function closeFlowActionForm() {
 .instance-page {
   margin: 0 auto;
   padding: 1.25rem;
+}
+
+.action-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--error);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--error) 12%, transparent);
+  color: var(--text);
+}
+
+.action-error-text {
+  font-size: var(--text-sm);
 }
 
 .instance-header {
