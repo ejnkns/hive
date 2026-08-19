@@ -15,4 +15,13 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   banner: "#!/usr/bin/env node",
+  // Agent-written paths (workspaces base, worktrees, persisted outputs,
+  // materialized module sets) must never restart the dev server mid-run. The
+  // workspaces base defaults to ~/.hive/workspaces (outside the repo); the
+  // regex also covers an in-repo .hive / .hive-workspaces layout and the
+  // server's own materialized definition copies (server/.runtime). RegExp,
+  // not glob: rolldown's watch exclude matches hidden segments only via regex.
+  ignoreWatch: [
+    /(^|[/\\])(\.hive|\.hive-workspaces|\.workspaces|\.runtime)([/\\]|$)/,
+  ],
 });

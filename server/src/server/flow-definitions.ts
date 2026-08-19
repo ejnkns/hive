@@ -257,7 +257,16 @@ export function definitionModuleVersion(
 ): string {
   const hash = createHash("sha256");
   hash.update(source);
-  for (const [path, fileSource] of Object.entries(files ?? {})) {
+  // File entries hash in sorted path order: the map's key order is
+  // caller-dependent (a JSON body keeps the client's insertion order, a
+  // directory read follows readdir order), so identical content must hash
+  // the same no matter how the keys arrived — the version changes only when
+  // the definition actually changes, not when it is re-loaded or re-saved
+  // with the same files in a different order.
+  const entries = Object.entries(files ?? {}).sort(([a], [b]) =>
+    a < b ? -1 : a > b ? 1 : 0
+  );
+  for (const [path, fileSource] of entries) {
     hash.update(path);
     hash.update(fileSource);
   }

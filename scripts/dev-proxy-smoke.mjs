@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
+import { mkdirSync, rmdirSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { connect } from "node:net";
 import { dirname, join } from "node:path";
@@ -71,9 +72,77 @@ try {
   console.log(
     `dev proxy smoke passed: ui=${uiPort}, backend=${backendPort}, upgrades=${upgradeCount}`
   );
+
+  await verifyWatchRootHygiene();
 } finally {
   vite.kill("SIGTERM");
   await closeServer(backend);
+}
+
+// Watch-root hygiene: agent-written paths (workspaces base, worktrees,
+// persisted outputs) must never land in the Vite watch root (ui/src), or an
+// agent writing while a long task runs would restart the dev server / trigger
+// a full reload mid-run. Writing under such a path must produce no HMR or
+// reload output — an .html write is the canary, since a watched .html file
+// makes Vite page-reload — while a write under a watched source path still
+// does.
+async function verifyWatchRootHygiene() {
+  const watchRoot = join(repositoryPath, "ui", "src");
+  const agentWorkspaceDir = join(
+    watchRoot,
+    ".hive",
+    "workspaces",
+    "dev-proxy-smoke",
+    "card-1",
+    "attempt-1"
+  );
+  const agentProbe = join(agentWorkspaceDir, "surface.html");
+  const watchedProbe = join(watchRoot, "dev-proxy-smoke-probe.html");
+  try {
+    rmSync(agentWorkspaceDir, { recursive: true, force: true });
+    rmSync(watchedProbe, { force: true });
+
+    const outputBeforeAgentWrite = viteOutput.length;
+    mkdirSync(agentWorkspaceDir, { recursive: true });
+    writeFileSync(agentProbe, "<!doctype html><title>probe</title>\n", "utf-8");
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    const agentDelta = viteOutput.slice(outputBeforeAgentWrite);
+    assert.ok(
+      !/page reload|hmr update|restarting server/.test(agentDelta),
+      `an agent-workspace write must not restart the dev server or reload, got:\n${agentDelta}`
+    );
+
+    const outputBeforeWatchedWrite = viteOutput.length;
+    writeFileSync(
+      watchedProbe,
+      "<!doctype html><title>probe</title>\n",
+      "utf-8"
+    );
+    await waitFor(
+      () => viteOutput.slice(outputBeforeWatchedWrite).includes("page reload"),
+      5_000,
+      `a watched source write must trigger a full reload, got:\n${viteOutput.slice(outputBeforeWatchedWrite)}`
+    );
+
+    console.log(
+      "dev watch-root hygiene passed: agent-workspace writes ignored, watched writes reload"
+    );
+  } finally {
+    rmSync(agentWorkspaceDir, { recursive: true, force: true });
+    rmSync(watchedProbe, { force: true });
+    for (const dir of [
+      join(watchRoot, ".hive", "workspaces", "dev-proxy-smoke", "card-1"),
+      join(watchRoot, ".hive", "workspaces", "dev-proxy-smoke"),
+      join(watchRoot, ".hive", "workspaces"),
+      join(watchRoot, ".hive"),
+    ]) {
+      try {
+        rmdirSync(dir);
+      } catch {
+        // non-empty or already gone — best-effort cleanup only
+      }
+    }
+  }
 }
 
 function collectViteOutput(chunk) {

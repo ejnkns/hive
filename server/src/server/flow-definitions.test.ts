@@ -10,9 +10,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import Fastify, { type FastifyInstance } from "fastify";
+import { createFlowRuntime } from "workflow-engine/create-flow-runtime";
 import { registerBuiltinFlowDefinitions } from "../main/register-builtin-flow-definitions.ts";
 import { registerFlowApiRoutes } from "./flow-api-routes.ts";
 import {
+  definitionModuleVersion,
   getRegisteredFlowDefinition,
   loadUserDefinitionsFromDisk,
   registerFlowDefinition,
@@ -20,6 +22,10 @@ import {
   resetFlowDefinitionsForTest,
   setDefinitionsBasePathForTest,
 } from "./flow-definitions.ts";
+import {
+  registerFlowForTest,
+  resetFlowRuntimesForTest,
+} from "./flow-registry.ts";
 import { queenBeeCompiled as queenBeeFlow } from "./test-support/compiled-presets.ts";
 
 const pingFlowSource = `
@@ -56,12 +62,14 @@ describe("flow definition library", () => {
     baseDir = mkdtempSync(join(tmpdir(), "hive-definitions-"));
     setDefinitionsBasePathForTest(baseDir);
     resetFlowDefinitionsForTest();
+    resetFlowRuntimesForTest();
     servers = [];
     registerFlowDefinition(queenBeeFlow, { builtIn: true });
   });
 
   afterEach(async () => {
     await Promise.all(servers.splice(0).map((s) => s.close()));
+    resetFlowRuntimesForTest();
     rmSync(baseDir, { recursive: true, force: true });
   });
 
@@ -250,5 +258,186 @@ describe("flow definition library", () => {
       "wayfinder's referenced modules are captured as files"
     );
     resetFlowDefinitionsForTest();
+  });
+});
+
+describe("definition module version determinism", () => {
+  const servers: FastifyInstance[] = [];
+
+  afterEach(async () => {
+    await Promise.all(servers.splice(0).map((s) => s.close()));
+  });
+
+  function definitionApiServer(): FastifyInstance {
+    const server = Fastify();
+    servers.push(server);
+    registerFlowApiRoutes(server);
+    return server;
+  }
+
+  // A save-unaware module: the version must depend only on the source and
+  // the referenced file contents — never on call order, key order, or any
+  // other ambient state — so an unchanged definition always loads with the
+  // same `?v=` and a save yields a new one.
+  const versionedSource = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "versioned-probe",
+  label: "Versioned Probe",
+  configSchema: [],
+  ui: {
+    components: {
+      "probe-card": { ref: "./ui/probe-card.ts" },
+    },
+  },
+  workflows: [
+    {
+      id: "probe",
+      label: "Probe",
+      instanceState: [],
+      initial: "idle",
+      terminalStates: ["done"],
+      states: [
+        { id: "idle", label: "Idle", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  edges: [],
+};
+`;
+
+  const versionedFiles = {
+    "./ui/probe-card.ts":
+      'import { theme } from "./theme.ts";\n\nexport default function (lit: FlowComponentDeps) { return { components: {} }; }\n',
+    "./ui/theme.ts":
+      'import { token } from "./tokens.ts";\nexport const theme = token;\n',
+    "./ui/tokens.ts": 'export const token = "mountain";\n',
+  };
+
+  it("hashes identical content to the same version regardless of file key order", () => {
+    const first = definitionModuleVersion(versionedSource, versionedFiles);
+    assert.match(first, /^[0-9a-f]{16}$/);
+    assert.equal(
+      definitionModuleVersion(versionedSource, versionedFiles),
+      first,
+      "recomputing with the same inputs yields the same version"
+    );
+    const reordered = {
+      "./ui/tokens.ts": versionedFiles["./ui/tokens.ts"],
+      "./ui/probe-card.ts": versionedFiles["./ui/probe-card.ts"],
+      "./ui/theme.ts": versionedFiles["./ui/theme.ts"],
+    };
+    assert.equal(
+      definitionModuleVersion(versionedSource, reordered),
+      first,
+      "a re-loaded definition whose files arrive in a different key order keeps its version"
+    );
+    assert.equal(
+      definitionModuleVersion(versionedSource, undefined),
+      definitionModuleVersion(versionedSource, undefined)
+    );
+  });
+
+  it("changes the version when the source or a file entry changes", () => {
+    const base = definitionModuleVersion(versionedSource, versionedFiles);
+    assert.notEqual(
+      definitionModuleVersion(
+        `${versionedSource}\n// edited\n`,
+        versionedFiles
+      ),
+      base,
+      "a source edit yields a new version"
+    );
+    assert.notEqual(
+      definitionModuleVersion(versionedSource, {
+        ...versionedFiles,
+        "./ui/theme.ts": 'export const theme = "light";\n',
+      }),
+      base,
+      "an edited referenced file yields a new version"
+    );
+    assert.notEqual(
+      definitionModuleVersion(versionedSource, {
+        "./ui/probe-card.ts": versionedFiles["./ui/probe-card.ts"],
+      }),
+      base,
+      "a removed referenced file yields a new version"
+    );
+    assert.notEqual(
+      definitionModuleVersion(versionedSource, {
+        ...versionedFiles,
+        "./ui/tokens-extra.ts": "export const extra = true;\n",
+      }),
+      base,
+      "an added referenced file yields a new version"
+    );
+  });
+
+  it("versions the payload and module routes through the same shared function", async () => {
+    await registerUserDefinition({
+      name: "Versioned Probe",
+      source: versionedSource,
+      files: versionedFiles,
+    });
+    const expected = definitionModuleVersion(versionedSource, versionedFiles);
+
+    const runtime = createFlowRuntime(
+      "versioned-probe-run",
+      [],
+      [],
+      {},
+      { name: "Versioned Run", definitionId: "versioned-probe" },
+      {}
+    );
+    registerFlowForTest("versioned-probe-run", runtime);
+    const server = definitionApiServer();
+
+    // The payload builder (flow-payload.ts) stamps the ref-form component
+    // URL with the seam's version.
+    const flowsResponse = await server.inject({
+      method: "GET",
+      url: "/api/flows",
+    });
+    assert.equal(flowsResponse.statusCode, 200);
+    const flow = flowsResponse
+      .json()
+      .flows.find(
+        (entry: { id: string }) => entry.id === "versioned-probe-run"
+      );
+    assert.ok(flow);
+    assert.equal(
+      flow.ui.components["probe-card"],
+      `/api/flows/definitions/versioned-probe/components/probe-card?v=${expected}`,
+      "the payload versions ref-form component URLs with the shared content hash"
+    );
+
+    // The components route (definition-routes.ts) recomputes the version
+    // through the same seam when rewriting the entry's relative imports.
+    const entryResponse = await server.inject({
+      method: "GET",
+      url: "/api/flows/definitions/versioned-probe/components/probe-card",
+    });
+    assert.equal(entryResponse.statusCode, 200);
+    assert.ok(
+      entryResponse.body.includes(
+        `/api/flows/definitions/versioned-probe/modules/ui/theme.ts?v=${expected}`
+      ),
+      "the components route rewrites imports with the shared content hash"
+    );
+
+    // The modules route (definition-routes.ts) computes the version the same
+    // way for a referenced file that imports a sibling.
+    const themeResponse = await server.inject({
+      method: "GET",
+      url: "/api/flows/definitions/versioned-probe/modules/ui/theme.ts",
+    });
+    assert.equal(themeResponse.statusCode, 200);
+    assert.ok(
+      themeResponse.body.includes(
+        `/api/flows/definitions/versioned-probe/modules/ui/tokens.ts?v=${expected}`
+      ),
+      "the modules route rewrites imports with the shared content hash"
+    );
   });
 });
