@@ -135,11 +135,16 @@ $effect(() => {
   };
 });
 
-// The declared component ids, as a stable signature: a fresh snapshot object
-// with the same components must not re-run the load — re-registering would
-// produce fresh served classes and recreate every mounted custom element
-// (resetting the chat scroll to the top on every push).
-const componentsSignature = $derived(Object.keys(components).sort().join(","));
+// The declared component paths, as a stable signature: a fresh snapshot object
+// with the same paths must not re-run the load — re-registering would produce
+// fresh served classes and recreate every mounted custom element (resetting
+// the chat scroll to the top on every push). The paths embed the `?v=` module
+// version, so a definition save (a new version hash) changes the signature and
+// deliberately re-loads the new version, while snapshot churn (same versions)
+// never does.
+const componentsSignature = $derived(
+  Object.values(components).sort().join(",")
+);
 
 // Load the flow's served components when the flow (or its declared component
 // set) changes; unload the previous flow's registrations on teardown. Loading

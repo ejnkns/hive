@@ -72,4 +72,27 @@ describe("DynamicElementHost", () => {
     await settle(shadowRootOf(el));
     expect(probeOf(el).label).toBe("b");
   });
+
+  it("keeps the mounted element across a transient elementClass miss", async () => {
+    const el: DynamicElementHost = await mount(
+      host({ elementClass: Probe, props: { label: "a" } })
+    );
+    await settle(shadowRootOf(el));
+    const mounted = shadowRootOf(el).querySelector("probe-element");
+    expect(mounted).not.toBeNull();
+
+    // A transient miss (async load in flight, the cleanup window between
+    // unregister and re-register) must not destroy the mounted element.
+    el.elementClass = null;
+    await el.updateComplete;
+    await settle(shadowRootOf(el));
+    expect(shadowRootOf(el).querySelector("probe-element")).toBe(mounted);
+
+    // The same class returning is not a swap: still the same instance.
+    el.elementClass = Probe;
+    await el.updateComplete;
+    await settle(shadowRootOf(el));
+    expect(shadowRootOf(el).querySelector("probe-element")).toBe(mounted);
+    expect(probeOf(el).label).toBe("a");
+  });
 });

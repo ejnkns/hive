@@ -6,6 +6,7 @@ import type {
 } from "workflow-engine/create-flow-runtime";
 import type {
   CustomRenderKind,
+  ElementConstructor,
   FlowViewProps,
   WorkflowViewProps,
 } from "workflow-engine/workflow-types";
@@ -133,8 +134,18 @@ export class WorkflowInstances extends LitElement {
   // so the set reflects each flow's stored state without a separate pass.
   private collapsedIds = new Set<string>();
 
+  // The last flow-level custom class rendered, keyed to the flowComponent id
+  // it was resolved for: a transient registry miss (async load in progress,
+  // the cleanup window between unregister and re-register) keeps rendering the
+  // last known class instead of flashing the default per-workflow boards.
+  // Keyed by id so switching to a different component never reuses a stale
+  // class from a previous flow.
+  private lastFlowView:
+    | { componentId: string | undefined; cls: ElementConstructor }
+    | undefined;
+
   render() {
-    const flowView = getComponentRenderer(this.flowComponent);
+    const flowView = this.flowViewClass();
     if (flowView !== undefined) {
       return html`<dynamic-element-host
         .elementClass=${flowView}
@@ -180,6 +191,25 @@ export class WorkflowInstances extends LitElement {
         }
       )}
     `;
+  }
+
+  // The flow-level custom class to render: the registry's current holder when
+  // present, otherwise the last known class for this flowComponent id. Only
+  // the first-ever mount (no class ever resolved for this component) falls
+  // back to the default per-workflow boards.
+  private flowViewClass(): ElementConstructor | undefined {
+    const current = getComponentRenderer(this.flowComponent);
+    if (current !== undefined) {
+      this.lastFlowView = { componentId: this.flowComponent, cls: current };
+      return current;
+    }
+    if (
+      this.lastFlowView !== undefined &&
+      this.lastFlowView.componentId === this.flowComponent
+    ) {
+      return this.lastFlowView.cls;
+    }
+    return undefined;
   }
 
   // The whole-body props a flow-level custom component receives (the trimmed
