@@ -73,17 +73,66 @@ let {
 
 let host: WorkflowInstances | null = null;
 
+// The latest snapshot awaiting a host sync. During a running agent the server
+// bursts many WS flow_snapshot frames back-to-back; feeding each one straight
+// through re-renders the whole flow-component page per frame of agent progress
+// and churns the main thread so the page can't be scrolled. The effect stores
+// the newest snapshot and flushes it once per animation frame instead.
+type SyncSnapshot = {
+  flowId: string;
+  flow?: FlowViewFlow;
+  flowComponent?: string;
+  workflowDefs: WorkflowDefResponse[];
+  instances: WorkflowInstanceEntry[];
+  customKinds: readonly CustomRenderKind[];
+  availableFlowActions: FlowLevelAction[];
+  persistedOutputs: Record<string, string>;
+  persistedOutputDirs: Record<string, Record<string, string>>;
+};
+
+let pending: SyncSnapshot | null = null;
+let syncFrame: number | undefined;
+
+function flushSnapshot(snapshot: SyncSnapshot): void {
+  if (host === null) return;
+  host.flowId = snapshot.flowId;
+  host.flow = snapshot.flow;
+  host.flowComponent = snapshot.flowComponent;
+  host.workflowDefs = snapshot.workflowDefs;
+  host.instances = snapshot.instances;
+  host.customKinds = snapshot.customKinds;
+  host.availableFlowActions = snapshot.availableFlowActions;
+  host.persistedOutputs = snapshot.persistedOutputs;
+  host.persistedOutputDirs = snapshot.persistedOutputDirs;
+}
+
 $effect(() => {
   if (!host) return;
-  host.flowId = flowId;
-  host.flow = flow;
-  host.flowComponent = flowComponent;
-  host.workflowDefs = workflowDefs;
-  host.instances = instances;
-  host.customKinds = customKinds;
-  host.availableFlowActions = availableFlowActions ?? [];
-  host.persistedOutputs = persistedOutputs ?? {};
-  host.persistedOutputDirs = persistedOutputDirs ?? {};
+  pending = {
+    flowId,
+    flow,
+    flowComponent,
+    workflowDefs,
+    instances,
+    customKinds,
+    availableFlowActions: availableFlowActions ?? [],
+    persistedOutputs: persistedOutputs ?? {},
+    persistedOutputDirs: persistedOutputDirs ?? {},
+  };
+  if (pending !== null && syncFrame === undefined) {
+    syncFrame = requestAnimationFrame(() => {
+      syncFrame = undefined;
+      const latest = pending;
+      pending = null;
+      if (latest !== null) flushSnapshot(latest);
+    });
+  }
+  return () => {
+    if (syncFrame !== undefined) {
+      cancelAnimationFrame(syncFrame);
+      syncFrame = undefined;
+    }
+  };
 });
 
 // The declared component ids, as a stable signature: a fresh snapshot object
