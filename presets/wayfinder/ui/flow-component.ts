@@ -32,6 +32,7 @@ import {
 } from "./wayfinder-map.ts";
 import type { ExpeditionTheme } from "./wayfinder-themes.ts";
 import {
+  EXPEDITION_THEMES,
   resolveTheme,
   THEME_ACCENT,
   THEME_GLYPHS,
@@ -62,6 +63,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       hoverId: { attribute: false },
       focusId: { attribute: false },
       fogOrder: { attribute: false },
+      themeOverride: { attribute: false },
     };
 
     static styles = [
@@ -193,6 +195,18 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
           background: var(--error);
           color: white;
           border-color: transparent;
+        }
+        .theme-cycle {
+          font-size: 0.5625rem;
+          height: 24px;
+          padding: 0 0.5rem;
+          border-radius: 4px;
+          border: 1px dashed var(--wf-accent);
+          background: transparent;
+          color: var(--wf-accent);
+          cursor: pointer;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
         }
 
         .table {
@@ -661,6 +675,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
     declare hoverId: string | undefined;
     declare focusId: string | undefined;
     declare fogOrder: string[];
+    declare themeOverride: ExpeditionTheme | undefined;
 
     constructor() {
       super();
@@ -674,7 +689,14 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
     private focusTimer: ReturnType<typeof setTimeout> | undefined;
 
     private get theme(): ExpeditionTheme {
-      return resolveTheme(this.flow.config);
+      return this.themeOverride ?? resolveTheme(this.flow.config);
+    }
+
+    // Dev-only: cycle the expedition skin without editing the flow config.
+    private cycleTheme() {
+      const index = EXPEDITION_THEMES.indexOf(this.theme);
+      this.themeOverride =
+        EXPEDITION_THEMES[(index + 1) % EXPEDITION_THEMES.length];
     }
 
     private get model(): WayfinderMap {
@@ -810,6 +832,14 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
           <span class="status">${this.flow.status}</span>
         </div>
         <div class="actions">
+          <button
+            class="theme-cycle"
+            type="button"
+            title="dev: cycle the expedition theme"
+            @click=${this.cycleTheme}
+          >
+            ${this.theme}
+          </button>
           ${this.availableFlowActions.map((action) => {
             const onClick =
               action.createInstance !== undefined

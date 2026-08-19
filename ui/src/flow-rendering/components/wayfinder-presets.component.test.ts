@@ -607,6 +607,9 @@ describe("wayfinder served modules", () => {
 
       // Header: expedition identity + flow actions.
       expect(queryAllDeep(el, ".title")[0]?.textContent).toBe("Wayfinder");
+      expect(queryAllDeep(el, ".theme-cycle")[0]?.textContent?.trim()).toBe(
+        "mountain"
+      );
       const actionLabels = queryAllDeep(el, ".actions button").map((button) =>
         button.textContent?.trim()
       );
