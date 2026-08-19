@@ -50,7 +50,7 @@ export function createMapCanvas(lit: FlowComponentDeps) {
         overflow: hidden;
         border: 1px solid var(--border);
         border-radius: 14px;
-        background: #0a0e15;
+        background: var(--map-backdrop, #0a0e15);
       }
       .canvas svg {
         position: absolute;

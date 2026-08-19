@@ -184,7 +184,8 @@ export function createWayfinderDrawing(deps: FlowComponentDeps) {
             cx=${star.x.toFixed(1)}
             cy=${star.y.toFixed(1)}
             r=${star.r.toFixed(2)}
-            fill="rgba(230,237,243,${star.o.toFixed(2)})"
+            fill="currentColor"
+            fill-opacity=${star.o.toFixed(2)}
           ></circle>`
         )}
         ${

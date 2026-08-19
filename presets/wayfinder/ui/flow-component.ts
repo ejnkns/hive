@@ -136,6 +136,64 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
           --wf-body: #4a5b6a;
         }
 
+        /* The map backdrop surface, keyed by theme and light/dark mode. The
+           mountain theme is a sky with a fog bank across the valley floor;
+           topo stays all-green; stars is pure black (white in light mode so
+           the currentColor starfield draws black). Both the table's mini-map
+           card and the full map view's canvas read --map-backdrop. */
+        .expedition[data-theme="mountain"] {
+          --map-backdrop: linear-gradient(
+            180deg,
+            #0a1226 0%,
+            #16284a 30%,
+            #24395c 46%,
+            #6c7c8c 68%,
+            #b7c1c9 86%,
+            #dde4e8 100%
+          );
+        }
+        .expedition[data-theme="topo"] {
+          --map-backdrop: radial-gradient(
+            130% 110% at 50% 5%,
+            #1c3626 0%,
+            #152b1c 52%,
+            #0c1e11 100%
+          );
+        }
+        .expedition[data-theme="stars"] {
+          --map-backdrop: #000000;
+        }
+        :host-context(html.light) .expedition[data-theme="mountain"] {
+          --map-backdrop: linear-gradient(
+            180deg,
+            #66b4e8 0%,
+            #8ec4ea 34%,
+            #a9cbd9 52%,
+            #c2d2d7 72%,
+            #e0e7ea 90%,
+            #f1f4f6 100%
+          );
+        }
+        :host-context(html.light) .expedition[data-theme="topo"] {
+          --map-backdrop: radial-gradient(
+            130% 110% at 50% 5%,
+            #cfe5bd 0%,
+            #b4d3a1 52%,
+            #97c283 100%
+          );
+        }
+        :host-context(html.light) .expedition[data-theme="stars"] {
+          --map-backdrop: #ffffff;
+        }
+        .expedition[data-theme="stars"] .map-card,
+        .expedition[data-theme="stars"] .canvas {
+          color: #ffffff;
+        }
+        :host-context(html.light) .expedition[data-theme="stars"] .map-card,
+        :host-context(html.light) .expedition[data-theme="stars"] .canvas {
+          color: #0a0e15;
+        }
+
         .header {
           flex-shrink: 0;
           display: flex;
@@ -592,11 +650,9 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
           border: 1px solid var(--border);
           border-radius: 14px;
           padding: 0.9rem;
-          background: radial-gradient(
-            120% 90% at 70% 20%,
-            #172030 0%,
-            #10151d 55%,
-            #0c1015 100%
+          background: var(
+            --map-backdrop,
+            radial-gradient(120% 90% at 70% 20%, #172030 0%, #10151d 55%, #0c1015 100%)
           );
           position: relative;
         }
