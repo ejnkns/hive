@@ -31,7 +31,7 @@ function authoringDef(): WorkflowDefResponse {
         label: "Drafting",
         category: "initial",
         actions: [],
-        tasks: [{ id: "assistant", label: "Assistant" }],
+        tasks: [{ id: "assistant", label: "Assistant", role: "ai-chat" }],
       },
     ],
     initial: "drafting",

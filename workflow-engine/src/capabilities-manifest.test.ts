@@ -170,4 +170,29 @@ describe("authoring guide", () => {
       "guide missing the free-text fallback"
     );
   });
+
+  it("covers the autoDispatch edge capability", () => {
+    const guide = authoringGuide();
+    const autoDispatch = engineCapabilities.autoDispatchEdges;
+    assert.ok(guide.includes(autoDispatch.name), "guide missing autoDispatch");
+    assert.ok(
+      guide.includes("createIfNone"),
+      "guide missing the createIfNone flag"
+    );
+    assert.ok(
+      guide.includes("silent no-op"),
+      "guide missing the unavailable-is-a-no-op semantics"
+    );
+    assert.ok(
+      guide.includes(autoDispatch.description),
+      "guide missing the autoDispatch description"
+    );
+  });
+
+  it("covers every builtin render kind", () => {
+    const guide = authoringGuide();
+    for (const kind of engineCapabilities.renderKinds) {
+      assert.ok(guide.includes(kind), `guide missing render kind ${kind}`);
+    }
+  });
 });

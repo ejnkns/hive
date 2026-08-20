@@ -90,7 +90,14 @@ describe("WorkflowInstanceCard", () => {
           label: "Ready",
           category: "initial",
           actions: [],
-          tasks: [{ id: "plan", label: "Plan", render: { kind: "markdown" } }],
+          tasks: [
+            {
+              id: "plan",
+              label: "Plan",
+              role: "ai-task",
+              render: { kind: "markdown" },
+            },
+          ],
         },
       ],
     });

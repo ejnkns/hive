@@ -182,6 +182,31 @@ export function createFlowRuntime<
         patchFlowState(effect.transformedData as Partial<TFlowState>);
       }
       if (effect.toWorkflow) {
+        if (effect.autoDispatch) {
+          // autoDispatch: the declarative singleton-refresh primitive. With
+          // createIfNone, create the target instance first when none exists
+          // (the edge's transformed data seeds its state; its initial-state
+          // auto-tasks run). Then dispatch the action to EVERY instance of the
+          // target workflow through the same availability path as a manual
+          // click — an instance where the action is unavailable (wrong state
+          // or a failing gate) is a silent no-op. Edge effects apply in
+          // declaration order, so a fan-out edge declared before this one has
+          // already created the cards this refresh reads.
+          if (
+            effect.autoDispatch.createIfNone === true &&
+            workflowInstancesInState(effect.toWorkflow).length === 0
+          ) {
+            addWorkflowInstance(effect.toWorkflow, {
+              workflowInstanceState: effect.transformedData,
+            });
+          }
+          for (const instance of workflowInstancesInState(effect.toWorkflow)) {
+            controllers
+              .get(instance.id)
+              ?.dispatchAction(effect.autoDispatch.actionId);
+          }
+          continue;
+        }
         const beforeIds = new Set(
           Array.from(controllers.keys()).filter(
             (id) => instanceWorkflowIds.get(id) === effect.toWorkflow
@@ -293,6 +318,7 @@ export function createFlowRuntime<
         tasks: s.tasks?.map((t) => ({
           id: t.id,
           label: t.label,
+          role: t.role,
           ...(t.render !== undefined ? { render: t.render } : {}),
         })),
       })),

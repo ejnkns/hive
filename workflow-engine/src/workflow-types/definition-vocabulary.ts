@@ -286,6 +286,15 @@ export type EdgeSpec = {
   // creating new instances. The transform's declared fields must be declared
   // flowState fields. Mutually exclusive with toWorkflow.
   toFlowState?: boolean;
+  // When the edge fires (the source reaches one of fromStates — always a
+  // terminal state), dispatch `actionId` to EVERY instance of `toWorkflow`
+  // through the same availability path as a manual click (state check +
+  // gates; unavailable → silent no-op). With `createIfNone`, create the
+  // target instance first when none exists — the edge's `fields` seed its
+  // state and its initial-state auto-tasks run. This is the declarative
+  // "refresh the singleton aggregate when work lands" primitive. Mutually
+  // exclusive with `fanOut`/`transform`; `fields` is allowed alongside.
+  autoDispatch?: { actionId: string; createIfNone?: boolean };
   // Value-source transforms (mutually exclusive with `transform`):
   fields?: Record<string, ValueSpec>;
   fanOut?: {

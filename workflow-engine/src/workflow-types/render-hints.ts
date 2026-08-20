@@ -15,7 +15,13 @@
 // The `kind` field stays open so custom kinds can register later without a
 // schema change.
 
-export type BuiltinRenderKind = "markdown" | "text" | "card" | "cards" | "json";
+export type BuiltinRenderKind =
+  | "markdown"
+  | "text"
+  | "card"
+  | "cards"
+  | "chips"
+  | "json";
 export type RenderKind = BuiltinRenderKind | (string & {});
 
 // The value types a render contract's props may declare. The runtime validates
@@ -68,6 +74,12 @@ export const builtinRenderContracts = {
       { name: "description", type: "string", scope: "element" },
       { name: "bullets", type: "string[]", scope: "element" },
     ],
+  },
+  // A single output-scoped array prop: the display field's array renders as
+  // inline pills. The single-prop default binding (empty path → root) means a
+  // display field declares it with no props (`render: { kind: "chips" }`).
+  chips: {
+    props: [{ name: "items", type: "array", scope: "output" }],
   },
   json: { props: [] },
 } as const satisfies Record<BuiltinRenderKind, RenderContract>;

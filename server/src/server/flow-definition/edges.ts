@@ -35,6 +35,12 @@ export function validateEdges(
           `a toFlowState edge updates flowState — do not also declare toWorkflow (${JSON.stringify(edge.toWorkflow)})`
         );
       }
+      if (edge.autoDispatch !== undefined) {
+        error(
+          `${ePath}.autoDispatch`,
+          `autoDispatch dispatches an action to instances of toWorkflow — a toFlowState edge has no target workflow, use one or the other`
+        );
+      }
       const fromStates = context.stateIdsByWorkflow.get(from.id);
       const fromTaskIds = context.taskIdsByWorkflow.get(from.id);
       if (!fromStates || !fromTaskIds) continue;
@@ -107,6 +113,45 @@ export function validateEdges(
         error(
           `${ePath}.fromStates`,
           `source workflow "${from.id}" has no state ${JSON.stringify(state)}`
+        );
+      }
+    }
+
+    // autoDispatch (the declarative singleton-refresh primitive): the named
+    // action must exist on the target workflow and be a dispatchable
+    // ManualAction (a state action that moves or removes the instance — the
+    // compile step rejects state actions with neither transitionTo nor
+    // deletesInstance). Mutually exclusive with fanOut/transform (the
+    // transform output is what seeds a createIfNone creation, but a
+    // fan-out/transform edge is an instance-creating edge, not a refresh).
+    if (edge.autoDispatch !== undefined) {
+      if (edge.fanOut !== undefined) {
+        error(
+          `${ePath}.autoDispatch`,
+          `autoDispatch is mutually exclusive with fanOut — a refresh edge dispatches an action, it does not fan out instances`
+        );
+      }
+      if (edge.transform !== undefined) {
+        error(
+          `${ePath}.autoDispatch`,
+          `autoDispatch is mutually exclusive with transform — a refresh edge dispatches an action, it does not transform into instances`
+        );
+      }
+      const found = to.states
+        .flatMap((s) => s.actions ?? [])
+        .find((a) => a.id === edge.autoDispatch?.actionId);
+      if (!found) {
+        error(
+          `${ePath}.autoDispatch.actionId`,
+          `autoDispatch references action "${edge.autoDispatch.actionId}" which no state of workflow "${to.id}" declares`
+        );
+      } else if (
+        found.transitionTo === undefined &&
+        found.deletesInstance !== true
+      ) {
+        error(
+          `${ePath}.autoDispatch.actionId`,
+          `autoDispatch references action "${edge.autoDispatch.actionId}" which is not dispatchable — a state action must declare transitionTo or deletesInstance`
         );
       }
     }
