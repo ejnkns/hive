@@ -4,15 +4,10 @@
 export type IdeaState = {
   title?: string;
   originalText?: string;
-  source?: string;
   category?: string;
   tags?: string[];
   priority?: string;
   effort?: string;
   status?: string;
-  dependsOn?: string[];
-  duplicateOf?: string;
   summary?: string;
-  rationale?: string;
-  dependents?: string[];
 };

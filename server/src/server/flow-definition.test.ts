@@ -1439,11 +1439,12 @@ describe("definition expressiveness (custom render kinds, task render hints, ui.
 });
 
 // ─── honeycomb preset end-to-end (the definition corpus acceptance test) ──
-// Fixture backlog → parse → taxonomy proposal → approve → global classify →
-// map.md. The ai-tasks run against a mock model caller that completes each
-// task's generated completion tool; the operations run the compiled ops.
+// Fixture backlog → parse+classify (repo-exploring ai-task, mocked) →
+// fan-out cards born classified → taxonomy auto-published → build map.md.
+// The ai-tasks run against a mock model caller that completes each task's
+// generated completion tool; the operations run the compiled ops.
 
-describe("honeycomb preset runs the full pipeline (paste → approve → classify → map)", () => {
+describe("honeycomb preset runs the full pipeline (paste → classified cards → map)", () => {
   const PRESET_SLUG = "honeycomb";
 
   function runners(compiled: CompiledFlowDefinition) {
@@ -1523,7 +1524,7 @@ describe("honeycomb preset runs the full pipeline (paste → approve → classif
     throw new Error(`timeout waiting for ${label}`);
   }
 
-  it("imports → fan-out → taxonomy → approve → classify → map.md", async () => {
+  it("imports → fan-out (cards born classified) → published taxonomy → map.md", async () => {
     const root = mkdtempSync(join(tmpdir(), "hive-honeycomb-"));
     const loaded = await loadPresetDefinition(PRESET_SLUG);
     if (!("workflows" in loaded.flow)) {
@@ -1540,12 +1541,13 @@ describe("honeycomb preset runs the full pipeline (paste → approve → classif
     );
 
     // Paste a backlog: the imports instance auto-runs prepare_input → parse
-    // (mock splits two ideas) → recordIdeas → done, and the fan-out edge
-    // creates one idea card per chunk.
+    // (the mock returns a taxonomy plus classified chunks — the third chunk
+    // deliberately carries no category to exercise the per-idea fallback) →
+    // recordIdeas → publishTaxonomy → done, then the fan-out edge creates one
+    // card per chunk.
     runtime.addWorkflowInstance("imports", {
       workflowInstanceState: {
         name: "TODOs dump",
-        source: "todos",
         rawText:
           "- Ship a demo\n- Rewrite the onboarding copy\n- Fix the search debounce",
       },
@@ -1556,66 +1558,82 @@ describe("honeycomb preset runs the full pipeline (paste → approve → classif
       "idea cards from the fan-out edge"
     );
 
-    // Start organizing: assemble digest → taxonomize (mock taxonomy) →
-    // taxonomy_proposed.
-    const organizer = runtime.addWorkflowInstance("organize", {
-      workflowInstanceState: { name: "Organizer" },
-    });
+    // The parse classifications ride the fan-out: the classified cards are
+    // born with their category and tags — no organize step, no approval.
+    const parseIdeas = (
+      COMPLETIONS.imports_parse_complete as {
+        ideas: Array<{
+          title: string;
+          category?: string;
+          tags?: string[];
+        }>;
+      }
+    ).ideas;
+    const ideaEntries = runtime
+      .getWorkflowInstanceEntries()
+      .filter((e) => e.workflowId === "ideas");
+    assert.equal(ideaEntries.length, 3);
+    for (const entry of ideaEntries) {
+      const expected = parseIdeas.find(
+        (c) => c.title === entry.state.workflowInstanceState.title
+      );
+      if (expected?.category === undefined) continue; // the fallback card
+      assert.equal(
+        entry.state.workflowInstanceState.category,
+        expected.category,
+        `card ${entry.state.workflowInstanceState.title} is born classified`
+      );
+      assert.deepEqual(
+        entry.state.workflowInstanceState.tags,
+        expected.tags,
+        "tags ride the fan-out"
+      );
+    }
+
+    // The chunk parse left uncategorized routes to per-idea classify (the
+    // taxonomy is already published, so the needs-classify gate fires) and
+    // receives schema-enforced category/tags.
     await waitFor(
       runtime,
       (entries) =>
         entries.some(
           (e) =>
-            e.id === organizer.id &&
-            e.state.currentState === "taxonomy_proposed"
+            e.workflowId === "ideas" && e.state.currentState === "classified"
         ),
-      "taxonomy proposal"
+      "per-idea fallback classification"
     );
-
-    // One click approves; publish → classify (mock classifications applied
-    // onto the cards by title via E1) → build map.md → done.
-    organizer.dispatchAction("approve");
-    await waitFor(
-      runtime,
-      (entries) =>
-        entries.some(
-          (e) => e.id === organizer.id && e.state.currentState === "done"
-        ),
-      "organize done"
-    );
-
-    // Every idea card received its classification on its own state.
-    const ideaEntries = runtime
+    const fallbackCard = runtime
       .getWorkflowInstanceEntries()
-      .filter((e) => e.workflowId === "ideas");
-    assert.equal(ideaEntries.length, 3);
-    const classifications = (
-      COMPLETIONS.organize_classifyAll_complete as {
-        classifications: Array<{ title: string; category: string }>;
-      }
-    ).classifications;
-    for (const entry of ideaEntries) {
-      const expected = classifications.find(
-        (c) => c.title === entry.state.workflowInstanceState.title
+      .find(
+        (e) =>
+          e.workflowId === "ideas" &&
+          e.state.workflowInstanceState.title === "Fix search debounce"
       );
-      assert.equal(
-        entry.state.workflowInstanceState.category,
-        expected?.category,
-        `card ${entry.state.workflowInstanceState.title} got its category`
-      );
-      assert.ok(
-        Array.isArray(entry.state.workflowInstanceState.dependents),
-        "dependents are computed per card"
-      );
-    }
-    // flowState carries the approved taxonomy (E2), not duplicated on cards.
+    const fallbackCompletion = COMPLETIONS.ideas_classify_complete as {
+      category: string;
+      tags: string[];
+    };
+    assert.equal(fallbackCard?.state.currentState, "classified");
+    assert.equal(
+      fallbackCard?.state.workflowInstanceState.category,
+      fallbackCompletion.category,
+      "the fallback card classifies against the published taxonomy"
+    );
+    assert.deepEqual(
+      fallbackCard?.state.workflowInstanceState.tags,
+      fallbackCompletion.tags
+    );
+
+    // The taxonomy is auto-published to flowState (E2) before the import
+    // finished — no approval step.
     const state = runtime.getFlowState() as {
-      taxonomy?: { categories?: unknown };
+      taxonomy?: { categories?: unknown; categoryNames?: unknown };
     };
     assert.deepEqual(state.taxonomy?.categories, [
       { name: "delivery", definition: "Shippable product work" },
       { name: "polish", definition: "Quality and copy" },
     ]);
+    assert.deepEqual(state.taxonomy?.categoryNames, ["delivery", "polish"]);
 
     // E3: the ideas board declares field-value grouping by category.
     const ideasDef = runtime
@@ -1624,16 +1642,25 @@ describe("honeycomb preset runs the full pipeline (paste → approve → classif
     assert.equal(ideasDef?.ui?.groupByField, "category");
 
     // E4: the category edit field's options resolve from flowState's taxonomy.
-    const ideasEntries = runtime
-      .getWorkflowInstanceEntries()
-      .filter((e) => e.workflowId === "ideas");
-    const categoryField = ideasEntries[0]?.editFields.find(
+    const categoryField = ideaEntries[0]?.editFields.find(
       (f) => f.key === "category"
     );
     assert.deepEqual(categoryField?.options, ["delivery", "polish"]);
     assert.equal(categoryField?.optionsFrom, undefined);
 
+    // Build map: the singleton Map builder auto-runs build_map → done, and
     // map.md is persisted to the domain dir.
+    const mapBuilder = runtime.addWorkflowInstance("organize", {
+      workflowInstanceState: { name: "Map" },
+    });
+    await waitFor(
+      runtime,
+      (entries) =>
+        entries.some(
+          (e) => e.id === mapBuilder.id && e.state.currentState === "done"
+        ),
+      "map builder done"
+    );
     const mapPath = join(root, ".honeycomb", "map.md");
     const map = readFileSync(mapPath, "utf-8");
     assert.ok(map.includes("# Ideas Map"), "map.md header");
@@ -1647,75 +1674,45 @@ describe("honeycomb preset runs the full pipeline (paste → approve → classif
 // The mock model's completions per generated completion tool.
 const COMPLETIONS: Record<string, unknown> = {
   imports_parse_complete: {
-    ideas: [
-      { title: "Ship a demo", text: "- Ship a demo", source: "todos" },
-      {
-        title: "Rewrite onboarding copy",
-        text: "- Rewrite the onboarding copy",
-        source: "todos",
-      },
-      {
-        title: "Fix search debounce",
-        text: "- Fix the search debounce",
-        source: "todos",
-      },
-    ],
-  },
-  organize_taxonomize_complete: {
     categories: [
       { name: "delivery", definition: "Shippable product work" },
       { name: "polish", definition: "Quality and copy" },
     ],
-    priorityScale: { levels: [{ key: "p0" }, { key: "p1" }, { key: "p2" }] },
-    effortScale: { levels: [{ key: "S" }, { key: "M" }, { key: "L" }] },
-    dedupPolicy: "the same ask restated",
-  },
-  organize_classifyAll_complete: {
-    classifications: [
+    ideas: [
       {
         title: "Ship a demo",
+        text: "- Ship a demo",
         category: "delivery",
         tags: ["demo"],
         priority: "p0",
         effort: "M",
         status: "backlog",
-        dependsOn: [],
-        duplicateOf: "",
         summary: "Ship the demo.",
-        rationale: "Shippable work.",
       },
       {
         title: "Rewrite onboarding copy",
+        text: "- Rewrite the onboarding copy",
         category: "polish",
         tags: ["copy"],
         priority: "p1",
         effort: "S",
         status: "backlog",
-        dependsOn: [],
-        duplicateOf: "",
         summary: "Rewrite the copy.",
-        rationale: "Quality and copy.",
       },
       {
         title: "Fix search debounce",
-        category: "delivery",
-        tags: ["search"],
-        priority: "p1",
-        effort: "S",
-        status: "backlog",
-        dependsOn: ["Ship a demo"],
-        duplicateOf: "",
-        summary: "Fix the debounce.",
-        rationale: "Shippable work.",
+        text: "- Fix the search debounce",
+        // deliberately no category: the card must fall back to per-idea
+        // classify against the just-published taxonomy
       },
     ],
   },
   ideas_classify_complete: {
-    category: "delivery",
-    tags: ["manual"],
+    category: "polish",
+    tags: ["search"],
     priority: "p1",
-    effort: "M",
+    effort: "S",
     status: "backlog",
-    summary: "A manually added idea.",
+    summary: "Fix the debounce.",
   },
 };

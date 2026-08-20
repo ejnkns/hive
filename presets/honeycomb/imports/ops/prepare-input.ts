@@ -8,21 +8,20 @@ import {
 import type { TaskDefinition } from "workflow-engine/task-runner";
 import type { ImportsState } from "../types.ts";
 
-// Builds the parse task's input digest: the raw text plus its declared source,
-// so the parse agent can tag every split idea with the correct source without
-// guessing. Written into instanceState; the parse task seeds from it.
+// Builds the parse task's input digest: the raw text as JSON. Written into
+// instanceState; the parse task seeds from it. The parse agent reads the
+// existing taxonomy itself via the read_taxonomy tool.
 function prepareInputOp(
   _task: TaskDefinition,
   _params: Record<string, unknown>,
   ctx: OperationContext<ImportsState>
 ) {
   const state = ctx.workflowInstanceState();
-  const source = state.source ?? "manual";
   const rawText = state.rawText ?? "";
   ctx.patchWorkflowInstanceState({
-    digest: JSON.stringify({ source, rawText }),
+    digest: JSON.stringify({ rawText }),
   });
-  return { ok: true, source, chars: rawText.length };
+  return { ok: true, chars: rawText.length };
 }
 
 export const prepare_inputOperations = defineOperations<ImportsState>({

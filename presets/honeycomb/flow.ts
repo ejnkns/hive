@@ -4,7 +4,7 @@ export const flow: FlowDefinition = {
   id: "honeycomb",
   label: "Honeycomb",
   description:
-    "Paste raw idea notes in, approve one taxonomy, and it organizes itself — categories, tags, priority, effort, dependencies, dedupe, and an organized map.md.",
+    "Paste raw idea notes in — the agent explores the repo to understand the domain, splits the notes into ideas, and classifies every idea (category + tags). No approval step; map.md is one click away.",
   configSchema: [
     {
       key: "basePath",
@@ -15,7 +15,7 @@ export const flow: FlowDefinition = {
     },
   ],
   domainDir: ".honeycomb",
-  // The shared approved taxonomy lives in flowState (E2) — one place, never
+  // The shared published taxonomy lives in flowState (E2) — one place, never
   // duplicated onto the idea cards. Per-idea classifications are instance
   // data on the cards.
   flowState: [{ field: "taxonomy", type: "object" }],
@@ -32,41 +32,8 @@ export const flow: FlowDefinition = {
       writes: ["digest"],
     },
     {
-      id: "assemble_backlog_digest",
-      ref: "./organize/ops/assemble-backlog-digest.ts",
-      writes: ["backlogDigest"],
-    },
-    {
       id: "publish_taxonomy",
-      ref: "./organize/ops/publish-taxonomy.ts",
-    },
-    {
-      id: "assemble_classify_input",
-      ref: "./organize/ops/assemble-classify-input.ts",
-      writes: ["classifyInput"],
-    },
-    {
-      id: "apply_classifications",
-      ref: "./organize/ops/apply-classifications.ts",
-      // E1: the global classify pass writes each classification onto the
-      // matching idea card's declared state, matched by title.
-      writesAcross: [
-        {
-          workflow: "ideas",
-          fields: [
-            "category",
-            "tags",
-            "priority",
-            "effort",
-            "status",
-            "dependsOn",
-            "duplicateOf",
-            "summary",
-            "rationale",
-            "dependents",
-          ],
-        },
-      ],
+      ref: "./imports/ops/publish-taxonomy.ts",
     },
     {
       id: "build_map",
@@ -76,28 +43,19 @@ export const flow: FlowDefinition = {
       id: "check_classification",
       ref: "./ideas/ops/check-classification.ts",
     },
-    {
-      id: "compute_dependents",
-      ref: "./ideas/ops/compute-dependents.ts",
-      writes: ["dependents"],
-    },
   ],
   workflows: [
     {
       id: "imports",
       label: "Imports",
       description:
-        "One instance per paste session: raw text in, one idea card per chunk out.",
-      instance: { title: "name", subtitle: "source" },
+        "One instance per paste session: raw text in, classified idea cards out.",
+      instance: { title: "name" },
       display: {
-        fields: [
-          { path: "source", label: "Source" },
-          { path: "ideas", label: "Ideas", derive: { kind: "count" } },
-        ],
+        fields: [{ path: "ideas", label: "Ideas", derive: { kind: "count" } }],
       },
       instanceState: [
         { field: "name", type: "string" },
-        { field: "source", type: "string" },
         { field: "rawText", type: "string" },
         { field: "digest", type: "string" },
         { field: "ideas", type: "object[]" },
@@ -118,16 +76,31 @@ export const flow: FlowDefinition = {
             },
             {
               id: "parse",
-              label: "Split ideas",
+              label: "Split and classify ideas",
               role: "ai-task",
               systemPromptRef: "./imports/prompts/parse.ts",
               inputFromInstanceState: "digest",
+              // The file tools read the bound repo (the task's workspace is
+              // the flow's basePath); read_taxonomy surfaces existing
+              // categories so new ideas reuse them.
+              tools: [
+                "read_file",
+                "list_directory",
+                "search_code",
+                "read_taxonomy",
+              ],
               completionOutput: [
+                {
+                  field: "categories",
+                  type: "object[]",
+                  description:
+                    "The category set every idea is classified against: each { name, definition }, 4-9 total, reusing existing taxonomy category names when they fit.",
+                },
                 {
                   field: "ideas",
                   type: "object[]",
                   description:
-                    "Split idea chunks, each { title, text, source } with the source copied from the input digest.",
+                    "Classified idea chunks, each { title, text, category, tags, priority, effort, status, summary } — category from the returned categories, tags 2-5 short tags.",
                 },
               ],
             },
@@ -139,7 +112,13 @@ export const flow: FlowDefinition = {
             },
             {
               to: "failed",
-              gate: { kind: "taskError", task: "parse" },
+              gate: {
+                kind: "or",
+                gates: [
+                  { kind: "taskError", task: "prepareInput" },
+                  { kind: "taskError", task: "parse" },
+                ],
+              },
             },
           ],
         },
@@ -160,11 +139,36 @@ export const flow: FlowDefinition = {
                 },
               },
             },
+            {
+              id: "publishTaxonomy",
+              label: "Publish taxonomy to flowState",
+              role: "operation",
+              operations: ["publish_taxonomy"],
+            },
           ],
+          // Auto-transitions evaluate after EACH task, so the leave gate must
+          // wait for both tasks — the taxonomy has to be published before the
+          // fan-out creates cards (they classify against it).
           autoTransitions: [
             {
               to: "done",
-              gate: { kind: "taskSuccess", task: "recordIdeas" },
+              gate: {
+                kind: "and",
+                gates: [
+                  { kind: "taskSuccess", task: "recordIdeas" },
+                  { kind: "taskSuccess", task: "publishTaxonomy" },
+                ],
+              },
+            },
+            {
+              to: "failed",
+              gate: {
+                kind: "or",
+                gates: [
+                  { kind: "taskError", task: "recordIdeas" },
+                  { kind: "taskError", task: "publishTaxonomy" },
+                ],
+              },
             },
           ],
         },
@@ -192,230 +196,18 @@ export const flow: FlowDefinition = {
     },
     {
       id: "organize",
-      label: "Organize",
+      label: "Map",
       description:
-        "The singleton brain: propose a taxonomy, get one approval, classify everything against it, build map.md.",
+        "Builds map.md from the classified idea cards — one click, no AI.",
       instance: { title: "name" },
-      display: {
-        fields: [
-          {
-            path: "categories",
-            label: "Proposed categories",
-            derive: { kind: "count" },
-          },
-        ],
-      },
-      instanceState: [
-        { field: "name", type: "string" },
-        { field: "backlogDigest", type: "string" },
-        { field: "categories", type: "object[]" },
-        { field: "priorityScale", type: "object" },
-        { field: "effortScale", type: "object" },
-        { field: "dedupPolicy", type: "string" },
-        { field: "classifyInput", type: "string" },
-      ],
-      initial: "preparing",
+      instanceState: [{ field: "name", type: "string" }],
+      initial: "building",
       terminalStates: ["done"],
       states: [
         {
-          id: "preparing",
-          label: "Preparing",
+          id: "building",
+          label: "Building",
           category: "initial",
-          tasks: [
-            {
-              id: "assembleDigest",
-              label: "Assemble backlog digest",
-              role: "operation",
-              operations: ["assemble_backlog_digest"],
-            },
-          ],
-          autoTransitions: [
-            {
-              to: "taxonomizing",
-              gate: { kind: "taskSuccess", task: "assembleDigest" },
-            },
-            {
-              to: "failed",
-              gate: { kind: "taskError", task: "assembleDigest" },
-            },
-          ],
-        },
-        {
-          id: "taxonomizing",
-          label: "Taxonomizing",
-          category: "active",
-          tasks: [
-            {
-              id: "taxonomize",
-              label: "Propose taxonomy",
-              role: "ai-task",
-              systemPromptRef: "./organize/prompts/taxonomize.ts",
-              inputFromInstanceState: "backlogDigest",
-              completionOutput: [
-                {
-                  field: "categories",
-                  type: "object[]",
-                  description:
-                    "Proposed categories, each { name, definition }.",
-                },
-                {
-                  field: "priorityScale",
-                  type: "object",
-                  description: "A small priority rubric.",
-                },
-                {
-                  field: "effortScale",
-                  type: "object",
-                  description: "A small effort rubric.",
-                },
-                {
-                  field: "dedupPolicy",
-                  type: "string",
-                  description: "How near-duplicates are recognized.",
-                },
-              ],
-            },
-            {
-              id: "recordTaxonomy",
-              label: "Record proposed taxonomy",
-              role: "operation",
-              patch: {
-                categories: {
-                  kind: "taskOutput",
-                  task: "taxonomize",
-                  path: "output.categories",
-                },
-                priorityScale: {
-                  kind: "taskOutput",
-                  task: "taxonomize",
-                  path: "output.priorityScale",
-                },
-                effortScale: {
-                  kind: "taskOutput",
-                  task: "taxonomize",
-                  path: "output.effortScale",
-                },
-                dedupPolicy: {
-                  kind: "taskOutput",
-                  task: "taxonomize",
-                  path: "output.dedupPolicy",
-                },
-              },
-            },
-          ],
-          autoTransitions: [
-            {
-              to: "taxonomy_proposed",
-              gate: { kind: "taskSuccess", task: "taxonomize" },
-            },
-            {
-              to: "failed",
-              gate: { kind: "taskError", task: "taxonomize" },
-            },
-          ],
-        },
-        {
-          id: "taxonomy_proposed",
-          label: "Taxonomy proposed",
-          category: "active",
-          actions: [
-            {
-              id: "approve",
-              label: "Approve taxonomy",
-              variant: "primary",
-              transitionTo: "publishing",
-            },
-            {
-              id: "revise",
-              label: "Revise taxonomy",
-              variant: "secondary",
-              transitionTo: "taxonomizing",
-            },
-          ],
-        },
-        {
-          id: "publishing",
-          label: "Publishing",
-          category: "active",
-          tasks: [
-            {
-              id: "publishTaxonomy",
-              label: "Publish taxonomy to flowState",
-              role: "operation",
-              operations: ["publish_taxonomy"],
-            },
-          ],
-          autoTransitions: [
-            {
-              to: "classifying",
-              gate: { kind: "taskSuccess", task: "publishTaxonomy" },
-            },
-            {
-              to: "failed",
-              gate: { kind: "taskError", task: "publishTaxonomy" },
-            },
-          ],
-        },
-        {
-          id: "classifying",
-          label: "Classifying",
-          category: "active",
-          tasks: [
-            {
-              id: "assembleClassifyInput",
-              label: "Assemble classify input",
-              role: "operation",
-              operations: ["assemble_classify_input"],
-            },
-            {
-              id: "classifyAll",
-              label: "Classify everything",
-              role: "ai-task",
-              systemPromptRef: "./organize/prompts/classify-all.ts",
-              inputFromInstanceState: "classifyInput",
-              completionOutput: [
-                {
-                  field: "classifications",
-                  type: "object[]",
-                  description:
-                    "One entry per idea: { title, category, tags, priority, effort, status, dependsOn, duplicateOf, summary, rationale }.",
-                },
-              ],
-            },
-            {
-              id: "applyClassifications",
-              label: "Apply classifications",
-              role: "operation",
-              operations: ["apply_classifications"],
-            },
-          ],
-          autoTransitions: [
-            {
-              to: "map_building",
-              gate: {
-                kind: "and",
-                gates: [
-                  { kind: "taskSuccess", task: "classifyAll" },
-                  { kind: "taskSuccess", task: "applyClassifications" },
-                ],
-              },
-            },
-            {
-              to: "failed",
-              gate: {
-                kind: "or",
-                gates: [
-                  { kind: "taskError", task: "classifyAll" },
-                  { kind: "taskError", task: "applyClassifications" },
-                ],
-              },
-            },
-          ],
-        },
-        {
-          id: "map_building",
-          label: "Building map",
-          category: "active",
           tasks: [
             {
               id: "buildMap",
@@ -442,10 +234,10 @@ export const flow: FlowDefinition = {
           category: "terminal",
           actions: [
             {
-              id: "reclassify",
-              label: "Re-classify",
+              id: "rebuild",
+              label: "Rebuild map",
               variant: "primary",
-              transitionTo: "classifying",
+              transitionTo: "building",
             },
           ],
         },
@@ -458,7 +250,7 @@ export const flow: FlowDefinition = {
               id: "retry",
               label: "Retry",
               variant: "primary",
-              transitionTo: "preparing",
+              transitionTo: "building",
             },
             {
               id: "discard",
@@ -490,9 +282,6 @@ export const flow: FlowDefinition = {
           { path: "effort", label: "Effort" },
           { path: "status", label: "Status" },
           { path: "tags", label: "Tags" },
-          { path: "dependsOn", label: "Depends on" },
-          { path: "dependents", label: "Dependents" },
-          { path: "duplicateOf", label: "Duplicate of" },
         ],
       },
       editFields: [
@@ -502,7 +291,7 @@ export const flow: FlowDefinition = {
           type: "string",
           // E4: the category select's options come from flowState's published
           // taxonomy (the AI's categories) — falls back to free text before
-          // the taxonomy is approved.
+          // the taxonomy is published.
           optionsFrom: { flowState: "taxonomy.categoryNames" },
         },
         { key: "tags", label: "Tags", type: "string[]" },
@@ -528,17 +317,12 @@ export const flow: FlowDefinition = {
       instanceState: [
         { field: "title", type: "string" },
         { field: "originalText", type: "string" },
-        { field: "source", type: "string" },
         { field: "category", type: "string" },
         { field: "tags", type: "string[]" },
         { field: "priority", type: "string" },
         { field: "effort", type: "string" },
         { field: "status", type: "string" },
-        { field: "dependsOn", type: "string[]" },
-        { field: "duplicateOf", type: "string" },
         { field: "summary", type: "string" },
-        { field: "rationale", type: "string" },
-        { field: "dependents", type: "string[]" },
       ],
       initial: "imported",
       terminalStates: ["done", "parked"],
@@ -555,6 +339,8 @@ export const flow: FlowDefinition = {
               operations: ["check_classification"],
             },
           ],
+          // A card the parse agent classified stays put; an uncategorized card
+          // (import fallback or a manual add) routes to per-idea classify.
           autoTransitions: [
             {
               to: "classify",
@@ -627,12 +413,6 @@ export const flow: FlowDefinition = {
                   path: "output.summary",
                 },
               },
-            },
-            {
-              id: "computeDependents",
-              label: "Compute dependents",
-              role: "operation",
-              operations: ["compute_dependents"],
             },
           ],
           autoTransitions: [
@@ -711,8 +491,9 @@ export const flow: FlowDefinition = {
   ],
   edges: [
     {
-      // One idea card per parsed chunk, preserving the original text and the
-      // import's source (the parse agent echoes source from the input digest).
+      // One idea card per parsed chunk, born with its parse classification —
+      // the taxonomy is already published by the time this edge fires, so any
+      // card that somehow lacks a category falls into per-idea classify.
       fromWorkflow: "imports",
       fromStates: ["done"],
       toWorkflow: "ideas",
@@ -722,7 +503,12 @@ export const flow: FlowDefinition = {
         fields: {
           title: { kind: "itemPath", path: "title" },
           originalText: { kind: "itemPath", path: "text" },
-          source: { kind: "itemPath", path: "source" },
+          category: { kind: "itemPath", path: "category" },
+          tags: { kind: "itemPath", path: "tags" },
+          priority: { kind: "itemPath", path: "priority" },
+          effort: { kind: "itemPath", path: "effort" },
+          status: { kind: "itemPath", path: "status" },
+          summary: { kind: "itemPath", path: "summary" },
         },
       },
     },
@@ -741,14 +527,6 @@ export const flow: FlowDefinition = {
             type: "string",
             required: true,
             placeholder: "e.g. TODOs dump",
-          },
-          {
-            key: "source",
-            label: "Source",
-            type: "string",
-            options: ["todos", "google-doc", "manual"],
-            required: true,
-            defaultValue: "todos",
           },
           {
             key: "rawText",
@@ -779,22 +557,16 @@ export const flow: FlowDefinition = {
             type: "textarea",
             required: true,
           },
-          {
-            key: "source",
-            label: "Source",
-            type: "string",
-            options: ["todos", "google-doc", "manual"],
-            defaultValue: "manual",
-          },
         ],
       },
     },
     {
-      id: "start_organizing",
-      label: "Start organizing",
+      id: "build_map",
+      label: "Build map",
       variant: "primary",
-      // The organize brain is a singleton: the action hides once one exists
-      // (the gate reads workflowInstancesInState by workflow).
+      // The map builder is a singleton: the action hides once one exists (the
+      // gate reads workflowInstancesInState by workflow). Its done state
+      // offers Rebuild map for later passes.
       gate: { kind: "file", ref: "./gates/organize-exists.ts" },
       createInstance: {
         workflowId: "organize",
@@ -803,7 +575,7 @@ export const flow: FlowDefinition = {
             key: "name",
             label: "Name",
             type: "string",
-            defaultValue: "Organizer",
+            defaultValue: "Map",
           },
         ],
       },
