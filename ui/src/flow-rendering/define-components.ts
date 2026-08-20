@@ -14,12 +14,14 @@ import "./components/markdown-view.ts";
 import "./components/text-view.ts";
 import "./components/card-view.ts";
 import "./components/cards-view.ts";
+import "./components/chips-view.ts";
 import "./components/json-view.ts";
 import "./components/workflow-instance-card.ts";
 import "./components/workflow-instances.ts";
 import "./components/workflow-board-content.ts";
 import { CardView } from "./components/card-view.ts";
 import { CardsView } from "./components/cards-view.ts";
+import { ChipsView } from "./components/chips-view.ts";
 import { FlowEditor } from "./components/flow-editor.ts";
 import { JsonView } from "./components/json-view.ts";
 import { MarkdownView } from "./components/markdown-view.ts";
@@ -39,5 +41,6 @@ export function defineFlowRenderingComponents(): void {
   registerKindRenderer("text", TextView);
   registerKindRenderer("card", CardView);
   registerKindRenderer("cards", CardsView);
+  registerKindRenderer("chips", ChipsView);
   registerKindRenderer("json", JsonView);
 }

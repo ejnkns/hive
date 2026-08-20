@@ -14,7 +14,7 @@
 
 4. **How a human drives the flow.** `ManualAction` buttons on states; flow-level actions for creating instances (`createInstance`) or bulk dispatch (`dispatchToAll`). Variants: `primary` = the call to action, `destructive` = irreversible (discard/delete), `secondary`/default = neutral. Every instance needs a way to be created and a way to finish.
 
-5. **How work flows between workflows.** Edges: when an instance of one workflow reaches a state you list, its task output transforms into a new instance of another workflow (`fields`) — or one instance per array item (`fanOut`). Use edges to build pipelines, never to duplicate data.
+5. **How work flows between workflows.** Edges: when an instance of one workflow reaches a state you list, its task output transforms into a new instance of another workflow (`fields`) — or one instance per array item (`fanOut`). Use edges to build pipelines, never to duplicate data. To REFRESH an aggregate/singleton when work lands (a map rebuilt after each import), declare an `autoDispatch` edge — it dispatches an action to every instance of the target (creating it once when none exists) through the same availability path as a click; declare it AFTER the edge that creates the work it reads.
 
 6. **Error handling — every flow needs an escape hatch.** Any ai-task or operation can fail. For every state with fallible tasks, add a needs-review/error state, gate `taskError` autoTransitions into it, and give it a retry action (transition back to the work state) and a discard action (transition to a terminal). The engine fails fast on ai-tasks with no system prompt and no input, so a state with no escape hatch becomes a stuck instance.
 

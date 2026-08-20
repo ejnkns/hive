@@ -42,11 +42,7 @@ export const FIELD_TYPES: Record<FieldType, string> = {
 };
 
 // The engine's builtin render kinds (a definition may declare custom kinds in
-// ui.kinds and reference them freely).
-export const BUILTIN_RENDER_KINDS: readonly string[] = [
-  "markdown",
-  "text",
-  "card",
-  "cards",
-  "json",
-];
+// ui.kinds and reference them freely). Mirrors the engine manifest so the
+// validator can never drift from the kinds the UI ships.
+export const BUILTIN_RENDER_KINDS: readonly string[] =
+  engineCapabilities.renderKinds;

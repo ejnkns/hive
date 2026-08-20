@@ -67,11 +67,25 @@ export function toCardsViewItems(cards: unknown[]): CardsViewItem[] {
 export function stringifyValue(value: unknown): string {
   if (value === undefined || value === null) return "";
   if (typeof value === "string") return value;
+  // An array of strings/scalars reads as comma-joined text (no brackets, no
+  // quotes); an empty array joins to "". An array containing objects keeps the
+  // JSON path — for structured data the shape is the meaning.
+  if (Array.isArray(value) && value.every((item) => isScalar(item))) {
+    return truncate(value.join(", "), 2000);
+  }
   // JSON.stringify returns undefined for undefined/function/symbol; those are
   // handled above (or are non-wire values), but the empty fallback keeps a
   // missing display field from crashing the card render.
   const serialized = JSON.stringify(value, null, 2);
   return truncate(serialized ?? "", 2000);
+}
+
+function isScalar(value: unknown): boolean {
+  return (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  );
 }
 
 function truncate(value: string, maxLength: number): string {
