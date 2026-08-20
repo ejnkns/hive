@@ -1085,14 +1085,19 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       </div>`;
     }
 
-    // The last agent failure: an errored research task leaves its error in
-    // taskOutputs, so the card names the reason the run stopped (the retry
-    // action sits right below).
+    // The last agent failure: an errored resolution task (research or one of
+    // the chat sessions) leaves its error in taskOutputs, so the card names
+    // the reason the run stopped (the retry action sits right below).
     private renderTaskError(entry: FlowViewProps["entries"][number]) {
       if (entry.state.hasRunningTask) return nothing;
-      const research = entry.state.taskOutputs.research;
-      if (research === undefined || research.status !== "error") return nothing;
-      return html`<div class="task-error">${research.error}</div>`;
+      for (const taskId of RESOLUTION_TASKS) {
+        const outcome = entry.state.taskOutputs[taskId];
+        if (outcome !== undefined && outcome.status === "error") {
+          const error = readOutcomeError(outcome);
+          return html`<div class="task-error">${error}</div>`;
+        }
+      }
+      return nothing;
     }
 
     // A workflow instance's available state actions (everything is data — the
@@ -1582,6 +1587,24 @@ function firstLine(text: string): string {
     .map((line) => line.trim())
     .find((line) => line !== "");
   return first ?? text.slice(0, 60);
+}
+
+// The resolution tasks whose error can leave a ticket in a resolving state:
+// research (ai-task) and the four chat resolution sessions.
+const RESOLUTION_TASKS = [
+  "research",
+  "prototypeSession",
+  "grillSession",
+  "taskSession",
+  "taskHitlSession",
+];
+
+// Reads the error message off a task-outcome entry (the wire shape is open;
+// the read is defensive — an absent message reads as a generic failure).
+function readOutcomeError(outcome: unknown): string {
+  if (outcome === null || typeof outcome !== "object") return "unknown error";
+  const error = (outcome as Record<string, unknown>).error;
+  return typeof error === "string" && error !== "" ? error : "unknown error";
 }
 
 // The agent is composing its next reply while the transcript ends on anything

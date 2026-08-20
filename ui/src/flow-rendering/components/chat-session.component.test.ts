@@ -128,4 +128,18 @@ describe("ChatSession", () => {
     const event = await emitted;
     expect(event.detail).toEqual({ content: "hello" });
   });
+
+  it("shows a failed model call as an error line, not a thinking pulse", async () => {
+    const el = await mount(
+      Object.assign(new ChatSession(), {
+        messages: [],
+        interactive: true,
+        modelStatus: { stage: "error", message: "read ECONNRESET" },
+      })
+    );
+    await settle(shadowRootOf(el));
+    const error = mustQuery(shadowRootOf(el), ".session-error");
+    expect(error.textContent).toContain("read ECONNRESET");
+    expect(shadowRootOf(el).querySelector(".thinking")).toBeNull();
+  });
 });

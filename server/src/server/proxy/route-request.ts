@@ -270,6 +270,14 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
             ttft: Date.now() - start,
             requestId,
           });
+        } else {
+          // The request already resolved with the ok stream, so the consumer
+          // holds the passThrough. The upstream failed mid-stream: terminate
+          // the downstream with the error so the consumer settles (rejects)
+          // instead of hanging open forever waiting for an end that never
+          // comes. The consumeSseStream consumer listens for 'error', so the
+          // destroy surfaces the failure and the model caller can retry.
+          failDownstream(passThrough, err);
         }
       });
 
@@ -317,6 +325,18 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
             ttft: effectiveTtft,
             requestId,
           });
+        } else if (!streamErrored && stats.isAbruptDisconnect) {
+          // The upstream closed the stream without a [DONE] terminator or
+          // finish reason: an incomplete response. The pipe would otherwise
+          // end the passThrough normally and the consumer would commit a
+          // truncated reply as if it were complete. Terminate the downstream
+          // with an error so the consumer retries instead.
+          failDownstream(
+            passThrough,
+            new Error(
+              `Upstream stream ended abruptly without [DONE] (${providerName}:${modelName})`
+            )
+          );
         }
       });
     });
@@ -365,4 +385,17 @@ export function routeRequest(opts: RouteRequestOptions): Promise<RouteResult> {
     req.write(bodyBuffer);
     req.end();
   });
+}
+
+// Terminates a downstream stream that was already handed to a consumer with
+// the upstream's failure. The destroy emits 'error' on the stream, which the
+// SSE consumers listen for; deferring to setImmediate guarantees the event
+// fires after any consumer that attaches in the same turn (microtasks after
+// the routeRequest promise resolves), so a fast upstream failure cannot
+// outrun the consumer's listener. The swallow listener keeps a late-attaching
+// or never-attaching consumer from crashing the process — the failure was
+// already communicated to anyone listening.
+function failDownstream(stream: PassThrough, err: Error): void {
+  stream.on("error", () => {});
+  setImmediate(() => stream.destroy(err));
 }

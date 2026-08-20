@@ -766,6 +766,16 @@ export const flow: FlowDefinition = {
               },
               transitionTo: "ready",
             },
+            {
+              id: "retry",
+              label: "Retry prototype",
+              variant: "secondary",
+              gate: {
+                kind: "taskError",
+                task: "prototypeSession",
+              },
+              transitionTo: "resolving_prototype",
+            },
           ],
         },
         {
@@ -778,6 +788,11 @@ export const flow: FlowDefinition = {
               label: "Grilling session",
               role: "ai-chat",
               startOnUserInput: true,
+              // The ticket's question opens the session as its first user
+              // message, so claiming a grilling ticket starts the grill on the
+              // recorded question immediately (not a cold, empty session that
+              // waits for the human to retype what the card already shows).
+              inputFromInstanceState: "question",
               render: {
                 kind: "prototype-decision",
                 props: {
@@ -835,6 +850,16 @@ export const flow: FlowDefinition = {
                 kind: "hasRunningTask",
               },
               transitionTo: "ready",
+            },
+            {
+              id: "retry",
+              label: "Retry grilling",
+              variant: "secondary",
+              gate: {
+                kind: "taskError",
+                task: "grillSession",
+              },
+              transitionTo: "resolving_grilling",
             },
           ],
         },
@@ -971,6 +996,16 @@ export const flow: FlowDefinition = {
                 kind: "hasRunningTask",
               },
               transitionTo: "ready",
+            },
+            {
+              id: "retry",
+              label: "Retry session",
+              variant: "secondary",
+              gate: {
+                kind: "taskError",
+                task: "taskHitlSession",
+              },
+              transitionTo: "resolving_task_hitl",
             },
           ],
         },
@@ -1142,6 +1177,18 @@ export const flow: FlowDefinition = {
                   },
                 ],
               },
+            },
+          ],
+          actions: [
+            {
+              id: "retry_plan",
+              label: "Retry plan",
+              variant: "secondary",
+              gate: {
+                kind: "taskError",
+                task: "plan",
+              },
+              transitionTo: "planned",
             },
           ],
         },

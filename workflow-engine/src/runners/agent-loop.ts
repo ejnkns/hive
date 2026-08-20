@@ -72,6 +72,18 @@ export type AgentTurnBehavior = {
     | { action: "wait" }
     | { action: "reprompt"; message: string }
   >;
+  // The model call threw (a mid-stream upstream failure, a provider outage).
+  // Decide how the turn continues:
+  //   "wait"    — surface the failure to the session and wait for input
+  //               (interactive ai-chat sessions survive transient failures:
+  //               the human continues by sending a message).
+  //   "throw"   — fail the task; flows route task errors via gates/actions.
+  // Absent: throw.
+  onModelCallError?: (
+    err: unknown,
+    messages: ChatMessage[],
+    task: TaskDefinition
+  ) => Promise<{ action: "wait" } | { action: "throw" }>;
 };
 
 export type AgentLoopConfig = AgentRunnerConfig & {
@@ -194,13 +206,36 @@ export async function runAgentLoop(
     config.signal.throwIfAborted();
 
     config.patchRunningTaskStatus?.({ stage: "routing" });
-    const response = await config.modelCaller(
-      task.systemPrompt ?? "",
-      messages,
-      toolDefs,
-      config.signal,
-      config.patchRunningTaskStatus
-    );
+    let response: { content: string; toolCalls?: ToolCall[] };
+    try {
+      response = await config.modelCaller(
+        task.systemPrompt ?? "",
+        messages,
+        toolDefs,
+        config.signal,
+        config.patchRunningTaskStatus
+      );
+    } catch (err) {
+      // An aborted call is the caller's decision, not a model failure.
+      if (config.signal.aborted) throw err;
+      const message = err instanceof Error ? err.message : String(err);
+      config.patchRunningTaskStatus?.({ stage: "error", message });
+      const decision = (await config.behavior.onModelCallError?.(
+        err,
+        messages,
+        task
+      )) ?? {
+        action: "throw" as const,
+      };
+      if (decision.action === "wait") {
+        // The session surfaces the failure (the behavior appends an error
+        // note to the transcript) and waits for the human to continue; the
+        // next iteration re-calls the model with the full transcript.
+        await config.behavior.waitForInput?.();
+        continue;
+      }
+      throw err;
+    }
     config.patchRunningTaskStatus?.({ stage: "complete" });
 
     messages.push({

@@ -271,6 +271,114 @@ describe("wayfinder served modules", () => {
     }
   });
 
+  it("ticket-card does not show the thinking indicator for a session waiting for its first user input", async () => {
+    defineFlowRenderingComponents();
+    localStorage.clear();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, text: async () => "" }))
+    );
+    const restore = await loadFlowComponents(
+      { "ticket-card": "/api/.../ticket-card" },
+      load(ticketCardModule)
+    );
+    try {
+      // A freshly claimed grilling ticket: the session runs but the transcript
+      // is only the system prompt — the agent is waiting for the human's first
+      // message, not thinking. The card must invite input, not claim the agent
+      // is composing a reply.
+      const instance = ticketEntry("t-2", "resolving_grilling");
+      instance.state.workflowInstanceState = {
+        title: "Grill the auth model",
+        question: "Which auth flow?",
+        type: "grilling",
+      };
+      instance.state.hasRunningTask = true;
+      instance.state.runningTaskContext = {
+        role: "ai-chat",
+        interactive: true,
+        sessionId: "s-1",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are grilling one decision ticket to resolution. The question is provided by the human.",
+          },
+        ],
+      };
+      const el = await mount(
+        Object.assign(new WorkflowInstances(), {
+          flowId: "flow-1",
+          workflowDefs: [ticketDef()],
+          instances: [instance],
+          customKinds: [],
+        })
+      );
+      await settle(shadowRootOf(el));
+
+      expect(queryAllDeep(el, ".thinking").length).toBe(0);
+      // The interactive input is still offered — the human starts the session.
+      expect(
+        queryAllDeep(el, "input[placeholder='Type a message...']").length
+      ).toBe(1);
+    } finally {
+      restore();
+    }
+  });
+
+  it("ticket-card surfaces a failed resolution session with the error and the retry action", async () => {
+    defineFlowRenderingComponents();
+    localStorage.clear();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, text: async () => "" }))
+    );
+    const restore = await loadFlowComponents(
+      { "ticket-card": "/api/.../ticket-card" },
+      load(ticketCardModule)
+    );
+    try {
+      // The grilling session errored (a mid-stream failure that exhausted the
+      // retries): the card must explain why the session stopped and offer the
+      // retry action instead of leaving the user staring at a stale state.
+      const instance = ticketEntry("t-2", "resolving_grilling");
+      instance.state.workflowInstanceState = {
+        title: "Grill the auth model",
+        question: "Which auth flow?",
+        type: "grilling",
+      };
+      instance.state.taskOutputs = {
+        grillSession: {
+          status: "error",
+          error: "read ECONNRESET",
+          output: undefined,
+        },
+      };
+      instance.availableActions = [
+        { id: "retry", label: "Retry grilling", variant: "secondary" },
+      ];
+      const el = await mount(
+        Object.assign(new WorkflowInstances(), {
+          flowId: "flow-1",
+          workflowDefs: [ticketDef()],
+          instances: [instance],
+          customKinds: [],
+        })
+      );
+      await settle(shadowRootOf(el));
+
+      const error = queryAllDeep(el, ".session-error")[0];
+      expect(error?.textContent).toContain("read ECONNRESET");
+      expect(queryAllDeep(el, ".thinking").length).toBe(0);
+      const buttons = queryAllDeep(el, ".ticket-actions button").map((button) =>
+        button.textContent?.trim()
+      );
+      expect(buttons).toContain("Retry grilling");
+    } finally {
+      restore();
+    }
+  });
+
   it("build-item-card renders the worker outcome and the reviewer verdict + findings", async () => {
     defineFlowRenderingComponents();
     localStorage.clear();

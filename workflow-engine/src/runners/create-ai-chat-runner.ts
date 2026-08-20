@@ -67,6 +67,24 @@ export function createAiChatRunner(config: AiChatRunnerConfig): TaskRunner {
       const behavior: AgentTurnBehavior = {
         onMessagesChanged: (m) => config.patchRunningTaskMessages?.(m),
         waitForInput,
+        onModelCallError: async (err, messages, task) => {
+          if (task.startOnUserInput) {
+            // A transient model-call failure must not kill an interactive
+            // session (the mid-stream ECONNRESET case): surface it in the
+            // transcript and wait for the human. The next message re-runs the
+            // model with the full conversation, so nothing is lost.
+            const message = err instanceof Error ? err.message : String(err);
+            messages.push({
+              role: "system",
+              content: `Model call failed: ${message}. Send a message to retry, or use Done/Cancel to end the session.`,
+            });
+            config.patchRunningTaskMessages?.(messages);
+            return { action: "wait" };
+          }
+          // One-shot sessions fail the task; the flow's gates and retry
+          // actions route the failure.
+          return { action: "throw" };
+        },
         onComplete: (response, completionCall) => ({
           content: response.content,
           messages,

@@ -44,6 +44,15 @@ export class ChatSession extends LitElement {
       font-size: 0.625rem;
     }
 
+    .session-error {
+      color: var(--error);
+      font-size: 0.625rem;
+      border: 1px solid var(--error);
+      border-radius: 4px;
+      padding: 0.25rem 0.5rem;
+      background: var(--bg);
+    }
+
     .thinking-dots {
       display: inline-flex;
       gap: 2px;
@@ -216,9 +225,16 @@ export class ChatSession extends LitElement {
 
   // The status row above the input: the live model-call progress when the
   // proxy reports it (routing → dispatched → thinking → streaming), else the
-  // generic thinking indicator. A completed call leaves the row empty.
+  // generic thinking indicator. A failed call renders as an error line (no
+  // pulse — the agent is not composing anything); a completed call leaves the
+  // row empty.
   private renderStatus() {
     const status = this.modelStatus;
+    if (status !== undefined && status.stage === "error") {
+      return html`<div class="session-error"
+        >Model call failed: ${status.message}</div
+      >`;
+    }
     if (status !== undefined && status.stage !== "complete") {
       const label =
         status.stage === "routing"
@@ -227,9 +243,7 @@ export class ChatSession extends LitElement {
             ? `→ ${status.provider}:${status.model}`
             : status.stage === "thinking"
               ? "Thinking…"
-              : status.stage === "streaming"
-                ? "Streaming…"
-                : `Model call failed: ${status.message}`;
+              : "Streaming…";
       return html`<div class="thinking">
         <span class="thinking-dots"
           ><span></span><span></span><span></span></span

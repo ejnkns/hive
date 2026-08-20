@@ -5,7 +5,6 @@
  * actions. Self-contained (no value imports — the lit runtime arrives through
  * the default-export factory). */
 
-import type { LitElement } from "lit";
 import type {
   ChatMessage,
   FlowComponentDeps,
@@ -151,6 +150,14 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         border-top: 1px dashed var(--border);
         padding-top: 0.5rem;
       }
+      .session-error {
+        font-size: 0.625rem;
+        color: var(--error);
+        border: 1px solid var(--error);
+        border-radius: 4px;
+        padding: 0.375rem 0.5rem;
+        background: var(--bg);
+      }
       .session-header {
         display: flex;
         flex-direction: column;
@@ -247,6 +254,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         }
         ${this.renderDecision()}
         ${this.renderChat()}
+        ${this.renderSessionError()}
         ${
           actions.length > 0
             ? html`<div class="ticket-actions">
@@ -297,6 +305,24 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       return nothing;
     }
 
+    // The last resolution failure: an errored chat session leaves its error in
+    // taskOutputs, so the card names the reason the session stopped (the retry
+    // action sits right below in the action row).
+    private renderSessionError() {
+      const state = this.instanceEntry.state;
+      if (state.hasRunningTask) return nothing;
+      for (const taskId of CHAT_RESOLUTION_TASKS) {
+        const outcome = state.taskOutputs[taskId];
+        if (outcome !== undefined && outcome.status === "error") {
+          const error = readOutcomeError(outcome);
+          return html`<div class="session-error"
+            >Resolution failed: ${error} — retry to start a new session.</div
+          >`;
+        }
+      }
+      return nothing;
+    }
+
     // The live HITL chat: shown when an interactive ai-chat session runs (a
     // prototype/grilling/task session). Read-only transcript + reply input.
     private renderChat() {
@@ -335,11 +361,15 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
   return { components: { "ticket-card": TicketCard } };
 }
 
-// The agent is composing its next reply while the transcript ends on anything
-// but an assistant message.
+// The agent is composing its next reply while the transcript ends on a message
+// it must answer (a user message it hasn't replied to yet, or a tool result
+// mid-loop). A transcript that ends on the system prompt (or is empty) is a
+// session waiting for its first user input — the agent is NOT thinking, and
+// showing the indicator there is what makes a claimed-but-idle session look
+// stuck.
 function agentIsThinking(messages: readonly ChatMessage[]): boolean {
   const last = messages[messages.length - 1];
-  return last !== undefined && last.role !== "assistant";
+  return last !== undefined && (last.role === "user" || last.role === "tool");
 }
 
 // Reads a string field off a task-outcome output (the output shape is open;
@@ -358,6 +388,14 @@ function readOutputArray(outcome: unknown, field: string): string[] {
   if (output === null || typeof output !== "object") return [];
   const value = (output as Record<string, unknown>)[field];
   return Array.isArray(value) ? (value as string[]) : [];
+}
+
+// Reads the error message off a task-outcome entry (the wire shape is open;
+// the read is defensive — an absent message reads as a generic failure).
+function readOutcomeError(outcome: unknown): string {
+  if (outcome === null || typeof outcome !== "object") return "unknown error";
+  const error = (outcome as Record<string, unknown>).error;
+  return typeof error === "string" && error !== "" ? error : "unknown error";
 }
 
 // Reads a string field off an ai-chat task's completion arguments (wrapped as

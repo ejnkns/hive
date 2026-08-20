@@ -3,6 +3,7 @@
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import type { Readable } from "node:stream";
+import { logger } from "shared/logger";
 import type {
   OperationContext,
   OperationFn,
@@ -191,6 +192,19 @@ function resolveAndPatchFlowConfig(
 
 // ─── Model caller adapter ──────────────────────────────────────────────
 
+// A mid-stream upstream failure (a connection reset after the response
+// started) is a transient network event, not a judgment on the conversation:
+// the transcript is only committed after the stream completes, so re-issuing
+// the exact same payload is always safe. The proxy's failover covers
+// pre-stream errors; this retry covers what it cannot see — a stream that
+// dies after the first byte. Bounded, so a persistently failing provider
+// still surfaces as a task error the flow can route.
+const MAX_STREAM_RETRIES = 2;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function consumeStream(
   stream: Readable,
   signal?: AbortSignal,
@@ -256,36 +270,57 @@ function createModelCaller(_engineTools: ToolDefinition[]) {
       messages[0]?.role === "system"
         ? messages
         : [{ role: "system", content: systemPrompt } as const, ...messages];
-    const result = await handleChatCompletion(
-      {
-        messages: allMessages,
-        tools: tools.length > 0 ? tools : undefined,
-        stream: true,
-      },
-      {},
-      signal
-    );
-    if (!result.success || !result.stream) {
-      throw new Error(result.error ?? "Model call failed");
-    }
-    // The request has been routed and the response is streaming: report the
-    // chosen node, then flip to thinking/streaming as the deltas arrive.
-    onStatus?.({
-      stage: "dispatched",
-      provider: result.provider ?? "",
-      model: result.model ?? "",
-    });
-    const response = await consumeStream(result.stream, signal, (delta) => {
-      if (typeof delta.reasoning_content === "string") {
-        onStatus?.({ stage: "thinking" });
-      } else if (typeof delta.content === "string" && delta.content !== "") {
-        onStatus?.({ stage: "streaming" });
+
+    for (let attempt = 0; ; attempt++) {
+      const result = await handleChatCompletion(
+        {
+          messages: allMessages,
+          tools: tools.length > 0 ? tools : undefined,
+          stream: true,
+        },
+        {},
+        signal
+      );
+      if (!result.success || !result.stream) {
+        throw new Error(result.error ?? "Model call failed");
       }
-    });
-    return {
-      content: response.content,
-      toolCalls: response.toolCalls.length > 0 ? response.toolCalls : undefined,
-    };
+      // The request has been routed and the response is streaming: report the
+      // chosen node, then flip to thinking/streaming as the deltas arrive.
+      onStatus?.({
+        stage: "dispatched",
+        provider: result.provider ?? "",
+        model: result.model ?? "",
+      });
+      try {
+        const response = await consumeStream(result.stream, signal, (delta) => {
+          if (typeof delta.reasoning_content === "string") {
+            onStatus?.({ stage: "thinking" });
+          } else if (
+            typeof delta.content === "string" &&
+            delta.content !== ""
+          ) {
+            onStatus?.({ stage: "streaming" });
+          }
+        });
+        return {
+          content: response.content,
+          toolCalls:
+            response.toolCalls.length > 0 ? response.toolCalls : undefined,
+        };
+      } catch (err) {
+        // An aborted call is the caller's decision, not a failure to retry.
+        if (signal?.aborted) throw err;
+        if (attempt >= MAX_STREAM_RETRIES) throw err;
+        logger.warn(
+          `model stream failed on attempt ${attempt + 1}/${MAX_STREAM_RETRIES + 1} — retrying the same conversation: ${
+            err instanceof Error ? err.message : String(err)
+          }`
+        );
+        // The next attempt re-runs routing from scratch; report it.
+        onStatus?.({ stage: "routing" });
+        await sleep(300 * (attempt + 1));
+      }
+    }
   };
 }
 

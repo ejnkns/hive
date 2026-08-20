@@ -609,4 +609,72 @@ describe("createAiChatRunner", () => {
     );
     assert.equal(calls, 0, "no model call for a missing declared input");
   });
+
+  it("keeps an interactive session alive when a model call fails, retrying on the next message", async () => {
+    let calls = 0;
+    const snapshots: ChatMessage[][] = [];
+    const modelCaller: AiChatModelCaller = async () => {
+      calls++;
+      if (calls === 1) throw new Error("read ECONNRESET");
+      return { content: "##COMPLETE##" };
+    };
+    const runner = createAiChatRunner({
+      modelCaller,
+      toolDefinitions: {},
+      toolExecutors: {},
+      completionSignal: "##COMPLETE##",
+      patchRunningTaskMessages: (messages) => snapshots.push([...messages]),
+    });
+
+    const runPromise = runner.run({ ...dummyTask, startOnUserInput: true });
+    await runner.sendMessage?.("Which auth flow?", "user");
+
+    // A failed model call must not kill an interactive session: the transcript
+    // gains a system error note and the session waits for the human instead of
+    // rejecting the task (the mid-stream ECONNRESET case).
+    await waitFor(() =>
+      snapshots.some((messages) =>
+        messages.some(
+          (message) =>
+            message.role === "system" &&
+            message.content.includes("Model call failed")
+        )
+      )
+    );
+    assert.equal(calls, 1, "the failed call is not replayed automatically");
+
+    // The human continues: the next message re-runs the model with the full
+    // transcript (the error note included) and the session completes.
+    await runner.sendMessage?.("continue", "user");
+    const result = await runPromise;
+    assert.equal(calls, 2, "the next user message re-invokes the model");
+    assert.ok(
+      (result.output as { content: string }).content.includes("##COMPLETE##")
+    );
+  });
+
+  it("fails a non-interactive session when the model call fails", async () => {
+    const runner = createAiChatRunner({
+      modelCaller: async () => {
+        throw new Error("read ECONNRESET");
+      },
+      toolDefinitions: {},
+      toolExecutors: {},
+    });
+
+    await assert.rejects(runner.run(dummyTask), /read ECONNRESET/);
+  });
 });
+
+async function waitFor(
+  condition: () => boolean,
+  timeoutMs = 5_000
+): Promise<void> {
+  const start = Date.now();
+  while (!condition()) {
+    if (Date.now() - start > timeoutMs) {
+      throw new Error("waitFor timed out");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+}

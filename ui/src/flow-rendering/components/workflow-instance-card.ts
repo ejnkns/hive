@@ -372,12 +372,15 @@ export class WorkflowInstanceCard extends LitElement {
   }
 
   // The agent is composing its next reply when the task is running and the
-  // transcript ends on anything but an assistant message (a user message it
-  // hasn't answered yet, or a tool result mid-loop).
+  // transcript ends on a message it must answer (a user message it hasn't
+  // replied to yet, or a tool result mid-loop). A transcript that ends on the
+  // system prompt (or is empty) is a session waiting for its first user input
+  // — the agent is NOT thinking, and showing the indicator there is what makes
+  // a claimed-but-idle session look stuck.
   private agentIsThinking(messages: ChatMessage[]): boolean {
     if (!this.instanceEntry.state.hasRunningTask) return false;
     const last = messages[messages.length - 1];
-    return last !== undefined && last.role !== "assistant";
+    return last !== undefined && (last.role === "user" || last.role === "tool");
   }
 
   private renderTaskOutputs() {

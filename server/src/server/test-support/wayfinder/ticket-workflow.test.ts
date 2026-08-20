@@ -257,6 +257,128 @@ describe("wayfinder ticket workflow", () => {
     assert.match(record, /OAuth2 with refresh tokens/);
   });
 
+  it("claiming a grilling ticket seeds the session with the ticket's question", async () => {
+    const runtime = makeWayfinderRuntime({
+      aiChatCaller: idleModelCaller(),
+      aiTaskCaller: idleModelCaller(),
+    });
+
+    const controller = runtime.addWorkflowInstance("ticket", {
+      workflowInstanceState: {
+        title: "Grill the auth model",
+        question: "Which auth flow?",
+        type: "grilling",
+        dependsOn: [],
+      },
+    });
+    await graduate(controller);
+    controller.dispatchAction("claim_grilling");
+    assert.equal(controller.getState().currentState, "resolving_grilling");
+
+    // The ticket's question opens the session as its first user message (the
+    // same pattern as the charting sessions seeding the destination), so the
+    // agent has the question to work on immediately instead of a cold session
+    // waiting for the human to retype it.
+    await waitFor(() => {
+      const ctx = controller.getState().runningTaskContext;
+      return (
+        ctx !== null &&
+        ctx.role === "ai-chat" &&
+        ctx.messages.some((m) => m.role === "user")
+      );
+    });
+    const ctx = controller.getState().runningTaskContext;
+    assert.ok(ctx);
+    assert.equal(ctx.role, "ai-chat");
+    const userMessages = ctx.messages.filter((m) => m.role === "user");
+    assert.equal(userMessages.length, 1);
+    assert.equal(userMessages[0].content, "Which auth flow?");
+  });
+
+  it("a grilling session whose model call fails surfaces the failure and continues on the next message", async () => {
+    let calls = 0;
+    const runtime = makeWayfinderRuntime({
+      aiChatCaller: async () => {
+        calls++;
+        if (calls === 1) throw new Error("read ECONNRESET");
+        return { content: "Understood — press Done when settled." };
+      },
+      aiTaskCaller: idleModelCaller(),
+    });
+
+    const controller = runtime.addWorkflowInstance("ticket", {
+      workflowInstanceState: {
+        title: "Grill the auth model",
+        question: "Which auth flow?",
+        type: "grilling",
+        dependsOn: [],
+      },
+    });
+    await graduate(controller);
+    controller.dispatchAction("claim_grilling");
+    assert.equal(controller.getState().currentState, "resolving_grilling");
+
+    // The seeded question starts the session; the model call fails mid-stream.
+    // The session must not die or hang: the transcript gains a system error
+    // note and the session keeps running, waiting for the human.
+    await waitFor(() => {
+      const ctx = controller.getState().runningTaskContext;
+      return (
+        ctx !== null &&
+        ctx.role === "ai-chat" &&
+        ctx.messages.some(
+          (m) => m.role === "system" && m.content.includes("Model call failed")
+        )
+      );
+    });
+    assert.equal(calls, 1, "the failed call is not replayed automatically");
+    assert.equal(
+      controller.getState().hasRunningTask,
+      true,
+      "the session stays alive after the failure"
+    );
+    assert.equal(
+      controller.getState().taskOutputs.grillSession,
+      undefined,
+      "a transient model-call failure must not error the task"
+    );
+
+    // The human continues the session; the model is called again with the
+    // full transcript and the session returns to a normal running state.
+    controller.sendTaskInput("grillSession", "continue", "user");
+    await waitFor(() => calls >= 2);
+    assert.equal(controller.getState().hasRunningTask, true);
+    const ctx = controller.getState().runningTaskContext;
+    assert.ok(ctx);
+    assert.equal(ctx.role, "ai-chat");
+    assert.ok(
+      ctx.messages.some((m) => m.role === "user" && m.content === "continue")
+    );
+  });
+
+  it("declares a retry action on the grilling state so a failed session can restart", async () => {
+    const ticketWorkflow = wayfinderWorkflows.find(
+      (workflow) => workflow.id === "ticket"
+    );
+    assert.ok(ticketWorkflow);
+    const grilling = ticketWorkflow.states.find(
+      (state) => state.id === "resolving_grilling"
+    );
+    assert.ok(grilling, "the resolving_grilling state must exist");
+    const retry = grilling.actions?.find((action) => action.id === "retry");
+    assert.ok(retry, "resolving_grilling must declare a retry action");
+    assert.equal(retry.label, "Retry grilling");
+    assert.equal(
+      retry.transitionTo,
+      "resolving_grilling",
+      "retry restarts the session in the same state"
+    );
+    assert.ok(
+      retry.gate !== undefined,
+      "retry must be gated so it only appears after the session failed"
+    );
+  });
+
   it("a prototype ticket works in a prepared workspace and links its artifact", async () => {
     const basePath = tempDir();
     const workspacesBasePath = tempDir();
