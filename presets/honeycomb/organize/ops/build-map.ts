@@ -1,7 +1,7 @@
 // The organize workflow's build_map operation, referenced by the honeycomb
 // flow definition. Renders the organized map.md: grouped by category,
-// ordered by priority, sequenced by dependency. The returned string is what
-// the task's persist path writes (string output becomes a text file).
+// ordered by priority. The returned string is what the task's persist path
+// writes (string output becomes a text file).
 
 import {
   defineOperations,
@@ -20,8 +20,6 @@ type IdeaView = {
   status: string;
   tags: string[];
   summary: string;
-  dependsOn: string[];
-  duplicateOf: string;
 };
 
 export const build_mapOperations = defineOperations<OrganizeState>({
@@ -50,23 +48,7 @@ export const build_mapOperations = defineOperations<OrganizeState>({
     ];
     for (const [category, bucket] of byCategory) {
       lines.push(`## ${category}`, "");
-      // Ordered by priority, sequenced by dependency: at each step the
-      // highest-priority idea whose dependsOn (within this category) have
-      // already rendered is emitted; a stable fallback keeps stragglers
-      // visible, never dropped.
-      const byTitle = new Map(bucket.map((idea) => [idea.title, idea]));
-      const emitted = new Set<string>();
-      const remaining = [...bucket].sort(byPriorityThenTitle);
-      while (remaining.length > 0) {
-        const index = remaining.findIndex((idea) =>
-          (idea.dependsOn ?? []).every((dep) => {
-            if (!byTitle.has(dep)) return true;
-            return emitted.has(dep);
-          })
-        );
-        const idea = remaining.splice(index === -1 ? 0 : index, 1)[0];
-        if (idea === undefined) break;
-        emitted.add(idea.title);
+      for (const idea of [...bucket].sort(byPriorityThenTitle)) {
         lines.push(renderIdea(idea));
       }
       lines.push("");
@@ -90,17 +72,12 @@ function priorityRank(priority: string | undefined): number {
 }
 
 function renderIdea(idea: IdeaView): string {
-  const deps =
-    idea.dependsOn !== undefined && idea.dependsOn.length > 0
-      ? ` _(depends on: ${idea.dependsOn.join(", ")})_`
-      : "";
-  const dup = idea.duplicateOf ? ` _(duplicate of: ${idea.duplicateOf})_` : "";
   const tags =
     idea.tags !== undefined && idea.tags.length > 0
       ? ` [${idea.tags.join(", ")}]`
       : "";
   const line = `- **${idea.title}** — ${idea.priority ?? "?"}/${
     idea.effort ?? "?"
-  }${tags}${deps}${dup}`;
+  }${tags}`;
   return idea.summary ? `${line}\n  ${idea.summary}` : line;
 }

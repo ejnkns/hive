@@ -2,13 +2,14 @@
 
 import { defineTool } from "workflow-engine/runners";
 
-// E2 tool read: the per-idea classifier fetches the approved taxonomy from
-// flowState — the shared cross-entity state — instead of a hardcoded list.
+// E2 tool read: the import parse agent and the per-idea classifier fetch the
+// published taxonomy from flowState — the shared cross-entity state — instead
+// of a hardcoded list.
 export const read_taxonomyTools = [
   defineTool({
     name: "read_taxonomy",
     description:
-      "Read the flow's approved taxonomy (categories with definitions, priorityScale, effortScale, dedupPolicy) from flowState.",
+      "Read the flow's published taxonomy (categories with definitions, and categoryNames) from flowState.",
     parameters: { properties: {}, required: [] },
     executor: async (call, ctx) => ({
       toolCallId: call.id,

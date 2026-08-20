@@ -4,20 +4,17 @@
 // two halves of the contract: the validator checks write keys against the
 // declaration; gates/ops bind this type for readable fields.
 
-import type { TaxonomyCategory } from "./organize/types.ts";
+export type TaxonomyCategory = { name: string; definition: string };
 
 // The published taxonomy (E2): written by publish_taxonomy into flowState,
-// read by the per-idea classifier (read_taxonomy tool), the classify-input
-// assembler, and the needs-classify gate. Fields are optional — the taxonomy
-// does not exist until the human approves it.
+// read by the import parse agent (read_taxonomy tool), the per-idea
+// classifier (read_taxonomy tool), and the needs-classify gate. Fields are
+// optional — the taxonomy does not exist until the first import publishes it.
 export type Taxonomy = {
   categories?: TaxonomyCategory[];
   // The category names as plain strings, for the edit form's dynamic select
   // options (E4 — the resolver keeps only string values).
   categoryNames?: string[];
-  priorityScale?: Record<string, unknown>;
-  effortScale?: Record<string, unknown>;
-  dedupPolicy?: string;
 };
 
 export type FlowState = {
