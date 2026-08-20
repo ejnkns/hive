@@ -11,53 +11,21 @@
 // Runs under Vitest browser mode (e2e/vitest.config.ts): the built server and
 // mock provider boot on the Node side in e2e/global-setup.ts (base URL via
 // `inject`), and the app runs in a second page of the same browser, driven
-// through the shared `app` wrapper (e2e/support/browser-app.mjs).
+// through the shared `app` wrapper (e2e/support/browser-app.mjs). The harness
+// helpers (session-state snapshot, fetchJson, waitFor, delete-first
+// definition registration) live in the shared support module
+// (e2e/support/flows.mjs) — this file's copies were deleted by ticket 07.
 
 import { expect, inject, onTestFailed, test } from "vitest";
 import { app } from "../support/browser-app.mjs";
+import {
+  deleteDefinition,
+  fetchJson,
+  findSessionState,
+  waitFor,
+} from "../support/flows.mjs";
 
 const baseUrl = inject("baseUrl");
-
-async function waitFor(predicate, timeoutMs = 60_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const value = await predicate();
-    if (value) return value;
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  throw new Error("Timed out waiting for the research-loop e2e");
-}
-
-// The authoring session's live instance state (the flow is hidden; fetch by
-// the stored flow id). The session's storage key is re-keyed from "new" to the
-// saved definition id once save_definition lands, so look up any live key.
-async function sessionState() {
-  return app.evaluate(async () => {
-    const keys = Object.keys(localStorage).filter((key) =>
-      key.startsWith("hive:author:")
-    );
-    for (const key of keys) {
-      const stored = localStorage.getItem(key);
-      if (!stored) continue;
-      const res = await fetch(`/api/flows/${encodeURIComponent(stored)}`);
-      if (!res.ok) continue;
-      const flow = await res.json();
-      return flow.instances?.[0]?.state ?? null;
-    }
-    return null;
-  });
-}
-
-async function fetchJson(url, options) {
-  return app.evaluate(
-    async ({ url, options }) => {
-      const res = await fetch(url, options);
-      if (!res.ok) return null;
-      return res.json();
-    },
-    { url, options: options ?? {} }
-  );
-}
 
 test("a generated research-loop flow runs with its custom gate and websearch tool", async () => {
   // The flow name is unique per run so watch-mode re-runs never collide
@@ -74,11 +42,7 @@ test("a generated research-loop flow runs with its custom gate and websearch too
   // save_definition call; on a watch re-run (shared server + data dir) that
   // save would 409 against the leftover, so drop any previous run's record
   // first (a fresh run just 404s — ignored).
-  await app.evaluate(async () => {
-    await fetch("/api/flows/definitions/research-loop", {
-      method: "DELETE",
-    });
-  });
+  await deleteDefinition("research-loop");
   await app.waitForSelector("textarea", { timeout: 15_000 });
   await app
     .fill("textarea", "Build a research loop flow with a custom gate and a websearch tool", {
@@ -89,7 +53,7 @@ test("a generated research-loop flow runs with its custom gate and websearch too
   // The agent sets the definition module, validates, writes the referenced
   // files, and saves the registered definition — all in-conversation.
   const state = await waitFor(async () => {
-    const s = await sessionState();
+    const s = await findSessionState();
     return s?.workflowInstanceState?.savedDefinitionId === "research-loop"
       ? s
       : null;

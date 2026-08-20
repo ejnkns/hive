@@ -8,139 +8,21 @@
 // mock provider boot on the Node side in e2e/global-setup.ts (base URL and the
 // fixture project path via `inject`), and the app runs in a second page of the
 // same browser, driven through the shared `app` wrapper
-// (e2e/support/browser-app.mjs).
+// (e2e/support/browser-app.mjs). The harness helpers (section snapshot, chat
+// reply, wait-and-click) live in the shared support module
+// (e2e/support/flows.mjs) — this file's copies were deleted by ticket 07.
 
 import { expect, inject, onTestFailed, test } from "vitest";
 import { app } from "../support/browser-app.mjs";
+import {
+  sectionState,
+  sendChatMessage,
+  waitAndClick,
+  waitForSection,
+} from "../support/flows.mjs";
 
 const baseUrl = inject("baseUrl");
 const projectPath = inject("projectPath");
-
-// The live DOM state of one workflow section: card titles + every visible
-// button text, across nested shadow roots.
-async function sectionState(label) {
-  return app.evaluate((label) => {
-    const walkButtons = (root) => {
-      const buttons = [];
-      for (const el of root.querySelectorAll("button")) {
-        const t = el.textContent?.trim();
-        if (t && !buttons.includes(t)) buttons.push(t);
-      }
-      for (const el of root.querySelectorAll("*")) {
-        if (el.shadowRoot) buttons.push(...walkButtons(el.shadowRoot));
-      }
-      return buttons;
-    };
-    const host = document.querySelector("workflow-instances");
-    const shadow = host?.shadowRoot;
-    const flow = Array.from(shadow?.querySelectorAll(".flow") ?? []).find(
-      (f) => f.querySelector(".flow-label")?.textContent === label
-    );
-    if (!flow) return null;
-    const titleOf = (el) => {
-      const itemHeader = el?.shadowRoot?.querySelector("item-header");
-      return (
-        itemHeader?.shadowRoot?.querySelector(".title")?.textContent ?? null
-      );
-    };
-    const cards = Array.from(flow.querySelectorAll("dynamic-element-host")).map(
-      (hostEl) =>
-        titleOf(hostEl.shadowRoot?.querySelector(".mount > *")) ?? null
-    );
-    return { cards, buttons: walkButtons(shadow ?? document) };
-  }, label);
-}
-
-async function waitForSection(label, predicate, timeoutMs = 40_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const state = await sectionState(label);
-    if (state && predicate(state)) return state;
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  throw new Error(`Timed out waiting for ${label}`);
-}
-
-// Waits until a button with the exact label is visible (across nested shadow
-// roots), then clicks it. Returns false if it never appears.
-async function waitAndClick(buttonLabel, timeoutMs = 40_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const clicked = await app.evaluate((buttonLabel) => {
-      const walk = (root) => {
-        for (const el of root.querySelectorAll("button")) {
-          if (el.textContent?.trim() === buttonLabel) return el;
-        }
-        for (const el of root.querySelectorAll("*")) {
-          if (el.shadowRoot) {
-            const found = walk(el.shadowRoot);
-            if (found) return found;
-          }
-        }
-        return null;
-      };
-      const host = document.querySelector("workflow-instances");
-      const button = walk(host?.shadowRoot ?? document);
-      if (!button) return false;
-      button.dispatchEvent(
-        new MouseEvent("click", { bubbles: true, composed: true })
-      );
-      return true;
-    }, buttonLabel);
-    if (clicked) return true;
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  return false;
-}
-
-// Sends a chat message to the interactive session in a section's card
-// (startOnUserInput sessions poll for their input across turns).
-async function replyToChat(text, timeoutMs = 15_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const sent = await app.evaluate((text) => {
-      const walk = (root) => {
-        const session = root.querySelector("chat-session");
-        if (session?.shadowRoot) {
-          const input = session.shadowRoot.querySelector("input");
-          if (input) return { session, input };
-        }
-        for (const el of root.querySelectorAll("*")) {
-          if (el.shadowRoot) {
-            const found = walk(el.shadowRoot);
-            if (found) return found;
-          }
-        }
-        return null;
-      };
-      const host = document.querySelector("workflow-instances");
-      const found = walk(host?.shadowRoot ?? document);
-      if (!found) return false;
-      found.input.value = text;
-      found.input.dispatchEvent(
-        new Event("input", { bubbles: true, composed: true })
-      );
-      const send = found.session.shadowRoot?.querySelector("button");
-      if (send) {
-        send.dispatchEvent(
-          new MouseEvent("click", { bubbles: true, composed: true })
-        );
-      } else {
-        found.input.dispatchEvent(
-          new KeyboardEvent("keydown", {
-            key: "Enter",
-            bubbles: true,
-            composed: true,
-          })
-        );
-      }
-      return true;
-    }, text);
-    if (sent) return true;
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  return false;
-}
 
 test("queen-bee card lifecycle: onboarding → requirements → plan → card → done", async () => {
   // The flow name is unique per run so watch-mode re-runs never collide
@@ -176,11 +58,11 @@ test("queen-bee card lifecycle: onboarding → requirements → plan → card �
     "start requirements session"
   ).toBe(true);
   expect(
-    await replyToChat("yes, the greeting is deterministic"),
+    await sendChatMessage("yes, the greeting is deterministic"),
     "chat input appeared and reply sent"
   ).toBe(true);
   await app.waitForTimeout(6_000); // agent explores, then asks
-  expect(await replyToChat("yes, exactly one deterministic greeting")).toBe(
+  expect(await sendChatMessage("yes, exactly one deterministic greeting")).toBe(
     true
   );
 
