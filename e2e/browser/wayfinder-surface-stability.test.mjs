@@ -14,91 +14,62 @@
 // page lives in its own browser context, so `app.setOffline` emulates the
 // network down for the app only — the test iframe and its command channel stay
 // online.
+//
+// Locator style (ticket 06): standard Playwright CSS selectors pierce the
+// app's nested Lit shadow DOM, so every wait is an auto-retrying assertion on
+// an observable (expect.poll over app.count / app.isVisible / app.textContent
+// / app.waitForFunction-style evaluate) instead of a hand-rolled shadow-DOM
+// walker or a waitForTimeout sleep. Two app.evaluate mechanisms are
+// sanctioned and kept: the element-identity comparison (captureSurface /
+// surfaceStillMounted — only page-side code can compare element references
+// across time) and the fog drag-reorder dispatch (dispatched events on real
+// geometry, the documented exception, as in the interactions e2e).
+//
+// First-render flake (ticket 06): the old node --test run passed in the
+// parallel run but failed SOLO at first render — a 30s waitForSelector on
+// `workflow-instances` — while under this runner it passes. Investigation of
+// whether a real race exists: NO. createFlow registers the runtime
+// synchronously BEFORE the POST returns (server/src/server/flow-registry/
+// flow-lifecycle.ts: registerRuntime precedes the seed, so the flow is in
+// getFlowRuntimes() the moment the test's create response resolves), and the
+// page resolves the flow deterministically: FlowInstancePage.svelte checks
+// the WS store first and falls back to a REST read when the init frame is
+// late, so `workflow-instances` cannot fail to render because of store-vs-
+// init ordering. The historical solo failure is therefore harness timing, not
+// app timing: pre-Piece-0, a stale packaged UI served `{"error":"UI not
+// found"}` on first render (the exact symptom: nothing ever mounts; the
+// build-freshness guard in e2e/support/hive-test-app.mjs now fails fast
+// instead), and the old runner had no retries for a slow cold start. The
+// residual timing sensitivity in the ported file — sleeping before the
+// create, waiting only on the SHELL element (workflow-instances) instead of
+// the surface, and fixed waits around the Done clicks / churn / reconnect —
+// is what this rewrite removes: every wait is now on an observable, with the
+// first render gated on the served surface's own header button (`.open-map`),
+// which exists only once the flow's components are registered and rendered.
+//
+// Offline emulation (ticket 06 probe): context.setOffline blocks NEW requests
+// but does not terminate ESTABLISHED WebSocket connections in this
+// environment — a probe watching a flow WS through 20s offline + 10s online
+// saw the socket stay OPEN the whole time, and navigator.onLine flipping to
+// false while a same-page fetch fails. So the app's flow socket never drops
+// and the app's reconnect backoff never runs here; the old test's offline
+// window + reconnect wait asserted a state that held trivially. This file
+// keeps the emulation honest (the offline/online fetch probes and
+// navigator.onLine ARE assertions), keeps the stability contract (the surface
+// element identity and view state stay intact across the network-level
+// interruption), and documents that the true WS-reconnect path is not
+// triggerable from the test in this environment (it needs the server to close
+// the socket, which nothing in the harness does).
 
 import { expect, inject, onTestFailed, test } from "vitest";
 import { app } from "../support/browser-app.mjs";
 
 const baseUrl = inject("baseUrl");
 
-// Runs `body` (page code) with one shared shadow-DOM walker: `hiveAll` holds
-// every element under workflow-instances' shadow root, across nested shadow
-// roots, in document order. The single walker keeps the deep queries in one
-// place instead of duplicating the recursion per helper. The body is an
-// expression — the string evaluate wraps it as `return (body);`, so the inner
-// IIFE below needs its own explicit `return` for that to surface.
-async function deepEval(body) {
-  return app.evaluate(`(() => {
-    const hiveAll = [];
-    const hiveWalk = (root) => {
-      for (const el of root.querySelectorAll("*")) {
-        hiveAll.push(el);
-        if (el.shadowRoot) hiveWalk(el.shadowRoot);
-      }
-    };
-    hiveWalk(document.querySelector("workflow-instances")?.shadowRoot ?? document);
-    return (${body});
-  })()`);
-}
-
-// Clicks the first button whose trimmed text equals `label`.
-async function clickButton(label, timeoutMs = 40_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const clicked = await deepEval(`(() => {
-      const button = hiveAll.find(
-        (el) => el.tagName === "BUTTON" && el.textContent?.trim() === ${JSON.stringify(label)}
-      );
-      if (!button) return false;
-      button.dispatchEvent(
-        new MouseEvent("click", { bubbles: true, composed: true })
-      );
-      return true;
-    })()`);
-    if (clicked) return true;
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  return false;
-}
-
-// Clicks the first element matching `selector` (CSS, applied via the walker).
-async function clickSelector(selector, timeoutMs = 20_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const clicked = await deepEval(`(() => {
-      const el = hiveAll.find((candidate) =>
-        candidate.matches(${JSON.stringify(selector)})
-      );
-      if (!el) return false;
-      el.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
-      return true;
-    })()`);
-    if (clicked) return true;
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  return false;
-}
-
-// Waits until at least one element matches `selector` in the shadow tree.
-async function waitForDeep(selector, timeoutMs = 30_000) {
-  await app.waitForFunction(
-    (sel) => {
-      const walk = (root) => {
-        for (const el of root.querySelectorAll(sel)) return true;
-        for (const el of root.querySelectorAll("*")) {
-          if (el.shadowRoot && walk(el.shadowRoot)) return true;
-        }
-        return false;
-      };
-      return walk(document);
-    },
-    selector,
-    { timeout: timeoutMs }
-  );
-}
-
 // The mounted served surface: dynamic-element-host's .mount child inside
 // workflow-instances — the element whose identity must stay stable. Stores it
-// on window so identity can be compared across evaluate calls.
+// on window so identity can be compared across evaluate calls (page-side code
+// is the only way to compare element references across time).
 async function captureSurface() {
   return app.evaluate(() => {
     const host = document.querySelector("workflow-instances");
@@ -121,26 +92,22 @@ async function surfaceStillMounted() {
   });
 }
 
-// A snapshot of the surface's observable state: map view open, active theme,
-// rendered fog order, and whether the default per-workflow boards are showing.
-async function surfaceState() {
-  return deepEval(`({
-    mapOpen: hiveAll.some((el) => el.classList?.contains("back-link")),
-    theme:
-      hiveAll.find((el) => el.classList?.contains("expedition"))?.dataset
-        ?.theme ??
-      hiveAll.find((el) => el.classList?.contains("theme-cycle"))?.textContent
-        ?.trim() ??
-      null,
-    fogOrder: hiveAll
-      .filter((el) => el.classList?.contains("fog-card"))
-      .map((el) => el.dataset?.id ?? "")
-      .join(","),
-    defaultBoards:
-      document.querySelector("workflow-instances")?.shadowRoot?.querySelector(
-        ".flow"
-      ) !== null,
-  })`);
+// Waits for `selector` to be present and then clicks it: the presence poll is
+// the auto-retry, the click is Playwright auto-waiting on actionability. For
+// buttons, `hasText` scopes the match to the labelled control. No walkers, no
+// sleeps.
+async function clickWhen(selector, { hasText, timeout = 20_000 } = {}) {
+  const countSelector =
+    hasText === undefined
+      ? selector
+      : `${selector}:has-text(${JSON.stringify(hasText)})`;
+  await expect
+    .poll(() => app.count(countSelector), { timeout })
+    .toBeGreaterThan(0);
+  await app.click(
+    selector,
+    hasText === undefined ? undefined : { hasText, first: true }
+  );
 }
 
 // Opens a second socket to the flow WS endpoint and counts flow_snapshot
@@ -177,54 +144,45 @@ test("wayfinder surface stays mounted with view state intact through churn and r
   // The flow name is unique per run so watch-mode re-runs never collide
   // (instance names are unique within a definition; the server 409s on dupes).
   const flowName = `surface-stability-check-${Date.now()}`;
-  const flowId = flowName;
   onTestFailed(async () => {
     const shot = await app.screenshot("failure");
     if (shot) console.log(`[app screenshot] ${shot}`);
   });
 
+  // Boot the app page (its origin anchors the API + WS calls), create the
+  // flow, then open the flow route. The creation POST does not depend on the
+  // flows library settling — no sleep here.
   await app.open(`${baseUrl}/#/flows`);
-  await app.waitForTimeout(800);
-
-  const created = await app.evaluate(
-    async (config) => {
-      const res = await fetch("/api/flows", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ definitionId: "wayfinder", config }),
-      });
-      return res.json();
-    },
-    { name: flowName, destination: "Keep the map open through the churn" }
-  );
+  const created = await app.createFlow("wayfinder", {
+    name: flowName,
+    destination: "Keep the map open through the churn",
+  });
   expect(created.ok, JSON.stringify(created)).toBe(true);
+  const flowId = created.flowId;
 
   await app.open(`${baseUrl}/#/flows/wayfinder/${flowName}`);
-  await app.waitForSelector("workflow-instances", { timeout: 30_000 });
-  // The custom surface mounts (its header lives in the served flow-component).
-  await waitForDeep(".open-map", 30_000);
-  await app.waitForTimeout(1_500);
+  // The shell host renders once the flow resolves (store or REST fallback);
+  // the served surface mounts only after the flow's components load — wait on
+  // the SURFACE (its header button), the true first-render completion signal.
+  await expect
+    .poll(() => app.isVisible("workflow-instances"), { timeout: 30_000 })
+    .toBe(true);
+  await expect
+    .poll(() => app.isVisible(".open-map"), { timeout: 30_000 })
+    .toBe(true);
   await openSnapshotCounter();
 
   // Chart the map: the naming session runs the agent against the mock
   // provider; approve it, then approve the frontier session that auto-starts
-  // (its file gate is what unlocks the add_fog_entry action).
-  const namingDone = await clickButton("Done");
-  if (!namingDone) {
-    const dump = await deepEval(`hiveAll
-      .filter((el) => el.tagName === "BUTTON")
-      .map((el) => el.textContent?.trim())
-      .join("|")`);
-    expect(
-      namingDone,
-      `naming session done; buttons at failure: ${JSON.stringify(dump)}`
-    ).toBe(true);
-  }
-  expect(await clickButton("Done"), "frontier session done").toBe(true);
-  await app.waitForTimeout(1_500);
+  // (its file gate is what unlocks the add_fog_entry action). Each "Done" is
+  // waited on as an observable (the session's action appears only when the
+  // session lands interactive) — no fixed sleeps between them.
+  await clickWhen("button", { hasText: "Done", timeout: 40_000 });
+  await clickWhen("button", { hasText: "Done", timeout: 40_000 });
 
   // Seed the two fog entries the reorder will work on (via the action API —
-  // each dispatch is itself a flow event that emits a snapshot frame).
+  // each dispatch is itself a flow event that emits a snapshot frame). The
+  // observable: both cards render in the tray.
   const addFogViaApi = (brief) =>
     app.evaluate(
       async ({ flowId, brief }) => {
@@ -239,24 +197,29 @@ test("wayfinder surface stays mounted with view state intact through churn and r
     );
   expect(await addFogViaApi("First fog card"), "first fog entry").toBe(true);
   expect(await addFogViaApi("Second fog card"), "second fog entry").toBe(true);
-  await app.waitForTimeout(800);
+  await expect.poll(() => app.count(".fog-card"), { timeout: 10_000 }).toBe(2);
 
   // Drag the second fog card above the first into a session-local clear
-  // order (dispatched events on real geometry, as in the interactions e2e).
-  const fogIds = () =>
-    deepEval(`hiveAll
-      .filter((el) => el.classList?.contains("fog-card"))
-      .map((el) => el.dataset?.id ?? "")
-      .join(",")`);
-  const fogBefore = await fogIds();
-  await deepEval(`(() => {
-    const cards = hiveAll.filter((el) => el.classList?.contains("fog-card"));
+  // order. Dispatched events on real geometry (the documented exception, as
+  // in the interactions e2e): only page-side code can hold element refs and
+  // read the geometry the drop handler keys on.
+  const drag = await app.evaluate(() => {
+    const walk = (root, out = []) => {
+      for (const el of root.querySelectorAll("*")) {
+        if (el.classList?.contains("fog-card")) out.push(el);
+        if (el.shadowRoot) walk(el.shadowRoot, out);
+      }
+      return out;
+    };
+    const host = document.querySelector("workflow-instances");
+    const cards = walk(host?.shadowRoot ?? document);
     const first = cards[0];
     const second = cards[1];
-    const pile = second?.parentElement;
-    const firstRect = first?.getBoundingClientRect();
+    if (first === undefined || second === undefined) return null;
+    const pile = second.parentElement;
+    const firstRect = first.getBoundingClientRect();
     const dropY = (firstRect?.top ?? 0) + (firstRect?.height ?? 0) / 2 - 1;
-    second?.dispatchEvent(
+    second.dispatchEvent(
       new MouseEvent("dragstart", { bubbles: true, composed: true })
     );
     pile?.dispatchEvent(
@@ -268,41 +231,51 @@ test("wayfinder surface stays mounted with view state intact through churn and r
     pile?.dispatchEvent(
       new MouseEvent("dragend", { bubbles: true, composed: true })
     );
-    return true;
-  })()`);
-  // The drop re-renders the pile from the new clear order; poll until it
-  // flips (the interactions e2e does the same).
-  const flipDeadline = Date.now() + 10_000;
-  let fogAfter = fogBefore;
-  while (Date.now() < flipDeadline) {
-    fogAfter = await fogIds();
-    if (fogAfter !== fogBefore) break;
-    await new Promise((resolve) => setTimeout(resolve, 300));
-  }
-  expect(
-    fogAfter,
-    `the fog drag must reorder the pile (before=${fogBefore}, after=${fogAfter})`
-  ).not.toBe(fogBefore);
+    return {
+      fogAfter: `${second.dataset?.id ?? ""},${first.dataset?.id ?? ""}`,
+    };
+  });
+  expect(drag, "the fog tray must render two draggable cards").not.toBeNull();
+  // The drop re-renders the pile from the new clear order; the first card's
+  // title flips to the dragged entry (a pure CSS observable — no walker).
+  await expect
+    .poll(() => app.textContent(".fog-card"), { timeout: 10_000 })
+    .toContain("Second fog card");
 
   // Cycle the expedition theme once (mountain → topo) and open the map view
   // BEFORE the churn window, so the churn exercises them. The theme button
   // lives in the header, which the map view replaces — click it first.
-  expect(await clickSelector(".theme-cycle"), "theme cycle clicked").toBe(true);
-  expect(await clickSelector(".open-map"), "map opened").toBe(true);
-  await app.waitForTimeout(500);
-  expect(await captureSurface(), "the custom surface is mounted").toBe(true);
+  await clickWhen(".theme-cycle");
+  await expect
+    .poll(() => app.count('.expedition[data-theme="topo"]'), {
+      timeout: 10_000,
+    })
+    .toBeGreaterThan(0);
+  await clickWhen(".open-map");
+  await expect
+    .poll(() => app.count(".back-link"), { timeout: 10_000 })
+    .toBeGreaterThan(0);
+  await expect.poll(() => captureSurface(), { timeout: 10_000 }).toBe(true);
 
-  const baseline = await surfaceState();
-  expect(baseline.mapOpen, "the map view is open").toBe(true);
-  expect(baseline.theme, "the cycled theme is active").toBe("topo");
-  expect(baseline.defaultBoards, "the default boards are not showing").toBe(
-    false
+  // The baseline: map open, cycled theme, and the default per-workflow boards
+  // are not showing (the served flow-component owns the page).
+  expect(await app.count(".back-link"), "the map view is open").toBeGreaterThan(
+    0
+  );
+  expect(
+    await app.count('.expedition[data-theme="topo"]'),
+    "the cycled theme is active"
+  ).toBeGreaterThan(0);
+  expect(await app.count(".flow"), "the default boards are not showing").toBe(
+    0
   );
 
-  // Churn with the map open: each add_fog_entry dispatch is a flow event
-  // that coalesces into a flow_snapshot frame. Sample the surface identity
-  // and view state across the window — the same element instance must stay
-  // mounted the whole time, and the reordered fog order must survive.
+  // Churn with the map open: each add_fog_entry dispatch is a flow event that
+  // coalesces into a flow_snapshot frame. After each dispatch, WAIT on the
+  // observable (a new frame on the counting socket), then sample the surface
+  // identity and view state — the same element instance must stay mounted the
+  // whole time, and the reordered fog order must survive. The loop keeps a
+  // bounded sampling cadence between the observable-based asserts.
   const churnStart = await snapshotCount(flowId);
   const deadline = Date.now() + 12_000;
   let samples = 0;
@@ -314,18 +287,27 @@ test("wayfinder surface stays mounted with view state intact through churn and r
         "churn fog entry"
       ).toBe(true);
       churnEntries += 1;
-      await new Promise((resolve) => setTimeout(resolve, 1_200));
+      await expect
+        .poll(() => snapshotCount(flowId), { timeout: 5_000 })
+        .toBeGreaterThan(churnStart + churnEntries - 1);
     }
     expect(
       await surfaceStillMounted(),
       "the surface element identity is stable through churn"
     ).toBe(true);
-    const mid = await surfaceState();
-    expect(mid.mapOpen, "the map view stays open through churn").toBe(true);
-    expect(mid.theme, "the theme stays cycled through churn").toBe("topo");
-    expect(mid.defaultBoards, "no default-UI flash through churn").toBe(false);
+    expect(
+      await app.count(".back-link"),
+      "the map view stays open through churn"
+    ).toBeGreaterThan(0);
+    expect(
+      await app.count('.expedition[data-theme="topo"]'),
+      "the theme stays cycled through churn"
+    ).toBeGreaterThan(0);
+    expect(await app.count(".flow"), "no default-UI flash through churn").toBe(
+      0
+    );
     samples += 1;
-    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    await new Promise((resolve) => setTimeout(resolve, 800));
   }
   const churnEnd = await snapshotCount(flowId);
   expect(
@@ -342,61 +324,105 @@ test("wayfinder surface stays mounted with view state intact through churn and r
   );
   expect(
     JSON.parse(storedFog).join(","),
-    `the fog clear order persists through churn (stored=${storedFog}, reordered=${fogAfter})`
-  ).toBe(fogAfter);
+    `the fog clear order persists through churn (stored=${storedFog}, reordered=${drag.fogAfter})`
+  ).toBe(drag.fogAfter);
 
   // Close the map (its back-link) so the header comes back: the fog tray must
-  // render the reordered pile, and the cycled theme + map-open state must
-  // restore when the map is reopened.
-  expect(await clickSelector(".back-link"), "map closed").toBe(true);
-  await app.waitForTimeout(300);
-  const closed = await surfaceState();
-  expect(closed.mapOpen, "the map view is closed").toBe(false);
-  expect(closed.theme, "the theme survives the close").toBe("topo");
+  // render the reordered pile (head = the dragged card) plus the four churn
+  // entries, and the cycled theme must survive the close.
+  await clickWhen(".back-link");
+  await expect.poll(() => app.count(".back-link"), { timeout: 10_000 }).toBe(0);
+  await expect.poll(() => app.count(".fog-card"), { timeout: 10_000 }).toBe(6);
+  await expect
+    .poll(() => app.textContent(".fog-card"), { timeout: 10_000 })
+    .toContain("Second fog card");
   expect(
-    closed.fogOrder === fogAfter || closed.fogOrder.startsWith(`${fogAfter},`),
-    `the reordered fog pile renders after the churn (order=${closed.fogOrder})`
-  ).toBe(true);
+    await app.count('.expedition[data-theme="topo"]'),
+    "the theme survives the close"
+  ).toBeGreaterThan(0);
 
-  expect(await clickSelector(".open-map"), "map reopened").toBe(true);
-  await app.waitForTimeout(300);
-  const reopened = await surfaceState();
-  expect(reopened.mapOpen, "the map view reopens").toBe(true);
-  expect(reopened.theme, "the theme survives the close/reopen").toBe("topo");
+  // Reopen the map: the map-open state and the cycled theme restore.
+  await clickWhen(".open-map");
+  await expect
+    .poll(() => app.count(".back-link"), { timeout: 10_000 })
+    .toBeGreaterThan(0);
+  expect(
+    await app.count('.expedition[data-theme="topo"]'),
+    "the theme survives the close/reopen"
+  ).toBeGreaterThan(0);
 
-  // Reconnect: dropping the network closes the app's WebSocket (the app
-  // reconnects with backoff and the server re-sends init); the flow must
-  // never drop out, so the surface element stays the same instance. Prove
-  // the emulation actually took the network down first.
+  // Network-level interruption: drop the network for the app context only
+  // (the test iframe and command channel stay online), prove the emulation is
+  // real (the fetch probe fails offline, navigator.onLine flips, and the fetch
+  // recovers after setOffline(false)), and assert the stability contract
+  // across the interruption: the same surface element instance stays mounted
+  // with the map open, the cycled theme, and no default-UI flash. (Probe
+  // finding, see the header: context.setOffline blocks new requests but does
+  // not terminate established WebSockets in this environment, so the app's
+  // flow socket never drops and its reconnect backoff never runs here — the
+  // contract asserted below is the surface's behavior across the real
+  // network-level interruption the emulation DOES produce.)
   await app.setOffline(true);
-  const offlineProbe = await app.evaluate(async () => {
-    try {
-      await fetch("/api/flows", { cache: "no-store" });
-      return false;
-    } catch {
-      return true;
-    }
-  });
-  expect(offlineProbe, "offline emulation is active").toBe(true);
-  await app.waitForTimeout(4_000);
-  await app.setOffline(false);
-  await app.waitForTimeout(14_000);
-
-  const afterReconnect = await surfaceState();
   expect(
-    await surfaceStillMounted(),
-    "the surface element identity survives a WebSocket reconnect"
+    await app.evaluate(async () => {
+      try {
+        await fetch("/api/flows", { cache: "no-store" });
+        return false;
+      } catch {
+        return true;
+      }
+    }),
+    "offline emulation is active"
   ).toBe(true);
   expect(
-    afterReconnect.mapOpen,
-    "the map view stays open through reconnect"
-  ).toBe(true);
-  expect(
-    afterReconnect.theme,
-    "the theme stays cycled through reconnect"
-  ).toBe("topo");
-  expect(
-    afterReconnect.defaultBoards,
-    "no default-UI flash through reconnect"
+    await app.evaluate(() => navigator.onLine),
+    "the browser reports the network down"
   ).toBe(false);
+  await expect
+    .poll(() => surfaceStillMounted(), { timeout: 10_000 })
+    .toBe(true);
+  expect(
+    await app.count(".back-link"),
+    "the map view stays open while offline"
+  ).toBeGreaterThan(0);
+  expect(
+    await app.count('.expedition[data-theme="topo"]'),
+    "the theme stays cycled while offline"
+  ).toBeGreaterThan(0);
+  expect(await app.count(".flow"), "no default-UI flash while offline").toBe(0);
+
+  await app.setOffline(false);
+  await expect
+    .poll(
+      async () =>
+        app.evaluate(async () => {
+          try {
+            await fetch("/api/flows", { cache: "no-store" });
+            return true;
+          } catch {
+            return false;
+          }
+        }),
+      { timeout: 10_000 }
+    )
+    .toBe(true);
+
+  // The interruption is over: the surface element identity must still be the
+  // same instance, and the view state (map open, theme, no default-UI flash)
+  // must be intact.
+  await expect
+    .poll(() => surfaceStillMounted(), { timeout: 10_000 })
+    .toBe(true);
+  expect(
+    await app.count(".back-link"),
+    "the map view stays open through the interruption"
+  ).toBeGreaterThan(0);
+  expect(
+    await app.count('.expedition[data-theme="topo"]'),
+    "the theme stays cycled through the interruption"
+  ).toBeGreaterThan(0);
+  expect(
+    await app.count(".flow"),
+    "no default-UI flash through the interruption"
+  ).toBe(0);
 });
