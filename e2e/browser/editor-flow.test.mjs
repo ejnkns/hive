@@ -5,32 +5,24 @@
 // state), the agent reads the current source and builds on it without
 // overwriting, and a regenerate takes the definition back. One session, a
 // bounded set of scripted model calls.
-import assert from "node:assert/strict";
-import { after, before, test } from "node:test";
-import { startHiveTestApp } from "./support/hive-test-app.mjs";
-import { startMockProvider } from "./support/mock-provider.mjs";
+//
+// Runs under Vitest browser mode (e2e/vitest.config.ts): the built server and
+// mock provider boot on the Node side in e2e/global-setup.ts (base URL via
+// `inject`), and the app runs in a second page of the same browser, driven
+// through the shared `app` wrapper (e2e/support/browser-app.mjs). Files run
+// sequentially against one shared server + data dir, so registered
+// definitions are delete-first (a fresh run's delete 404s — ignored) — watch
+// re-runs never 409 on the previous run's records.
 
-let mock;
-let app;
-let page;
-let baseUrl;
+import { expect, inject, onTestFailed, test } from "vitest";
+import { app } from "../support/browser-app.mjs";
 
-before(async () => {
-  mock = await startMockProvider();
-  app = await startHiveTestApp(mock.host);
-  page = app.page;
-  baseUrl = app.baseUrl;
-});
-
-after(async () => {
-  await app.close();
-  await mock.close();
-});
+const baseUrl = inject("baseUrl");
 
 // The flow-editor's live state: header title, code-pane text, chat text,
 // and every visible button, across nested shadow roots.
 async function editorState() {
-  return page.evaluate(() => {
+  return app.evaluate(() => {
     const walk = (root) => {
       for (const el of root.querySelectorAll("flow-editor")) return el;
       for (const el of root.querySelectorAll("*")) {
@@ -97,7 +89,7 @@ async function waitForEditor(predicate, timeoutMs = 60_000) {
 async function clickEditorButton(buttonLabel, timeoutMs = 40_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const clicked = await page.evaluate((buttonLabel) => {
+    const clicked = await app.evaluate((buttonLabel) => {
       const walk = (root) => {
         for (const el of root.querySelectorAll("button")) {
           if (el.textContent?.trim() === buttonLabel) return el;
@@ -128,7 +120,7 @@ async function clickEditorButton(buttonLabel, timeoutMs = 40_000) {
 async function clickEditorTab(tabLabel, timeoutMs = 40_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const clicked = await page.evaluate((tabLabel) => {
+    const clicked = await app.evaluate((tabLabel) => {
       const walk = (root) => {
         for (const el of root.querySelectorAll("button.tab")) {
           if (el.textContent?.trim() === tabLabel) return el;
@@ -162,7 +154,7 @@ async function editActiveEditor(text) {
 
 // Replaces the flow-editor's editable source with the given text.
 async function editDefinitionSource(text) {
-  return page.evaluate((text) => {
+  return app.evaluate((text) => {
     const walk = (root) => {
       for (const el of root.querySelectorAll("code-editor")) {
         const textarea = el.shadowRoot?.querySelector("textarea");
@@ -189,7 +181,7 @@ async function editDefinitionSource(text) {
 
 // Sends a chat message to the session's chat-session input.
 async function sendChatMessage(text) {
-  return page.evaluate((text) => {
+  return app.evaluate((text) => {
     const walk = (root) => {
       for (const el of root.querySelectorAll("chat-session")) {
         const input = el.shadowRoot?.querySelector("input");
@@ -224,7 +216,7 @@ async function sendChatMessage(text) {
 // the library list does not include it — fetch by the stored id). The storage
 // key is per definition ("new" for a new definition, the id otherwise).
 async function sessionState(definitionKey = "new") {
-  return page.evaluate(async (definitionKey) => {
+  return app.evaluate(async (definitionKey) => {
     const stored = localStorage.getItem(`hive:author:${definitionKey}`);
     if (!stored) return null;
     const res = await fetch(`/api/flows/${encodeURIComponent(stored)}`);
@@ -248,15 +240,63 @@ async function waitForSessionState(
   throw new Error("Timed out waiting for the session state");
 }
 
+// Registers a definition by name (+ optional referenced files), dropping any
+// previous run's record first — watch re-runs share the server + data dir and
+// the server 409s on a duplicate name. A fresh run's delete 404s (ignored).
+// The slug mirrors the server's slugify (shared/src/slugify.ts).
+function slugify(name) {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 50);
+}
+
+async function registerDefinition(name, source, files) {
+  const slug = slugify(name);
+  return app.evaluate(
+    async ({ slug, name, source, files }) => {
+      await fetch(`/api/flows/definitions/${encodeURIComponent(slug)}`, {
+        method: "DELETE",
+      });
+      const res = await fetch("/api/flows/definitions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, source, files }),
+      });
+      return res.ok ? await res.json() : null;
+    },
+    { slug, name, source, files }
+  );
+}
+
+// Drops a definition's record (best-effort) so a UI save in this test can
+// re-register it on a watch re-run without a 409.
+async function deleteDefinition(slug) {
+  await app.evaluate(async (slug) => {
+    await fetch(`/api/flows/definitions/${encodeURIComponent(slug)}`, {
+      method: "DELETE",
+    });
+  }, slug);
+}
+
 test("authoring session renders as the flow editor, co-edits, and saves", async () => {
-  // Definition editor (new definition): start a lucky session.
-  await page.goto(`${baseUrl}/#/flows/new`);
-  await page.waitForSelector("textarea", { timeout: 15_000 });
-  await page
-    .locator("textarea")
-    .first()
-    .fill("A review flow with approve and reject actions");
-  await page.locator("button", { hasText: "I'm feeling lucky" }).click();
+  onTestFailed(async () => {
+    const shot = await app.screenshot("failure");
+    if (shot) console.log(`[app screenshot] ${shot}`);
+  });
+
+  // Definition editor (new definition): start a lucky session. The session's
+  // save registers "review-flow"; drop any previous run's record first (the
+  // app page must exist before page code can run).
+  await app.open(`${baseUrl}/#/flows/new`);
+  await deleteDefinition("review-flow");
+  await app.waitForSelector("textarea", { timeout: 15_000 });
+  await app
+    .fill("textarea", "A review flow with approve and reject actions", {
+      first: true,
+    });
+  await app.click("button", { hasText: "I'm feeling lucky" });
 
   // The session renders as a flow instance: the flow-editor's header carries
   // the user's prompt, and the editable editor shows the definition module.
@@ -264,10 +304,10 @@ test("authoring session renders as the flow editor, co-edits, and saves", async 
     (state) => state.title === "A review flow with approve and reject actions"
   );
   await waitForEditor((state) => state.code.includes("reviewFlow"));
-  assert.ok(
+  expect(
     await editDefinitionSource("export const flow = {}; // manual tweak"),
     "the editable source is present"
-  );
+  ).toBe(true);
 
   // The write-back lands: the session source is the manual text. One artifact
   // — the edit IS the state (no divergence flag, no adoption).
@@ -279,7 +319,7 @@ test("authoring session renders as the flow editor, co-edits, and saves", async 
 
   // Ask the agent to continue: it reads the current source and proposes in
   // chat instead of overwriting the human's edit.
-  assert.ok(await sendChatMessage("please add a reject action"));
+  expect(await sendChatMessage("please add a reject action")).toBe(true);
   await waitForSessionState((state) => {
     const messages = state.runningTaskContext?.messages ?? [];
     return messages.some(
@@ -298,7 +338,7 @@ test("authoring session renders as the flow editor, co-edits, and saves", async 
 
   // Regenerate: the agent rewrites the definition module (the manual tweak is
   // gone — the agent took over again).
-  assert.ok(await sendChatMessage("regenerate the definition"));
+  expect(await sendChatMessage("regenerate the definition")).toBe(true);
   await waitForEditor(
     (state) =>
       state.code.includes("reviewFlow") && !state.code.includes("manual tweak"),
@@ -307,14 +347,14 @@ test("authoring session renders as the flow editor, co-edits, and saves", async 
 
   // Save registers the definition synchronously; the session is re-keyed
   // under the saved definition and routed to its edit page (still the session).
-  assert.ok(
+  expect(
     await clickEditorButton("Save definition"),
     "the save button is available and clicked"
-  );
+  ).toBe(true);
   await waitForEditor((state) => state.saved.includes("review-flow"));
   await waitFor(
     async () =>
-      (await page.evaluate(() => window.location.hash)) ===
+      (await app.evaluate(() => window.location.hash)) ===
       "#/flows/review-flow/edit"
   );
   // The session resumes on the edit page: the saved status is still there.
@@ -322,72 +362,86 @@ test("authoring session renders as the flow editor, co-edits, and saves", async 
 
   // The "done" affordance: Instantiate flow leaves the session for the
   // definition's page (where the instantiate form lives).
-  assert.ok(
+  expect(
     await clickEditorButton("Instantiate flow"),
     "the instantiate button appears once the definition is saved"
-  );
+  ).toBe(true);
   await waitFor(
     async () =>
-      (await page.evaluate(() => window.location.hash)) ===
-      "#/flows/review-flow"
+      (await app.evaluate(() => window.location.hash)) === "#/flows/review-flow"
   );
 
-  const definition = await page.evaluate(async () => {
+  const definition = await app.evaluate(async () => {
     const res = await fetch("/api/flows/definitions/review-flow");
     return res.ok ? await res.json() : null;
   });
-  assert.equal(definition?.name, "Review Flow");
-  assert.ok(
+  expect(definition?.name).toBe("Review Flow");
+  expect(
     definition?.source?.includes("FlowDefinition"),
     "the saved definition source is the definition module"
-  );
-  assert.ok(
+  ).toBe(true);
+  expect(
     definition?.definition?.id === "reviewFlow",
     "the registered record carries the pure-data form"
-  );
+  ).toBe(true);
 });
 
 test("the new-flow screen shows the canonical scaffold as an editable draft", async () => {
-  await page.goto(`${baseUrl}/#/flows/new`);
+  onTestFailed(async () => {
+    const shot = await app.screenshot("failure");
+    if (shot) console.log(`[app screenshot] ${shot}`);
+  });
+
+  await app.open(`${baseUrl}/#/flows/new`);
   // The no-session files editor seeds from the canonical scaffold (fetched
   // from the server — the editor carries no copy of its own).
-  await page.waitForFunction(
+  await app.waitForFunction(
     () =>
       document
         .querySelector("code-editor")
         ?.shadowRoot?.querySelector("textarea")
         ?.value?.includes("myFlow") ?? false,
+    undefined,
     { timeout: 15_000 }
   );
   // Tabs: only the Definition tab (the scaffold declares no refs).
-  const tabs = await page.evaluate(() =>
+  const tabs = await app.evaluate(() =>
     Array.from(document.querySelectorAll(".tab-bar button")).map((tab) =>
       tab.textContent?.trim()
     )
   );
-  assert.deepEqual(tabs, ["Definition"]);
+  expect(tabs).toEqual(["Definition"]);
   // The hand-write Save is present and enabled even without edits: saving the
   // scaffold as-is creates the flow (the session is not the only path).
-  const save = await page.evaluate(() =>
+  const save = await app.evaluate(() =>
     Array.from(document.querySelectorAll("button")).some((b) =>
       b.textContent?.includes("Save as new flow")
     )
   );
-  assert.ok(save, "the hand-write save button is present");
+  expect(save, "the hand-write save button is present").toBe(true);
 });
 
 test("hand-writing the scaffold saves a definition without a session", async () => {
-  await page.goto(`${baseUrl}/#/flows/new`);
-  await page.waitForFunction(
+  onTestFailed(async () => {
+    const shot = await app.screenshot("failure");
+    if (shot) console.log(`[app screenshot] ${shot}`);
+  });
+
+  // The save registers "hand-written"; drop any previous run's record first
+  // (the app page must exist before page code can run).
+  await app.open(`${baseUrl}/#/flows/new`);
+  await deleteDefinition("hand-written");
+  await app.waitForFunction(
     () =>
       document
         .querySelector("code-editor")
         ?.shadowRoot?.querySelector("textarea")
         ?.value?.includes("myFlow") ?? false,
+    undefined,
     { timeout: 15_000 }
   );
   // Hand-write: rename the scaffold's id and label directly.
-  const edited = await page.evaluate(() => {
+  const edited = await app.evaluate(() => {
     const textarea = document
       .querySelector("code-editor")
       ?.shadowRoot?.querySelector("textarea");
@@ -400,39 +454,45 @@ test("hand-writing the scaffold saves a definition without a session", async () 
     );
     return true;
   });
-  assert.ok(edited, "the scaffold must be editable");
+  expect(edited, "the scaffold must be editable").toBe(true);
   // Save without any session: the definition is created from the draft and
   // the editor routes to its edit page.
-  await page.locator("button", { hasText: "Save as new flow" }).click();
+  await app.click("button", { hasText: "Save as new flow" });
   await waitFor(
     async () =>
-      (await page.evaluate(() => window.location.hash)) ===
+      (await app.evaluate(() => window.location.hash)) ===
       "#/flows/hand-written/edit"
   );
-  const definition = await page.evaluate(async () => {
+  const definition = await app.evaluate(async () => {
     const res = await fetch("/api/flows/definitions/hand-written");
     return res.ok ? await res.json() : null;
   });
-  assert.ok(definition, "the hand-written definition exists");
-  assert.equal(definition?.name, "Hand Written");
-  assert.ok(
+  expect(definition, "the hand-written definition exists").toBeTruthy();
+  expect(definition?.name).toBe("Hand Written");
+  expect(
     definition?.source?.includes('id: "handFlow"'),
     "the saved source is the hand-written module"
-  );
+  ).toBe(true);
 });
 
 test("a conversation seeds from the editor's scaffold edits", async () => {
-  await page.goto(`${baseUrl}/#/flows/new`);
-  await page.waitForFunction(
+  onTestFailed(async () => {
+    const shot = await app.screenshot("failure");
+    if (shot) console.log(`[app screenshot] ${shot}`);
+  });
+
+  await app.open(`${baseUrl}/#/flows/new`);
+  await app.waitForFunction(
     () =>
       document
         .querySelector("code-editor")
         ?.shadowRoot?.querySelector("textarea")
         ?.value?.includes("myFlow") ?? false,
+    undefined,
     { timeout: 15_000 }
   );
   // Edit the scaffold's label before starting the conversation.
-  await page.evaluate(() => {
+  await app.evaluate(() => {
     const textarea = document
       .querySelector("code-editor")
       ?.shadowRoot?.querySelector("textarea");
@@ -448,8 +508,8 @@ test("a conversation seeds from the editor's scaffold edits", async () => {
   });
   // Start a conversation: the session seeds from the edited scaffold (the
   // edit IS the state — the agent reads it, not a stale copy).
-  await page.locator("textarea").first().fill("extend the scaffold");
-  await page.locator("button", { hasText: "Start conversation" }).click();
+  await app.fill("textarea", "extend the scaffold", { first: true });
+  await app.click("button", { hasText: "Start conversation" });
   // The agent read the seeded source and set it back verbatim — the editor
   // shows the human's edited label, not a mock-authored copy.
   await waitForEditor((state) => state.code.includes("My Edited Flow"), 40_000);
@@ -528,62 +588,57 @@ export const flow: FlowDefinition = {
 `;
 
 test("closing the authoring session keeps the definition's files visible and editable", async () => {
+  onTestFailed(async () => {
+    const shot = await app.screenshot("failure");
+    if (shot) console.log(`[app screenshot] ${shot}`);
+  });
+
   // Register a definition to work on (a data module with a referenced file).
   // Navigate first so the page origin matches the API host.
-  await page.goto(`${baseUrl}/#/flows`);
-  const created = await page.evaluate(
-    async ({ source, files, baseUrl }) => {
-      const res = await fetch(`${baseUrl}/api/flows/definitions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "Close Me", source, files }),
-      });
-      return res.ok ? await res.json() : null;
-    },
-    { source: CLOSE_SOURCE, files: CLOSE_FILES, baseUrl }
-  );
-  assert.ok(created, "definition registered");
-  assert.equal(created?.id, "close-me");
+  await app.open(`${baseUrl}/#/flows`);
+  const created = await registerDefinition("Close Me", CLOSE_SOURCE, CLOSE_FILES);
+  expect(created, "definition registered").toBeTruthy();
+  expect(created?.id).toBe("close-me");
 
   // Start a revision session on it; the session is live (the mock writes its
   // own module into the working copy).
-  await page.goto(`${baseUrl}/#/flows/close-me/edit`);
-  await page.waitForSelector(
-    "button",
-    { hasText: "Start conversation" },
-    { timeout: 15_000 }
-  );
-  await page.locator("textarea").first().fill("Tighten the gate");
-  await page.locator("button", { hasText: "Start conversation" }).click();
+  await app.open(`${baseUrl}/#/flows/close-me/edit`);
+  await app.waitForSelector("button", {
+    hasText: "Start conversation",
+    timeout: 15_000,
+  });
+  await app.fill("textarea", "Tighten the gate", { first: true });
+  await app.click("button", { hasText: "Start conversation" });
   await waitForEditor((state) => state.code.includes("FlowDefinition"), 40_000);
 
   // Close the session (a shell button, not inside the flow-editor): the
   // persistent files stay visible and editable — the session was a
   // collaborator, not the only way to see the flow.
-  await page.locator("button.author-close").click();
+  await app.click("button.author-close");
   // The no-session files editor binds the saved source once the detail
   // refreshes (the close also re-fetches it).
-  await page.waitForFunction(
+  await app.waitForFunction(
     () =>
       document
         .querySelector("code-editor")
         ?.shadowRoot?.querySelector("textarea")
         ?.value?.includes("closeFlow") ?? false,
+    undefined,
     { timeout: 15_000 }
   );
-  const tabs = await page.evaluate(() =>
+  const tabs = await app.evaluate(() =>
     Array.from(document.querySelectorAll(".tab-bar button")).map((tab) =>
       tab.textContent?.trim()
     )
   );
-  assert.ok(
+  expect(
     tabs.includes("./tools/search.ts"),
     `the referenced file tab is visible: ${tabs.join(", ")}`
-  );
+  ).toBe(true);
 
   // The no-session files editor is editable: change the label, save
   // explicitly, and the definition updates.
-  const edited = await page.evaluate(() => {
+  const edited = await app.evaluate(() => {
     const textarea = document
       .querySelector("code-editor")
       ?.shadowRoot?.querySelector("textarea");
@@ -597,30 +652,31 @@ test("closing the authoring session keeps the definition's files visible and edi
     );
     return true;
   });
-  assert.ok(edited, "the no-session editor must be editable");
-  await page.waitForFunction(
+  expect(edited, "the no-session editor must be editable").toBe(true);
+  await app.waitForFunction(
     () => {
       const save = Array.from(document.querySelectorAll("button")).find((b) =>
         b.textContent?.includes("Save definition")
       );
       return save !== undefined && !save.disabled;
     },
+    undefined,
     { timeout: 15_000 }
   );
-  await page.locator("button", { hasText: "Save definition" }).click();
-  await page.waitForSelector(".saved-status", { timeout: 15_000 });
+  await app.click("button", { hasText: "Save definition" });
+  await app.waitForSelector(".saved-status", { timeout: 15_000 });
 
   // The definition survives and the explicit save persisted the edit.
-  const definition = await page.evaluate(async () => {
+  const definition = await app.evaluate(async () => {
     const res = await fetch("/api/flows/definitions/close-me");
     return res.ok ? await res.json() : null;
   });
-  assert.ok(definition, "the saved definition survives closing the session");
-  assert.equal(definition?.name, "Close Me");
-  assert.ok(
+  expect(definition, "the saved definition survives closing the session").toBeTruthy();
+  expect(definition?.name).toBe("Close Me");
+  expect(
     definition?.source?.includes("Close Me (edited)"),
     "the explicit save persisted the edit"
-  );
+  ).toBe(true);
 });
 
 // A registered definition the close-session test works on (a data module with
@@ -654,21 +710,26 @@ const CLOSE_FILES = {
 };
 
 test("hand edits are the state: the agent continues with them in force", async () => {
+  onTestFailed(async () => {
+    const shot = await app.screenshot("failure");
+    if (shot) console.log(`[app screenshot] ${shot}`);
+  });
+
   // Lucky session: the generated definition module renders as the editor.
-  await page.goto(`${baseUrl}/#/flows/new`);
-  await page.waitForSelector("textarea", { timeout: 15_000 });
-  await page
-    .locator("textarea")
-    .first()
-    .fill("A review flow with approve and reject actions");
-  await page.locator("button", { hasText: "I'm feeling lucky" }).click();
+  await app.open(`${baseUrl}/#/flows/new`);
+  await app.waitForSelector("textarea", { timeout: 15_000 });
+  await app
+    .fill("textarea", "A review flow with approve and reject actions", {
+      first: true,
+    });
+  await app.click("button", { hasText: "I'm feeling lucky" });
   await waitForEditor(
     (state) => state.title === "A review flow with approve and reject actions"
   );
   await waitForEditor((state) => state.code.includes("reviewFlow"));
 
   // The human edits the source: a label change.
-  const edited = await page.evaluate(() => {
+  const edited = await app.evaluate(() => {
     const walk = (root) => {
       for (const el of root.querySelectorAll("code-editor")) {
         const textarea = el.shadowRoot?.querySelector("textarea");
@@ -694,7 +755,7 @@ test("hand edits are the state: the agent continues with them in force", async (
     );
     return true;
   });
-  assert.ok(edited, "the editor must be editable");
+  expect(edited, "the editor must be editable").toBe(true);
 
   // The write-back lands: the session source is the manual text — in force,
   // no adoption and no divergence flag.
@@ -708,7 +769,7 @@ test("hand edits are the state: the agent continues with them in force", async (
   // The agent continues: a message drives a turn where it reads the current
   // source (read_definition_source — the hand edit is the state) and proposes
   // in chat without overwriting; the edit stays in force.
-  assert.ok(await sendChatMessage("continue the session"));
+  expect(await sendChatMessage("continue the session")).toBe(true);
   await waitForSessionState((state) => {
     const messages = state.runningTaskContext?.messages ?? [];
     return messages.some(
@@ -727,30 +788,25 @@ test("hand edits are the state: the agent continues with them in force", async (
 });
 
 test("revising an existing definition starts a session with its source as context", async () => {
+  onTestFailed(async () => {
+    const shot = await app.screenshot("failure");
+    if (shot) console.log(`[app screenshot] ${shot}`);
+  });
+
   // Register a definition to revise.
-  const created = await page.evaluate(async (source) => {
-    const res = await fetch("/api/flows/definitions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "Revise Me", source }),
-    });
-    return res.ok ? await res.json() : null;
-  }, REVISE_SOURCE);
-  assert.ok(created, "definition registered");
-  assert.equal(created?.id, "revise-me");
+  const created = await registerDefinition("Revise Me", REVISE_SOURCE);
+  expect(created, "definition registered").toBeTruthy();
+  expect(created?.id).toBe("revise-me");
 
   // The edit route shows the start-session state (no session auto-resumes for
   // a definition that has never been authored).
-  await page.goto(`${baseUrl}/#/flows/revise-me/edit`);
-  await page.waitForSelector(
-    "button",
-    { hasText: "Start conversation" },
-    {
-      timeout: 15_000,
-    }
-  );
-  await page.locator("textarea").first().fill("Add a second workflow");
-  await page.locator("button", { hasText: "Start conversation" }).click();
+  await app.open(`${baseUrl}/#/flows/revise-me/edit`);
+  await app.waitForSelector("button", {
+    hasText: "Start conversation",
+    timeout: 15_000,
+  });
+  await app.fill("textarea", "Add a second workflow", { first: true });
+  await app.click("button", { hasText: "Start conversation" });
 
   // The session's first user message carries the existing source as context,
   // so the agent proposes changes to the real definition rather than from
@@ -771,30 +827,27 @@ test("revising an existing definition starts a session with its source as contex
 });
 
 test("a referenced file opens as an editable tab and the edit persists across a reload", async () => {
+  onTestFailed(async () => {
+    const shot = await app.screenshot("failure");
+    if (shot) console.log(`[app screenshot] ${shot}`);
+  });
+
   // Register a definition to author (an existing-definition session resumes
   // across a reload; a new-definition session intentionally starts fresh).
-  await page.goto(`${baseUrl}/#/flows`);
-  const created = await page.evaluate(async (source) => {
-    const res = await fetch("/api/flows/definitions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "Tab Me", source }),
-    });
-    return res.ok ? await res.json() : null;
-  }, REVISE_SOURCE);
-  assert.ok(created, "definition registered");
-  assert.equal(created?.id, "tab-me");
+  await app.open(`${baseUrl}/#/flows`);
+  const created = await registerDefinition("Tab Me", REVISE_SOURCE);
+  expect(created, "definition registered").toBeTruthy();
+  expect(created?.id).toBe("tab-me");
 
   // Start a session: the mock's definition module declares a referenced tool,
   // so the set is a module set and the editor shows file tabs.
-  await page.goto(`${baseUrl}/#/flows/tab-me/edit`);
-  await page.waitForSelector(
-    "button",
-    { hasText: "Start conversation" },
-    { timeout: 15_000 }
-  );
-  await page.locator("textarea").first().fill("Add a websearch tool");
-  await page.locator("button", { hasText: "Start conversation" }).click();
+  await app.open(`${baseUrl}/#/flows/tab-me/edit`);
+  await app.waitForSelector("button", {
+    hasText: "Start conversation",
+    timeout: 15_000,
+  });
+  await app.fill("textarea", "Add a websearch tool", { first: true });
+  await app.click("button", { hasText: "Start conversation" });
 
   // The editor shows the Definition tab and a tab per referenced file.
   await waitForEditor(
@@ -806,17 +859,19 @@ test("a referenced file opens as an editable tab and the edit persists across a 
 
   // Open the referenced file: the editor shows its (unwritten) pane; the
   // human implements it directly.
-  assert.ok(
+  expect(
     await clickEditorTab("./tools/websearch.ts"),
     "the referenced file tab must be clickable"
-  );
+  ).toBe(true);
   await waitForEditor(
     (state) => state.code !== "" || state.code === "",
     40_000
   );
 
   // Edit the file: the write-back lands in the session (authoritative).
-  assert.ok(await editActiveEditor(EDITED_TOOL), "the file editor is editable");
+  expect(await editActiveEditor(EDITED_TOOL), "the file editor is editable").toBe(
+    true
+  );
   await waitForSessionState(
     (state) =>
       typeof state.workflowInstanceState?.files?.["./tools/websearch.ts"] ===
@@ -829,25 +884,26 @@ test("a referenced file opens as an editable tab and the edit persists across a 
   );
 
   // Reload: the session resumes and the edited file content is still there.
-  await page.reload();
+  await app.reload();
   await waitForEditor(
     (state) => state.tabs.includes("./tools/websearch.ts"),
     40_000
   );
-  assert.ok(await clickEditorTab("./tools/websearch.ts"));
+  expect(await clickEditorTab("./tools/websearch.ts")).toBe(true);
   await waitForEditor((state) => state.code.includes("edited result"), 40_000);
 });
 
 test("revising an existing definition shows its referenced files as editable tabs", async () => {
+  onTestFailed(async () => {
+    const shot = await app.screenshot("failure");
+    if (shot) console.log(`[app screenshot] ${shot}`);
+  });
+
   // Register a module-set definition with a referenced file.
-  await page.goto(`${baseUrl}/#/flows`);
-  const created = await page.evaluate(async () => {
-    const res = await fetch("/api/flows/definitions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Tab Seed",
-        source: `import type { FlowDefinition } from "workflow-engine/workflow-types";
+  await app.open(`${baseUrl}/#/flows`);
+  const created = await registerDefinition(
+    "Tab Seed",
+    `import type { FlowDefinition } from "workflow-engine/workflow-types";
 
 export const flow: FlowDefinition = {
   id: "tab-seed",
@@ -868,30 +924,26 @@ export const flow: FlowDefinition = {
   ],
   edges: [],
 };`,
-        files: { "./gates/approved.ts": "export const ok = true;\n" },
-      }),
-    });
-    return res.ok ? await res.json() : null;
-  });
-  assert.ok(created, "definition registered");
-  assert.equal(created?.id, "tab-seed");
+    { "./gates/approved.ts": "export const ok = true;\n" }
+  );
+  expect(created, "definition registered").toBeTruthy();
+  expect(created?.id).toBe("tab-seed");
 
   // Start a revision session — the seeded file appears as an editable tab.
-  await page.goto(`${baseUrl}/#/flows/tab-seed/edit`);
-  await page.waitForSelector(
-    "button",
-    { hasText: "Start conversation" },
-    { timeout: 15_000 }
-  );
-  await page.locator("textarea").first().fill("Tighten the gate");
-  await page.locator("button", { hasText: "Start conversation" }).click();
+  await app.open(`${baseUrl}/#/flows/tab-seed/edit`);
+  await app.waitForSelector("button", {
+    hasText: "Start conversation",
+    timeout: 15_000,
+  });
+  await app.fill("textarea", "Tighten the gate", { first: true });
+  await app.click("button", { hasText: "Start conversation" });
   await waitForEditor(
     (state) => state.tabs.includes("./gates/approved.ts"),
     40_000
   );
 
   // Open it: the seeded content is there (the file is editable in-conversation).
-  assert.ok(await clickEditorTab("./gates/approved.ts"));
+  expect(await clickEditorTab("./gates/approved.ts")).toBe(true);
   await waitForEditor(
     (state) => state.code.includes("export const ok = true;"),
     40_000
@@ -899,30 +951,29 @@ export const flow: FlowDefinition = {
 });
 
 test("hand-adding a ref to a saved definition shows its tab and saves the file", async () => {
+  onTestFailed(async () => {
+    const shot = await app.screenshot("failure");
+    if (shot) console.log(`[app screenshot] ${shot}`);
+  });
+
   // A saved definition with no referenced files.
-  await page.goto(`${baseUrl}/#/flows`);
-  const created = await page.evaluate(async (source) => {
-    const res = await fetch("/api/flows/definitions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "Add Ref", source }),
-    });
-    return res.ok ? await res.json() : null;
-  }, ADD_REF_SOURCE);
-  assert.ok(created, "definition registered");
-  assert.equal(created?.id, "add-ref");
+  await app.open(`${baseUrl}/#/flows`);
+  const created = await registerDefinition("Add Ref", ADD_REF_SOURCE);
+  expect(created, "definition registered").toBeTruthy();
+  expect(created?.id).toBe("add-ref");
 
   // Hand-edit the source to declare a referenced tool.
-  await page.goto(`${baseUrl}/#/flows/add-ref/edit`);
-  await page.waitForFunction(
+  await app.open(`${baseUrl}/#/flows/add-ref/edit`);
+  await app.waitForFunction(
     () =>
       document
         .querySelector("code-editor")
         ?.shadowRoot?.querySelector("textarea")
         ?.value?.includes("add-ref") ?? false,
+    undefined,
     { timeout: 15_000 }
   );
-  const edited = await page.evaluate(() => {
+  const edited = await app.evaluate(() => {
     const textarea = document
       .querySelector("code-editor")
       ?.shadowRoot?.querySelector("textarea");
@@ -936,29 +987,29 @@ test("hand-adding a ref to a saved definition shows its tab and saves the file",
     );
     return true;
   });
-  assert.ok(edited, "the source must be editable");
+  expect(edited, "the source must be editable").toBe(true);
 
   // The declared-but-unwritten ref gets a tab, derived from the source.
-  await page.waitForFunction(
+  await app.waitForFunction(
     () =>
       Array.from(document.querySelectorAll(".tab-bar button")).some(
         (b) => b.textContent?.trim() === "./tools/websearch.ts"
       ),
+    undefined,
     { timeout: 15_000 }
   );
 
   // Write the referenced file by hand.
-  await page
-    .locator(".tab-bar button", { hasText: "./tools/websearch.ts" })
-    .click();
-  await page.waitForFunction(
+  await app.click(".tab-bar button", { hasText: "./tools/websearch.ts" });
+  await app.waitForFunction(
     () =>
       document
         .querySelector("code-editor")
         ?.shadowRoot?.querySelector("textarea") !== null,
+    undefined,
     { timeout: 10_000 }
   );
-  const wrote = await page.evaluate((content) => {
+  const wrote = await app.evaluate((content) => {
     const textarea = document
       .querySelector("code-editor")
       ?.shadowRoot?.querySelector("textarea");
@@ -969,47 +1020,52 @@ test("hand-adding a ref to a saved definition shows its tab and saves the file",
     );
     return true;
   }, EDITED_TOOL);
-  assert.ok(wrote, "the referenced file tab must be writable");
+  expect(wrote, "the referenced file tab must be writable").toBe(true);
 
   // Save: the module + the hand-written file register together.
-  await page.locator("button", { hasText: "Save definition" }).click();
-  await page.waitForSelector(".saved-status", { timeout: 20_000 });
+  await app.click("button", { hasText: "Save definition" });
+  await app.waitForSelector(".saved-status", { timeout: 20_000 });
 
-  const definition = await page.evaluate(async () => {
+  const definition = await app.evaluate(async () => {
     const res = await fetch("/api/flows/definitions/add-ref");
     return res.ok ? await res.json() : null;
   });
-  assert.ok(definition, "the definition survives the save");
-  assert.ok(
+  expect(definition, "the definition survives the save").toBeTruthy();
+  expect(
     definition?.source?.includes('ref: "./tools/websearch.ts"'),
     "the edited source is persisted"
-  );
-  assert.ok(
+  ).toBe(true);
+  expect(
     definition?.files?.["./tools/websearch.ts"]?.includes("websearchTools"),
     "the hand-written referenced file is persisted"
-  );
+  ).toBe(true);
 });
 
 test("a built-in flow definition is viewable read-only (View instead of Edit)", async () => {
-  await page.goto(`${baseUrl}/#/flows/queen-bee`);
+  onTestFailed(async () => {
+    const shot = await app.screenshot("failure");
+    if (shot) console.log(`[app screenshot] ${shot}`);
+  });
+
+  await app.open(`${baseUrl}/#/flows/queen-bee`);
   // The built-in's definition page offers View (never Edit).
-  await page.waitForSelector("a", { hasText: "View" }, { timeout: 20_000 });
-  await page.locator("a", { hasText: "View" }).first().click();
+  await app.waitForSelector("a", { hasText: "View", timeout: 20_000 });
+  await app.click("a", { hasText: "View", first: true });
 
   // The read-only viewer shows the preset's entry source on the Definition tab.
-  await page.waitForSelector("code-editor", { timeout: 20_000 });
-  const code = await page.evaluate(() => {
+  await app.waitForSelector("code-editor", { timeout: 20_000 });
+  const code = await app.evaluate(() => {
     const editor = document.querySelector("code-editor");
     return editor?.shadowRoot?.querySelector("textarea")?.value ?? "";
   });
-  assert.ok(
+  expect(
     code.includes('id: "queen-bee"') &&
       code.includes("export const flow: FlowDefinition = {"),
     "the preset's definition module source must be viewable"
-  );
-  const disabled = await page.evaluate(() => {
+  ).toBe(true);
+  const disabled = await app.evaluate(() => {
     const editor = document.querySelector("code-editor");
     return editor?.shadowRoot?.querySelector("textarea")?.disabled ?? false;
   });
-  assert.equal(disabled, true, "the viewer is read-only");
+  expect(disabled, "the viewer is read-only").toBe(true);
 });

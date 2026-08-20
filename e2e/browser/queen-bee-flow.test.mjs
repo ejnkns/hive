@@ -3,32 +3,23 @@
 // pass was required for: real persistence, real git worktrees, the real Lit
 // rendering surface, and the real browser's custom-element constraints. It
 // guards the browser/WS/schema seams that unit and component tests cannot.
-import assert from "node:assert/strict";
-import { after, before, test } from "node:test";
-import { startHiveTestApp } from "./support/hive-test-app.mjs";
-import { startMockProvider } from "./support/mock-provider.mjs";
+//
+// Runs under Vitest browser mode (e2e/vitest.config.ts): the built server and
+// mock provider boot on the Node side in e2e/global-setup.ts (base URL and the
+// fixture project path via `inject`), and the app runs in a second page of the
+// same browser, driven through the shared `app` wrapper
+// (e2e/support/browser-app.mjs).
 
-let mock;
-let app;
-let page;
-let baseUrl;
+import { expect, inject, onTestFailed, test } from "vitest";
+import { app } from "../support/browser-app.mjs";
 
-before(async () => {
-  mock = await startMockProvider();
-  app = await startHiveTestApp(mock.host);
-  page = app.page;
-  baseUrl = app.baseUrl;
-});
-
-after(async () => {
-  await app.close();
-  await mock.close();
-});
+const baseUrl = inject("baseUrl");
+const projectPath = inject("projectPath");
 
 // The live DOM state of one workflow section: card titles + every visible
 // button text, across nested shadow roots.
 async function sectionState(label) {
-  return page.evaluate((label) => {
+  return app.evaluate((label) => {
     const walkButtons = (root) => {
       const buttons = [];
       for (const el of root.querySelectorAll("button")) {
@@ -75,7 +66,7 @@ async function waitForSection(label, predicate, timeoutMs = 40_000) {
 async function waitAndClick(buttonLabel, timeoutMs = 40_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const clicked = await page.evaluate((buttonLabel) => {
+    const clicked = await app.evaluate((buttonLabel) => {
       const walk = (root) => {
         for (const el of root.querySelectorAll("button")) {
           if (el.textContent?.trim() === buttonLabel) return el;
@@ -107,7 +98,7 @@ async function waitAndClick(buttonLabel, timeoutMs = 40_000) {
 async function replyToChat(text, timeoutMs = 15_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const sent = await page.evaluate((text) => {
+    const sent = await app.evaluate((text) => {
       const walk = (root) => {
         const session = root.querySelector("chat-session");
         if (session?.shadowRoot) {
@@ -152,18 +143,26 @@ async function replyToChat(text, timeoutMs = 15_000) {
 }
 
 test("queen-bee card lifecycle: onboarding → requirements → plan → card → done", async () => {
+  // The flow name is unique per run so watch-mode re-runs never collide
+  // (instance names are unique within a definition; the server 409s on dupes).
+  const flowName = `e2e-project-${Date.now()}`;
+  onTestFailed(async () => {
+    const shot = await app.screenshot("failure");
+    if (shot) console.log(`[app screenshot] ${shot}`);
+  });
+
   // Flows library lists the built-ins.
-  await page.goto(`${baseUrl}/#/flows`);
-  await page.waitForSelector("text=Queen Bee", { timeout: 15_000 });
-  assert.equal(await page.locator("text=Wayfinder").count(), 1);
+  await app.open(`${baseUrl}/#/flows`);
+  await app.waitForSelector("text=Queen Bee", { timeout: 15_000 });
+  expect(await app.count("text=Wayfinder")).toBe(1);
 
   // Create a flow bound to the fixture project.
-  await page.goto(`${baseUrl}/#/flows/queen-bee/new`);
-  await page.waitForSelector("input", { timeout: 15_000 });
-  await page.locator("input").first().fill("e2e-project");
-  await page.locator("input").nth(1).fill(app.projectPath);
-  await page.locator("button", { hasText: "Create instance" }).first().click();
-  await page.waitForSelector(".flow-header", { timeout: 20_000 });
+  await app.open(`${baseUrl}/#/flows/queen-bee/new`);
+  await app.waitForSelector("input", { timeout: 15_000 });
+  await app.fill("input", flowName, { first: true });
+  await app.fill("input", projectPath, { nth: 1 });
+  await app.click("button", { hasText: "Create instance", first: true });
+  await app.waitForSelector(".flow-header", { timeout: 20_000 });
 
   // Onboarding completes on its own (operations only).
   await waitForSection("Onboarding", () => true);
@@ -172,16 +171,18 @@ test("queen-bee card lifecycle: onboarding → requirements → plan → card �
   // Requirements session: start, answer the agent's clarifying question
   // (startOnUserInput — the first reply starts the agent, which explores and
   // asks; the second reply answers, the draft lands, REQUIREMENTS_COMPLETE).
-  assert.ok(
+  expect(
     await waitAndClick("Start requirements session"),
     "start requirements session"
-  );
-  assert.ok(
+  ).toBe(true);
+  expect(
     await replyToChat("yes, the greeting is deterministic"),
     "chat input appeared and reply sent"
+  ).toBe(true);
+  await app.waitForTimeout(6_000); // agent explores, then asks
+  expect(await replyToChat("yes, exactly one deterministic greeting")).toBe(
+    true
   );
-  await page.waitForTimeout(6_000); // agent explores, then asks
-  assert.ok(await replyToChat("yes, exactly one deterministic greeting"));
 
   // Requirements → complete → planning (planner proposes) → planned → accept.
   for (const step of [
@@ -189,25 +190,25 @@ test("queen-bee card lifecycle: onboarding → requirements → plan → card �
     "Accept proposal",
     "Accept all and create cards",
   ]) {
-    assert.ok(await waitAndClick(step), `${step} available and clicked`);
+    expect(await waitAndClick(step), `${step} available and clicked`).toBe(true);
     if (step !== "Accept all and create cards") {
-      await page.waitForTimeout(8_000); // planner runs after submit
+      await app.waitForTimeout(8_000); // planner runs after submit
     }
   }
 
   // The edge fans the plan out into a cards instance (ready, runnable).
   const cards = await waitForSection("Cards", (s) => s.cards.length === 1);
-  assert.ok(cards, "cards section appears with the planned card");
-  assert.ok(
+  expect(cards, "cards section appears with the planned card").toBeTruthy();
+  expect(
     cards.buttons.includes("Run Worker Agent"),
     "the ready card exposes Run Worker Agent"
-  );
+  ).toBe(true);
 
   // Run the worker (mock writes + commits + submits) → validation → review →
   // the reviewer approves → accept merges to done.
-  assert.ok(await waitAndClick("Run Worker Agent"));
-  await page.waitForTimeout(2_000);
-  const workerChat = await page.evaluate(() => {
+  expect(await waitAndClick("Run Worker Agent")).toBe(true);
+  await app.waitForTimeout(2_000);
+  const workerChat = await app.evaluate(() => {
     const host = document.querySelector("workflow-instances");
     const walk = (root) => {
       let inputs = 0;
@@ -219,48 +220,42 @@ test("queen-bee card lifecycle: onboarding → requirements → plan → card �
     };
     return walk(host?.shadowRoot ?? document);
   });
-  assert.equal(
+  expect(
     workerChat,
-    0,
     "the one-shot worker chat is read-only (no input) — the requirements chat had one"
-  );
-  assert.ok(
+  ).toBe(0);
+  // KNOWN FAILURE (ticket 08/09, see docs/known-issues.md): the reviewer never
+  // approves, so "Accept work" never appears and this assertion fails.
+  expect(
     await waitAndClick("Accept work", 60_000),
     "reviewer approved and accept became available"
-  );
+  ).toBe(true);
   await waitForSection(
     "Cards",
     (s) => s.cards.length === 1 && s.buttons.length > 0,
     30_000
   );
-  await page.waitForTimeout(3_000);
+  await app.waitForTimeout(3_000);
 
   // Add an idea: the served idea-card (a served-at-runtime custom component)
   // must load, register, and render live — the end-to-end guard for the
   // browser custom-element + re-render bugs that component tests could not
   // catch (the demo card vanished until the loader registered classes and the
   // host re-rendered after the async load).
-  await page.locator("button", { hasText: "Add idea" }).first().click();
-  await page.waitForSelector(".action-form input", { timeout: 10_000 });
-  await page.locator(".action-form input").first().fill("A great idea");
-  await page
-    .locator(".dialog-actions button", { hasText: "Run" })
-    .first()
-    .click();
-  await page.waitForSelector(".idea-title", { timeout: 15_000 });
-  const ideaTitle = await page.locator(".idea-title").first().textContent();
-  assert.equal(
-    ideaTitle?.trim(),
-    "A great idea",
-    "the served idea card renders the idea title"
+  await app.click("button", { hasText: "Add idea", first: true });
+  await app.waitForSelector(".action-form input", { timeout: 10_000 });
+  await app.fill(".action-form input", "A great idea", { first: true });
+  await app.click(".dialog-actions button", { hasText: "Run", first: true });
+  await app.waitForSelector(".idea-title", { timeout: 15_000 });
+  const ideaTitle = await app.textContent(".idea-title");
+  expect(ideaTitle?.trim(), "the served idea card renders the idea title").toBe(
+    "A great idea"
   );
 
   // The done card carries the plan's title.
   const done = await sectionState("Cards");
-  assert.ok(
-    done.cards.some((title) =>
-      (title ?? "").includes("deterministic greeting")
-    ),
+  expect(
+    done.cards.some((title) => (title ?? "").includes("deterministic greeting")),
     `done card title present (${JSON.stringify(done.cards)})`
-  );
+  ).toBe(true);
 });

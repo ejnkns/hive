@@ -14,26 +14,6 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { chromium } from "playwright-core";
-import { chromeExecutable } from "./chrome-executable.mjs";
-
-export async function startHiveTestApp(mockProviderHost) {
-  const server = await startHiveTestServer(mockProviderHost);
-  const browser = await chromium.launch({
-    executablePath: chromeExecutable(),
-    headless: true,
-  });
-  const page = await browser.newPage();
-  page.setDefaultTimeout(120_000);
-  return {
-    ...server,
-    page,
-    async close() {
-      await browser.close();
-      await server.close();
-    },
-  };
-}
 
 // Node-side boot for the Vitest browser-mode runner: the server and mock
 // provider must live outside the browser test context (test files execute in

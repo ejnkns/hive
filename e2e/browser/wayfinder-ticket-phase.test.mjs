@@ -2,34 +2,22 @@
 // (research) → resolve to closed → start build. Drives the real browser + mock
 // provider through the flow-component surface (the flow-level custom view) and
 // the served ticket card, beyond the creation/charting e2e.
+//
+// Runs under Vitest browser mode (e2e/vitest.config.ts): the built server and
+// mock provider boot on the Node side in e2e/global-setup.ts (base URL via
+// `inject`), and the app runs in a second page of the same browser, driven
+// through the shared `app` wrapper (e2e/support/browser-app.mjs).
 
-import assert from "node:assert/strict";
-import { after, before, test } from "node:test";
-import { startHiveTestApp } from "./support/hive-test-app.mjs";
-import { startMockProvider } from "./support/mock-provider.mjs";
+import { expect, inject, onTestFailed, test } from "vitest";
+import { app } from "../support/browser-app.mjs";
 
-let mock;
-let app;
-let page;
-let baseUrl;
-
-before(async () => {
-  mock = await startMockProvider();
-  app = await startHiveTestApp(mock.host);
-  page = app.page;
-  baseUrl = app.baseUrl;
-});
-
-after(async () => {
-  await app.close();
-  await mock.close();
-});
+const baseUrl = inject("baseUrl");
 
 // Clicks a button whose text equals `label`, across nested shadow roots.
 async function waitAndClick(buttonLabel, timeoutMs = 40_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const clicked = await page.evaluate((buttonLabel) => {
+    const clicked = await app.evaluate((buttonLabel) => {
       const walk = (root) => {
         for (const el of root.querySelectorAll("button")) {
           if (el.textContent?.trim() === buttonLabel) return el;
@@ -60,7 +48,7 @@ async function waitAndClick(buttonLabel, timeoutMs = 40_000) {
 async function deepHasText(className, text, timeoutMs = 20_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const found = await page.evaluate(
+    const found = await app.evaluate(
       ({ className, text }) => {
         const walk = (root) => {
           for (const el of root.querySelectorAll(`.${className}`)) {
@@ -86,7 +74,7 @@ async function deepHasText(className, text, timeoutMs = 20_000) {
 async function clickClass(className, timeoutMs = 20_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const clicked = await page.evaluate((className) => {
+    const clicked = await app.evaluate((className) => {
       const walk = (root) => {
         for (const el of root.querySelectorAll(`.${className}`)) {
           el.dispatchEvent(
@@ -110,94 +98,99 @@ async function clickClass(className, timeoutMs = 20_000) {
 
 // Submits the flow-action create form (the shared Svelte dialog).
 async function submitFlowActionForm() {
-  await page.waitForSelector(".dialog-actions button", { timeout: 10_000 });
-  await page
-    .locator(".dialog-actions button", { hasText: "Run" })
-    .first()
-    .click();
+  await app.waitForSelector(".dialog-actions button", { timeout: 10_000 });
+  await app.click(".dialog-actions button", { hasText: "Run", first: true });
 }
 
 test("wayfinder ticket phase: chart → add research ticket → graduate → claim → closed → start build", async () => {
-  await page.goto(`${baseUrl}/#/flows`);
-  await page.waitForTimeout(800);
-
-  const created = await page.evaluate(async () => {
-    const res = await fetch("/api/flows", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        definitionId: "wayfinder",
-        config: {
-          name: "ticket-check",
-          destination: "Pick the editor's storage layer",
-        },
-      }),
-    });
-    return res.json();
+  // The flow name is unique per run so watch-mode re-runs never collide
+  // (instance names are unique within a definition; the server 409s on dupes).
+  const flowName = `ticket-check-${Date.now()}`;
+  onTestFailed(async () => {
+    const shot = await app.screenshot("failure");
+    if (shot) console.log(`[app screenshot] ${shot}`);
   });
-  assert.equal(created.ok, true, JSON.stringify(created));
 
-  await page.goto(`${baseUrl}/#/flows/wayfinder/ticket-check`);
-  await page.waitForSelector("workflow-instances", { timeout: 30_000 });
-  await page.waitForTimeout(2_000);
+  await app.open(`${baseUrl}/#/flows`);
+  await app.waitForTimeout(800);
+
+  const created = await app.evaluate(
+    async (config) => {
+      const res = await fetch("/api/flows", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ definitionId: "wayfinder", config }),
+      });
+      return res.json();
+    },
+    { name: flowName, destination: "Pick the editor's storage layer" }
+  );
+  expect(created.ok, JSON.stringify(created)).toBe(true);
+
+  await app.open(`${baseUrl}/#/flows/wayfinder/${flowName}`);
+  await app.waitForSelector("workflow-instances", { timeout: 30_000 });
+  await app.waitForTimeout(2_000);
 
   // The table renders the map card, and the map view drills in and back.
-  assert.ok(
+  expect(
     await deepHasText("open-map", "Open the map view"),
     "the table shows the map card"
+  ).toBe(true);
+  expect(await clickClass("open-map"), "open the map view from the map card").toBe(
+    true
   );
-  assert.ok(
-    await clickClass("open-map"),
-    "open the map view from the map card"
-  );
-  assert.ok(
+  expect(
     await deepHasText("back-link", "Back to the table"),
     "the map view has a back link"
-  );
-  assert.ok(await clickClass("back-link"), "return to the table");
+  ).toBe(true);
+  expect(await clickClass("back-link"), "return to the table").toBe(true);
 
   // Chart: the naming session is agent-initiating (the mock answers it), so
   // Done → frontier, then Done → charted.
-  assert.ok(await waitAndClick("Done"), "naming session Done");
-  await page.waitForTimeout(4_000);
-  assert.ok(await waitAndClick("Done"), "frontier session Done");
-  await page.waitForTimeout(2_000);
+  expect(await waitAndClick("Done"), "naming session Done").toBe(true);
+  await app.waitForTimeout(4_000);
+  expect(await waitAndClick("Done"), "frontier session Done").toBe(true);
+  await app.waitForTimeout(2_000);
 
   // Add a research ticket through the flow-action create form.
-  await page.locator("button", { hasText: "Add ticket" }).first().click();
-  await page.waitForSelector("#cf-title", { timeout: 10_000 });
-  await page.locator("#cf-title").fill("Choose the store");
-  await page.locator("#cf-question").fill("localStorage or IndexedDB?");
-  await page.locator("#cf-type").selectOption("research");
+  await app.click("button", { hasText: "Add ticket", first: true });
+  await app.waitForSelector("#cf-title", { timeout: 10_000 });
+  await app.fill("#cf-title", "Choose the store");
+  await app.fill("#cf-question", "localStorage or IndexedDB?");
+  await app.selectOption("#cf-type", "research");
   await submitFlowActionForm();
 
   // The ticket lands in the fog tray (normalize runs), highlighted as needing
   // clarity, then the graduate action opens.
-  assert.ok(
+  expect(
     await deepHasText("fog-card", "Choose the store"),
     "the fog tray shows the new ticket"
+  ).toBe(true);
+  expect(await waitAndClick("Graduate to ready"), "graduate the fog ticket").toBe(
+    true
   );
-  assert.ok(await waitAndClick("Graduate to ready"), "graduate the fog ticket");
 
   // The ready ticket sits in the briefing deck with its research stamp; claim
   // it, and the one-shot research agent resolves it (the mock completes it),
   // then assemble closes the ticket.
-  assert.ok(
+  expect(
     await deepHasText("stamp", "research"),
     "the briefing deck stamps the ready ticket research"
+  ).toBe(true);
+  expect(await waitAndClick("Claim for research"), "claim the ticket").toBe(
+    true
   );
-  assert.ok(await waitAndClick("Claim for research"), "claim the ticket");
 
   // Once the ticket closes the map is clear, so Start build becomes available.
-  assert.ok(
+  expect(
     await waitAndClick("Start build", 30_000),
     "start build after the frontier cleared"
-  );
+  ).toBe(true);
   await submitFlowActionForm();
 
   // The build workflow starts in its specing state; the depot shows its crate.
-  assert.ok(
+  expect(
     await deepHasText("crate", "specing"),
     "the depot shows the specing build crate"
-  );
+  ).toBe(true);
 });

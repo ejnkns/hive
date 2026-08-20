@@ -3,34 +3,22 @@
 // Drives the real browser + mock provider through the flow-component surface,
 // using the same dispatched-event path the component tests use (a real
 // pointer drag proved flaky for HTML5 drag-and-drop).
+//
+// Runs under Vitest browser mode (e2e/vitest.config.ts): the built server and
+// mock provider boot on the Node side in e2e/global-setup.ts (base URL via
+// `inject`), and the app runs in a second page of the same browser, driven
+// through the shared `app` wrapper (e2e/support/browser-app.mjs).
 
-import assert from "node:assert/strict";
-import { after, before, test } from "node:test";
-import { startHiveTestApp } from "./support/hive-test-app.mjs";
-import { startMockProvider } from "./support/mock-provider.mjs";
+import { expect, inject, onTestFailed, test } from "vitest";
+import { app } from "../support/browser-app.mjs";
 
-let mock;
-let app;
-let page;
-let baseUrl;
-
-before(async () => {
-  mock = await startMockProvider();
-  app = await startHiveTestApp(mock.host);
-  page = app.page;
-  baseUrl = app.baseUrl;
-});
-
-after(async () => {
-  await app.close();
-  await mock.close();
-});
+const baseUrl = inject("baseUrl");
 
 // Clicks a button whose text equals `label`, across nested shadow roots.
 async function waitAndClick(buttonLabel, timeoutMs = 40_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const clicked = await page.evaluate((buttonLabel) => {
+    const clicked = await app.evaluate((buttonLabel) => {
       const walk = (root) => {
         for (const el of root.querySelectorAll("button")) {
           if (el.textContent?.trim() === buttonLabel) return el;
@@ -61,7 +49,7 @@ async function waitAndClick(buttonLabel, timeoutMs = 40_000) {
 async function deepHasText(className, text, timeoutMs = 20_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const found = await page.evaluate(
+    const found = await app.evaluate(
       ({ className, text }) => {
         const walk = (root) => {
           for (const el of root.querySelectorAll(`.${className}`)) {
@@ -85,64 +73,66 @@ async function deepHasText(className, text, timeoutMs = 20_000) {
 
 // Submits the flow-action create form (the shared Svelte dialog).
 async function submitFlowActionForm() {
-  await page.waitForSelector(".dialog-actions button", { timeout: 10_000 });
-  await page
-    .locator(".dialog-actions button", { hasText: "Run" })
-    .first()
-    .click();
+  await app.waitForSelector(".dialog-actions button", { timeout: 10_000 });
+  await app.click(".dialog-actions button", { hasText: "Run", first: true });
 }
 
 test("wayfinder interactions: hover sync card<->marker and fog drag reorder", async () => {
-  await page.goto(`${baseUrl}/#/flows`);
-  await page.waitForTimeout(800);
-
-  const created = await page.evaluate(async () => {
-    const res = await fetch("/api/flows", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        definitionId: "wayfinder",
-        config: {
-          name: "interaction-check",
-          destination: "Pick the editor's storage layer",
-        },
-      }),
-    });
-    return res.json();
+  // The flow name is unique per run so watch-mode re-runs never collide
+  // (instance names are unique within a definition; the server 409s on dupes).
+  const flowName = `interaction-check-${Date.now()}`;
+  onTestFailed(async () => {
+    const shot = await app.screenshot("failure");
+    if (shot) console.log(`[app screenshot] ${shot}`);
   });
-  assert.equal(created.ok, true, JSON.stringify(created));
 
-  await page.goto(`${baseUrl}/#/flows/wayfinder/interaction-check`);
-  await page.waitForSelector("workflow-instances", { timeout: 30_000 });
-  await page.waitForTimeout(2_000);
+  await app.open(`${baseUrl}/#/flows`);
+  await app.waitForTimeout(800);
+
+  const created = await app.evaluate(
+    async (config) => {
+      const res = await fetch("/api/flows", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ definitionId: "wayfinder", config }),
+      });
+      return res.json();
+    },
+    { name: flowName, destination: "Pick the editor's storage layer" }
+  );
+  expect(created.ok, JSON.stringify(created)).toBe(true);
+
+  await app.open(`${baseUrl}/#/flows/wayfinder/${flowName}`);
+  await app.waitForSelector("workflow-instances", { timeout: 30_000 });
+  await app.waitForTimeout(2_000);
 
   // Chart the map (the mock answers the naming and frontier sessions).
-  assert.ok(await waitAndClick("Done"), "naming session Done");
-  await page.waitForTimeout(4_000);
-  assert.ok(await waitAndClick("Done"), "frontier session Done");
-  await page.waitForTimeout(2_000);
+  expect(await waitAndClick("Done"), "naming session Done").toBe(true);
+  await app.waitForTimeout(4_000);
+  expect(await waitAndClick("Done"), "frontier session Done").toBe(true);
+  await app.waitForTimeout(2_000);
 
   // Two fog entries give the tray a pile to reorder.
   for (const brief of ["Choose the store", "Plot the reorder seam"]) {
-    await page.locator("button", { hasText: "Add fog entry" }).first().click();
-    await page.waitForSelector("#cf-brief", { timeout: 10_000 });
-    await page.locator("#cf-brief").fill(brief);
+    await app.click("button", { hasText: "Add fog entry", first: true });
+    await app.waitForSelector("#cf-brief", { timeout: 10_000 });
+    await app.fill("#cf-brief", brief);
     await submitFlowActionForm();
   }
-  assert.ok(
+  expect(
     await deepHasText("fog-card", "Choose the store"),
     "the fog tray shows the first fog entry"
-  );
-  assert.ok(
+  ).toBe(true);
+  expect(
     await deepHasText("fog-card", "Plot the reorder seam"),
     "the fog tray shows the second fog entry"
-  );
+  ).toBe(true);
 
   // Hover sync + fog reorder, driven with dispatched events on real geometry:
   // hover card -> its marker lights; hover marker -> its card lights; then
   // drag the second card above the first. Lit updates asynchronously, so each
   // dispatch awaits a frame before reading the classes.
-  const scenario = await page.evaluate(async () => {
+  const scenario = await app.evaluate(async () => {
     const flush = () => new Promise((resolve) => setTimeout(resolve, 60));
     const walk = (root) => {
       const found = [];
@@ -211,22 +201,20 @@ test("wayfinder interactions: hover sync card<->marker and fog drag reorder", as
     return { firstId, secondId, before, cardToMarker, markerToCard };
   });
 
-  assert.deepEqual(
+  expect(
     scenario.cardToMarker,
-    [true, true],
     "hovering the card lights the card and its marker"
-  );
-  assert.deepEqual(
+  ).toEqual([true, true]);
+  expect(
     scenario.markerToCard,
-    [true, true],
     "hovering the marker lights the marker and its card"
-  );
+  ).toEqual([true, true]);
 
   // The drop re-renders from the new clear order; poll until the pile flips.
   const deadline = Date.now() + 10_000;
   let after = scenario.before;
   while (Date.now() < deadline && after === scenario.before) {
-    after = await page.evaluate(() => {
+    after = await app.evaluate(() => {
       const walk = (root) => {
         const found = [];
         for (const el of root.querySelectorAll("*")) {
@@ -241,9 +229,8 @@ test("wayfinder interactions: hover sync card<->marker and fog drag reorder", as
     if (after !== scenario.before) break;
     await new Promise((resolve) => setTimeout(resolve, 300));
   }
-  assert.equal(
+  expect(
     after,
-    `${scenario.secondId},${scenario.firstId}`,
     "the dragged fog card reorders above the first"
-  );
+  ).toBe(`${scenario.secondId},${scenario.firstId}`);
 });

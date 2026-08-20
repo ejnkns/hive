@@ -6,37 +6,28 @@
 // flow-surface-stability effort: it proves stable surface identity
 // (ticket 01), view-state persistence (ticket 02), and non-destructive
 // reconnect (ticket 03) together.
+//
+// Runs under Vitest browser mode (e2e/vitest.config.ts): the built server and
+// mock provider boot on the Node side in e2e/global-setup.ts (base URL via
+// `inject`), and the app runs in a second page of the same browser, driven
+// through the shared `app` wrapper (e2e/support/browser-app.mjs). The app
+// page lives in its own browser context, so `app.setOffline` emulates the
+// network down for the app only — the test iframe and its command channel stay
+// online.
 
-import assert from "node:assert/strict";
-import { after, before, test } from "node:test";
-import { startHiveTestApp } from "./support/hive-test-app.mjs";
-import { startMockProvider } from "./support/mock-provider.mjs";
+import { expect, inject, onTestFailed, test } from "vitest";
+import { app } from "../support/browser-app.mjs";
 
-let mock;
-let app;
-let page;
-let baseUrl;
-
-before(async () => {
-  mock = await startMockProvider();
-  app = await startHiveTestApp(mock.host);
-  page = app.page;
-  baseUrl = app.baseUrl;
-});
-
-after(async () => {
-  await app.close();
-  await mock.close();
-});
+const baseUrl = inject("baseUrl");
 
 // Runs `body` (page code) with one shared shadow-DOM walker: `hiveAll` holds
 // every element under workflow-instances' shadow root, across nested shadow
 // roots, in document order. The single walker keeps the deep queries in one
 // place instead of duplicating the recursion per helper. The body is an
-// expression — Playwright's string evaluate wraps it as `return (body);`, so
-// the inner IIFE below needs its own explicit `return` for that to surface.
+// expression — the string evaluate wraps it as `return (body);`, so the inner
+// IIFE below needs its own explicit `return` for that to surface.
 async function deepEval(body) {
-  return page.evaluate(`(() => {
+  return app.evaluate(`(() => {
     const hiveAll = [];
     const hiveWalk = (root) => {
       for (const el of root.querySelectorAll("*")) {
@@ -89,7 +80,7 @@ async function clickSelector(selector, timeoutMs = 20_000) {
 
 // Waits until at least one element matches `selector` in the shadow tree.
 async function waitForDeep(selector, timeoutMs = 30_000) {
-  await page.waitForFunction(
+  await app.waitForFunction(
     (sel) => {
       const walk = (root) => {
         for (const el of root.querySelectorAll(sel)) return true;
@@ -109,7 +100,7 @@ async function waitForDeep(selector, timeoutMs = 30_000) {
 // workflow-instances — the element whose identity must stay stable. Stores it
 // on window so identity can be compared across evaluate calls.
 async function captureSurface() {
-  return page.evaluate(() => {
+  return app.evaluate(() => {
     const host = document.querySelector("workflow-instances");
     const dyn = host?.shadowRoot?.querySelector("dynamic-element-host");
     window.__surface = dyn?.shadowRoot?.querySelector(".mount > *") ?? null;
@@ -118,7 +109,7 @@ async function captureSurface() {
 }
 
 async function surfaceStillMounted() {
-  return page.evaluate(() => {
+  return app.evaluate(() => {
     const host = document.querySelector("workflow-instances");
     const dyn = host?.shadowRoot?.querySelector("dynamic-element-host");
     const current = dyn?.shadowRoot?.querySelector(".mount > *") ?? null;
@@ -157,7 +148,7 @@ async function surfaceState() {
 // frames actually arrive, so the stability assertions always run against real
 // snapshot pressure.
 async function openSnapshotCounter() {
-  await page.evaluate(async () => {
+  await app.evaluate(async () => {
     const protocol = location.protocol === "http:" ? "ws:" : "wss:";
     window.__snapshotCounts = {};
     window.__snapshotSocket = new WebSocket(
@@ -179,35 +170,40 @@ async function openSnapshotCounter() {
 }
 
 async function snapshotCount(flowId) {
-  return page.evaluate((id) => window.__snapshotCounts?.[id] ?? 0, flowId);
+  return app.evaluate((id) => window.__snapshotCounts?.[id] ?? 0, flowId);
 }
 
 test("wayfinder surface stays mounted with view state intact through churn and reconnect", async () => {
-  await page.goto(`${baseUrl}/#/flows`);
-  await page.waitForTimeout(800);
-
-  const created = await page.evaluate(async () => {
-    const res = await fetch("/api/flows", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        definitionId: "wayfinder",
-        config: {
-          name: "surface-stability-check",
-          destination: "Keep the map open through the churn",
-        },
-      }),
-    });
-    return res.json();
+  // The flow name is unique per run so watch-mode re-runs never collide
+  // (instance names are unique within a definition; the server 409s on dupes).
+  const flowName = `surface-stability-check-${Date.now()}`;
+  const flowId = flowName;
+  onTestFailed(async () => {
+    const shot = await app.screenshot("failure");
+    if (shot) console.log(`[app screenshot] ${shot}`);
   });
-  assert.equal(created.ok, true, JSON.stringify(created));
-  const flowId = "surface-stability-check";
 
-  await page.goto(`${baseUrl}/#/flows/wayfinder/surface-stability-check`);
-  await page.waitForSelector("workflow-instances", { timeout: 30_000 });
+  await app.open(`${baseUrl}/#/flows`);
+  await app.waitForTimeout(800);
+
+  const created = await app.evaluate(
+    async (config) => {
+      const res = await fetch("/api/flows", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ definitionId: "wayfinder", config }),
+      });
+      return res.json();
+    },
+    { name: flowName, destination: "Keep the map open through the churn" }
+  );
+  expect(created.ok, JSON.stringify(created)).toBe(true);
+
+  await app.open(`${baseUrl}/#/flows/wayfinder/${flowName}`);
+  await app.waitForSelector("workflow-instances", { timeout: 30_000 });
   // The custom surface mounts (its header lives in the served flow-component).
   await waitForDeep(".open-map", 30_000);
-  await page.waitForTimeout(1_500);
+  await app.waitForTimeout(1_500);
   await openSnapshotCounter();
 
   // Chart the map: the naming session runs the agent against the mock
@@ -219,18 +215,18 @@ test("wayfinder surface stays mounted with view state intact through churn and r
       .filter((el) => el.tagName === "BUTTON")
       .map((el) => el.textContent?.trim())
       .join("|")`);
-    assert.ok(
+    expect(
       namingDone,
       `naming session done; buttons at failure: ${JSON.stringify(dump)}`
-    );
+    ).toBe(true);
   }
-  assert.ok(await clickButton("Done"), "frontier session done");
-  await page.waitForTimeout(1_500);
+  expect(await clickButton("Done"), "frontier session done").toBe(true);
+  await app.waitForTimeout(1_500);
 
   // Seed the two fog entries the reorder will work on (via the action API —
   // each dispatch is itself a flow event that emits a snapshot frame).
   const addFogViaApi = (brief) =>
-    page.evaluate(
+    app.evaluate(
       async ({ flowId, brief }) => {
         const res = await fetch(`/api/flows/${flowId}/actions/add_fog_entry`, {
           method: "POST",
@@ -241,9 +237,9 @@ test("wayfinder surface stays mounted with view state intact through churn and r
       },
       { flowId, brief }
     );
-  assert.equal(await addFogViaApi("First fog card"), true, "first fog entry");
-  assert.equal(await addFogViaApi("Second fog card"), true, "second fog entry");
-  await page.waitForTimeout(800);
+  expect(await addFogViaApi("First fog card"), "first fog entry").toBe(true);
+  expect(await addFogViaApi("Second fog card"), "second fog entry").toBe(true);
+  await app.waitForTimeout(800);
 
   // Drag the second fog card above the first into a session-local clear
   // order (dispatched events on real geometry, as in the interactions e2e).
@@ -283,27 +279,24 @@ test("wayfinder surface stays mounted with view state intact through churn and r
     if (fogAfter !== fogBefore) break;
     await new Promise((resolve) => setTimeout(resolve, 300));
   }
-  assert.notEqual(
+  expect(
     fogAfter,
-    fogBefore,
     `the fog drag must reorder the pile (before=${fogBefore}, after=${fogAfter})`
-  );
+  ).not.toBe(fogBefore);
 
   // Cycle the expedition theme once (mountain → topo) and open the map view
   // BEFORE the churn window, so the churn exercises them. The theme button
   // lives in the header, which the map view replaces — click it first.
-  assert.ok(await clickSelector(".theme-cycle"), "theme cycle clicked");
-  assert.ok(await clickSelector(".open-map"), "map opened");
-  await page.waitForTimeout(500);
-  assert.ok(await captureSurface(), "the custom surface is mounted");
+  expect(await clickSelector(".theme-cycle"), "theme cycle clicked").toBe(true);
+  expect(await clickSelector(".open-map"), "map opened").toBe(true);
+  await app.waitForTimeout(500);
+  expect(await captureSurface(), "the custom surface is mounted").toBe(true);
 
   const baseline = await surfaceState();
-  assert.equal(baseline.mapOpen, true, "the map view is open");
-  assert.equal(baseline.theme, "topo", "the cycled theme is active");
-  assert.equal(
-    baseline.defaultBoards,
-    false,
-    "the default boards are not showing"
+  expect(baseline.mapOpen, "the map view is open").toBe(true);
+  expect(baseline.theme, "the cycled theme is active").toBe("topo");
+  expect(baseline.defaultBoards, "the default boards are not showing").toBe(
+    false
   );
 
   // Churn with the map open: each add_fog_entry dispatch is a flow event
@@ -316,70 +309,67 @@ test("wayfinder surface stays mounted with view state intact through churn and r
   let churnEntries = 0;
   while (Date.now() < deadline) {
     if (churnEntries < 4) {
-      assert.equal(
+      expect(
         await addFogViaApi(`Churn fog entry ${churnEntries + 1}`),
-        true,
         "churn fog entry"
-      );
+      ).toBe(true);
       churnEntries += 1;
       await new Promise((resolve) => setTimeout(resolve, 1_200));
     }
-    assert.equal(
+    expect(
       await surfaceStillMounted(),
-      true,
       "the surface element identity is stable through churn"
-    );
+    ).toBe(true);
     const mid = await surfaceState();
-    assert.equal(mid.mapOpen, true, "the map view stays open through churn");
-    assert.equal(mid.theme, "topo", "the theme stays cycled through churn");
-    assert.equal(mid.defaultBoards, false, "no default-UI flash through churn");
+    expect(mid.mapOpen, "the map view stays open through churn").toBe(true);
+    expect(mid.theme, "the theme stays cycled through churn").toBe("topo");
+    expect(mid.defaultBoards, "no default-UI flash through churn").toBe(false);
     samples += 1;
     await new Promise((resolve) => setTimeout(resolve, 1_000));
   }
   const churnEnd = await snapshotCount(flowId);
-  assert.ok(
+  expect(
     churnEnd > churnStart,
     `snapshot churn must actually arrive during the window (before=${churnStart}, after=${churnEnd})`
-  );
-  assert.ok(
+  ).toBe(true);
+  expect(
     samples >= 5,
     `sampled the surface across the churn window (${samples} samples)`
-  );
-  const storedFog = await page.evaluate(
+  ).toBe(true);
+  const storedFog = await app.evaluate(
     (id) => sessionStorage.getItem(`hive:view:${id}:fog-order`) ?? "",
     flowId
   );
-  assert.equal(
+  expect(
     JSON.parse(storedFog).join(","),
-    fogAfter,
     `the fog clear order persists through churn (stored=${storedFog}, reordered=${fogAfter})`
-  );
+  ).toBe(fogAfter);
 
   // Close the map (its back-link) so the header comes back: the fog tray must
   // render the reordered pile, and the cycled theme + map-open state must
   // restore when the map is reopened.
-  assert.ok(await clickSelector(".back-link"), "map closed");
-  await page.waitForTimeout(300);
+  expect(await clickSelector(".back-link"), "map closed").toBe(true);
+  await app.waitForTimeout(300);
   const closed = await surfaceState();
-  assert.equal(closed.mapOpen, false, "the map view is closed");
-  assert.equal(closed.theme, "topo", "the theme survives the close");
-  assert.ok(
+  expect(closed.mapOpen, "the map view is closed").toBe(false);
+  expect(closed.theme, "the theme survives the close").toBe("topo");
+  expect(
     closed.fogOrder === fogAfter || closed.fogOrder.startsWith(`${fogAfter},`),
     `the reordered fog pile renders after the churn (order=${closed.fogOrder})`
-  );
+  ).toBe(true);
 
-  assert.ok(await clickSelector(".open-map"), "map reopened");
-  await page.waitForTimeout(300);
+  expect(await clickSelector(".open-map"), "map reopened").toBe(true);
+  await app.waitForTimeout(300);
   const reopened = await surfaceState();
-  assert.equal(reopened.mapOpen, true, "the map view reopens");
-  assert.equal(reopened.theme, "topo", "the theme survives the close/reopen");
+  expect(reopened.mapOpen, "the map view reopens").toBe(true);
+  expect(reopened.theme, "the theme survives the close/reopen").toBe("topo");
 
   // Reconnect: dropping the network closes the app's WebSocket (the app
   // reconnects with backoff and the server re-sends init); the flow must
   // never drop out, so the surface element stays the same instance. Prove
   // the emulation actually took the network down first.
-  await page.context().setOffline(true);
-  const offlineProbe = await page.evaluate(async () => {
+  await app.setOffline(true);
+  const offlineProbe = await app.evaluate(async () => {
     try {
       await fetch("/api/flows", { cache: "no-store" });
       return false;
@@ -387,30 +377,26 @@ test("wayfinder surface stays mounted with view state intact through churn and r
       return true;
     }
   });
-  assert.equal(offlineProbe, true, "offline emulation is active");
-  await page.waitForTimeout(4_000);
-  await page.context().setOffline(false);
-  await page.waitForTimeout(14_000);
+  expect(offlineProbe, "offline emulation is active").toBe(true);
+  await app.waitForTimeout(4_000);
+  await app.setOffline(false);
+  await app.waitForTimeout(14_000);
 
   const afterReconnect = await surfaceState();
-  assert.equal(
+  expect(
     await surfaceStillMounted(),
-    true,
     "the surface element identity survives a WebSocket reconnect"
-  );
-  assert.equal(
+  ).toBe(true);
+  expect(
     afterReconnect.mapOpen,
-    true,
     "the map view stays open through reconnect"
-  );
-  assert.equal(
+  ).toBe(true);
+  expect(
     afterReconnect.theme,
-    "topo",
     "the theme stays cycled through reconnect"
-  );
-  assert.equal(
+  ).toBe("topo");
+  expect(
     afterReconnect.defaultBoards,
-    false,
     "no default-UI flash through reconnect"
-  );
+  ).toBe(false);
 });

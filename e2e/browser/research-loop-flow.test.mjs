@@ -7,27 +7,16 @@
 // result directly) and the custom gate decides the transition to done. The
 // mock provider drives both the authoring conversation and the runtime
 // research agent.
-import assert from "node:assert/strict";
-import { after, before, test } from "node:test";
-import { startHiveTestApp } from "./support/hive-test-app.mjs";
-import { startMockProvider } from "./support/mock-provider.mjs";
+//
+// Runs under Vitest browser mode (e2e/vitest.config.ts): the built server and
+// mock provider boot on the Node side in e2e/global-setup.ts (base URL via
+// `inject`), and the app runs in a second page of the same browser, driven
+// through the shared `app` wrapper (e2e/support/browser-app.mjs).
 
-let mock;
-let app;
-let page;
-let baseUrl;
+import { expect, inject, onTestFailed, test } from "vitest";
+import { app } from "../support/browser-app.mjs";
 
-before(async () => {
-  mock = await startMockProvider();
-  app = await startHiveTestApp(mock.host);
-  page = app.page;
-  baseUrl = app.baseUrl;
-});
-
-after(async () => {
-  await app.close();
-  await mock.close();
-});
+const baseUrl = inject("baseUrl");
 
 async function waitFor(predicate, timeoutMs = 60_000) {
   const deadline = Date.now() + timeoutMs;
@@ -43,7 +32,7 @@ async function waitFor(predicate, timeoutMs = 60_000) {
 // the stored flow id). The session's storage key is re-keyed from "new" to the
 // saved definition id once save_definition lands, so look up any live key.
 async function sessionState() {
-  return page.evaluate(async () => {
+  return app.evaluate(async () => {
     const keys = Object.keys(localStorage).filter((key) =>
       key.startsWith("hive:author:")
     );
@@ -60,7 +49,7 @@ async function sessionState() {
 }
 
 async function fetchJson(url, options) {
-  return page.evaluate(
+  return app.evaluate(
     async ({ url, options }) => {
       const res = await fetch(url, options);
       if (!res.ok) return null;
@@ -71,14 +60,31 @@ async function fetchJson(url, options) {
 }
 
 test("a generated research-loop flow runs with its custom gate and websearch tool", async () => {
+  // The flow name is unique per run so watch-mode re-runs never collide
+  // (instance names are unique within a definition; the server 409s on dupes).
+  const flowName = `Research One ${Date.now()}`;
+  onTestFailed(async () => {
+    const shot = await app.screenshot("failure");
+    if (shot) console.log(`[app screenshot] ${shot}`);
+  });
+
   // Start a lucky authoring session asking for a research loop.
-  await page.goto(`${baseUrl}/#/flows/new`);
-  await page.waitForSelector("textarea", { timeout: 15_000 });
-  await page
-    .locator("textarea")
-    .first()
-    .fill("Build a research loop flow with a custom gate and a websearch tool");
-  await page.locator("button", { hasText: "I'm feeling lucky" }).click();
+  await app.open(`${baseUrl}/#/flows/new`);
+  // The authoring session registers the "research-loop" definition via its
+  // save_definition call; on a watch re-run (shared server + data dir) that
+  // save would 409 against the leftover, so drop any previous run's record
+  // first (a fresh run just 404s — ignored).
+  await app.evaluate(async () => {
+    await fetch("/api/flows/definitions/research-loop", {
+      method: "DELETE",
+    });
+  });
+  await app.waitForSelector("textarea", { timeout: 15_000 });
+  await app
+    .fill("textarea", "Build a research loop flow with a custom gate and a websearch tool", {
+      first: true,
+    });
+  await app.click("button", { hasText: "I'm feeling lucky" });
 
   // The agent sets the definition module, validates, writes the referenced
   // files, and saves the registered definition — all in-conversation.
@@ -88,26 +94,26 @@ test("a generated research-loop flow runs with its custom gate and websearch too
       ? s
       : null;
   }, 90_000);
-  assert.equal(state.workflowInstanceState.savedDefinitionId, "research-loop");
-  assert.equal(state.workflowInstanceState.report?.passed, true);
+  expect(state.workflowInstanceState.savedDefinitionId).toBe("research-loop");
+  expect(state.workflowInstanceState.report?.passed).toBe(true);
   const gateFile =
     state.workflowInstanceState.files?.["./gates/approved.ts"] ?? "";
-  assert.ok(
+  expect(
     gateFile.includes('verdict === "approved"'),
     "the session's file set carries the implemented gate"
-  );
+  ).toBe(true);
 
   // The definition registers and is servable: the source is the pure-data
   // definition module (references by ref path — the entry imports nothing),
   // and the registered record carries the parsed data form.
   const definition = await fetchJson("/api/flows/definitions/research-loop");
-  assert.ok(definition, "the definition must register");
-  assert.match(definition.source, /export const flow: FlowDefinition = \{/);
-  assert.match(definition.source, /ref: "\.\/gates\/approved\.ts"/);
-  assert.ok(
+  expect(definition, "the definition must register").toBeTruthy();
+  expect(definition.source).toMatch(/export const flow: FlowDefinition = \{/);
+  expect(definition.source).toMatch(/ref: "\.\/gates\/approved\.ts"/);
+  expect(
     definition.definition?.id === "researchLoop",
     "the registered record carries the pure-data definition"
-  );
+  ).toBe(true);
 
   // Instantiate the saved definition and run it: the custom tool executes and
   // the custom gate decides the transition.
@@ -116,10 +122,10 @@ test("a generated research-loop flow runs with its custom gate and websearch too
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       definitionId: "research-loop",
-      config: { name: "Research One" },
+      config: { name: flowName },
     }),
   });
-  assert.ok(created, "the definition must instantiate");
+  expect(created, "the definition must instantiate").toBeTruthy();
 
   // The flow's initial state auto-runs an input-seeded AI task, so the
   // engine does not seed an empty instance (a phantom run with nothing to
@@ -133,7 +139,7 @@ test("a generated research-loop flow runs with its custom gate and websearch too
       body: JSON.stringify({ query: "hive" }),
     }
   );
-  assert.ok(dispatched, "the add_research action must dispatch");
+  expect(dispatched, "the add_research action must dispatch").toBeTruthy();
 
   const flow = await fetchJson(
     `/api/flows/${encodeURIComponent(created.flowId)}`
@@ -142,7 +148,7 @@ test("a generated research-loop flow runs with its custom gate and websearch too
     (entry) => entry.state.currentState === "searching"
   );
   const instanceId = instance?.id;
-  assert.ok(instanceId, "the research instance must exist");
+  expect(instanceId, "the research instance must exist").toBeTruthy();
 
   // Release the interactive search task with the query.
   const sent = await fetchJson(
@@ -153,7 +159,9 @@ test("a generated research-loop flow runs with its custom gate and websearch too
       body: JSON.stringify({ content: "find hive" }),
     }
   );
-  assert.ok(sent, "task input must be accepted");
+  // KNOWN FAILURE (ticket 08/09, see docs/known-issues.md): the interactive
+  // task input POST is rejected, so `sent` is null and this assertion fails.
+  expect(sent, "task input must be accepted").toBeTruthy();
 
   // The custom gate decides the transition: the instance reaches done with an
   // approved verdict, and the websearch tool's shaped result is in the
@@ -165,16 +173,16 @@ test("a generated research-loop flow runs with its custom gate and websearch too
     const instance = f?.instances?.find((i) => i.id === instanceId);
     return instance?.state?.currentState === "done" ? instance : null;
   }, 30_000);
-  assert.equal(done.state.workflowInstanceState.verdict, "approved");
+  expect(done.state.workflowInstanceState.verdict).toBe("approved");
   const transcript = JSON.stringify(
     done.state.taskOutputs?.search?.output ?? {}
   );
-  assert.ok(
+  expect(
     transcript.includes("Hive docs"),
     "the custom websearch tool returned its shaped result"
-  );
-  assert.ok(
+  ).toBe(true);
+  expect(
     transcript.includes("good result"),
     "the completion summary fed the extractor and the gate"
-  );
+  ).toBe(true);
 });
