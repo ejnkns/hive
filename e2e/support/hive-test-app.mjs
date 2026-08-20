@@ -15,8 +15,31 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
+import { chromeExecutable } from "./chrome-executable.mjs";
 
 export async function startHiveTestApp(mockProviderHost) {
+  const server = await startHiveTestServer(mockProviderHost);
+  const browser = await chromium.launch({
+    executablePath: chromeExecutable(),
+    headless: true,
+  });
+  const page = await browser.newPage();
+  page.setDefaultTimeout(120_000);
+  return {
+    ...server,
+    page,
+    async close() {
+      await browser.close();
+      await server.close();
+    },
+  };
+}
+
+// Node-side boot for the Vitest browser-mode runner: the server and mock
+// provider must live outside the browser test context (test files execute in
+// the browser and have no Node APIs), so globalSetup boots just the server and
+// hands the base URL to the tests via `provide`/`inject`.
+export async function startHiveTestServer(mockProviderHost) {
   const runtimePath = mkdtempSync(join(tmpdir(), "hive-e2e-"));
   const dataPath = join(runtimePath, ".hive");
   const projectPath = createGitProject(runtimePath);
@@ -58,19 +81,11 @@ export async function startHiveTestApp(mockProviderHost) {
   child.stderr.on("data", (chunk) => (output += String(chunk)));
   await waitForHealth(port, child, () => output);
 
-  const browser = await chromium.launch({
-    executablePath: chromeExecutable(),
-    headless: true,
-  });
-  const page = await browser.newPage();
-  page.setDefaultTimeout(120_000);
   return {
     baseUrl: `http://127.0.0.1:${port}`,
     output: () => output,
-    page,
     projectPath,
     async close() {
-      await browser.close();
       child.kill("SIGTERM");
       if (!(await waitForExit(child, 5_000))) {
         child.kill("SIGKILL");
@@ -200,27 +215,6 @@ function isolatedEnvironment(overrides) {
     DOTENV_CONFIG_PATH: join(tmpdir(), "hive-e2e-missing.env"),
     NO_COLOR: "1",
   };
-}
-
-function chromeExecutable() {
-  const candidates = [
-    process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    "/usr/bin/google-chrome",
-    "/usr/bin/chromium",
-    "/usr/bin/chromium-browser",
-  ].filter(Boolean);
-  for (const candidate of candidates) {
-    try {
-      accessSync(candidate, constants.X_OK);
-      return candidate;
-    } catch {
-      // Try the next supported system browser path.
-    }
-  }
-  throw new Error(
-    "Queen Bee E2E requires Chrome/Chromium or PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH"
-  );
 }
 
 async function reserveAvailablePort() {

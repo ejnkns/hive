@@ -1,5 +1,9 @@
 node_modules/
+.pnpm-store/
 dist/
+__screenshots__/
+__traces__/
+.vitest-attachments/
 dist-package/
 .env
 *.log
