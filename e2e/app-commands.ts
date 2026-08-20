@@ -24,15 +24,6 @@ import { PNG } from "pngjs";
 // is evaluated inside the app page — a function source is called with the arg,
 // any other expression is evaluated. Playwright locators/auto-wait apply to
 // every command; tests add auto-retry on top with `expect.poll`.
-const appSessions = new Map<string, { page: Page; context: BrowserContext }>();
-
-function requireAppSession(sessionId: string) {
-  const session = appSessions.get(sessionId);
-  if (!session || session.page.isClosed()) {
-    throw new Error("openApp must be called before other app commands");
-  }
-  return session;
-}
 
 // Navigate the session's app page to the given URL, creating the app context
 // + page on first use.
@@ -107,15 +98,9 @@ export const appEvaluate: BrowserCommand<[fn: string, arg?: unknown]> = async (
 export const appClick: BrowserCommand<
   [selector: string, options?: { hasText?: string; first?: boolean }]
 > = async ({ sessionId }, selector, options = {}) => {
-  const locator = requireAppSession(sessionId).page.locator(
-    selector,
-    options.hasText !== undefined ? { hasText: options.hasText } : undefined
-  );
-  if (options.first) {
-    await locator.first().click();
-  } else {
-    await locator.click();
-  }
+  let locator = locatorFor(requireAppSession(sessionId), selector, options);
+  if (options.first) locator = locator.first();
+  await locator.click();
 };
 
 export const appFill: BrowserCommand<
@@ -152,10 +137,7 @@ export const appAttr: BrowserCommand<
     options?: { hasText?: string; first?: boolean; nth?: number },
   ]
 > = async ({ sessionId }, selector, name, options = {}) => {
-  const base = requireAppSession(sessionId).page.locator(
-    selector,
-    options.hasText !== undefined ? { hasText: options.hasText } : undefined
-  );
+  const base = locatorFor(requireAppSession(sessionId), selector, options);
   if ((await base.count()) === 0) return null;
   const target = options.first
     ? base.first()
@@ -186,10 +168,7 @@ export const appDispatch: BrowserCommand<
   eventInit = {},
   options = {}
 ) => {
-  let locator = requireAppSession(sessionId).page.locator(
-    selector,
-    options.hasText !== undefined ? { hasText: options.hasText } : undefined
-  );
+  let locator = locatorFor(requireAppSession(sessionId), selector, options);
   if (options.first) locator = locator.first();
   await locator.dispatchEvent(eventType, eventInit);
 };
@@ -215,16 +194,15 @@ export const appCount: BrowserCommand<[selector: string]> = async (
 export const appWaitForSelector: BrowserCommand<
   [selector: string, options?: { hasText?: string; timeout?: number }]
 > = async ({ sessionId }, selector, options = {}) => {
-  const appPage = requireAppSession(sessionId).page;
+  const session = requireAppSession(sessionId);
   if (options.hasText !== undefined) {
     // The old files passed `{ hasText }` where waitForSelector has no such
     // option; a locator wait is the faithful equivalent.
-    await appPage
-      .locator(selector, { hasText: options.hasText })
+    await locatorFor(session, selector, options)
       .first()
       .waitFor({ state: "visible", timeout: options.timeout });
   } else {
-    await appPage.waitForSelector(selector, { timeout: options.timeout });
+    await session.page.waitForSelector(selector, { timeout: options.timeout });
   }
 };
 
@@ -463,3 +441,31 @@ export const appAssertScreenshot: BrowserCommand<
       "re-record with `vitest run -u`."
   );
 };
+
+// ── helpers (declared after the exports per CONTEXT.md's main-export-first
+//    structure; every use is at command-call time, so declaration order is
+//    safe) ───────────────────────────────────────────────────────────────────
+
+const appSessions = new Map<string, { page: Page; context: BrowserContext }>();
+
+function requireAppSession(sessionId: string) {
+  const session = appSessions.get(sessionId);
+  if (!session || session.page.isClosed()) {
+    throw new Error("openApp must be called before other app commands");
+  }
+  return session;
+}
+
+// The shared locator construction: every command takes a piercing CSS selector
+// with an optional { hasText } scoping option (waitForSelector has no such
+// option, so the locator path is the faithful equivalent).
+function locatorFor(
+  session: { page: Page },
+  selector: string,
+  options?: { hasText?: string }
+) {
+  return session.page.locator(
+    selector,
+    options?.hasText !== undefined ? { hasText: options.hasText } : undefined
+  );
+}

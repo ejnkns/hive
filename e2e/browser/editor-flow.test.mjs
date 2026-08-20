@@ -26,23 +26,23 @@
 // through the direct document → code-editor → textarea path (only page-side
 // code can read a textarea's value property; the fixed path is not a walker).
 
-import { expect, inject, onTestFailed, test } from "vitest";
+import { expect, inject, test } from "vitest";
 import { app } from "../support/browser-app.mjs";
 import {
+  captureFailureScreenshot,
   deleteDefinition,
+  editorValue,
   fetchJson,
   registerDefinition,
   sendChatMessage,
   sessionState,
+  waitForEditorValue,
 } from "../support/flows.mjs";
 
 const baseUrl = inject("baseUrl");
 
 test("authoring session renders as the flow editor, co-edits, and saves", async () => {
-  onTestFailed(async () => {
-    const shot = await app.screenshot("failure");
-    if (shot) console.log(`[app screenshot] ${shot}`);
-  });
+  captureFailureScreenshot();
 
   // Definition editor (new definition): start a lucky session. The session's
   // save registers "review-flow"; drop any previous run's record first (the
@@ -50,10 +50,9 @@ test("authoring session renders as the flow editor, co-edits, and saves", async 
   await app.open(`${baseUrl}/#/flows/new`);
   await deleteDefinition("review-flow");
   await app.waitForSelector("textarea", { timeout: 15_000 });
-  await app
-    .fill("textarea", "A review flow with approve and reject actions", {
-      first: true,
-    });
+  await app.fill("textarea", "A review flow with approve and reject actions", {
+    first: true,
+  });
   await app.click("button", { hasText: "I'm feeling lucky" });
 
   // The session renders as a flow instance: the flow-editor's header carries
@@ -159,23 +158,12 @@ test("authoring session renders as the flow editor, co-edits, and saves", async 
 });
 
 test("the new-flow screen shows the canonical scaffold as an editable draft", async () => {
-  onTestFailed(async () => {
-    const shot = await app.screenshot("failure");
-    if (shot) console.log(`[app screenshot] ${shot}`);
-  });
+  captureFailureScreenshot();
 
   await app.open(`${baseUrl}/#/flows/new`);
   // The no-session files editor seeds from the canonical scaffold (fetched
   // from the server — the editor carries no copy of its own).
-  await app.waitForFunction(
-    () =>
-      document
-        .querySelector("code-editor")
-        ?.shadowRoot?.querySelector("textarea")
-        ?.value?.includes("myFlow") ?? false,
-    undefined,
-    { timeout: 15_000 }
-  );
+  await waitForEditorValue("myFlow");
   // Tabs: only the Definition tab (the scaffold declares no refs).
   const tabs = await app.evaluate(() =>
     Array.from(document.querySelectorAll(".tab-bar button")).map((tab) =>
@@ -192,31 +180,15 @@ test("the new-flow screen shows the canonical scaffold as an editable draft", as
 });
 
 test("hand-writing the scaffold saves a definition without a session", async () => {
-  onTestFailed(async () => {
-    const shot = await app.screenshot("failure");
-    if (shot) console.log(`[app screenshot] ${shot}`);
-  });
+  captureFailureScreenshot();
 
   // The save registers "hand-written"; drop any previous run's record first
   // (the app page must exist before page code can run).
   await app.open(`${baseUrl}/#/flows/new`);
   await deleteDefinition("hand-written");
-  await app.waitForFunction(
-    () =>
-      document
-        .querySelector("code-editor")
-        ?.shadowRoot?.querySelector("textarea")
-        ?.value?.includes("myFlow") ?? false,
-    undefined,
-    { timeout: 15_000 }
-  );
+  await waitForEditorValue("myFlow");
   // Hand-write: rename the scaffold's id and label directly.
-  const scaffold = await app.evaluate(
-    () =>
-      document
-        .querySelector("code-editor")
-        ?.shadowRoot?.querySelector("textarea")?.value ?? ""
-  );
+  const scaffold = await editorValue();
   await app.fill(
     "code-editor textarea",
     scaffold
@@ -241,28 +213,12 @@ test("hand-writing the scaffold saves a definition without a session", async () 
 });
 
 test("a conversation seeds from the editor's scaffold edits", async () => {
-  onTestFailed(async () => {
-    const shot = await app.screenshot("failure");
-    if (shot) console.log(`[app screenshot] ${shot}`);
-  });
+  captureFailureScreenshot();
 
   await app.open(`${baseUrl}/#/flows/new`);
-  await app.waitForFunction(
-    () =>
-      document
-        .querySelector("code-editor")
-        ?.shadowRoot?.querySelector("textarea")
-        ?.value?.includes("myFlow") ?? false,
-    undefined,
-    { timeout: 15_000 }
-  );
+  await waitForEditorValue("myFlow");
   // Edit the scaffold's label before starting the conversation.
-  const scaffold = await app.evaluate(
-    () =>
-      document
-        .querySelector("code-editor")
-        ?.shadowRoot?.querySelector("textarea")?.value ?? ""
-  );
+  const scaffold = await editorValue();
   await app.fill(
     "code-editor textarea",
     scaffold.replace('label: "My Flow",', 'label: "My Edited Flow",')
@@ -348,15 +304,16 @@ export const flow: FlowDefinition = {
 `;
 
 test("closing the authoring session keeps the definition's files visible and editable", async () => {
-  onTestFailed(async () => {
-    const shot = await app.screenshot("failure");
-    if (shot) console.log(`[app screenshot] ${shot}`);
-  });
+  captureFailureScreenshot();
 
   // Register a definition to work on (a data module with a referenced file).
   // Navigate first so the page origin matches the API host.
   await app.open(`${baseUrl}/#/flows`);
-  const created = await registerDefinition("Close Me", CLOSE_SOURCE, CLOSE_FILES);
+  const created = await registerDefinition(
+    "Close Me",
+    CLOSE_SOURCE,
+    CLOSE_FILES
+  );
   expect(created, "definition registered").toBeTruthy();
   expect(created?.id).toBe("close-me");
 
@@ -386,15 +343,7 @@ test("closing the authoring session keeps the definition's files visible and edi
   await app.click("button.author-close");
   // The no-session files editor binds the saved source once the detail
   // refreshes (the close also re-fetches it).
-  await app.waitForFunction(
-    () =>
-      document
-        .querySelector("code-editor")
-        ?.shadowRoot?.querySelector("textarea")
-        ?.value?.includes("closeFlow") ?? false,
-    undefined,
-    { timeout: 15_000 }
-  );
+  await waitForEditorValue("closeFlow");
   const tabs = await app.evaluate(() =>
     Array.from(document.querySelectorAll(".tab-bar button")).map((tab) =>
       tab.textContent?.trim()
@@ -407,12 +356,7 @@ test("closing the authoring session keeps the definition's files visible and edi
 
   // The no-session files editor is editable: change the label, save
   // explicitly, and the definition updates.
-  const source = await app.evaluate(
-    () =>
-      document
-        .querySelector("code-editor")
-        ?.shadowRoot?.querySelector("textarea")?.value ?? ""
-  );
+  const source = await editorValue();
   await app.fill(
     "code-editor textarea",
     source.replace('label: "Close Me",', 'label: "Close Me (edited)",')
@@ -432,7 +376,10 @@ test("closing the authoring session keeps the definition's files visible and edi
 
   // The definition survives and the explicit save persisted the edit.
   const definition = await fetchJson("/api/flows/definitions/close-me");
-  expect(definition, "the saved definition survives closing the session").toBeTruthy();
+  expect(
+    definition,
+    "the saved definition survives closing the session"
+  ).toBeTruthy();
   expect(definition?.name).toBe("Close Me");
   expect(
     definition?.source?.includes("Close Me (edited)"),
@@ -471,18 +418,14 @@ const CLOSE_FILES = {
 };
 
 test("hand edits are the state: the agent continues with them in force", async () => {
-  onTestFailed(async () => {
-    const shot = await app.screenshot("failure");
-    if (shot) console.log(`[app screenshot] ${shot}`);
-  });
+  captureFailureScreenshot();
 
   // Lucky session: the generated definition module renders as the editor.
   await app.open(`${baseUrl}/#/flows/new`);
   await app.waitForSelector("textarea", { timeout: 15_000 });
-  await app
-    .fill("textarea", "A review flow with approve and reject actions", {
-      first: true,
-    });
+  await app.fill("textarea", "A review flow with approve and reject actions", {
+    first: true,
+  });
   await app.click("button", { hasText: "I'm feeling lucky" });
   await app.waitForSelector("flow-editor .editor-title", {
     hasText: "A review flow with approve and reject actions",
@@ -541,10 +484,7 @@ test("hand edits are the state: the agent continues with them in force", async (
 });
 
 test("revising an existing definition starts a session with its source as context", async () => {
-  onTestFailed(async () => {
-    const shot = await app.screenshot("failure");
-    if (shot) console.log(`[app screenshot] ${shot}`);
-  });
+  captureFailureScreenshot();
 
   // Register a definition to revise.
   const created = await registerDefinition("Revise Me", REVISE_SOURCE);
@@ -578,10 +518,7 @@ test("revising an existing definition starts a session with its source as contex
 });
 
 test("a referenced file opens as an editable tab and the edit persists across a reload", async () => {
-  onTestFailed(async () => {
-    const shot = await app.screenshot("failure");
-    if (shot) console.log(`[app screenshot] ${shot}`);
-  });
+  captureFailureScreenshot();
 
   // Register a definition to author (an existing-definition session resumes
   // across a reload; a new-definition session intentionally starts fresh).
@@ -653,10 +590,7 @@ test("a referenced file opens as an editable tab and the edit persists across a 
 });
 
 test("revising an existing definition shows its referenced files as editable tabs", async () => {
-  onTestFailed(async () => {
-    const shot = await app.screenshot("failure");
-    if (shot) console.log(`[app screenshot] ${shot}`);
-  });
+  captureFailureScreenshot();
 
   // Register a module-set definition with a referenced file.
   await app.open(`${baseUrl}/#/flows`);
@@ -719,10 +653,7 @@ export const flow: FlowDefinition = {
 });
 
 test("hand-adding a ref to a saved definition shows its tab and saves the file", async () => {
-  onTestFailed(async () => {
-    const shot = await app.screenshot("failure");
-    if (shot) console.log(`[app screenshot] ${shot}`);
-  });
+  captureFailureScreenshot();
 
   // A saved definition with no referenced files.
   await app.open(`${baseUrl}/#/flows`);
@@ -732,21 +663,8 @@ test("hand-adding a ref to a saved definition shows its tab and saves the file",
 
   // Hand-edit the source to declare a referenced tool.
   await app.open(`${baseUrl}/#/flows/add-ref/edit`);
-  await app.waitForFunction(
-    () =>
-      document
-        .querySelector("code-editor")
-        ?.shadowRoot?.querySelector("textarea")
-        ?.value?.includes("add-ref") ?? false,
-    undefined,
-    { timeout: 15_000 }
-  );
-  const source = await app.evaluate(
-    () =>
-      document
-        .querySelector("code-editor")
-        ?.shadowRoot?.querySelector("textarea")?.value ?? ""
-  );
+  await waitForEditorValue("add-ref");
+  const source = await editorValue();
   await app.fill(
     "code-editor textarea",
     source.replace(
@@ -767,14 +685,7 @@ test("hand-adding a ref to a saved definition shows its tab and saves the file",
 
   // Write the referenced file by hand.
   await app.click(".tab-bar button", { hasText: "./tools/websearch.ts" });
-  await app.waitForFunction(
-    () =>
-      document
-        .querySelector("code-editor")
-        ?.shadowRoot?.querySelector("textarea") !== null,
-    undefined,
-    { timeout: 10_000 }
-  );
+  await app.waitForSelector("code-editor textarea", { timeout: 10_000 });
   await app.fill("code-editor textarea", EDITED_TOOL);
 
   // Save: the module + the hand-written file register together.
@@ -794,10 +705,7 @@ test("hand-adding a ref to a saved definition shows its tab and saves the file",
 });
 
 test("a built-in flow definition is viewable read-only (View instead of Edit)", async () => {
-  onTestFailed(async () => {
-    const shot = await app.screenshot("failure");
-    if (shot) console.log(`[app screenshot] ${shot}`);
-  });
+  captureFailureScreenshot();
 
   await app.open(`${baseUrl}/#/flows/queen-bee`);
   // The built-in's definition page offers View (never Edit).
@@ -806,10 +714,7 @@ test("a built-in flow definition is viewable read-only (View instead of Edit)", 
 
   // The read-only viewer shows the preset's entry source on the Definition tab.
   await app.waitForSelector("code-editor", { timeout: 20_000 });
-  const code = await app.evaluate(() => {
-    const editor = document.querySelector("code-editor");
-    return editor?.shadowRoot?.querySelector("textarea")?.value ?? "";
-  });
+  const code = await editorValue();
   expect(
     code.includes('id: "queen-bee"') &&
       code.includes("export const flow: FlowDefinition = {"),

@@ -21,9 +21,10 @@
 // contract is the auto-run on the seeded query (ticket 08): the instance
 // reaches done without a manual task/input POST.
 
-import { expect, inject, onTestFailed, test } from "vitest";
+import { expect, inject, test } from "vitest";
 import { app } from "../support/browser-app.mjs";
 import {
+  captureFailureScreenshot,
   deleteDefinition,
   fetchJson,
   findSessionState,
@@ -32,13 +33,8 @@ import {
 const baseUrl = inject("baseUrl");
 
 test("a generated research-loop flow runs with its custom gate and websearch tool", async () => {
-  // The flow name is unique per run so watch-mode re-runs never collide
-  // (instance names are unique within a definition; the server 409s on dupes).
   const flowName = `Research One ${Date.now()}`;
-  onTestFailed(async () => {
-    const shot = await app.screenshot("failure");
-    if (shot) console.log(`[app screenshot] ${shot}`);
-  });
+  captureFailureScreenshot();
 
   // Start a lucky authoring session asking for a research loop.
   await app.open(`${baseUrl}/#/flows/new`);
@@ -48,10 +44,13 @@ test("a generated research-loop flow runs with its custom gate and websearch too
   // first (a fresh run just 404s — ignored).
   await deleteDefinition("research-loop");
   await app.waitForSelector("textarea", { timeout: 15_000 });
-  await app
-    .fill("textarea", "Build a research loop flow with a custom gate and a websearch tool", {
+  await app.fill(
+    "textarea",
+    "Build a research loop flow with a custom gate and a websearch tool",
+    {
       first: true,
-    });
+    }
+  );
   await app.click("button", { hasText: "I'm feeling lucky" });
 
   // The agent sets the definition module, validates, writes the referenced
@@ -134,9 +133,11 @@ test("a generated research-loop flow runs with its custom gate and websearch too
   await expect
     .poll(
       async () => {
+        // fetchJson throws on non-2xx; a transient miss mid-poll should keep
+        // polling, so the error is swallowed here.
         const f = await fetchJson(
           `/api/flows/${encodeURIComponent(created.flowId)}`
-        );
+        ).catch(() => null);
         const instance = f?.instances?.find((i) => i.id === instanceId);
         if (instance?.state?.currentState === "done") {
           done = instance;

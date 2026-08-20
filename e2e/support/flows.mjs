@@ -10,6 +10,7 @@
 // (expect.poll / app.waitForSelector / app.waitForFunction) instead of these
 // helpers; the poll-loop helpers this module used to carry were deleted once
 // the last consumer (queen-bee, ticket 09) migrated.
+import { onTestFailed } from "vitest";
 import { app } from "./browser-app.mjs";
 
 // ── flow / definition registration via the built server's API ──────────────
@@ -54,13 +55,25 @@ export async function deleteDefinition(slug) {
   }, slug);
 }
 
-// GET/POST JSON to the built server from the app page's origin; null on
-// non-2xx so `expect(...).toBeTruthy()` surfaces the handshake failure.
+// GET/POST JSON to the built server from the app page's origin. A non-2xx
+// response THROWS with the HTTP status, URL, and body — the spec's
+// failure-diagnostics decision: an API handshake failure must surface its
+// actual cause in the test output, not a silent null. Call sites inside
+// `expect.poll` that should keep polling on a transient error wrap the call
+// with `.catch(() => null)`.
 export async function fetchJson(url, options) {
   return app.evaluate(
     async ({ url, options }) => {
       const res = await fetch(url, options);
-      if (!res.ok) return null;
+      if (!res.ok) {
+        const body = await res.text();
+        const error = new Error(
+          `HTTP ${res.status} ${url}: ${body.slice(0, 300)}`
+        );
+        error.status = res.status;
+        error.body = body;
+        throw error;
+      }
       return res.json();
     },
     { url, options: options ?? {} }
@@ -129,3 +142,109 @@ export async function sendChatMessage(text, timeoutMs = 15_000) {
   return true;
 }
 
+// ── failure artifacts ────────────────────────────────────────────────────────
+
+// Registers the app-page failure artifacts for the current test: the app-page
+// screenshot (vitest's own screenshotFailures only captures the runner page,
+// which never shows the app) plus a truncated body-text snapshot. The flow
+// name is unique per run so the artifacts never collide across watch re-runs.
+export function captureFailureScreenshot(label = "failure") {
+  onTestFailed(async () => {
+    const shot = await app.screenshot(label);
+    if (shot) console.log(`[app screenshot] ${shot}`);
+    try {
+      const text = await app.textContent("body");
+      if (text) console.log(`[app page snapshot] ${text.slice(0, 2_000)}`);
+    } catch {
+      // The app page may never have been opened; the screenshot above already
+      // handled that case.
+    }
+  });
+}
+
+// ── flow-editor surface ──────────────────────────────────────────────────────
+
+// The editable source of the no-session files editor (the code-editor element
+// carries the real draft in its textarea's value — textContent is not
+// authoritative after programmatic fills). Only page-side code can read it.
+export function editorValue() {
+  return app.evaluate(
+    () =>
+      document
+        .querySelector("code-editor")
+        ?.shadowRoot?.querySelector("textarea")?.value ?? ""
+  );
+}
+
+// Waits until the no-session files editor has bound its source and, when
+// `text` is given, that source contains it. The editor binds asynchronously
+// (fresh page, fetch, render), so this is the auto-retry for the "editor is
+// ready" state the old files polled with the same deep path.
+export async function waitForEditorValue(text, timeout = 15_000) {
+  await app.waitForFunction(
+    (text) => {
+      const value =
+        document
+          .querySelector("code-editor")
+          ?.shadowRoot?.querySelector("textarea")?.value ?? "";
+      return text === undefined ? value !== "" : value.includes(text);
+    },
+    text,
+    { timeout }
+  );
+}
+
+// ── flow-action create form (the shared Svelte dialog) ──────────────────────
+
+// Submits the flow-action create form: waits for the dialog's action buttons,
+// then clicks Run.
+export async function submitFlowActionForm() {
+  await app.waitForSelector(".dialog-actions button", { timeout: 10_000 });
+  await app.click(".dialog-actions button", { hasText: "Run", first: true });
+}
+
+// ── fog drag-reorder (the ONE justified dispatched-event workaround) ─────────
+
+// Page-side drag of the fog card `secondId` above `firstId`: synthetic
+// dragstart/dragover/drop/dragend on real geometry, exactly what the tray's
+// handlers see (a real pointer drag of the HTML5 fog cards proved flaky; only
+// page-side code can hold the element refs and read the geometry the drop
+// handler keys on). Returns the resulting pile order ("id,id") or null when
+// either card is not found.
+export async function dragFogCardAbove(firstId, secondId) {
+  return app.evaluate(
+    ({ firstId, secondId }) => {
+      const host = document.querySelector("workflow-instances");
+      const servedRoot = host?.shadowRoot
+        ?.querySelector("dynamic-element-host")
+        ?.shadowRoot?.querySelector(".mount > *")?.shadowRoot;
+      if (!servedRoot) return null;
+      const byId = (id) =>
+        servedRoot.querySelector(`.fog-card[data-id="${id}"]`);
+      const first = byId(firstId);
+      const second = byId(secondId);
+      if (!first || !second) return null;
+      const pile = second.parentElement;
+      const firstRect = first.getBoundingClientRect();
+      const dropY = (firstRect.top ?? 0) + (firstRect.height ?? 0) / 2 - 1;
+      second.dispatchEvent(
+        new MouseEvent("dragstart", { bubbles: true, composed: true })
+      );
+      pile?.dispatchEvent(
+        new MouseEvent("dragover", { bubbles: true, composed: true })
+      );
+      pile?.dispatchEvent(
+        new MouseEvent("drop", {
+          bubbles: true,
+          composed: true,
+          clientY: dropY,
+        })
+      );
+      pile?.dispatchEvent(
+        new MouseEvent("dragend", { bubbles: true, composed: true })
+      );
+      return `${second.dataset?.id ?? ""},${first.dataset?.id ?? ""}`;
+    },
+    { firstId, secondId }
+  );
+}

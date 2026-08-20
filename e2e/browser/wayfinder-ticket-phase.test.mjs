@@ -13,25 +13,18 @@
 // walkers, no sleeps. The session-to-session transitions (naming Done →
 // frontier Done) retry on the observable DOM state instead of fixed delays.
 
-import { expect, inject, onTestFailed, test } from "vitest";
+import { expect, inject, test } from "vitest";
 import { app } from "../support/browser-app.mjs";
+import {
+  captureFailureScreenshot,
+  submitFlowActionForm,
+} from "../support/flows.mjs";
 
 const baseUrl = inject("baseUrl");
 
-// Submits the flow-action create form (the shared Svelte dialog).
-async function submitFlowActionForm() {
-  await app.waitForSelector(".dialog-actions button", { timeout: 10_000 });
-  await app.click(".dialog-actions button", { hasText: "Run", first: true });
-}
-
 test("wayfinder ticket phase: chart → add research ticket → graduate → claim → closed → start build", async () => {
-  // The flow name is unique per run so watch-mode re-runs never collide
-  // (instance names are unique within a definition; the server 409s on dupes).
   const flowName = `ticket-check-${Date.now()}`;
-  onTestFailed(async () => {
-    const shot = await app.screenshot("failure");
-    if (shot) console.log(`[app screenshot] ${shot}`);
-  });
+  captureFailureScreenshot();
 
   await app.open(`${baseUrl}/#/flows`);
   const created = await app.createFlow("wayfinder", {

@@ -11,19 +11,15 @@
 // selectors pierce the app's nested Lit shadow DOM; `expect.poll` retries the
 // command checks until they settle — no hand-rolled walkers, no sleeps.
 
-import { expect, inject, onTestFailed, test } from "vitest";
+import { expect, inject, test } from "vitest";
 import { commands } from "vitest/browser";
+import { captureFailureScreenshot } from "../support/flows.mjs";
 
 const baseUrl = inject("baseUrl");
 
 test("charting session and expedition map survive reload", async () => {
-  // The flow name is unique per run so watch-mode re-runs never collide
-  // (instance names are unique within a definition; the server 409s on dupes).
   const flowName = `session-check-${Date.now()}`;
-  onTestFailed(async () => {
-    const shot = await commands.appScreenshot("failure");
-    if (shot) console.log(`[app screenshot] ${shot}`);
-  });
+  captureFailureScreenshot();
 
   await commands.openApp(`${baseUrl}/#/flows`);
   const created = await commands.createFlow("wayfinder", {

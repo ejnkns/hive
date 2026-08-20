@@ -20,7 +20,7 @@ import {
   appWaitForTimeout,
   createFlow,
   openApp,
-} from "./app-commands";
+} from "./app-commands.ts";
 import { chromeExecutable } from "./support/chrome-executable.mjs";
 
 // The e2e suite under Vitest browser mode. Tests execute inside a real browser

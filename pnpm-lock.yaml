@@ -26,9 +26,6 @@ importers:
       playwright:
         specifier: ^1.62.1
         version: 1.62.1
-      playwright-core:
-        specifier: ^1.61.1
-        version: 1.61.1
       pngjs:
         specifier: ^7.0.0
         version: 7.0.0
@@ -1433,11 +1430,6 @@ packages:
 
   pino@10.3.1:
     resolution: {integrity: sha512-r34yH/GlQpKZbU1BvFFqOjhISRo1MNx1tWYsYvmj6KIRHSPMT2+yHOEb1SG6NMvRoHRF0a07kCOox/9yakl1vg==}
-    hasBin: true
-
-  playwright-core@1.61.1:
-    resolution: {integrity: sha512-h7Qlt6m4REp25qvIdvbDtVmD4LqVXfpRxhORv9L0jzETM05p4fuPJ3dKyuSXQxDSbXnmS79HAgi9589lGSpLkg==}
-    engines: {node: '>=18'}
     hasBin: true
 
   playwright-core@1.62.1:
@@ -2922,8 +2914,6 @@ snapshots:
       safe-stable-stringify: 2.5.0
       sonic-boom: 4.2.1
       thread-stream: 4.2.0
-
-  playwright-core@1.61.1: {}
 
   playwright-core@1.62.1: {}
 

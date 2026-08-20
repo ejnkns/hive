@@ -61,8 +61,12 @@
 // triggerable from the test in this environment (it needs the server to close
 // the socket, which nothing in the harness does).
 
-import { expect, inject, onTestFailed, test } from "vitest";
+import { expect, inject, test } from "vitest";
 import { app } from "../support/browser-app.mjs";
+import {
+  captureFailureScreenshot,
+  dragFogCardAbove,
+} from "../support/flows.mjs";
 
 const baseUrl = inject("baseUrl");
 
@@ -173,13 +177,8 @@ async function snapshotCount(flowId) {
 }
 
 test("wayfinder surface stays mounted with view state intact through churn and reconnect", async () => {
-  // The flow name is unique per run so watch-mode re-runs never collide
-  // (instance names are unique within a definition; the server 409s on dupes).
   const flowName = `surface-stability-check-${Date.now()}`;
-  onTestFailed(async () => {
-    const shot = await app.screenshot("failure");
-    if (shot) console.log(`[app screenshot] ${shot}`);
-  });
+  captureFailureScreenshot();
 
   // Boot the app page (its origin anchors the API + WS calls), create the
   // flow, then open the flow route. The creation POST does not depend on the
@@ -232,42 +231,20 @@ test("wayfinder surface stays mounted with view state intact through churn and r
   await expect.poll(() => app.count(".fog-card"), { timeout: 10_000 }).toBe(2);
 
   // Drag the second fog card above the first into a session-local clear
-  // order. Dispatched events on real geometry (the documented exception, as
-  // in the interactions e2e): only page-side code can hold element refs and
-  // read the geometry the drop handler keys on.
-  const drag = await app.evaluate(() => {
-    const walk = (root, out = []) => {
-      for (const el of root.querySelectorAll("*")) {
-        if (el.classList?.contains("fog-card")) out.push(el);
-        if (el.shadowRoot) walk(el.shadowRoot, out);
-      }
-      return out;
-    };
-    const host = document.querySelector("workflow-instances");
-    const cards = walk(host?.shadowRoot ?? document);
-    const first = cards[0];
-    const second = cards[1];
-    if (first === undefined || second === undefined) return null;
-    const pile = second.parentElement;
-    const firstRect = first.getBoundingClientRect();
-    const dropY = (firstRect?.top ?? 0) + (firstRect?.height ?? 0) / 2 - 1;
-    second.dispatchEvent(
-      new MouseEvent("dragstart", { bubbles: true, composed: true })
-    );
-    pile?.dispatchEvent(
-      new MouseEvent("dragover", { bubbles: true, composed: true })
-    );
-    pile?.dispatchEvent(
-      new MouseEvent("drop", { bubbles: true, composed: true, clientY: dropY })
-    );
-    pile?.dispatchEvent(
-      new MouseEvent("dragend", { bubbles: true, composed: true })
-    );
-    return {
-      fogAfter: `${second.dataset?.id ?? ""},${first.dataset?.id ?? ""}`,
-    };
-  });
-  expect(drag, "the fog tray must render two draggable cards").not.toBeNull();
+  // order. Dispatched events on real geometry — the documented exception, as
+  // in the interactions e2e — implemented once in the shared dragFogCardAbove
+  // helper (flows.mjs): only page-side code can hold the element refs and read
+  // the geometry the drop handler keys on. The helper returns the resulting
+  // pile order, which the persistence assertion below reads back.
+  const firstFogId = await app.attr(".fog-card", "data-id", { first: true });
+  const secondFogId = await app.attr(".fog-card", "data-id", { nth: 1 });
+  expect(firstFogId, "first fog card has an id").toBeTruthy();
+  expect(secondFogId, "second fog card has an id").toBeTruthy();
+  const fogAfter = await dragFogCardAbove(firstFogId, secondFogId);
+  expect(
+    fogAfter,
+    "the fog tray must render two draggable cards"
+  ).not.toBeNull();
   // The drop re-renders the pile from the new clear order; the first card's
   // title flips to the dragged entry (a pure CSS observable — no walker).
   await expect
@@ -369,8 +346,8 @@ test("wayfinder surface stays mounted with view state intact through churn and r
   );
   expect(
     JSON.parse(storedFog).join(","),
-    `the fog clear order persists through churn (stored=${storedFog}, reordered=${drag.fogAfter})`
-  ).toBe(drag.fogAfter);
+    `the fog clear order persists through churn (stored=${storedFog}, reordered=${fogAfter})`
+  ).toBe(fogAfter);
 
   // Close the map (its back-link) so the header comes back: the fog tray must
   // render the reordered pile (head = the dragged card) plus the four churn

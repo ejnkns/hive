@@ -18,21 +18,19 @@
 // outputs, the review verdict) while the DOM assertions check what the user
 // sees (buttons, chat input, the done card's title).
 
-import { expect, inject, onTestFailed, test } from "vitest";
+import { expect, inject, test } from "vitest";
 import { app } from "../support/browser-app.mjs";
-import { sendChatMessage } from "../support/flows.mjs";
+import {
+  captureFailureScreenshot,
+  sendChatMessage,
+} from "../support/flows.mjs";
 
 const baseUrl = inject("baseUrl");
 const projectPath = inject("projectPath");
 
 test("queen-bee card lifecycle: onboarding → requirements → plan → card → done", async () => {
-  // The flow name is unique per run so watch-mode re-runs never collide
-  // (instance names are unique within a definition; the server 409s on dupes).
   const flowName = `e2e-project-${Date.now()}`;
-  onTestFailed(async () => {
-    const shot = await app.screenshot("failure");
-    if (shot) console.log(`[app screenshot] ${shot}`);
-  });
+  captureFailureScreenshot();
 
   // The live flow snapshot the polls read (the same /api/flows/<flowId> the
   // UI renders): instance states, task outputs, the running task context.

@@ -14,19 +14,15 @@
 // shadow-DOM walkers, no sleeps (the old snapshot-deep-equal after a fixed
 // delay is now re-asserted on the observable DOM state after reload).
 
-import { expect, inject, onTestFailed, test } from "vitest";
+import { expect, inject, test } from "vitest";
 import { app } from "../support/browser-app.mjs";
+import { captureFailureScreenshot } from "../support/flows.mjs";
 
 const baseUrl = inject("baseUrl");
 
 test("creating a wayfinder instance starts the charting session with the destination", async () => {
-  // The flow name is unique per run so watch-mode re-runs never collide
-  // (instance names are unique within a definition; the server 409s on dupes).
   const flowName = `expedition-check-${Date.now()}`;
-  onTestFailed(async () => {
-    const shot = await app.screenshot("failure");
-    if (shot) console.log(`[app screenshot] ${shot}`);
-  });
+  captureFailureScreenshot();
 
   await app.open(`${baseUrl}/#/flows`);
   const created = await app.createFlow("wayfinder", {
@@ -59,9 +55,10 @@ test("creating a wayfinder instance starts the charting session with the destina
     .toBeGreaterThan(0);
 
   // A single active workflow: no overview bar (it would be redundant).
-  expect(await app.count(".overview"), "no overview for a single workflow").toBe(
-    0
-  );
+  expect(
+    await app.count(".overview"),
+    "no overview for a single workflow"
+  ).toBe(0);
 
   // Reload preserves it all: the destination, the live naming session, and
   // the single-workflow layout all come back (each re-asserted with auto-wait

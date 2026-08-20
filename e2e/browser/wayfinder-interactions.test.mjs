@@ -14,30 +14,25 @@
 //
 // The ONE justified exception is the fog drag-to-reorder: HTML5 drag is
 // dispatched (dragstart/dragover/drop/dragend) on real geometry inside the
-// app page — a real pointer drag proved flaky — documented inline where it
-// runs. The hover sync uses dispatched mouseenter/mouseleave on the real
-// elements (the same synthetic path the component tests use; a real pointer
-// hover is fragile on the piled cards' overlap).
+// app page — a real pointer drag proved flaky — implemented once in the
+// shared dragFogCardAbove helper (flows.mjs). The hover sync uses dispatched
+// mouseenter/mouseleave on the real elements (the same synthetic path the
+// component tests use; a real pointer hover is fragile on the piled cards'
+// overlap).
 
-import { expect, inject, onTestFailed, test } from "vitest";
+import { expect, inject, test } from "vitest";
 import { app } from "../support/browser-app.mjs";
+import {
+  captureFailureScreenshot,
+  dragFogCardAbove,
+  submitFlowActionForm,
+} from "../support/flows.mjs";
 
 const baseUrl = inject("baseUrl");
 
-// Submits the flow-action create form (the shared Svelte dialog).
-async function submitFlowActionForm() {
-  await app.waitForSelector(".dialog-actions button", { timeout: 10_000 });
-  await app.click(".dialog-actions button", { hasText: "Run", first: true });
-}
-
 test("wayfinder interactions: hover sync card<->marker and fog drag reorder", async () => {
-  // The flow name is unique per run so watch-mode re-runs never collide
-  // (instance names are unique within a definition; the server 409s on dupes).
   const flowName = `interaction-check-${Date.now()}`;
-  onTestFailed(async () => {
-    const shot = await app.screenshot("failure");
-    if (shot) console.log(`[app screenshot] ${shot}`);
-  });
+  captureFailureScreenshot();
 
   await app.open(`${baseUrl}/#/flows`);
   const created = await app.createFlow("wayfinder", {
@@ -130,51 +125,16 @@ test("wayfinder interactions: hover sync card<->marker and fog drag reorder", as
     composed: true,
   });
 
-  // The fog drag-to-reorder — the ONE justified dispatched-event workaround:
-  // real pointer drags of the HTML5 fog cards proved flaky, so the drag is
-  // driven with synthetic dragstart/dragover/drop/dragend on real geometry
-  // inside the app page. The cards live in the served component's shadow root
-  // (workflow-instances → dynamic-element-host → .mount → the served element),
-  // reached through that direct path — the old recursive walker is gone; the
-  // events and the drop Y are exactly what the tray's handlers see.
-  const drag = await app.evaluate(
-    ({ firstId, secondId }) => {
-      const host = document.querySelector("workflow-instances");
-      const servedRoot = host
-        ?.shadowRoot?.querySelector("dynamic-element-host")
-        ?.shadowRoot?.querySelector(".mount > *")?.shadowRoot;
-      if (!servedRoot) return { ok: false, reason: "served root not found" };
-      const byId = (id) =>
-        servedRoot.querySelector(`.fog-card[data-id="${id}"]`);
-      const first = byId(firstId);
-      const second = byId(secondId);
-      if (!first || !second) return { ok: false, reason: "fog cards not found" };
-      // The pile is the cards' parent; drop just above the first card's
-      // vertical middle (real geometry, deterministic insertion).
-      const pile = second.parentElement;
-      const firstRect = first.getBoundingClientRect();
-      const dropY = (firstRect.top ?? 0) + (firstRect.height ?? 0) / 2 - 1;
-      second.dispatchEvent(
-        new MouseEvent("dragstart", { bubbles: true, composed: true })
-      );
-      pile?.dispatchEvent(
-        new MouseEvent("dragover", { bubbles: true, composed: true })
-      );
-      pile?.dispatchEvent(
-        new MouseEvent("drop", {
-          bubbles: true,
-          composed: true,
-          clientY: dropY,
-        })
-      );
-      pile?.dispatchEvent(
-        new MouseEvent("dragend", { bubbles: true, composed: true })
-      );
-      return { ok: true };
-    },
-    { firstId, secondId }
-  );
-  expect(drag.ok, JSON.stringify(drag)).toBe(true);
+  // The fog drag-to-reorder — the ONE justified dispatched-event workaround
+  // (real pointer drags of the HTML5 fog cards proved flaky), implemented in
+  // the shared dragFogCardAbove helper (e2e/support/flows.mjs): synthetic
+  // dragstart/dragover/drop/dragend on real geometry inside the app page. The
+  // cards live in the served component's shadow root (workflow-instances →
+  // dynamic-element-host → .mount → the served element), reached through that
+  // direct path — the old recursive walker is gone; the events and the drop Y
+  // are exactly what the tray's handlers see.
+  const dragOrder = await dragFogCardAbove(firstId, secondId);
+  expect(dragOrder, "the fog cards must be draggable").not.toBeNull();
 
   // The drop re-renders from the new clear order; poll until the pile flips
   // (the dragged card is first), then pin the full order.
