@@ -511,10 +511,14 @@ export function assignRoutes(server: FastifyServer, deps: RouteDeps) {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const uiBuildDir = join(__dirname, "ui");
+// Packaged assets (UI build + API spec) live in server/dist-package, a sibling
+// of the tsdown output dir: tsdown's `clean: true` wipes only server/dist, so
+// a dev `tsdown --watch` rebuild can never delete the UI the server serves.
+const packagedAssetsDir = join(__dirname, "..", "dist-package");
+const uiBuildDir = join(packagedAssetsDir, "ui");
 const indexHtmlPath = join(uiBuildDir, "index.html");
-const specHtmlPath = join(__dirname, "static", "api-spec.html");
-const specYamlPath = join(__dirname, "static", "api-spec.yaml");
+const specHtmlPath = join(packagedAssetsDir, "static", "api-spec.html");
+const specYamlPath = join(packagedAssetsDir, "static", "api-spec.yaml");
 const MIME_TYPES: Record<string, string> = {
   js: "text/javascript",
   css: "text/css",

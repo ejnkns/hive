@@ -5,7 +5,9 @@ import {
   constants,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { createServer } from "node:http";
@@ -37,7 +39,7 @@ export async function startHiveTestApp(mockProviderHost) {
   );
   const port = await reserveAvailablePort();
   const executable = join(repositoryPath, "server", "dist", "main.mjs");
-  accessSync(executable, constants.R_OK);
+  assertFreshBuild(executable);
   const child = spawn(
     process.execPath,
     [executable, "start", "--host", "127.0.0.1", "--port", String(port)],
@@ -82,6 +84,93 @@ export async function startHiveTestApp(mockProviderHost) {
 const repositoryPath = dirname(
   dirname(dirname(fileURLToPath(import.meta.url)))
 );
+
+// E2E boots the built server and serves whatever package-assets copied. If the
+// server bundle or the packaged UI is missing or stale (a dev `tsdown --watch`
+// rebuild used to wipe server/dist/ui), every browser test failed at first
+// render with a silent "UI not found". Fail fast here instead: verify the
+// artifacts exist and are newer than their sources before any server boots.
+function assertFreshBuild(executable) {
+  const packagedUiIndex = join(
+    repositoryPath,
+    "server",
+    "dist-package",
+    "ui",
+    "index.html"
+  );
+
+  const problems = [];
+  if (!isReadableFile(executable)) {
+    problems.push(`built server bundle missing: ${executable}`);
+  }
+  if (!isReadableFile(packagedUiIndex)) {
+    problems.push(`packaged UI missing: ${packagedUiIndex}`);
+  }
+  if (isStaleSince(executable, join(repositoryPath, "server", "src"))) {
+    problems.push(
+      `server build is stale (server/src is newer than ${executable})`
+    );
+  }
+  if (isStaleSince(packagedUiIndex, join(repositoryPath, "ui", "src"))) {
+    problems.push(
+      `packaged UI is stale (ui/src is newer than ${packagedUiIndex})`
+    );
+  }
+  if (problems.length > 0) {
+    throw new Error(
+      `E2E requires a fresh build: run \`pnpm build\` and retry.\n${problems.join(
+        "\n"
+      )}`
+    );
+  }
+}
+
+function isReadableFile(path) {
+  try {
+    accessSync(path, constants.R_OK);
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function isStaleSince(artifact, sourceRoot) {
+  if (!isReadableFile(artifact)) return false;
+  return newestSourceMtime(sourceRoot) > statSync(artifact).mtimeMs;
+}
+
+// Test/spec files are not build inputs; editing one must not flag the build
+// as stale.
+const NON_BUILD_INPUT = /(\.test\.|\.spec\.)/;
+
+function newestSourceMtime(root) {
+  let newest = 0;
+  const pending = [root];
+  while (pending.length > 0) {
+    const dir = pending.pop();
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue; // missing source root — nothing to compare
+    }
+    for (const entry of entries) {
+      if (NON_BUILD_INPUT.test(entry.name)) continue;
+      const entryPath = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        pending.push(entryPath);
+      } else if (entry.isFile()) {
+        try {
+          const mtime = statSync(entryPath).mtimeMs;
+          if (mtime > newest) newest = mtime;
+        } catch {
+          // Unreadable source file — ignore for freshness.
+        }
+      }
+    }
+  }
+  return newest;
+}
 
 function createGitProject(runtimePath) {
   const projectPath = join(runtimePath, "project");
