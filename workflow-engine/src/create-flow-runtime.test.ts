@@ -1228,6 +1228,64 @@ describe("FlowRuntime", () => {
       );
     });
 
+    it("skips an action that declares input fields (silent no-op, never an error)", async () => {
+      const fieldActionWorkflow = defineWorkflow({
+        id: "fieldRefresh",
+        label: "Field Refresh",
+        taskOutputs: {} as Record<string, never>,
+        states: [
+          {
+            id: "done",
+            label: "Done",
+            actions: [
+              {
+                id: "annotate",
+                label: "Annotate",
+                transitionTo: "done",
+                fields: [
+                  {
+                    key: "note",
+                    label: "Note",
+                    type: "string",
+                    required: true,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        initial: "done",
+        terminalStates: ["done"],
+      });
+      const runner = new MockRunner();
+      const runtime = createFlowRuntime(
+        "test",
+        [sourceWorkflow, fieldActionWorkflow],
+        refreshEdges({
+          toWorkflow: "fieldRefresh",
+          autoDispatch: { actionId: "annotate" },
+        }),
+        { "ai-task": () => runner }
+      );
+
+      // The instance is in done, but its only action needs a form input the
+      // autoDispatch cannot provide — the dispatch must be a silent no-op
+      // (the autoDispatch contract is never-an-error), not a thrown field
+      // validation failure.
+      runtime.addWorkflowInstance("fieldRefresh", { currentState: "done" });
+      await driveSourceToDone(runtime, runner);
+      assert.equal(
+        runtime.workflowInstancesInState("fieldRefresh").length,
+        1,
+        "no new instance created (createIfNone off)"
+      );
+      assert.equal(
+        runtime.workflowInstancesInState("fieldRefresh")[0]?.currentState,
+        "done",
+        "the field-bearing action never fired — no throw, no state change"
+      );
+    });
+
     it("applies alongside a fan-out edge from the same state, in declaration order", async () => {
       const runner = new MockRunner();
       const runtime = createFlowRuntime(
