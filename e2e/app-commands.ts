@@ -139,6 +139,59 @@ export const appTextContent: BrowserCommand<[selector: string]> = async (
   return element.textContent();
 };
 
+// Read an attribute off the first (or nth) element the piercing selector
+// matches, e.g. the fog cards' data-id used as the hover/drag handles. Returns
+// null when nothing matches so `expect.poll` can retry on a not-yet-rendered
+// element (unlike textContent/getAttribute on a missing element, which throw).
+export const appAttr: BrowserCommand<
+  [
+    selector: string,
+    name: string,
+    options?: { hasText?: string; first?: boolean; nth?: number },
+  ]
+> = async ({ sessionId }, selector, name, options = {}) => {
+  const base = requireAppSession(sessionId).page.locator(
+    selector,
+    options.hasText !== undefined ? { hasText: options.hasText } : undefined
+  );
+  if ((await base.count()) === 0) return null;
+  const target = options.first
+    ? base.first()
+    : options.nth !== undefined
+      ? base.nth(options.nth)
+      : base.first();
+  return target.getAttribute(name);
+};
+
+// Dispatch a synthetic event (mouseenter/mouseleave/…) on the element the
+// piercing selector matches. This is the locator-side equivalent of the old
+// files' `dispatchEvent(new MouseEvent(...))` deep-walkers: the selector finds
+// the element across the nested shadow roots, and the event fires on the real
+// element — no walker, no hit-testing (a real pointer hover is layout-fragile
+// on the piled fog cards). Playwright auto-waits for the element to be
+// attached before dispatching.
+export const appDispatch: BrowserCommand<
+  [
+    selector: string,
+    eventType: string,
+    eventInit?: Record<string, unknown>,
+    options?: { hasText?: string; first?: boolean },
+  ]
+> = async (
+  { sessionId },
+  selector,
+  eventType,
+  eventInit = {},
+  options = {}
+) => {
+  let locator = requireAppSession(sessionId).page.locator(
+    selector,
+    options.hasText !== undefined ? { hasText: options.hasText } : undefined
+  );
+  if (options.first) locator = locator.first();
+  await locator.dispatchEvent(eventType, eventInit);
+};
+
 export const appIsVisible: BrowserCommand<[selector: string]> = async (
   { sessionId },
   selector

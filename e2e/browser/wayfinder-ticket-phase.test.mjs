@@ -6,95 +6,17 @@
 // Runs under Vitest browser mode (e2e/vitest.config.ts): the built server and
 // mock provider boot on the Node side in e2e/global-setup.ts (base URL via
 // `inject`), and the app runs in a second page of the same browser, driven
-// through the shared `app` wrapper (e2e/support/browser-app.mjs).
+// through the shared `app` wrapper (e2e/support/browser-app.mjs). Playwright
+// CSS selectors pierce the app's nested Lit shadow DOM, so buttons and cards
+// deep in the served component are addressed directly and clicked with
+// auto-wait (`app.click` / `app.waitForSelector`) — no hand-rolled shadow-DOM
+// walkers, no sleeps. The session-to-session transitions (naming Done →
+// frontier Done) retry on the observable DOM state instead of fixed delays.
 
 import { expect, inject, onTestFailed, test } from "vitest";
 import { app } from "../support/browser-app.mjs";
 
 const baseUrl = inject("baseUrl");
-
-// Clicks a button whose text equals `label`, across nested shadow roots.
-async function waitAndClick(buttonLabel, timeoutMs = 40_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const clicked = await app.evaluate((buttonLabel) => {
-      const walk = (root) => {
-        for (const el of root.querySelectorAll("button")) {
-          if (el.textContent?.trim() === buttonLabel) return el;
-        }
-        for (const el of root.querySelectorAll("*")) {
-          if (el.shadowRoot) {
-            const found = walk(el.shadowRoot);
-            if (found) return found;
-          }
-        }
-        return null;
-      };
-      const host = document.querySelector("workflow-instances");
-      const button = walk(host?.shadowRoot ?? document);
-      if (!button) return false;
-      button.dispatchEvent(
-        new MouseEvent("click", { bubbles: true, composed: true })
-      );
-      return true;
-    }, buttonLabel);
-    if (clicked) return true;
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  return false;
-}
-
-// Whether an element with the class AND text exists deep in the shadow tree.
-async function deepHasText(className, text, timeoutMs = 20_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const found = await app.evaluate(
-      ({ className, text }) => {
-        const walk = (root) => {
-          for (const el of root.querySelectorAll(`.${className}`)) {
-            if (el.textContent?.includes(text)) return true;
-          }
-          for (const el of root.querySelectorAll("*")) {
-            if (el.shadowRoot && walk(el.shadowRoot)) return true;
-          }
-          return false;
-        };
-        const host = document.querySelector("workflow-instances");
-        return walk(host?.shadowRoot ?? document);
-      },
-      { className, text }
-    );
-    if (found) return true;
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  return false;
-}
-
-// Clicks the first element with the class, across nested shadow roots.
-async function clickClass(className, timeoutMs = 20_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const clicked = await app.evaluate((className) => {
-      const walk = (root) => {
-        for (const el of root.querySelectorAll(`.${className}`)) {
-          el.dispatchEvent(
-            new MouseEvent("click", { bubbles: true, composed: true })
-          );
-          return true;
-        }
-        for (const el of root.querySelectorAll("*")) {
-          if (el.shadowRoot && walk(el.shadowRoot)) return true;
-        }
-        return false;
-      };
-      const host = document.querySelector("workflow-instances");
-      return walk(host?.shadowRoot ?? document);
-    }, className);
-    if (clicked) return true;
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  return false;
-}
 
 // Submits the flow-action create form (the shared Svelte dialog).
 async function submitFlowActionForm() {
@@ -112,45 +34,35 @@ test("wayfinder ticket phase: chart → add research ticket → graduate → cla
   });
 
   await app.open(`${baseUrl}/#/flows`);
-  await app.waitForTimeout(800);
-
-  const created = await app.evaluate(
-    async (config) => {
-      const res = await fetch("/api/flows", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ definitionId: "wayfinder", config }),
-      });
-      return res.json();
-    },
-    { name: flowName, destination: "Pick the editor's storage layer" }
-  );
+  const created = await app.createFlow("wayfinder", {
+    name: flowName,
+    destination: "Pick the editor's storage layer",
+  });
   expect(created.ok, JSON.stringify(created)).toBe(true);
 
   await app.open(`${baseUrl}/#/flows/wayfinder/${flowName}`);
-  await app.waitForSelector("workflow-instances", { timeout: 30_000 });
-  await app.waitForTimeout(2_000);
+  await expect
+    .poll(() => app.isVisible("workflow-instances"), { timeout: 30_000 })
+    .toBe(true);
 
   // The table renders the map card, and the map view drills in and back.
-  expect(
-    await deepHasText("open-map", "Open the map view"),
-    "the table shows the map card"
-  ).toBe(true);
-  expect(await clickClass("open-map"), "open the map view from the map card").toBe(
-    true
-  );
-  expect(
-    await deepHasText("back-link", "Back to the table"),
-    "the map view has a back link"
-  ).toBe(true);
-  expect(await clickClass("back-link"), "return to the table").toBe(true);
+  await app.waitForSelector(".open-map", {
+    hasText: "Open the map view",
+    timeout: 30_000,
+  });
+  await app.click(".open-map", { first: true });
+  await app.waitForSelector(".back-link", {
+    hasText: "Back to the table",
+    timeout: 30_000,
+  });
+  await app.click(".back-link", { first: true });
 
   // Chart: the naming session is agent-initiating (the mock answers it), so
-  // Done → frontier, then Done → charted.
-  expect(await waitAndClick("Done"), "naming session Done").toBe(true);
-  await app.waitForTimeout(4_000);
-  expect(await waitAndClick("Done"), "frontier session Done").toBe(true);
-  await app.waitForTimeout(2_000);
+  // Done → frontier, then Done → charted. Each click auto-waits for its
+  // session's Done to be live — the old fixed sleeps between sessions are
+  // replaced by waiting on the observable DOM state.
+  await app.click("button", { hasText: "Done" });
+  await app.click("button", { hasText: "Done" });
 
   // Add a research ticket through the flow-action create form.
   await app.click("button", { hasText: "Add ticket", first: true });
@@ -162,35 +74,29 @@ test("wayfinder ticket phase: chart → add research ticket → graduate → cla
 
   // The ticket lands in the fog tray (normalize runs), highlighted as needing
   // clarity, then the graduate action opens.
-  expect(
-    await deepHasText("fog-card", "Choose the store"),
-    "the fog tray shows the new ticket"
-  ).toBe(true);
-  expect(await waitAndClick("Graduate to ready"), "graduate the fog ticket").toBe(
-    true
-  );
+  await app.waitForSelector(".fog-card", {
+    hasText: "Choose the store",
+    timeout: 30_000,
+  });
+  await app.click("button", { hasText: "Graduate to ready" });
 
   // The ready ticket sits in the briefing deck with its research stamp; claim
   // it, and the one-shot research agent resolves it (the mock completes it),
   // then assemble closes the ticket.
-  expect(
-    await deepHasText("stamp", "research"),
-    "the briefing deck stamps the ready ticket research"
-  ).toBe(true);
-  expect(await waitAndClick("Claim for research"), "claim the ticket").toBe(
-    true
-  );
+  await app.waitForSelector(".stamp", {
+    hasText: "research",
+    timeout: 30_000,
+  });
+  await app.click("button", { hasText: "Claim for research" });
 
-  // Once the ticket closes the map is clear, so Start build becomes available.
-  expect(
-    await waitAndClick("Start build", 30_000),
-    "start build after the frontier cleared"
-  ).toBe(true);
+  // Once the ticket closes the map is clear, so Start build becomes available
+  // (auto-waits until the flow action's gate passes).
+  await app.click("button", { hasText: "Start build" });
   await submitFlowActionForm();
 
   // The build workflow starts in its specing state; the depot shows its crate.
-  expect(
-    await deepHasText("crate", "specing"),
-    "the depot shows the specing build crate"
-  ).toBe(true);
+  await app.waitForSelector(".crate", {
+    hasText: "specing",
+    timeout: 30_000,
+  });
 });

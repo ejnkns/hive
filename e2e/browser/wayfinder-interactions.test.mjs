@@ -7,69 +7,22 @@
 // Runs under Vitest browser mode (e2e/vitest.config.ts): the built server and
 // mock provider boot on the Node side in e2e/global-setup.ts (base URL via
 // `inject`), and the app runs in a second page of the same browser, driven
-// through the shared `app` wrapper (e2e/support/browser-app.mjs).
+// through the shared `app` wrapper (e2e/support/browser-app.mjs). Playwright
+// CSS selectors pierce the app's nested Lit shadow DOM, so the tray checks and
+// the hover sync are direct selectors with auto-waiting assertions — no
+// hand-rolled shadow-DOM walkers, no sleeps.
+//
+// The ONE justified exception is the fog drag-to-reorder: HTML5 drag is
+// dispatched (dragstart/dragover/drop/dragend) on real geometry inside the
+// app page — a real pointer drag proved flaky — documented inline where it
+// runs. The hover sync uses dispatched mouseenter/mouseleave on the real
+// elements (the same synthetic path the component tests use; a real pointer
+// hover is fragile on the piled cards' overlap).
 
 import { expect, inject, onTestFailed, test } from "vitest";
 import { app } from "../support/browser-app.mjs";
 
 const baseUrl = inject("baseUrl");
-
-// Clicks a button whose text equals `label`, across nested shadow roots.
-async function waitAndClick(buttonLabel, timeoutMs = 40_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const clicked = await app.evaluate((buttonLabel) => {
-      const walk = (root) => {
-        for (const el of root.querySelectorAll("button")) {
-          if (el.textContent?.trim() === buttonLabel) return el;
-        }
-        for (const el of root.querySelectorAll("*")) {
-          if (el.shadowRoot) {
-            const found = walk(el.shadowRoot);
-            if (found) return found;
-          }
-        }
-        return null;
-      };
-      const host = document.querySelector("workflow-instances");
-      const button = walk(host?.shadowRoot ?? document);
-      if (!button) return false;
-      button.dispatchEvent(
-        new MouseEvent("click", { bubbles: true, composed: true })
-      );
-      return true;
-    }, buttonLabel);
-    if (clicked) return true;
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  return false;
-}
-
-// Whether an element with the class AND text exists deep in the shadow tree.
-async function deepHasText(className, text, timeoutMs = 20_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const found = await app.evaluate(
-      ({ className, text }) => {
-        const walk = (root) => {
-          for (const el of root.querySelectorAll(`.${className}`)) {
-            if (el.textContent?.includes(text)) return true;
-          }
-          for (const el of root.querySelectorAll("*")) {
-            if (el.shadowRoot && walk(el.shadowRoot)) return true;
-          }
-          return false;
-        };
-        const host = document.querySelector("workflow-instances");
-        return walk(host?.shadowRoot ?? document);
-      },
-      { className, text }
-    );
-    if (found) return true;
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  return false;
-}
 
 // Submits the flow-action create form (the shared Svelte dialog).
 async function submitFlowActionForm() {
@@ -87,30 +40,23 @@ test("wayfinder interactions: hover sync card<->marker and fog drag reorder", as
   });
 
   await app.open(`${baseUrl}/#/flows`);
-  await app.waitForTimeout(800);
-
-  const created = await app.evaluate(
-    async (config) => {
-      const res = await fetch("/api/flows", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ definitionId: "wayfinder", config }),
-      });
-      return res.json();
-    },
-    { name: flowName, destination: "Pick the editor's storage layer" }
-  );
+  const created = await app.createFlow("wayfinder", {
+    name: flowName,
+    destination: "Pick the editor's storage layer",
+  });
   expect(created.ok, JSON.stringify(created)).toBe(true);
 
   await app.open(`${baseUrl}/#/flows/wayfinder/${flowName}`);
-  await app.waitForSelector("workflow-instances", { timeout: 30_000 });
-  await app.waitForTimeout(2_000);
+  await expect
+    .poll(() => app.isVisible("workflow-instances"), { timeout: 30_000 })
+    .toBe(true);
 
-  // Chart the map (the mock answers the naming and frontier sessions).
-  expect(await waitAndClick("Done"), "naming session Done").toBe(true);
-  await app.waitForTimeout(4_000);
-  expect(await waitAndClick("Done"), "frontier session Done").toBe(true);
-  await app.waitForTimeout(2_000);
+  // Chart the map (the mock answers the naming and frontier sessions). Each
+  // click auto-waits for its session's Done to be actionable — the old fixed
+  // sleeps between the sessions (4s/2s) are replaced by waiting on the
+  // observable DOM state (the next session's button appearing).
+  await app.click("button", { hasText: "Done" });
+  await app.click("button", { hasText: "Done" });
 
   // Two fog entries give the tray a pile to reorder.
   for (const brief of ["Choose the store", "Plot the reorder seam"]) {
@@ -119,118 +65,129 @@ test("wayfinder interactions: hover sync card<->marker and fog drag reorder", as
     await app.fill("#cf-brief", brief);
     await submitFlowActionForm();
   }
-  expect(
-    await deepHasText("fog-card", "Choose the store"),
-    "the fog tray shows the first fog entry"
-  ).toBe(true);
-  expect(
-    await deepHasText("fog-card", "Plot the reorder seam"),
-    "the fog tray shows the second fog entry"
-  ).toBe(true);
-
-  // Hover sync + fog reorder, driven with dispatched events on real geometry:
-  // hover card -> its marker lights; hover marker -> its card lights; then
-  // drag the second card above the first. Lit updates asynchronously, so each
-  // dispatch awaits a frame before reading the classes.
-  const scenario = await app.evaluate(async () => {
-    const flush = () => new Promise((resolve) => setTimeout(resolve, 60));
-    const walk = (root) => {
-      const found = [];
-      for (const el of root.querySelectorAll("*")) {
-        found.push(el);
-        if (el.shadowRoot) found.push(...walk(el.shadowRoot));
-      }
-      return found;
-    };
-    const all = walk(document);
-    const fogCards = all.filter((el) => el.classList?.contains("fog-card"));
-    const cardByTitle = (title) =>
-      fogCards.find((el) => el.textContent?.includes(title));
-    const markerById = (id) =>
-      all.find((el) => el.tagName === "circle" && el.dataset?.id === id);
-    const first = cardByTitle("Choose the store");
-    const second = cardByTitle("Plot the reorder seam");
-    const firstId = first?.dataset?.id ?? null;
-    const secondId = second?.dataset?.id ?? null;
-    const before = fogCards.map((el) => el.dataset?.id).join(",");
-
-    const cardToMarker = [];
-    first?.dispatchEvent(
-      new MouseEvent("mouseenter", { bubbles: true, composed: true })
-    );
-    await flush();
-    cardToMarker.push(first?.classList.contains("hl"));
-    cardToMarker.push(markerById(firstId)?.classList.contains("hl"));
-    first?.dispatchEvent(
-      new MouseEvent("mouseleave", { bubbles: true, composed: true })
-    );
-
-    const markerToCard = [];
-    markerById(secondId)?.dispatchEvent(
-      new MouseEvent("mouseenter", { bubbles: true, composed: true })
-    );
-    await flush();
-    markerToCard.push(markerById(secondId)?.classList.contains("hl"));
-    markerToCard.push(second?.classList.contains("hl"));
-    markerById(secondId)?.dispatchEvent(
-      new MouseEvent("mouseleave", { bubbles: true, composed: true })
-    );
-
-    // Drag the second fog card so its drop lands just above the first card's
-    // vertical middle (real geometry, deterministic insertion).
-    const pile = second?.parentElement;
-    const firstRect = first?.getBoundingClientRect();
-    const dropY = (firstRect?.top ?? 0) + (firstRect?.height ?? 0) / 2 - 1;
-    second?.dispatchEvent(
-      new MouseEvent("dragstart", { bubbles: true, composed: true })
-    );
-    pile?.dispatchEvent(
-      new MouseEvent("dragover", { bubbles: true, composed: true })
-    );
-    pile?.dispatchEvent(
-      new MouseEvent("drop", {
-        bubbles: true,
-        composed: true,
-        clientY: dropY,
-      })
-    );
-    pile?.dispatchEvent(
-      new MouseEvent("dragend", { bubbles: true, composed: true })
-    );
-
-    return { firstId, secondId, before, cardToMarker, markerToCard };
+  await app.waitForSelector(".fog-card", {
+    hasText: "Choose the store",
+    timeout: 30_000,
+  });
+  await app.waitForSelector(".fog-card", {
+    hasText: "Plot the reorder seam",
+    timeout: 30_000,
   });
 
-  expect(
-    scenario.cardToMarker,
-    "hovering the card lights the card and its marker"
-  ).toEqual([true, true]);
-  expect(
-    scenario.markerToCard,
-    "hovering the marker lights the marker and its card"
-  ).toEqual([true, true]);
+  // The fog cards' data-ids are the hover/drag handles: the mini-map markers
+  // carry the same id, so card↔marker pairing is one id.
+  const firstId = await app.attr(".fog-card", "data-id", {
+    hasText: "Choose the store",
+  });
+  const secondId = await app.attr(".fog-card", "data-id", {
+    hasText: "Plot the reorder seam",
+  });
+  expect(firstId, "first fog card has an id").toBeTruthy();
+  expect(secondId, "second fog card has an id").toBeTruthy();
 
-  // The drop re-renders from the new clear order; poll until the pile flips.
-  const deadline = Date.now() + 10_000;
-  let after = scenario.before;
-  while (Date.now() < deadline && after === scenario.before) {
-    after = await app.evaluate(() => {
-      const walk = (root) => {
-        const found = [];
-        for (const el of root.querySelectorAll("*")) {
-          if (el.classList?.contains("fog-card")) found.push(el.dataset?.id);
-          if (el.shadowRoot) found.push(...walk(el.shadowRoot));
-        }
-        return found;
-      };
+  // Hover sync, dispatched on the real elements: hover card -> its marker
+  // lights; hover marker -> its card lights. Lit applies the .hl class
+  // asynchronously, so each light-up is polled instead of the old 60ms flush.
+  await app.dispatch(
+    ".fog-card",
+    "mouseenter",
+    { bubbles: true, composed: true },
+    { hasText: "Choose the store" }
+  );
+  await expect
+    .poll(() => app.count(`.fog-card[data-id="${firstId}"].hl`), {
+      timeout: 5_000,
+    })
+    .toBe(1);
+  await expect
+    .poll(() => app.count(`circle[data-id="${firstId}"].hl`), {
+      timeout: 5_000,
+    })
+    .toBe(1);
+  await app.dispatch(
+    ".fog-card",
+    "mouseleave",
+    { bubbles: true, composed: true },
+    { hasText: "Choose the store" }
+  );
+
+  await app.dispatch(`circle[data-id="${secondId}"]`, "mouseenter", {
+    bubbles: true,
+    composed: true,
+  });
+  await expect
+    .poll(() => app.count(`circle[data-id="${secondId}"].hl`), {
+      timeout: 5_000,
+    })
+    .toBe(1);
+  await expect
+    .poll(() => app.count(`.fog-card[data-id="${secondId}"].hl`), {
+      timeout: 5_000,
+    })
+    .toBe(1);
+  await app.dispatch(`circle[data-id="${secondId}"]`, "mouseleave", {
+    bubbles: true,
+    composed: true,
+  });
+
+  // The fog drag-to-reorder — the ONE justified dispatched-event workaround:
+  // real pointer drags of the HTML5 fog cards proved flaky, so the drag is
+  // driven with synthetic dragstart/dragover/drop/dragend on real geometry
+  // inside the app page. The cards live in the served component's shadow root
+  // (workflow-instances → dynamic-element-host → .mount → the served element),
+  // reached through that direct path — the old recursive walker is gone; the
+  // events and the drop Y are exactly what the tray's handlers see.
+  const drag = await app.evaluate(
+    ({ firstId, secondId }) => {
       const host = document.querySelector("workflow-instances");
-      return walk(host?.shadowRoot ?? document).join(",");
-    });
-    if (after !== scenario.before) break;
-    await new Promise((resolve) => setTimeout(resolve, 300));
-  }
-  expect(
-    after,
-    "the dragged fog card reorders above the first"
-  ).toBe(`${scenario.secondId},${scenario.firstId}`);
+      const servedRoot = host
+        ?.shadowRoot?.querySelector("dynamic-element-host")
+        ?.shadowRoot?.querySelector(".mount > *")?.shadowRoot;
+      if (!servedRoot) return { ok: false, reason: "served root not found" };
+      const byId = (id) =>
+        servedRoot.querySelector(`.fog-card[data-id="${id}"]`);
+      const first = byId(firstId);
+      const second = byId(secondId);
+      if (!first || !second) return { ok: false, reason: "fog cards not found" };
+      // The pile is the cards' parent; drop just above the first card's
+      // vertical middle (real geometry, deterministic insertion).
+      const pile = second.parentElement;
+      const firstRect = first.getBoundingClientRect();
+      const dropY = (firstRect.top ?? 0) + (firstRect.height ?? 0) / 2 - 1;
+      second.dispatchEvent(
+        new MouseEvent("dragstart", { bubbles: true, composed: true })
+      );
+      pile?.dispatchEvent(
+        new MouseEvent("dragover", { bubbles: true, composed: true })
+      );
+      pile?.dispatchEvent(
+        new MouseEvent("drop", {
+          bubbles: true,
+          composed: true,
+          clientY: dropY,
+        })
+      );
+      pile?.dispatchEvent(
+        new MouseEvent("dragend", { bubbles: true, composed: true })
+      );
+      return { ok: true };
+    },
+    { firstId, secondId }
+  );
+  expect(drag.ok, JSON.stringify(drag)).toBe(true);
+
+  // The drop re-renders from the new clear order; poll until the pile flips
+  // (the dragged card is first), then pin the full order.
+  await expect
+    .poll(() => app.attr(".fog-card", "data-id", { first: true }), {
+      timeout: 10_000,
+    })
+    .toBe(secondId);
+  const order = [
+    await app.attr(".fog-card", "data-id", { first: true }),
+    await app.attr(".fog-card", "data-id", { nth: 1 }),
+  ].join(",");
+  expect(order, "the dragged fog card reorders above the first").toBe(
+    `${secondId},${firstId}`
+  );
 });

@@ -18,6 +18,9 @@ export const app = {
   createFlow: (definitionId, config) =>
     commands.createFlow(definitionId, config),
   click: (selector, options) => commands.appClick(selector, options),
+  attr: (selector, name, options) => commands.appAttr(selector, name, options),
+  dispatch: (selector, eventType, eventInit, options) =>
+    commands.appDispatch(selector, eventType, eventInit, options),
   isVisible: (selector) => commands.appIsVisible(selector),
   count: (selector) => commands.appCount(selector),
   fill: (selector, text, options) => commands.appFill(selector, text, options),

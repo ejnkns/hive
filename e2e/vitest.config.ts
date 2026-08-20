@@ -2,8 +2,10 @@ import { fileURLToPath } from "node:url";
 import { playwright } from "@vitest/browser-playwright";
 import { defineConfig } from "vitest/config";
 import {
+  appAttr,
   appClick,
   appCount,
+  appDispatch,
   appEvaluate,
   appFill,
   appIsVisible,
@@ -63,6 +65,8 @@ export default defineConfig({
         appSelectOption,
         appTextContent,
         appEvaluate,
+        appAttr,
+        appDispatch,
         appIsVisible,
         appCount,
         appWaitForSelector,
