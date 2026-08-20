@@ -110,6 +110,38 @@ async function clickWhen(selector, { hasText, timeout = 20_000 } = {}) {
   );
 }
 
+// The cycled expedition theme blends its --wf-* colors over --dur-slow (400ms,
+// see ui/src/app.css) when the theme changes. Screenshots must be captured
+// with the blend SETTLED — Playwright's animation disabling does not freeze
+// CSS custom-property transitions, so a mid-blend capture would be
+// run-timing-dependent. Observable-based wait: poll the computed --wf-accent
+// until two consecutive reads agree (the value stops moving only once the
+// transition completes).
+async function settleThemeColors(timeout = 10_000) {
+  let last = null;
+  await expect
+    .poll(
+      async () => {
+        const value = await app.evaluate(() => {
+          const host = document.querySelector("workflow-instances");
+          const dyn = host?.shadowRoot?.querySelector("dynamic-element-host");
+          const el = dyn?.shadowRoot?.querySelector(".mount > *");
+          const expedition = el?.shadowRoot?.querySelector(".expedition");
+          return expedition
+            ? getComputedStyle(expedition)
+                .getPropertyValue("--wf-accent")
+                .trim()
+            : "";
+        });
+        const stable = last !== null && value === last;
+        last = value;
+        return stable;
+      },
+      { timeout, interval: 100 }
+    )
+    .toBe(true);
+}
+
 // Opens a second socket to the flow WS endpoint and counts flow_snapshot
 // frames per flow on window.__snapshotCounts — churn is only "seen" once
 // frames actually arrive, so the stability assertions always run against real
@@ -270,6 +302,19 @@ test("wayfinder surface stays mounted with view state intact through churn and r
     0
   );
 
+  // Visual contract (ticket 10): the map view open with the cycled expedition
+  // theme, captured now that the surface is settled (the baseline asserts
+  // above all passed on observables, so the render is stable). The theme's
+  // color blend must finish before the shot (see settleThemeColors), and the
+  // capture targets the surface element itself (workflow-instances) so the app
+  // shell's top bar — whose breadcrumb shows the RUN-UNIQUE flow name — is
+  // excluded: that text changes every run and would make the baseline
+  // inherently unstable.
+  await settleThemeColors();
+  await app.assertScreenshot("surface-map-topo", {
+    element: "workflow-instances",
+  });
+
   // Churn with the map open: each add_fog_entry dispatch is a flow event that
   // coalesces into a flow_snapshot frame. After each dispatch, WAIT on the
   // observable (a new frame on the counting socket), then sample the surface
@@ -340,6 +385,17 @@ test("wayfinder surface stays mounted with view state intact through churn and r
     await app.count('.expedition[data-theme="topo"]'),
     "the theme survives the close"
   ).toBeGreaterThan(0);
+
+  // Visual contract (ticket 10): the fog tray renders the reordered pile — the
+  // dragged card on top. Capture the tray's own box (the pile with its fanned
+  // fog cards) so the assertion is about the pile, not the rest of the page.
+  // The cycled theme's colors are long settled here (the churn window elapsed
+  // since the theme cycle), but the settle wait keeps every capture under the
+  // same contract.
+  await settleThemeColors();
+  await app.assertScreenshot("surface-fog-reordered", {
+    element: ".station:has(.fog-card)",
+  });
 
   // Reopen the map: the map-open state and the cycled theme restore.
   await clickWhen(".open-map");
@@ -425,4 +481,17 @@ test("wayfinder surface stays mounted with view state intact through churn and r
     await app.count(".flow"),
     "no default-UI flash through the interruption"
   ).toBe(0);
+
+  // Visual contract (ticket 10): the view state (map open, cycled theme, and
+  // the churned fog on the map) persisted through the network-level
+  // interruption. (The true page-reload path is the wayfinder-reload e2e's
+  // seam; a reload here would break the element-identity contract asserted
+  // above, so the persistence proof across the interruption is captured
+  // visually instead.) Same surface-element capture as the first shot, for the
+  // same reasons (shell breadcrumb carries the run-unique flow name; theme
+  // colors must be settled).
+  await settleThemeColors();
+  await app.assertScreenshot("surface-view-persisted", {
+    element: "workflow-instances",
+  });
 });

@@ -35,4 +35,6 @@ export const app = {
   setOffline: (offline) => commands.appSetOffline(offline),
   reload: () => commands.appReload(),
   screenshot: (name) => commands.appScreenshot(name),
+  assertScreenshot: (name, options) =>
+    commands.appAssertScreenshot(name, options),
 };
