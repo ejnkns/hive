@@ -12,9 +12,14 @@
 // mock provider boot on the Node side in e2e/global-setup.ts (base URL via
 // `inject`), and the app runs in a second page of the same browser, driven
 // through the shared `app` wrapper (e2e/support/browser-app.mjs). The harness
-// helpers (session-state snapshot, fetchJson, waitFor, delete-first
-// definition registration) live in the shared support module
-// (e2e/support/flows.mjs) — this file's copies were deleted by ticket 07.
+// helpers (session-state snapshot, fetchJson, delete-first definition
+// registration) live in the shared support module (e2e/support/flows.mjs).
+//
+// Locator style (ticket 08): every wait is an auto-retrying assertion
+// (app.waitForSelector / app.waitForFunction / expect.poll) — no hand-rolled
+// shadow-DOM walkers, no waitForTimeout sleeps. The search task's release
+// contract is the auto-run on the seeded query (ticket 08): the instance
+// reaches done without a manual task/input POST.
 
 import { expect, inject, onTestFailed, test } from "vitest";
 import { app } from "../support/browser-app.mjs";
@@ -22,7 +27,6 @@ import {
   deleteDefinition,
   fetchJson,
   findSessionState,
-  waitFor,
 } from "../support/flows.mjs";
 
 const baseUrl = inject("baseUrl");
@@ -52,16 +56,24 @@ test("a generated research-loop flow runs with its custom gate and websearch too
 
   // The agent sets the definition module, validates, writes the referenced
   // files, and saves the registered definition — all in-conversation.
-  const state = await waitFor(async () => {
-    const s = await findSessionState();
-    return s?.workflowInstanceState?.savedDefinitionId === "research-loop"
-      ? s
-      : null;
-  }, 90_000);
-  expect(state.workflowInstanceState.savedDefinitionId).toBe("research-loop");
-  expect(state.workflowInstanceState.report?.passed).toBe(true);
+  let session = null;
+  await expect
+    .poll(
+      async () => {
+        const s = await findSessionState();
+        if (s?.workflowInstanceState?.savedDefinitionId === "research-loop") {
+          session = s;
+          return true;
+        }
+        return false;
+      },
+      { timeout: 90_000 }
+    )
+    .toBe(true);
+  expect(session.workflowInstanceState.savedDefinitionId).toBe("research-loop");
+  expect(session.workflowInstanceState.report?.passed).toBe(true);
   const gateFile =
-    state.workflowInstanceState.files?.["./gates/approved.ts"] ?? "";
+    session.workflowInstanceState.files?.["./gates/approved.ts"] ?? "";
   expect(
     gateFile.includes('verdict === "approved"'),
     "the session's file set carries the implemented gate"
@@ -91,10 +103,10 @@ test("a generated research-loop flow runs with its custom gate and websearch too
   });
   expect(created, "the definition must instantiate").toBeTruthy();
 
-  // The flow's initial state auto-runs an input-seeded AI task, so the
-  // engine does not seed an empty instance (a phantom run with nothing to
-  // work on) — the research instance comes from the flow-level add_research
-  // action, carrying the query.
+  // The research instance comes from the flow-level add_research action,
+  // carrying the query (a required createInstance field — the engine never
+  // seeds an empty instance, so no phantom auto-task). The action response
+  // carries the new instance id directly.
   const dispatched = await fetchJson(
     `/api/flows/${encodeURIComponent(created.flowId)}/actions/add_research`,
     {
@@ -104,39 +116,37 @@ test("a generated research-loop flow runs with its custom gate and websearch too
     }
   );
   expect(dispatched, "the add_research action must dispatch").toBeTruthy();
-
-  const flow = await fetchJson(
-    `/api/flows/${encodeURIComponent(created.flowId)}`
-  );
-  const instance = flow?.instances?.find(
-    (entry) => entry.state.currentState === "searching"
-  );
-  const instanceId = instance?.id;
+  const instanceId = dispatched?.instance?.id;
   expect(instanceId, "the research instance must exist").toBeTruthy();
 
-  // Release the interactive search task with the query.
-  const sent = await fetchJson(
-    `/api/flows/${encodeURIComponent(created.flowId)}/instances/${encodeURIComponent(instanceId)}/task/input`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: "find hive" }),
-    }
-  );
-  // KNOWN FAILURE (ticket 08/09, see docs/known-issues.md): the interactive
-  // task input POST is rejected, so `sent` is null and this assertion fails.
-  expect(sent, "task input must be accepted").toBeTruthy();
-
-  // The custom gate decides the transition: the instance reaches done with an
+  // The search task's release contract is the AUTO-RUN on the seeded query
+  // (ticket 08): the task declares startOnUserInput AND
+  // inputFromInstanceState: "query", so the creation-time query opens the
+  // session as its first user message and the model call starts immediately —
+  // the wayfinder-style "human's opening statement" contract
+  // (create-ai-chat-runner). There is no manual task/input release: by the
+  // time a task/input POST could arrive, the seeded run has already completed
+  // (the old test hit the 409 "No running task on this instance"). The custom
+  // gate then decides the transition: the instance reaches done with an
   // approved verdict, and the websearch tool's shaped result is in the
   // transcript (the mock provider stubs the transport, not the tool).
-  const done = await waitFor(async () => {
-    const f = await fetchJson(
-      `/api/flows/${encodeURIComponent(created.flowId)}`
-    );
-    const instance = f?.instances?.find((i) => i.id === instanceId);
-    return instance?.state?.currentState === "done" ? instance : null;
-  }, 30_000);
+  let done = null;
+  await expect
+    .poll(
+      async () => {
+        const f = await fetchJson(
+          `/api/flows/${encodeURIComponent(created.flowId)}`
+        );
+        const instance = f?.instances?.find((i) => i.id === instanceId);
+        if (instance?.state?.currentState === "done") {
+          done = instance;
+          return true;
+        }
+        return false;
+      },
+      { timeout: 30_000 }
+    )
+    .toBe(true);
   expect(done.state.workflowInstanceState.verdict).toBe("approved");
   const transcript = JSON.stringify(
     done.state.taskOutputs?.search?.output ?? {}
