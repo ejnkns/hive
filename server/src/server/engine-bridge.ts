@@ -1,8 +1,8 @@
 /** @public — one-time engine wiring. Creates configured runners with server-side dependencies. */
 
-import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import type { Readable } from "node:stream";
+import { HIVE_DIR } from "shared/hive-dir";
 import { logger } from "shared/logger";
 import type {
   OperationContext,
@@ -145,7 +145,13 @@ function gitRepoAvailable(workspacePath: string): boolean {
   return gitOptional(workspacePath, ["rev-parse", "--git-dir"]) !== "";
 }
 
-const DEFAULT_WORKSPACES_BASE_PATH = join(homedir(), ".hive", "workspaces");
+// The default isolated-workspace base follows the hive data dir (HIVE_DIR),
+// like every other server-side hive state path (flows, definitions, model
+// cache). A default install resolves to ~/.hive/workspaces — unchanged; a
+// deployment that relocates the data dir (HIVE_DATA_DIR, e.g. the e2e harness)
+// keeps its worktrees colocated and per-run isolated instead of leaking into
+// the home directory.
+const DEFAULT_WORKSPACES_BASE_PATH = join(HIVE_DIR, "workspaces");
 
 function readWorkspacesBasePath(config: Record<string, unknown>): string {
   return readString(config.workspacesBasePath) ?? DEFAULT_WORKSPACES_BASE_PATH;

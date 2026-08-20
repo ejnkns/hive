@@ -5,11 +5,11 @@
 // chat reply — the per-file copies these helpers replace were deleted from the
 // test files as part of the ticket-07 consolidation.
 //
-// Style note: files migrated to locator style (editor-flow, wayfinder-*) write
-// their own auto-retrying assertions (expect.poll / app.waitForSelector /
-// app.waitForFunction) instead of these helpers; the poll-loop helpers below
-// are kept for the files tickets 08/09 own (queen-bee, research-loop), whose
-// behavioral assertions and known failures must not change.
+// Style note: files migrated to locator style (editor-flow, wayfinder-*,
+// research-loop, queen-bee) write their own auto-retrying assertions
+// (expect.poll / app.waitForSelector / app.waitForFunction) instead of these
+// helpers; the poll-loop helpers this module used to carry were deleted once
+// the last consumer (queen-bee, ticket 09) migrated.
 import { app } from "./browser-app.mjs";
 
 // ── flow / definition registration via the built server's API ──────────────
@@ -129,96 +129,3 @@ export async function sendChatMessage(text, timeoutMs = 15_000) {
   return true;
 }
 
-// ── poll loops (kept for the files tickets 08/09 own; migrated files use
-//    expect.poll / app.waitForSelector / app.waitForFunction instead) ────────
-
-// Polls until a predicate returns a truthy value.
-export async function waitFor(predicate, timeoutMs = 60_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const value = await predicate();
-    if (value) return value;
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  throw new Error("Timed out");
-}
-
-// ── queen-bee section surface (moved verbatim — the file's known failure
-//    (ticket 08) must still fail identically, so behavior is unchanged) ─────
-
-// The live DOM state of one workflow section: card titles + every visible
-// button text, across nested shadow roots.
-export async function sectionState(label) {
-  return app.evaluate((label) => {
-    const walkButtons = (root) => {
-      const buttons = [];
-      for (const el of root.querySelectorAll("button")) {
-        const t = el.textContent?.trim();
-        if (t && !buttons.includes(t)) buttons.push(t);
-      }
-      for (const el of root.querySelectorAll("*")) {
-        if (el.shadowRoot) buttons.push(...walkButtons(el.shadowRoot));
-      }
-      return buttons;
-    };
-    const host = document.querySelector("workflow-instances");
-    const shadow = host?.shadowRoot;
-    const flow = Array.from(shadow?.querySelectorAll(".flow") ?? []).find(
-      (f) => f.querySelector(".flow-label")?.textContent === label
-    );
-    if (!flow) return null;
-    const titleOf = (el) => {
-      const itemHeader = el?.shadowRoot?.querySelector("item-header");
-      return (
-        itemHeader?.shadowRoot?.querySelector(".title")?.textContent ?? null
-      );
-    };
-    const cards = Array.from(flow.querySelectorAll("dynamic-element-host")).map(
-      (hostEl) =>
-        titleOf(hostEl.shadowRoot?.querySelector(".mount > *")) ?? null
-    );
-    return { cards, buttons: walkButtons(shadow ?? document) };
-  }, label);
-}
-
-export async function waitForSection(label, predicate, timeoutMs = 40_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const state = await sectionState(label);
-    if (state && predicate(state)) return state;
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  throw new Error(`Timed out waiting for ${label}`);
-}
-
-// Waits until a button with the exact label is visible (across nested shadow
-// roots), then clicks it. Returns false if it never appears.
-export async function waitAndClick(buttonLabel, timeoutMs = 40_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const clicked = await app.evaluate((buttonLabel) => {
-      const walk = (root) => {
-        for (const el of root.querySelectorAll("button")) {
-          if (el.textContent?.trim() === buttonLabel) return el;
-        }
-        for (const el of root.querySelectorAll("*")) {
-          if (el.shadowRoot) {
-            const found = walk(el.shadowRoot);
-            if (found) return found;
-          }
-        }
-        return null;
-      };
-      const host = document.querySelector("workflow-instances");
-      const button = walk(host?.shadowRoot ?? document);
-      if (!button) return false;
-      button.dispatchEvent(
-        new MouseEvent("click", { bubbles: true, composed: true })
-      );
-      return true;
-    }, buttonLabel);
-    if (clicked) return true;
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  return false;
-}

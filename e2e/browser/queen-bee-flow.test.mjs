@@ -8,18 +8,19 @@
 // mock provider boot on the Node side in e2e/global-setup.ts (base URL and the
 // fixture project path via `inject`), and the app runs in a second page of the
 // same browser, driven through the shared `app` wrapper
-// (e2e/support/browser-app.mjs). The harness helpers (section snapshot, chat
-// reply, wait-and-click) live in the shared support module
-// (e2e/support/flows.mjs) — this file's copies were deleted by ticket 07.
+// (e2e/support/browser-app.mjs).
+//
+// Locator style (ticket 09): every wait is an auto-retrying assertion
+// (app.waitForSelector / expect.poll on the live REST flow snapshot) — no
+// hand-rolled shadow-DOM walkers, no waitForTimeout sleeps. The flow state is
+// read back through the same /api/flows/<flowId> snapshot the UI renders, so
+// the poll assertions check the authoritative contract (instance state, task
+// outputs, the review verdict) while the DOM assertions check what the user
+// sees (buttons, chat input, the done card's title).
 
 import { expect, inject, onTestFailed, test } from "vitest";
 import { app } from "../support/browser-app.mjs";
-import {
-  sectionState,
-  sendChatMessage,
-  waitAndClick,
-  waitForSection,
-} from "../support/flows.mjs";
+import { sendChatMessage } from "../support/flows.mjs";
 
 const baseUrl = inject("baseUrl");
 const projectPath = inject("projectPath");
@@ -32,6 +33,17 @@ test("queen-bee card lifecycle: onboarding → requirements → plan → card �
     const shot = await app.screenshot("failure");
     if (shot) console.log(`[app screenshot] ${shot}`);
   });
+
+  // The live flow snapshot the polls read (the same /api/flows/<flowId> the
+  // UI renders): instance states, task outputs, the running task context.
+  const flowDetail = () =>
+    app.evaluate(async (flowName) => {
+      const res = await fetch("/api/flows");
+      const body = await res.json();
+      const flow = (body.flows ?? []).find((f) => f.config?.name === flowName);
+      if (!flow) return null;
+      return (await fetch(`/api/flows/${flow.id}`)).json();
+    }, flowName);
 
   // Flows library lists the built-ins.
   await app.open(`${baseUrl}/#/flows`);
@@ -46,78 +58,134 @@ test("queen-bee card lifecycle: onboarding → requirements → plan → card �
   await app.click("button", { hasText: "Create instance", first: true });
   await app.waitForSelector(".flow-header", { timeout: 20_000 });
 
-  // Onboarding completes on its own (operations only).
-  await waitForSection("Onboarding", () => true);
-  await waitForSection("Requirements", (s) => s.cards.length === 1);
+  // Onboarding completes on its own (operations only); the edge then fans the
+  // requirements instance in — the section renders exactly one card.
+  await expect
+    .poll(
+      () =>
+        app.count(
+          'workflow-instances .flow[data-workflow-id="requirements"] item-header'
+        ),
+      { timeout: 40_000 }
+    )
+    .toBe(1);
 
   // Requirements session: start, answer the agent's clarifying question
   // (startOnUserInput — the first reply starts the agent, which explores and
   // asks; the second reply answers, the draft lands, REQUIREMENTS_COMPLETE).
-  expect(
-    await waitAndClick("Start requirements session"),
-    "start requirements session"
-  ).toBe(true);
-  expect(
-    await sendChatMessage("yes, the greeting is deterministic"),
-    "chat input appeared and reply sent"
-  ).toBe(true);
-  await app.waitForTimeout(6_000); // agent explores, then asks
+  await app.click("button", { hasText: "Start requirements session" });
+  expect(await sendChatMessage("yes, the greeting is deterministic")).toBe(
+    true
+  );
+  // The agent explores (tool calls) and then asks — wait for the question in
+  // the live transcript before answering, so the second reply is the answer
+  // (the mock's conversation is keyed on the last message).
+  await expect
+    .poll(
+      async () => {
+        const detail = await flowDetail();
+        const requirements = detail?.instances?.find(
+          (instance) => instance.workflowId === "requirements"
+        );
+        const messages =
+          requirements?.state?.runningTaskContext?.messages ??
+          requirements?.state?.taskOutputs?.draft?.output?.messages ??
+          [];
+        return messages.some(
+          (message) =>
+            message.role === "assistant" &&
+            typeof message.content === "string" &&
+            message.content.includes("deterministic greeting?")
+        );
+      },
+      { timeout: 40_000 }
+    )
+    .toBe(true);
   expect(await sendChatMessage("yes, exactly one deterministic greeting")).toBe(
     true
   );
 
   // Requirements → complete → planning (planner proposes) → planned → accept.
+  // Each button only renders once its gate passes, so the click's auto-wait
+  // covers the planner run between submit and accept.
   for (const step of [
     "Submit for planning",
     "Accept proposal",
     "Accept all and create cards",
   ]) {
-    expect(await waitAndClick(step), `${step} available and clicked`).toBe(true);
-    if (step !== "Accept all and create cards") {
-      await app.waitForTimeout(8_000); // planner runs after submit
-    }
+    await app.click("button", { hasText: step });
   }
 
   // The edge fans the plan out into a cards instance (ready, runnable).
-  const cards = await waitForSection("Cards", (s) => s.cards.length === 1);
-  expect(cards, "cards section appears with the planned card").toBeTruthy();
-  expect(
-    cards.buttons.includes("Run Worker Agent"),
-    "the ready card exposes Run Worker Agent"
-  ).toBe(true);
+  await expect
+    .poll(
+      () =>
+        app.count(
+          'workflow-instances .flow[data-workflow-id="cards"] item-header'
+        ),
+      { timeout: 40_000 }
+    )
+    .toBe(1);
+  await app.waitForSelector("button", {
+    hasText: "Run Worker Agent",
+    timeout: 20_000,
+  });
 
   // Run the worker (mock writes + commits + submits) → validation → review →
-  // the reviewer approves → accept merges to done.
-  expect(await waitAndClick("Run Worker Agent")).toBe(true);
-  await app.waitForTimeout(2_000);
-  const workerChat = await app.evaluate(() => {
-    const host = document.querySelector("workflow-instances");
-    const walk = (root) => {
-      let inputs = 0;
-      inputs += root.querySelectorAll("chat-session input").length;
-      for (const el of root.querySelectorAll("*")) {
-        if (el.shadowRoot) inputs += walk(el.shadowRoot);
-      }
-      return inputs;
-    };
-    return walk(host?.shadowRoot ?? document);
-  });
+  // the reviewer approves → accept merges to done. The worker is a one-shot
+  // ai-chat session: its running task context is non-interactive, and the
+  // chat renders without an input row (the requirements chat had one).
+  await app.click("button", { hasText: "Run Worker Agent" });
+  await expect
+    .poll(
+      async () => {
+        const detail = await flowDetail();
+        const cards = detail?.instances?.find(
+          (instance) => instance.workflowId === "cards"
+        );
+        return cards?.state?.runningTaskContext?.role === "ai-chat";
+      },
+      { timeout: 30_000, interval: 25 }
+    )
+    .toBe(true);
   expect(
-    workerChat,
+    await app.count("chat-session input"),
     "the one-shot worker chat is read-only (no input) — the requirements chat had one"
   ).toBe(0);
-  // KNOWN FAILURE (ticket 08/09, see docs/known-issues.md): the reviewer never
-  // approves, so "Accept work" never appears and this assertion fails.
-  expect(
-    await waitAndClick("Accept work", 60_000),
-    "reviewer approved and accept became available"
-  ).toBe(true);
-  await waitForSection(
-    "Cards",
-    (s) => s.cards.length === 1 && s.buttons.length > 0,
-    30_000
-  );
-  await app.waitForTimeout(3_000);
+
+  // The reviewer approves: the review task's verdict is "approved", the
+  // freshness check reports the review fresh, and the accept action appears.
+  await expect
+    .poll(
+      async () => {
+        const detail = await flowDetail();
+        const cards = detail?.instances?.find(
+          (instance) => instance.workflowId === "cards"
+        );
+        const review = cards?.state?.taskOutputs?.review?.output;
+        return (
+          review?.verdict === "approved" &&
+          cards?.state?.workflowInstanceState?.reviewIsStale === false
+        );
+      },
+      { timeout: 30_000 }
+    )
+    .toBe(true);
+  await app.click("button", { hasText: "Accept work" });
+
+  // The merge completes: the card lands in the done state.
+  await expect
+    .poll(
+      async () => {
+        const detail = await flowDetail();
+        const cards = detail?.instances?.find(
+          (instance) => instance.workflowId === "cards"
+        );
+        return cards?.state?.currentState === "done";
+      },
+      { timeout: 30_000 }
+    )
+    .toBe(true);
 
   // Add an idea: the served idea-card (a served-at-runtime custom component)
   // must load, register, and render live — the end-to-end guard for the
@@ -135,9 +203,11 @@ test("queen-bee card lifecycle: onboarding → requirements → plan → card �
   );
 
   // The done card carries the plan's title.
-  const done = await sectionState("Cards");
+  const done = await app.textContent(
+    'workflow-instances .flow[data-workflow-id="cards"] .title'
+  );
   expect(
-    done.cards.some((title) => (title ?? "").includes("deterministic greeting")),
-    `done card title present (${JSON.stringify(done.cards)})`
+    (done ?? "").includes("deterministic greeting"),
+    `done card title present (${JSON.stringify(done)})`
   ).toBe(true);
 });
