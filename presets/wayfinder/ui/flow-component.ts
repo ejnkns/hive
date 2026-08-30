@@ -390,9 +390,9 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
           color: var(--muted);
           padding: 0.4rem 0;
         }
-        .card .t,
+        .card .card-title,
         .card .lbl,
-        .crate .t,
+        .crate .card-title,
         .crate .lbl,
         .journal .txt,
         .dest-note .name,
@@ -462,7 +462,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
           outline: 2px solid color-mix(in srgb, var(--wf-accent) 55%, transparent);
           outline-offset: 1px;
         }
-        .card .t {
+        .card .card-title {
           font-weight: 600;
           font-size: 0.84rem;
           color: var(--wf-ink);
@@ -472,10 +472,10 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
           color: var(--wf-body);
           margin-top: 0.28rem;
         }
-        .card .t,
+        .card .card-title,
         .card .body,
         .journal .txt,
-        .crate .t,
+        .crate .card-title,
         .dest-note .name {
           font-family: var(--wf-font);
         }
@@ -592,7 +592,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
           align-items: center;
           gap: 0.35rem;
         }
-        .fog-title .t {
+        .fog-title .card-title {
           flex: 1;
           min-width: 0;
         }
@@ -666,7 +666,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
           text-transform: uppercase;
           color: var(--muted);
         }
-        .crate .t {
+        .crate .card-title {
           font-weight: 600;
           font-size: 0.8rem;
           color: var(--wf-ink);
@@ -1010,7 +1010,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
                 this.focusFromKey(event, "base")}
             >
               <div class="lbl">${entry.state.currentState}</div>
-              <div class="t">${
+              <div class="card-title">${
                 typeof destination === "string" && destination !== ""
                   ? destination
                   : "Base camp"
@@ -1053,7 +1053,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
               @keydown=${(event: KeyboardEvent) => this.focusFromKey(event, id)}
             >
               <div class="lbl">${resolvingLabel(entry.state.currentState)}</div>
-              <div class="t">${ticketTitle(entry)}</div>
+              <div class="card-title">${ticketTitle(entry)}</div>
               ${this.renderTaskStatus(entry)} ${this.renderTaskError(entry)}
               ${this.renderActions(entry)} ${this.renderChat(entry)}
             </div>`;
@@ -1188,7 +1188,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         @click=${() => this.setFocus(id)}
         @keydown=${(event: KeyboardEvent) => this.focusFromKey(event, id)}
       >
-        <div class="t">${title}</div>
+        <div class="card-title">${title}</div>
         ${
           question !== undefined && question !== ""
             ? html`<div class="body">${question}</div>`
@@ -1242,7 +1242,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         @click=${() => this.setFocus(id)}
         @keydown=${(event: KeyboardEvent) => this.focusFromKey(event, id)}
       >
-        <div class="fog-title"><span class="q">?</span><span class="t">${ticketTitle(entry)}</span></div>
+        <div class="fog-title"><span class="q">?</span><span class="card-title">${ticketTitle(entry)}</span></div>
         <span class="tag">needs clarity</span>
         ${this.renderActions(entry)}
       </div>`;
@@ -1299,7 +1299,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
             hasSpec
               ? html`<div class="crate spec">
                 <div class="lbl">manifest · spec</div>
-                <div class="t">${firstLine(spec ?? "")}</div>
+                <div class="card-title">${firstLine(spec ?? "")}</div>
               </div>`
               : nothing
           }
@@ -1307,7 +1307,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
             hasPlan
               ? html`<div class="crate">
                 <div class="lbl">route plan</div>
-                <div class="t">${firstLine(plan ?? "")}</div>
+                <div class="card-title">${firstLine(plan ?? "")}</div>
               </div>`
               : nothing
           }
@@ -1326,7 +1326,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
               @keydown=${(event: KeyboardEvent) => this.focusFromKey(event, id)}
             >
               <div class="lbl">build · ${entry.state.currentState}</div>
-              <div class="t">The implementation phase</div>
+              <div class="card-title">The implementation phase</div>
               ${this.renderActions(entry)} ${this.renderChat(entry)}
             </div>`;
           })}
@@ -1345,7 +1345,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
               @keydown=${(event: KeyboardEvent) => this.focusFromKey(event, id)}
             >
               <div class="lbl">gear · build item</div>
-              <div class="t">${implementationTitle(entry)}</div>
+              <div class="card-title">${implementationTitle(entry)}</div>
               ${this.renderActions(entry)}
             </div>`;
           })}
@@ -1376,7 +1376,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
               @click=${() => this.setFocus(id)}
               @keydown=${(event: KeyboardEvent) => this.focusFromKey(event, id)}
             >
-              <div class="t">⊘ ${ticketTitle(entry)}</div>
+              <div class="card-title">⊘ ${ticketTitle(entry)}</div>
               <span class="stamp">ruled out</span>
             </div>`;
           })}

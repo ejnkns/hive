@@ -205,7 +205,7 @@ export function createMapCanvas(lit: FlowComponentDeps) {
         background: rgba(91, 192, 232, 0.1);
         border-color: rgba(91, 192, 232, 0.3);
       }
-      .panel .entry.hl .t {
+      .panel .entry.hl .card-title {
         color: #ffffff;
       }
       .panel .entry.focus {
@@ -218,7 +218,7 @@ export function createMapCanvas(lit: FlowComponentDeps) {
       .panel .entry:focus-visible {
         outline: 1px solid rgba(91, 192, 232, 0.5);
       }
-      .panel .entry .t {
+      .panel .entry .card-title {
         font-weight: 600;
         color: var(--text);
       }
@@ -227,17 +227,17 @@ export function createMapCanvas(lit: FlowComponentDeps) {
         color: var(--muted);
       }
       .node .cap,
-      .panel .entry .t,
+      .panel .entry .card-title,
       .panel .entry .meta {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      .panel .entry .t {
+      .panel .entry .card-title {
         min-width: 0;
       }
       .node .cap,
-      .panel .entry .t {
+      .panel .entry .card-title {
         font-family: var(--wf-font);
       }
     `;
@@ -370,7 +370,7 @@ export function createMapCanvas(lit: FlowComponentDeps) {
               @keydown=${(event: KeyboardEvent) =>
                 this.keydownFocus(event, node.id)}
             >
-              <div class="t">${node.title}</div>
+              <div class="card-title">${node.title}</div>
               <div class="meta">${node.kind} · ${node.meta}</div>
             </div>`
           )}
