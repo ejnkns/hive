@@ -551,7 +551,6 @@ describe("FlowRuntime", () => {
             },
             getContext: () => ({
               flowConfig: () => ctx.flowConfig,
-              patchFlowConfig: ctx.patchFlowConfig,
               instanceId: ctx.instanceId,
               workflowId: ctx.workflowId,
               currentState: ctx.currentState,
@@ -786,7 +785,6 @@ describe("FlowRuntime", () => {
               },
               getContext: () => ({
                 flowConfig: () => ctx.flowConfig,
-                patchFlowConfig: ctx.patchFlowConfig,
                 instanceId: ctx.instanceId,
                 workflowId: ctx.workflowId,
                 currentState: ctx.currentState,
@@ -1513,7 +1511,6 @@ describe("FlowRuntime", () => {
             createOperationRunner({
               getContext: () => ({
                 flowConfig: () => ({}),
-                patchFlowConfig: () => {},
                 instanceId: "",
                 workflowId: "",
                 currentState: "",
@@ -1582,70 +1579,71 @@ describe("FlowRuntime", () => {
       assert.equal(written[0], `${entry.id}-2.json`);
     });
 
-    it("does not persist when no base path is bound", async () => {
+    it("rejects a persist task with no bound base path at construction", () => {
       root = mkdtempSync(join(tmpdir(), "hive-persist-"));
-      const runtime = createFlowRuntime(
-        "test",
-        [
-          defineWorkflow({
-            id: "persist",
-            label: "Persist",
-            taskOutputs: { save: {} as { hello: string } },
-            states: [
-              {
-                id: "ready",
-                label: "Ready",
-                tasks: [
+      assert.throws(
+        () =>
+          createFlowRuntime(
+            "test",
+            [
+              defineWorkflow({
+                id: "persist",
+                label: "Persist",
+                taskOutputs: { save: {} as { hello: string } },
+                states: [
                   {
-                    id: "save",
-                    label: "Save",
-                    trigger: "auto",
-                    role: "operation",
-                    operations: ["save_output"],
-                    persist: { path: "output.json" },
+                    id: "ready",
+                    label: "Ready",
+                    tasks: [
+                      {
+                        id: "save",
+                        label: "Save",
+                        trigger: "auto",
+                        role: "operation",
+                        operations: ["save_output"],
+                        persist: { path: "output.json" },
+                      },
+                    ],
+                    autoTransitions: [
+                      {
+                        to: "done",
+                        gate: (ctx) =>
+                          ctx.taskOutputs.save?.status === "success",
+                      },
+                    ],
                   },
+                  { id: "done", label: "Done" },
                 ],
-                autoTransitions: [
-                  {
-                    to: "done",
-                    gate: (ctx) => ctx.taskOutputs.save?.status === "success",
-                  },
-                ],
-              },
-              { id: "done", label: "Done" },
-            ],
-            initial: "ready",
-            terminalStates: ["done"],
-          }),
-        ],
-        [],
-        {
-          operation: () =>
-            createOperationRunner({
-              getContext: () => ({
-                flowConfig: () => ({}),
-                patchFlowConfig: () => {},
-                instanceId: "",
-                workflowId: "",
-                currentState: "",
-                workflowInstanceState: () => ({}),
-                taskOutputs: () => ({}),
-                patchWorkflowInstanceState: () => {},
-                flowState: () => ({}),
-                patchFlowState: () => {},
-                workflowInstancesInState: () => [],
-                patchInstanceState: () => false,
+                initial: "ready",
+                terminalStates: ["done"],
               }),
-              operations: {
-                save_output: () => ({ hello: "world" }),
-              },
-            }),
-        },
-        { definitionId: "test" }
+            ],
+            [],
+            {
+              operation: () =>
+                createOperationRunner({
+                  getContext: () => ({
+                    flowConfig: () => ({}),
+                    instanceId: "",
+                    workflowId: "",
+                    currentState: "",
+                    workflowInstanceState: () => ({}),
+                    taskOutputs: () => ({}),
+                    patchWorkflowInstanceState: () => {},
+                    flowState: () => ({}),
+                    patchFlowState: () => {},
+                    workflowInstancesInState: () => [],
+                    patchInstanceState: () => false,
+                  }),
+                  operations: {
+                    save_output: () => ({ hello: "world" }),
+                  },
+                }),
+            },
+            { definitionId: "test" }
+          ),
+        /persist paths.*basePath/
       );
-      runtime.addWorkflowInstance("persist");
-      await waitForDone(runtime);
-      assert.ok(!existsSync(join(root, ".test")));
     });
   });
 });
@@ -1896,6 +1894,7 @@ describe("agent-created instances", () => {
             },
             toolDefinitions: createStandardToolDefinitions(),
             toolExecutors: createStandardToolRegistry(),
+            basePath: join(tmpdir(), "hive-agent-created"),
             createWorkflowInstance: ctx.createWorkflowInstance,
           }),
       }

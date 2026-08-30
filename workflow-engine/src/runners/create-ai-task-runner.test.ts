@@ -54,6 +54,7 @@ describe("createAiTaskRunner", () => {
       modelCaller: mockCaller([{ content: "Hello!" }]),
       toolDefinitions: {},
       toolExecutors: {},
+      basePath: tempDir(),
     });
 
     const result = await runner.run(dummyTask);
@@ -81,6 +82,7 @@ describe("createAiTaskRunner", () => {
           isError: false,
         }),
       },
+      basePath: tempDir(),
     });
 
     const result = await runner.run(dummyTask);
@@ -103,6 +105,7 @@ describe("createAiTaskRunner", () => {
           isError: false,
         }),
       },
+      basePath: tempDir(),
     });
 
     await assert.rejects(
@@ -131,6 +134,7 @@ describe("createAiTaskRunner", () => {
       ]),
       toolDefinitions: {},
       toolExecutors: {},
+      basePath: tempDir(),
       completionTool: "submit_review",
     });
 
@@ -144,6 +148,7 @@ describe("createAiTaskRunner", () => {
       modelCaller: mockCaller([{ content: "Hello!" }]),
       toolDefinitions: {},
       toolExecutors: {},
+      basePath: tempDir(),
     });
 
     runner.cancel();
@@ -208,6 +213,7 @@ describe("createAiTaskRunner", () => {
           };
         },
       },
+      basePath: tempDir(),
       flowState: () => ({ taxonomy: { categories: ["infra"] } }),
     });
 
@@ -261,6 +267,7 @@ describe("createAiTaskRunner", () => {
       },
       toolDefinitions: {},
       toolExecutors: {},
+      basePath: tempDir(),
       workflowInstanceState: () => ({
         requirementsDraft: "# The requirements",
       }),
@@ -286,6 +293,7 @@ describe("createAiTaskRunner", () => {
       },
       toolDefinitions: {},
       toolExecutors: {},
+      basePath: tempDir(),
       workflowInstanceState: () => ({}),
     });
 
@@ -309,6 +317,7 @@ describe("createAiTaskRunner", () => {
       },
       toolDefinitions: {},
       toolExecutors: {},
+      basePath: tempDir(),
       workflowInstanceState: () => ({}),
     });
 
@@ -337,6 +346,7 @@ describe("createAiTaskRunner", () => {
       },
       toolDefinitions: {},
       toolExecutors: {},
+      basePath: tempDir(),
       workflowInstanceState: () => ({}),
     });
 
@@ -363,6 +373,7 @@ describe("createAiTaskRunner", () => {
       modelCaller: mockCaller([{ content: "Hello!" }]),
       toolDefinitions: {},
       toolExecutors: {},
+      basePath: tempDir(),
       workflowInstanceState: () => ({}),
     });
 
@@ -377,6 +388,7 @@ describe("createAiTaskRunner", () => {
       modelCaller: mockCaller([{ content: "Finished." }]),
       toolDefinitions: {},
       toolExecutors: {},
+      basePath: tempDir(),
       workflowInstanceState: () => ({}),
     });
 

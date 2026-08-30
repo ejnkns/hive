@@ -7,8 +7,9 @@ const INSTANCE_REF_PREFIX = "@instance:";
 // A task declares its workspace with either a literal path or an @instance: ref
 // into the workflow instance state (e.g. "@instance:worktreePath" resolves the
 // worktree prepare_worktree recorded). A task without a declared workspace
-// operates in the flow's basePath (the bound project repo); with no bound repo
-// it falls back to the process cwd, matching the previous no-workspace default.
+// operates in the flow's basePath (the bound project repo or the hive-owned
+// default). There is NO fallback to the daemon's cwd — a task with neither a
+// declared workspace nor a bound basePath is an error, never an accident.
 export function resolveWorkspacePath(
   declared: string | undefined,
   instanceState: Record<string, unknown> | undefined,
@@ -20,7 +21,14 @@ export function resolveWorkspacePath(
       declared.slice(INSTANCE_REF_PREFIX.length)
     );
     if (typeof resolved === "string" && resolved !== "") return resolved;
-    return basePath ?? process.cwd();
+    if (basePath !== undefined) return basePath;
+    throw new Error(
+      "No workspace to operate in: the workspacePath ref did not resolve and the flow has no basePath — declare a workspacePath or bind a basePath (never the daemon's cwd)"
+    );
   }
-  return declared ?? basePath ?? process.cwd();
+  if (declared !== undefined) return declared;
+  if (basePath !== undefined) return basePath;
+  throw new Error(
+    "No workspace to operate in: the task declares no workspacePath and the flow has no basePath — declare a workspacePath or bind a basePath (never the daemon's cwd)"
+  );
 }

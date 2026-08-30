@@ -215,7 +215,6 @@ function operationRunners(compiled: CompiledFlowDefinition) {
         operations: compiled.operations ?? {},
         getContext: () => ({
           flowConfig: () => ctx.flowConfig,
-          patchFlowConfig: ctx.patchFlowConfig,
           instanceId: ctx.instanceId,
           workflowId: ctx.workflowId,
           currentState: ctx.currentState,
@@ -446,7 +445,6 @@ describe("compileFlowDefinition", () => {
 
     const ctx = {
       flowConfig: () => ({}),
-      patchFlowConfig: () => {},
       instanceId: "inst-1",
       workflowId: "items",
       currentState: "ready",

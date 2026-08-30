@@ -22,7 +22,6 @@ export type OperationContext<
   TState extends Record<string, unknown> = Record<string, unknown>,
 > = {
   flowConfig(): Record<string, unknown>;
-  patchFlowConfig(patch: Record<string, unknown>): void;
   instanceId: string;
   workflowId: string;
   currentState: string;
@@ -37,7 +36,7 @@ export type OperationContext<
   patchWorkflowInstanceState(patch: Partial<TState>): void;
   // Flow-level state access (E2): the flow's declared cross-entity state
   // (e.g. the shared taxonomy in honeycomb). Live reads see the current
-  // state; patchFlowState mirrors patchFlowConfig — the write persists and
+  // state; patchFlowState mirrors the flowState write — the write persists and
   // emits flow_state_changed.
   flowState(): Record<string, unknown>;
   patchFlowState(patch: Record<string, unknown>): void;
@@ -85,7 +84,6 @@ export function defineOperations<TState extends Record<string, unknown>>(
 
 const NOOP_CONTEXT: OperationContext = {
   flowConfig: () => ({}),
-  patchFlowConfig: () => {},
   instanceId: "",
   workflowId: "",
   currentState: "",

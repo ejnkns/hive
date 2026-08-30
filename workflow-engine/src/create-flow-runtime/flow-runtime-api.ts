@@ -14,7 +14,6 @@ import type {
 export type FlowRuntimeAPI<TFlowConfig, TFlowState> = {
   getFlowConfig(): TFlowConfig;
   getFlowState(): TFlowState;
-  patchFlowConfig(patch: Partial<TFlowConfig>): void;
   patchFlowState(patch: Partial<TFlowState>): void;
   addWorkflowInstance(
     workflowId: string,

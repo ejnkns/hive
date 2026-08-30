@@ -22,14 +22,17 @@ describe("resolveWorkspacePath", () => {
     assert.equal(resolveWorkspacePath(undefined, undefined, "/base"), "/base");
   });
 
-  it("falls back to the process cwd with no declared workspace and no basePath", () => {
-    assert.equal(resolveWorkspacePath(undefined, undefined), process.cwd());
+  it("throws with no declared workspace and no basePath — never the daemon's cwd", () => {
+    assert.throws(
+      () => resolveWorkspacePath(undefined, undefined),
+      /No workspace to operate in.*never the daemon's cwd/
+    );
   });
 
-  it("falls back to the basePath when an @instance ref does not resolve", () => {
-    assert.equal(
-      resolveWorkspacePath("@instance:missing", {}, "/base"),
-      "/base"
+  it("throws when an @instance ref does not resolve and there is no basePath", () => {
+    assert.throws(
+      () => resolveWorkspacePath("@instance:missing", {}),
+      /No workspace to operate in/
     );
   });
 });

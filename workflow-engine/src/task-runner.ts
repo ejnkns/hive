@@ -43,7 +43,6 @@ export type TaskRunner = {
 // and patch flow state, and ai runners know which instance they serve.
 export type TaskRunnerContext = {
   flowConfig: Record<string, unknown>;
-  patchFlowConfig(patch: Record<string, unknown>): void;
   instanceId: string;
   workflowId: string;
   currentState: string;
@@ -85,8 +84,7 @@ export type TaskRunnerContext = {
     patch: Record<string, unknown>
   ): boolean;
   // Flow-level state access (E2): the flow's declared cross-entity state
-  // (live getter) and the flowState write (mirrors patchFlowConfig — persists
-  // and emits flow_state_changed).
+  // (live getter) and the flowState write (persists + emits flow_state_changed).
   flowState: () => Record<string, unknown>;
   patchFlowState(patch: Record<string, unknown>): void;
 };

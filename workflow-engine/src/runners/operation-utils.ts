@@ -2,20 +2,17 @@
 
 import { execFileSync } from "node:child_process";
 
-import { join } from "node:path";
+import { resolveFlowRoot } from "../read-flow-settings.ts";
 
 // Helpers for authoring deterministic operations. The engine provides these so
 // operations in any flow can resolve the repo binding, run git inspection, and
 // read files without reimplementing raw child_process/fs/path handling.
 
-// Resolves the flow's bound repository/directory root from config, treating a
-// relative path as relative to the process cwd. Throws when no repo is bound.
+// Resolves the flow's bound repository/directory root from config. The server
+// normalizes basePath at creation (absolute, tilde-expanded, or a hive-owned
+// default), so this asserts the invariant — there is no cwd fallback.
 export function resolveBasePath(flowConfig: Record<string, unknown>): string {
-  const raw = flowConfig.basePath;
-  if (typeof raw !== "string" || raw === "") {
-    throw new Error("Flow config basePath is not set");
-  }
-  return raw.startsWith("/") ? raw : join(process.cwd(), raw);
+  return resolveFlowRoot(flowConfig);
 }
 
 // Runs a git command in the flow's repo, returning "" on failure. Operations

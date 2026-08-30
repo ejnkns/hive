@@ -1,5 +1,6 @@
 /** @public — the flow runtime factory and its API surface. Import from here, not from create-flow-runtime/ directly. */
 
+import { isAbsolute } from "node:path";
 import type { FlowPersistence } from "./create-flow-runtime/flow-persistence.ts";
 import type { FlowRuntimeAPI } from "./create-flow-runtime/flow-runtime-api.ts";
 import type {
@@ -55,6 +56,39 @@ export function createFlowRuntime<
   persistence?: FlowPersistence
 ): FlowRuntimeAPI<TFlowConfig, TFlowState> {
   // config/initialState are optional; {} satisfies the Record constraint
+  // The basePath invariant: a present basePath must be absolute. The server
+  // normalizes it at creation (absolute, tilde-expanded, or a hive-owned
+  // default workspace), so a relative value reaching the engine is a caller
+  // bug — never silently re-anchored to the daemon's cwd.
+  const declaredBasePath = (config as Record<string, unknown> | undefined)
+    ?.basePath;
+  if (
+    typeof declaredBasePath === "string" &&
+    declaredBasePath !== "" &&
+    !isAbsolute(declaredBasePath)
+  ) {
+    throw new Error(
+      `Flow config basePath must be an absolute path (got "${declaredBasePath}") — the engine never resolves against the daemon's cwd`
+    );
+  }
+
+  // Fail at construction when the flow declares persist paths but has no
+  // basePath to write them under: the server normalizes basePath at creation,
+  // so a missing binding reaching the engine is a direct-construction mistake
+  // that would otherwise surface as a confusing mid-task error.
+  const hasBasePath =
+    typeof declaredBasePath === "string" && declaredBasePath !== "";
+  const declaresPersist = workflowDefs.some((wf) =>
+    wf.states.some((state) =>
+      (state.tasks ?? []).some((task) => task.persist !== undefined)
+    )
+  );
+  if (declaresPersist && !hasBasePath) {
+    throw new Error(
+      "Flow declares persist paths (task persist) but the flow config has no basePath — provide an absolute basePath (the server binds a hive-owned default workspace at creation)"
+    );
+  }
+
   const _flowConfig = (config ?? {}) as TFlowConfig;
   const _flowState = (initialState ?? {}) as TFlowState;
   const controllers = new Map<string, WorkflowInstanceControllerAPI>();
@@ -145,11 +179,6 @@ export function createFlowRuntime<
     emit({ type: "instance_removed", instanceId, workflowId });
     persistence?.deleteInstance?.(flowId, instanceId);
     return true;
-  }
-
-  function patchFlowConfig(patch: Partial<TFlowConfig>): void {
-    Object.assign(_flowConfig, patch);
-    persistence?.saveFlow(flowId, _flowConfig, _flowState);
   }
 
   function patchFlowState(patch: Partial<TFlowState>): void {
@@ -440,7 +469,6 @@ export function createFlowRuntime<
       _flowState,
       {
         flowConfig: _flowConfig,
-        patchFlowConfig,
         instanceId,
         workflowId,
         // Expose instance creation to agents via the create_instance tool: the
@@ -511,7 +539,6 @@ export function createFlowRuntime<
   return {
     getFlowConfig: () => _flowConfig,
     getFlowState: () => _flowState,
-    patchFlowConfig,
     patchFlowState,
     addWorkflowInstance,
     getWorkflowInstance: (instanceId: string) => controllers.get(instanceId),

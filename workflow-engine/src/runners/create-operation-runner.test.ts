@@ -100,7 +100,6 @@ describe("createOperationRunner", () => {
   it("provides the operation context from getContext", async () => {
     const context = {
       flowConfig: () => ({ basePath: "/tmp/repo" }),
-      patchFlowConfig: () => {},
       instanceId: "instance-1",
       workflowId: "test-wf",
       currentState: "working",

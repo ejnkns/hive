@@ -43,7 +43,6 @@ function ctxFor(
 ): OperationContext {
   return {
     flowConfig: () => config,
-    patchFlowConfig: () => {},
     instanceId: "i1",
     workflowId: "w1",
     currentState: "s1",
