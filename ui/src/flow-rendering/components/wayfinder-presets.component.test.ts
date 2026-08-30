@@ -72,7 +72,11 @@ function ticketEntry(id: string, currentState: string) {
 // same session.
 async function mountFlowComponentHost(
   instances: WorkflowInstanceEntry[],
-  options: { flowId?: string; config?: Record<string, unknown> } = {}
+  options: {
+    flowId?: string;
+    config?: Record<string, unknown>;
+    persistedOutputDirs?: Record<string, Record<string, string>>;
+  } = {}
 ) {
   const flowId = options.flowId ?? "flow-1";
   const config = options.config ?? {};
@@ -88,6 +92,7 @@ async function mountFlowComponentHost(
       customKinds: [],
       availableFlowActions: [],
       persistedOutputs: {},
+      persistedOutputDirs: options.persistedOutputDirs ?? {},
     })
   );
   await settle(shadowRootOf(el));
@@ -99,7 +104,10 @@ async function mountFlowComponentHost(
 // module-registry restore the caller must run in a finally.
 async function mountFlowComponent(
   instances: WorkflowInstanceEntry[],
-  config: Record<string, unknown> = {}
+  options: {
+    config?: Record<string, unknown>;
+    persistedOutputDirs?: Record<string, Record<string, string>>;
+  } = {}
 ) {
   defineFlowRenderingComponents();
   localStorage.clear();
@@ -112,7 +120,7 @@ async function mountFlowComponent(
     { "flow-component": "/api/.../flow-component" },
     load(flowComponentModule)
   );
-  const el = await mountFlowComponentHost(instances, { config });
+  const el = await mountFlowComponentHost(instances, options);
   return { el, restore };
 }
 
@@ -1239,6 +1247,89 @@ describe("wayfinder served modules", () => {
         card.getAttribute("data-id")
       );
       expect(againOrder).toEqual(["t-3", "t-2"]);
+    } finally {
+      restore();
+    }
+  });
+
+  it("flow-component journal drills into a closed ticket's persisted decision record", async () => {
+    const charted = entry("c-1", "charted");
+    charted.workflowId = "charting";
+    charted.state.workflowInstanceState = { destination: "hive router" };
+    const closed = ticketEntry("t-9", "closed");
+    closed.state.workflowInstanceState = { title: "Decide the form" };
+    const { el, restore } = await mountFlowComponent([charted, closed], {
+      persistedOutputDirs: {
+        decisions: {
+          "t-9.md":
+            "# Decision — Decide the form\n\n## Decision\nThe register is central.\n",
+        },
+      },
+    });
+    try {
+      const journalEntry = queryAllDeep(
+        el,
+        '.journal .entry[data-id="t-9"]'
+      )[0] as HTMLElement | undefined;
+      expect(
+        journalEntry,
+        "the closed ticket sits in the journal"
+      ).toBeDefined();
+
+      // Closed by default: the record stays hidden until the entry is opened.
+      expect(queryAllDeep(el, ".journal .decision").length).toBe(0);
+
+      // Click opens the record as markdown under the entry.
+      journalEntry?.click();
+      await settle(shadowRootOf(el));
+      const markdowns = queryAllDeep(el, ".journal .decision markdown-view");
+      expect(markdowns.length).toBe(1);
+      expect(markdowns[0]?.shadowRoot?.textContent).toContain(
+        "The register is central."
+      );
+      expect(markdowns[0]?.shadowRoot?.textContent).toContain(
+        "Decide the form"
+      );
+
+      // Clicking the open entry collapses it again.
+      journalEntry?.click();
+      await settle(shadowRootOf(el));
+      expect(queryAllDeep(el, ".journal .decision").length).toBe(0);
+
+      // Keyboard parity: Enter on the focused entry reopens the record.
+      journalEntry?.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true })
+      );
+      await settle(shadowRootOf(el));
+      expect(queryAllDeep(el, ".journal .decision markdown-view").length).toBe(
+        1
+      );
+    } finally {
+      restore();
+    }
+  });
+
+  it("flow-component journal degrades when a closed ticket has no decision record", async () => {
+    const charted = entry("c-1", "charted");
+    charted.workflowId = "charting";
+    charted.state.workflowInstanceState = { destination: "hive router" };
+    const closed = ticketEntry("t-9", "closed");
+    closed.state.workflowInstanceState = { title: "No record here" };
+    const { el, restore } = await mountFlowComponent([charted, closed]);
+    try {
+      const journalEntry = queryAllDeep(
+        el,
+        '.journal .entry[data-id="t-9"]'
+      )[0] as HTMLElement | undefined;
+      journalEntry?.click();
+      await settle(shadowRootOf(el));
+      expect(
+        queryAllDeep(el, ".journal .decision-empty")[0]?.textContent
+      ).toContain("No decision record persisted.");
+      // No markdown pane for a missing record.
+      expect(queryAllDeep(el, ".journal .decision markdown-view").length).toBe(
+        0
+      );
     } finally {
       restore();
     }

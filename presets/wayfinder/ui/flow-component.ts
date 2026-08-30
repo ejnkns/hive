@@ -64,6 +64,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       hoverId: { attribute: false },
       focusId: { attribute: false },
       fogOrder: { attribute: false },
+      openDecisionId: { attribute: false },
     };
 
     static styles = [
@@ -634,6 +635,18 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
           font-size: 0.8rem;
           color: var(--wf-ink);
         }
+        .journal .decision {
+          padding: 0 0.8rem 0.7rem 2.2rem;
+          border-bottom: 1px dashed var(--wf-paper-edge);
+        }
+        .journal .decision:last-child {
+          border-bottom: none;
+        }
+        .journal .decision-empty {
+          font-size: 0.72rem;
+          color: var(--muted);
+          font-style: italic;
+        }
 
         .crate {
           background: var(--wf-paper);
@@ -746,6 +759,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
     declare hoverId: string | undefined;
     declare focusId: string | undefined;
     declare fogOrder: string[];
+    declare openDecisionId: string | undefined;
 
     constructor() {
       super();
@@ -825,6 +839,24 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
     // already mirror hover through the @focus/@blur listeners.
     private focusFromKey(event: KeyboardEvent, id: string) {
       if (event.key === "Enter" || event.key === " ") this.setFocus(id);
+    }
+
+    // Journal drill-in: one closed ticket's decision record open at a time.
+    // Opening focuses the entry (map highlight + pulse); the record stays
+    // open after the pulse clears, until a click (or Enter/Space) collapses
+    // it or opens another.
+    private toggleDecision(id: string) {
+      this.openDecisionId = this.openDecisionId === id ? undefined : id;
+      this.setFocus(id);
+    }
+
+    // Enter/Space on a journal entry toggles its record open, matching the
+    // click affordance for keyboard users; Space must not scroll the column.
+    private decisionFromKey(event: KeyboardEvent, id: string) {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        this.toggleDecision(id);
+      }
     }
 
     // The hl/focus class suffix shared by every card-family surface.
@@ -1220,6 +1252,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         <div class="journal">
           ${closed.map((entry) => {
             const id = entry.id;
+            const record = decisionRecord(this.persistedOutputDirs, id);
             return html`<div
               class="entry${this.hotClass(id)}"
               data-id=${id}
@@ -1228,12 +1261,26 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
               @mouseleave=${() => this.hover(undefined)}
               @focus=${() => this.hover(id)}
               @blur=${() => this.hover(undefined)}
-              @click=${() => this.setFocus(id)}
-              @keydown=${(event: KeyboardEvent) => this.focusFromKey(event, id)}
+              @click=${() => this.toggleDecision(id)}
+              @keydown=${(event: KeyboardEvent) =>
+                this.decisionFromKey(event, id)}
             >
               <span class="cairn">▴</span>
               <span class="txt">${ticketTitle(entry)}</span>
-            </div>`;
+            </div>
+            ${
+              this.openDecisionId === id
+                ? html`<div class="decision">
+                    ${
+                      record === undefined
+                        ? html`<div class="decision-empty">
+                            No decision record persisted.
+                          </div>`
+                        : html`<markdown-view .content=${record}></markdown-view>`
+                    }
+                  </div>`
+                : nothing
+            }`;
           })}
           ${
             closed.length === 0
@@ -1462,6 +1509,18 @@ const FOCUS_CLEAR_MS = 2_000;
 // another flow's keys.
 function viewStateKey(flowId: string, suffix: string): string {
   return `hive:view:${flowId}:${suffix}`;
+}
+
+// The journal drill-in: the decision record for a closed ticket is the
+// persisted decisions/<instanceId>.md file, read through the engine's
+// persisted-output seam (flow-payload.ts reads it via readPersistedDirectory
+// and ships it in the snapshot). Missing when the ticket has no record — the
+// renderer degrades to a muted note rather than a broken pane.
+function decisionRecord(
+  dirs: Readonly<Record<string, Readonly<Record<string, string>>>> | undefined,
+  instanceId: string
+): string | undefined {
+  return dirs?.decisions?.[`${instanceId}.md`];
 }
 
 // The stored fog clear order is a JSON id list; malformed or non-list values

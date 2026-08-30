@@ -30,6 +30,9 @@ test("wayfinder ticket phase: chart → add research ticket → graduate → cla
   const created = await app.createFlow("wayfinder", {
     name: flowName,
     destination: "Pick the editor's storage layer",
+    // Bind the flow to the per-run temp project so the persisted-output seam
+    // (decisions/, map.md) resolves to isolated files that teardown removes.
+    basePath: inject("projectPath"),
   });
   expect(created.ok, JSON.stringify(created)).toBe(true);
 
@@ -92,4 +95,28 @@ test("wayfinder ticket phase: chart → add research ticket → graduate → cla
     hasText: "specing",
     timeout: 30_000,
   });
+
+  // The journal drills into the closed ticket's persisted decision record:
+  // assemble_resolution wrote decisions/<ticketId>.md, the snapshot shipped it
+  // as persistedOutputDirs, and clicking the entry renders it as markdown.
+  await app.waitForSelector(".journal .entry", {
+    hasText: "Choose the store",
+    timeout: 30_000,
+  });
+  await app.click(".journal .entry", {
+    hasText: "Choose the store",
+    first: true,
+  });
+  await app.waitForSelector(".journal .decision markdown-view .markdown", {
+    timeout: 10_000,
+  });
+  const recordText =
+    (await app.textContent(".journal .decision markdown-view .markdown")) ?? "";
+  expect(
+    recordText,
+    "the decision record renders the research findings"
+  ).toContain("IndexedDB is the right store");
+  expect(recordText, "the record carries the research gist").toContain(
+    "Research report on"
+  );
 });
