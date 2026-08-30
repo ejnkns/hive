@@ -1,7 +1,10 @@
 /** @private — flow-level REST routes: list/detail/create/delete, config
  * patch, and flow-level action dispatch. */
 
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
+import { resolveHiveDir } from "shared/hive-dir";
 import { slugify } from "shared/slugify";
 import { getRegisteredFlowDefinition } from "../flow-definitions.ts";
 import {
@@ -195,6 +198,15 @@ export function registerFlowsRoutes(server: FastifyInstance): void {
         .send({ error: `Flow "${flowId}" already exists` });
     }
 
+    // A flow created without a bound basePath gets a hive-owned default
+    // workspace instead of falling back to the daemon's cwd: resolve
+    // HIVE_DIR/workspaces/<flowId>, create it, and bind it into the config
+    // before the runtime is built. The absolute path persists with the
+    // config, so a restart rehydrates onto the same directory.
+    if (typeof config.basePath !== "string" || config.basePath === "") {
+      config.basePath = ensureDefaultWorkspace(flowId);
+    }
+
     try {
       const runtime = createFlow(flowId, definitionId, persistence, config);
       return reply.status(201).send({
@@ -226,5 +238,14 @@ export function registerFlowsRoutes(server: FastifyInstance): void {
       n++;
     }
     return `${slug}-${n}`;
+  }
+
+  // The default workspace for a flow that binds no repository: a dedicated
+  // hive-owned directory per flow, created on demand — never the daemon's
+  // cwd, whose meaning depends on where the process was started.
+  function ensureDefaultWorkspace(flowId: string): string {
+    const dir = join(resolveHiveDir(), "workspaces", flowId);
+    mkdirSync(dir, { recursive: true });
+    return dir;
   }
 }

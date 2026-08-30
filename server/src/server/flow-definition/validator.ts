@@ -1379,12 +1379,11 @@ export function analyzeFlowDefinition(definition: FlowDefinition): string[] {
   // 6. A flow that persists outputs — via ui.persistedOutputs/
   //    ui.persistedOutputDirs (shipped to the UI in the snapshot) or a task
   //    persist path (written to basePath/<domainDir>) — whose configSchema
-  //    does not guarantee a basePath: with no bound base path the
-  //    persisted-output seam is a silent no-op (persistTaskOutput returns
-  //    without writing; readPersistedOutput/readPersistedDirectory return
-  //    empty), so the durable artifacts never exist, the UI reads empty
-  //    strings, and agents fall back to the server's cwd. Advisory, not an
-  //    error — the interactive surface still works.
+  //    does not require a basePath: an instance without one is bound to a
+  //    hive-owned default workspace (HIVE_DIR/workspaces/<flow>) at creation
+  //    instead of the user's project, so the artifacts persist outside the
+  //    repo. Advisory, not an error — the flow still runs; the warning tells
+  //    the author the durable outputs will not land where a user expects.
   const declaresPersistedOutputs =
     (definition.ui?.persistedOutputs?.length ?? 0) > 0 ||
     (definition.ui?.persistedOutputDirs?.length ?? 0) > 0 ||
@@ -1403,7 +1402,7 @@ export function analyzeFlowDefinition(definition: FlowDefinition): string[] {
         basePathField.defaultValue !== ""));
   if (declaresPersistedOutputs && !guaranteesBasePath) {
     findings.push(
-      "flow persists outputs (ui.persistedOutputs / ui.persistedOutputDirs / task persist paths) but its configSchema does not require a basePath — with no bound base path persistence is a silent no-op, the durable artifacts never exist, and agents fall back to the server's cwd"
+      "flow persists outputs (ui.persistedOutputs / ui.persistedOutputDirs / task persist paths) but its configSchema does not require a basePath — instances without one are bound to a hive-owned default workspace (HIVE_DIR/workspaces/<flow>) instead of the user's project; require a basePath if the artifacts belong there"
     );
   }
 

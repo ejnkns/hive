@@ -521,7 +521,7 @@ export const flow: FlowDefinition = {
   it("flags a flow that persists outputs but does not require a basePath", () => {
     const { definition } = parseDefinition(PERSISTED_WITHOUT_BASE_PATH_MODULE);
     assert.deepEqual(analyzeFlowDefinition(definition), [
-      "flow persists outputs (ui.persistedOutputs / ui.persistedOutputDirs / task persist paths) but its configSchema does not require a basePath — with no bound base path persistence is a silent no-op, the durable artifacts never exist, and agents fall back to the server's cwd",
+      "flow persists outputs (ui.persistedOutputs / ui.persistedOutputDirs / task persist paths) but its configSchema does not require a basePath — instances without one are bound to a hive-owned default workspace (HIVE_DIR/workspaces/<flow>) instead of the user's project; require a basePath if the artifacts belong there",
     ]);
   });
 
@@ -537,7 +537,7 @@ export const flow: FlowDefinition = {
       TASK_PERSIST_WITHOUT_BASE_PATH_MODULE
     );
     assert.deepEqual(analyzeFlowDefinition(definition), [
-      "flow persists outputs (ui.persistedOutputs / ui.persistedOutputDirs / task persist paths) but its configSchema does not require a basePath — with no bound base path persistence is a silent no-op, the durable artifacts never exist, and agents fall back to the server's cwd",
+      "flow persists outputs (ui.persistedOutputs / ui.persistedOutputDirs / task persist paths) but its configSchema does not require a basePath — instances without one are bound to a hive-owned default workspace (HIVE_DIR/workspaces/<flow>) instead of the user's project; require a basePath if the artifacts belong there",
     ]);
   });
 
@@ -1455,9 +1455,9 @@ export const crossOperations = defineOperations({
 // A completionOutput task nobody reads, with no referenced files that could
 // read it: the discarded-output advisory must fire.
 // A persisted-output flow whose configSchema does not require a basePath:
-// the persisted-output seam is a silent no-op without one, so the advisory
-// must fire. The module is otherwise clean (a creation path exists, so no
-// other advisory applies).
+// an instance without one is bound to a hive-owned default workspace instead
+// of the user's project, so the advisory must fire. The module is otherwise
+// clean (a creation path exists, so no other advisory applies).
 const PERSISTED_WITHOUT_BASE_PATH_MODULE = `import type { FlowDefinition } from "workflow-engine/workflow-types";
 
 export const flow: FlowDefinition = {
@@ -1564,8 +1564,9 @@ export const flow: FlowDefinition = {
 };
 `;
 
-// A flow with no ui.persistedOutputs but a task persist path: the write is
-// just as dead without a basePath, so the advisory still fires.
+// A flow with no ui.persistedOutputs but a task persist path: the write
+// lands in the hive-owned default without a basePath, so the advisory still
+// fires.
 const TASK_PERSIST_WITHOUT_BASE_PATH_MODULE = `import type { FlowDefinition } from "workflow-engine/workflow-types";
 
 export const flow: FlowDefinition = {

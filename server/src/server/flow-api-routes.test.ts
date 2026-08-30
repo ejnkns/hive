@@ -812,6 +812,48 @@ describe("flow API routes", () => {
     assert.match(badOption.json().error, /outside the allowed options/);
   });
 
+  it("binds a hive-owned default workspace when a flow is created without a basePath", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "hive-default-ws-"));
+    const previous = process.env.HIVE_DATA_DIR;
+    process.env.HIVE_DATA_DIR = dataDir;
+    try {
+      setFlowPersistence(noopPersistence);
+      registerFlowDefinition(editableDefinition);
+      const server = Fastify();
+      servers.push(server);
+      registerFlowApiRoutes(server);
+
+      const response = await server.inject({
+        method: "POST",
+        url: "/api/flows",
+        body: {
+          definitionId: "editable-def",
+          config: { name: "Default WS" },
+        },
+      });
+      assert.equal(response.statusCode, 201);
+      const flowId = response.json().flowId as string;
+
+      const runtime = getFlowRuntime(flowId);
+      assert.ok(runtime, "the flow runtime exists");
+      const config = runtime.getFlowConfig() as Record<string, unknown>;
+      const expected = join(dataDir, "workspaces", flowId);
+      assert.equal(
+        config.basePath,
+        expected,
+        "a missing basePath resolves to a hive-owned default, never the daemon's cwd"
+      );
+      assert.ok(
+        existsSync(expected),
+        "the default workspace is created on the fly"
+      );
+    } finally {
+      if (previous === undefined) delete process.env.HIVE_DATA_DIR;
+      else process.env.HIVE_DATA_DIR = previous;
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+
   it("PATCH state returns 400 for a workflow with no editFields", async () => {
     setFlowPersistence(noopPersistence);
     registerFlowDefinition(actionApiDefinition);
