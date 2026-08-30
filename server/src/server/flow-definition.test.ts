@@ -777,7 +777,6 @@ function operationRunners(compiled: CompiledFlowDefinition) {
         operations: compiled.operations ?? {},
         getContext: () => ({
           flowConfig: () => ctx.flowConfig,
-          patchFlowConfig: ctx.patchFlowConfig,
           instanceId: ctx.instanceId,
           workflowId: ctx.workflowId,
           currentState: ctx.currentState,
@@ -1823,7 +1822,6 @@ describe("honeycomb preset runs the full pipeline (paste â†’ classified cards â†
 
     const operationContext = (ctx: TaskRunnerContext) => ({
       flowConfig: () => ctx.flowConfig,
-      patchFlowConfig: ctx.patchFlowConfig,
       instanceId: ctx.instanceId,
       workflowId: ctx.workflowId,
       currentState: ctx.currentState,

@@ -68,10 +68,14 @@ describe("queen-bee onboarding workflow", () => {
 
     const config = runtime.getFlowConfig() as Record<string, unknown>;
     assert.equal(config.basePath, basePath);
-    assert.equal(config.targetBranch, "main");
     assert.equal(config.name, "My Project");
     assert.equal(config.integrationBranch, "queen-bee-main");
     assert.equal(config.branchPrefix, "queen-bee/");
+
+    // The target branch is a flow-level decision recorded in flowState, not
+    // the (static) flow config.
+    const flowState = runtime.getFlowState() as Record<string, unknown>;
+    assert.equal(flowState.targetBranch, "main");
 
     const projectJson = JSON.parse(
       readFileSync(join(basePath, ".queen-bee", "project.json"), "utf-8")

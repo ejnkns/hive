@@ -60,12 +60,15 @@ describe("wayfinder charting workflow", () => {
     );
     controller.dispatchAction("done");
 
-    // Entering frontier runs the settle operation (patches flow config and
+    // Entering frontier runs the settle operation (patches flowState and
     // persists map.md) before the frontier session starts.
     await waitFor(() => controller.getState().currentState === "frontier");
-    const config = runtime.getFlowConfig();
-    assert.equal(config.destination, "Ship the code editor");
-    assert.equal(config.notes, "TypeScript; prioritise correctness over speed");
+    const flowState = runtime.getFlowState();
+    assert.equal(flowState.destination, "Ship the code editor");
+    assert.equal(
+      flowState.notes,
+      "TypeScript; prioritise correctness over speed"
+    );
     await waitFor(() => existsSync(join(basePath, ".wayfinder", "map.md")));
     const mapBody = readFileSync(
       join(basePath, ".wayfinder", "map.md"),

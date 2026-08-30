@@ -58,7 +58,6 @@ function makeEngineRunner(
   const baseRunners = createEngineRunners({ tools: [], operations: {} });
   return baseRunners.operationRunner({
     flowConfig,
-    patchFlowConfig: () => {},
     instanceId: "card-1",
     workflowId: "cards",
     currentState: "ready",
@@ -78,7 +77,6 @@ function makeRunner(
   return createOperationRunner({
     getContext: (): OperationContext => ({
       flowConfig: () => flowConfig,
-      patchFlowConfig: () => {},
       instanceId: "card-1",
       workflowId: "cards",
       currentState: "ready",

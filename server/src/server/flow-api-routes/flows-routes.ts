@@ -1,12 +1,12 @@
-/** @private — flow-level REST routes: list/detail/create/delete, config
- * patch, and flow-level action dispatch. */
+/** @private — flow-level REST routes: list/detail/create/delete and
+ * flow-level action dispatch. */
 
-import { mkdirSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
-import { resolveHiveDir } from "shared/hive-dir";
 import { slugify } from "shared/slugify";
 import { getRegisteredFlowDefinition } from "../flow-definitions.ts";
+import { ensureDefaultWorkspace } from "../flow-registry/default-workspace.ts";
 import {
   createFlow,
   dispatchFlowLevelAction,
@@ -91,30 +91,6 @@ export function registerFlowsRoutes(server: FastifyInstance): void {
     }
   );
 
-  server.patch("/api/flows/:flowId/config", async (request, reply) => {
-    // Fastify params type is erased; shape guaranteed by route pattern
-    const { flowId } = request.params as { flowId: string };
-    // Fastify body is unknown; validated below
-    const body = request.body as Record<string, unknown> | null;
-
-    if (!body || Object.keys(body).length === 0) {
-      return reply.status(400).send({ error: "Config patch body is required" });
-    }
-
-    const runtime = getFlowRuntime(flowId);
-    if (!runtime) {
-      return reply.status(404).send({ error: "Flow not found" });
-    }
-
-    runtime.patchFlowConfig(body);
-
-    return reply.send({
-      ok: true,
-      flowId,
-      config: runtime.getFlowConfig(),
-    });
-  });
-
   server.delete("/api/flows/:flowId", async (request, reply) => {
     // Fastify params type is erased; shape guaranteed by route pattern
     const { flowId } = request.params as { flowId: string };
@@ -198,13 +174,22 @@ export function registerFlowsRoutes(server: FastifyInstance): void {
         .send({ error: `Flow "${flowId}" already exists` });
     }
 
-    // A flow created without a bound basePath gets a hive-owned default
-    // workspace instead of falling back to the daemon's cwd: resolve
-    // HIVE_DIR/workspaces/<flowId>, create it, and bind it into the config
-    // before the runtime is built. The absolute path persists with the
-    // config, so a restart rehydrates onto the same directory.
-    if (typeof config.basePath !== "string" || config.basePath === "") {
+    // The basePath invariant, enforced at creation: absent → a hive-owned
+    // default workspace (HIVE_DIR/workspaces/<flowId>, created on the fly);
+    // "~" → expanded to the home dir; absolute → used as-is; relative →
+    // rejected (the daemon's cwd is never a stable anchor). The resolved
+    // value persists with the config, so rehydration reuses the same dir.
+    const rawBasePath = config.basePath;
+    if (typeof rawBasePath !== "string" || rawBasePath.trim() === "") {
       config.basePath = ensureDefaultWorkspace(flowId);
+    } else {
+      const normalized = normalizeBasePath(rawBasePath);
+      if (normalized === undefined) {
+        return reply.status(400).send({
+          error: `Invalid flow config: basePath must be an absolute path or ~/… (got "${rawBasePath}") — the daemon's current directory is not a stable anchor`,
+        });
+      }
+      config.basePath = normalized;
     }
 
     try {
@@ -240,12 +225,13 @@ export function registerFlowsRoutes(server: FastifyInstance): void {
     return `${slug}-${n}`;
   }
 
-  // The default workspace for a flow that binds no repository: a dedicated
-  // hive-owned directory per flow, created on demand — never the daemon's
-  // cwd, whose meaning depends on where the process was started.
-  function ensureDefaultWorkspace(flowId: string): string {
-    const dir = join(resolveHiveDir(), "workspaces", flowId);
-    mkdirSync(dir, { recursive: true });
-    return dir;
+  // Expands a creation-time basePath to its absolute form: "~" / "~/…"
+  // becomes the home dir; anything else must already be absolute. Returns
+  // undefined for relative paths — rejected at creation, never cwd-anchored.
+  function normalizeBasePath(raw: string): string | undefined {
+    if (raw === "~") return homedir();
+    if (raw.startsWith("~/")) return join(homedir(), raw.slice(2));
+    if (raw.startsWith("/")) return raw;
+    return undefined;
   }
 }

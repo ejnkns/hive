@@ -232,7 +232,6 @@ function operationContext(
 ): OperationContext<AuthoringItemState> {
   return {
     flowConfig: () => ctx.flowConfig,
-    patchFlowConfig: ctx.patchFlowConfig,
     instanceId: ctx.instanceId,
     workflowId: ctx.workflowId,
     currentState: ctx.currentState,
@@ -273,6 +272,7 @@ function buildRuntime(model: ReturnType<typeof scriptedModel>) {
           modelCaller: model,
           toolDefinitions: toolMaps.definitions,
           toolExecutors: toolMaps.executors,
+          basePath: join(tmpdir(), "hive-authoring"),
           workflowInstanceState: ctx.workflowInstanceState,
           patchRunningTaskMessages: ctx.patchRunningTaskMessages,
           patchWorkflowInstanceState: ctx.patchWorkflowInstanceState,

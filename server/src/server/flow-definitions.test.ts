@@ -102,6 +102,20 @@ describe("flow definition library", () => {
         required: true,
         hint: "A git repository root or a plain directory to bind the flow to.",
       },
+      {
+        key: "integrationBranch",
+        label: "Integration branch",
+        type: "string",
+        defaultValue: "queen-bee-main",
+        hint: "The branch accepted work merges into.",
+      },
+      {
+        key: "branchPrefix",
+        label: "Feature branch prefix",
+        type: "string",
+        defaultValue: "queen-bee/",
+        hint: "Prefix for per-card feature branches.",
+      },
     ]);
     assert.equal("source" in queenBee, false);
   });

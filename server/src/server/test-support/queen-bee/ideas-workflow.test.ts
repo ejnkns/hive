@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 import { createFlowRuntime } from "workflow-engine/create-flow-runtime";
 import type { AiChatModelCaller } from "workflow-engine/runners";
@@ -73,6 +75,7 @@ function makeIdeasRuntime(options: {
           modelCaller: options.modelCaller,
           toolDefinitions: baseRunners.toolDefinitions,
           toolExecutors: baseRunners.toolExecutors,
+          basePath: join(tmpdir(), "hive-ideas"),
           instanceId: ctx.instanceId,
           patchWorkflowInstanceState: ctx.patchWorkflowInstanceState,
           workflowInstanceState: ctx.workflowInstanceState,

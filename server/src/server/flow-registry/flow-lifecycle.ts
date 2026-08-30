@@ -56,7 +56,26 @@ export function createFlow(
   const flowConfig: Record<string, unknown> = {
     definitionId,
     ...config,
+    // The definition declares its domainDir (default .<definition-id>); copy
+    // it into the flow config at creation so the engine's persisted-output
+    // seam reads one source. A config-provided domainDir wins.
+    ...(definition.domainDir !== undefined && config?.domainDir === undefined
+      ? { domainDir: definition.domainDir }
+      : {}),
   };
+
+  // Apply declared configSchema defaults for fields the creation config
+  // omitted or left empty: static creation-time defaults (e.g. queen-bee's
+  // integrationBranch/branchPrefix) are part of the instance's config, not
+  // just UI pre-fills.
+  for (const field of definition.configSchema ?? []) {
+    if (
+      field.defaultValue !== undefined &&
+      (flowConfig[field.key] === undefined || flowConfig[field.key] === "")
+    ) {
+      flowConfig[field.key] = field.defaultValue;
+    }
+  }
 
   // Snapshot the definition source for user definitions so the instance keeps
   // its creation-time behavior even if the definition is later edited or

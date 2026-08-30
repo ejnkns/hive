@@ -2,6 +2,9 @@
 // model callers so ai-chat/ai-task sessions run deterministically while
 // operations and tools use the real engine wiring.
 
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createFlowRuntime } from "workflow-engine/create-flow-runtime";
 import type { ToolCall } from "workflow-engine/runners";
 import {
@@ -25,10 +28,15 @@ export type MakeRuntimeOptions = {
 };
 
 export function makeWayfinderRuntime(options: MakeRuntimeOptions) {
+  // The invariant: every flow runtime has an absolute basePath (the server
+  // normalizes it at creation; direct harness use defaults to a scratch dir
+  // so the persist seam and agent workspaces always resolve).
+  const basePath =
+    options.basePath ?? mkdtempSync(join(tmpdir(), "hive-wayfinder-test-"));
   const flowConfig: Record<string, unknown> = {
     definitionId: "wayfinder",
     name: "Wayfinder",
-    ...(options.basePath !== undefined ? { basePath: options.basePath } : {}),
+    basePath,
     ...(options.workspacesBasePath !== undefined
       ? { workspacesBasePath: options.workspacesBasePath }
       : {}),

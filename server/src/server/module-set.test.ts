@@ -312,7 +312,6 @@ export const websearchTools = [
 function operationContext(ctx: TaskRunnerContext): OperationContext {
   return {
     flowConfig: () => ctx.flowConfig,
-    patchFlowConfig: ctx.patchFlowConfig,
     instanceId: ctx.instanceId,
     workflowId: ctx.workflowId,
     currentState: ctx.currentState,
@@ -386,6 +385,7 @@ function buildRuntime(
         modelCaller,
         toolDefinitions,
         toolExecutors,
+        basePath: join(tmpdir(), "hive-module-set"),
         patchWorkflowInstanceState: ctx.patchWorkflowInstanceState,
         workflowInstanceState: ctx.workflowInstanceState,
         patchRunningTaskMessages: ctx.patchRunningTaskMessages,
