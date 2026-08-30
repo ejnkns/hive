@@ -34,7 +34,7 @@ function ensureIntegrationBranchOp(
     integrationBranch,
     branchPrefix
   );
-  ctx.patchFlowConfig({ basePath, targetBranch });
+  ctx.patchFlowState({ targetBranch });
   return { ...result, targetBranch };
 }
 

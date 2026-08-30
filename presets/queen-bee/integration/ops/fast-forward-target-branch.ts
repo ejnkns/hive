@@ -16,8 +16,12 @@ function fastForwardTargetBranchOp(
 ): Record<string, unknown> {
   const config = ctx.flowConfig();
   const basePath = typeof config.basePath === "string" ? config.basePath : "";
+  // The target branch is a flow-level decision inferred at onboarding and
+  // recorded in flowState (flow config is static).
   const targetBranch =
-    typeof config.targetBranch === "string" ? config.targetBranch : "main";
+    typeof ctx.flowState().targetBranch === "string"
+      ? (ctx.flowState().targetBranch as string)
+      : "main";
   return fastForwardTargetBranch(task, { basePath, targetBranch }, ctx);
 }
 

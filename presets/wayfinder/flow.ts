@@ -39,6 +39,12 @@ export const flow: FlowDefinition = {
     },
   ],
   domainDir: ".wayfinder",
+  // Mutable flow-level standing facts (settled destination/notes) live in
+  // flowState; the flow config is static (set at creation).
+  flowState: [
+    { field: "destination", type: "string" },
+    { field: "notes", type: "string" },
+  ],
   // Declarative theme: clear sky blue accent, mountain emblem — "clearing the
   // fog" matches wayfinder's chart-fog-then-build workflows. queen-bee /
   // honeycomb stay on the default golden. The served component modules (the

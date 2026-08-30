@@ -8,21 +8,30 @@ import type { TaskDefinition } from "workflow-engine/task-runner";
 import { readString } from "../../shared/read.ts";
 import type { ChartingState } from "../types.ts";
 
-// Writes the settled destination/notes into flow config (so the effort's
-// standing facts are flow-level, not session-level) and returns the map.md body
-// the task persists under the domain root. The session's submit_map recording
-// is authoritative; the creation-time config values are the fallback.
+// Writes the settled destination/notes into flowState (the effort's standing
+// facts are flow-level, not session-level; flow config is static) and returns
+// the map.md body the task persists under the domain root. The session's
+// submit_map recording is authoritative; the creation-time config values are
+// the last-resort fallback.
 function settleChartOp(
   _task: TaskDefinition,
   _params: Record<string, unknown>,
   ctx: OperationContext<ChartingState>
 ): string {
   const config = ctx.flowConfig();
+  const flowState = ctx.flowState();
   const state = ctx.workflowInstanceState();
   const destination =
-    readString(state.destination) ?? readString(config.destination) ?? "";
-  const notes = readString(state.notes) ?? readString(config.notes) ?? "";
-  ctx.patchFlowConfig({ destination, notes });
+    readString(state.destination) ??
+    readString(flowState.destination) ??
+    readString(config.destination) ??
+    "";
+  const notes =
+    readString(state.notes) ??
+    readString(flowState.notes) ??
+    readString(config.notes) ??
+    "";
+  ctx.patchFlowState({ destination, notes });
   return buildMapBody(destination, notes);
 }
 
