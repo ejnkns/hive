@@ -38,6 +38,7 @@ test("wayfinder interactions: hover sync card<->marker and fog drag reorder", as
   const created = await app.createFlow("wayfinder", {
     name: flowName,
     destination: "Pick the editor's storage layer",
+    basePath: inject("projectPath"),
   });
   expect(created.ok, JSON.stringify(created)).toBe(true);
 

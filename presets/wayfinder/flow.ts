@@ -18,7 +18,8 @@ export const flow: FlowDefinition = {
       key: "basePath",
       label: "Base path",
       type: "string",
-      hint: "The repository wayfinder is bound to — charting and build sessions read and write code here. Leave empty to work in the current directory.",
+      required: true,
+      hint: "The repository wayfinder is bound to — charting and build sessions read and write code here, and the persisted artifacts (map.md, decisions/, spec/build-plan) live under its .wayfinder/ directory. Required: without a bound base path nothing persists and the build phase has nothing to read.",
       placeholder: "e.g. . or a repo path",
     },
     {

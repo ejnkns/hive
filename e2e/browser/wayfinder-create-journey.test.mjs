@@ -28,6 +28,7 @@ test("creating a wayfinder instance starts the charting session with the destina
   const created = await app.createFlow("wayfinder", {
     name: flowName,
     destination: "A spec for the routing layer",
+    basePath: inject("projectPath"),
   });
   expect(created.ok, JSON.stringify(created)).toBe(true);
 

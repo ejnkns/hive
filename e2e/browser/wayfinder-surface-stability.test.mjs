@@ -188,6 +188,7 @@ test("wayfinder surface stays mounted with view state intact through churn and r
     name: flowName,
     destination: "Keep the map open through the churn",
     expeditionTheme: "topo",
+    basePath: inject("projectPath"),
   });
   expect(created.ok, JSON.stringify(created)).toBe(true);
   const flowId = created.flowId;

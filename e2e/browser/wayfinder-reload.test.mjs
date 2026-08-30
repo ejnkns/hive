@@ -25,6 +25,7 @@ test("charting session and expedition map survive reload", async () => {
   const created = await commands.createFlow("wayfinder", {
     name: flowName,
     destination: "A spec to hand off",
+    basePath: inject("projectPath"),
   });
   expect(created.ok).toBe(true);
 
