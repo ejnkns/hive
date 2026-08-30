@@ -1376,6 +1376,37 @@ export function analyzeFlowDefinition(definition: FlowDefinition): string[] {
     );
   }
 
+  // 6. A flow that persists outputs — via ui.persistedOutputs/
+  //    ui.persistedOutputDirs (shipped to the UI in the snapshot) or a task
+  //    persist path (written to basePath/<domainDir>) — whose configSchema
+  //    does not guarantee a basePath: with no bound base path the
+  //    persisted-output seam is a silent no-op (persistTaskOutput returns
+  //    without writing; readPersistedOutput/readPersistedDirectory return
+  //    empty), so the durable artifacts never exist, the UI reads empty
+  //    strings, and agents fall back to the server's cwd. Advisory, not an
+  //    error — the interactive surface still works.
+  const declaresPersistedOutputs =
+    (definition.ui?.persistedOutputs?.length ?? 0) > 0 ||
+    (definition.ui?.persistedOutputDirs?.length ?? 0) > 0 ||
+    definition.workflows.some((wf) =>
+      wf.states.some((state) =>
+        (state.tasks ?? []).some((task) => task.persist !== undefined)
+      )
+    );
+  const basePathField = (definition.configSchema ?? []).find(
+    (field) => field.key === "basePath"
+  );
+  const guaranteesBasePath =
+    basePathField !== undefined &&
+    (basePathField.required === true ||
+      (typeof basePathField.defaultValue === "string" &&
+        basePathField.defaultValue !== ""));
+  if (declaresPersistedOutputs && !guaranteesBasePath) {
+    findings.push(
+      "flow persists outputs (ui.persistedOutputs / ui.persistedOutputDirs / task persist paths) but its configSchema does not require a basePath — with no bound base path persistence is a silent no-op, the durable artifacts never exist, and agents fall back to the server's cwd"
+    );
+  }
+
   return findings;
 }
 
