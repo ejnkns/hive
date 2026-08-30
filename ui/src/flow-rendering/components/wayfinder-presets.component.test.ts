@@ -757,9 +757,6 @@ describe("wayfinder served modules", () => {
 
       // Header: expedition identity + flow actions.
       expect(queryAllDeep(el, ".title")[0]?.textContent).toBe("Wayfinder");
-      expect(queryAllDeep(el, ".theme-cycle")[0]?.textContent?.trim()).toBe(
-        "mountain"
-      );
       const actionLabels = queryAllDeep(el, ".actions button").map((button) =>
         button.textContent?.trim()
       );
@@ -1161,68 +1158,6 @@ describe("wayfinder served modules", () => {
     }
   });
 
-  it("flow-component persists the theme override and restores it on a fresh mount", async () => {
-    const charted = entry("c-1", "charted");
-    charted.workflowId = "charting";
-    charted.state.workflowInstanceState = { destination: "hive router" };
-    const fogTicket = ticketEntry("t-2", "fog");
-    fogTicket.state.workflowInstanceState = { brief: "metrics to Effect?" };
-    const { el, restore } = await mountFlowComponent([charted, fogTicket]);
-    try {
-      const cycleButton = queryAllDeep(el, ".theme-cycle")[0] as
-        | HTMLElement
-        | undefined;
-      cycleButton?.click();
-      await settle(shadowRootOf(el));
-      expect(
-        queryAllDeep(el, ".expedition")[0]?.getAttribute("data-theme")
-      ).toBe("topo");
-      expect(sessionStorage.getItem("hive:view:flow-1:theme-override")).toBe(
-        "topo"
-      );
-
-      // A fresh mount within the same session restores the override.
-      el.remove();
-      const remounted = await mountFlowComponentHost([charted, fogTicket]);
-      expect(
-        queryAllDeep(remounted, ".expedition")[0]?.getAttribute("data-theme")
-      ).toBe("topo");
-    } finally {
-      restore();
-    }
-  });
-
-  it("flow-component keeps the config's expedition theme over a stored override", async () => {
-    const charted = entry("c-1", "charted");
-    charted.workflowId = "charting";
-    charted.state.workflowInstanceState = { destination: "hive router" };
-    const fogTicket = ticketEntry("t-2", "fog");
-    fogTicket.state.workflowInstanceState = { brief: "metrics to Effect?" };
-    const { el, restore } = await mountFlowComponent([charted, fogTicket]);
-    try {
-      // A previous mount stored a theme override.
-      const cycleButton = queryAllDeep(el, ".theme-cycle")[0] as
-        | HTMLElement
-        | undefined;
-      cycleButton?.click();
-      await settle(shadowRootOf(el));
-      expect(sessionStorage.getItem("hive:view:flow-1:theme-override")).toBe(
-        "topo"
-      );
-      el.remove();
-
-      // The config's own theme still wins when it provides one.
-      const configured = await mountFlowComponentHost([charted, fogTicket], {
-        config: { expeditionTheme: "stars" },
-      });
-      expect(
-        queryAllDeep(configured, ".expedition")[0]?.getAttribute("data-theme")
-      ).toBe("stars");
-    } finally {
-      restore();
-    }
-  });
-
   it("flow-component persists the fog clear order and restores it on a fresh mount", async () => {
     const charted = entry("c-1", "charted");
     charted.workflowId = "charting";
@@ -1260,11 +1195,7 @@ describe("wayfinder served modules", () => {
     second.state.workflowInstanceState = { brief: "reorder the map?" };
     const { el, restore } = await mountFlowComponent([charted, first, second]);
     try {
-      // Set all three pieces of view state for flow-1.
-      const cycleButton = queryAllDeep(el, ".theme-cycle")[0] as
-        | HTMLElement
-        | undefined;
-      cycleButton?.click();
+      // Set the two pieces of view state for flow-1.
       await dragSecondFogFirst(el);
       const openButton = queryAllDeep(el, ".open-map")[0] as
         | HTMLElement
@@ -1272,9 +1203,6 @@ describe("wayfinder served modules", () => {
       openButton?.click();
       await settle(shadowRootOf(el));
       expect(sessionStorage.getItem("hive:view:flow-1:map-open")).toBe("1");
-      expect(sessionStorage.getItem("hive:view:flow-1:theme-override")).toBe(
-        "topo"
-      );
       expect(sessionStorage.getItem("hive:view:flow-1:fog-order")).toBe(
         '["t-3","t-2"]'
       );
@@ -1300,7 +1228,7 @@ describe("wayfinder served modules", () => {
       expect(queryAllDeep(again, ".map-layout").length).toBe(1);
       expect(
         queryAllDeep(again, ".expedition")[0]?.getAttribute("data-theme")
-      ).toBe("topo");
+      ).toBe("mountain");
       // The map view is open, so step back to the table to see the tray.
       const backButton = queryAllDeep(again, ".back-link")[0] as
         | HTMLElement

@@ -34,7 +34,6 @@ import {
 } from "./wayfinder-map.ts";
 import type { ExpeditionTheme } from "./wayfinder-themes.ts";
 import {
-  EXPEDITION_THEMES,
   resolveTheme,
   THEME_ACCENT,
   THEME_GLYPHS,
@@ -65,7 +64,6 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       hoverId: { attribute: false },
       focusId: { attribute: false },
       fogOrder: { attribute: false },
-      themeOverride: { attribute: false },
     };
 
     static styles = [
@@ -255,18 +253,6 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
           background: var(--error);
           color: white;
           border-color: transparent;
-        }
-        .theme-cycle {
-          font-size: 0.5625rem;
-          height: 24px;
-          padding: 0 0.5rem;
-          border-radius: 4px;
-          border: 1px dashed var(--wf-accent);
-          background: transparent;
-          color: var(--wf-accent);
-          cursor: pointer;
-          text-transform: uppercase;
-          letter-spacing: 0.06em;
         }
 
         .table {
@@ -760,7 +746,6 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
     declare hoverId: string | undefined;
     declare focusId: string | undefined;
     declare fogOrder: string[];
-    declare themeOverride: ExpeditionTheme | undefined;
 
     constructor() {
       super();
@@ -788,18 +773,14 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       this.restoreViewState(flow);
     }
 
-    // The durable view state (map open, theme override, fog clear order)
-    // lives in sessionStorage keyed by flow id: the mount host can tear the
+    // The durable view state (map open, fog clear order) lives in
+    // sessionStorage keyed by flow id: the mount host can tear the
     // element down on a class swap or remount, so the user's view must
     // survive in storage, not in fields. Writes happen at the mutation
     // sites; restores read the keys back before the first render.
     private restoreViewState(flow: FlowViewProps["flow"]): void {
       this.mapOpen =
         sessionStorage.getItem(viewStateKey(flow.id, "map-open")) === "1";
-      this.themeOverride = storedThemeOverride(
-        flow.config,
-        sessionStorage.getItem(viewStateKey(flow.id, "theme-override"))
-      );
       this.fogOrder = storedFogOrder(
         sessionStorage.getItem(viewStateKey(flow.id, "fog-order"))
       );
@@ -814,15 +795,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
     private focusTimer: ReturnType<typeof setTimeout> | undefined;
 
     private get theme(): ExpeditionTheme {
-      return this.themeOverride ?? resolveTheme(this.flow.config);
-    }
-
-    // Dev-only: cycle the expedition skin without editing the flow config.
-    private cycleTheme() {
-      const index = EXPEDITION_THEMES.indexOf(this.theme);
-      const next = EXPEDITION_THEMES[(index + 1) % EXPEDITION_THEMES.length];
-      this.themeOverride = next;
-      this.persistViewState("theme-override", next);
+      return resolveTheme(this.flow.config);
     }
 
     private get model(): WayfinderMap {
@@ -960,14 +933,6 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
           <span class="status">${this.flow.status}</span>
         </div>
         <div class="actions">
-          <button
-            class="theme-cycle"
-            type="button"
-            title="dev: cycle the expedition theme"
-            @click=${this.cycleTheme}
-          >
-            ${this.theme}
-          </button>
           ${this.availableFlowActions.map((action) => {
             const onClick =
               action.createInstance !== undefined
@@ -1497,31 +1462,6 @@ const FOCUS_CLEAR_MS = 2_000;
 // another flow's keys.
 function viewStateKey(flowId: string, suffix: string): string {
   return `hive:view:${flowId}:${suffix}`;
-}
-
-// The stored theme override restores only when the flow config does not
-// itself provide the expedition theme: the override is a dev/testing
-// affordance, so a saved override wins over the default, but the config's
-// own theme still wins when it provides one.
-function storedThemeOverride(
-  config: Record<string, unknown>,
-  stored: string | null
-): ExpeditionTheme | undefined {
-  const configured = config.expeditionTheme;
-  if (isExpeditionTheme(configured)) return undefined;
-  if (stored === null) return undefined;
-  if (!isExpeditionTheme(stored)) return undefined;
-  return stored;
-}
-
-// The only way an unknown string becomes a valid ExpeditionTheme: membership
-// in the known themes list. The cast is safe because the includes check
-// (against the exhaustive theme list) ran first — the guard's whole job.
-function isExpeditionTheme(value: unknown): value is ExpeditionTheme {
-  return (
-    typeof value === "string" &&
-    EXPEDITION_THEMES.includes(value as ExpeditionTheme)
-  );
 }
 
 // The stored fog clear order is a JSON id list; malformed or non-list values

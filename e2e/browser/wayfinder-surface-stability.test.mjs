@@ -1,7 +1,7 @@
 // The stability contract end to end: while a running agent churns the flow
 // snapshots (and across a WebSocket reconnect), the served wayfinder surface
 // stays mounted — the same element instance — with the map view open, the
-// cycled expedition theme, and the fog clear order intact, and the default
+// configured expedition theme, and the fog clear order intact, and the default
 // per-workflow boards never flash. The highest seam of the
 // flow-surface-stability effort: it proves stable surface identity
 // (ticket 01), view-state persistence (ticket 02), and non-destructive
@@ -114,7 +114,7 @@ async function clickWhen(selector, { hasText, timeout = 20_000 } = {}) {
   );
 }
 
-// The cycled expedition theme blends its --wf-* colors over --dur-slow (400ms,
+// The expedition theme's --wf-* colors transition over --dur-slow (400ms,
 // see ui/src/app.css) when the theme changes. Screenshots must be captured
 // with the blend SETTLED — Playwright's animation disabling does not freeze
 // CSS custom-property transitions, so a mid-blend capture would be
@@ -187,6 +187,7 @@ test("wayfinder surface stays mounted with view state intact through churn and r
   const created = await app.createFlow("wayfinder", {
     name: flowName,
     destination: "Keep the map open through the churn",
+    expeditionTheme: "topo",
   });
   expect(created.ok, JSON.stringify(created)).toBe(true);
   const flowId = created.flowId;
@@ -251,10 +252,8 @@ test("wayfinder surface stays mounted with view state intact through churn and r
     .poll(() => app.textContent(".fog-card"), { timeout: 10_000 })
     .toContain("Second fog card");
 
-  // Cycle the expedition theme once (mountain → topo) and open the map view
-  // BEFORE the churn window, so the churn exercises them. The theme button
-  // lives in the header, which the map view replaces — click it first.
-  await clickWhen(".theme-cycle");
+  // The expedition theme comes from the flow config (created with "topo");
+  // open the map view BEFORE the churn window so the churn exercises it.
   await expect
     .poll(() => app.count('.expedition[data-theme="topo"]'), {
       timeout: 10_000,
@@ -266,21 +265,22 @@ test("wayfinder surface stays mounted with view state intact through churn and r
     .toBeGreaterThan(0);
   await expect.poll(() => captureSurface(), { timeout: 10_000 }).toBe(true);
 
-  // The baseline: map open, cycled theme, and the default per-workflow boards
-  // are not showing (the served flow-component owns the page).
+  // The baseline: map open, configured topo theme, and the default
+  // per-workflow boards are not showing (the served flow-component owns the
+  // page).
   expect(await app.count(".back-link"), "the map view is open").toBeGreaterThan(
     0
   );
   expect(
     await app.count('.expedition[data-theme="topo"]'),
-    "the cycled theme is active"
+    "the configured theme is active"
   ).toBeGreaterThan(0);
   expect(await app.count(".flow"), "the default boards are not showing").toBe(
     0
   );
 
-  // Visual contract (ticket 10): the map view open with the cycled expedition
-  // theme, captured now that the surface is settled (the baseline asserts
+  // Visual contract (ticket 10): the map view open with the configured
+  // expedition theme, captured now that the surface is settled (the baseline asserts
   // above all passed on observables, so the render is stable). The theme's
   // color blend must finish before the shot (see settleThemeColors), and the
   // capture targets the surface element itself (workflow-instances) so the app
@@ -323,7 +323,7 @@ test("wayfinder surface stays mounted with view state intact through churn and r
     ).toBeGreaterThan(0);
     expect(
       await app.count('.expedition[data-theme="topo"]'),
-      "the theme stays cycled through churn"
+      "the theme stays topo through churn"
     ).toBeGreaterThan(0);
     expect(await app.count(".flow"), "no default-UI flash through churn").toBe(
       0
@@ -351,7 +351,7 @@ test("wayfinder surface stays mounted with view state intact through churn and r
 
   // Close the map (its back-link) so the header comes back: the fog tray must
   // render the reordered pile (head = the dragged card) plus the four churn
-  // entries, and the cycled theme must survive the close.
+  // entries, and the topo theme must survive the close.
   await clickWhen(".back-link");
   await expect.poll(() => app.count(".back-link"), { timeout: 10_000 }).toBe(0);
   await expect.poll(() => app.count(".fog-card"), { timeout: 10_000 }).toBe(6);
@@ -366,15 +366,15 @@ test("wayfinder surface stays mounted with view state intact through churn and r
   // Visual contract (ticket 10): the fog tray renders the reordered pile — the
   // dragged card on top. Capture the tray's own box (the pile with its fanned
   // fog cards) so the assertion is about the pile, not the rest of the page.
-  // The cycled theme's colors are long settled here (the churn window elapsed
-  // since the theme cycle), but the settle wait keeps every capture under the
-  // same contract.
+  // The theme's colors are long settled here (the churn window elapsed
+  // since the theme mounted), but the settle wait keeps every capture under
+  // the same contract.
   await settleThemeColors();
   await app.assertScreenshot("surface-fog-reordered", {
     element: ".station:has(.fog-card)",
   });
 
-  // Reopen the map: the map-open state and the cycled theme restore.
+  // Reopen the map: the map-open state and the topo theme restore.
   await clickWhen(".open-map");
   await expect
     .poll(() => app.count(".back-link"), { timeout: 10_000 })
@@ -389,7 +389,7 @@ test("wayfinder surface stays mounted with view state intact through churn and r
   // real (the fetch probe fails offline, navigator.onLine flips, and the fetch
   // recovers after setOffline(false)), and assert the stability contract
   // across the interruption: the same surface element instance stays mounted
-  // with the map open, the cycled theme, and no default-UI flash. (Probe
+  // with the map open, the topo theme, and no default-UI flash. (Probe
   // finding, see the header: context.setOffline blocks new requests but does
   // not terminate established WebSockets in this environment, so the app's
   // flow socket never drops and its reconnect backoff never runs here — the
@@ -420,7 +420,7 @@ test("wayfinder surface stays mounted with view state intact through churn and r
   ).toBeGreaterThan(0);
   expect(
     await app.count('.expedition[data-theme="topo"]'),
-    "the theme stays cycled while offline"
+    "the theme stays topo while offline"
   ).toBeGreaterThan(0);
   expect(await app.count(".flow"), "no default-UI flash while offline").toBe(0);
 
@@ -441,8 +441,8 @@ test("wayfinder surface stays mounted with view state intact through churn and r
     .toBe(true);
 
   // The interruption is over: the surface element identity must still be the
-  // same instance, and the view state (map open, theme, no default-UI flash)
-  // must be intact.
+  // same instance, and the view state (map open, topo theme, no default-UI
+  // flash) must be intact.
   await expect
     .poll(() => surfaceStillMounted(), { timeout: 10_000 })
     .toBe(true);
@@ -452,14 +452,14 @@ test("wayfinder surface stays mounted with view state intact through churn and r
   ).toBeGreaterThan(0);
   expect(
     await app.count('.expedition[data-theme="topo"]'),
-    "the theme stays cycled through the interruption"
+    "the theme stays topo through the interruption"
   ).toBeGreaterThan(0);
   expect(
     await app.count(".flow"),
     "no default-UI flash through the interruption"
   ).toBe(0);
 
-  // Visual contract (ticket 10): the view state (map open, cycled theme, and
+  // Visual contract (ticket 10): the view state (map open, topo theme, and
   // the churned fog on the map) persisted through the network-level
   // interruption. (The true page-reload path is the wayfinder-reload e2e's
   // seam; a reload here would break the element-identity contract asserted
