@@ -138,6 +138,35 @@ describe("evaluateEdges", () => {
     assert.deepEqual(effects[0].transformedData, { cardSpec: { title: "A" } });
     assert.deepEqual(effects[1].transformedData, { cardSpec: { title: "B" } });
   });
+
+  it("an autoDispatch edge yields one effect carrying the action, not a fan-out", () => {
+    const edges: FlowEdge[] = [
+      {
+        fromWorkflow: "source",
+        fromStates: ["done"],
+        toWorkflow: "organize",
+        autoDispatch: { actionId: "rebuild", createIfNone: true },
+        transform: (source) => ({
+          name: (source.doWork?.output as { result?: string } | undefined)
+            ?.result,
+        }),
+      },
+    ];
+
+    const effects = evaluateEdges(edges, "source", "done", {
+      doWork: { status: "success", output: { result: "Map" } },
+    });
+
+    assert.equal(effects.length, 1);
+    assert.ok(effects[0]);
+    assert.equal(effects[0].toWorkflow, "organize");
+    assert.deepEqual(effects[0].autoDispatch, {
+      actionId: "rebuild",
+      createIfNone: true,
+    });
+    // The transform output is the seed for a createIfNone creation.
+    assert.deepEqual(effects[0].transformedData, { name: "Map" });
+  });
 });
 
 function readMerged(data: Record<string, unknown>): unknown {

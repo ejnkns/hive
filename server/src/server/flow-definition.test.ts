@@ -1200,6 +1200,188 @@ export const toState: TransformContract = () => ({ bogusField: 1 });
     );
   });
 
+  it("accepts a valid autoDispatch edge (action exists, dispatchable, no fanOut/transform)", async () => {
+    const module = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "goodAutoDispatch",
+  label: "Good AutoDispatch",
+  configSchema: [],
+  workflows: [
+    {
+      id: "source",
+      label: "Source",
+      instanceState: [],
+      initial: "done",
+      terminalStates: ["done"],
+      states: [{ id: "done", label: "Done", category: "terminal" }],
+    },
+    {
+      id: "map",
+      label: "Map",
+      instanceState: [{ field: "name", type: "string" }],
+      initial: "building",
+      terminalStates: ["done"],
+      states: [
+        {
+          id: "building",
+          label: "Building",
+          category: "initial",
+          autoTransitions: [{ to: "done", gate: { kind: "always" } }],
+        },
+        {
+          id: "done",
+          label: "Done",
+          category: "terminal",
+          actions: [
+            {
+              id: "rebuild",
+              label: "Rebuild map",
+              transitionTo: "building",
+            },
+          ],
+        },
+      ],
+    },
+  ],
+  edges: [
+    {
+      fromWorkflow: "source",
+      fromStates: ["done"],
+      toWorkflow: "map",
+      autoDispatch: { actionId: "rebuild", createIfNone: true },
+      fields: { name: { kind: "literal", value: "Map" } },
+    },
+  ],
+};
+`;
+    await loadDefinitionFromSource(
+      "good-auto-dispatch",
+      module,
+      "goodAutoDispatch",
+      {}
+    );
+  });
+
+  it("rejects an autoDispatch edge referencing a missing or non-dispatchable action", async () => {
+    const module = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "badAutoDispatch",
+  label: "Bad AutoDispatch",
+  configSchema: [],
+  workflows: [
+    {
+      id: "source",
+      label: "Source",
+      instanceState: [],
+      initial: "done",
+      terminalStates: ["done"],
+      states: [{ id: "done", label: "Done", category: "terminal" }],
+    },
+    {
+      id: "map",
+      label: "Map",
+      instanceState: [],
+      initial: "building",
+      terminalStates: ["done"],
+      states: [
+        { id: "building", label: "Building", category: "initial" },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  edges: [
+    {
+      fromWorkflow: "source",
+      fromStates: ["done"],
+      toWorkflow: "map",
+      autoDispatch: { actionId: "nope" },
+    },
+  ],
+};
+`;
+    await assert.rejects(
+      loadDefinitionFromSource(
+        "bad-auto-dispatch",
+        module,
+        "badAutoDispatch",
+        {}
+      ),
+      /autoDispatch references action "nope" which no state of workflow "map" declares/
+    );
+  });
+
+  it("rejects an autoDispatch edge that also declares fanOut (mutually exclusive)", async () => {
+    const module = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "badAutoDispatchFanOut",
+  label: "Bad AutoDispatch FanOut",
+  configSchema: [],
+  workflows: [
+    {
+      id: "source",
+      label: "Source",
+      instanceState: [],
+      initial: "done",
+      terminalStates: ["done"],
+      states: [{ id: "done", label: "Done", category: "terminal" }],
+    },
+    {
+      id: "map",
+      label: "Map",
+      instanceState: [{ field: "name", type: "string" }],
+      initial: "building",
+      terminalStates: ["done"],
+      states: [
+        {
+          id: "building",
+          label: "Building",
+          category: "initial",
+          autoTransitions: [{ to: "done", gate: { kind: "always" } }],
+        },
+        {
+          id: "done",
+          label: "Done",
+          category: "terminal",
+          actions: [
+            {
+              id: "rebuild",
+              label: "Rebuild map",
+              transitionTo: "building",
+            },
+          ],
+        },
+      ],
+    },
+  ],
+  edges: [
+    {
+      fromWorkflow: "source",
+      fromStates: ["done"],
+      toWorkflow: "map",
+      autoDispatch: { actionId: "rebuild", createIfNone: true },
+      fanOut: {
+        task: "parse",
+        path: "output.ideas",
+        fields: { name: { kind: "itemPath", path: "title" } },
+      },
+    },
+  ],
+};
+`;
+    await assert.rejects(
+      loadDefinitionFromSource(
+        "bad-auto-dispatch-fanout",
+        module,
+        "badAutoDispatchFanOut",
+        {}
+      ),
+      /autoDispatch is mutually exclusive with fanOut/
+    );
+  });
+
   it("rejects a writesAcross declaration that targets an undeclared field", async () => {
     const module = `import type { FlowDefinition } from "workflow-engine/workflow-types";
 
@@ -1648,24 +1830,83 @@ describe("honeycomb preset runs the full pipeline (paste → classified cards �
     assert.deepEqual(categoryField?.options, ["delivery", "polish"]);
     assert.equal(categoryField?.optionsFrom, undefined);
 
-    // Build map: the singleton Map builder auto-runs build_map → done, and
-    // map.md is persisted to the domain dir.
-    const mapBuilder = runtime.addWorkflowInstance("organize", {
-      workflowInstanceState: { name: "Map" },
-    });
+    // The automatic map: the autoDispatch edge creates the Map singleton on
+    // the first import (seeded name "Map"; its initial buildMap auto-task
+    // runs) — no manual step — and map.md is persisted to the domain dir.
     await waitFor(
       runtime,
-      (entries) =>
-        entries.some(
-          (e) => e.id === mapBuilder.id && e.state.currentState === "done"
-        ),
-      "map builder done"
+      (entries) => {
+        const organizes = entries.filter((e) => e.workflowId === "organize");
+        return (
+          organizes.length === 1 && organizes[0]?.state.currentState === "done"
+        );
+      },
+      "auto-created map singleton done"
+    );
+    assert.equal(
+      runtime
+        .getWorkflowInstanceEntries()
+        .filter((e) => e.workflowId === "organize").length,
+      1,
+      "the first import created exactly one map instance"
     );
     const mapPath = join(root, ".honeycomb", "map.md");
     const map = readFileSync(mapPath, "utf-8");
     assert.ok(map.includes("# Ideas Map"), "map.md header");
     assert.ok(map.includes("Ship a demo"), "map lists the idea");
     assert.ok(map.includes("## delivery"), "map groups by category");
+
+    // No accumulation: a second paste must not create a second map — the
+    // autoDispatch edge dispatches Rebuild to the existing singleton instead,
+    // which runs buildMap again (each run records a task_execution entry).
+    // The parse mock returns the same ideas, so the assertions are about
+    // instance counts and the rebuild, not paste-unique titles.
+    runtime.addWorkflowInstance("imports", {
+      workflowInstanceState: {
+        name: "TODOs dump 2",
+        rawText: "- Ship a demo\n- Another idea\n- Fix the search debounce",
+      },
+    });
+    await waitFor(
+      runtime,
+      (entries) => {
+        const importsEntries = entries.filter(
+          (e) => e.workflowId === "imports"
+        );
+        return (
+          importsEntries.length === 2 &&
+          importsEntries.every((e) => e.state.currentState === "done")
+        );
+      },
+      "second import done"
+    );
+    assert.equal(
+      runtime
+        .getWorkflowInstanceEntries()
+        .filter((e) => e.workflowId === "organize").length,
+      1,
+      "the map stays a singleton — a second import does not accumulate"
+    );
+    await waitFor(
+      runtime,
+      (entries) => {
+        const organize = entries.find((e) => e.workflowId === "organize");
+        const buildRuns =
+          organize?.state.history.filter(
+            (h) =>
+              h.type === "task_execution" &&
+              h.taskId === "buildMap" &&
+              h.status === "success"
+          ).length ?? 0;
+        return organize?.state.currentState === "done" && buildRuns >= 2;
+      },
+      "map rebuilt after the second import"
+    );
+    const rebuiltMap = readFileSync(mapPath, "utf-8");
+    assert.ok(
+      rebuiltMap.includes("Ship a demo"),
+      "the rebuilt map still lists the ideas"
+    );
 
     rmSync(root, { recursive: true, force: true });
   });

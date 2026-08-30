@@ -1028,6 +1028,7 @@ const EDGE_KEYS = [
   "fromStates",
   "toWorkflow",
   "toFlowState",
+  "autoDispatch",
   "fields",
   "fanOut",
   "transform",
@@ -1054,6 +1055,21 @@ function readEdges(
     if (toWorkflow !== undefined) edge.toWorkflow = toWorkflow;
     const toFlowState = readBool(obj, "toFlowState");
     if (toFlowState !== undefined) edge.toFlowState = toFlowState;
+    const autoDispatch = readObject(obj, "autoDispatch");
+    if (autoDispatch !== undefined) {
+      const actionId = readString(autoDispatch, "actionId");
+      const createIfNone = readBool(autoDispatch, "createIfNone");
+      if (actionId === undefined) {
+        findings.push(
+          `${ePath}.autoDispatch: not data — autoDispatch must carry actionId`
+        );
+      } else {
+        edge.autoDispatch = {
+          actionId,
+          ...(createIfNone !== undefined ? { createIfNone } : {}),
+        };
+      }
+    }
     const fields = readObject(obj, "fields");
     if (fields !== undefined) {
       const parsed: Record<string, ValueSpec> = {};

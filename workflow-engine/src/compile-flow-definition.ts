@@ -649,6 +649,9 @@ function compileEdge(edge: EdgeSpec, resolveRef: RefResolver): RuntimeFlowEdge {
     fromStates: edge.fromStates,
     ...(edge.toWorkflow !== undefined ? { toWorkflow: edge.toWorkflow } : {}),
     ...(edge.toFlowState === true ? { toFlowState: true } : {}),
+    ...(edge.autoDispatch !== undefined
+      ? { autoDispatch: edge.autoDispatch }
+      : {}),
   };
   const hasTransform =
     Object.keys(edge.fields ?? {}).length > 0 ||

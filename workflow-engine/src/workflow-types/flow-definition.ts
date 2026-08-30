@@ -137,6 +137,11 @@ export type FlowEdge<
   fromStates: string[];
   toWorkflow?: string;
   toFlowState?: boolean;
+  // autoDispatch rides the compiled projection as data: when the edge fires,
+  // the runtime dispatches the named action to every instance of toWorkflow
+  // (creating one first when createIfNone is set and none exists). The edge's
+  // transform output seeds the created instance.
+  autoDispatch?: { actionId: string; createIfNone?: boolean };
   transform?: (
     source: Partial<TaskOutputMap<TSourceOutputs>>
   ) => Partial<TTargetState> | Partial<TTargetState>[];

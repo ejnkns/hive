@@ -112,6 +112,15 @@ export const engineCapabilities = {
       "An EdgeSpec flag: when true, the edge's transform output updates FlowState instead of creating new instances. The transform's declared fields must be declared flowState fields (the validator enforces it). Edges (incl. toFlowState) fire only on terminal states — a flow that needs to write flowState mid-lifecycle uses a patchFlowState operation instead.",
   } as const,
 
+  // autoDispatch edges (the declarative singleton-refresh primitive): a
+  // terminal-state edge that dispatches an action to the target workflow's
+  // instances, creating the target on first occurrence.
+  autoDispatchEdges: {
+    name: "autoDispatch",
+    description:
+      "An EdgeSpec declaration: `autoDispatch: { actionId, createIfNone }` on a terminal-state edge (e.g. imports done → organize). When the edge fires, the action is dispatched to EVERY instance of the target workflow through the same availability path as a manual click (state check + gates; an instance where the action is unavailable is a silent no-op). With `createIfNone`, the target instance is created first when none exists — the edge's `fields` seed its state and its initial-state auto-tasks run. Mutually exclusive with fanOut/transform (a refresh edge dispatches, it does not fan out); `fields` is allowed alongside. This makes 'refresh the singleton aggregate when work lands' a declarative primitive — edge effects apply in declaration order, so declare a refresh edge AFTER the edge that creates the work it reads.",
+  } as const,
+
   // Runtime edit-field options (E4): a ConfigField sources its select options
   // from flowState at runtime instead of a static list.
   runtimeEditOptions: {
@@ -204,8 +213,10 @@ export const engineCapabilities = {
   ] as const,
 
   // Render kinds the generic UI ships; a task's render hint resolves against
-  // these (custom kinds are declared by the flow definition).
-  renderKinds: ["markdown", "text", "card", "cards", "json"] as const,
+  // these (custom kinds are declared by the flow definition). `chips` renders
+  // a single output-scoped array as inline pills (a display field declares it
+  // with no props — the empty path binds the array prop to the root).
+  renderKinds: ["markdown", "text", "card", "cards", "chips", "json"] as const,
 } as const;
 
 export type EngineCapabilities = typeof engineCapabilities;
@@ -284,6 +295,12 @@ export function authoringGuide(): string {
   push("## toFlowState edges");
   push(
     `- ${engineCapabilities.toFlowStateEdges.name} — ${engineCapabilities.toFlowStateEdges.description}`
+  );
+  push();
+
+  push("## autoDispatch edges (refresh a singleton when work lands)");
+  push(
+    `- ${engineCapabilities.autoDispatchEdges.name} — ${engineCapabilities.autoDispatchEdges.description}`
   );
   push();
 

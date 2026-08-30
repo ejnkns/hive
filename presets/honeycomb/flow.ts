@@ -4,7 +4,7 @@ export const flow: FlowDefinition = {
   id: "honeycomb",
   label: "Honeycomb",
   description:
-    "Paste raw idea notes in — the agent explores the repo to understand the domain, splits the notes into ideas, and classifies every idea (category + tags). No approval step; map.md is one click away.",
+    "Paste raw idea notes in — the agent explores the repo to understand the domain, splits the notes into ideas, and classifies every idea (category + tags). No approval step; map.md builds automatically as imports land.",
   configSchema: [
     {
       key: "basePath",
@@ -103,6 +103,18 @@ export const flow: FlowDefinition = {
                     "Classified idea chunks, each { title, text, category, tags, priority, effort, status, summary } — category from the returned categories, tags 2-5 short tags.",
                 },
               ],
+              // The import preview renders the parsed chunks as compact cards:
+              // title, summary, and the tags as bullets (items resolves
+              // relative to the task output → output.ideas).
+              render: {
+                kind: "cards",
+                props: {
+                  items: "ideas",
+                  title: "title",
+                  description: "summary",
+                  bullets: "tags",
+                },
+              },
             },
           ],
           autoTransitions: [
@@ -215,6 +227,9 @@ export const flow: FlowDefinition = {
               role: "operation",
               operations: ["build_map"],
               persist: { path: "map.md" },
+              // The map string renders as markdown — operation outputs are
+              // hidden by default, and this hint keeps the preview visible.
+              render: { kind: "markdown" },
             },
           ],
           autoTransitions: [
@@ -281,7 +296,7 @@ export const flow: FlowDefinition = {
           { path: "priority", label: "Priority" },
           { path: "effort", label: "Effort" },
           { path: "status", label: "Status" },
-          { path: "tags", label: "Tags" },
+          { path: "tags", label: "Tags", render: { kind: "chips" } },
         ],
       },
       editFields: [
@@ -368,6 +383,16 @@ export const flow: FlowDefinition = {
               systemPromptRef: "./ideas/prompts/classify.ts",
               inputFromInstanceState: "originalText",
               tools: ["read_taxonomy"],
+              // Each classification renders as a compact card: category as the
+              // title, the summary as the description, tags as bullets.
+              render: {
+                kind: "card",
+                props: {
+                  title: "category",
+                  description: "summary",
+                  bullets: "tags",
+                },
+              },
               completionOutput: [
                 { field: "category", type: "string" },
                 { field: "tags", type: "string[]" },
@@ -512,6 +537,18 @@ export const flow: FlowDefinition = {
         },
       },
     },
+    {
+      // The map singleton: the first import creates it (seeded name "Map";
+      // its initial buildMap auto-task runs) and every later import dispatches
+      // the done-state Rebuild action — the map always reflects the latest
+      // cards. Declared after the fan-out edge so the cards this rebuild
+      // reads already exist when it fires.
+      fromWorkflow: "imports",
+      fromStates: ["done"],
+      toWorkflow: "organize",
+      autoDispatch: { actionId: "rebuild", createIfNone: true },
+      fields: { name: { kind: "literal", value: "Map" } },
+    },
   ],
   actions: [
     {
@@ -556,26 +593,6 @@ export const flow: FlowDefinition = {
             label: "Notes",
             type: "textarea",
             required: true,
-          },
-        ],
-      },
-    },
-    {
-      id: "build_map",
-      label: "Build map",
-      variant: "primary",
-      // The map builder is a singleton: the action hides once one exists (the
-      // gate reads workflowInstancesInState by workflow). Its done state
-      // offers Rebuild map for later passes.
-      gate: { kind: "file", ref: "./gates/organize-exists.ts" },
-      createInstance: {
-        workflowId: "organize",
-        fields: [
-          {
-            key: "name",
-            label: "Name",
-            type: "string",
-            defaultValue: "Map",
           },
         ],
       },

@@ -79,6 +79,65 @@ const targetWorkflow = defineWorkflow({
   terminalStates: ["ready"],
 });
 
+// The singleton-refresh target (the map-builder shape): an initial state whose
+// auto-task produces the artifact, a done state offering a rebuild action that
+// transitions back to building, and a failed state with retry.
+const refreshWorkflow = defineWorkflow({
+  id: "refresh",
+  label: "Refresh",
+  taskOutputs: {
+    buildMap: {} as { result: string },
+  },
+  states: [
+    {
+      id: "building",
+      label: "Building",
+      tasks: [
+        {
+          id: "buildMap",
+          label: "Build map",
+          trigger: "auto",
+          role: "ai-task",
+        },
+      ],
+      autoTransitions: [
+        {
+          to: "done",
+          gate: (ctx) => ctx.taskOutputs.buildMap?.status === "success",
+        },
+        {
+          to: "failed",
+          gate: (ctx) => ctx.taskOutputs.buildMap?.status === "error",
+        },
+      ],
+    },
+    {
+      id: "done",
+      label: "Done",
+      actions: [
+        {
+          id: "rebuild",
+          label: "Rebuild map",
+          transitionTo: "building",
+        },
+      ],
+    },
+    {
+      id: "failed",
+      label: "Failed",
+      actions: [
+        {
+          id: "retry",
+          label: "Retry",
+          transitionTo: "building",
+        },
+      ],
+    },
+  ],
+  initial: "building",
+  terminalStates: ["done"],
+});
+
 // ─── Mock Runner ───
 
 class MockRunner implements TaskRunner {
@@ -1075,6 +1134,192 @@ describe("FlowRuntime", () => {
     });
   });
 
+  describe("autoDispatch edges (singleton refresh)", () => {
+    function refreshEdges(overrides: Partial<FlowEdge> = {}): FlowEdge[] {
+      return [
+        {
+          fromWorkflow: "source",
+          fromStates: ["done"],
+          toWorkflow: "refresh",
+          autoDispatch: { actionId: "rebuild", createIfNone: true },
+          ...overrides,
+        },
+      ];
+    }
+
+    async function driveSourceToDone(
+      runtime: ReturnType<typeof createFlowRuntime>,
+      runner: MockRunner
+    ): Promise<void> {
+      const controller = runtime.addWorkflowInstance("source");
+      controller.dispatchAction("start");
+      await new Promise((r) => setTimeout(r, 0));
+      runner.complete({ result: "ok" });
+      await new Promise((r) => setTimeout(r, 0));
+    }
+
+    it("creates the singleton on first fire (seeded) and dispatches rebuild on later fires — no accumulation", async () => {
+      const runner = new MockRunner();
+      const runtime = createFlowRuntime(
+        "test",
+        [sourceWorkflow, refreshWorkflow],
+        refreshEdges(),
+        { "ai-task": () => runner }
+      );
+
+      // First import reaches done → createIfNone creates the map singleton,
+      // seeded by the edge's transformed data; its initial auto-task runs.
+      await driveSourceToDone(runtime, runner);
+      assert.equal(
+        runtime.workflowInstancesInState("refresh").length,
+        1,
+        "exactly one refresh instance after the first fire"
+      );
+      // The fresh instance sits in its initial state; its buildMap auto-task
+      // is pending on the shared runner.
+      runner.complete({ result: "map v1" });
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(
+        runtime.workflowInstancesInState("refresh")[0]?.currentState,
+        "done",
+        "the map finished building"
+      );
+
+      // Second import reaches done → the edge dispatches rebuild to the
+      // existing singleton (not a duplicate); rebuild runs buildMap again.
+      await driveSourceToDone(runtime, runner);
+      assert.equal(
+        runtime.workflowInstancesInState("refresh").length,
+        1,
+        "never a duplicate refresh instance"
+      );
+      runner.complete({ result: "map v2" });
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(
+        runtime.workflowInstancesInState("refresh")[0]?.currentState,
+        "done",
+        "the rebuilt map finished again"
+      );
+    });
+
+    it("dispatches to every available instance; an unavailable action is a silent no-op", async () => {
+      const runner = new MockRunner();
+      const runtime = createFlowRuntime(
+        "test",
+        [sourceWorkflow, refreshWorkflow],
+        refreshEdges({ autoDispatch: { actionId: "rebuild" } }),
+        { "ai-task": () => runner }
+      );
+
+      // Two maps already in done, one fresh map in building (rebuild not
+      // available there).
+      runtime.addWorkflowInstance("refresh", { currentState: "done" });
+      runtime.addWorkflowInstance("refresh", { currentState: "done" });
+      runtime.addWorkflowInstance("refresh");
+
+      // Import reaches done → dispatch rebuild to all three: the two done
+      // instances transition to building, the building one stays (no-op, no
+      // error), and no new instance is created (createIfNone is off).
+      await driveSourceToDone(runtime, runner);
+      assert.equal(
+        runtime.workflowInstancesInState(undefined, "building").length,
+        3,
+        "all three maps are building after the dispatch"
+      );
+    });
+
+    it("skips an action that declares input fields (silent no-op, never an error)", async () => {
+      const fieldActionWorkflow = defineWorkflow({
+        id: "fieldRefresh",
+        label: "Field Refresh",
+        taskOutputs: {} as Record<string, never>,
+        states: [
+          {
+            id: "done",
+            label: "Done",
+            actions: [
+              {
+                id: "annotate",
+                label: "Annotate",
+                transitionTo: "done",
+                fields: [
+                  {
+                    key: "note",
+                    label: "Note",
+                    type: "string",
+                    required: true,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        initial: "done",
+        terminalStates: ["done"],
+      });
+      const runner = new MockRunner();
+      const runtime = createFlowRuntime(
+        "test",
+        [sourceWorkflow, fieldActionWorkflow],
+        refreshEdges({
+          toWorkflow: "fieldRefresh",
+          autoDispatch: { actionId: "annotate" },
+        }),
+        { "ai-task": () => runner }
+      );
+
+      // The instance is in done, but its only action needs a form input the
+      // autoDispatch cannot provide — the dispatch must be a silent no-op
+      // (the autoDispatch contract is never-an-error), not a thrown field
+      // validation failure.
+      runtime.addWorkflowInstance("fieldRefresh", { currentState: "done" });
+      await driveSourceToDone(runtime, runner);
+      assert.equal(
+        runtime.workflowInstancesInState("fieldRefresh").length,
+        1,
+        "no new instance created (createIfNone off)"
+      );
+      assert.equal(
+        runtime.workflowInstancesInState("fieldRefresh")[0]?.currentState,
+        "done",
+        "the field-bearing action never fired — no throw, no state change"
+      );
+    });
+
+    it("applies alongside a fan-out edge from the same state, in declaration order", async () => {
+      const runner = new MockRunner();
+      const runtime = createFlowRuntime(
+        "test",
+        [sourceWorkflow, targetWorkflow, refreshWorkflow],
+        [
+          {
+            fromWorkflow: "source",
+            fromStates: ["done"],
+            toWorkflow: "target",
+            transform: () => ({ origin: "source" }),
+          },
+          ...refreshEdges(),
+        ],
+        { "ai-task": () => runner }
+      );
+
+      await driveSourceToDone(runtime, runner);
+      // Both edge effects applied: the fan-out created a target instance and
+      // the autoDispatch created the refresh singleton.
+      assert.equal(runtime.workflowInstances.length, 3);
+      assert.equal(
+        runtime.workflowInstancesInState(undefined, "ready").length,
+        1,
+        "fan-out instance exists"
+      );
+      assert.equal(
+        runtime.workflowInstancesInState(undefined, "building").length,
+        1,
+        "autoDispatch singleton exists"
+      );
+    });
+  });
+
   describe("combined edge evaluation", () => {
     it("handles both toWorkflow and toFlowState edges from same state", async () => {
       const edges: FlowEdge[] = [
@@ -1529,6 +1774,7 @@ describe("getWorkflowDefinitions serializes rendering hints", () => {
       {
         id: "plan",
         label: "Run planner",
+        role: "ai-task",
         render: {
           kind: "cards",
           props: {
@@ -1572,7 +1818,7 @@ describe("getWorkflowDefinitions serializes rendering hints", () => {
     const [def] = runtime.getWorkflowDefinitions();
 
     assert.deepEqual(def.states[0]?.tasks, [
-      { id: "doWork", label: "Do work" },
+      { id: "doWork", label: "Do work", role: "operation" },
     ]);
   });
 });

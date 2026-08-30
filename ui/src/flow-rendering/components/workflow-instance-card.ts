@@ -34,6 +34,7 @@ import {
 type SerializedTaskDef = {
   id: string;
   label: string;
+  role: "operation" | "ai-task" | "ai-chat";
   render?: RuntimeRenderHint;
 };
 
@@ -385,11 +386,20 @@ export class WorkflowInstanceCard extends LitElement {
 
   private renderTaskOutputs() {
     const entries = Object.entries(this.instanceEntry.state.taskOutputs);
-    if (entries.length === 0) return nothing;
+    // A successful operation output is engine bookkeeping (extract/patch ops)
+    // — hidden unless the task declares a render hint. Errors always render,
+    // and ai-task/ai-chat outputs keep their fallbacks.
+    const visible = entries.filter(([taskId, outcome]) => {
+      const taskDef = this.findTaskDef(taskId);
+      if (taskDef?.role !== "operation") return true;
+      if (taskDef.render !== undefined) return true;
+      return outcomeStatus(outcome) !== "success";
+    });
+    if (visible.length === 0) return nothing;
     return html`<div class="task-outputs">
       <span class="outputs-label">Task outputs</span>
       ${repeat(
-        entries,
+        visible,
         ([taskId]) => taskId,
         ([taskId, outcome]) => {
           const taskDef = this.findTaskDef(taskId);

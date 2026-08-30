@@ -42,8 +42,15 @@ export type WorkflowDefResponse = {
     category?: StateCategory;
     actions: Array<{ id: string; label: string; variant: ActionVariant }>;
     // Serialized task entries: the UI correlates completed task outputs by id
-    // and applies the per-task render hint.
-    tasks?: Array<{ id: string; label: string; render?: RuntimeRenderHint }>;
+    // and applies the per-task render hint. `role` rides on the wire so the
+    // generic card renderer can apply role-based defaults (operation outputs
+    // are hidden unless a render hint overrides).
+    tasks?: Array<{
+      id: string;
+      label: string;
+      role: "operation" | "ai-task" | "ai-chat";
+      render?: RuntimeRenderHint;
+    }>;
   }>;
   initial: string;
   terminalStates: string[];

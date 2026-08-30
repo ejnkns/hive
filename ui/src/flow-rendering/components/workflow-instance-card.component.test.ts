@@ -90,7 +90,14 @@ describe("WorkflowInstanceCard", () => {
           label: "Ready",
           category: "initial",
           actions: [],
-          tasks: [{ id: "plan", label: "Plan", render: { kind: "markdown" } }],
+          tasks: [
+            {
+              id: "plan",
+              label: "Plan",
+              role: "ai-task",
+              render: { kind: "markdown" },
+            },
+          ],
         },
       ],
     });
@@ -105,6 +112,207 @@ describe("WorkflowInstanceCard", () => {
     expect(mustQuery(shadowRootOf(markdown), ".markdown h1").textContent).toBe(
       "Heading"
     );
+  });
+
+  it("renders an array display field as joined comma-separated text", async () => {
+    const def = cardDef({
+      display: { fields: [{ path: "tags", label: "Tags" }] },
+    });
+    const instance = entry("c1", "ready", {
+      workflowInstanceState: { tags: ["a11y", "offline", "sync"] },
+    });
+    const el = await mount(card(def, instance));
+    await settle(shadowRootOf(el));
+    const values = [...shadowRootOf(el).querySelectorAll(".domain-data-value")];
+    expect(values.map((v) => v.textContent)).toEqual(["a11y, offline, sync"]);
+  });
+
+  it("renders an empty array display field as an empty value", async () => {
+    const def = cardDef({
+      display: { fields: [{ path: "tags", label: "Tags" }] },
+    });
+    const instance = entry("c1", "ready", {
+      workflowInstanceState: { tags: [] },
+    });
+    const el = await mount(card(def, instance));
+    await settle(shadowRootOf(el));
+    const values = [...shadowRootOf(el).querySelectorAll(".domain-data-value")];
+    expect(values.map((v) => v.textContent)).toEqual([""]);
+  });
+
+  it("falls back to JSON for an array display field containing objects", async () => {
+    const def = cardDef({
+      display: { fields: [{ path: "items", label: "Items" }] },
+    });
+    const instance = entry("c1", "ready", {
+      workflowInstanceState: { items: [{ name: "alpha" }, { name: "beta" }] },
+    });
+    const el = await mount(card(def, instance));
+    await settle(shadowRootOf(el));
+    const values = [...shadowRootOf(el).querySelectorAll(".domain-data-value")];
+    expect(values[0]?.textContent).toContain('"name"');
+    expect(values[0]?.textContent).toContain("alpha");
+  });
+
+  it("renders the Session-data fallback array as joined text", async () => {
+    const instance = entry("c1", "ready", {
+      workflowInstanceState: { tags: ["one", "two"] },
+    });
+    const el = await mount(card(undefined, instance));
+    await settle(shadowRootOf(el));
+    const values = [...shadowRootOf(el).querySelectorAll(".domain-data-value")];
+    expect(values.map((v) => v.textContent)).toEqual(["one, two"]);
+  });
+
+  it("hides a successful operation output without a render hint", async () => {
+    const def = cardDef({
+      states: [
+        {
+          id: "ready",
+          label: "Ready",
+          category: "initial",
+          actions: [],
+          tasks: [{ id: "extract", label: "Extract", role: "operation" }],
+        },
+      ],
+    });
+    const instance = entry("c1", "ready", {
+      taskOutputs: {
+        extract: { status: "success", output: { note: "bookkeeping" } },
+      },
+    });
+    const el = await mount(card(def, instance));
+    await settle(shadowRootOf(el));
+    // No output item, and no panel at all when every output is hidden.
+    expect(shadowRootOf(el).querySelector(".output-item")).toBeNull();
+    expect(shadowRootOf(el).querySelector(".task-outputs")).toBeNull();
+  });
+
+  it("renders ai-task outputs while hiding operation bookkeeping", async () => {
+    const def = cardDef({
+      states: [
+        {
+          id: "ready",
+          label: "Ready",
+          category: "initial",
+          actions: [],
+          tasks: [
+            { id: "extract", label: "Extract", role: "operation" },
+            { id: "plan", label: "Plan", role: "ai-task" },
+          ],
+        },
+      ],
+    });
+    const instance = entry("c1", "ready", {
+      taskOutputs: {
+        extract: { status: "success", output: { note: "bookkeeping" } },
+        plan: { status: "success", output: "a plan" },
+      },
+    });
+    const el = await mount(card(def, instance));
+    await settle(shadowRootOf(el));
+    const items = [...shadowRootOf(el).querySelectorAll(".output-item")];
+    expect(items.length).toBe(1);
+    expect(items[0]?.querySelector(".output-task-id")?.textContent).toBe(
+      "Plan"
+    );
+  });
+
+  it("renders a successful operation output per its render hint", async () => {
+    const def = cardDef({
+      states: [
+        {
+          id: "ready",
+          label: "Ready",
+          category: "initial",
+          actions: [],
+          tasks: [
+            {
+              id: "summary",
+              label: "Summary",
+              role: "operation",
+              render: { kind: "markdown" },
+            },
+          ],
+        },
+      ],
+    });
+    const instance = entry("c1", "ready", {
+      taskOutputs: {
+        summary: { status: "success", output: "# Wrapped up" },
+      },
+    });
+    const el = await mount(card(def, instance));
+    await settle(shadowRootOf(el));
+    const markdown = mustFind(el, "markdown-view");
+    expect(mustQuery(shadowRootOf(markdown), ".markdown h1").textContent).toBe(
+      "Wrapped up"
+    );
+  });
+
+  it("renders an operation task error even without a render hint", async () => {
+    const def = cardDef({
+      states: [
+        {
+          id: "ready",
+          label: "Ready",
+          category: "initial",
+          actions: [],
+          tasks: [{ id: "extract", label: "Extract", role: "operation" }],
+        },
+      ],
+    });
+    const instance = entry("c1", "ready", {
+      taskOutputs: {
+        extract: { status: "error", error: "op failed", output: {} },
+      },
+    });
+    const el = await mount(card(def, instance));
+    await settle(shadowRootOf(el));
+    const items = [...shadowRootOf(el).querySelectorAll(".output-item")];
+    expect(items.length).toBe(1);
+    expect(items[0]?.querySelector(".output-status")?.textContent).toBe(
+      "error"
+    );
+    expect(mustFind(el, "task-error-view")).toBeTruthy();
+  });
+
+  it("renders a chips render hint over an array of strings as pills", async () => {
+    const def = cardDef({
+      display: {
+        fields: [{ path: "tags", label: "Tags", render: { kind: "chips" } }],
+      },
+    });
+    const instance = entry("c1", "ready", {
+      workflowInstanceState: { tags: ["a11y", "offline", "sync"] },
+    });
+    const el = await mount(card(def, instance));
+    await settle(shadowRootOf(el));
+    const chips = mustFind(el, "chips-view");
+    const pills = [...shadowRootOf(chips).querySelectorAll(".chip")];
+    expect(pills.map((p) => p.textContent)).toEqual([
+      "a11y",
+      "offline",
+      "sync",
+    ]);
+  });
+
+  it("falls back to raw rendering when the chips kind receives a non-array", async () => {
+    const def = cardDef({
+      display: {
+        fields: [{ path: "note", label: "Note", render: { kind: "chips" } }],
+      },
+    });
+    const instance = entry("c1", "ready", {
+      workflowInstanceState: { note: "plain string" },
+    });
+    const el = await mount(card(def, instance));
+    await settle(shadowRootOf(el));
+    // The contract mismatch (string bound to an array prop) falls back to
+    // json rendering; chips-view is never mounted.
+    expect(shadowRootOf(el).querySelector("chips-view")).toBeNull();
+    const json = mustFind(el, "json-view");
+    expect(shadowRootOf(json).textContent).toContain("plain string");
   });
 
   it("orders available actions primary-first", async () => {

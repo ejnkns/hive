@@ -3,10 +3,11 @@ import { describe, it } from "node:test";
 import { builtinRenderContracts, type RenderHint } from "./workflow-types.ts";
 
 describe("builtin render contracts", () => {
-  it("ships all five builtin kinds", () => {
+  it("ships all six builtin kinds", () => {
     assert.deepEqual(Object.keys(builtinRenderContracts).sort(), [
       "card",
       "cards",
+      "chips",
       "json",
       "markdown",
       "text",
@@ -36,6 +37,12 @@ describe("builtin render contracts", () => {
       { name: "title", type: "string", scope: "element" },
       { name: "description", type: "string", scope: "element" },
       { name: "bullets", type: "string[]", scope: "element" },
+    ]);
+  });
+
+  it("chips takes one output-scoped array prop (items)", () => {
+    assert.deepEqual(builtinRenderContracts.chips.props, [
+      { name: "items", type: "array", scope: "output" },
     ]);
   });
 
@@ -78,6 +85,24 @@ const _validMarkdownFromContent: RenderHint<{
   content: string;
   revision: string;
 }> = { kind: "markdown", props: { content: "content" } };
+
+// The chips kind's single array prop binds to the root when props are omitted,
+// so a display field can declare it with no props at all.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _validChips: RenderHint<{ tags: string[] }> = { kind: "chips" };
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _validChipsFromProp: RenderHint<{ tags: string[] }> = {
+  kind: "chips",
+  props: { items: "tags" },
+};
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _chipsUnknownProp: RenderHint<{ tags: string[] }> = {
+  kind: "chips",
+  // @ts-expect-error: "bogus" is not a prop of the chips contract
+  props: { bogus: "tags" },
+};
 
 const _unknownProp: RenderHint<PlanProposal> = {
   kind: "cards",
