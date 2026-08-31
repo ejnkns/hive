@@ -3,7 +3,7 @@
 // lit runtime and registered, then asserted through the workflow-instances
 // surface. These are behavior tests over the actual shipped components.
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkflowInstanceEntry } from "workflow-engine/create-flow-runtime";
 import type {
   FlowComponentDeps,
@@ -165,6 +165,21 @@ function mouseLeave(): MouseEvent {
 }
 
 describe("wayfinder served modules", () => {
+  // jsdom cannot provide a Canvas 2d context; the map surface guards the
+  // null context (drawing is verified in a real browser). Stub getContext
+  // with a plain assignment (not a vi spy — some tests call restoreAllMocks
+  // mid-test) so the jsdom warning stays out of the suite output.
+  const originalGetContext = HTMLCanvasElement.prototype.getContext;
+
+  beforeEach(() => {
+    HTMLCanvasElement.prototype.getContext = (() =>
+      null) as typeof originalGetContext;
+  });
+
+  afterEach(() => {
+    HTMLCanvasElement.prototype.getContext = originalGetContext;
+  });
+
   it("ticket-card renders type badge, question, dependsOn chips, and the research findings preview", async () => {
     defineFlowRenderingComponents();
     localStorage.clear();
@@ -1330,6 +1345,90 @@ describe("wayfinder served modules", () => {
       expect(queryAllDeep(el, ".journal .decision markdown-view").length).toBe(
         0
       );
+    } finally {
+      restore();
+    }
+  });
+
+  it("flow-component mounts the persistent map surface with theme, controls, and camera-positioned overlays", async () => {
+    const charted = entry("c-1", "charted");
+    charted.workflowId = "charting";
+    charted.state.workflowInstanceState = { destination: "hive router" };
+    const fogTicket = ticketEntry("t-2", "fog");
+    fogTicket.state.workflowInstanceState = { brief: "metrics to Effect?" };
+    const { el, restore } = await mountFlowComponent([charted, fogTicket], {
+      config: { expeditionTheme: "stars" },
+    });
+    try {
+      const openButton = queryAllDeep(el, ".open-map")[0] as
+        | HTMLElement
+        | undefined;
+      openButton?.click();
+      await settle(shadowRootOf(el));
+
+      // The surface: canvas visual layer + DOM node overlays + panel.
+      const surface = queryAllDeep(el, ".map-surface")[0];
+      expect(surface).toBeDefined();
+      expect(queryAllDeep(el, ".map-surface canvas").length).toBe(1);
+      expect(queryAllDeep(el, ".map-surface .node").length).toBeGreaterThan(0);
+      // The theme rides the config onto the surface host (its shadow styles
+      // key off data-theme), and the fit/reset controls are present.
+      const viewHost = (surface?.getRootNode() as ShadowRoot).host;
+      expect(viewHost.getAttribute("data-theme")).toBe("stars");
+      expect(queryAllDeep(el, ".map-controls button.fit").length).toBe(1);
+      expect(queryAllDeep(el, ".map-controls button.reset").length).toBe(1);
+
+      // The controller positioned every overlay through the camera: each node
+      // carries a projected screen position in CSS variables.
+      for (const node of queryAllDeep(el, ".map-surface .node")) {
+        expect(
+          (node as HTMLElement).style.getPropertyValue("--node-x")
+        ).toMatch(/px$/);
+      }
+    } finally {
+      restore();
+    }
+  });
+
+  it("flow-component keeps one map surface instance across renders and reopens it after closing", async () => {
+    const charted = entry("c-1", "charted");
+    charted.workflowId = "charting";
+    charted.state.workflowInstanceState = { destination: "hive router" };
+    const fogTicket = ticketEntry("t-2", "fog");
+    fogTicket.state.workflowInstanceState = { brief: "metrics to Effect?" };
+    const { el, restore } = await mountFlowComponent([charted, fogTicket]);
+    try {
+      const openButton = queryAllDeep(el, ".open-map")[0] as
+        | HTMLElement
+        | undefined;
+      openButton?.click();
+      await settle(shadowRootOf(el));
+      const surface = queryAllDeep(el, ".map-surface")[0];
+      const viewHost = (surface?.getRootNode() as ShadowRoot).host;
+      const before = viewHost;
+
+      // A hover sync re-renders the entry — the same surface instance stays.
+      const node = queryAllDeep(el, '.map-surface .node[data-id="t-2"]')[0];
+      node?.dispatchEvent(mouseEnter());
+      await settle(shadowRootOf(el));
+      expect((surface?.getRootNode() as ShadowRoot).host).toBe(before);
+
+      // Closing detaches (disposes) the surface; reopening re-attaches the
+      // same instance — one camera/animation owner for the whole session.
+      const backButton = queryAllDeep(el, ".back-link")[0] as
+        | HTMLElement
+        | undefined;
+      backButton?.click();
+      await settle(shadowRootOf(el));
+      expect(queryAllDeep(el, ".map-surface").length).toBe(0);
+      const openAgain = queryAllDeep(el, ".open-map")[0] as
+        | HTMLElement
+        | undefined;
+      openAgain?.click();
+      await settle(shadowRootOf(el));
+      expect(queryAllDeep(el, ".map-surface").length).toBe(1);
+      const reopened = queryAllDeep(el, ".map-surface")[0];
+      expect((reopened?.getRootNode() as ShadowRoot).host).toBe(before);
     } finally {
       restore();
     }

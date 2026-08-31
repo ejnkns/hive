@@ -22,7 +22,7 @@ import type {
   FlowViewProps,
   ModelCallStatus,
 } from "workflow-engine/workflow-types";
-import { createMapCanvas } from "./map-canvas.ts";
+import { createMapCanvas, type MapCanvasElement } from "./map-canvas.ts";
 import { createWayfinderDrawing } from "./wayfinder-drawing.ts";
 import type { WayfinderMap } from "./wayfinder-map.ts";
 import {
@@ -186,12 +186,10 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         :host-context(html.light) .expedition[data-theme="stars"] {
           --map-backdrop: #ffffff;
         }
-        .expedition[data-theme="stars"] .map-card,
-        .expedition[data-theme="stars"] .canvas {
+        .expedition[data-theme="stars"] .map-card {
           color: #ffffff;
         }
-        :host-context(html.light) .expedition[data-theme="stars"] .map-card,
-        :host-context(html.light) .expedition[data-theme="stars"] .canvas {
+        :host-context(html.light) .expedition[data-theme="stars"] .map-card {
           color: #0a0e15;
         }
 
@@ -737,9 +735,23 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
           0%, 100% { transform: scale(1); }
           50% { transform: scale(2); }
         }
+        @media (prefers-reduced-motion: reduce) {
+          .card.focus,
+          .crate.focus,
+          .journal .entry.focus,
+          .marker.focus,
+          .task-status .pulse {
+            animation: none;
+          }
+        }
       `,
-      MapCanvas.styles,
     ];
+
+    // The persistent map surface: constructed once when the map first opens
+    // and kept across renders (and across open/close cycles), so the camera
+    // and animation owner live in one place instead of being rebuilt every
+    // render. The entry references the class by constructor — never by tag.
+    private mapView: MapCanvasElement | undefined;
 
     declare flow: FlowViewProps["flow"];
     declare workflowDefs: FlowViewProps["workflowDefs"];
@@ -917,11 +929,41 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       this.draggedFogId = undefined;
     }
 
+    protected override updated(changedProperties: PropertyValues<this>): void {
+      super.updated(changedProperties);
+      // The map surface is a persistent instance: sync its data props after
+      // every render (data flows down; the callbacks are wired once at
+      // creation).
+      const view = this.mapView;
+      if (view === undefined || !this.mapOpen) return;
+      view.model = this.model;
+      view.theme = this.theme;
+      view.hoverId = this.hoverId;
+      view.focusId = this.focusId;
+    }
+
+    private ensureMapView(): MapCanvasElement {
+      const existing = this.mapView;
+      if (existing !== undefined) return existing;
+      const view: MapCanvasElement = new MapCanvas();
+      view.onClose = () => this.closeMap();
+      view.onHover = (id) => this.hover(id);
+      view.onFocus = (id) => this.setFocus(id);
+      this.mapView = view;
+      return view;
+    }
+
     render() {
       const theme = this.theme;
       return this.mapOpen
         ? this.renderMapView(theme)
         : this.renderTableView(theme);
+    }
+
+    private renderMapView(theme: ExpeditionTheme) {
+      return html`<div class="expedition" data-theme=${theme}>
+        ${this.ensureMapView()}
+      </div>`;
     }
 
     private renderTableView(theme: ExpeditionTheme) {
@@ -939,21 +981,6 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
             ${this.renderOutOfScope()}
           </div>
         </div>
-      </div>`;
-    }
-
-    private renderMapView(theme: ExpeditionTheme) {
-      const model = this.model;
-      return html`<div class="expedition" data-theme=${theme}>
-        ${new MapCanvas({
-          model,
-          theme,
-          onClose: () => this.closeMap(),
-          hoverId: this.hoverId,
-          focusId: this.focusId,
-          onHover: (id) => this.hover(id),
-          onFocus: (id) => this.setFocus(id),
-        }).render()}
       </div>`;
     }
 
@@ -1475,7 +1502,15 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
     }
   }
 
-  return { components: { "flow-component": FlowComponent } };
+  return {
+    components: {
+      "flow-component": FlowComponent,
+      // The full-map surface is registered beside the entry so it gets a
+      // defined tag (constructing an unregistered Lit subclass throws); the
+      // entry composes it by constructor, never by tag.
+      "wayfinder-map-view": MapCanvas,
+    },
+  };
 }
 
 // The live model-call stage, human-readable for the card's status line.

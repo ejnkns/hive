@@ -1,62 +1,121 @@
-/** The wayfinder full-map view (module-set sibling of the served flow
- * component): the map layout, canvas, nodes, and sidebar panel as a local
- * class composed by constructor — the entry constructs one per render and
- * embeds its template. It is never registered as a custom element and never
- * referenced by tag (served modules are registered under generated tags and
- * cannot reference each other by tag; constructor composition needs no
- * registration). Its styles join the entry's shadow root, so the map inherits
- * the expedition theme variables set on the entry's .expedition chrome. */
+/** The wayfinder full-map surface (a served component sibling of the served
+ * flow component): the real pannable, zoomable map. A Lit element the entry
+ * constructs ONCE per open and keeps across renders — never a fresh camera or
+ * animation owner per render. It owns the persistent map controller
+ * (map-controller.ts): the Canvas draws the theme backdrop decor and the
+ * directed curved dependency edges with arrowheads, the DOM node overlays sit
+ * at the same camera-projected world points (so the map stays keyboard- and
+ * screen-reader-accessible), and the sidebar panel is the complete
+ * DOM-backed list representation. Registered under a generated tag through
+ * the entry's registrations; the entry references it by constructor, never
+ * by tag. */
 
 import type { FlowComponentDeps } from "workflow-engine/workflow-types";
-import { createWayfinderDrawing } from "./wayfinder-drawing.ts";
+import { MapController } from "./map-controller.ts";
+import { nodeStatusGlyph } from "./map-visuals.ts";
 import type { WayfinderMap, WayfinderNode } from "./wayfinder-map.ts";
 import type { ExpeditionTheme } from "./wayfinder-themes.ts";
-import { THEME_ACCENT, THEME_GLYPHS } from "./wayfinder-themes.ts";
 
-export type MapCanvasProps = {
+// The public surface contract the entry syncs each render: the data props
+// (model/theme/hover/focus) plus the callbacks it wires once at construction.
+// Intersected with HTMLElement so the constructor type stays assignable to
+// the served ElementConstructor contract.
+export type MapCanvasElement = HTMLElement & {
   model: WayfinderMap;
   theme: ExpeditionTheme;
-  onClose: () => void;
   hoverId: string | undefined;
   focusId: string | undefined;
-  onHover: (id: string | undefined) => void;
-  onFocus: (id: string) => void;
+  onClose: (() => void) | undefined;
+  onHover: ((id: string | undefined) => void) | undefined;
+  onFocus: ((id: string) => void) | undefined;
 };
 
-export function createMapCanvas(lit: FlowComponentDeps) {
-  const { html, css, svg, nothing } = lit;
-  const drawing = createWayfinderDrawing(lit);
+export function createMapCanvas(
+  lit: FlowComponentDeps
+): new () => MapCanvasElement {
+  const { LitElement: Base, html, css, nothing } = lit;
 
-  class MapCanvas {
+  class MapCanvas extends Base {
+    static properties = {
+      model: { attribute: false },
+      theme: { type: String, reflect: true, attribute: "data-theme" },
+      hoverId: { attribute: false },
+      focusId: { attribute: false },
+      onClose: { attribute: false },
+      onHover: { attribute: false },
+      onFocus: { attribute: false },
+    };
+
     static styles = css`
+      :host {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+      }
+      :host([data-theme="stars"]) {
+        color: #f6f8fa;
+      }
+      :host-context(html.light):host([data-theme="stars"]) {
+        color: #0a0e15;
+      }
+
       .map-layout {
         flex: 1;
         min-height: 0;
         display: grid;
-        grid-template-columns: 1fr 300px;
+        grid-template-columns: minmax(0, 1fr) 300px;
       }
       @media (max-width: 900px) {
-        .map-layout {
+        :host {
           flex: none;
+        }
+        .map-layout {
           height: auto;
           grid-template-columns: 1fr;
         }
-        .canvas {
+        .map-surface {
           min-height: 60vh;
         }
       }
-      .canvas {
+
+      .map-surface {
         position: relative;
         overflow: hidden;
         border: 1px solid var(--border);
         border-radius: 14px;
         background: var(--map-backdrop, #0a0e15);
+        touch-action: none;
       }
-      .canvas svg {
+      .map-surface canvas {
         position: absolute;
         inset: 0;
         width: 100%;
         height: 100%;
+        display: block;
+      }
+      .map-nodes {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+
+      .map-controls {
+        position: absolute;
+        right: 14px;
+        top: 14px;
+        z-index: 6;
+        display: flex;
+        gap: 0.375rem;
+      }
+      .map-controls button {
+        font: inherit;
+        font-size: 0.7rem;
+        padding: 0.32rem 0.6rem;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text);
+        cursor: pointer;
       }
       .back-link {
         position: absolute;
@@ -72,15 +131,22 @@ export function createMapCanvas(lit: FlowComponentDeps) {
         color: var(--text);
         cursor: pointer;
       }
+
       .node {
         position: absolute;
-        transform: translate(-50%, -50%);
+        left: 0;
+        top: 0;
+        pointer-events: auto;
+        transform: translate(var(--node-x, 0px), var(--node-y, 0px))
+          translate(-50%, -50%);
         text-align: center;
         cursor: pointer;
         z-index: 3;
+        will-change: transform;
       }
       .node.hl {
-        transform: translate(-50%, -50%) scale(1.18);
+        transform: translate(var(--node-x, 0px), var(--node-y, 0px))
+          translate(-50%, -50%) scale(1.18);
       }
       .node.hl .cap {
         color: #ffffff;
@@ -89,8 +155,15 @@ export function createMapCanvas(lit: FlowComponentDeps) {
         animation: focuspulse 1s ease-in-out 2;
       }
       @keyframes focuspulse {
-        0%, 100% { transform: translate(-50%, -50%) scale(1); }
-        50% { transform: translate(-50%, -50%) scale(1.45); }
+        0%,
+        100% {
+          transform: translate(var(--node-x, 0px), var(--node-y, 0px))
+            translate(-50%, -50%) scale(1);
+        }
+        50% {
+          transform: translate(var(--node-x, 0px), var(--node-y, 0px))
+            translate(-50%, -50%) scale(1.45);
+        }
       }
       .node:focus-visible {
         outline: 2px solid rgba(91, 192, 232, 0.45);
@@ -186,6 +259,12 @@ export function createMapCanvas(lit: FlowComponentDeps) {
         background: var(--warning);
       }
 
+      @media (prefers-reduced-motion: reduce) {
+        .node.focus {
+          animation: none;
+        }
+      }
+
       .panel {
         border-left: 1px solid var(--border);
         padding: 0.9rem;
@@ -220,8 +299,18 @@ export function createMapCanvas(lit: FlowComponentDeps) {
         animation: entrypulse 1s ease-in-out 2;
       }
       @keyframes entrypulse {
-        0%, 100% { transform: scale(1); }
-        50% { transform: scale(1.06); }
+        0%,
+        100% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.06);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .panel .entry.focus {
+          animation: none;
+        }
       }
       .panel .entry:focus-visible {
         outline: 1px solid rgba(91, 192, 232, 0.5);
@@ -250,132 +339,150 @@ export function createMapCanvas(lit: FlowComponentDeps) {
       }
     `;
 
-    private props: MapCanvasProps;
+    declare model: WayfinderMap;
+    declare theme: ExpeditionTheme;
+    declare hoverId: string | undefined;
+    declare focusId: string | undefined;
+    declare onClose: (() => void) | undefined;
+    declare onHover: ((id: string | undefined) => void) | undefined;
+    declare onFocus: ((id: string) => void) | undefined;
 
-    constructor(props: MapCanvasProps) {
-      this.props = props;
+    // The persistent controller: created once per element instance (the entry
+    // keeps the same instance across renders), mounted when the element
+    // attaches, disposed when it detaches. The camera, layout positions, and
+    // animation owner live here — never in a render.
+    private controller: MapController;
+
+    constructor() {
+      super();
+      this.controller = new MapController({
+        onFocus: (id) => this.onFocus?.(id),
+      });
+    }
+
+    connectedCallback(): void {
+      super.connectedCallback();
+      // A reconnect (the map reopens with the same instance) re-mounts the
+      // controller; the first attach mounts in firstUpdated after render.
+      if (this.hasUpdated) this.mountSurface();
+    }
+
+    firstUpdated(): void {
+      this.mountSurface();
+    }
+
+    disconnectedCallback(): void {
+      super.disconnectedCallback();
+      this.controller.dispose();
+    }
+
+    protected override updated(): void {
+      // Runs after every render: adopt the latest model/theme (a live update
+      // warm-lays only new ids and never moves the camera) and re-position the
+      // node overlays the render just refreshed.
+      if (this.model !== undefined) {
+        this.controller.update(this.model, this.theme);
+      }
+    }
+
+    private mountSurface(): void {
+      const surface =
+        this.renderRoot.querySelector<HTMLElement>(".map-surface");
+      if (surface !== null) this.controller.mount(surface);
     }
 
     // The hl/focus class suffix: a focused element stays lit until its pulse
     // clears, and hovering lights the counterpart in the other surface.
-    private hotClass(
-      id: string,
-      hoverId: string | undefined,
-      focusId: string | undefined
-    ): string {
-      if (focusId === id) return " hl focus";
-      if (hoverId === id) return " hl";
+    private hotClass(id: string): string {
+      if (this.focusId === id) return " hl focus";
+      if (this.hoverId === id) return " hl";
       return "";
     }
 
     // Enter/Space focus an element the same way a click does, so keyboard
     // navigation gets the pulse too.
-    private keydownFocus(event: KeyboardEvent, id: string) {
+    private keydownFocus(event: KeyboardEvent, id: string): void {
       if (event.key !== "Enter" && event.key !== " ") return;
-      this.props.onFocus(id);
+      this.onFocus?.(id);
     }
 
     render() {
-      const { model, theme, onClose } = this.props;
+      const model = this.model;
+      if (model === undefined) return nothing;
       return html`<div class="map-layout">
-        <div class="canvas">
-          <button class="back-link" type="button" @click=${onClose}>
+        <div
+          class="map-surface"
+          role="group"
+          aria-label="Expedition map — use the panel or the node markers to select tickets"
+        >
+          <canvas class="map-canvas" aria-hidden="true"></canvas>
+          <div class="map-nodes">
+            ${model.nodes.map((node) => this.renderNode(node))}
+          </div>
+          <div class="map-controls">
+            <button
+              class="fit"
+              type="button"
+              title="Fit the whole map into view"
+              @click=${() => this.controller.fit()}
+            >
+              Fit
+            </button>
+            <button
+              class="reset"
+              type="button"
+              title="Snap back to the fitted view"
+              @click=${() => this.controller.reset()}
+            >
+              Reset
+            </button>
+          </div>
+          <button class="back-link" type="button" @click=${() => this.onClose?.()}>
             ← Back to the table
           </button>
-          ${this.mapBackdrop(model.nodes, theme)}
-          ${this.mapPaths(model.nodes, theme)}
-          ${model.nodes.map((node) => this.renderNode(node, theme))}
         </div>
         <aside class="panel">${this.renderPanel(model)}</aside>
       </div>`;
     }
 
-    private mapBackdrop(nodes: WayfinderNode[], theme: ExpeditionTheme) {
-      return svg`<svg
-        viewBox="0 0 1000 660"
-        preserveAspectRatio="none"
-        aria-hidden="true"
-      >
-        ${drawing.drawBackdrop(nodes, theme, 10, 6.6)}
-      </svg>`;
-    }
-
-    private mapPaths(nodes: WayfinderNode[], theme: ExpeditionTheme) {
-      const accent = THEME_ACCENT[theme];
-      return svg`<svg
-        viewBox="0 0 1000 660"
-        preserveAspectRatio="none"
-        aria-hidden="true"
-      >
-        <g>
-          ${drawing.drawFrontier(nodes, 10, 6.6, accent)}
-          ${drawing.drawTrail(nodes, 10, 6.6, accent)}
-        </g>
-      </svg>`;
-    }
-
-    private renderNode(node: WayfinderNode, theme: ExpeditionTheme) {
-      const glyphs = THEME_GLYPHS[theme];
-      const glyph =
-        node.presentation === "summit"
-          ? glyphs.summit
-          : node.presentation === "base"
-            ? glyphs.base
-            : node.presentation === "decision"
-              ? glyphs.decision
-              : node.presentation === "implementation"
-                ? glyphs.implementation
-                : node.presentation === "out-of-scope"
-                  ? glyphs.outOfScope
-                  : "";
+    private renderNode(node: WayfinderNode) {
+      const glyph = nodeStatusGlyph(node.presentation, this.theme);
       const caption =
         node.presentation === "fog"
           ? html`<span class="tag">needs clarity</span>`
           : nothing;
-      const { hoverId, focusId, onHover, onFocus } = this.props;
       const id = node.id;
       return html`<div
-        class="node ${node.presentation}${this.hotClass(id, hoverId, focusId)}"
-        style=${`left:${node.x}%;top:${node.y}%`}
+        class="node ${node.presentation}${this.hotClass(id)}"
         data-id=${id}
         tabindex="0"
-        @mouseenter=${() => onHover(id)}
-        @mouseleave=${() => onHover(undefined)}
-        @focus=${() => onHover(id)}
-        @blur=${() => onHover(undefined)}
-        @click=${() => onFocus(id)}
+        @mouseenter=${() => this.onHover?.(id)}
+        @mouseleave=${() => this.onHover?.(undefined)}
+        @focus=${() => this.onHover?.(id)}
+        @blur=${() => this.onHover?.(undefined)}
+        @click=${() => this.onFocus?.(id)}
         @keydown=${(event: KeyboardEvent) => this.keydownFocus(event, id)}
       >
-        <div class="glyph">
-          ${
-            node.presentation === "fog" ||
-            node.presentation === "frontier" ||
-            node.presentation === "blocked" ||
-            node.presentation === "active"
-              ? ""
-              : glyph
-          }
-        </div>
+        <div class="glyph">${glyph}</div>
         <div class="cap">${node.title}</div>
         ${caption}
       </div>`;
     }
 
     private renderPanel(model: WayfinderMap) {
-      const { hoverId, focusId, onHover, onFocus } = this.props;
       return html`${model.groups.map(
         (group) => html`<div class="group">
           <div class="gh">${group.label}</div>
           ${group.nodes.map(
             (node) => html`<div
-              class="entry${this.hotClass(node.id, hoverId, focusId)}"
+              class="entry${this.hotClass(node.id)}"
               data-id=${node.id}
               tabindex="0"
-              @mouseenter=${() => onHover(node.id)}
-              @mouseleave=${() => onHover(undefined)}
-              @focus=${() => onHover(node.id)}
-              @blur=${() => onHover(undefined)}
-              @click=${() => onFocus(node.id)}
+              @mouseenter=${() => this.onHover?.(node.id)}
+              @mouseleave=${() => this.onHover?.(undefined)}
+              @focus=${() => this.onHover?.(node.id)}
+              @blur=${() => this.onHover?.(undefined)}
+              @click=${() => this.onFocus?.(node.id)}
               @keydown=${(event: KeyboardEvent) =>
                 this.keydownFocus(event, node.id)}
             >

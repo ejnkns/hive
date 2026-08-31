@@ -1,14 +1,20 @@
 /** The wayfinder SVG drawing builders (module-set sibling of the served flow
- * component): the pure geometry (peak/wobble/trail path data) and the shared
- * draw methods the mini-map and the full expedition map both use. Nothing
- * reads component state — the svg/nothing tags arrive through the lit deps
- * factory and every theme-dependent draw takes the theme as a parameter — so
- * the module stays pure and testable. */
+ * component): the pure geometry (peak path data) and the shared draw methods
+ * the mini-map uses. The status-aware vocabulary (colors, radii, wobble
+ * contours) lives in map-visuals so the SVG mini-map and the Canvas map
+ * surface render every status the same way. Nothing reads component state —
+ * the svg/nothing tags arrive through the lit deps factory and every
+ * theme-dependent draw takes the theme as a parameter — so the module stays
+ * pure and testable. */
 
 import type { FlowComponentDeps } from "workflow-engine/workflow-types";
+import {
+  nodeStatusColor,
+  nodeStatusRadius,
+  wobblePoints,
+} from "./map-visuals.ts";
 import type { WayfinderNode } from "./wayfinder-map.ts";
 import type { ExpeditionTheme } from "./wayfinder-themes.ts";
-import { THEME_ACCENT } from "./wayfinder-themes.ts";
 
 // A triangle peak path (apex at x,y; base at y+height).
 export function peak(
@@ -24,26 +30,21 @@ export function peak(
 
 // An organic contour ring (a slightly wobbled ellipse) — the topo theme's
 // contour lines, drawn from a small number of perturbed radii so they read as
-// hand-surveyed terrain rather than perfect circles.
+// hand-surveyed terrain rather than perfect circles. The point geometry is
+// shared with the Canvas surface via map-visuals.
 export function wobblePath(
   cx: number,
   cy: number,
   r: number,
   seed: number
 ): string {
-  const n = 60;
-  let d = "";
-  for (let i = 0; i <= n; i += 1) {
-    const a = (i / n) * Math.PI * 2;
-    const rr =
-      r +
-      Math.sin(a * 5 + seed) * r * 0.08 +
-      Math.sin(a * 9 + seed * 2) * r * 0.04;
-    const x = cx + Math.cos(a) * rr;
-    const y = cy + Math.sin(a) * rr * 0.82;
-    d += `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)} `;
-  }
-  return `${d}Z`;
+  const d = wobblePoints(cx, cy, r, seed)
+    .map(
+      (point, index) =>
+        `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`
+    )
+    .join(" ");
+  return `${d} Z`;
 }
 
 // The trail sequence: base -> fog -> the actionable frontier -> the ordered
@@ -256,17 +257,8 @@ export function createWayfinderDrawing(deps: FlowComponentDeps) {
       theme: ExpeditionTheme,
       interactions: MarkerInteractions = {}
     ) {
-      const colors: Record<string, string> = {
-        decision: "#3fb950",
-        implementation: THEME_ACCENT[theme],
-        frontier: THEME_ACCENT[theme],
-        blocked: "#d0b3b3",
-        active: "#d29922",
-        fog: "#f0ead9",
-        "out-of-scope": "#9aa4ad",
-      };
-      const fill = colors[node.presentation] ?? "#9aa4ad";
-      const radius = node.presentation === "fog" ? 5 : 4;
+      const fill = nodeStatusColor(node.presentation, theme);
+      const radius = nodeStatusRadius(node.presentation);
       const isFog = node.presentation === "fog";
       const interactive = interactions.onClick !== undefined;
       return svg`<circle
