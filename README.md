@@ -23,15 +23,13 @@ _replaced with the alive._
 
 > **Work in progress.**
 
-Hive is a local LLM proxy daemon with telemetry-driven model routing, plus a
-declarative flow engine that runs AI agents server-side. It hides the
-volatility of free model providers by continuously monitoring quality and
-swapping providers automatically.
+Hive is an intelligent model router and a platform for authoring and running
+AI-enabled workflows. The router selects provider/model nodes, preserves useful
+session affinity, and fails over according to policy. The workflow platform lets
+AI and humans create versioned FlowPackages containing definitions, execution
+modules, and bespoke UI, then instantiate them as durable FlowInstances.
 
-New here? Read the tutorial in `docs/tutorial/` — a step-by-step walkthrough
-of how the codebase works, pointing at the exact files:
-[01-what-is-hive.md](docs/tutorial/01-what-is-hive.md) starts with the package
-map and boot sequence.
+
 
 ## What Hive does
 
@@ -44,9 +42,6 @@ map and boot sequence.
   reviewer agents), **honeycomb** (self-organizing content), **wayfinder**
   (research/collection flows).
 
-The README's design mantra: *flows = product, proxy = backbone* (see
-`docs/design-plan.md`). Repo layout: `server/` (the daemon), `ui/` (Svelte
-dashboard), `workflow-engine/`, `telemetry/`, `shared/`, `presets/`, `e2e/`.
 
 ### Dynamic Model Routing
 
@@ -69,11 +64,13 @@ dashboard), `workflow-engine/`, `telemetry/`, `shared/`, `presets/`, `e2e/`.
 
 ### Flows
 
-A flow definition is pure data — workflows, states, tasks, gates, edges — that
-the engine (`workflow-engine/`) compiles into a runtime. AI tasks call models
-**through the same routing pipeline** as external clients, with a standard tool
-registry (file read/write, command execution, git, web fetch). The server
-registers, persists, serves, and can even **AI-author** definitions
+A FlowDefinition is reusable flow code — workflows, states, tasks, gates, edges,
+relationships, and UI metadata — that the engine compiles into a runtime. A
+FlowInstance is a long-lived workspace created from an immutable FlowConfig;
+it contains WorkflowItems, each progressing through one workflow graph. AI tasks
+call models **through the same routing pipeline** as external clients, with a
+standard tool registry (file read/write, command execution, git, web fetch).
+The server registers, persists, serves, and can even **AI-author** definitions
 (`POST /api/flows/definitions/author` — an agentic session that writes the
 definition module and validates it against a typechecking gate).
 
@@ -175,7 +172,3 @@ pnpm dev            # server (watch, port 8154) + UI (Vite, port 8153, proxying 
 pnpm build          # telemetry → ui → server (bundled binary at server/dist/main.mjs)
 pnpm test           # unit + e2e suite
 ```
-
-See `docs/tutorial/08-tests-and-tooling.md` for the test layout, and
-`CONTEXT.md` for code conventions (fractal file structure, `.ts`-suffixed
-relative imports, no emojis).
