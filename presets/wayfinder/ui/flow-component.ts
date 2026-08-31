@@ -1421,7 +1421,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       const accent = THEME_ACCENT[theme];
       const sx = 5.6;
       const sy = 4;
-      const summit = model.nodes.find((node) => node.kind === "summit");
+      const summit = model.nodes.find((node) => node.presentation === "summit");
       return svg`<svg viewBox="0 0 560 400" role="img" aria-label="Expedition map">
         ${drawing.drawBackdrop(model.nodes, theme, sx, sy)}
         ${drawing.drawFrontier(model.nodes, sx, sy, accent)}
@@ -1438,7 +1438,10 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
             : nothing
         }
         ${model.nodes
-          .filter((node) => node.kind !== "base" && node.kind !== "summit")
+          .filter(
+            (node) =>
+              node.presentation !== "base" && node.presentation !== "summit"
+          )
           .map((node) => {
             const id = node.id;
             return drawing.drawMarker(node, sx, sy, theme, {

@@ -160,7 +160,7 @@ export function createMapCanvas(lit: FlowComponentDeps) {
           0 0 0 5px rgba(138, 147, 160, 0.16),
           0 0 0 11px rgba(138, 147, 160, 0.08);
       }
-      .node.ready .glyph {
+      .node.frontier .glyph {
         display: inline-block;
         width: 13px;
         height: 13px;
@@ -170,7 +170,15 @@ export function createMapCanvas(lit: FlowComponentDeps) {
           0 0 0 3px rgba(91, 192, 232, 0.25),
           0 0 16px var(--wf-accent);
       }
-      .node.resolving .glyph {
+      .node.blocked .glyph {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--muted);
+        border: 1px solid rgba(154, 164, 173, 0.6);
+      }
+      .node.active .glyph {
         display: inline-block;
         width: 13px;
         height: 13px;
@@ -309,25 +317,25 @@ export function createMapCanvas(lit: FlowComponentDeps) {
     private renderNode(node: WayfinderNode, theme: ExpeditionTheme) {
       const glyphs = THEME_GLYPHS[theme];
       const glyph =
-        node.kind === "summit"
+        node.presentation === "summit"
           ? glyphs.summit
-          : node.kind === "base"
+          : node.presentation === "base"
             ? glyphs.base
-            : node.kind === "decision"
+            : node.presentation === "decision"
               ? glyphs.decision
-              : node.kind === "implementation"
+              : node.presentation === "implementation"
                 ? glyphs.implementation
-                : node.kind === "out-of-scope"
+                : node.presentation === "out-of-scope"
                   ? glyphs.outOfScope
                   : "";
       const caption =
-        node.kind === "fog"
+        node.presentation === "fog"
           ? html`<span class="tag">needs clarity</span>`
           : nothing;
       const { hoverId, focusId, onHover, onFocus } = this.props;
       const id = node.id;
       return html`<div
-        class="node ${node.kind}${this.hotClass(id, hoverId, focusId)}"
+        class="node ${node.presentation}${this.hotClass(id, hoverId, focusId)}"
         style=${`left:${node.x}%;top:${node.y}%`}
         data-id=${id}
         tabindex="0"
@@ -340,9 +348,10 @@ export function createMapCanvas(lit: FlowComponentDeps) {
       >
         <div class="glyph">
           ${
-            node.kind === "fog" ||
-            node.kind === "ready" ||
-            node.kind === "resolving"
+            node.presentation === "fog" ||
+            node.presentation === "frontier" ||
+            node.presentation === "blocked" ||
+            node.presentation === "active"
               ? ""
               : glyph
           }
@@ -371,7 +380,7 @@ export function createMapCanvas(lit: FlowComponentDeps) {
                 this.keydownFocus(event, node.id)}
             >
               <div class="card-title">${node.title}</div>
-              <div class="meta">${node.kind} · ${node.meta}</div>
+              <div class="meta">${node.presentation} · ${node.meta}</div>
             </div>`
           )}
         </div>`

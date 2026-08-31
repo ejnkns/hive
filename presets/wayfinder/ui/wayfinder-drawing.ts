@@ -46,18 +46,20 @@ export function wobblePath(
   return `${d}Z`;
 }
 
-// The trail sequence: base -> fog -> frontier -> the ordered ascent -> summit.
+// The trail sequence: base -> fog -> the actionable frontier -> the ordered
+// ascent -> summit. Blocked tickets are stuck behind the frontier, not on the
+// expedition path, so they are excluded from the trail.
 export function trailNodes(nodes: WayfinderNode[]): WayfinderNode[] {
-  const base = nodes.find((node) => node.kind === "base");
-  const fog = nodes.filter((node) => node.kind === "fog");
-  const ready = nodes
-    .filter((node) => node.kind === "ready")
+  const base = nodes.find((node) => node.presentation === "base");
+  const fog = nodes.filter((node) => node.presentation === "fog");
+  const frontier = nodes
+    .filter((node) => node.presentation === "frontier")
     .sort((a, b) => a.x - b.x);
   const ascent = nodes
     .filter((node) => node.order !== undefined)
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  const summit = nodes.find((node) => node.kind === "summit");
-  return [base, ...fog, ...ready, ...ascent, summit].filter(
+  const summit = nodes.find((node) => node.presentation === "summit");
+  return [base, ...fog, ...frontier, ...ascent, summit].filter(
     (node): node is WayfinderNode => node !== undefined
   );
 }
@@ -86,12 +88,14 @@ export function createWayfinderDrawing(deps: FlowComponentDeps) {
       sx: number,
       sy: number
     ) {
-      const summit = nodes.find((node) => node.kind === "summit");
+      const summit = nodes.find((node) => node.presentation === "summit");
       const cx = summit?.x ?? 84;
       const cy = summit?.y ?? 10;
       if (theme === "mountain") {
         const conquered = nodes.filter(
-          (node) => node.kind === "decision" || node.kind === "implementation"
+          (node) =>
+            node.presentation === "decision" ||
+            node.presentation === "implementation"
         );
         return svg`<g>
           ${
@@ -112,7 +116,9 @@ export function createWayfinderDrawing(deps: FlowComponentDeps) {
       }
       if (theme === "topo") {
         const conquered = nodes.filter(
-          (node) => node.kind === "decision" || node.kind === "implementation"
+          (node) =>
+            node.presentation === "decision" ||
+            node.presentation === "implementation"
         );
         const graticule: string[] = [];
         for (let i = 1; i < 10; i += 1) {
@@ -207,9 +213,9 @@ export function createWayfinderDrawing(deps: FlowComponentDeps) {
       sy: number,
       accent: string
     ) {
-      const ready = nodes.filter((node) => node.kind === "ready");
-      const y = ready.length > 0 ? ready[0].y : 60;
-      const xs = ready.map((node) => node.x);
+      const frontier = nodes.filter((node) => node.presentation === "frontier");
+      const y = frontier.length > 0 ? frontier[0].y : 60;
+      const xs = frontier.map((node) => node.x);
       const minX = xs.length > 0 ? Math.min(...xs) : 20;
       const maxX = xs.length > 0 ? Math.max(...xs) : 52;
       return svg`<path
@@ -253,14 +259,15 @@ export function createWayfinderDrawing(deps: FlowComponentDeps) {
       const colors: Record<string, string> = {
         decision: "#3fb950",
         implementation: THEME_ACCENT[theme],
-        ready: THEME_ACCENT[theme],
-        resolving: "#d29922",
+        frontier: THEME_ACCENT[theme],
+        blocked: "#d0b3b3",
+        active: "#d29922",
         fog: "#f0ead9",
         "out-of-scope": "#9aa4ad",
       };
-      const fill = colors[node.kind] ?? "#9aa4ad";
-      const radius = node.kind === "fog" ? 5 : 4;
-      const isFog = node.kind === "fog";
+      const fill = colors[node.presentation] ?? "#9aa4ad";
+      const radius = node.presentation === "fog" ? 5 : 4;
+      const isFog = node.presentation === "fog";
       const interactive = interactions.onClick !== undefined;
       return svg`<circle
         cx=${node.x * sx}

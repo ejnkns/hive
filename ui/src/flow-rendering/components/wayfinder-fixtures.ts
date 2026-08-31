@@ -37,11 +37,10 @@
  * - There is no detail drawer today: selecting a node/card only highlights
  *   and pulses. Presentation status is derived UI state, never a second
  *   domain status field. `ready` + every dependsOn blocker closed =
- *   frontier; `ready` with unresolved blockers must render blocked
- *   (baseline gap: the current map derivation kinds both as plain "ready"
- *   — the later blocked/frontier ticket closes that gap using the
- *   `dependsOn` field already on the WorkflowItem state; no domain field is
- *   missing).
+ *   frontier; `ready` with unresolved blockers renders blocked — closed by
+ *   the map-presentation-model ticket, which derives both from the
+ *   `dependsOn` field already on the WorkflowItem state (no domain field
+ *   was missing).
  *
  * Browser-free: plain data builders over ../test-fixtures.ts, importable by
  * both the `node --test` pure suite and the vitest jsdom component suite.
