@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { WorkflowInstanceEntry } from "workflow-engine/create-flow-runtime";
 import { deriveWayfinderMap } from "../../../../presets/wayfinder/ui/wayfinder-map.ts";
+import { wayfinderFixtureEntries } from "./wayfinder-fixtures.ts";
 
 // A minimal full WorkflowInstanceEntry for a wayfinder instance (the fields the
 // derivation reads are workflowId, currentState, and workflowInstanceState).
@@ -158,6 +159,90 @@ describe("deriveWayfinderMap", () => {
       instance("ticket", "t-3", "closed"),
     ];
     assert.deepEqual(deriveWayfinderMap(entries), deriveWayfinderMap(entries));
+  });
+
+  // The shared baseline fixture (wayfinder-fixtures.ts): one WorkflowItem per
+  // lifecycle position. This pins the CURRENT derivation as the compatibility
+  // baseline for the spatial-UI refactor — later tickets change the
+  // blocked/frontier presentation on top of these expectations, not under
+  // them.
+  describe("the shared wayfinder baseline fixture", () => {
+    it("places every lifecycle record in its baseline group", () => {
+      const map = deriveWayfinderMap(wayfinderFixtureEntries());
+
+      assert.equal(map.destination, "Hive router resilience");
+
+      const byKind = groupBy(map.nodes, (n) => n.kind);
+      assert.deepEqual(
+        byKind.get("fog")?.map((n) => n.id),
+        ["ticket-fog"]
+      );
+      // Baseline gap, recorded on purpose: the derivation kinds every
+      // `ready` ticket as plain "ready" — the ready-but-blocked ticket
+      // (dependsOn: ["ticket-fog"]) and the truly frontier-ready ticket
+      // (dependsOn: ["ticket-decision"], closed) are indistinguishable.
+      // The blocked/frontier ticket must separate them via the `dependsOn`
+      // field already on the WorkflowItem state — no domain field is
+      // missing.
+      assert.deepEqual(
+        byKind.get("ready")?.map((n) => n.id),
+        ["ticket-blocked", "ticket-frontier"]
+      );
+      assert.deepEqual(
+        byKind.get("resolving")?.map((n) => n.id),
+        ["ticket-resolving"]
+      );
+      assert.deepEqual(
+        byKind.get("decision")?.map((n) => n.id),
+        ["ticket-decision"]
+      );
+      assert.deepEqual(
+        byKind.get("out-of-scope")?.map((n) => n.id),
+        ["ticket-out-of-scope"]
+      );
+      assert.deepEqual(
+        byKind.get("implementation")?.map((n) => n.id),
+        ["build-1", "build-item-1"]
+      );
+      assert.deepEqual(
+        byKind.get("base")?.map((n) => n.instanceId),
+        ["charting-1"]
+      );
+      assert.deepEqual(
+        byKind.get("summit")?.map((n) => n.title),
+        ["Hive router resilience"]
+      );
+    });
+
+    it("orders the fixture's ascent resolving -> decision -> build -> build item", () => {
+      const map = deriveWayfinderMap(wayfinderFixtureEntries());
+      const ascent = map.groups
+        .find((g) => g.id === "ascent")
+        ?.nodes.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      assert.deepEqual(
+        ascent?.map((n) => n.id),
+        ["ticket-resolving", "ticket-decision", "build-1", "build-item-1"]
+      );
+    });
+
+    it("carries dependsOn on the fixture's WorkflowItem state for the blocked/frontier split", () => {
+      const entries = wayfinderFixtureEntries();
+      const blocked = entries.find((e) => e.id === "ticket-blocked");
+      const frontier = entries.find((e) => e.id === "ticket-frontier");
+      assert.deepEqual(blocked?.state.workflowInstanceState.dependsOn, [
+        "ticket-fog",
+      ]);
+      assert.deepEqual(frontier?.state.workflowInstanceState.dependsOn, [
+        "ticket-decision",
+      ]);
+    });
+
+    it("derives the same map from the same fixture order (deterministic)", () => {
+      assert.deepEqual(
+        deriveWayfinderMap(wayfinderFixtureEntries()),
+        deriveWayfinderMap(wayfinderFixtureEntries())
+      );
+    });
   });
 
   it("orders the ascent path resolving -> decisions -> implementations -> summit", () => {
