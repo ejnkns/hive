@@ -1037,6 +1037,63 @@ describe("wayfinder served modules", () => {
     }
   });
 
+  it("flow-component does not show the table chat's thinking indicator for a session waiting for its first user input", async () => {
+    // A freshly opened naming session: the transcript is only the system
+    // prompt — the agent is waiting for the human's first message, not
+    // composing a reply. The card must invite input, not claim the agent is
+    // thinking (the same contract the ticket card pins).
+    const naming = entry("charting-1", "naming");
+    naming.workflowId = "charting";
+    naming.state.workflowInstanceState = { destination: "" };
+    naming.state.hasRunningTask = true;
+    naming.state.runningTaskContext = {
+      role: "ai-chat",
+      interactive: true,
+      sessionId: "s-1",
+      messages: [
+        {
+          role: "system",
+          content: "You are naming one expedition destination.",
+        },
+      ],
+    };
+    const fogTicket = ticketEntry("t-1", "fog");
+    const { el, restore } = await mountFlowComponent([naming, fogTicket]);
+    try {
+      await switchView(el, "table");
+      expect(queryAllDeep(el, ".card-chat").length).toBe(1);
+      expect(queryAllDeep(el, ".thinking").length).toBe(0);
+      // The interactive input is still offered — the human starts the session.
+      expect(
+        queryAllDeep(el, "input[placeholder='Type a message...']").length
+      ).toBe(1);
+    } finally {
+      restore();
+    }
+  });
+
+  it("flow-component presents blocked-ready tickets as blocked in the briefing deck via the shared presentation status", async () => {
+    const { el, restore } = await mountFlowComponent(wayfinderFixtureEntries());
+    try {
+      await switchView(el, "table");
+      // The frontier dossier (every dependsOn blocker closed) keeps its plain
+      // type stamp — the deck's claimable paper.
+      const frontier = queryAllDeep(el, '.card[data-id="ticket-frontier"]')[0];
+      expect(frontier).toBeDefined();
+      expect(frontier?.querySelector(".stamp")?.textContent).toBe("research");
+      // A ready ticket with an unresolved dependsOn blocker is domain-ready
+      // but not claimable: the deck reads the shared presentation model and
+      // presents it as blocked — never a second domain status field.
+      const blocked = queryAllDeep(el, '.card[data-id="ticket-blocked"]')[0];
+      expect(blocked).toBeDefined();
+      const blockedStamp = blocked?.querySelector(".stamp")?.textContent ?? "";
+      expect(blockedStamp).toContain("blocked");
+      expect(blockedStamp).toContain("prototype");
+    } finally {
+      restore();
+    }
+  });
+
   it("flow-component syncs hover between table cards and mini-map markers, both directions", async () => {
     const charted = entry("c-1", "charted");
     charted.workflowId = "charting";

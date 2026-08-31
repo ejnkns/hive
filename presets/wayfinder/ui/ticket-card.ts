@@ -2,25 +2,22 @@
  * decision ticket: type badge, question, dependsOn chips, HITL marker,
  * worktree/branch when the resolution workspace exists, the resolved-decision
  * preview from whichever resolution task ran, live HITL chat, and the state
- * actions. Self-contained (no value imports — the lit runtime arrives through
- * the default-export factory). */
+ * actions. Shares the WorkflowItem status readers with the other card
+ * surfaces (wayfinder-status.ts); the lit runtime arrives through the
+ * default-export factory. */
 
 import type {
-  ChatMessage,
   FlowComponentDeps,
   FlowComponentRegistrations,
   InstanceComponentProps,
 } from "workflow-engine/workflow-types";
 import type { TicketType } from "./shared.ts";
-
-// The resolution task ids per ticket type (the card previews whichever ran).
-const RESEARCH_TASK = "research";
-const CHAT_RESOLUTION_TASKS = [
-  "prototypeSession",
-  "grillSession",
-  "taskSession",
-  "taskHitlSession",
-];
+import {
+  agentIsThinking,
+  CHAT_RESOLUTION_TASKS,
+  RESEARCH_TASK,
+  readOutcomeError,
+} from "./wayfinder-status.ts";
 
 export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
   const { LitElement: Base, html, css, nothing } = lit;
@@ -361,17 +358,6 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
   return { components: { "ticket-card": TicketCard } };
 }
 
-// The agent is composing its next reply while the transcript ends on a message
-// it must answer (a user message it hasn't replied to yet, or a tool result
-// mid-loop). A transcript that ends on the system prompt (or is empty) is a
-// session waiting for its first user input — the agent is NOT thinking, and
-// showing the indicator there is what makes a claimed-but-idle session look
-// stuck.
-function agentIsThinking(messages: readonly ChatMessage[]): boolean {
-  const last = messages[messages.length - 1];
-  return last !== undefined && (last.role === "user" || last.role === "tool");
-}
-
 // Reads a string field off a task-outcome output (the output shape is open;
 // the read is defensive — an absent or non-string value reads as empty).
 function readOutputString(outcome: unknown, field: string): string {
@@ -388,14 +374,6 @@ function readOutputArray(outcome: unknown, field: string): string[] {
   if (output === null || typeof output !== "object") return [];
   const value = (output as Record<string, unknown>)[field];
   return Array.isArray(value) ? (value as string[]) : [];
-}
-
-// Reads the error message off a task-outcome entry (the wire shape is open;
-// the read is defensive — an absent message reads as a generic failure).
-function readOutcomeError(outcome: unknown): string {
-  if (outcome === null || typeof outcome !== "object") return "unknown error";
-  const error = (outcome as Record<string, unknown>).error;
-  return typeof error === "string" && error !== "" ? error : "unknown error";
 }
 
 // Reads a string field off an ai-chat task's completion arguments (wrapped as

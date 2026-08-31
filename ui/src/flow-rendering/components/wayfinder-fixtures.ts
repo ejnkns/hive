@@ -10,8 +10,9 @@
  * while refactoring the map UI):
  * - Map-first: a populated expedition defaults to the map shell with the HUD
  *   (map-shell.ts); the Map/Table toggle switches to the cartographer's table
- *   (table-shell.ts); a newly created flow (no content nodes) presents the
- *   Base Camp empty state (base-camp.ts). View mode persists in
+ *   (table-shell.ts composing the wayfinder-table.ts workbench); a newly
+ *   created flow (no content nodes) presents the Base Camp empty state
+ *   (base-camp.ts). View mode persists in
  *   sessionStorage under `hive:view:<flowId>:view` ("map"/"table"), with the
  *   legacy pre-view-mode `hive:view:<flowId>:map-open` ("1"/"0") read as a
  *   fallback; `hive:view:<flowId>:fog-order` (JSON id list) stays. All

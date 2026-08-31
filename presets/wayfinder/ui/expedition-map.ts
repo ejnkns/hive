@@ -7,11 +7,11 @@
  * replaces was the generic fallback). */
 
 import type {
-  ChatMessage,
   FlowComponentDeps,
   FlowComponentRegistrations,
   WorkflowViewProps,
 } from "workflow-engine/workflow-types";
+import { agentIsThinking } from "./wayfinder-status.ts";
 
 export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
   const { LitElement: Base, html, css, nothing } = lit;
@@ -351,14 +351,6 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
   }
 
   return { components: { "expedition-map": ExpeditionMap } };
-}
-
-// The agent is composing its next reply while the transcript ends on anything
-// but an assistant message (a user message it hasn't answered, or a tool
-// result mid-loop).
-function agentIsThinking(messages: readonly ChatMessage[]): boolean {
-  const last = messages[messages.length - 1];
-  return last !== undefined && last.role !== "assistant";
 }
 
 // The index of a state along the fog → frontier → charted progression (fog

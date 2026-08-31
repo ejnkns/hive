@@ -4,11 +4,11 @@
  * arrives via the factory. */
 
 import type {
-  ChatMessage,
   FlowComponentDeps,
   FlowComponentRegistrations,
   InstanceComponentProps,
 } from "workflow-engine/workflow-types";
+import { agentIsThinking } from "./wayfinder-status.ts";
 
 export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
   const { LitElement: Base, html, css, nothing } = lit;
@@ -175,11 +175,4 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
   }
 
   return { components: { "charting-card": ChartingCard } };
-}
-
-// The agent is composing its next reply while the transcript ends on anything
-// but an assistant message.
-function agentIsThinking(messages: readonly ChatMessage[]): boolean {
-  const last = messages[messages.length - 1];
-  return last !== undefined && last.role !== "assistant";
 }

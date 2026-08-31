@@ -35,6 +35,14 @@ import type {
   WayfinderNode,
   WayfinderPresentationStatus,
 } from "./wayfinder-map.ts";
+import {
+  agentIsThinking,
+  CHAT_RESOLUTION_TASKS,
+  RESEARCH_TASK,
+  readDecisionRecord,
+  readOutcomeError,
+  TICKET_RESOLUTION_TASKS,
+} from "./wayfinder-status.ts";
 
 /** A blocker or dependent reference the drawer renders as a navigable chip:
  * the target node's title when the id is a map node, the raw id otherwise
@@ -184,16 +192,10 @@ const PRESENTATION_LABELS: Record<WayfinderPresentationStatus, string> = {
   summit: "Summit",
 };
 
-// The resolution task ids per workflow shape. A ticket resolves through the
-// research (ai-task) or one of the chat sessions; a build item through the
-// worker session and the review; a build through the planner.
-const RESEARCH_TASK = "research";
-const CHAT_RESOLUTION_TASKS = [
-  "prototypeSession",
-  "grillSession",
-  "taskSession",
-  "taskHitlSession",
-];
+// The build-outcome task ids per workflow shape. A ticket resolves through
+// the research (ai-task) or one of the chat sessions (wayfinder-status.ts);
+// a build item through the worker session and the review; a build through
+// the planner.
 const BUILD_OUTCOME_TASK = "runAgent";
 const REVIEW_TASK = "review";
 const PLAN_TASK = "plan";
@@ -298,7 +300,7 @@ function readResolution(entry: WorkflowInstanceEntry): DrawerResolution[] {
 // the drawer names the reason the run stopped (the retry action sits below).
 function readResolutionError(entry: WorkflowInstanceEntry): string | undefined {
   if (entry.workflowId !== "ticket") return undefined;
-  for (const taskId of [RESEARCH_TASK, ...CHAT_RESOLUTION_TASKS]) {
+  for (const taskId of TICKET_RESOLUTION_TASKS) {
     const outcome = entry.state.taskOutputs[taskId];
     if (outcome !== undefined && outcome.status === "error") {
       return readOutcomeError(outcome);
@@ -338,16 +340,6 @@ function readQuestion(instanceState: unknown): string | undefined {
   return brief !== "" ? brief : undefined;
 }
 
-// The persisted decision record for the closed ticket, read through the
-// engine's persisted-output seam (flow-payload reads the decisions directory
-// and ships it in the snapshot).
-function readDecisionRecord(
-  dirs: Readonly<Record<string, Readonly<Record<string, string>>>> | undefined,
-  instanceId: string
-): string | undefined {
-  return dirs?.decisions?.[`${instanceId}.md`];
-}
-
 // The live interactive ai-chat session, when one runs; one-shot (read-only)
 // sessions are not surfaced as chat.
 function readChat(
@@ -364,14 +356,6 @@ function readChat(
     thinking: agentIsThinking(ctx.messages),
     ...(ctx.modelStatus !== undefined ? { modelStatus: ctx.modelStatus } : {}),
   };
-}
-
-// The agent is composing its next reply while the transcript ends on a
-// message it must answer (a user message it hasn't replied to yet, or a tool
-// result mid-loop).
-function agentIsThinking(messages: readonly ChatMessage[]): boolean {
-  const last = messages[messages.length - 1];
-  return last !== undefined && (last.role === "user" || last.role === "tool");
 }
 
 // Defensive readers over the open wire shapes: absent or non-string values
@@ -426,10 +410,4 @@ function readCompletion(outcome: unknown): Record<string, unknown> | undefined {
 
 function readCompletionString(outcome: unknown, field: string): string {
   return readString(readCompletion(outcome), field);
-}
-
-function readOutcomeError(outcome: unknown): string {
-  if (outcome === null || typeof outcome !== "object") return "unknown error";
-  const error = (outcome as Record<string, unknown>).error;
-  return typeof error === "string" && error !== "" ? error : "unknown error";
 }

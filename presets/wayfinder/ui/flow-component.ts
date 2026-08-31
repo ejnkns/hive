@@ -5,9 +5,10 @@
  * variables), the session-scoped view state (map-first for a populated
  * expedition, the Base Camp empty state for a newly created flow, and the
  * explicit Map/Table toggle), the hover/focus pulse, the persisted fog clear
- * order, and the three renderers it composes — the Base Camp empty state
+ * order, and the four renderers it composes — the Base Camp empty state
  * (base-camp.ts), the map-first shell with its HUD (map-shell.ts), and the
- * alternate cartographer's table (table-shell.ts). The shells are separate
+ * alternate cartographer's table (the table-shell.ts chrome composing the
+ * focused wayfinder-table.ts workbench). The shells are separate
  * modules so neither the map nor the table can regress into a monolith; the
  * entry keeps one persistent instance of each (the map shell keeps the one
  * persistent map surface, so the camera and animation owner survive view
@@ -36,6 +37,10 @@ import {
   expeditionIsEmpty,
   type WayfinderMap,
 } from "./wayfinder-map.ts";
+import {
+  createWayfinderTable,
+  type WayfinderTableElement,
+} from "./wayfinder-table.ts";
 import type { ExpeditionTheme } from "./wayfinder-themes.ts";
 import { resolveTheme } from "./wayfinder-themes.ts";
 
@@ -44,7 +49,8 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
   const MapCanvas = createMapCanvas(lit);
   const Drawer = createWayfinderDrawer(lit);
   const MapShell = createMapShell({ lit, MapCanvas, Drawer });
-  const TableShell = createTableShell(lit);
+  const Table = createWayfinderTable(lit);
+  const TableShell = createTableShell({ lit, Table });
   const BaseCamp = createBaseCamp(lit);
 
   class FlowComponent extends Base {
@@ -448,6 +454,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       "wayfinder-map-view": MapCanvas,
       "wayfinder-map-shell": MapShell,
       "wayfinder-drawer": Drawer,
+      "wayfinder-table": Table,
       "wayfinder-table-shell": TableShell,
       "wayfinder-base-camp": BaseCamp,
     },

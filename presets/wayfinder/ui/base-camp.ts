@@ -10,13 +10,13 @@
 
 import type { WorkflowDefResponse } from "workflow-engine/create-flow-runtime";
 import type {
-  ChatMessage,
   FlowActionView,
   FlowComponentDeps,
   FlowViewProps,
 } from "workflow-engine/workflow-types";
 import type { WayfinderView } from "./shared.ts";
 import type { WayfinderMap } from "./wayfinder-map.ts";
+import { agentIsThinking } from "./wayfinder-status.ts";
 import type { ExpeditionTheme } from "./wayfinder-themes.ts";
 
 // The entries slice of the flow-view props.
@@ -450,11 +450,4 @@ export function createBaseCamp(
   }
 
   return BaseCamp;
-}
-
-// The agent is composing its next reply while the transcript ends on anything
-// but an assistant message.
-function agentIsThinking(messages: readonly ChatMessage[]): boolean {
-  const last = messages[messages.length - 1];
-  return last !== undefined && last.role !== "assistant";
 }
