@@ -9,9 +9,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { WorkflowInstanceEntry } from "workflow-engine/create-flow-runtime";
+import type { WayfinderCounts } from "../../../../presets/wayfinder/ui/wayfinder-map.ts";
 import {
   deriveWayfinderMap,
+  expeditionIsEmpty,
   wayfinderGroupOf,
+  wayfinderProgress,
 } from "../../../../presets/wayfinder/ui/wayfinder-map.ts";
 import { wayfinderFixtureEntries } from "./wayfinder-fixtures.ts";
 
@@ -540,6 +543,130 @@ describe("deriveWayfinderMap", () => {
     assert.equal(ordered[ordered.length - 1]?.presentation, "summit");
   });
 });
+
+describe("expeditionIsEmpty", () => {
+  it("is true for a newly created flow: only the base/summit anchors, no content nodes", () => {
+    // A charting session with no destination and zero tickets/builds: the
+    // freshly-created flow's map has only the synthetic anchors.
+    const map = deriveWayfinderMap([
+      instance("charting", "c-1", "naming", { destination: "" }),
+    ]);
+    assert.equal(expeditionIsEmpty(map), true);
+  });
+
+  it("is false once any content node exists — fog, frontier, blocked, active, decision, out-of-scope, or implementation", () => {
+    const chartingEntry = charting();
+    // Every lifecycle position individually makes the expedition populated.
+    const positions: Array<{ label: string; entry: WorkflowInstanceEntry }> = [
+      { label: "fog", entry: ticket("fog", "fog", { brief: "vague" }) },
+      {
+        label: "frontier",
+        entry: ticket("frontier", "ready", { title: "pick", type: "research" }),
+      },
+      {
+        label: "blocked",
+        entry: ticket("blocked", "ready", {
+          title: "blocked",
+          dependsOn: ["missing"],
+        }),
+      },
+      {
+        label: "active",
+        entry: ticket("active", "resolving_research", {
+          title: "run",
+          type: "research",
+        }),
+      },
+      {
+        label: "decision",
+        entry: ticket("decision", "closed", {
+          title: "done",
+          type: "research",
+        }),
+      },
+      {
+        label: "out-of-scope",
+        entry: ticket("oos", "out_of_scope", { title: "no", type: "task" }),
+      },
+      {
+        label: "build",
+        entry: instance("build", "build", "accepted", { spec: "# Spec" }),
+      },
+      {
+        label: "buildItem",
+        entry: instance("buildItem", "item", "done", {
+          ticket: { title: "gear" },
+        }),
+      },
+    ];
+    for (const { label, entry: extra } of positions) {
+      const map = deriveWayfinderMap([chartingEntry, extra]);
+      assert.equal(
+        expeditionIsEmpty(map),
+        false,
+        `${label} must count as populated`
+      );
+    }
+  });
+
+  it("is false for the full representative fixture", () => {
+    assert.equal(
+      expeditionIsEmpty(deriveWayfinderMap(wayfinderFixtureEntries())),
+      false
+    );
+  });
+});
+
+describe("wayfinderProgress", () => {
+  it("is 0 for an empty journey (no division by zero)", () => {
+    assert.equal(wayfinderProgress(countsOf()), 0);
+  });
+
+  it("is the charted fraction of the journey: decisions / (fog + frontier + blocked + active + decision)", () => {
+    // 4 decisions of an 8-step journey chart the map halfway.
+    assert.equal(
+      wayfinderProgress(
+        countsOf({ fog: 1, frontier: 1, blocked: 1, active: 1, decision: 4 })
+      ),
+      50
+    );
+    // 5 of 5 charted: the journey is complete at 100%.
+    assert.equal(wayfinderProgress(countsOf({ decision: 5 })), 100);
+  });
+
+  it("excludes out-of-scope boundaries and implementation items from the journey", () => {
+    // An out-of-scope ticket and a build item are not charting steps: the
+    // single decision of one fog ticket is a complete chart.
+    assert.equal(
+      wayfinderProgress(
+        countsOf({ fog: 1, decision: 1, "out-of-scope": 4, implementation: 3 })
+      ),
+      50
+    );
+  });
+
+  it("rounds to a whole percent for the progress bar", () => {
+    // 1 decision of a 3-step journey is 33.33% — the bar needs an integer.
+    assert.equal(
+      wayfinderProgress(countsOf({ fog: 1, frontier: 1, decision: 1 })),
+      33
+    );
+  });
+});
+
+// A zeroed WayfinderCounts for the progress derivations.
+function countsOf(overrides: Partial<WayfinderCounts> = {}): WayfinderCounts {
+  return {
+    fog: 0,
+    frontier: 0,
+    blocked: 0,
+    active: 0,
+    decision: 0,
+    "out-of-scope": 0,
+    implementation: 0,
+    ...overrides,
+  };
+}
 
 function groupBy<T, K>(items: readonly T[], key: (item: T) => K): Map<K, T[]> {
   const result = new Map<K, T[]>();

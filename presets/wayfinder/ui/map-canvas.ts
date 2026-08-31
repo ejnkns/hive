@@ -6,9 +6,12 @@
  * directed curved dependency edges with arrowheads, the DOM node overlays sit
  * at the same camera-projected world points (so the map stays keyboard- and
  * screen-reader-accessible), and the sidebar panel is the complete
- * DOM-backed list representation. Registered under a generated tag through
- * the entry's registrations; the entry references it by constructor, never
- * by tag. */
+ * DOM-backed list representation. The map shell (map-shell.ts) renders the
+ * HUD chrome — flow identity, counts, progress, legend, actions, the Fit/
+ * Reset controls, and the Map/Table toggle — and composes this surface by
+ * constructor; the surface itself carries only the map and its panel.
+ * Registered under a generated tag through the entry's registrations; the
+ * entry references it by constructor, never by tag. */
 
 import type { FlowComponentDeps } from "workflow-engine/workflow-types";
 import { MapController } from "./map-controller.ts";
@@ -16,8 +19,9 @@ import { nodeStatusGlyph } from "./map-visuals.ts";
 import type { WayfinderMap, WayfinderNode } from "./wayfinder-map.ts";
 import type { ExpeditionTheme } from "./wayfinder-themes.ts";
 
-// The public surface contract the entry syncs each render: the data props
-// (model/theme/hover/focus) plus the callbacks it wires once at construction.
+// The public surface contract the shell syncs each render: the data props
+// (model/theme/hover/focus), the callbacks it wires once at construction,
+// and the camera controls the HUD's Fit/Reset buttons call.
 // Intersected with HTMLElement so the constructor type stays assignable to
 // the served ElementConstructor contract.
 export type MapCanvasElement = HTMLElement & {
@@ -25,9 +29,12 @@ export type MapCanvasElement = HTMLElement & {
   theme: ExpeditionTheme;
   hoverId: string | undefined;
   focusId: string | undefined;
-  onClose: (() => void) | undefined;
   onHover: ((id: string | undefined) => void) | undefined;
   onFocus: ((id: string) => void) | undefined;
+  /** Fit the whole map into the viewport (the HUD's Fit button). */
+  fit(): void;
+  /** Snap back to the fitted view (the HUD's Reset button). */
+  reset(): void;
 };
 
 export function createMapCanvas(
@@ -41,7 +48,6 @@ export function createMapCanvas(
       theme: { type: String, reflect: true, attribute: "data-theme" },
       hoverId: { attribute: false },
       focusId: { attribute: false },
-      onClose: { attribute: false },
       onHover: { attribute: false },
       onFocus: { attribute: false },
     };
@@ -97,39 +103,6 @@ export function createMapCanvas(
         position: absolute;
         inset: 0;
         pointer-events: none;
-      }
-
-      .map-controls {
-        position: absolute;
-        right: 14px;
-        top: 14px;
-        z-index: 6;
-        display: flex;
-        gap: 0.375rem;
-      }
-      .map-controls button {
-        font: inherit;
-        font-size: 0.7rem;
-        padding: 0.32rem 0.6rem;
-        border-radius: 6px;
-        border: 1px solid var(--border);
-        background: var(--surface);
-        color: var(--text);
-        cursor: pointer;
-      }
-      .back-link {
-        position: absolute;
-        left: 14px;
-        top: 14px;
-        z-index: 6;
-        font: inherit;
-        font-size: 0.7rem;
-        padding: 0.32rem 0.6rem;
-        border-radius: 6px;
-        border: 1px solid var(--border);
-        background: var(--surface);
-        color: var(--text);
-        cursor: pointer;
       }
 
       .node {
@@ -343,7 +316,6 @@ export function createMapCanvas(
     declare theme: ExpeditionTheme;
     declare hoverId: string | undefined;
     declare focusId: string | undefined;
-    declare onClose: (() => void) | undefined;
     declare onHover: ((id: string | undefined) => void) | undefined;
     declare onFocus: ((id: string) => void) | undefined;
 
@@ -406,6 +378,17 @@ export function createMapCanvas(
       this.onFocus?.(id);
     }
 
+    /** Fit the whole map into view — called by the shell's HUD Fit button. */
+    fit(): void {
+      this.controller.fit();
+    }
+
+    /** Snap back to the fitted view — called by the shell's HUD Reset
+     * button. */
+    reset(): void {
+      this.controller.reset();
+    }
+
     render() {
       const model = this.model;
       if (model === undefined) return nothing;
@@ -419,27 +402,6 @@ export function createMapCanvas(
           <div class="map-nodes">
             ${model.nodes.map((node) => this.renderNode(node))}
           </div>
-          <div class="map-controls">
-            <button
-              class="fit"
-              type="button"
-              title="Fit the whole map into view"
-              @click=${() => this.controller.fit()}
-            >
-              Fit
-            </button>
-            <button
-              class="reset"
-              type="button"
-              title="Snap back to the fitted view"
-              @click=${() => this.controller.reset()}
-            >
-              Reset
-            </button>
-          </div>
-          <button class="back-link" type="button" @click=${() => this.onClose?.()}>
-            ← Back to the table
-          </button>
         </div>
         <aside class="panel">${this.renderPanel(model)}</aside>
       </div>`;

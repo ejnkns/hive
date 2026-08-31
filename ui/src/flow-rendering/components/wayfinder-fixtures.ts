@@ -8,22 +8,34 @@
  *
  * Baseline compatibility requirements this snapshot pins (do not regress
  * while refactoring the map UI):
- * - Table mode is the default view; the map opens via `.open-map`. View
- *   state persists in sessionStorage under `hive:view:<flowId>:map-open`
- *   ("1"/"0") and `hive:view:<flowId>:fog-order` (JSON id list), scoped per
- *   FlowInstance and restored in `willUpdate` (wayfinder-presets.component.test.ts
- *   "keeps the default table view…", "persists the open map view…",
+ * - Map-first: a populated expedition defaults to the map shell with the HUD
+ *   (map-shell.ts); the Map/Table toggle switches to the cartographer's table
+ *   (table-shell.ts); a newly created flow (no content nodes) presents the
+ *   Base Camp empty state (base-camp.ts). View mode persists in
+ *   sessionStorage under `hive:view:<flowId>:view` ("map"/"table"), with the
+ *   legacy pre-view-mode `hive:view:<flowId>:map-open` ("1"/"0") read as a
+ *   fallback; `hive:view:<flowId>:fog-order` (JSON id list) stays. All
+ *   session-scoped per FlowInstance and restored in `willUpdate`
+ *   (wayfinder-presets.component.test.ts "defaults to the map-first view…",
+ *   "persists the view mode…", "restores the legacy map-open storage key…",
  *   "view state is flow-scoped…"). No other view state is persisted.
+ * - The HUD counts come from the shared presentation model's derived counts
+ *   (`WayfinderMap.counts`): the frontier chip is the blockers-closed
+ *   frontier, never a recount of `ready` WorkflowItems; progress is
+ *   decisions / (fog + frontier + blocked + active + decision), excluding
+ *   out-of-scope boundaries and implementation items.
  * - Themes are `mountain | topo | stars` (wayfinder-themes.ts), selected via
  *   the flow CONFIG field `expeditionTheme` — static per FlowInstance, not
- *   persisted UI state; `mountain` is the default.
+ *   persisted UI state; `mountain` is the default. The theme wrapper in the
+ *   entry defines the --wf-* and --map-backdrop variables; the shells inherit
+ *   them and reflect data-theme on their hosts.
  * - Live chat renders inside a card while its WorkflowItem runs an
  *   interactive ai-chat session (`runningTaskContext.role === "ai-chat"` with
  *   `interactive: true`), surfacing `<chat-session>` and `onSendMessage`.
  * - Actions render per WorkflowItem on the table cards from
  *   `availableActions` (data-driven labels/variants) and flow-level actions
- *   in the header; the map view renders no action buttons. The claim action
- *   is gated on dependsOn blockers being closed
+ *   in the HUD and table header; the map view renders no per-item actions.
+ *   The claim action is gated on dependsOn blockers being closed
  *   (presets/wayfinder/gates/blockers-closed.ts + the engine's
  *   dependsOnState backstop).
  * - Journal drill-in: closed tickets list in the journal and toggle open

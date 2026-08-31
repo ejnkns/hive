@@ -44,8 +44,11 @@
 // create, waiting only on the SHELL element (workflow-instances) instead of
 // the surface, and fixed waits around the Done clicks / churn / reconnect —
 // is what this rewrite removes: every wait is now on an observable, with the
-// first render gated on the served surface's own header button (`.open-map`),
-// which exists only once the flow's components are registered and rendered.
+// first render gated on the served surface's own chrome wrapper
+// (`.expedition`), which exists only once the flow's components are
+// registered and rendered. The map-first shell (ticket 05) makes the map the
+// primary surface for a populated expedition; the `.view-toggle` switches to
+// the table and back.
 //
 // Offline emulation (ticket 06 probe): context.setOffline blocks NEW requests
 // but does not terminate ESTABLISHED WebSocket connections in this
@@ -196,12 +199,12 @@ test("wayfinder surface stays mounted with view state intact through churn and r
   await app.open(`${baseUrl}/#/flows/wayfinder/${flowName}`);
   // The shell host renders once the flow resolves (store or REST fallback);
   // the served surface mounts only after the flow's components load — wait on
-  // the SURFACE (its header button), the true first-render completion signal.
+  // the SURFACE (its chrome wrapper), the true first-render completion signal.
   await expect
     .poll(() => app.isVisible("workflow-instances"), { timeout: 30_000 })
     .toBe(true);
   await expect
-    .poll(() => app.isVisible(".open-map"), { timeout: 30_000 })
+    .poll(() => app.isVisible(".expedition"), { timeout: 30_000 })
     .toBe(true);
   await openSnapshotCounter();
 
@@ -230,6 +233,10 @@ test("wayfinder surface stays mounted with view state intact through churn and r
     );
   expect(await addFogViaApi("First fog card"), "first fog entry").toBe(true);
   expect(await addFogViaApi("Second fog card"), "second fog entry").toBe(true);
+  // The first fog entry makes the expedition populated, so the map-first
+  // shell takes over. Switch to the table, where the fog tray lives.
+  await app.waitForSelector(".view-toggle", { timeout: 30_000 });
+  await app.click(".view-toggle button", { hasText: "Table", first: true });
   await expect.poll(() => app.count(".fog-card"), { timeout: 10_000 }).toBe(2);
 
   // Drag the second fog card above the first into a session-local clear
@@ -254,24 +261,26 @@ test("wayfinder surface stays mounted with view state intact through churn and r
     .toContain("Second fog card");
 
   // The expedition theme comes from the flow config (created with "topo");
-  // open the map view BEFORE the churn window so the churn exercises it.
+  // switch back to the map-first view BEFORE the churn window so the churn
+  // exercises the surface with the map primary.
   await expect
     .poll(() => app.count('.expedition[data-theme="topo"]'), {
       timeout: 10_000,
     })
     .toBeGreaterThan(0);
-  await clickWhen(".open-map");
+  await app.click(".view-toggle button", { hasText: "Map", first: true });
   await expect
-    .poll(() => app.count(".back-link"), { timeout: 10_000 })
+    .poll(() => app.count(".map-layout"), { timeout: 10_000 })
     .toBeGreaterThan(0);
   await expect.poll(() => captureSurface(), { timeout: 10_000 }).toBe(true);
 
-  // The baseline: map open, configured topo theme, and the default
-  // per-workflow boards are not showing (the served flow-component owns the
-  // page).
-  expect(await app.count(".back-link"), "the map view is open").toBeGreaterThan(
-    0
-  );
+  // The baseline: the map-first surface, configured topo theme, and the
+  // default per-workflow boards are not showing (the served flow-component
+  // owns the page).
+  expect(
+    await app.count(".map-layout"),
+    "the map-first surface is showing"
+  ).toBeGreaterThan(0);
   expect(
     await app.count('.expedition[data-theme="topo"]'),
     "the configured theme is active"
@@ -319,8 +328,8 @@ test("wayfinder surface stays mounted with view state intact through churn and r
       "the surface element identity is stable through churn"
     ).toBe(true);
     expect(
-      await app.count(".back-link"),
-      "the map view stays open through churn"
+      await app.count(".map-layout"),
+      "the map-first surface stays through churn"
     ).toBeGreaterThan(0);
     expect(
       await app.count('.expedition[data-theme="topo"]'),
@@ -350,11 +359,13 @@ test("wayfinder surface stays mounted with view state intact through churn and r
     `the fog clear order persists through churn (stored=${storedFog}, reordered=${fogAfter})`
   ).toBe(fogAfter);
 
-  // Close the map (its back-link) so the header comes back: the fog tray must
-  // render the reordered pile (head = the dragged card) plus the four churn
-  // entries, and the topo theme must survive the close.
-  await clickWhen(".back-link");
-  await expect.poll(() => app.count(".back-link"), { timeout: 10_000 }).toBe(0);
+  // Switch to the table: the fog tray must render the reordered pile (head =
+  // the dragged card) plus the four churn entries, and the topo theme must
+  // survive the switch.
+  await clickWhen(".view-toggle button", { hasText: "Table" });
+  await expect
+    .poll(() => app.count(".map-layout"), { timeout: 10_000 })
+    .toBe(0);
   await expect.poll(() => app.count(".fog-card"), { timeout: 10_000 }).toBe(6);
   await expect
     .poll(() => app.textContent(".fog-card"), { timeout: 10_000 })
@@ -375,10 +386,10 @@ test("wayfinder surface stays mounted with view state intact through churn and r
     element: ".station:has(.fog-card)",
   });
 
-  // Reopen the map: the map-open state and the topo theme restore.
-  await clickWhen(".open-map");
+  // Switch back to the map: the map-first state and the topo theme restore.
+  await clickWhen(".view-toggle button", { hasText: "Map" });
   await expect
-    .poll(() => app.count(".back-link"), { timeout: 10_000 })
+    .poll(() => app.count(".map-layout"), { timeout: 10_000 })
     .toBeGreaterThan(0);
   expect(
     await app.count('.expedition[data-theme="topo"]'),
@@ -416,8 +427,8 @@ test("wayfinder surface stays mounted with view state intact through churn and r
     .poll(() => surfaceStillMounted(), { timeout: 10_000 })
     .toBe(true);
   expect(
-    await app.count(".back-link"),
-    "the map view stays open while offline"
+    await app.count(".map-layout"),
+    "the map-first surface stays while offline"
   ).toBeGreaterThan(0);
   expect(
     await app.count('.expedition[data-theme="topo"]'),
@@ -448,8 +459,8 @@ test("wayfinder surface stays mounted with view state intact through churn and r
     .poll(() => surfaceStillMounted(), { timeout: 10_000 })
     .toBe(true);
   expect(
-    await app.count(".back-link"),
-    "the map view stays open through the interruption"
+    await app.count(".map-layout"),
+    "the map-first surface stays through the interruption"
   ).toBeGreaterThan(0);
   expect(
     await app.count('.expedition[data-theme="topo"]'),

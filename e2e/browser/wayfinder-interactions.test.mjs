@@ -54,13 +54,18 @@ test("wayfinder interactions: hover sync card<->marker and fog drag reorder", as
   await app.click("button", { hasText: "Done" });
   await app.click("button", { hasText: "Done" });
 
-  // Two fog entries give the tray a pile to reorder.
+  // Two fog entries give the tray a pile to reorder. The first fog entry
+  // makes the expedition populated, so the map-first shell takes over; the
+  // flow actions live in its HUD, and the fog tray itself sits in the table.
   for (const brief of ["Choose the store", "Plot the reorder seam"]) {
     await app.click("button", { hasText: "Add fog entry", first: true });
     await app.waitForSelector("#cf-brief", { timeout: 10_000 });
     await app.fill("#cf-brief", brief);
     await submitFlowActionForm();
   }
+  // Switch to the table, where the fog tray and the mini-map live.
+  await app.waitForSelector(".view-toggle", { timeout: 30_000 });
+  await app.click(".view-toggle button", { hasText: "Table", first: true });
   await app.waitForSelector(".fog-card", {
     hasText: "Choose the store",
     timeout: 30_000,

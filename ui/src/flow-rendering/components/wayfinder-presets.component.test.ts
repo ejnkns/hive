@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkflowInstanceEntry } from "workflow-engine/create-flow-runtime";
 import type {
+  FlowActionView,
   FlowComponentDeps,
   FlowComponentRegistrations,
 } from "workflow-engine/workflow-types";
@@ -25,6 +26,7 @@ import {
   settle,
   shadowRootOf,
 } from "../test-utils.ts";
+import { wayfinderFixtureEntries } from "./wayfinder-fixtures.ts";
 import { WorkflowInstances } from "./workflow-instances.ts";
 
 // The preset modules' default export IS the served factory; the fake
@@ -76,22 +78,26 @@ async function mountFlowComponentHost(
     flowId?: string;
     config?: Record<string, unknown>;
     persistedOutputDirs?: Record<string, Record<string, string>>;
+    persistedOutputs?: Record<string, string>;
+    availableFlowActions?: FlowActionView[];
   } = {}
 ) {
   const flowId = options.flowId ?? "flow-1";
   const config = options.config ?? {};
   const charting = cardDef({ id: "charting", label: "Charting" });
   const ticket = cardDef({ id: "ticket", label: "Ticket" });
+  const build = cardDef({ id: "build", label: "Build" });
+  const buildItem = cardDef({ id: "buildItem", label: "Build Item" });
   const el = await mount(
     Object.assign(new WorkflowInstances(), {
       flowId,
       flow: { id: flowId, label: "Wayfinder", status: "idle", config },
       flowComponent: "flow-component",
-      workflowDefs: [charting, ticket],
+      workflowDefs: [charting, ticket, build, buildItem],
       instances,
       customKinds: [],
-      availableFlowActions: [],
-      persistedOutputs: {},
+      availableFlowActions: options.availableFlowActions ?? [],
+      persistedOutputs: options.persistedOutputs ?? {},
       persistedOutputDirs: options.persistedOutputDirs ?? {},
     })
   );
@@ -107,6 +113,8 @@ async function mountFlowComponent(
   options: {
     config?: Record<string, unknown>;
     persistedOutputDirs?: Record<string, Record<string, string>>;
+    persistedOutputs?: Record<string, string>;
+    availableFlowActions?: FlowActionView[];
   } = {}
 ) {
   defineFlowRenderingComponents();
@@ -666,125 +674,273 @@ describe("wayfinder served modules", () => {
     }
   });
 
-  it("flow-component renders the cartographer's table: dossier, fog, journal, depot, do-not-enter, and map", async () => {
-    defineFlowRenderingComponents();
-    localStorage.clear();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({ ok: true, text: async () => "" }))
+  // --- Ticket 05: the map-first shell and HUD ---
+
+  // Clicks the Map/Table toggle inside whichever shell is rendered.
+  async function switchView(el: WorkflowInstances, view: "map" | "table") {
+    const buttons = queryAllDeep(el, ".view-toggle button");
+    const target = buttons.find(
+      (button) => button.textContent?.trim().toLowerCase() === view
     );
-    const restore = await loadFlowComponents(
-      { "flow-component": "/api/.../flow-component" },
-      load(flowComponentModule)
+    expect(target, `the ${view} toggle is visible`).toBeDefined();
+    (target as HTMLElement).click();
+    await settle(shadowRootOf(el));
+  }
+
+  const addTicketAction: FlowActionView = {
+    id: "add_ticket",
+    label: "Add ticket",
+    variant: "primary",
+    createInstance: { workflowId: "ticket", fields: [] },
+  };
+
+  it("flow-component renders the map-first shell with a HUD: identity, destination, derived counts, progress, legend, actions, and map controls", async () => {
+    const { el, restore } = await mountFlowComponent(
+      wayfinderFixtureEntries(),
+      { availableFlowActions: [addTicketAction] }
     );
     try {
-      const charting = cardDef({
-        id: "charting",
-        label: "Charting",
-        terminalStates: ["charted"],
-        ui: { view: "list", workflowComponent: "expedition-map" },
-      });
-      const chartedEntry = entry("c-1", "charted");
-      chartedEntry.workflowId = "charting";
-      chartedEntry.state.workflowInstanceState = {
-        destination: "hive router",
-        notes: "offline-first",
-      };
+      // A populated expedition defaults to the map, not the table.
+      expect(queryAllDeep(el, ".map-layout").length).toBe(1);
+      expect(queryAllDeep(el, ".table").length).toBe(0);
 
-      const ticket = cardDef({
-        id: "ticket",
-        label: "Ticket",
-        ui: { view: "board", workflowComponent: "frontier-board" },
-      });
-      const readyTicket = entry("t-1", "ready");
-      readyTicket.workflowId = "ticket";
-      readyTicket.state.workflowInstanceState = {
-        title: "Pick the router",
-        type: "research",
-      };
-      readyTicket.availableActions = [
-        {
-          id: "claim_research",
-          label: "Claim for research",
-          variant: "primary",
-        },
-      ];
-      const fogTicket = entry("t-2", "fog");
-      fogTicket.workflowId = "ticket";
-      fogTicket.state.workflowInstanceState = { brief: "metrics to Effect?" };
-      const closedTicket = entry("t-3", "closed");
-      closedTicket.workflowId = "ticket";
-      closedTicket.state.workflowInstanceState = {
-        title: "Pilot is concurrency-first",
-        type: "research",
-      };
-      const outOfScopeTicket = entry("t-4", "out_of_scope");
-      outOfScopeTicket.workflowId = "ticket";
-      outOfScopeTicket.state.workflowInstanceState = {
-        title: "Carve-out audit",
-        type: "task",
-      };
-
-      const build = cardDef({
-        id: "build",
-        label: "Build",
-        terminalStates: ["accepted"],
-        ui: { view: "list", workflowComponent: "build-pipeline" },
-      });
-      const buildEntry = entry("b-1", "accepted");
-      buildEntry.workflowId = "build";
-
-      const buildItem = cardDef({ id: "buildItem", label: "Build Item" });
-      const itemEntry = entry("bi-1", "done");
-      itemEntry.workflowId = "buildItem";
-      itemEntry.state.workflowInstanceState = {
-        ticket: { title: "Retry loop" },
-      };
-
-      const el = await mount(
-        Object.assign(new WorkflowInstances(), {
-          flowId: "flow-1",
-          flow: {
-            id: "flow-1",
-            label: "Wayfinder",
-            status: "idle",
-            config: {},
-          },
-          flowComponent: "flow-component",
-          workflowDefs: [charting, ticket, build, buildItem],
-          instances: [
-            chartedEntry,
-            readyTicket,
-            fogTicket,
-            closedTicket,
-            outOfScopeTicket,
-            buildEntry,
-            itemEntry,
-          ],
-          customKinds: [],
-          availableFlowActions: [
-            {
-              id: "add_ticket",
-              label: "Add ticket",
-              variant: "primary",
-              createInstance: { workflowId: "ticket", fields: [] },
-            },
-          ],
-          persistedOutputs: {
-            "spec.md": "# Retry loop\nRetry transient failures.",
-            "build-plan.md": "# Plan\nThree build items.",
-          },
-        })
+      // The HUD names the expedition and its destination.
+      const hud = queryAllDeep(el, ".hud")[0];
+      expect(hud).toBeDefined();
+      expect(queryAllDeep(el, ".hud .title")[0]?.textContent).toBe("Wayfinder");
+      expect(queryAllDeep(el, ".hud .dest")[0]?.textContent).toBe(
+        "Hive router resilience"
       );
-      await settle(shadowRootOf(el));
 
-      // Header: expedition identity + flow actions.
+      // The counts come from the shared presentation model — the frontier
+      // chip counts the blockers-closed frontier, never every `ready` ticket.
+      // The fixture has TWO ready tickets: one with all blockers closed
+      // (frontier) and one blocked on an open fog ticket.
+      expect(queryAllDeep(el, ".chip.frontier")[0]?.textContent).toBe(
+        "1 frontier"
+      );
+      expect(queryAllDeep(el, ".chip.blocked")[0]?.textContent).toBe(
+        "1 blocked"
+      );
+      expect(queryAllDeep(el, ".chip.active")[0]?.textContent).toBe("1 active");
+      expect(queryAllDeep(el, ".chip.decision")[0]?.textContent).toBe(
+        "1 decision"
+      );
+      expect(queryAllDeep(el, ".chip.fog")[0]?.textContent).toBe("1 fog");
+      expect(queryAllDeep(el, ".chip.out-of-scope")[0]?.textContent).toBe(
+        "1 out of scope"
+      );
+      expect(queryAllDeep(el, ".chip.implementation")[0]?.textContent).toBe(
+        "2 implementation"
+      );
+
+      // Progress: 1 decision of the 5-step journey (fog + frontier + blocked
+      // + active + decision) is 20% charted; out-of-scope and implementation
+      // are not journey steps.
+      const progress = queryAllDeep(el, ".hud-progress")[0];
+      expect(progress?.getAttribute("role")).toBe("progressbar");
+      expect(progress?.getAttribute("aria-valuenow")).toBe("20");
+      expect(queryAllDeep(el, ".progress-label")[0]?.textContent).toBe(
+        "20% charted"
+      );
+
+      // The legend labels the journey statuses with text (colour is never the
+      // only signal).
+      const legend = queryAllDeep(el, ".legend-item").map((item) =>
+        item.textContent?.trim()
+      );
+      expect(legend).toEqual(["frontier", "blocked", "active", "decision"]);
+
+      // Flow actions are data-driven through availableFlowActions/onCreate.
+      expect(
+        queryAllDeep(el, ".hud-actions button")[0]?.textContent?.trim()
+      ).toBe("Add ticket");
+
+      // The HUD carries the map controls (Fit/Reset) and the Map/Table toggle.
+      expect(queryAllDeep(el, ".hud-map-controls button.fit").length).toBe(1);
+      expect(queryAllDeep(el, ".hud-map-controls button.reset").length).toBe(1);
+      const toggle = queryAllDeep(el, ".view-toggle button").map((button) =>
+        button.textContent?.trim()
+      );
+      expect(toggle).toEqual(["Map", "Table"]);
+    } finally {
+      restore();
+    }
+  });
+
+  it("flow-component renders the Base Camp empty state for a newly created flow", async () => {
+    const chartingEntry = entry("c-1", "naming");
+    chartingEntry.workflowId = "charting";
+    chartingEntry.state.workflowInstanceState = {
+      destination: "Hive router resilience",
+    };
+    chartingEntry.availableActions = [
+      { id: "start_charting", label: "Start charting", variant: "primary" },
+    ];
+    const { el, restore } = await mountFlowComponent([chartingEntry]);
+    try {
+      // No map, no table: the empty expedition presents the Base Camp.
+      expect(queryAllDeep(el, ".base-panel").length).toBe(1);
+      expect(queryAllDeep(el, ".map-layout").length).toBe(0);
+      expect(queryAllDeep(el, ".table").length).toBe(0);
+      expect(queryAllDeep(el, ".hud").length).toBe(0);
+
+      // The camp names the flow, its destination, and the charting session
+      // card with its action — the journey starts here.
+      expect(queryAllDeep(el, ".header .title")[0]?.textContent).toBe(
+        "Wayfinder"
+      );
+      expect(queryAllDeep(el, ".base-dest .name")[0]?.textContent).toBe(
+        "Hive router resilience"
+      );
+      expect(queryAllDeep(el, ".station-head")[0]?.textContent).toBe(
+        "Base camp"
+      );
+      expect(queryAllDeep(el, ".card .lbl")[0]?.textContent).toBe("naming");
+      expect(queryAllDeep(el, ".card .card-title")[0]?.textContent).toBe(
+        "Hive router resilience"
+      );
+      expect(
+        queryAllDeep(el, ".card-actions button")[0]?.textContent?.trim()
+      ).toBe("Start charting");
+      expect(queryAllDeep(el, ".base-hint")[0]?.textContent).toContain(
+        "chart the frontier"
+      );
+
+      // The Map/Table toggle stays visible from the start: the table is a
+      // useful workbench even while the expedition is empty, and the sparse
+      // map degrades back to the Base Camp.
+      const toggle = queryAllDeep(el, ".view-toggle button").map((button) =>
+        button.textContent?.trim()
+      );
+      expect(toggle).toEqual(["Map", "Table"]);
+      await switchView(el, "table");
+      expect(queryAllDeep(el, ".table").length).toBe(1);
+      expect(queryAllDeep(el, ".base-panel").length).toBe(0);
+      await switchView(el, "map");
+      expect(queryAllDeep(el, ".base-panel").length).toBe(1);
+    } finally {
+      restore();
+    }
+  });
+
+  it("flow-component Base Camp names uncharted territory before the destination is settled", async () => {
+    // A freshly created flow has no destination yet: the camp must not render
+    // an empty breadcrumb — it names the territory uncharted instead.
+    const chartingEntry = entry("c-1", "naming");
+    chartingEntry.workflowId = "charting";
+    chartingEntry.state.workflowInstanceState = { destination: "" };
+    const { el, restore } = await mountFlowComponent([chartingEntry]);
+    try {
+      expect(queryAllDeep(el, ".base-dest .name")[0]?.textContent).toBe(
+        "Uncharted territory"
+      );
+    } finally {
+      restore();
+    }
+  });
+
+  it("flow-component applies the expeditionTheme and switches map and table via the toggle", async () => {
+    const { el, restore } = await mountFlowComponent(
+      wayfinderFixtureEntries(),
+      { config: { expeditionTheme: "stars" } }
+    );
+    try {
+      // The config's expeditionTheme selects the stars skin on the chrome
+      // wrapper and on the map surface host.
+      expect(
+        queryAllDeep(el, ".expedition")[0]?.getAttribute("data-theme")
+      ).toBe("stars");
+      const surface = queryAllDeep(el, ".map-surface")[0];
+      const viewHost = (surface?.getRootNode() as ShadowRoot).host;
+      expect(viewHost.getAttribute("data-theme")).toBe("stars");
+
+      // Map-first: the surface with its panel is primary.
+      expect(queryAllDeep(el, ".map-layout").length).toBe(1);
+      expect(queryAllDeep(el, ".panel").length).toBe(1);
+
+      // The toggle switches to the table...
+      await switchView(el, "table");
+      expect(queryAllDeep(el, ".map-layout").length).toBe(0);
+      expect(queryAllDeep(el, ".table").length).toBe(1);
+      expect(
+        queryAllDeep(el, ".expedition")[0]?.getAttribute("data-theme")
+      ).toBe("stars");
+
+      // ...and back to the map.
+      await switchView(el, "map");
+      expect(queryAllDeep(el, ".map-layout").length).toBe(1);
+      expect(queryAllDeep(el, ".table").length).toBe(0);
+    } finally {
+      restore();
+    }
+  });
+
+  it("flow-component renders the alternate table: stations, journal, depot, do-not-enter, and the mini-map", async () => {
+    const charted = entry("c-1", "charted");
+    charted.workflowId = "charting";
+    charted.state.workflowInstanceState = {
+      destination: "hive router",
+      notes: "offline-first",
+    };
+    const readyTicket = entry("t-1", "ready");
+    readyTicket.workflowId = "ticket";
+    readyTicket.state.workflowInstanceState = {
+      title: "Pick the router",
+      type: "research",
+    };
+    readyTicket.availableActions = [
+      { id: "claim_research", label: "Claim for research", variant: "primary" },
+    ];
+    const fogTicket = entry("t-2", "fog");
+    fogTicket.workflowId = "ticket";
+    fogTicket.state.workflowInstanceState = { brief: "metrics to Effect?" };
+    const closedTicket = entry("t-3", "closed");
+    closedTicket.workflowId = "ticket";
+    closedTicket.state.workflowInstanceState = {
+      title: "Pilot is concurrency-first",
+      type: "research",
+    };
+    const outOfScopeTicket = entry("t-4", "out_of_scope");
+    outOfScopeTicket.workflowId = "ticket";
+    outOfScopeTicket.state.workflowInstanceState = {
+      title: "Carve-out audit",
+      type: "task",
+    };
+    const buildEntry = entry("b-1", "accepted");
+    buildEntry.workflowId = "build";
+    const itemEntry = entry("bi-1", "done");
+    itemEntry.workflowId = "buildItem";
+    itemEntry.state.workflowInstanceState = { ticket: { title: "Retry loop" } };
+
+    const { el, restore } = await mountFlowComponent(
+      [
+        charted,
+        readyTicket,
+        fogTicket,
+        closedTicket,
+        outOfScopeTicket,
+        buildEntry,
+        itemEntry,
+      ],
+      {
+        availableFlowActions: [addTicketAction],
+        persistedOutputs: {
+          "spec.md": "# Retry loop\nRetry transient failures.",
+          "build-plan.md": "# Plan\nThree build items.",
+        },
+      }
+    );
+    try {
+      // Map-first default; the toggle opens the table.
+      await switchView(el, "table");
+
+      // Header: expedition identity + flow actions + the toggle.
       expect(queryAllDeep(el, ".title")[0]?.textContent).toBe("Wayfinder");
       const actionLabels = queryAllDeep(el, ".actions button").map((button) =>
         button.textContent?.trim()
       );
       expect(actionLabels).toContain("Add ticket");
-      // The table defaults to the mountain theme.
       expect(
         queryAllDeep(el, ".expedition")[0]?.getAttribute("data-theme")
       ).toBe("mountain");
@@ -819,121 +975,13 @@ describe("wayfinder served modules", () => {
       );
       // Depot: spec, plan, build, and build-item crates.
       expect(queryAllDeep(el, ".crate").length).toBeGreaterThanOrEqual(3);
-      // The map card carries the destination and an SVG mini-map.
+      // The mini-map card carries the destination and an SVG mini-map, and
+      // its button opens the full map view.
       expect(queryAllDeep(el, ".dest-note .name")[0]?.textContent).toBe(
         "hive router"
       );
       expect(queryAllDeep(el, ".map-card svg").length).toBe(1);
       expect(queryAllDeep(el, ".open-map").length).toBe(1);
-    } finally {
-      restore();
-    }
-  });
-
-  it("flow-component applies the expeditionTheme and drills into the map view", async () => {
-    defineFlowRenderingComponents();
-    localStorage.clear();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({ ok: true, text: async () => "" }))
-    );
-    const restore = await loadFlowComponents(
-      { "flow-component": "/api/.../flow-component" },
-      load(flowComponentModule)
-    );
-    try {
-      const charting = cardDef({ id: "charting", label: "Charting" });
-      const chartedEntry = entry("c-1", "charted");
-      chartedEntry.workflowId = "charting";
-      chartedEntry.state.workflowInstanceState = { destination: "hive router" };
-
-      const ticket = cardDef({ id: "ticket", label: "Ticket" });
-      const fogTicket = entry("t-1", "fog");
-      fogTicket.workflowId = "ticket";
-      fogTicket.state.workflowInstanceState = { brief: "metrics to Effect?" };
-
-      const el = await mount(
-        Object.assign(new WorkflowInstances(), {
-          flowId: "flow-1",
-          flow: {
-            id: "flow-1",
-            label: "Wayfinder",
-            status: "idle",
-            config: { expeditionTheme: "stars" },
-          },
-          flowComponent: "flow-component",
-          workflowDefs: [charting, ticket],
-          instances: [chartedEntry, fogTicket],
-          customKinds: [],
-          availableFlowActions: [],
-        })
-      );
-      await settle(shadowRootOf(el));
-
-      // The config's expeditionTheme selects the stars skin.
-      expect(
-        queryAllDeep(el, ".expedition")[0]?.getAttribute("data-theme")
-      ).toBe("stars");
-
-      // Drilling in: the map card's open-map affordance zooms to the full map.
-      const openButton = queryAllDeep(el, ".open-map")[0] as
-        | HTMLElement
-        | undefined;
-      openButton?.click();
-      await settle(shadowRootOf(el));
-      expect(queryAllDeep(el, ".map-layout").length).toBe(1);
-      expect(queryAllDeep(el, ".panel").length).toBe(1);
-      expect(queryAllDeep(el, ".back-link").length).toBe(1);
-      // The summit node renders the destination text.
-      expect(queryAllDeep(el, ".node.summit .cap")[0]?.textContent).toBe(
-        "hive router"
-      );
-
-      // Back to the table.
-      const backButton = queryAllDeep(el, ".back-link")[0] as
-        | HTMLElement
-        | undefined;
-      backButton?.click();
-      await settle(shadowRootOf(el));
-      expect(queryAllDeep(el, ".map-layout").length).toBe(0);
-      expect(queryAllDeep(el, ".table").length).toBe(1);
-    } finally {
-      restore();
-    }
-  });
-
-  it("flow-component syncs hover between table cards and mini-map markers, both directions", async () => {
-    const charted = entry("c-1", "charted");
-    charted.workflowId = "charting";
-    charted.state.workflowInstanceState = { destination: "hive router" };
-    const fogTicket = ticketEntry("t-2", "fog");
-    fogTicket.state.workflowInstanceState = { brief: "metrics to Effect?" };
-    const { el, restore } = await mountFlowComponent([charted, fogTicket]);
-    try {
-      const fogCard = queryAllDeep(el, ".fog-card")[0];
-      const marker = queryAllDeep(el, '.marker[data-id="t-2"]')[0];
-      expect(fogCard?.getAttribute("data-id")).toBe("t-2");
-      expect(marker).toBeDefined();
-
-      // Card -> marker: hovering the fog card lights its marker up.
-      fogCard?.dispatchEvent(mouseEnter());
-      await settle(shadowRootOf(el));
-      expect(fogCard?.classList.contains("hl")).toBe(true);
-      expect(marker?.classList.contains("hl")).toBe(true);
-      fogCard?.dispatchEvent(mouseLeave());
-      await settle(shadowRootOf(el));
-      expect(fogCard?.classList.contains("hl")).toBe(false);
-      expect(marker?.classList.contains("hl")).toBe(false);
-
-      // Marker -> card: hovering the marker lights its card up.
-      marker?.dispatchEvent(mouseEnter());
-      await settle(shadowRootOf(el));
-      expect(fogCard?.classList.contains("hl")).toBe(true);
-      expect(marker?.classList.contains("hl")).toBe(true);
-      marker?.dispatchEvent(mouseLeave());
-      await settle(shadowRootOf(el));
-      expect(fogCard?.classList.contains("hl")).toBe(false);
-      expect(marker?.classList.contains("hl")).toBe(false);
     } finally {
       restore();
     }
@@ -947,13 +995,8 @@ describe("wayfinder served modules", () => {
     fogTicket.state.workflowInstanceState = { brief: "metrics to Effect?" };
     const { el, restore } = await mountFlowComponent([charted, fogTicket]);
     try {
-      const openButton = queryAllDeep(el, ".open-map")[0] as
-        | HTMLElement
-        | undefined;
-      openButton?.click();
-      await settle(shadowRootOf(el));
-
-      const node = queryAllDeep(el, '.node[data-id="t-2"]')[0];
+      // Map-first: no drill-in needed, the surface is already primary.
+      const node = queryAllDeep(el, '.map-surface .node[data-id="t-2"]')[0];
       const entryRow = queryAllDeep(el, '.panel .entry[data-id="t-2"]')[0];
       expect(node).toBeDefined();
       expect(entryRow).toBeDefined();
@@ -989,6 +1032,44 @@ describe("wayfinder served modules", () => {
     }
   });
 
+  it("flow-component syncs hover between table cards and mini-map markers, both directions", async () => {
+    const charted = entry("c-1", "charted");
+    charted.workflowId = "charting";
+    charted.state.workflowInstanceState = { destination: "hive router" };
+    const fogTicket = ticketEntry("t-2", "fog");
+    fogTicket.state.workflowInstanceState = { brief: "metrics to Effect?" };
+    const { el, restore } = await mountFlowComponent([charted, fogTicket]);
+    try {
+      await switchView(el, "table");
+      const fogCard = queryAllDeep(el, ".fog-card")[0];
+      const marker = queryAllDeep(el, '.marker[data-id="t-2"]')[0];
+      expect(fogCard?.getAttribute("data-id")).toBe("t-2");
+      expect(marker).toBeDefined();
+
+      // Card -> marker: hovering the fog card lights its marker up.
+      fogCard?.dispatchEvent(mouseEnter());
+      await settle(shadowRootOf(el));
+      expect(fogCard?.classList.contains("hl")).toBe(true);
+      expect(marker?.classList.contains("hl")).toBe(true);
+      fogCard?.dispatchEvent(mouseLeave());
+      await settle(shadowRootOf(el));
+      expect(fogCard?.classList.contains("hl")).toBe(false);
+      expect(marker?.classList.contains("hl")).toBe(false);
+
+      // Marker -> card: hovering the marker lights its card up.
+      marker?.dispatchEvent(mouseEnter());
+      await settle(shadowRootOf(el));
+      expect(fogCard?.classList.contains("hl")).toBe(true);
+      expect(marker?.classList.contains("hl")).toBe(true);
+      marker?.dispatchEvent(mouseLeave());
+      await settle(shadowRootOf(el));
+      expect(fogCard?.classList.contains("hl")).toBe(false);
+      expect(marker?.classList.contains("hl")).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
   it("flow-component pulses a clicked card into focus and auto-clears it", async () => {
     const charted = entry("c-1", "charted");
     charted.workflowId = "charting";
@@ -997,6 +1078,7 @@ describe("wayfinder served modules", () => {
     fogTicket.state.workflowInstanceState = { brief: "metrics to Effect?" };
     const { el, restore } = await mountFlowComponent([charted, fogTicket]);
     try {
+      await switchView(el, "table");
       const fogCard = queryAllDeep(el, ".fog-card")[0];
       const marker = queryAllDeep(el, '.marker[data-id="t-2"]')[0];
       vi.useFakeTimers();
@@ -1058,6 +1140,7 @@ describe("wayfinder served modules", () => {
       failed,
     ]);
     try {
+      await switchView(el, "table");
       // The running research card names the dispatched node.
       const statuses = queryAllDeep(el, ".task-status");
       expect(statuses[0]?.textContent).toContain("groq");
@@ -1082,6 +1165,7 @@ describe("wayfinder served modules", () => {
     second.state.workflowInstanceState = { brief: "reorder the map?" };
     const { el, restore } = await mountFlowComponent([charted, first, second]);
     try {
+      await switchView(el, "table");
       const firstCard = queryAllDeep(el, '.fog-card[data-id="t-2"]')[0];
       const secondCard = queryAllDeep(el, '.fog-card[data-id="t-3"]')[0];
       const pile = firstCard?.parentElement;
@@ -1131,7 +1215,7 @@ describe("wayfinder served modules", () => {
     }
   });
 
-  it("flow-component keeps the default table view, theme, and fog order when no view state is stored", async () => {
+  it("flow-component defaults to the map-first view, theme, and fog order when no view state is stored", async () => {
     const charted = entry("c-1", "charted");
     charted.workflowId = "charting";
     charted.state.workflowInstanceState = { destination: "hive router" };
@@ -1141,11 +1225,15 @@ describe("wayfinder served modules", () => {
     second.state.workflowInstanceState = { brief: "reorder the map?" };
     const { el, restore } = await mountFlowComponent([charted, first, second]);
     try {
-      expect(queryAllDeep(el, ".map-layout").length).toBe(0);
-      expect(queryAllDeep(el, ".table").length).toBe(1);
+      // No stored view: a populated expedition presents the map first.
+      expect(queryAllDeep(el, ".map-layout").length).toBe(1);
+      expect(queryAllDeep(el, ".table").length).toBe(0);
       expect(
         queryAllDeep(el, ".expedition")[0]?.getAttribute("data-theme")
       ).toBe("mountain");
+
+      // The table still holds the natural fog order.
+      await switchView(el, "table");
       const order = queryAllDeep(el, ".fog-card").map((card) =>
         card.getAttribute("data-id")
       );
@@ -1155,7 +1243,7 @@ describe("wayfinder served modules", () => {
     }
   });
 
-  it("flow-component persists the open map view and restores it on a fresh mount", async () => {
+  it("flow-component persists the view mode and restores it on a fresh mount", async () => {
     const charted = entry("c-1", "charted");
     charted.workflowId = "charting";
     charted.state.workflowInstanceState = { destination: "hive router" };
@@ -1163,46 +1251,53 @@ describe("wayfinder served modules", () => {
     fogTicket.state.workflowInstanceState = { brief: "metrics to Effect?" };
     const { el, restore } = await mountFlowComponent([charted, fogTicket]);
     try {
-      const openButton = queryAllDeep(el, ".open-map")[0] as
-        | HTMLElement
-        | undefined;
-      openButton?.click();
-      await settle(shadowRootOf(el));
-      expect(queryAllDeep(el, ".map-layout").length).toBe(1);
-      expect(sessionStorage.getItem("hive:view:flow-1:map-open")).toBe("1");
+      // Switch to the table: the choice persists session-scoped.
+      await switchView(el, "table");
+      expect(queryAllDeep(el, ".table").length).toBe(1);
+      expect(sessionStorage.getItem("hive:view:flow-1:view")).toBe("table");
 
-      // A fresh mount within the same session restores the map view.
+      // A fresh mount within the same session restores the table.
       el.remove();
       const remounted = await mountFlowComponentHost([charted, fogTicket]);
-      expect(queryAllDeep(remounted, ".map-layout").length).toBe(1);
-      expect(queryAllDeep(remounted, ".table").length).toBe(0);
+      expect(queryAllDeep(remounted, ".table").length).toBe(1);
+      expect(queryAllDeep(remounted, ".map-layout").length).toBe(0);
     } finally {
       restore();
     }
   });
 
-  it("flow-component persists the fog clear order and restores it on a fresh mount", async () => {
+  it("flow-component restores the legacy map-open storage key gracefully", async () => {
     const charted = entry("c-1", "charted");
     charted.workflowId = "charting";
     charted.state.workflowInstanceState = { destination: "hive router" };
-    const first = ticketEntry("t-2", "fog");
-    first.state.workflowInstanceState = { brief: "metrics to Effect?" };
-    const second = ticketEntry("t-3", "fog");
-    second.state.workflowInstanceState = { brief: "reorder the map?" };
-    const { el, restore } = await mountFlowComponent([charted, first, second]);
+    const fogTicket = ticketEntry("t-2", "fog");
+    fogTicket.state.workflowInstanceState = { brief: "metrics to Effect?" };
+    const { el, restore } = await mountFlowComponent([charted, fogTicket]);
     try {
-      await dragSecondFogFirst(el);
-      expect(sessionStorage.getItem("hive:view:flow-1:fog-order")).toBe(
-        '["t-3","t-2"]'
-      );
-
-      // A fresh mount within the same session restores the clear order.
+      // A session that wrote the pre-view-mode map-open flag ("0" = table)
+      // still restores the table, even though map is the new default.
+      sessionStorage.setItem("hive:view:flow-1:map-open", "0");
       el.remove();
-      const remounted = await mountFlowComponentHost([charted, first, second]);
-      const order = queryAllDeep(remounted, ".fog-card").map((card) =>
-        card.getAttribute("data-id")
-      );
-      expect(order).toEqual(["t-3", "t-2"]);
+      const remounted = await mountFlowComponentHost([charted, fogTicket]);
+      expect(queryAllDeep(remounted, ".table").length).toBe(1);
+
+      // The new view key wins over the legacy flag when both exist.
+      sessionStorage.setItem("hive:view:flow-1:view", "map");
+      sessionStorage.setItem("hive:view:flow-1:map-open", "0");
+      remounted.remove();
+      const again = await mountFlowComponentHost([charted, fogTicket]);
+      expect(queryAllDeep(again, ".map-layout").length).toBe(1);
+
+      // A stored table view applies even to an empty expedition: the stations
+      // are a workbench, so the choice is not silently ignored.
+      const chartingOnly = entry("c-1", "naming");
+      chartingOnly.workflowId = "charting";
+      chartingOnly.state.workflowInstanceState = { destination: "" };
+      sessionStorage.setItem("hive:view:flow-1:view", "table");
+      again.remove();
+      const emptyTable = await mountFlowComponentHost([chartingOnly]);
+      expect(queryAllDeep(emptyTable, ".table").length).toBe(1);
+      expect(queryAllDeep(emptyTable, ".base-panel").length).toBe(0);
     } finally {
       restore();
     }
@@ -1218,28 +1313,26 @@ describe("wayfinder served modules", () => {
     second.state.workflowInstanceState = { brief: "reorder the map?" };
     const { el, restore } = await mountFlowComponent([charted, first, second]);
     try {
-      // Set the two pieces of view state for flow-1.
+      // flow-1: switch to the table and reorder the fog tray.
+      await switchView(el, "table");
       await dragSecondFogFirst(el);
-      const openButton = queryAllDeep(el, ".open-map")[0] as
-        | HTMLElement
-        | undefined;
-      openButton?.click();
-      await settle(shadowRootOf(el));
-      expect(sessionStorage.getItem("hive:view:flow-1:map-open")).toBe("1");
+      expect(sessionStorage.getItem("hive:view:flow-1:view")).toBe("table");
       expect(sessionStorage.getItem("hive:view:flow-1:fog-order")).toBe(
         '["t-3","t-2"]'
       );
 
-      // A different flow mounts with its own defaults: nothing leaks over.
+      // A different flow mounts with its own defaults: map-first and the
+      // natural fog order — nothing leaks over.
       el.remove();
       const other = await mountFlowComponentHost([charted, first, second], {
         flowId: "flow-2",
       });
-      expect(queryAllDeep(other, ".map-layout").length).toBe(0);
-      expect(queryAllDeep(other, ".table").length).toBe(1);
+      expect(queryAllDeep(other, ".map-layout").length).toBe(1);
+      expect(queryAllDeep(other, ".table").length).toBe(0);
       expect(
         queryAllDeep(other, ".expedition")[0]?.getAttribute("data-theme")
       ).toBe("mountain");
+      await switchView(other, "table");
       const otherOrder = queryAllDeep(other, ".fog-card").map((card) =>
         card.getAttribute("data-id")
       );
@@ -1248,16 +1341,7 @@ describe("wayfinder served modules", () => {
       // flow-1 still restores its own state on a fresh mount.
       other.remove();
       const again = await mountFlowComponentHost([charted, first, second]);
-      expect(queryAllDeep(again, ".map-layout").length).toBe(1);
-      expect(
-        queryAllDeep(again, ".expedition")[0]?.getAttribute("data-theme")
-      ).toBe("mountain");
-      // The map view is open, so step back to the table to see the tray.
-      const backButton = queryAllDeep(again, ".back-link")[0] as
-        | HTMLElement
-        | undefined;
-      backButton?.click();
-      await settle(shadowRootOf(again));
+      expect(queryAllDeep(again, ".table").length).toBe(1);
       const againOrder = queryAllDeep(again, ".fog-card").map((card) =>
         card.getAttribute("data-id")
       );
@@ -1282,6 +1366,7 @@ describe("wayfinder served modules", () => {
       },
     });
     try {
+      await switchView(el, "table");
       const journalEntry = queryAllDeep(
         el,
         '.journal .entry[data-id="t-9"]'
@@ -1332,6 +1417,7 @@ describe("wayfinder served modules", () => {
     closed.state.workflowInstanceState = { title: "No record here" };
     const { el, restore } = await mountFlowComponent([charted, closed]);
     try {
+      await switchView(el, "table");
       const journalEntry = queryAllDeep(
         el,
         '.journal .entry[data-id="t-9"]'
@@ -1360,23 +1446,17 @@ describe("wayfinder served modules", () => {
       config: { expeditionTheme: "stars" },
     });
     try {
-      const openButton = queryAllDeep(el, ".open-map")[0] as
-        | HTMLElement
-        | undefined;
-      openButton?.click();
-      await settle(shadowRootOf(el));
-
-      // The surface: canvas visual layer + DOM node overlays + panel.
+      // The map-first surface: canvas visual layer + DOM node overlays + panel.
       const surface = queryAllDeep(el, ".map-surface")[0];
       expect(surface).toBeDefined();
       expect(queryAllDeep(el, ".map-surface canvas").length).toBe(1);
       expect(queryAllDeep(el, ".map-surface .node").length).toBeGreaterThan(0);
       // The theme rides the config onto the surface host (its shadow styles
-      // key off data-theme), and the fit/reset controls are present.
+      // key off data-theme), and the HUD's Fit/Reset controls are present.
       const viewHost = (surface?.getRootNode() as ShadowRoot).host;
       expect(viewHost.getAttribute("data-theme")).toBe("stars");
-      expect(queryAllDeep(el, ".map-controls button.fit").length).toBe(1);
-      expect(queryAllDeep(el, ".map-controls button.reset").length).toBe(1);
+      expect(queryAllDeep(el, ".hud-map-controls button.fit").length).toBe(1);
+      expect(queryAllDeep(el, ".hud-map-controls button.reset").length).toBe(1);
 
       // The controller positioned every overlay through the camera: each node
       // carries a projected screen position in CSS variables.
@@ -1385,6 +1465,12 @@ describe("wayfinder served modules", () => {
           (node as HTMLElement).style.getPropertyValue("--node-x")
         ).toMatch(/px$/);
       }
+
+      // The HUD Fit button drives the same controller without throwing.
+      const fit = queryAllDeep(el, ".hud-map-controls button.fit")[0] as
+        | HTMLElement
+        | undefined;
+      expect(() => fit?.click()).not.toThrow();
     } finally {
       restore();
     }
@@ -1398,11 +1484,6 @@ describe("wayfinder served modules", () => {
     fogTicket.state.workflowInstanceState = { brief: "metrics to Effect?" };
     const { el, restore } = await mountFlowComponent([charted, fogTicket]);
     try {
-      const openButton = queryAllDeep(el, ".open-map")[0] as
-        | HTMLElement
-        | undefined;
-      openButton?.click();
-      await settle(shadowRootOf(el));
       const surface = queryAllDeep(el, ".map-surface")[0];
       const viewHost = (surface?.getRootNode() as ShadowRoot).host;
       const before = viewHost;
@@ -1413,19 +1494,12 @@ describe("wayfinder served modules", () => {
       await settle(shadowRootOf(el));
       expect((surface?.getRootNode() as ShadowRoot).host).toBe(before);
 
-      // Closing detaches (disposes) the surface; reopening re-attaches the
-      // same instance — one camera/animation owner for the whole session.
-      const backButton = queryAllDeep(el, ".back-link")[0] as
-        | HTMLElement
-        | undefined;
-      backButton?.click();
-      await settle(shadowRootOf(el));
+      // Switching to the table detaches (disposes) the surface; switching
+      // back re-attaches the same instance — one camera/animation owner for
+      // the whole session.
+      await switchView(el, "table");
       expect(queryAllDeep(el, ".map-surface").length).toBe(0);
-      const openAgain = queryAllDeep(el, ".open-map")[0] as
-        | HTMLElement
-        | undefined;
-      openAgain?.click();
-      await settle(shadowRootOf(el));
+      await switchView(el, "map");
       expect(queryAllDeep(el, ".map-surface").length).toBe(1);
       const reopened = queryAllDeep(el, ".map-surface")[0];
       expect((reopened?.getRootNode() as ShadowRoot).host).toBe(before);

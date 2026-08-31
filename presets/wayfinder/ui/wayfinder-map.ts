@@ -103,6 +103,40 @@ export type WayfinderMap = {
   counts: WayfinderCounts;
 };
 
+// The expedition is empty when the map carries no content node — only the
+// synthetic base/summit anchors. A newly created flow starts here; the
+// map-first shell shows the Base Camp empty state until the first ticket or
+// build exists.
+export function expeditionIsEmpty(model: WayfinderMap): boolean {
+  const counts = model.counts;
+  return (
+    counts.fog +
+      counts.frontier +
+      counts.blocked +
+      counts.active +
+      counts.decision +
+      counts["out-of-scope"] +
+      counts.implementation ===
+    0
+  );
+}
+
+// The charted fraction of the expedition journey, as a whole percent. The
+// journey is the fog → frontier → decision path: fog, frontier, blocked,
+// active, and decision tickets. Out-of-scope boundaries (ruled out, not
+// charted) and implementation items (the build phase after the chart) are
+// deliberately excluded — the bar measures how much of the map is charted.
+export function wayfinderProgress(counts: WayfinderCounts): number {
+  const journey =
+    counts.fog +
+    counts.frontier +
+    counts.blocked +
+    counts.active +
+    counts.decision;
+  if (journey === 0) return 0;
+  return Math.round((counts.decision / journey) * 100);
+}
+
 export const RESOLVING_STATES = [
   "resolving_research",
   "resolving_prototype",
