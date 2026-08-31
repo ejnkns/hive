@@ -174,11 +174,13 @@ export function registerFlowsRoutes(server: FastifyInstance): void {
         .send({ error: `Flow "${flowId}" already exists` });
     }
 
-    // The basePath invariant, enforced at creation: absent → a hive-owned
-    // default workspace (HIVE_DIR/workspaces/<flowId>, created on the fly);
-    // "~" → expanded to the home dir; absolute → used as-is; relative →
-    // rejected (the daemon's cwd is never a stable anchor). The resolved
-    // value persists with the config, so rehydration reuses the same dir.
+    // basePath is normalized once, at creation — the only time it can be set
+    // (flow config is immutable after creation, and rehydration never mutates
+    // it): absent → a hive-owned default workspace
+    // (HIVE_DIR/workspaces/<flowId>, created on the fly); "~" → expanded to
+    // the home dir; absolute → used as-is; relative → rejected (the daemon's
+    // cwd is never a stable anchor). The resolved value persists with the
+    // config, so rehydration reuses the same dir.
     const rawBasePath = config.basePath;
     if (typeof rawBasePath !== "string" || rawBasePath.trim() === "") {
       config.basePath = ensureDefaultWorkspace(flowId);

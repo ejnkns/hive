@@ -47,6 +47,40 @@ const testDefinition = {
   edges: [],
 };
 
+// A workflow whose task declares a persist path — the engine refuses to
+// construct its runtime without an absolute basePath.
+const persistWorkflow = defineWorkflow({
+  id: "persist-wf",
+  label: "Persist Workflow",
+  taskOutputs: {} as Record<string, never>,
+  states: [
+    {
+      id: "active",
+      label: "Active",
+      category: "initial",
+      tasks: [
+        {
+          id: "write_doc",
+          label: "Write a doc",
+          trigger: "auto",
+          role: "operation",
+          persist: { path: "doc.md" },
+        },
+      ],
+    },
+    { id: "done", label: "Done", category: "terminal" },
+  ],
+  initial: "active",
+  terminalStates: ["done"],
+});
+
+const persistDefinition = {
+  id: "persist-def",
+  label: "Persist Definition",
+  workflows: [persistWorkflow],
+  edges: [],
+};
+
 describe("flow-registry", () => {
   let dir: string;
   let definitionsDir: string;
@@ -58,9 +92,14 @@ describe("flow-registry", () => {
     resetFlowDefinitionsForTest();
     setFlowPersistence(createFlowPersistence(dir));
     registerFlowDefinition(testDefinition);
+    // The hive-owned default workspace resolver reads the env var at call
+    // time; pin it to the temp dir so the repair test never touches the real
+    // hive data directory.
+    process.env.HIVE_DATA_DIR = join(dir, "hive-data");
   });
 
   afterEach(() => {
+    delete process.env.HIVE_DATA_DIR;
     rmSync(dir, { recursive: true, force: true });
     rmSync(definitionsDir, { recursive: true, force: true });
   });
@@ -259,6 +298,30 @@ describe("flow-registry", () => {
       []
     );
     assert.equal(runtime, null);
+  });
+
+  it("rehydrateFlow rejects a persist flow whose config has no basePath instead of repairing it", async () => {
+    registerFlowDefinition(persistDefinition);
+    const persistence = getFlowPersistence();
+    assert.ok(persistence);
+    // A persisted flow whose config lacks a basePath even though the
+    // definition declares persist tasks is invalid: flow config is immutable
+    // after creation, and creation always normalizes basePath. Rehydration
+    // must reject it (no runtime) rather than silently rewriting the config.
+    persistence.saveFlow("legacy-flow", { definitionId: "persist-def" }, {});
+    const runtime = await rehydrateFlow(
+      persistence,
+      "legacy-flow",
+      { definitionId: "persist-def" },
+      {},
+      []
+    );
+    assert.equal(runtime, null);
+    // The persisted config is untouched — rejection never mutates it.
+    const config = persistence.loadFlow("legacy-flow")?.config as
+      | Record<string, unknown>
+      | undefined;
+    assert.equal(config?.basePath, undefined);
   });
 
   it("onFlowEvent emits flow_event for a runtime created after subscription", () => {

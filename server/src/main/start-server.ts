@@ -65,7 +65,26 @@ export async function startServer(overrides?: Partial<ServerConfig>) {
     state: flowState,
     instances,
   } of flows) {
-    await rehydrateFlow(persistence, flowId, flowConfig, flowState, instances);
+    // One un-rehydratable flow must not kill the boot: a definition or
+    // persisted-state problem in a single flow logs a warning and is skipped,
+    // the rest of the flows still come up. rehydrateFlow already rejects the
+    // known invalid-config case (persist tasks without a basePath); this
+    // guard is the safety net for anything else.
+    try {
+      await rehydrateFlow(
+        persistence,
+        flowId,
+        flowConfig,
+        flowState,
+        instances
+      );
+    } catch (err) {
+      logger.warn(
+        `Flow "${flowId}" failed to rehydrate, skipping: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+    }
   }
 
   registerFlowApiRoutes(server);

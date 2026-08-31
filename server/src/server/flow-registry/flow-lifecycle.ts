@@ -232,6 +232,24 @@ export async function rehydrateFlow(
     domain = { tools: definition.tools, operations: definition.operations };
   }
 
+  // Flow config is immutable after creation, and creation always normalizes
+  // basePath (an absent value is bound to the hive-owned default workspace).
+  // A persisted config that declares persist tasks but has no basePath is
+  // therefore invalid — the engine refuses to construct it — and rehydration
+  // rejects it rather than mutating the config: the flow owner must provide a
+  // basePath or delete the flow.
+  const declaresPersist = workflows.some((wf) =>
+    wf.states.some((state) =>
+      (state.tasks ?? []).some((task) => task.persist !== undefined)
+    )
+  );
+  if (declaresPersist && typeof cfg.basePath !== "string") {
+    logger.warn(
+      `Flow "${flowId}" declares persist tasks but has no basePath — skipping rehydration; the flow needs a basePath or should be deleted`
+    );
+    return null;
+  }
+
   const runners = createEngineRunners(domain);
   const runtime = createFlowRuntime(
     flowId,

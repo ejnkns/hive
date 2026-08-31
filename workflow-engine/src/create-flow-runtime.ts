@@ -56,10 +56,11 @@ export function createFlowRuntime<
   persistence?: FlowPersistence
 ): FlowRuntimeAPI<TFlowConfig, TFlowState> {
   // config/initialState are optional; {} satisfies the Record constraint
-  // The basePath invariant: a present basePath must be absolute. The server
-  // normalizes it at creation (absolute, tilde-expanded, or a hive-owned
-  // default workspace), so a relative value reaching the engine is a caller
-  // bug — never silently re-anchored to the daemon's cwd.
+  // The engine's basePath rule is narrow: a PRESENT basePath must be
+  // absolute — the engine never re-anchors a relative value to the daemon's
+  // cwd. Normalization (tilde expansion, the hive-owned default workspace for
+  // an absent value) is the server's creation-time job; a relative value
+  // reaching the engine is a caller bug.
   const declaredBasePath = (config as Record<string, unknown> | undefined)
     ?.basePath;
   if (
@@ -72,10 +73,12 @@ export function createFlowRuntime<
     );
   }
 
-  // Fail at construction when the flow declares persist paths but has no
-  // basePath to write them under: the server normalizes basePath at creation,
-  // so a missing binding reaching the engine is a direct-construction mistake
-  // that would otherwise surface as a confusing mid-task error.
+  // Hard rejection: a flow that declares persist paths needs a basePath to
+  // write them under. Creation always provides one (the server binds the
+  // hive-owned default workspace when absent), so a persist-declaring flow
+  // without a basePath is an invalid config — the caller must surface it
+  // (e.g. rehydration skips the flow with a warning), never silently patch
+  // it, or the mistake would surface as a confusing mid-task error.
   const hasBasePath =
     typeof declaredBasePath === "string" && declaredBasePath !== "";
   const declaresPersist = workflowDefs.some((wf) =>
