@@ -232,6 +232,97 @@ describe("wayfinder map controller", () => {
     document.body.removeChild(host);
   });
 
+  it("does not capture the pointer for a press on a node overlay (the native click stays the exact selection path)", () => {
+    const host = surfaceHost(VIEWPORT);
+    const model = baselineModel();
+    addOverlayNodes(host, model);
+    const capture = vi.fn();
+    Object.defineProperty(host, "setPointerCapture", {
+      value: capture,
+      configurable: true,
+    });
+    const controller = new MapController({ onFocus: () => {} });
+    controller.mount(host);
+    controller.update(model, "mountain");
+    const node = host.querySelector(".node");
+    expect(node).toBeDefined();
+    // A press on a node must not capture: capture retargets the node's
+    // native click to the surface, killing the exact selection path.
+    node?.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        clientX: 10,
+        clientY: 10,
+        pointerId: 1,
+        bubbles: true,
+      })
+    );
+    expect(capture).not.toHaveBeenCalled();
+    // A press on the blank surface still captures (pan + tap hit-test path).
+    pointerDown(host, 20, 20, 2);
+    expect(capture).toHaveBeenCalledWith(2);
+    document.body.removeChild(host);
+  });
+
+  it("a node press still tracks a drag, so the map pans when the press moves", () => {
+    const host = surfaceHost(VIEWPORT);
+    const model = baselineModel();
+    addOverlayNodes(host, model);
+    const onFocus = vi.fn();
+    const controller = new MapController({ onFocus });
+    controller.mount(host);
+    controller.update(model, "mountain");
+    controller.reset();
+    const before = controller.goal;
+    const node = host.querySelector(".node");
+    expect(node).toBeDefined();
+    node?.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        clientX: 100,
+        clientY: 100,
+        pointerId: 1,
+        bubbles: true,
+      })
+    );
+    node?.dispatchEvent(
+      new PointerEvent("pointermove", {
+        clientX: 200,
+        clientY: 150,
+        pointerId: 1,
+        bubbles: true,
+      })
+    );
+    node?.dispatchEvent(
+      new PointerEvent("pointerup", {
+        clientX: 200,
+        clientY: 150,
+        pointerId: 1,
+        bubbles: true,
+      })
+    );
+    // The press moved beyond the tap threshold: a pan, not a tap — no node
+    // focused, and the camera goal panned by the drag delta.
+    expect(onFocus).not.toHaveBeenCalled();
+    expect(controller.goal.x).toBeCloseTo(before.x + 100);
+    expect(controller.goal.y).toBeCloseTo(before.y + 50);
+    document.body.removeChild(host);
+  });
+
+  it("reports a blank tap (no node within reach) through onBlankTap", () => {
+    const host = surfaceHost(VIEWPORT);
+    const onFocus = vi.fn();
+    const onBlankTap = vi.fn();
+    const controller = new MapController({ onFocus, onBlankTap });
+    controller.mount(host);
+    controller.update(baselineModel(), "mountain");
+    controller.reset();
+    // Tap a screen corner far from every node: no hit, a blank tap.
+    pointerDown(host, 790, 590);
+    pointerUp(host, 790, 590);
+    expect(onFocus).not.toHaveBeenCalled();
+    expect(onBlankTap).toHaveBeenCalledTimes(1);
+    document.body.removeChild(host);
+  });
+
   it("focuses a node tapped through the camera (canvas-aligned hit testing)", () => {
     const host = surfaceHost(VIEWPORT);
     const onFocus = vi.fn();

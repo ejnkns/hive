@@ -30,6 +30,7 @@ import { createMapCanvas } from "./map-canvas.ts";
 import { createMapShell, type MapShellElement } from "./map-shell.ts";
 import type { WayfinderView } from "./shared.ts";
 import { createTableShell, type TableShellElement } from "./table-shell.ts";
+import { createWayfinderDrawer } from "./wayfinder-drawer.ts";
 import {
   deriveWayfinderMap,
   expeditionIsEmpty,
@@ -41,7 +42,8 @@ import { resolveTheme } from "./wayfinder-themes.ts";
 export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
   const { LitElement: Base, html, css } = lit;
   const MapCanvas = createMapCanvas(lit);
-  const MapShell = createMapShell({ lit, MapCanvas });
+  const Drawer = createWayfinderDrawer(lit);
+  const MapShell = createMapShell({ lit, MapCanvas, Drawer });
   const TableShell = createTableShell(lit);
   const BaseCamp = createBaseCamp(lit);
 
@@ -329,6 +331,8 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       shell.onFlowAction = (actionId) => this.onFlowAction(actionId);
       shell.onHover = (id) => this.hover(id);
       shell.onFocus = (id) => this.setFocus(id);
+      shell.onAction = (id, actionId) => this.onAction(id, actionId);
+      shell.onSendMessage = (id, content) => this.onSendMessage(id, content);
       shell.onViewChange = (view) => this.switchView(view);
       this.mapShell = shell;
       return shell;
@@ -387,6 +391,9 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
           ...identity,
           model: this.model,
           theme: this.theme,
+          entries: this.entries,
+          workflowDefs: this.workflowDefs,
+          persistedOutputDirs: this.persistedOutputDirs,
           availableFlowActions: this.availableFlowActions,
           hoverId: this.hoverId,
           focusId: this.focusId,
@@ -440,6 +447,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       // throws); the entry composes them by constructor, never by tag.
       "wayfinder-map-view": MapCanvas,
       "wayfinder-map-shell": MapShell,
+      "wayfinder-drawer": Drawer,
       "wayfinder-table-shell": TableShell,
       "wayfinder-base-camp": BaseCamp,
     },

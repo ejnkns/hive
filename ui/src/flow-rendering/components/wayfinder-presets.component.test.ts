@@ -22,11 +22,16 @@ import { cardDef, entry } from "../test-fixtures.ts";
 import {
   click,
   mount,
+  mustQuery,
   queryAllDeep,
   settle,
   shadowRootOf,
+  type,
 } from "../test-utils.ts";
-import { wayfinderFixtureEntries } from "./wayfinder-fixtures.ts";
+import {
+  WAYFINDER_DECISION_RECORDS,
+  wayfinderFixtureEntries,
+} from "./wayfinder-fixtures.ts";
 import { WorkflowInstances } from "./workflow-instances.ts";
 
 // The preset modules' default export IS the served factory; the fake
@@ -1503,6 +1508,411 @@ describe("wayfinder served modules", () => {
       expect(queryAllDeep(el, ".map-surface").length).toBe(1);
       const reopened = queryAllDeep(el, ".map-surface")[0];
       expect((reopened?.getRootNode() as ShadowRoot).host).toBe(before);
+    } finally {
+      restore();
+    }
+  });
+
+  // --- Ticket 06: the in-context WorkflowItem detail drawer ---
+
+  // Engages a map node (or a sidebar panel entry) with a click — the same
+  // affordance a real pointer tap goes through (the surface's @click handler).
+  function selectNode(el: WorkflowInstances, id: string, inPanel = false) {
+    const selector = inPanel
+      ? `.panel .entry[data-id="${id}"]`
+      : `.map-surface .node[data-id="${id}"]`;
+    const target = queryAllDeep(el, selector)[0];
+    expect(target, `the ${selector} element is present`).toBeDefined();
+    (target as HTMLElement).dispatchEvent(click());
+  }
+
+  it("selecting a map node opens the in-context detail drawer while the map stays visible", async () => {
+    const { el, restore } = await mountFlowComponent(wayfinderFixtureEntries());
+    try {
+      expect(queryAllDeep(el, ".drawer").length).toBe(0);
+      selectNode(el, "ticket-frontier");
+      await settle(shadowRootOf(el));
+      expect(queryAllDeep(el, ".drawer").length).toBe(1);
+      expect(queryAllDeep(el, ".drawer-name")[0]?.textContent).toBe(
+        "Pick the failover policy"
+      );
+      // The map surface stays in the DOM — the drawer is in context, not a
+      // navigation.
+      expect(queryAllDeep(el, ".map-surface").length).toBe(1);
+    } finally {
+      restore();
+    }
+  });
+
+  it("selecting a sidebar entry opens the same drawer", async () => {
+    const { el, restore } = await mountFlowComponent(wayfinderFixtureEntries());
+    try {
+      selectNode(el, "ticket-fog", true);
+      await settle(shadowRootOf(el));
+      expect(queryAllDeep(el, ".drawer-name")[0]?.textContent).toBe(
+        "Do metrics survive the proxy restart?"
+      );
+    } finally {
+      restore();
+    }
+  });
+
+  it("the drawer shows derived status, actual workflow state, type, and question", async () => {
+    const { el, restore } = await mountFlowComponent(wayfinderFixtureEntries());
+    try {
+      selectNode(el, "ticket-frontier");
+      await settle(shadowRootOf(el));
+      expect(queryAllDeep(el, ".status-chip")[0]?.textContent?.trim()).toBe(
+        "Frontier"
+      );
+      expect(queryAllDeep(el, ".state-label")[0]?.textContent).toBe("Ready");
+      expect(queryAllDeep(el, ".type-label")[0]?.textContent).toBe("research");
+      expect(queryAllDeep(el, ".drawer-question")[0]?.textContent).toBe(
+        "Circuit-breaker half-open or cooldown-first?"
+      );
+    } finally {
+      restore();
+    }
+  });
+
+  it("the drawer renders the resolution task output and the persisted decision record", async () => {
+    const entries = wayfinderFixtureEntries();
+    const resolving = entries.find((e) => e.id === "ticket-resolving");
+    if (resolving !== undefined) {
+      resolving.state.taskOutputs = {
+        research: {
+          status: "success",
+          output: {
+            question: "Which provider errors are retryable?",
+            findings: "# Findings\n\nProviders are flaky.",
+            sources: ["https://a.example"],
+          },
+        },
+      };
+    }
+    const { el, restore } = await mountFlowComponent(entries, {
+      persistedOutputDirs: WAYFINDER_DECISION_RECORDS,
+    });
+    try {
+      // The active research ticket shows its findings as markdown.
+      selectNode(el, "ticket-resolving");
+      await settle(shadowRootOf(el));
+      const findings = queryAllDeep(el, ".resolution-block markdown-view")[0];
+      expect(findings).toBeDefined();
+      expect(findings?.shadowRoot?.textContent).toContain(
+        "Providers are flaky."
+      );
+      expect(queryAllDeep(el, ".resolution-meta")[0]?.textContent).toBe(
+        "1 sources"
+      );
+
+      // The closed ticket drills into its persisted decision record.
+      selectNode(el, "ticket-decision");
+      await settle(shadowRootOf(el));
+      const titles = queryAllDeep(el, ".drawer-section-title").map((title) =>
+        title.textContent?.trim()
+      );
+      expect(titles).toContain("Decision record");
+      const record = queryAllDeep(el, "markdown-view")[0];
+      expect(record?.shadowRoot?.textContent).toContain(
+        "Pilots run concurrently"
+      );
+    } finally {
+      restore();
+    }
+  });
+
+  it("drawer actions route through the generic hive-action seam", async () => {
+    const entries = wayfinderFixtureEntries();
+    const frontier = entries.find((e) => e.id === "ticket-frontier");
+    if (frontier !== undefined) {
+      frontier.availableActions = [
+        {
+          id: "claim_research",
+          label: "Claim for research",
+          variant: "primary",
+        },
+      ];
+    }
+    const { el, restore } = await mountFlowComponent(entries);
+    try {
+      const actions: Array<{ instanceId: string; actionId: string }> = [];
+      el.addEventListener("hive-action", (event) => {
+        actions.push((event as CustomEvent).detail);
+      });
+      selectNode(el, "ticket-frontier");
+      await settle(shadowRootOf(el));
+      const claim = queryAllDeep(el, ".drawer-actions button")[0] as
+        | HTMLElement
+        | undefined;
+      expect(claim?.textContent?.trim()).toBe("Claim for research");
+      claim?.dispatchEvent(click());
+      await settle(shadowRootOf(el));
+      expect(actions[0]).toMatchObject({
+        flowId: "flow-1",
+        instanceId: "ticket-frontier",
+        actionId: "claim_research",
+      });
+    } finally {
+      restore();
+    }
+  });
+
+  it("the drawer surfaces the live chat session and routes messages through hive-send-message", async () => {
+    const entries = wayfinderFixtureEntries();
+    const resolving = entries.find((e) => e.id === "ticket-resolving");
+    if (resolving !== undefined) {
+      resolving.state.currentState = "resolving_prototype";
+      resolving.state.hasRunningTask = true;
+      resolving.state.runningTaskContext = {
+        role: "ai-chat",
+        messages: [{ role: "assistant", content: "How should we fail?" }],
+        sessionId: "session-1",
+        interactive: true,
+      };
+    }
+    const { el, restore } = await mountFlowComponent(entries);
+    try {
+      const messages: Array<{ instanceId: string; content: string }> = [];
+      el.addEventListener("hive-send-message", (event) => {
+        messages.push((event as CustomEvent).detail);
+      });
+      selectNode(el, "ticket-resolving");
+      await settle(shadowRootOf(el));
+      const session = queryAllDeep(el, "chat-session")[0];
+      expect(session).toBeDefined();
+      const input = mustQuery(
+        shadowRootOf(session),
+        "input"
+      ) as HTMLInputElement;
+      type(input, "cooldown first");
+      input.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true })
+      );
+      await settle(shadowRootOf(el));
+      expect(messages[0]).toMatchObject({
+        flowId: "flow-1",
+        instanceId: "ticket-resolving",
+        content: "cooldown first",
+      });
+    } finally {
+      restore();
+    }
+  });
+
+  it("blocker chips navigate the drawer to the referenced node without leaving the map", async () => {
+    const { el, restore } = await mountFlowComponent(wayfinderFixtureEntries());
+    try {
+      selectNode(el, "ticket-blocked");
+      await settle(shadowRootOf(el));
+      const titles = queryAllDeep(el, ".drawer-section-title").map((title) =>
+        title.textContent?.trim()
+      );
+      expect(titles).toContain("Blocks on");
+      const chip = queryAllDeep(el, '.ref-chip[data-id="ticket-fog"]')[0] as
+        | HTMLElement
+        | undefined;
+      expect(chip).toBeDefined();
+      chip?.dispatchEvent(click());
+      await settle(shadowRootOf(el));
+      expect(queryAllDeep(el, ".drawer-name")[0]?.textContent).toBe(
+        "Do metrics survive the proxy restart?"
+      );
+      expect(queryAllDeep(el, ".status-chip")[0]?.textContent?.trim()).toBe(
+        "Fog"
+      );
+      // The map stays; the navigated node is durably selected (highlighted).
+      expect(queryAllDeep(el, ".map-surface").length).toBe(1);
+      expect(
+        queryAllDeep(
+          el,
+          '.map-surface .node[data-id="ticket-fog"]'
+        )[0]?.classList.contains("selected")
+      ).toBe(true);
+    } finally {
+      restore();
+    }
+  });
+
+  it("dependent chips navigate the drawer to the dependent node", async () => {
+    const { el, restore } = await mountFlowComponent(wayfinderFixtureEntries());
+    try {
+      selectNode(el, "ticket-fog");
+      await settle(shadowRootOf(el));
+      const titles = queryAllDeep(el, ".drawer-section-title").map((title) =>
+        title.textContent?.trim()
+      );
+      expect(titles).toContain("Dependents");
+      const chip = queryAllDeep(el, '.ref-chip[data-id="ticket-blocked"]')[0] as
+        | HTMLElement
+        | undefined;
+      expect(chip).toBeDefined();
+      chip?.dispatchEvent(click());
+      await settle(shadowRootOf(el));
+      expect(queryAllDeep(el, ".drawer-name")[0]?.textContent).toBe(
+        "Sketch the retry console"
+      );
+    } finally {
+      restore();
+    }
+  });
+
+  it("Escape, the close button, and a blank-map tap dismiss the drawer", async () => {
+    const { el, restore } = await mountFlowComponent(wayfinderFixtureEntries());
+    try {
+      selectNode(el, "ticket-fog");
+      await settle(shadowRootOf(el));
+      expect(queryAllDeep(el, ".drawer").length).toBe(1);
+
+      // Escape works from anywhere while the drawer is attached.
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+      await settle(shadowRootOf(el));
+      expect(queryAllDeep(el, ".drawer").length).toBe(0);
+
+      // The close button.
+      selectNode(el, "ticket-fog");
+      await settle(shadowRootOf(el));
+      (
+        queryAllDeep(el, ".drawer-close")[0] as HTMLElement | undefined
+      )?.dispatchEvent(click());
+      await settle(shadowRootOf(el));
+      expect(queryAllDeep(el, ".drawer").length).toBe(0);
+
+      // A blank-map tap (the pointer lands on no node) dismisses too.
+      selectNode(el, "ticket-fog");
+      await settle(shadowRootOf(el));
+      const surface = queryAllDeep(el, ".map-surface")[0];
+      surface?.dispatchEvent(
+        new PointerEvent("pointerdown", {
+          clientX: 790,
+          clientY: 590,
+          pointerId: 1,
+          bubbles: true,
+        })
+      );
+      surface?.dispatchEvent(
+        new PointerEvent("pointerup", {
+          clientX: 790,
+          clientY: 590,
+          pointerId: 1,
+          bubbles: true,
+        })
+      );
+      await settle(shadowRootOf(el));
+      expect(queryAllDeep(el, ".drawer").length).toBe(0);
+    } finally {
+      restore();
+    }
+  });
+
+  it("the drawer closes when the selected WorkflowItem disappears from a later snapshot", async () => {
+    const { el, restore } = await mountFlowComponent(wayfinderFixtureEntries());
+    try {
+      selectNode(el, "ticket-fog");
+      await settle(shadowRootOf(el));
+      expect(queryAllDeep(el, ".drawer").length).toBe(1);
+
+      // A later snapshot without the selected fog ticket: the drawer closes
+      // gracefully instead of holding a ghost selection.
+      el.instances = wayfinderFixtureEntries().filter(
+        (e) => e.id !== "ticket-fog"
+      );
+      await settle(shadowRootOf(el));
+      expect(queryAllDeep(el, ".drawer").length).toBe(0);
+      expect(
+        queryAllDeep(el, '.map-surface .node[data-id="ticket-fog"]').length
+      ).toBe(0);
+    } finally {
+      restore();
+    }
+  });
+
+  it("keyboard parity: Enter on a focused node opens the drawer", async () => {
+    const { el, restore } = await mountFlowComponent(wayfinderFixtureEntries());
+    try {
+      const node = queryAllDeep(
+        el,
+        '.map-surface .node[data-id="ticket-fog"]'
+      )[0];
+      node?.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true })
+      );
+      await settle(shadowRootOf(el));
+      expect(queryAllDeep(el, ".drawer").length).toBe(1);
+      expect(queryAllDeep(el, ".drawer-name")[0]?.textContent).toBe(
+        "Do metrics survive the proxy restart?"
+      );
+    } finally {
+      restore();
+    }
+  });
+
+  it("the drawer is a bottom sheet on a narrow viewport and a right-side panel on desktop", async () => {
+    const { el, restore } = await mountFlowComponent(wayfinderFixtureEntries());
+    try {
+      vi.stubGlobal(
+        "matchMedia",
+        vi.fn(() => ({
+          matches: true,
+          media: "(max-width: 900px)",
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+        }))
+      );
+      try {
+        selectNode(el, "ticket-fog");
+        await settle(shadowRootOf(el));
+        const drawerRoot = queryAllDeep(el, ".drawer")[0];
+        expect(drawerRoot).toBeDefined();
+        const drawerHost = (drawerRoot?.getRootNode() as ShadowRoot).host;
+        // The bottom-sheet face is keyed off the matchMedia-driven attribute.
+        expect(drawerHost.hasAttribute("data-compact")).toBe(true);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+
+      // Desktop (matchMedia no longer matches): the same drawer renders as
+      // the right-side panel.
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+      await settle(shadowRootOf(el));
+      selectNode(el, "ticket-fog");
+      await settle(shadowRootOf(el));
+      const drawerRoot = queryAllDeep(el, ".drawer")[0];
+      const drawerHost = (drawerRoot?.getRootNode() as ShadowRoot).host;
+      expect(drawerHost.hasAttribute("data-compact")).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
+  it("the selected node keeps a persistent highlight distinct from the hover pulse", async () => {
+    const { el, restore } = await mountFlowComponent(wayfinderFixtureEntries());
+    try {
+      selectNode(el, "ticket-fog");
+      await settle(shadowRootOf(el));
+      const node = queryAllDeep(
+        el,
+        '.map-surface .node[data-id="ticket-fog"]'
+      )[0];
+      expect(node?.classList.contains("selected")).toBe(true);
+
+      // Hovering a different node does not steal the durable selection.
+      const other = queryAllDeep(
+        el,
+        '.map-surface .node[data-id="ticket-frontier"]'
+      )[0];
+      other?.dispatchEvent(mouseEnter());
+      await settle(shadowRootOf(el));
+      expect(node?.classList.contains("selected")).toBe(true);
+      expect(other?.classList.contains("selected")).toBe(false);
+
+      // The sidebar entry carries the same durable selection.
+      expect(
+        queryAllDeep(
+          el,
+          '.panel .entry[data-id="ticket-fog"]'
+        )[0]?.classList.contains("selected")
+      ).toBe(true);
     } finally {
       restore();
     }

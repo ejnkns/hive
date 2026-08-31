@@ -36,6 +36,10 @@ import type { ExpeditionTheme } from "./wayfinder-themes.ts";
 export type MapControllerOptions = {
   /** The surface's focus affordance (a tapped node, or a click on a node). */
   onFocus(id: string): void;
+  /** A tap that hit no node — the surface dismisses a selected detail
+   * (click-away/blank-map dismissal). Optional: without it, a blank tap
+   * simply selects nothing. */
+  onBlankTap?(): void;
 };
 
 /** The pointer-movement threshold (screen px) under which a press-release is
@@ -313,7 +317,18 @@ export class MapController {
     ) {
       return;
     }
-    host.setPointerCapture?.(event.pointerId);
+    // A press that starts on a node overlay must NOT capture the pointer:
+    // capture retargets the node's native click to the captured surface, so
+    // the node's @click never fires and selection would fall back to the
+    // proximity hit-test alone — which picks the wrong node on a dense
+    // constellation. Without capture the native click on the node is the
+    // exact selection path, the same path the sidebar entries use. The drag
+    // still tracks (pointer events bubble from the node to the surface), so
+    // the map pans when a node press moves; a drag that ends on the node it
+    // started on is a click, exactly like any other clickable element.
+    const onNode =
+      event.target instanceof Element && event.target.closest(".node") !== null;
+    if (!onNode) host.setPointerCapture?.(event.pointerId);
     this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (this.pointers.size === 2) {
       // A second finger turns the drag into a pinch (never a tap).
@@ -384,9 +399,12 @@ export class MapController {
     if (drag === undefined || event.pointerId !== drag.pointerId) return;
     this.drag = undefined;
     if (drag.moved >= TAP_MOVE_PX) return; // it was a pan, not a tap
-    // Every tap hit-tests the nearest node (the DOM overlays' native click is
-    // retargeted to the captured surface, so the tap is the selection path) —
-    // small targets stay tappable, exactly like the reference tool.
+    // A tap hit-tests the nearest node within reach — small targets stay
+    // tappable, exactly like the reference tool. A tap that started on a node
+    // overlay is followed (same task) by the node's native click, which
+    // selects the exact node; the hit-test is the forgiving fallback for a
+    // tap that drifted off the node, and a tap that hit no node is a blank
+    // tap (the shell dismisses an open drawer).
     this.hitTest(event.clientX, event.clientY);
   };
 
@@ -410,13 +428,16 @@ export class MapController {
 
   // Hit test in world space through the same camera used for drawing: the tap
   // screen point is projected to world coordinates and the nearest node
-  // within a finger-sized radius (converted to world units) is focused.
+  // within a finger-sized radius (converted to world units) is focused. A tap
+  // that hits no node is a blank tap — reported upward so the shell can
+  // dismiss an open detail drawer without navigating anywhere.
   private hitTest(sx: number, sy: number): void {
     if (this.positions === undefined) return;
     const world = screenToWorld(this.cameraState, sx, sy);
     const radius = TAP_HIT_PX / this.cameraState.scale;
     const id = nearestNodeId(this.positions, world.x, world.y, radius);
     if (id !== undefined) this.options.onFocus(id);
+    else this.options.onBlankTap?.();
   }
 }
 

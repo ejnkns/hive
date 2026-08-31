@@ -7,28 +7,55 @@
  * camera and animation owner live in the same place across view switches.
  * The HUD renders from the shared presentation model's derived counts — the
  * frontier number is the blockers-closed frontier, never a recount of `ready`
- * WorkflowItems. */
+ * WorkflowItems.
+ *
+ * The shell also owns the in-context detail drawer: a durable `selectedId`
+ * separate from the transient hover/focus pulse, set when a node is engaged
+ * (click/tap/Enter) and cleared by the close button, Escape, a blank-map
+ * tap, or the selected WorkflowItem disappearing from a later snapshot. The
+ * drawer (wayfinder-drawer.ts, composed by constructor) renders the derived
+ * detail over the map body while a selection is active; blocker/dependent
+ * chips navigate the selection without ever leaving the map. Local map
+ * selection is the shell's own seam — the flow's route-oriented `onSelect`
+ * is never used for it. */
 
+import type { WorkflowDefResponse } from "workflow-engine/create-flow-runtime";
 import type {
   FlowActionView,
   FlowComponentDeps,
+  FlowViewProps,
 } from "workflow-engine/workflow-types";
 import type { MapCanvasElement } from "./map-canvas.ts";
 import type { WayfinderView } from "./shared.ts";
+import type { WayfinderDrawerElement } from "./wayfinder-drawer.ts";
+import {
+  type DrawerDetail,
+  deriveDrawerDetail,
+} from "./wayfinder-drawer-model.ts";
 import type { WayfinderCounts, WayfinderMap } from "./wayfinder-map.ts";
 import { wayfinderProgress } from "./wayfinder-map.ts";
 import type { ExpeditionTheme } from "./wayfinder-themes.ts";
 
+// The entries slice of the flow-view props (kept as a named alias so the
+// contract below reads tightly).
+type FlowViewPropsEntries = FlowViewProps["entries"];
+
 // The public shell contract the entry syncs each render: the HUD data
-// (identity, model, theme, actions), the hover/focus ids forwarded to the
-// surface, and the callbacks wired once at construction. Intersected with
-// HTMLElement so the constructor type stays assignable to the served
-// ElementConstructor contract.
+// (identity, model, theme, actions), the entries/definitions/persisted
+// payloads the drawer reads, the hover/focus ids forwarded to the surface,
+// and the callbacks wired once at construction. Intersected with HTMLElement
+// so the constructor type stays assignable to the served ElementConstructor
+// contract.
 export type MapShellElement = HTMLElement & {
   flowLabel: string;
   flowStatus: string;
   model: WayfinderMap;
   theme: ExpeditionTheme;
+  entries: FlowViewPropsEntries;
+  workflowDefs: readonly WorkflowDefResponse[];
+  persistedOutputDirs: Readonly<
+    Record<string, Readonly<Record<string, string>>>
+  >;
   availableFlowActions: readonly FlowActionView[];
   hoverId: string | undefined;
   focusId: string | undefined;
@@ -36,6 +63,8 @@ export type MapShellElement = HTMLElement & {
   onFlowAction: ((actionId: string) => void) | undefined;
   onHover: ((id: string | undefined) => void) | undefined;
   onFocus: ((id: string) => void) | undefined;
+  onAction: ((id: string, actionId: string) => void) | undefined;
+  onSendMessage: ((id: string, content: string) => Promise<void>) | undefined;
   onViewChange: ((view: WayfinderView) => void) | undefined;
 };
 
@@ -44,8 +73,10 @@ export function createMapShell(options: {
   // The one full-map surface class the entry registered: the shell constructs
   // it by constructor, so the constructed class must be the registered one.
   MapCanvas: new () => MapCanvasElement;
+  // The in-context detail drawer class, likewise composed by constructor.
+  Drawer: new () => WayfinderDrawerElement;
 }): new () => MapShellElement {
-  const { lit, MapCanvas } = options;
+  const { lit, MapCanvas, Drawer } = options;
   const { LitElement: Base, html, css, nothing } = lit;
 
   class MapShell extends Base {
@@ -54,13 +85,21 @@ export function createMapShell(options: {
       flowStatus: { attribute: false },
       model: { attribute: false },
       theme: { type: String, reflect: true, attribute: "data-theme" },
+      entries: { attribute: false },
+      workflowDefs: { attribute: false },
+      persistedOutputDirs: { attribute: false },
       availableFlowActions: { attribute: false },
       hoverId: { attribute: false },
       focusId: { attribute: false },
+      // The durable drawer selection: internal to the shell (not part of the
+      // public contract), kept across re-renders and view switches.
+      selectedId: { attribute: false },
       onCreate: { attribute: false },
       onFlowAction: { attribute: false },
       onHover: { attribute: false },
       onFocus: { attribute: false },
+      onAction: { attribute: false },
+      onSendMessage: { attribute: false },
       onViewChange: { attribute: false },
     };
 
@@ -74,6 +113,22 @@ export function createMapShell(options: {
       }
       @media (max-width: 900px) {
         :host {
+          flex: none;
+        }
+      }
+
+      /* The map body hosts the surface and the in-context detail drawer: the
+         drawer is absolutely positioned against it (right side on desktop,
+         bottom sheet on narrow viewports), so the map stays visible behind
+         it. */
+      .map-body {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        position: relative;
+      }
+      @media (max-width: 900px) {
+        .map-body {
           flex: none;
         }
       }
@@ -294,13 +349,23 @@ export function createMapShell(options: {
     declare flowStatus: string;
     declare model: WayfinderMap;
     declare theme: ExpeditionTheme;
+    declare entries: FlowViewPropsEntries;
+    declare workflowDefs: readonly WorkflowDefResponse[];
+    declare persistedOutputDirs: Readonly<
+      Record<string, Readonly<Record<string, string>>>
+    >;
     declare availableFlowActions: readonly FlowActionView[];
     declare hoverId: string | undefined;
     declare focusId: string | undefined;
+    declare selectedId: string | undefined;
     declare onCreate: ((actionId: string) => void) | undefined;
     declare onFlowAction: ((actionId: string) => void) | undefined;
     declare onHover: ((id: string | undefined) => void) | undefined;
     declare onFocus: ((id: string) => void) | undefined;
+    declare onAction: ((id: string, actionId: string) => void) | undefined;
+    declare onSendMessage:
+      | ((id: string, content: string) => Promise<void>)
+      | undefined;
     declare onViewChange: ((view: WayfinderView) => void) | undefined;
 
     // The persistent map surface: constructed once and kept across renders
@@ -308,16 +373,53 @@ export function createMapShell(options: {
     // one place. Referenced by constructor — never by tag.
     private mapView: MapCanvasElement | undefined;
 
+    // The persistent in-context detail drawer: constructed once, attached
+    // while a selection is active, detached when the selection clears.
+    private drawer: WayfinderDrawerElement | undefined;
+
+    // The derived drawer detail: recomputed in willUpdate from the current
+    // selection + snapshot (derived state never lives in render).
+    private drawerDetail: DrawerDetail | undefined;
+
+    protected override willUpdate(): void {
+      this.drawerDetail =
+        this.selectedId === undefined
+          ? undefined
+          : deriveDrawerDetail({
+              selectedId: this.selectedId,
+              model: this.model,
+              entries: this.entries,
+              workflowDefs: this.workflowDefs,
+              persistedOutputDirs: this.persistedOutputDirs,
+            });
+    }
+
     protected override updated(): void {
-      // The map surface is a persistent instance: sync its data props after
-      // every render (data flows down; the callbacks are wired once at
-      // creation).
+      // A live update can remove the selected WorkflowItem from the snapshot:
+      // clear the selection so the drawer closes gracefully instead of
+      // holding a ghost id. (The drawer also degrades to nothing on its own.)
+      if (
+        this.selectedId !== undefined &&
+        this.model !== undefined &&
+        !this.model.nodes.some((node) => node.id === this.selectedId)
+      ) {
+        this.selectedId = undefined;
+      }
+      // The persistent children are synced after every render (data flows
+      // down; the callbacks are wired once at creation). Unused props stay
+      // on the instance until its view renders.
       const view = this.mapView;
-      if (view === undefined) return;
-      view.model = this.model;
-      view.theme = this.theme;
-      view.hoverId = this.hoverId;
-      view.focusId = this.focusId;
+      if (view !== undefined) {
+        view.model = this.model;
+        view.theme = this.theme;
+        view.hoverId = this.hoverId;
+        view.focusId = this.focusId;
+        view.selectedId = this.selectedId;
+      }
+      const drawer = this.drawer;
+      if (drawer !== undefined) {
+        drawer.detail = this.drawerDetail;
+      }
     }
 
     private ensureMapView(): MapCanvasElement {
@@ -325,14 +427,53 @@ export function createMapShell(options: {
       if (existing !== undefined) return existing;
       const view: MapCanvasElement = new MapCanvas();
       view.onHover = (id) => this.onHover?.(id);
-      view.onFocus = (id) => this.onFocus?.(id);
+      // Engaging a node (click/tap/Enter) pulses it AND makes it the durable
+      // selection — the drawer opens, the map keeps the node highlighted.
+      view.onFocus = (id) => {
+        this.onFocus?.(id);
+        this.selectNode(id);
+      };
+      view.onBlankTap = () => this.clearSelection();
       this.mapView = view;
       return view;
     }
 
+    private ensureDrawer(): WayfinderDrawerElement {
+      const existing = this.drawer;
+      if (existing !== undefined) return existing;
+      const drawer: WayfinderDrawerElement = new Drawer();
+      drawer.onClose = () => this.clearSelection();
+      drawer.onNavigate = (id) => {
+        this.selectNode(id);
+        // Re-focus the newly selected node so the map highlight follows the
+        // navigation (the pulse is transient; the selection persists).
+        this.onFocus?.(id);
+      };
+      drawer.onAction = (id, actionId) => this.onAction?.(id, actionId);
+      drawer.onSendMessage = async (id, content) => {
+        await this.onSendMessage?.(id, content);
+      };
+      this.drawer = drawer;
+      return drawer;
+    }
+
+    // The durable selection: distinct from the short-lived hover/focus pulse.
+    private selectNode(id: string) {
+      this.selectedId = id;
+    }
+
+    // Dismiss the drawer: the close button, Escape, or a blank-map tap.
+    private clearSelection() {
+      this.selectedId = undefined;
+    }
+
     render() {
       if (this.model === undefined) return nothing;
-      return html`${this.renderHud()}${this.ensureMapView()}`;
+      return html`${this.renderHud()}
+        <div class="map-body">
+          ${this.ensureMapView()}
+          ${this.drawerDetail === undefined ? nothing : this.ensureDrawer()}
+        </div>`;
     }
 
     private renderHud() {

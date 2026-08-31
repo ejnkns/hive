@@ -20,8 +20,8 @@ import type { WayfinderMap, WayfinderNode } from "./wayfinder-map.ts";
 import type { ExpeditionTheme } from "./wayfinder-themes.ts";
 
 // The public surface contract the shell syncs each render: the data props
-// (model/theme/hover/focus), the callbacks it wires once at construction,
-// and the camera controls the HUD's Fit/Reset buttons call.
+// (model/theme/hover/focus/selected), the callbacks it wires once at
+// construction, and the camera controls the HUD's Fit/Reset buttons call.
 // Intersected with HTMLElement so the constructor type stays assignable to
 // the served ElementConstructor contract.
 export type MapCanvasElement = HTMLElement & {
@@ -29,8 +29,13 @@ export type MapCanvasElement = HTMLElement & {
   theme: ExpeditionTheme;
   hoverId: string | undefined;
   focusId: string | undefined;
+  /** The durable drawer selection — the node renders a persistent highlight
+   * distinct from the transient hover/focus pulse. */
+  selectedId: string | undefined;
   onHover: ((id: string | undefined) => void) | undefined;
   onFocus: ((id: string) => void) | undefined;
+  /** A tap that hit no node (blank-map dismissal of an open drawer). */
+  onBlankTap: (() => void) | undefined;
   /** Fit the whole map into the viewport (the HUD's Fit button). */
   fit(): void;
   /** Snap back to the fitted view (the HUD's Reset button). */
@@ -48,8 +53,10 @@ export function createMapCanvas(
       theme: { type: String, reflect: true, attribute: "data-theme" },
       hoverId: { attribute: false },
       focusId: { attribute: false },
+      selectedId: { attribute: false },
       onHover: { attribute: false },
       onFocus: { attribute: false },
+      onBlankTap: { attribute: false },
     };
 
     static styles = css`
@@ -123,6 +130,15 @@ export function createMapCanvas(
       }
       .node.hl .cap {
         color: #ffffff;
+      }
+      /* The durable drawer selection: a persistent ring around the glyph, so
+         the selected node stays identifiable after the focus pulse clears.
+         Colour is an accent — the .cap caption shows whenever the node is
+         selected, hovered, or focused. */
+      .node.selected .glyph {
+        outline: 2px solid var(--wf-accent);
+        outline-offset: 3px;
+        border-radius: 999px;
       }
       .node.focus {
         animation: focuspulse 1s ease-in-out 2;
@@ -268,6 +284,13 @@ export function createMapCanvas(
       .panel .entry.hl .card-title {
         color: #ffffff;
       }
+      .panel .entry.selected {
+        background: color-mix(in srgb, var(--wf-accent) 14%, transparent);
+        border-color: color-mix(in srgb, var(--wf-accent) 55%, transparent);
+      }
+      .panel .entry.selected .card-title {
+        color: var(--wf-accent);
+      }
       .panel .entry.focus {
         animation: entrypulse 1s ease-in-out 2;
       }
@@ -316,8 +339,10 @@ export function createMapCanvas(
     declare theme: ExpeditionTheme;
     declare hoverId: string | undefined;
     declare focusId: string | undefined;
+    declare selectedId: string | undefined;
     declare onHover: ((id: string | undefined) => void) | undefined;
     declare onFocus: ((id: string) => void) | undefined;
+    declare onBlankTap: (() => void) | undefined;
 
     // The persistent controller: created once per element instance (the entry
     // keeps the same instance across renders), mounted when the element
@@ -329,6 +354,7 @@ export function createMapCanvas(
       super();
       this.controller = new MapController({
         onFocus: (id) => this.onFocus?.(id),
+        onBlankTap: () => this.onBlankTap?.(),
       });
     }
 
@@ -363,12 +389,17 @@ export function createMapCanvas(
       if (surface !== null) this.controller.mount(surface);
     }
 
-    // The hl/focus class suffix: a focused element stays lit until its pulse
-    // clears, and hovering lights the counterpart in the other surface.
-    private hotClass(id: string): string {
-      if (this.focusId === id) return " hl focus";
-      if (this.hoverId === id) return " hl";
-      return "";
+    // The state class suffix: a focused element stays lit until its pulse
+    // clears, hovering lights the counterpart in the other surface, and the
+    // durable selection renders its own persistent highlight (distinct from
+    // the transient hover/focus pulse).
+    private stateClass(id: string): string {
+      const focus = this.focusId === id;
+      const hover = this.hoverId === id;
+      const selected = this.selectedId === id;
+      return `${hover || focus ? " hl" : ""}${focus ? " focus" : ""}${
+        selected ? " selected" : ""
+      }`;
     }
 
     // Enter/Space focus an element the same way a click does, so keyboard
@@ -415,7 +446,7 @@ export function createMapCanvas(
           : nothing;
       const id = node.id;
       return html`<div
-        class="node ${node.presentation}${this.hotClass(id)}"
+        class="node ${node.presentation}${this.stateClass(id)}"
         data-id=${id}
         tabindex="0"
         @mouseenter=${() => this.onHover?.(id)}
@@ -437,7 +468,7 @@ export function createMapCanvas(
           <div class="gh">${group.label}</div>
           ${group.nodes.map(
             (node) => html`<div
-              class="entry${this.hotClass(node.id)}"
+              class="entry${this.stateClass(node.id)}"
               data-id=${node.id}
               tabindex="0"
               @mouseenter=${() => this.onHover?.(node.id)}
