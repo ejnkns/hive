@@ -53,6 +53,7 @@ export type MapShellElement = HTMLElement & {
   theme: ExpeditionTheme;
   entries: FlowViewPropsEntries;
   workflowDefs: readonly WorkflowDefResponse[];
+  persistedOutputs: FlowViewProps["persistedOutputs"];
   persistedOutputDirs: Readonly<
     Record<string, Readonly<Record<string, string>>>
   >;
@@ -87,6 +88,7 @@ export function createMapShell(options: {
       theme: { type: String, reflect: true, attribute: "data-theme" },
       entries: { attribute: false },
       workflowDefs: { attribute: false },
+      persistedOutputs: { attribute: false },
       persistedOutputDirs: { attribute: false },
       availableFlowActions: { attribute: false },
       hoverId: { attribute: false },
@@ -351,6 +353,7 @@ export function createMapShell(options: {
     declare theme: ExpeditionTheme;
     declare entries: FlowViewPropsEntries;
     declare workflowDefs: readonly WorkflowDefResponse[];
+    declare persistedOutputs: FlowViewProps["persistedOutputs"];
     declare persistedOutputDirs: Readonly<
       Record<string, Readonly<Record<string, string>>>
     >;
@@ -390,6 +393,7 @@ export function createMapShell(options: {
               model: this.model,
               entries: this.entries,
               workflowDefs: this.workflowDefs,
+              persistedOutputs: this.persistedOutputs,
               persistedOutputDirs: this.persistedOutputDirs,
             });
     }

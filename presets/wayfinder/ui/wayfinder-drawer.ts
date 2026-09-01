@@ -3,17 +3,19 @@
  * opens when a map node is selected, rendering the selected WorkflowItem's
  * full detail — derived presentation, actual workflow state, type,
  * question/brief, the resolution task output, the persisted decision record,
- * branch/worktree data, navigable blocker/dependent references, the live
- * interactive chat session, and the available actions — without routing away
- * from the map. The map shell (map-shell.ts) composes it by constructor and
- * renders it over the map body while a selection is active; the drawer itself
- * is a thin renderer over the pure view model (wayfinder-drawer-model.ts) the
- * shell derives. The mobile face is driven by a matchMedia-checked
- * `data-compact` attribute (the CSS keys off the attribute, not a bare media
- * query) so the responsive structure is testable in jsdom; a real browser
- * verifies the feel. Escape dismisses from anywhere (the drawer listens on
- * the document while attached); the close button, the reference chips, and
- * the action buttons are real buttons, so the drawer is keyboard-reachable. */
+ * the recorded map on the charting anchors (standing notes plus the
+ * persisted map.md document, verbatim as markdown), branch/worktree data,
+ * navigable blocker/dependent references, the live interactive chat session,
+ * and the available actions — without routing away from the map. The map
+ * shell (map-shell.ts) composes it by constructor and renders it over the map
+ * body while a selection is active; the drawer itself is a thin renderer over
+ * the pure view model (wayfinder-drawer-model.ts) the shell derives. The
+ * mobile face is driven by a matchMedia-checked `data-compact` attribute (the
+ * CSS keys off the attribute, not a bare media query) so the responsive
+ * structure is testable in jsdom; a real browser verifies the feel. Escape
+ * dismisses from anywhere (the drawer listens on the document while
+ * attached); the close button, the reference chips, and the action buttons
+ * are real buttons, so the drawer is keyboard-reachable. */
 
 import type { FlowComponentDeps } from "workflow-engine/workflow-types";
 import type {
@@ -266,6 +268,20 @@ export function createWayfinderDrawer(
         border-radius: 6px;
         padding: 0.35rem 0.55rem;
       }
+      .map-document-empty {
+        font-size: 0.66rem;
+        color: var(--muted);
+        border: 1px dashed var(--wf-paper-edge, var(--border));
+        border-radius: 6px;
+        padding: 0.4rem 0.55rem;
+      }
+      .standing-notes {
+        margin: 0;
+        font-size: 0.72rem;
+        line-height: 1.4;
+        color: var(--wf-ink, var(--text));
+        white-space: pre-wrap;
+      }
       .branch-line {
         margin: 0;
         font-size: 0.6rem;
@@ -463,6 +479,8 @@ export function createWayfinderDrawer(
               : nothing
           }
           ${this.renderResolution(detail)}
+          ${this.renderStandingNotes(detail)}
+          ${this.renderMapDocument(detail)}
           ${
             detail.decisionRecord !== undefined
               ? html`<section class="drawer-section">
@@ -584,6 +602,36 @@ export function createWayfinderDrawer(
             )}
           </div>`;
       }
+    }
+
+    // The recorded map, on the charting anchors: the standing notes the
+    // submit_map recording carries, and the persisted map document — the
+    // chart's content, rendered verbatim as markdown. Before settle_chart
+    // has persisted the document, the section degrades to its empty state
+    // instead of hiding (the anchor owns the document either way).
+    private renderStandingNotes(detail: DrawerDetail) {
+      if (detail.notes === undefined) return nothing;
+      return html`<section class="drawer-section">
+        <h3 class="drawer-section-title">Standing notes</h3>
+        <p class="standing-notes">${detail.notes}</p>
+      </section>`;
+    }
+
+    private renderMapDocument(detail: DrawerDetail) {
+      if (detail.mapDocument === undefined) return nothing;
+      return html`<section class="drawer-section">
+        <h3 class="drawer-section-title">Map document</h3>
+        ${
+          detail.mapDocument !== ""
+            ? html`<markdown-view
+                .content=${detail.mapDocument}
+              ></markdown-view>`
+            : html`<div class="map-document-empty">
+                No map recorded yet — the chart persists when the frontier
+                settles.
+              </div>`
+        }
+      </section>`;
     }
 
     private renderWorkspace(detail: DrawerDetail) {

@@ -597,6 +597,66 @@ describe("deriveDrawerDetail — graceful degradation", () => {
     assert.equal(detail.resolution?.length, 0);
   });
 
+  it("carries the charting notes and the persisted map document on the summit anchor", () => {
+    const entries = wayfinderFixtureEntries();
+    const detail = deriveDrawerDetail({
+      selectedId: "summit",
+      model: modelOf(entries),
+      entries,
+      workflowDefs: [],
+      persistedOutputDirs: EMPTY_DIRS,
+      persistedOutputs: {
+        "map.md": "# Wayfinder Map\n\n## Destination\nHive router resilience\n",
+      },
+    });
+    assert.ok(detail !== undefined);
+    // The recorded map's three faces ride the detail: the destination is the
+    // summit's title, the standing notes come from the charting state, and
+    // the persisted map document is the chart's content (rendered verbatim,
+    // never parsed into a second status model).
+    assert.equal(detail.title, "Hive router resilience");
+    assert.equal(detail.notes, "offline-first, provider failover");
+    assert.equal(detail.mapDocument?.startsWith("# Wayfinder Map"), true);
+  });
+
+  it("reads an empty map document before settle_chart has persisted one", () => {
+    const charting = instance("charting", "c-1", "frontier", {
+      destination: "hive router",
+    });
+    const detail = deriveDrawerDetail({
+      selectedId: "summit",
+      model: modelOf([charting]),
+      entries: [charting],
+      workflowDefs: [],
+      persistedOutputDirs: EMPTY_DIRS,
+      persistedOutputs: {},
+    });
+    assert.ok(detail !== undefined);
+    // The anchor owns the map document even when nothing is persisted yet:
+    // "" (not undefined) is what tells the drawer to render its graceful
+    // empty state instead of hiding the section.
+    assert.equal(detail.mapDocument, "");
+    // No notes were recorded — the field stays absent, not empty.
+    assert.equal(detail.notes, undefined);
+  });
+
+  it("keeps the map document off non-charting WorkflowItems", () => {
+    const entries = wayfinderFixtureEntries();
+    const detail = deriveDrawerDetail({
+      selectedId: "ticket-frontier",
+      model: modelOf(entries),
+      entries,
+      workflowDefs: [],
+      persistedOutputDirs: EMPTY_DIRS,
+      persistedOutputs: {
+        "map.md": "# Wayfinder Map\n",
+      },
+    });
+    assert.ok(detail !== undefined);
+    assert.equal(detail.mapDocument, undefined);
+    assert.equal(detail.notes, undefined);
+  });
+
   it("falls back to the raw state id when the definition is unknown", () => {
     const entries = [
       instance("charting", "c-1", "charted", { destination: "hive router" }),

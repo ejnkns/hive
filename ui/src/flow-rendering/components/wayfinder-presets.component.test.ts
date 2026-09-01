@@ -1800,6 +1800,55 @@ describe("wayfinder served modules", () => {
     }
   });
 
+  it("the drawer renders the recorded map document on the summit anchor", async () => {
+    const { el, restore } = await mountFlowComponent(
+      wayfinderFixtureEntries(),
+      {
+        persistedOutputs: {
+          "map.md":
+            "# Wayfinder Map\n\n## Destination\nHive router resilience\n\n## Notes\noffline-first, provider failover\n",
+        },
+      }
+    );
+    try {
+      selectNode(el, "summit");
+      await settle(shadowRootOf(el));
+      expect(queryAllDeep(el, ".drawer-name")[0]?.textContent).toBe(
+        "Hive router resilience"
+      );
+      // The chart's content renders verbatim as markdown — never parsed
+      // into a second status model.
+      const sections = queryAllDeep(el, ".drawer-section-title").map((title) =>
+        title.textContent?.trim()
+      );
+      expect(sections).toContain("Map document");
+      expect(sections).toContain("Standing notes");
+      const document = queryAllDeep(el, ".drawer-body markdown-view")[0];
+      expect(document?.shadowRoot?.textContent).toContain("Wayfinder Map");
+      expect(document?.shadowRoot?.textContent).toContain(
+        "offline-first, provider failover"
+      );
+    } finally {
+      restore();
+    }
+  });
+
+  it("the summit drawer degrades gracefully before settle_chart has persisted the map", async () => {
+    const { el, restore } = await mountFlowComponent(wayfinderFixtureEntries());
+    try {
+      selectNode(el, "summit");
+      await settle(shadowRootOf(el));
+      // The anchor owns the map document, so the section renders with its
+      // empty state — no markdown pane, no broken section.
+      expect(queryAllDeep(el, ".map-document-empty")[0]?.textContent).toContain(
+        "No map recorded yet"
+      );
+      expect(queryAllDeep(el, ".drawer-body markdown-view").length).toBe(0);
+    } finally {
+      restore();
+    }
+  });
+
   it("Escape, the close button, and a blank-map tap dismiss the drawer", async () => {
     const { el, restore } = await mountFlowComponent(wayfinderFixtureEntries());
     try {
@@ -1843,6 +1892,81 @@ describe("wayfinder served modules", () => {
       );
       await settle(shadowRootOf(el));
       expect(queryAllDeep(el, ".drawer").length).toBe(0);
+    } finally {
+      restore();
+    }
+  });
+
+  it("Base Camp shows the submit_map destination and notes immediately from a live snapshot", async () => {
+    // A fresh expedition mid-naming: no destination recorded yet.
+    const naming = entry("charting-1", "naming");
+    naming.workflowId = "charting";
+    naming.state.workflowInstanceState = { destination: "" };
+    const { el, restore } = await mountFlowComponent([naming]);
+    try {
+      expect(queryAllDeep(el, ".base-dest .name")[0]?.textContent).toBe(
+        "Uncharted territory"
+      );
+      expect(queryAllDeep(el, ".card-notes").length).toBe(0);
+
+      // The agent calls submit_map mid-session; the next coalesced snapshot
+      // patches the charting instance state. The Base Camp must show the
+      // destination and standing notes on that frame — no remount, no
+      // terminal state, no waiting for the next task.
+      const recorded = entry("charting-1", "naming");
+      recorded.workflowId = "charting";
+      recorded.state.workflowInstanceState = {
+        destination: "Hive router resilience",
+        notes: "offline-first, provider failover",
+      };
+      el.instances = [recorded];
+      await settle(shadowRootOf(el));
+      expect(queryAllDeep(el, ".base-dest .name")[0]?.textContent).toBe(
+        "Hive router resilience"
+      );
+      expect(queryAllDeep(el, ".card-notes")[0]?.textContent).toBe(
+        "offline-first, provider failover"
+      );
+    } finally {
+      restore();
+    }
+  });
+
+  it("the HUD destination and summit label follow a live submit_map snapshot", async () => {
+    const charted = entry("c-1", "charted");
+    charted.workflowId = "charting";
+    charted.state.workflowInstanceState = {
+      destination: "old drifting name",
+    };
+    const fogTicket = ticketEntry("t-2", "fog");
+    fogTicket.state.workflowInstanceState = { brief: "metrics to Effect?" };
+    const { el, restore } = await mountFlowComponent([charted, fogTicket]);
+    try {
+      expect(queryAllDeep(el, ".hud .dest")[0]?.textContent).toBe(
+        "old drifting name"
+      );
+      expect(
+        queryAllDeep(el, '.map-surface .node[data-id="summit"] .cap')[0]
+          ?.textContent
+      ).toBe("old drifting name");
+
+      // The submit_map patch arrives as a new snapshot: the HUD destination
+      // and the summit node label re-derive from the same model.
+      const recorded = entry("c-1", "charted");
+      recorded.workflowId = "charting";
+      recorded.state.workflowInstanceState = {
+        destination: "Hive router resilience",
+        notes: "offline-first",
+      };
+      el.instances = [recorded, fogTicket];
+      await settle(shadowRootOf(el));
+      expect(queryAllDeep(el, ".hud .dest")[0]?.textContent).toBe(
+        "Hive router resilience"
+      );
+      expect(
+        queryAllDeep(el, '.map-surface .node[data-id="summit"] .cap')[0]
+          ?.textContent
+      ).toBe("Hive router resilience");
     } finally {
       restore();
     }

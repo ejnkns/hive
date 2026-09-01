@@ -325,6 +325,10 @@ export function deriveWayfinderMap(
     y: 10,
     workflowId: "charting",
     state: charting?.state.currentState ?? "",
+    // The summit resolves to the charting WorkflowItem like the base anchor:
+    // its drawer detail (notes, persisted map document) derives from the
+    // charting entry.
+    ...(charting !== undefined ? { instanceId: charting.id } : {}),
     blockers: [],
     dependents: [],
   });

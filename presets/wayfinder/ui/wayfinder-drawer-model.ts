@@ -2,13 +2,14 @@
  * component): the pure derivation of a selected WorkflowItem's in-context
  * detail — title, derived presentation status, the actual workflow state with
  * its definition label, type, question/brief, blocker and dependent
- * references, the resolution task output, the persisted decision record,
- * branch/worktree data, the available actions, and the live interactive chat
- * context. A named export a test can import directly as TypeScript, and a
- * value-imported sibling of the served drawer (the server serves the
- * module-set file tree to the browser). Pure so the content decision — what
- * the drawer shows for a frontier ticket vs a research run vs a build item —
- * is testable without DOM.
+ * references, the resolution task output, the persisted decision record, the
+ * recorded map on the charting anchors (standing notes plus the persisted
+ * map.md document), branch/worktree data, the available actions, and the live
+ * interactive chat context. A named export a test can import directly as
+ * TypeScript, and a value-imported sibling of the served drawer (the server
+ * serves the module-set file tree to the browser). Pure so the content
+ * decision — what the drawer shows for a frontier ticket vs a research run vs
+ * a build item — is testable without DOM.
  *
  * The derivation never reads DOM state and owns no animation state. The node
  * identity is the WorkflowItem id (or the synthetic base/summit ids) from the
@@ -18,7 +19,8 @@
  * dependent references stay raw ids when no node carries them. Resolution
  * content comes only from the task outputs already on the WorkflowItem
  * snapshot; the decision record comes only from the persisted decisions
- * directory. */
+ * directory; the map document comes only from the declared persisted-output
+ * whitelist. */
 
 import type {
   WorkflowDefResponse,
@@ -27,6 +29,7 @@ import type {
 import type { RuntimeWorkflowInstanceState } from "workflow-engine/shared/workflow-instance-state";
 import type {
   ChatMessage,
+  FlowViewProps,
   ModelCallStatus,
   VisibleAction,
 } from "workflow-engine/workflow-types";
@@ -120,6 +123,14 @@ export type DrawerDetail = {
   resolutionError?: string;
   /** The persisted decision record (decisions/<id>.md). */
   decisionRecord?: string;
+  /** The charting session's standing notes (submit_map's second face).
+   * Present only on the charting anchors and only when notes were recorded. */
+  notes?: string;
+  /** The persisted map document (map.md) — the chart's content. Present
+   * (possibly "") only on the charting anchors: "" before settle_chart has
+   * persisted one, the document body afterwards. Absent (undefined) on every
+   * non-charting WorkflowItem, which renders no map section at all. */
+  mapDocument?: string;
   branch?: string;
   worktree?: string;
   actions: readonly VisibleAction[];
@@ -137,9 +148,18 @@ export function deriveDrawerDetail(options: {
   persistedOutputDirs:
     | Readonly<Record<string, Readonly<Record<string, string>>>>
     | undefined;
+  /** Optional so callers without persisted outputs stay terse; a charting
+   * anchor still gets its (empty) map document section. */
+  persistedOutputs?: FlowViewProps["persistedOutputs"] | undefined;
 }): DrawerDetail | undefined {
-  const { selectedId, model, entries, workflowDefs, persistedOutputDirs } =
-    options;
+  const {
+    selectedId,
+    model,
+    entries,
+    workflowDefs,
+    persistedOutputDirs,
+    persistedOutputs,
+  } = options;
   if (selectedId === undefined) return undefined;
   const node = model.nodes.find((candidate) => candidate.id === selectedId);
   if (node === undefined) return undefined;
@@ -154,6 +174,13 @@ export function deriveDrawerDetail(options: {
   const resolutionError =
     entry !== undefined ? readResolutionError(entry) : undefined;
   const decisionRecord = readDecisionRecord(persistedOutputDirs, selectedId);
+  // The recorded map lives on the charting WorkflowItem (the synthetic
+  // base/summit anchors resolve to it): the notes come from the instance
+  // state submit_map patches; the map document is the flow's persisted
+  // map.md, read through the engine's persisted-output seam. "" means the
+  // anchor owns the document but settle_chart has not persisted it yet.
+  const isChartingEntry = entry?.workflowId === "charting";
+  const notes = readString(instanceState, "notes");
   const branch = readString(instanceState, "branchName");
   const worktree = readString(instanceState, "worktreePath");
   const chat = readChat(entry);
@@ -171,6 +198,10 @@ export function deriveDrawerDetail(options: {
     resolution: entry === undefined ? [] : readResolution(entry),
     ...(resolutionError !== undefined ? { resolutionError } : {}),
     ...(decisionRecord !== undefined ? { decisionRecord } : {}),
+    ...(isChartingEntry
+      ? { mapDocument: readMapDocument(persistedOutputs) }
+      : {}),
+    ...(notes !== "" ? { notes } : {}),
     ...(branch !== "" ? { branch } : {}),
     ...(worktree !== "" ? { worktree } : {}),
     actions: entry?.availableActions ?? [],
@@ -330,6 +361,15 @@ function referencesOf(
     const node = model.nodes.find((candidate) => candidate.id === id);
     return node === undefined ? { id, title: id } : { id, title: node.title };
   });
+}
+
+// The persisted map document off the declared persisted-output whitelist.
+// A missing or empty document reads as "" — the anchor owns the document
+// regardless; the renderer decides content vs empty state.
+function readMapDocument(
+  persistedOutputs: Readonly<Record<string, string>> | undefined
+): string {
+  return persistedOutputs?.["map.md"] ?? "";
 }
 
 // The ticket question, or the fog brief. Neither present -> undefined.

@@ -193,6 +193,13 @@ export function createBaseCamp(
         text-transform: uppercase;
         color: var(--wf-body);
       }
+      .card-notes {
+        font-size: 0.72rem;
+        line-height: 1.4;
+        color: var(--wf-body);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
       .station-head {
         font-size: 0.68rem;
         letter-spacing: 0.1em;
@@ -381,6 +388,7 @@ export function createBaseCamp(
         <h2 class="station-head">Base camp</h2>
         ${charting.map((entry) => {
           const destination = entry.state.workflowInstanceState.destination;
+          const notes = entry.state.workflowInstanceState.notes;
           return html`<div class="card" data-id="base">
             <div class="lbl">${entry.state.currentState}</div>
             <div class="card-title">${
@@ -388,6 +396,11 @@ export function createBaseCamp(
                 ? destination
                 : "Base camp"
             }</div>
+            ${
+              typeof notes === "string" && notes !== ""
+                ? html`<div class="card-notes">${notes}</div>`
+                : nothing
+            }
             ${this.renderActions(entry)} ${this.renderChat(entry)}
           </div>`;
         })}

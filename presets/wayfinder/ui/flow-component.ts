@@ -399,6 +399,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
           theme: this.theme,
           entries: this.entries,
           workflowDefs: this.workflowDefs,
+          persistedOutputs: this.persistedOutputs,
           persistedOutputDirs: this.persistedOutputDirs,
           availableFlowActions: this.availableFlowActions,
           hoverId: this.hoverId,
