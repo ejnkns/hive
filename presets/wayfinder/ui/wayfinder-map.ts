@@ -16,8 +16,16 @@
  * with no matching WorkflowItem id stays as an unsatisfied edge (its
  * dependent must not look actionable). An edge is satisfied only when its
  * blocker ticket is `closed`; `out_of_scope` is a distinct terminal state
- * and never satisfies. Presentation status is derived UI state — the
- * canonical WorkflowItem state is never rewritten. */
+ * and never satisfies. Whether a blocker IS satisfied is the engine's
+ * decision, not this model's: the frontier/blocked split of a `ready`
+ * ticket reads the engine-projected dependency fact on the entry
+ * (`dependencies.unsatisfied` — the engine's own dependsOnState evaluation);
+ * this model keeps only the vocabulary mapping (no unsatisfied references
+ * -> `frontier`, any -> `blocked`). The `closedIds` set below feeds ONLY the
+ * per-edge rendering fact (an edge is drawn satisfied when the blocker
+ * ticket is closed), never the frontier classification. Presentation status
+ * is derived UI state — the canonical WorkflowItem state is never
+ * rewritten. */
 
 import type { FlowViewProps } from "workflow-engine/workflow-types";
 
@@ -156,9 +164,11 @@ export function deriveWayfinderMap(
     (entry) => entry.workflowId === "buildItem"
   );
 
-  // The dependency-satisfying set: an edge is satisfied only when its blocker
-  // is a closed ticket. out_of_scope is a distinct terminal state and is
-  // deliberately absent.
+  // The dependency-satisfying set for EDGE rendering: an edge is drawn
+  // satisfied when its blocker is a closed ticket. out_of_scope is a distinct
+  // terminal state and is deliberately absent. The frontier/blocked
+  // classification does NOT read this set — it consumes the engine-projected
+  // fact (see the ready split below).
   const closedIds = new Set(
     tickets
       .filter((entry) => entry.state.currentState === "closed")
@@ -193,18 +203,17 @@ export function deriveWayfinderMap(
     });
   });
 
-  // Ready tickets split by their blockers: all closed -> the actionable
-  // frontier; any unresolved blocker (or a dangling reference) -> blocked.
+  // Ready tickets split by the ENGINE's dependency evaluation: no unsatisfied
+  // references -> the actionable frontier; any (including a dangling
+  // reference) -> blocked. The engine owns the satisfying-state decision;
+  // this is the vocabulary mapping only.
   const ready = tickets.filter((entry) => entry.state.currentState === "ready");
   const frontier: WayfinderNode[] = [];
   const blocked: WayfinderNode[] = [];
   ready.forEach((entry, index) => {
     const blockers = dependsOnIds(entry);
-    const presentation: WayfinderPresentationStatus = blockers.every((id) =>
-      closedIds.has(id)
-    )
-      ? "frontier"
-      : "blocked";
+    const presentation: WayfinderPresentationStatus =
+      entry.dependencies.unsatisfied.length === 0 ? "frontier" : "blocked";
     const node: WayfinderNode = {
       id: entry.id,
       presentation,

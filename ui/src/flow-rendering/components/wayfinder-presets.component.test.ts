@@ -20,6 +20,7 @@ import { cardDef, entry } from "../test-fixtures.ts";
 import {
   click,
   mount,
+  mustFind,
   mustQuery,
   queryAllDeep,
   settle,
@@ -279,6 +280,95 @@ describe("wayfinder served modules", () => {
       expect(marker.length).toBe(1);
       expect(marker[0]?.textContent).toContain("ruled out");
       expect(queryAllDeep(el, ".decision").length).toBe(0);
+    } finally {
+      restore();
+    }
+  });
+
+  it("ticket-card renders a ready ticket with unsatisfied dependencies as waiting on them", async () => {
+    defineFlowRenderingComponents();
+    localStorage.clear();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, text: async () => "" }))
+    );
+    const restore = await loadFlowComponents(
+      { "ticket-card": "/api/.../ticket-card" },
+      load(ticketCardModule)
+    );
+    try {
+      const instance = ticketEntry("t-1", "ready");
+      instance.state.workflowInstanceState = {
+        title: "Pick the routing layer",
+        type: "research",
+        dependsOn: ["t-2", "t-3"],
+      };
+      // The engine-projected fact (ticket 12): t-2 resolved, t-3 not.
+      instance.dependencies = {
+        blockers: ["t-2", "t-3"],
+        unsatisfied: ["t-3"],
+      };
+      const el = await mount(
+        Object.assign(new WorkflowInstances(), {
+          flowId: "flow-1",
+          workflowDefs: [ticketDef()],
+          instances: [instance],
+          customKinds: [],
+        })
+      );
+      await settle(shadowRootOf(el));
+
+      // The card names the waiting state in text (not colour alone) and
+      // names the unresolved dependencies.
+      const note = mustFind(el, ".waiting-note");
+      expect(note.textContent).toContain("Waiting on");
+      expect(note.textContent).toContain("t-3");
+      expect(note.textContent).not.toContain("t-2");
+      // The unresolved chip is marked, the satisfied one is not.
+      const chips = queryAllDeep(el, ".depends-chip");
+      expect(chips.length).toBe(2);
+      const unsatisfied = chips.filter((chip) =>
+        chip.hasAttribute("data-unsatisfied")
+      );
+      expect(unsatisfied.map((chip) => chip.textContent)).toEqual(["t-3"]);
+    } finally {
+      restore();
+    }
+  });
+
+  it("ticket-card does not render the waiting note on a frontier-ready ticket", async () => {
+    defineFlowRenderingComponents();
+    localStorage.clear();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, text: async () => "" }))
+    );
+    const restore = await loadFlowComponents(
+      { "ticket-card": "/api/.../ticket-card" },
+      load(ticketCardModule)
+    );
+    try {
+      const instance = ticketEntry("t-1", "ready");
+      instance.state.workflowInstanceState = {
+        title: "Pick the routing layer",
+        type: "research",
+        dependsOn: ["t-2"],
+      };
+      // The engine projected every blocker as satisfied — the ticket is the
+      // actionable frontier and must not present as waiting.
+      instance.dependencies = { blockers: ["t-2"], unsatisfied: [] };
+      const el = await mount(
+        Object.assign(new WorkflowInstances(), {
+          flowId: "flow-1",
+          workflowDefs: [ticketDef()],
+          instances: [instance],
+          customKinds: [],
+        })
+      );
+      await settle(shadowRootOf(el));
+
+      expect(queryAllDeep(el, ".waiting-note").length).toBe(0);
+      expect(queryAllDeep(el, ".depends-chip").length).toBe(1);
     } finally {
       restore();
     }

@@ -294,9 +294,11 @@ export class WorkflowInstances extends LitElement {
   }
 
   // The cross-workflow state counts the custom workflow views receive: per
-  // workflow, the instance count by current state. A derived view over the
+  // workflow, the instance count by current state plus the engine-evaluated
+  // dependency aggregates (waiting vs satisfied). A derived view over the
   // same snapshot the sections render — a workflow-level view uses it to
-  // render sibling-workflow context (the expedition map's frontier summary).
+  // present sibling-workflow context and waiting-vs-actionable counts
+  // without sibling entries.
   private workflowCounts(): WorkflowViewProps["workflowCounts"] {
     const entriesByWorkflow = new Map<string, WorkflowInstanceEntry[]>();
     for (const entry of this.instances) {
@@ -307,15 +309,24 @@ export class WorkflowInstances extends LitElement {
     return this.workflowDefs.map((def) => {
       const entries = entriesByWorkflow.get(def.id) ?? [];
       const byState: Record<string, number> = {};
+      let waitingOnDependencies = 0;
+      let dependenciesSatisfied = 0;
       for (const entry of entries) {
         byState[entry.state.currentState] =
           (byState[entry.state.currentState] ?? 0) + 1;
+        if (entry.dependencies.unsatisfied.length > 0) {
+          waitingOnDependencies += 1;
+        } else if (entry.dependencies.blockers.length > 0) {
+          dependenciesSatisfied += 1;
+        }
       }
       return {
         workflowId: def.id,
         label: def.label,
         total: entries.length,
         byState,
+        waitingOnDependencies,
+        dependenciesSatisfied,
       };
     });
   }

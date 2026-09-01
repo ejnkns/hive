@@ -15,6 +15,10 @@ import {
   createWorkflowInstanceController,
   type WorkflowInstanceControllerAPI,
 } from "./create-workflow-instance-controller.ts";
+import {
+  projectDependencySatisfaction,
+  type WorkflowDependencyProjection,
+} from "./dependency-satisfaction.ts";
 import { summarizeWorkflowInstances } from "./derive-display.ts";
 import { evaluateEdges } from "./evaluate-edges.ts";
 import { evaluateGate } from "./evaluate-gate.ts";
@@ -36,6 +40,7 @@ export type {
   FlowRuntimeAPI,
   FlowRuntimeEvent,
   WorkflowDefResponse,
+  WorkflowDependencyProjection,
   WorkflowInstanceEntry,
   WorkflowSummary,
 };
@@ -398,11 +403,22 @@ export function createFlowRuntime<
   function getWorkflowInstanceEntries(): WorkflowInstanceEntry[] {
     const entries = Array.from(controllers.entries()).map(([id, ctrl]) => {
       const workflowId = instanceWorkflowIds.get(id) ?? "";
+      const workflow = workflowMap.get(workflowId);
+      const state = ctrl.getState();
       return {
         id,
         workflowId,
-        state: ctrl.getState(),
+        state,
         availableActions: ctrl.getAvailableActions(),
+        // The engine's own dependsOnState evaluation, projected per entry so
+        // any surface reads the same fact the dispatch-time gate enforces.
+        dependencies: projectDependencySatisfaction({
+          states: workflow?.states ?? [],
+          currentState: state.currentState,
+          workflowInstanceState: state.workflowInstanceState,
+          workflowInstancesInState,
+          instanceTitlePath: workflow?.instance?.title,
+        }),
         editFields: (workflowMap.get(workflowId)?.editFields ?? []).map(
           resolveEditFieldOptions
         ),

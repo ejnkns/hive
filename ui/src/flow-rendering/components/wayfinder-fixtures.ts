@@ -49,11 +49,12 @@
  *   anywhere in the UI today.
  * - There is no detail drawer today: selecting a node/card only highlights
  *   and pulses. Presentation status is derived UI state, never a second
- *   domain status field. `ready` + every dependsOn blocker closed =
- *   frontier; `ready` with unresolved blockers renders blocked — closed by
- *   the map-presentation-model ticket, which derives both from the
- *   `dependsOn` field already on the WorkflowItem state (no domain field
- *   was missing).
+ *   domain status field. The frontier/blocked split of a `ready` WorkflowItem
+ *   consumes the engine-projected dependency fact on the entry
+ *   (`dependencies.unsatisfied`, ticket 12): unsatisfied references =
+ *   blocked, none = frontier. The engine owns the satisfying-state decision
+ *   (its dependsOnState evaluation); the UI keeps only the vocabulary
+ *   mapping.
  *
  * Browser-free: plain data builders over ../test-fixtures.ts, importable by
  * both the `node --test` pure suite and the vitest jsdom component suite.
@@ -84,8 +85,9 @@ export function wayfinderFogTicket(): WorkflowInstanceEntry {
   return ticket;
 }
 
-// An actually frontier-ready ticket: every dependsOn blocker is closed, so
-// its presentation status is frontier.
+// An actually frontier-ready ticket: the engine projects its recorded
+// blocker as satisfied (the blocker is closed — the declared dependsOnState),
+// so its presentation status is frontier.
 export function wayfinderFrontierTicket(): WorkflowInstanceEntry {
   const ticket = entry("ticket-frontier", "ready");
   ticket.workflowId = "ticket";
@@ -95,11 +97,13 @@ export function wayfinderFrontierTicket(): WorkflowInstanceEntry {
     type: "research",
     dependsOn: ["ticket-decision"],
   };
+  ticket.dependencies = { blockers: ["ticket-decision"], unsatisfied: [] };
   return ticket;
 }
 
-// A ready-but-blocked ticket: `ready` in domain state, but dependsOn names a
-// blocker that is not closed — it must present as blocked, not frontier.
+// A ready-but-blocked ticket: `ready` in domain state, but the engine
+// projects its recorded blocker (not closed — it is still in fog) as
+// unsatisfied — it must present as blocked, not frontier.
 export function wayfinderBlockedTicket(): WorkflowInstanceEntry {
   const ticket = entry("ticket-blocked", "ready");
   ticket.workflowId = "ticket";
@@ -108,6 +112,10 @@ export function wayfinderBlockedTicket(): WorkflowInstanceEntry {
     question: "Where does the retry console live?",
     type: "prototype",
     dependsOn: ["ticket-fog"],
+  };
+  ticket.dependencies = {
+    blockers: ["ticket-fog"],
+    unsatisfied: ["ticket-fog"],
   };
   return ticket;
 }

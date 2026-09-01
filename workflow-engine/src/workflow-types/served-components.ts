@@ -80,12 +80,18 @@ export type WorkflowViewProps = {
   // Cross-workflow context: every workflow of the flow with its instance
   // count by current state — so a workflow-level view can render
   // sibling-workflow state (e.g. the expedition map shows the ticket
-  // frontier/fog/decisions). Includes the view's own workflow.
+  // frontier/fog/decisions). Includes the view's own workflow. The
+  // dependency aggregates carry the engine-evaluated dependency projection:
+  // `waitingOnDependencies` counts entries with at least one unsatisfied
+  // blocker; `dependenciesSatisfied` counts entries whose recorded blockers
+  // are all satisfied. Entries with no recorded blockers count in neither.
   workflowCounts: ReadonlyArray<{
     workflowId: string;
     label: string;
     total: number;
     byState: Readonly<Record<string, number>>;
+    waitingOnDependencies: number;
+    dependenciesSatisfied: number;
   }>;
   // The existing hive-action / hive-send-message callbacks, scoped to a
   // workflow instance id.

@@ -8,7 +8,10 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { WorkflowInstanceEntry } from "workflow-engine/create-flow-runtime";
+import type {
+  WorkflowDependencyProjection,
+  WorkflowInstanceEntry,
+} from "workflow-engine/create-flow-runtime";
 import type { WayfinderCounts } from "../../../../presets/wayfinder/ui/wayfinder-map.ts";
 import {
   deriveWayfinderMap,
@@ -19,12 +22,16 @@ import {
 import { wayfinderFixtureEntries } from "./wayfinder-fixtures.ts";
 
 // A minimal full WorkflowInstanceEntry for a wayfinder instance (the fields the
-// derivation reads are workflowId, currentState, and workflowInstanceState).
+// derivation reads are workflowId, currentState, workflowInstanceState, and
+// the engine-projected dependency fact). The dependency fact is what the
+// engine's getWorkflowInstanceEntries projects — tests construct it as the
+// server would ship it and assert the vocabulary mapping on top.
 function instance(
   workflowId: string,
   id: string,
   currentState: string,
-  instanceState: Record<string, unknown> = {}
+  instanceState: Record<string, unknown> = {},
+  dependencies: WorkflowDependencyProjection = { blockers: [], unsatisfied: [] }
 ): WorkflowInstanceEntry {
   return {
     id,
@@ -39,6 +46,7 @@ function instance(
       history: [],
     },
     availableActions: [],
+    dependencies,
     editFields: [],
     workflowSummary: { total: 0, byField: {} },
   };
@@ -53,9 +61,10 @@ const charting = () =>
 function ticket(
   id: string,
   state: string,
-  instanceState: Record<string, unknown> = {}
+  instanceState: Record<string, unknown> = {},
+  dependencies: WorkflowDependencyProjection = { blockers: [], unsatisfied: [] }
 ): WorkflowInstanceEntry {
-  return instance("ticket", id, state, instanceState);
+  return instance("ticket", id, state, instanceState, dependencies);
 }
 
 describe("deriveWayfinderMap", () => {
@@ -63,16 +72,26 @@ describe("deriveWayfinderMap", () => {
     const entries = [
       charting(),
       ticket("t-1", "fog", { brief: "metrics to Effect?" }),
-      ticket("t-2", "ready", {
-        title: "Pick the router",
-        type: "research",
-        dependsOn: ["t-5"],
-      }),
-      ticket("t-3", "ready", {
-        title: "Prototype sync",
-        type: "prototype",
-        dependsOn: ["t-1"],
-      }),
+      ticket(
+        "t-2",
+        "ready",
+        {
+          title: "Pick the router",
+          type: "research",
+          dependsOn: ["t-5"],
+        },
+        { blockers: ["t-5"], unsatisfied: [] }
+      ),
+      ticket(
+        "t-3",
+        "ready",
+        {
+          title: "Prototype sync",
+          type: "prototype",
+          dependsOn: ["t-1"],
+        },
+        { blockers: ["t-1"], unsatisfied: ["t-1"] }
+      ),
       ticket("t-4", "resolving_research", {
         title: "Grill the interop seam",
         type: "grilling",
@@ -142,21 +161,92 @@ describe("deriveWayfinderMap", () => {
     );
   });
 
-  it("classifies ready as frontier only when every dependsOn blocker is closed", () => {
+  it("splits ready into frontier/blocked from the engine-projected dependency fact", () => {
     const map = deriveWayfinderMap([
       charting(),
       ticket("decision-1", "closed"),
       ticket("fog-1", "fog"),
-      ticket("ready-clear", "ready", { dependsOn: ["decision-1"] }),
-      ticket("ready-open", "ready", { dependsOn: ["fog-1"] }),
+      ticket(
+        "ready-clear",
+        "ready",
+        { dependsOn: ["decision-1"] },
+        { blockers: ["decision-1"], unsatisfied: [] }
+      ),
+      ticket(
+        "ready-open",
+        "ready",
+        { dependsOn: ["fog-1"] },
+        { blockers: ["fog-1"], unsatisfied: ["fog-1"] }
+      ),
       ticket("ready-none", "ready"),
     ]);
     const presentation = (id: string) =>
       map.nodes.find((node) => node.id === id)?.presentation;
+    // The engine decides which blockers are satisfied (the dependsOnState
+    // evaluation projected onto the entry); the map only maps the fact to
+    // its presentation vocabulary — no unsatisfied references -> frontier.
     assert.equal(presentation("ready-clear"), "frontier");
     assert.equal(presentation("ready-open"), "blocked");
-    // No dependsOn at all -> no unresolved blockers -> frontier.
+    // No dependsOn at all -> nothing unsatisfied -> frontier.
     assert.equal(presentation("ready-none"), "frontier");
+  });
+
+  it("trusts the projected fact over its own closed-state re-derivation", () => {
+    // The whole point of the projection: the map must NOT re-derive "blocker
+    // is closed" from the snapshot. When the engine's dependsOnState
+    // evaluation disagrees with a naive closedIds check, the engine wins —
+    // the UI must never present frontier something the engine would deny,
+    // nor block something the engine allows.
+    const map = deriveWayfinderMap([
+      charting(),
+      ticket("decision-1", "closed"),
+      ticket("fog-1", "fog"),
+      ticket(
+        "engine-denies",
+        "ready",
+        { dependsOn: ["decision-1"] },
+        // Blocker LOOKS closed in the snapshot, but the engine's declared
+        // requirement does not resolve it.
+        { blockers: ["decision-1"], unsatisfied: ["decision-1"] }
+      ),
+      ticket(
+        "engine-allows",
+        "ready",
+        { dependsOn: ["fog-1"] },
+        // Blocker is NOT closed in the snapshot, but the engine's declared
+        // requirement resolves it (a non-closed satisfying state).
+        { blockers: ["fog-1"], unsatisfied: [] }
+      ),
+    ]);
+    const presentation = (id: string) =>
+      map.nodes.find((node) => node.id === id)?.presentation;
+    assert.equal(presentation("engine-denies"), "blocked");
+    assert.equal(presentation("engine-allows"), "frontier");
+  });
+
+  it("does not present non-ready tickets as blocked even with unsatisfied dependencies", () => {
+    const map = deriveWayfinderMap([
+      charting(),
+      ticket(
+        "fog-1",
+        "fog",
+        { dependsOn: ["nope"] },
+        { blockers: ["nope"], unsatisfied: ["nope"] }
+      ),
+      ticket(
+        "t-1",
+        "resolving_research",
+        { dependsOn: ["nope"] },
+        { blockers: ["nope"], unsatisfied: ["nope"] }
+      ),
+    ]);
+    const presentation = (id: string) =>
+      map.nodes.find((node) => node.id === id)?.presentation;
+    // Blocked is a face of `ready` only; fog stays fog, resolving stays
+    // active — the engine fact cannot leak a second status onto other states.
+    assert.equal(presentation("fog-1"), "fog");
+    assert.equal(presentation("t-1"), "active");
+    assert.ok(!statusesOf(map).has("blocked"), "no blocked status");
   });
 
   it("maps resolving and recording to active, closed to decision, out_of_scope to out-of-scope", () => {
@@ -230,7 +320,15 @@ describe("deriveWayfinderMap", () => {
       const map = deriveWayfinderMap([
         charting(),
         ticket("oos-1", "out_of_scope"),
-        ticket("ready-1", "ready", { dependsOn: ["oos-1"] }),
+        ticket(
+          "ready-1",
+          "ready",
+          { dependsOn: ["oos-1"] },
+          // The engine projects the out-of-scope blocker as unsatisfied
+          // (out_of_scope is not the declared dependsOnState) — the map
+          // consumes that fact for the presentation and the edge.
+          { blockers: ["oos-1"], unsatisfied: ["oos-1"] }
+        ),
       ]);
       const edge = map.edges.find((candidate) => candidate.to === "ready-1");
       assert.equal(edge?.satisfied, false);
@@ -243,7 +341,12 @@ describe("deriveWayfinderMap", () => {
     it("keeps a dangling dependsOn reference as an unsatisfied edge and blocks its dependent", () => {
       const map = deriveWayfinderMap([
         charting(),
-        ticket("ready-1", "ready", { dependsOn: ["missing-ticket"] }),
+        ticket(
+          "ready-1",
+          "ready",
+          { dependsOn: ["missing-ticket"] },
+          { blockers: ["missing-ticket"], unsatisfied: ["missing-ticket"] }
+        ),
       ]);
       assert.deepEqual(
         map.edges.map((edge) => ({
@@ -291,7 +394,14 @@ describe("deriveWayfinderMap", () => {
       const map = deriveWayfinderMap([
         charting(),
         ticket("t-1", "ready", { dependsOn: "not-an-array" }),
-        ticket("t-2", "ready", { dependsOn: [42, "t-3"] }),
+        ticket(
+          "t-2",
+          "ready",
+          { dependsOn: [42, "t-3"] },
+          // The engine filters non-string references out of the projection;
+          // the fact it ships keeps t-3 as the one unsatisfied blocker.
+          { blockers: ["t-3"], unsatisfied: ["t-3"] }
+        ),
         ticket("t-3", "fog"),
       ]);
       assert.equal(

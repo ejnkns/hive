@@ -1,5 +1,6 @@
 /** @private — only imported by create-flow-runtime.ts */
 
+import type { WorkflowDependencyProjection } from "../dependency-satisfaction.ts";
 import type { RuntimeWorkflowInstanceState } from "../shared/workflow-instance-state.ts";
 import type {
   ActionVariant,
@@ -61,6 +62,12 @@ export type WorkflowInstanceEntry = {
   workflowId: string;
   state: RuntimeWorkflowInstanceState;
   availableActions: VisibleAction[];
+  // The engine-evaluated dependency fact for this WorkflowItem (see
+  // WorkflowDependencyProjection): the recorded dependsOn references and
+  // which of them the current state's dependsOnState actions have not
+  // resolved. One source of truth — surfaces consume this instead of
+  // re-deriving blocker satisfaction from sibling entries.
+  dependencies: WorkflowDependencyProjection;
   // The workflow's declared editable instance-state fields; the UI renders an
   // "Edit details" form from these and patches instance state through the
   // state API. Empty/absent when the workflow is not editable.

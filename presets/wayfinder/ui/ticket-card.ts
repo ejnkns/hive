@@ -120,6 +120,18 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         border-radius: 4px;
         padding: 0.125rem 0.375rem;
       }
+      .depends-chip[data-unsatisfied] {
+        border-style: dashed;
+        border-width: 2px;
+        padding: 0 0.25rem;
+      }
+      .waiting-note {
+        font-size: 0.625rem;
+        color: var(--muted);
+        border: 1px dashed var(--border);
+        border-radius: 4px;
+        padding: 0.25rem 0.5rem;
+      }
       .branch-line {
         font-size: 0.5625rem;
         font-family: var(--font-mono, monospace);
@@ -219,6 +231,14 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       const dependsOn = Array.isArray(instanceState.dependsOn)
         ? (instanceState.dependsOn as string[])
         : [];
+      // The engine-projected dependency fact (ticket 12): which recorded
+      // blockers the engine has not resolved. A ready ticket with unresolved
+      // dependencies is waiting on them, not unconditionally actionable —
+      // the claim actions are already withheld by the engine's gates.
+      const waitingOn =
+        state.currentState === "ready"
+          ? (this.instanceEntry.dependencies?.unsatisfied ?? [])
+          : [];
       const hitl = instanceState.hitl === true;
       // out_of_scope is a distinct terminal (ruled out — it never satisfies
       // dependencies and records no decision); the card names it as such so a
@@ -252,8 +272,19 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
           dependsOn.length > 0
             ? html`<div class="depends-chips">
               ${dependsOn.map(
-                (id) => html`<span class="depends-chip">${id}</span>`
+                (id) => html`<span
+                  class="depends-chip"
+                  ?data-unsatisfied=${waitingOn.includes(id)}
+                  >${id}</span
+                >`
               )}
+            </div>`
+            : nothing
+        }
+        ${
+          waitingOn.length > 0
+            ? html`<div class="waiting-note" role="note">
+              Waiting on dependencies: ${waitingOn.join(", ")}
             </div>`
             : nothing
         }

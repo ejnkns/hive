@@ -20,13 +20,17 @@ import {
 import { wayfinderFixtureEntries } from "./wayfinder-fixtures.ts";
 
 // A minimal full WorkflowInstanceEntry for a wayfinder instance (the fields
-// the derivation reads are workflowId, currentState, and
-// workflowInstanceState).
+// the derivation reads are workflowId, currentState, workflowInstanceState,
+// and the engine-projected dependency fact).
 function instance(
   workflowId: string,
   id: string,
   currentState: string,
-  instanceState: Record<string, unknown> = {}
+  instanceState: Record<string, unknown> = {},
+  dependencies: WorkflowInstanceEntry["dependencies"] = {
+    blockers: [],
+    unsatisfied: [],
+  }
 ): WorkflowInstanceEntry {
   return {
     id,
@@ -41,6 +45,7 @@ function instance(
       history: [],
     },
     availableActions: [],
+    dependencies,
     editFields: [],
     workflowSummary: { total: 0, byField: {} },
   };
@@ -52,9 +57,13 @@ const charting = () =>
 function ticket(
   id: string,
   currentState: string,
-  instanceState: Record<string, unknown> = {}
+  instanceState: Record<string, unknown> = {},
+  dependencies: WorkflowInstanceEntry["dependencies"] = {
+    blockers: [],
+    unsatisfied: [],
+  }
 ): WorkflowInstanceEntry {
-  return instance("ticket", id, currentState, instanceState);
+  return instance("ticket", id, currentState, instanceState, dependencies);
 }
 
 function model(entries: WorkflowInstanceEntry[]): WayfinderMap {
@@ -111,18 +120,32 @@ describe("deriveMapTransitions", () => {
   });
 
   it("marks a ready ticket whose last blocker closed as frontier (the blocked -> frontier face change)", () => {
-    // Before: both tickets ready, the blocker open — the dependent presents
-    // as blocked. After: the blocker closed — the same ticket now presents
-    // as the actionable frontier.
+    // Before: both tickets ready, the engine projects the blocker as
+    // unsatisfied — the dependent presents as blocked. After: the blocker
+    // closed and the engine re-projects the dependency fact (the satisfying
+    // state is the engine's decision, not a UI re-derivation) — the same
+    // ticket now presents as the actionable frontier. The transitions seam
+    // diffs the derived model unchanged; the face change simply became
+    // engine-truth-driven.
     const before = model([
       charting(),
       ticket("t-0", "ready", { title: "Root decision" }),
-      ticket("t-2", "ready", { title: "Next step", dependsOn: ["t-0"] }),
+      ticket(
+        "t-2",
+        "ready",
+        { title: "Next step", dependsOn: ["t-0"] },
+        { blockers: ["t-0"], unsatisfied: ["t-0"] }
+      ),
     ]);
     const after = model([
       charting(),
       ticket("t-0", "closed", { title: "Root decision" }),
-      ticket("t-2", "ready", { title: "Next step", dependsOn: ["t-0"] }),
+      ticket(
+        "t-2",
+        "ready",
+        { title: "Next step", dependsOn: ["t-0"] },
+        { blockers: ["t-0"], unsatisfied: [] }
+      ),
     ]);
     const transitions = deriveMapTransitions(before, after);
     assert.deepEqual(transitions.addedIds, []);

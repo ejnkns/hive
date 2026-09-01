@@ -1913,3 +1913,206 @@ describe("agent-created instances", () => {
     assert.equal(tickets[0]?.state.currentState, "fog");
   });
 });
+
+// A workflow whose ready state declares two actions with DISAGREEING
+// dependsOnState targets, so the projection's multi-action resolution is
+// observable. `instance` gives the workflow an instance-title path so
+// name-vs-id dependency references are exercised too.
+const dependencyWorkflow = defineWorkflow({
+  id: "card",
+  label: "Card",
+  instance: { title: "title" },
+  taskOutputs: {} as Record<string, never>,
+  states: [
+    {
+      id: "ready",
+      label: "Ready",
+      actions: [
+        {
+          id: "run",
+          label: "Run",
+          dependsOnState: "done",
+          transitionTo: "working",
+        },
+        {
+          id: "ship",
+          label: "Ship",
+          dependsOnState: "shipped",
+          transitionTo: "working",
+        },
+      ],
+    },
+    { id: "working", label: "Working" },
+    { id: "done", label: "Done" },
+    { id: "shipped", label: "Shipped" },
+  ],
+  initial: "ready",
+  terminalStates: ["done", "shipped"],
+});
+
+describe("instance dependency projection", () => {
+  it("projects a recorded dependency as satisfied when the blocker is in the declared dependsOnState", () => {
+    const runtime = createFlowRuntime("test", [dependencyWorkflow], [], {});
+    runtime.addWorkflowInstance("card", {
+      workflowInstanceState: {
+        title: "Blocked card",
+        dependsOn: ["blocker-1"],
+      },
+    });
+    runtime.addWorkflowInstance(
+      "card",
+      { currentState: "done", workflowInstanceState: { title: "Blocker" } },
+      "blocker-1"
+    );
+
+    const entries = runtime.getWorkflowInstanceEntries();
+    const blocked = entries.find(
+      (entry) => entry.state.currentState === "ready"
+    );
+    assert.deepEqual(blocked?.dependencies, {
+      blockers: ["blocker-1"],
+      unsatisfied: [],
+    });
+  });
+
+  it("projects a recorded dependency as unsatisfied while the blocker has not reached the declared state", () => {
+    const runtime = createFlowRuntime("test", [dependencyWorkflow], [], {});
+    runtime.addWorkflowInstance("card", {
+      workflowInstanceState: {
+        title: "Blocked card",
+        dependsOn: ["blocker-1"],
+      },
+    });
+    runtime.addWorkflowInstance(
+      "card",
+      { currentState: "working", workflowInstanceState: { title: "Blocker" } },
+      "blocker-1"
+    );
+
+    const entries = runtime.getWorkflowInstanceEntries();
+    const blocked = entries.find(
+      (entry) => entry.state.currentState === "ready"
+    );
+    assert.deepEqual(blocked?.dependencies, {
+      blockers: ["blocker-1"],
+      unsatisfied: ["blocker-1"],
+    });
+  });
+
+  it("never satisfies a dangling dependency reference", () => {
+    const runtime = createFlowRuntime("test", [dependencyWorkflow], [], {});
+    runtime.addWorkflowInstance("card", {
+      workflowInstanceState: {
+        title: "Blocked card",
+        dependsOn: ["no-such-instance"],
+      },
+    });
+
+    const [blocked] = runtime.getWorkflowInstanceEntries();
+    assert.deepEqual(blocked?.dependencies, {
+      blockers: ["no-such-instance"],
+      unsatisfied: ["no-such-instance"],
+    });
+  });
+
+  it("satisfies a dependency by NAME when a titled blocker sits in the declared state", () => {
+    const runtime = createFlowRuntime("test", [dependencyWorkflow], [], {});
+    runtime.addWorkflowInstance("card", {
+      workflowInstanceState: {
+        title: "Blocked card",
+        dependsOn: ["Named blocker"],
+      },
+    });
+    runtime.addWorkflowInstance(
+      "card",
+      {
+        currentState: "done",
+        workflowInstanceState: { title: "Named blocker" },
+      },
+      "blocker-named"
+    );
+
+    const entries = runtime.getWorkflowInstanceEntries();
+    const blocked = entries.find(
+      (entry) => entry.state.currentState === "ready"
+    );
+    assert.deepEqual(blocked?.dependencies, {
+      blockers: ["Named blocker"],
+      unsatisfied: [],
+    });
+  });
+
+  it("keeps a reference unsatisfied when no declared action's requirement resolves it, even with disagreeing targets", () => {
+    const runtime = createFlowRuntime("test", [dependencyWorkflow], [], {});
+    // Two actions declare DISAGREEING targets ("run" wants done, "ship"
+    // wants shipped). blocker-1 is done (satisfies "run"), blocker-2 is
+    // shipped (satisfies "ship") — each is resolved by some declared action,
+    // so the entry can act. blocker-3 sits in neither target: no declared
+    // action resolves it, so it stays unsatisfied.
+    runtime.addWorkflowInstance("card", {
+      workflowInstanceState: {
+        title: "Blocked card",
+        dependsOn: ["blocker-1", "blocker-2", "blocker-3"],
+      },
+    });
+    runtime.addWorkflowInstance(
+      "card",
+      { currentState: "done", workflowInstanceState: { title: "Blocker one" } },
+      "blocker-1"
+    );
+    runtime.addWorkflowInstance(
+      "card",
+      {
+        currentState: "shipped",
+        workflowInstanceState: { title: "Blocker two" },
+      },
+      "blocker-2"
+    );
+    runtime.addWorkflowInstance(
+      "card",
+      {
+        currentState: "working",
+        workflowInstanceState: { title: "Blocker three" },
+      },
+      "blocker-3"
+    );
+
+    const entries = runtime.getWorkflowInstanceEntries();
+    const blocked = entries.find(
+      (entry) => entry.state.currentState === "ready"
+    );
+    assert.deepEqual(blocked?.dependencies, {
+      blockers: ["blocker-1", "blocker-2", "blocker-3"],
+      unsatisfied: ["blocker-3"],
+    });
+  });
+
+  it("leaves entries with no recorded dependencies and states with no dependsOnState actions unprojected", () => {
+    const runtime = createFlowRuntime("test", [dependencyWorkflow], [], {});
+    runtime.addWorkflowInstance("card", {
+      workflowInstanceState: { title: "Independent card" },
+    });
+    runtime.addWorkflowInstance("card", {
+      currentState: "working",
+      workflowInstanceState: { title: "Busy card", dependsOn: ["blocker-1"] },
+    });
+
+    const entries = runtime.getWorkflowInstanceEntries();
+    const independent = entries.find(
+      (entry) => entry.state.currentState === "ready"
+    );
+    assert.deepEqual(independent?.dependencies, {
+      blockers: [],
+      unsatisfied: [],
+    });
+    // The working state declares no actions with dependsOnState — the engine
+    // imposes no dependency requirement there, even with references recorded.
+    const busy = entries.find(
+      (entry) => entry.state.currentState === "working"
+    );
+    assert.deepEqual(busy?.dependencies, {
+      blockers: ["blocker-1"],
+      unsatisfied: [],
+    });
+  });
+});
