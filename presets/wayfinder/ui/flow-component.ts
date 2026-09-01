@@ -16,9 +16,9 @@
  * alongside it. Sections compose the canonical <workflow-board-content> (a
  * DEFAULT element — served modules can only reference default elements by
  * tag; the served instance cards resolve through the registry inside it).
- * The per-workflow workflow-view components (expedition-map, frontier-board,
- * build-pipeline) remain the fallback layer if this component fails to
- * load. */
+ * There is no per-workflow fallback layer: the wayfinder preset declares no
+ * workflowComponent views, so if this component fails to load, the generic
+ * Hive sections (board/list) render — the canonical degraded path. */
 
 import type { PropertyValues } from "lit";
 import type {

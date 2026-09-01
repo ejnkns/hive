@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -20,7 +21,9 @@ import {
   registerFlowDefinition,
   registerUserDefinition,
   resetFlowDefinitionsForTest,
+  runtimeDefinitionsDir,
   setDefinitionsBasePathForTest,
+  writeModuleSetDir,
 } from "./flow-definitions.ts";
 import {
   registerFlowForTest,
@@ -453,5 +456,38 @@ export const flow: FlowDefinition = {
       ),
       "the modules route rewrites imports with the shared content hash"
     );
+  });
+});
+
+describe("module set materialization", () => {
+  it("writeModuleSetDir replaces the runtime copy — a file removed from the definition disappears", () => {
+    // The materialized dir is the module set the runtime imports and the
+    // module-set gate lints. A merge-on-write would keep serving (and
+    // linting) a file the definition no longer declares — the stale module
+    // survives every re-save. The runtime copy is fully derived from source,
+    // so writing must replace, not merge.
+    const slug = `materialize-replace-${process.pid}`;
+    const dir = join(runtimeDefinitionsDir(), slug);
+    try {
+      writeModuleSetDir(slug, {
+        entry: "export const flow = null;",
+        files: {
+          "./ui/kept.ts": "export const kept = 1;",
+          "./ui/gone.ts": "export const gone = 1;",
+        },
+      });
+      writeModuleSetDir(slug, {
+        entry: "export const flow = null;",
+        files: { "./ui/kept.ts": "export const kept = 2;" },
+      });
+      assert.ok(existsSync(join(dir, "ui", "kept.ts")));
+      assert.equal(
+        existsSync(join(dir, "ui", "gone.ts")),
+        false,
+        "a file removed from the definition must not survive materialization"
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

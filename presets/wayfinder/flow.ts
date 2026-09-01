@@ -102,9 +102,6 @@ export const flow: FlowDefinition = {
       "build-card": { ref: "./ui/build-card.ts" },
       "build-item-card": { ref: "./ui/build-item-card.ts" },
       "charting-card": { ref: "./ui/charting-card.ts" },
-      "expedition-map": { ref: "./ui/expedition-map.ts" },
-      "frontier-board": { ref: "./ui/frontier-board.ts" },
-      "build-pipeline": { ref: "./ui/build-pipeline.ts" },
       "findings-report": { ref: "./ui/findings-report.ts" },
       "prototype-decision": { ref: "./ui/prototype-decision.ts" },
       "plan-tickets": { ref: "./ui/plan-tickets.ts" },
@@ -172,7 +169,6 @@ export const flow: FlowDefinition = {
       ui: {
         view: "list",
         instanceComponent: "charting-card",
-        workflowComponent: "expedition-map",
       },
       instanceState: [
         {
@@ -324,7 +320,6 @@ export const flow: FlowDefinition = {
       ui: {
         view: "board",
         instanceComponent: "ticket-card",
-        workflowComponent: "frontier-board",
         columns: [
           {
             id: "fog",
@@ -351,7 +346,12 @@ export const flow: FlowDefinition = {
           {
             id: "closed",
             label: "Closed",
-            states: ["closed", "out_of_scope"],
+            states: ["closed"],
+          },
+          {
+            id: "out_of_scope",
+            label: "Out of scope",
+            states: ["out_of_scope"],
           },
         ],
       },
@@ -1071,7 +1071,6 @@ export const flow: FlowDefinition = {
       ui: {
         view: "list",
         instanceComponent: "build-card",
-        workflowComponent: "build-pipeline",
       },
       instanceState: [
         {

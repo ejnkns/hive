@@ -654,6 +654,10 @@ export function writeModuleSetDir(
   rendered: { entry: string; files: Record<string, string> }
 ): string {
   const dir = join(runtimeDefinitionsDir(), runtimeSlug);
+  // Replace, not merge: the dir is fully derived from the rendered source, so
+  // a file the definition no longer declares must not survive here — a merge
+  // would keep the stale module importable (and gate-lintable) forever.
+  rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "flow.ts"), rendered.entry, "utf-8");
   for (const [ref, refSource] of Object.entries(rendered.files)) {

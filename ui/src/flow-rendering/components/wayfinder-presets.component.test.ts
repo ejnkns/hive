@@ -11,9 +11,7 @@ import type {
   FlowComponentRegistrations,
 } from "workflow-engine/workflow-types";
 import buildItemCardModule from "../../../../presets/wayfinder/ui/build-item-card.ts";
-import expeditionMapModule from "../../../../presets/wayfinder/ui/expedition-map.ts";
 import flowComponentModule from "../../../../presets/wayfinder/ui/flow-component.ts";
-import frontierBoardModule from "../../../../presets/wayfinder/ui/frontier-board.ts";
 import ticketCardModule from "../../../../presets/wayfinder/ui/ticket-card.ts";
 import { defineFlowRenderingComponents } from "../define-components.ts";
 import type { FlowComponentEvaluator } from "../load-flow-components.ts";
@@ -243,6 +241,44 @@ describe("wayfinder served modules", () => {
       expect(queryAllDeep(el, ".decision-gist")[0]?.textContent).toContain(
         "2 sources"
       );
+    } finally {
+      restore();
+    }
+  });
+
+  it("ticket-card marks an out-of-scope ticket as ruled out, distinct from a decision", async () => {
+    defineFlowRenderingComponents();
+    localStorage.clear();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, text: async () => "" }))
+    );
+    const restore = await loadFlowComponents(
+      { "ticket-card": "/api/.../ticket-card" },
+      load(ticketCardModule)
+    );
+    try {
+      const instance = ticketEntry("t-1", "out_of_scope");
+      instance.state.workflowInstanceState = {
+        title: "Rewrite the renderer",
+        type: "task",
+      };
+      const el = await mount(
+        Object.assign(new WorkflowInstances(), {
+          flowId: "flow-1",
+          workflowDefs: [ticketDef()],
+          instances: [instance],
+          customKinds: [],
+        })
+      );
+      await settle(shadowRootOf(el));
+
+      // out_of_scope is a distinct terminal: ruled out, not a recorded
+      // decision — the card says so instead of rendering a decision pane.
+      const marker = queryAllDeep(el, ".scope-marker");
+      expect(marker.length).toBe(1);
+      expect(marker[0]?.textContent).toContain("ruled out");
+      expect(queryAllDeep(el, ".decision").length).toBe(0);
     } finally {
       restore();
     }
@@ -539,146 +575,6 @@ describe("wayfinder served modules", () => {
       restore();
     }
   });
-
-  it("expedition-map renders destinations, the fog→frontier→charted trail, and charted progress", async () => {
-    defineFlowRenderingComponents();
-    localStorage.clear();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({ ok: true, text: async () => "" }))
-    );
-    const restore = await loadFlowComponents(
-      { "expedition-map": "/api/.../expedition-map" },
-      load(expeditionMapModule)
-    );
-    try {
-      const def = cardDef({
-        id: "charting",
-        label: "Charting",
-        terminalStates: ["charted"],
-        states: [
-          {
-            id: "no_session",
-            label: "No Session",
-            category: "initial",
-            actions: [],
-            tasks: [],
-          },
-          {
-            id: "naming",
-            label: "Naming",
-            category: "active",
-            actions: [],
-            tasks: [],
-          },
-          {
-            id: "frontier",
-            label: "Frontier",
-            category: "active",
-            actions: [],
-            tasks: [],
-          },
-          {
-            id: "charted",
-            label: "Charted",
-            category: "terminal",
-            actions: [],
-            tasks: [],
-          },
-        ],
-        ui: { view: "list", workflowComponent: "expedition-map" },
-      });
-      const chartedEntry = entry("c-1", "charted");
-      chartedEntry.workflowId = "charting";
-      chartedEntry.state.workflowInstanceState = {
-        destination: "hive router",
-        notes: "Offline-first; execution carried into the map.",
-      };
-      const el = await mount(
-        Object.assign(new WorkflowInstances(), {
-          flowId: "flow-1",
-          workflowDefs: [def],
-          instances: [chartedEntry],
-          customKinds: [],
-        })
-      );
-      await settle(shadowRootOf(el));
-
-      expect(queryAllDeep(el, ".map-title")[0]?.textContent).toBe(
-        "Expedition map"
-      );
-      expect(queryAllDeep(el, ".map-progress")[0]?.textContent).toContain(
-        "1 of 1 charted"
-      );
-      expect(queryAllDeep(el, ".destination-title")[0]?.textContent).toBe(
-        "hive router"
-      );
-      expect(queryAllDeep(el, ".destination-notes")[0]?.textContent).toContain(
-        "Offline-first"
-      );
-      // The charted destination shows the full trail reached.
-      const reached = queryAllDeep(el, ".trail-step[data-reached='true']");
-      expect(reached.length).toBe(3);
-    } finally {
-      restore();
-    }
-  });
-
-  it("frontier-board composes the canonical board under a fog/frontier summary bar", async () => {
-    defineFlowRenderingComponents();
-    localStorage.clear();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({ ok: true, text: async () => "" }))
-    );
-    const restore = await loadFlowComponents(
-      { "frontier-board": "/api/.../frontier-board" },
-      load(frontierBoardModule)
-    );
-    try {
-      const def = cardDef({
-        id: "ticket",
-        label: "Ticket",
-        ui: {
-          view: "board",
-          workflowComponent: "frontier-board",
-          columns: [
-            { id: "fog", label: "Fog", states: ["fog"] },
-            { id: "frontier", label: "Frontier", states: ["ready"] },
-            { id: "closed", label: "Closed", states: ["closed"] },
-          ],
-        },
-      });
-      const fog = ticketEntry("t-1", "fog");
-      const ready = ticketEntry("t-2", "ready");
-      const closed = ticketEntry("t-3", "closed");
-      const el = await mount(
-        Object.assign(new WorkflowInstances(), {
-          flowId: "flow-1",
-          workflowDefs: [def],
-          instances: [fog, ready, closed],
-          customKinds: [],
-        })
-      );
-      await settle(shadowRootOf(el));
-
-      // The summary bar counts the fog / frontier / closed lanes.
-      const chips = queryAllDeep(el, ".summary-chip");
-      expect(chips[0]?.textContent).toContain("fog");
-      expect(chips[0]?.textContent).toContain("1");
-      expect(chips[1]?.textContent).toContain("frontier");
-      expect(chips[1]?.textContent).toContain("1");
-      expect(chips[3]?.textContent).toContain("closed");
-      expect(chips[3]?.textContent).toContain("1");
-      // The canonical board composes underneath (via the globally registered
-      // <workflow-board-content> element).
-      expect(queryAllDeep(el, "workflow-board-content").length).toBe(1);
-      expect(queryAllDeep(el, ".flow-board").length).toBe(1);
-    } finally {
-      restore();
-    }
-  });
-
   // --- Ticket 05: the map-first shell and HUD ---
 
   // Clicks the Map/Table toggle inside whichever shell is rendered.

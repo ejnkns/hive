@@ -85,6 +85,16 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         padding: 0.125rem 0.375rem;
         border-radius: 4px;
       }
+      .scope-marker {
+        font-size: 0.5625rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        border: 1px solid var(--border);
+        padding: 0.125rem 0.375rem;
+        border-radius: 4px;
+      }
       .ticket-title {
         font-weight: 700;
         font-size: 0.8125rem;
@@ -210,6 +220,10 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         ? (instanceState.dependsOn as string[])
         : [];
       const hitl = instanceState.hitl === true;
+      // out_of_scope is a distinct terminal (ruled out — it never satisfies
+      // dependencies and records no decision); the card names it as such so a
+      // ruled-out ticket is never mistaken for a recorded decision.
+      const outOfScope = state.currentState === "out_of_scope";
       const branchName = instanceState.branchName as string | undefined;
       const worktreePath = instanceState.worktreePath as string | undefined;
       const actions = this.instanceEntry.availableActions ?? [];
@@ -222,6 +236,11 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
               : nothing
           }
           ${hitl ? html`<span class="hitl-marker">hitl</span>` : nothing}
+          ${
+            outOfScope
+              ? html`<span class="scope-marker">ruled out</span>`
+              : nothing
+          }
         </div>
         <div class="ticket-title">${title}</div>
         ${
