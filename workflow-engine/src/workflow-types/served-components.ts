@@ -117,6 +117,16 @@ export type FlowViewFlow = {
   label: string;
   status: FlowStatus;
   config: Record<string, unknown>;
+  // The flow snapshot's revision stamp: a monotonic per-flow counter the
+  // runtime advances once per snapshot-affecting mutation (an instance
+  // created, its state or domain data changed, it terminated or was removed,
+  // or the flow state was patched) and reads — never advances — when a
+  // snapshot is serialized or re-delivered (reconnect init, host re-render),
+  // so equal stamps mean identical content. Surfaces may compare stamps to
+  // skip no-op diffing of a re-delivered snapshot; the field is optional and
+  // absent on degraded paths (older hosts), where consumers must fall back
+  // to always-diff.
+  revision?: number;
 };
 
 // The gate-evaluated, UI-facing view of a flow-level action (no gate function

@@ -42,6 +42,10 @@ export type FlowResponse = {
   config?: Record<string, unknown>;
   workflows: WorkflowDefResponse[];
   instances: WorkflowInstanceEntry[];
+  // The flow's revision stamp (server flowPayload): a monotonic counter
+  // advanced once per snapshot-affecting mutation, held across re-delivery.
+  // Optional — absent from older payloads.
+  revision?: number;
   ui?: {
     kinds?: CustomRenderKind[];
     // Declared served component ids → fetch path (transpiled module source).

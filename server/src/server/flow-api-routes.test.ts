@@ -283,6 +283,7 @@ type FlowWsMessage =
       type: "init";
       flows: Array<{
         id: string;
+        revision: number;
         instances: Array<{ state: { currentState: string } }>;
       }>;
     }
@@ -290,6 +291,7 @@ type FlowWsMessage =
       type: "flow_snapshot";
       flow: {
         id: string;
+        revision: number;
         instances: Array<{ id: string; state: { currentState: string } }>;
       };
     }
@@ -1272,6 +1274,78 @@ describe("flow API routes", () => {
 
     assert.equal(response.statusCode, 404);
     assert.equal(response.json().error, "Instance not found");
+  });
+
+  it("stamps flow frames with a monotonic revision that holds across reconnect re-delivery", async () => {
+    const runtime = createFlowRuntime(
+      "test-flow",
+      [testWorkflow],
+      [],
+      {},
+      { name: "Test Flow", basePath: "/tmp/test-repo" },
+      {},
+      noopPersistence
+    );
+    let instanceId = "";
+    runtime.on((event) => {
+      if (event.type === "instance_created") instanceId = event.instanceId;
+    });
+    runtime.addWorkflowInstance("test-wf");
+    registerFlowForTest("test-flow", runtime);
+
+    const server = await flowSocketServer();
+    const first = await openFlowWs(server);
+
+    await waitFor(() =>
+      first.received.some((message) => message.type === "init")
+    );
+    const init = first.received.find(
+      (message): message is Extract<FlowWsMessage, { type: "init" }> =>
+        message.type === "init"
+    );
+    assert.ok(init, "init should be sent on connect");
+    const initRevision = init.flows[0].revision;
+    assert.equal(
+      typeof initRevision,
+      "number",
+      "the init frame carries the flow's revision stamp"
+    );
+    // A mutation advances the stamp on the pushed snapshot.
+    await server.inject({
+      method: "POST",
+      url: `/api/flows/test-flow/instances/${instanceId}/action`,
+      body: { actionId: "start" },
+    });
+    await waitFor(() => first.received.some((m) => m.type === "flow_snapshot"));
+    const snapshot = first.received.find(
+      (message): message is Extract<FlowWsMessage, { type: "flow_snapshot" }> =>
+        message.type === "flow_snapshot"
+    );
+    assert.ok(snapshot, "the mutation pushed a flow_snapshot");
+    assert.ok(
+      snapshot.flow.revision > initRevision,
+      "a snapshot-affecting mutation advances the revision"
+    );
+    const afterMutation = snapshot.flow.revision;
+    first.ws.close();
+
+    // Re-delivery holds the stamp: a reconnect's init frame re-serializes the
+    // same content and must NOT advance the revision.
+    const second = await openFlowWs(server);
+    await waitFor(() =>
+      second.received.some((message) => message.type === "init")
+    );
+    const reconnectInit = second.received.find(
+      (message): message is Extract<FlowWsMessage, { type: "init" }> =>
+        message.type === "init"
+    );
+    assert.ok(reconnectInit, "the reconnect sends init");
+    assert.equal(
+      reconnectInit.flows[0].revision,
+      afterMutation,
+      "content-neutral re-delivery holds the revision"
+    );
+    second.ws.close();
   });
 
   it("sends init on connect and flow_snapshot after an action", async () => {

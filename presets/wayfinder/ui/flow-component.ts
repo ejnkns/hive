@@ -397,6 +397,9 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
           ...identity,
           model: this.model,
           theme: this.theme,
+          // The snapshot's revision stamp: the map surface compares it to
+          // skip the transitions diff on a re-delivered identical snapshot.
+          revision: this.flow.revision,
           entries: this.entries,
           workflowDefs: this.workflowDefs,
           persistedOutputs: this.persistedOutputs,

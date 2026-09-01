@@ -14,6 +14,11 @@ import type {
 export type FlowRuntimeAPI<TFlowConfig, TFlowState> = {
   getFlowConfig(): TFlowConfig;
   getFlowState(): TFlowState;
+  // The flow's revision stamp: a monotonic counter the runtime advances once
+  // per snapshot-affecting mutation and reads (never writes) on snapshot
+  // serialization, so equal stamps mean identical content. Surfaces compare
+  // stamps to skip no-op work on a re-delivered snapshot.
+  getRevision(): number;
   patchFlowState(patch: Partial<TFlowState>): void;
   addWorkflowInstance(
     workflowId: string,

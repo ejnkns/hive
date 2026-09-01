@@ -29,6 +29,11 @@ import type { ExpeditionTheme } from "./wayfinder-themes.ts";
 export type MapCanvasElement = HTMLElement & {
   model: WayfinderMap;
   theme: ExpeditionTheme;
+  // The host's snapshot revision stamp (FlowViewFlow.revision). A present,
+  // unchanged stamp means the snapshot was re-delivered with identical
+  // content, so the live-update transitions diff is skipped; an absent stamp
+  // (degraded path) always diffs.
+  revision: number | undefined;
   hoverId: string | undefined;
   focusId: string | undefined;
   /** The durable drawer selection — the node renders a persistent highlight
@@ -53,6 +58,7 @@ export function createMapCanvas(
     static properties = {
       model: { attribute: false },
       theme: { type: String, reflect: true, attribute: "data-theme" },
+      revision: { attribute: false },
       hoverId: { attribute: false },
       focusId: { attribute: false },
       selectedId: { attribute: false },
@@ -384,6 +390,7 @@ export function createMapCanvas(
 
     declare model: WayfinderMap;
     declare theme: ExpeditionTheme;
+    declare revision: number | undefined;
     declare hoverId: string | undefined;
     declare focusId: string | undefined;
     declare selectedId: string | undefined;
@@ -433,9 +440,13 @@ export function createMapCanvas(
     protected override willUpdate(changed: PropertyValues<this>): void {
       // Derived live-update feedback, only on a model change: diff the
       // previous snapshot against the next one (the pure transitions seam).
-      // Reduced motion drops the motion marks entirely; the class changes
+      // A present, unchanged revision stamp means the host re-delivered
+      // identical content — the diff would find nothing — so it is skipped
+      // entirely; an absent stamp (degraded path) always diffs. Reduced
+      // motion drops the motion marks entirely; the class changes
       // themselves are the DOM trace, and the CSS media query backs them up.
       if (!changed.has("model") || this.model === undefined) return;
+      if (this.revision !== undefined && !changed.has("revision")) return;
       const transitions = deriveMapTransitions(
         changed.get("model"),
         this.model

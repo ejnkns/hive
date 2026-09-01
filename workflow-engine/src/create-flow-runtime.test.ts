@@ -234,6 +234,76 @@ describe("FlowRuntime", () => {
     });
   });
 
+  describe("getRevision", () => {
+    it("advances across snapshot-affecting mutations", () => {
+      const runtime = createFlowRuntime("test", [sourceWorkflow], [], {});
+      const start = runtime.getRevision();
+      const instance = runtime.addWorkflowInstance("source");
+      const afterCreate = runtime.getRevision();
+      assert.ok(afterCreate > start, "instance creation advances the revision");
+
+      instance.dispatchAction("start");
+      assert.ok(
+        runtime.getRevision() > afterCreate,
+        "a state transition advances the revision"
+      );
+
+      const beforePatch = runtime.getRevision();
+      runtime.patchFlowState({ key: "val" });
+      assert.ok(
+        runtime.getRevision() > beforePatch,
+        "a flow state patch advances the revision"
+      );
+
+      const beforeRemove = runtime.getRevision();
+      runtime.removeWorkflowInstance(instance.id);
+      assert.ok(
+        runtime.getRevision() > beforeRemove,
+        "instance removal advances the revision"
+      );
+    });
+
+    it("holds across read-only re-delivery (serialization reads, never writes)", () => {
+      const runtime = createFlowRuntime("test", [sourceWorkflow], [], {});
+      const instance = runtime.addWorkflowInstance("source");
+      const afterCreate = runtime.getRevision();
+
+      // Content-neutral re-delivery: re-serializing the snapshot (the init
+      // frame and every host re-render) reads the stamp without advancing it.
+      runtime.getWorkflowInstanceEntries();
+      runtime.getWorkflowDefinitions();
+      runtime.getWorkflowInstanceEntries();
+      assert.equal(
+        runtime.getRevision(),
+        afterCreate,
+        "read-only snapshot serialization holds the revision"
+      );
+
+      // A mutation still advances it afterwards.
+      instance.dispatchAction("start");
+      assert.ok(runtime.getRevision() > afterCreate);
+    });
+
+    it("is monotonic within a flow and independent across flows", () => {
+      const first = createFlowRuntime("first", [sourceWorkflow], [], {});
+      const second = createFlowRuntime("second", [sourceWorkflow], [], {});
+
+      const firstStart = first.getRevision();
+      first.addWorkflowInstance("source");
+      const firstAfterCreate = first.getRevision();
+      assert.ok(firstAfterCreate > firstStart, "monotonic within a flow");
+      assert.equal(
+        second.getRevision(),
+        firstStart,
+        "an untouched flow's revision is independent of a sibling's mutations"
+      );
+
+      second.addWorkflowInstance("source");
+      assert.ok(second.getRevision() > firstStart);
+      assert.ok(first.getRevision() >= firstAfterCreate);
+    });
+  });
+
   describe("addWorkflowInstance", () => {
     it("creates a controller in the workflow's initial state", () => {
       const runtime = createFlowRuntime("test", [sourceWorkflow], [], {});

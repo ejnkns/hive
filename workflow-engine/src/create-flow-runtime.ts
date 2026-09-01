@@ -103,6 +103,18 @@ export function createFlowRuntime<
   const instanceWorkflowIds = new Map<string, string>();
   const workflowMap = new Map<string, RuntimeWorkflowConfig>();
   const eventHandlers = new Set<FlowEventHandler>();
+  let revision = 0;
+
+  // The flow's revision stamp: a monotonic counter advanced once per emitted
+  // runtime event. Every emitted event is a snapshot-affecting mutation (an
+  // instance created, its state or domain data changed, it terminated or was
+  // removed, or the flow state was patched), so the counter advances exactly
+  // when the serialized snapshot's content can have changed. Read-only
+  // re-delivery — snapshot serialization for an init frame, an HTTP fetch, a
+  // host re-render — reads the counter without advancing it, so equal stamps
+  // mean identical content. The count lives per runtime (independent across
+  // flows) and restarts at process rehydration, which is unobservable because
+  // every client re-initializes from a fresh init frame on reconnect.
 
   for (const wf of workflowDefs) {
     workflowMap.set(wf.id, wf);
@@ -111,6 +123,7 @@ export function createFlowRuntime<
   // ── internal helpers ──
 
   function emit(event: FlowRuntimeEvent): void {
+    revision += 1;
     for (const handler of eventHandlers) {
       handler(event);
     }
@@ -558,6 +571,8 @@ export function createFlowRuntime<
   return {
     getFlowConfig: () => _flowConfig,
     getFlowState: () => _flowState,
+    // The snapshot revision stamp (see the counter declaration above).
+    getRevision: () => revision,
     patchFlowState,
     addWorkflowInstance,
     getWorkflowInstance: (instanceId: string) => controllers.get(instanceId),

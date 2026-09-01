@@ -89,6 +89,11 @@ export function flowPayload(
     config: clientConfig,
     workflows,
     instances,
+    // The flow's revision stamp (runtime.getRevision): a monotonic counter
+    // advanced by the runtime once per snapshot-affecting mutation and read
+    // — never advanced — here at serialization, so equal stamps mean
+    // identical content and re-delivery (reconnect init) holds the stamp.
+    revision: runtime.getRevision(),
     // Hidden definitions (the flow-authoring session) are driven by the
     // editor, not the flow library — the client hides their instances.
     hidden: definition?.hidden ?? false,

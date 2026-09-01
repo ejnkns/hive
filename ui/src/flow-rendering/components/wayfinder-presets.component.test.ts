@@ -84,6 +84,7 @@ async function mountFlowComponentHost(
     persistedOutputDirs?: Record<string, Record<string, string>>;
     persistedOutputs?: Record<string, string>;
     availableFlowActions?: FlowActionView[];
+    revision?: number;
   } = {}
 ) {
   const flowId = options.flowId ?? "flow-1";
@@ -95,7 +96,13 @@ async function mountFlowComponentHost(
   const el = await mount(
     Object.assign(new WorkflowInstances(), {
       flowId,
-      flow: { id: flowId, label: "Wayfinder", status: "idle", config },
+      flow: {
+        id: flowId,
+        label: "Wayfinder",
+        status: "idle",
+        config,
+        revision: options.revision,
+      },
       flowComponent: "flow-component",
       workflowDefs: [charting, ticket, build, buildItem],
       instances,
@@ -119,6 +126,7 @@ async function mountFlowComponent(
     persistedOutputDirs?: Record<string, Record<string, string>>;
     persistedOutputs?: Record<string, string>;
     availableFlowActions?: FlowActionView[];
+    revision?: number;
   } = {}
 ) {
   defineFlowRenderingComponents();
@@ -2174,6 +2182,93 @@ describe("wayfinder served modules", () => {
       // frontier chip emptied, the active chip picked the ticket up.
       expect(queryAllDeep(el, ".hud .chip.frontier").length).toBe(0);
       expect(queryAllDeep(el, ".hud .chip.active").length).toBe(1);
+    } finally {
+      restore();
+    }
+  });
+
+  it("a changed revision stamp diffs exactly as today", async () => {
+    const { el, restore } = await mountFlowComponent(
+      wayfinderFixtureEntries(),
+      {
+        revision: 1,
+      }
+    );
+    try {
+      await settle(shadowRootOf(el));
+
+      // The next stamped snapshot: the frontier ticket activated and a new
+      // dependent arrived — the host ships a higher revision stamp.
+      const later = entriesWithFrontierActivated();
+      const dependent = ticketEntry("t-new-stamped", "ready");
+      dependent.state.workflowInstanceState = {
+        title: "Stamped next step",
+        dependsOn: ["t-a"],
+      };
+      later.push(dependent);
+      el.flow = {
+        id: "flow-1",
+        label: "Wayfinder",
+        status: "idle",
+        config: {},
+        revision: 2,
+      };
+      el.instances = later;
+      await settle(shadowRootOf(el));
+
+      // The changed stamp diffs: the presentation change flares its node...
+      const changedNode = queryAllDeep(
+        el,
+        '.map-surface .node[data-id="ticket-frontier"]'
+      )[0];
+      expect(changedNode?.classList.contains("flare")).toBe(true);
+      // ...and the added node carries the entrance mark while survivors do
+      // not — exactly the ticket-07 behaviour, now stamped.
+      const addedNode = queryAllDeep(
+        el,
+        '.map-surface .node[data-id="t-new-stamped"]'
+      )[0];
+      expect(addedNode?.classList.contains("enter")).toBe(true);
+      expect(changedNode?.classList.contains("enter")).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
+  it("an unchanged revision stamp skips the transitions diff: a re-shipped identical snapshot re-triggers no marks", async () => {
+    const { el, restore } = await mountFlowComponent(
+      wayfinderFixtureEntries(),
+      {
+        revision: 7,
+      }
+    );
+    try {
+      await settle(shadowRootOf(el));
+      const enteredIds = queryAllDeep(el, ".map-surface .node.enter")
+        .map((node) => node.getAttribute("data-id"))
+        .sort();
+      expect(enteredIds.length).toBeGreaterThan(0);
+
+      // Content-neutral re-delivery: the host re-ships the identical
+      // snapshot content under the same stamp (a coalesced re-render, a
+      // reconnect replay). The map skips its live-update diff — no flare
+      // appears anywhere and the entrance wave is not recomputed.
+      el.flow = {
+        id: "flow-1",
+        label: "Wayfinder",
+        status: "idle",
+        config: {},
+        revision: 7,
+      };
+      el.instances = wayfinderFixtureEntries();
+      await settle(shadowRootOf(el));
+
+      expect(queryAllDeep(el, ".map-surface .node.flare").length).toBe(0);
+      expect(
+        queryAllDeep(el, ".map-surface .node.enter")
+          .map((node) => node.getAttribute("data-id"))
+          .sort()
+      ).toEqual(enteredIds);
     } finally {
       restore();
     }

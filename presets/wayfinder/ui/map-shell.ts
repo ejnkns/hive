@@ -51,6 +51,9 @@ export type MapShellElement = HTMLElement & {
   flowStatus: string;
   model: WayfinderMap;
   theme: ExpeditionTheme;
+  // The host's snapshot revision stamp, forwarded to the map surface so a
+  // re-delivered identical snapshot skips its transitions diff.
+  revision: number | undefined;
   entries: FlowViewPropsEntries;
   workflowDefs: readonly WorkflowDefResponse[];
   persistedOutputs: FlowViewProps["persistedOutputs"];
@@ -86,6 +89,7 @@ export function createMapShell(options: {
       flowStatus: { attribute: false },
       model: { attribute: false },
       theme: { type: String, reflect: true, attribute: "data-theme" },
+      revision: { attribute: false },
       entries: { attribute: false },
       workflowDefs: { attribute: false },
       persistedOutputs: { attribute: false },
@@ -351,6 +355,7 @@ export function createMapShell(options: {
     declare flowStatus: string;
     declare model: WayfinderMap;
     declare theme: ExpeditionTheme;
+    declare revision: number | undefined;
     declare entries: FlowViewPropsEntries;
     declare workflowDefs: readonly WorkflowDefResponse[];
     declare persistedOutputs: FlowViewProps["persistedOutputs"];
@@ -416,6 +421,7 @@ export function createMapShell(options: {
       if (view !== undefined) {
         view.model = this.model;
         view.theme = this.theme;
+        view.revision = this.revision;
         view.hoverId = this.hoverId;
         view.focusId = this.focusId;
         view.selectedId = this.selectedId;
