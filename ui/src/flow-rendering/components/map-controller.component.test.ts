@@ -20,6 +20,7 @@ import {
   deriveWayfinderMap,
   type WayfinderMap,
 } from "../../../../presets/wayfinder/ui/wayfinder-map.ts";
+import { entry } from "../test-fixtures.ts";
 import { wayfinderFixtureEntries } from "./wayfinder-fixtures.ts";
 
 // A minimal map surface: a host with the canvas and a node-overlay layer,
@@ -45,6 +46,33 @@ const VIEWPORT = { width: 800, height: 600 };
 // UI test builds on.
 function baselineModel(): WayfinderMap {
   return deriveWayfinderMap(wayfinderFixtureEntries());
+}
+
+// A later snapshot: the baseline plus one ready dependent of the closed
+// decision — the live-update shape (same nodes plus one arrival).
+function modelWithAddedTicket(): WayfinderMap {
+  const dependent = entry("ticket-arriving", "ready");
+  dependent.workflowId = "ticket";
+  dependent.state.workflowInstanceState = {
+    title: "Arrives later",
+    dependsOn: ["ticket-decision"],
+  };
+  return deriveWayfinderMap([...wayfinderFixtureEntries(), dependent]);
+}
+
+// Reads each node overlay's camera-projected screen position (the CSS
+// variables the controller writes) keyed by node id.
+function overlayPositions(host: HTMLElement): Map<string, string> {
+  const positions = new Map<string, string>();
+  for (const el of host.querySelectorAll<HTMLElement>(".node")) {
+    const id = el.dataset.id;
+    if (id === undefined) continue;
+    positions.set(
+      id,
+      `${el.style.getPropertyValue("--node-x")} ${el.style.getPropertyValue("--node-y")}`
+    );
+  }
+  return positions;
 }
 
 // The node-overlay divs the surface would render; the controller positions
@@ -467,6 +495,66 @@ describe("wayfinder map controller", () => {
     controller.update(model, "stars");
     const nodes = host.querySelectorAll(".node");
     expect(nodes.length).toBe(model.nodes.length);
+    document.body.removeChild(host);
+  });
+
+  it("a live update that adds nodes keeps the camera and every existing overlay position", () => {
+    const host = surfaceHost(VIEWPORT);
+    const model = baselineModel();
+    const next = modelWithAddedTicket();
+    addOverlayNodes(host, model);
+    const controller = new MapController({ onFocus: () => {} });
+    controller.mount(host);
+    controller.update(model, "mountain");
+    controller.reset();
+    // Zoom in first so camera preservation is a real claim, not the default.
+    host.dispatchEvent(
+      new WheelEvent("wheel", {
+        clientX: 400,
+        clientY: 300,
+        deltaY: -240,
+        cancelable: true,
+      })
+    );
+    const cameraBefore = controller.camera;
+    const positionsBefore = overlayPositions(host);
+    // The surface renders the arrival's overlay with the next snapshot.
+    addOverlayNodes(host, next);
+
+    controller.update(next, "mountain");
+
+    // The camera (and its zoom) is untouched by an ordinary update...
+    expect(controller.camera).toEqual(cameraBefore);
+    // ...every survivor holds its exact projected screen position...
+    const positionsAfter = overlayPositions(host);
+    for (const [id, before] of positionsBefore) {
+      expect(positionsAfter.get(id), `${id} stayed put`).toBe(before);
+    }
+    // ...and the arrival is positioned by the same camera.
+    expect(positionsAfter.get("ticket-arriving") ?? "").toMatch(
+      /^[\d.]+px [\d.]+px$/
+    );
+    document.body.removeChild(host);
+  });
+
+  it("a live update while the camera is easing keeps easing to the user's goal (never a refit)", async () => {
+    vi.useFakeTimers();
+    const host = surfaceHost(VIEWPORT);
+    const controller = new MapController({ onFocus: () => {} });
+    controller.mount(host);
+    controller.update(baselineModel(), "mountain");
+    controller.reset();
+    // Pan, then hand the controller a changed model before the ease settles.
+    pointerDown(host, 100, 100);
+    pointerMove(host, 400, 300);
+    pointerUp(host, 400, 300);
+    const pannedGoal = controller.goal;
+    controller.update(modelWithAddedTicket(), "mountain");
+    expect(controller.goal).toEqual(pannedGoal);
+    await vi.advanceTimersByTimeAsync(1_000);
+    // The ease lands on the user's goal, not on a refit of the new bounds.
+    expect(controller.camera.x).toBeCloseTo(pannedGoal.x, 1);
+    expect(controller.camera.y).toBeCloseTo(pannedGoal.y, 1);
     document.body.removeChild(host);
   });
 });

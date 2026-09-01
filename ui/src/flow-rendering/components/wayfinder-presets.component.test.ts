@@ -1870,4 +1870,177 @@ describe("wayfinder served modules", () => {
       restore();
     }
   });
+
+  // --- Ticket 07: live-update stability and motion ---
+
+  // Reads a map node overlay's camera-projected screen position (the CSS
+  // variables the controller writes) — the observable "where is this node
+  // on screen" seam in jsdom.
+  function overlayPosition(el: WorkflowInstances, id: string) {
+    const node = queryAllDeep(el, `.map-surface .node[data-id="${id}"]`)[0] as
+      | HTMLElement
+      | undefined;
+    expect(node, `the map node overlay for ${id} is present`).toBeDefined();
+    return {
+      x: node?.style.getPropertyValue("--node-x"),
+      y: node?.style.getPropertyValue("--node-y"),
+    };
+  }
+
+  // The baseline fixture with the frontier ticket advanced to an active
+  // (resolving) state — a realistic live snapshot diff.
+  function entriesWithFrontierActivated(): WorkflowInstanceEntry[] {
+    const later = wayfinderFixtureEntries();
+    const frontier = later.find((entry) => entry.id === "ticket-frontier");
+    if (frontier !== undefined) {
+      frontier.state.currentState = "resolving_research";
+    }
+    return later;
+  }
+
+  it("a live snapshot keeps every existing node overlay in place and animates the new node in", async () => {
+    const charted = entry("c-1", "charted");
+    charted.workflowId = "charting";
+    charted.state.workflowInstanceState = { destination: "hive router" };
+    const closed = ticketEntry("t-a", "closed");
+    closed.state.workflowInstanceState = { title: "Root decision" };
+    const { el, restore } = await mountFlowComponent([charted, closed]);
+    try {
+      await settle(shadowRootOf(el));
+      const rootBefore = overlayPosition(el, "t-a");
+      expect(rootBefore.x).toMatch(/px$/);
+
+      // A later snapshot adds one ready dependent of the closed decision.
+      const dependent = ticketEntry("t-new", "ready");
+      dependent.state.workflowInstanceState = {
+        title: "Next step",
+        dependsOn: ["t-a"],
+      };
+      el.instances = [charted, closed, dependent];
+      await settle(shadowRootOf(el));
+
+      // The survivor did not move by a single projected screen pixel.
+      expect(overlayPosition(el, "t-a")).toEqual(rootBefore);
+      // The new node is positioned by the same camera and carries the
+      // one-shot entrance mark; the survivor carries no marks.
+      expect(overlayPosition(el, "t-new").x).toMatch(/px$/);
+      const addedNode = queryAllDeep(
+        el,
+        '.map-surface .node[data-id="t-new"]'
+      )[0];
+      expect(addedNode?.classList.contains("enter")).toBe(true);
+      expect(addedNode?.classList.contains("flare")).toBe(false);
+      const rootNode = queryAllDeep(el, '.map-surface .node[data-id="t-a"]')[0];
+      expect(rootNode?.classList.contains("enter")).toBe(false);
+      expect(rootNode?.classList.contains("flare")).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
+  it("a presentation status change flares its node and recomputes the HUD counts", async () => {
+    const { el, restore } = await mountFlowComponent(wayfinderFixtureEntries());
+    try {
+      await settle(shadowRootOf(el));
+      expect(queryAllDeep(el, ".hud .chip.frontier").length).toBe(1);
+
+      el.instances = entriesWithFrontierActivated();
+      await settle(shadowRootOf(el));
+
+      // The node flares once (no entrance mark) and its derived status
+      // class followed the snapshot (frontier -> active).
+      const node = queryAllDeep(
+        el,
+        '.map-surface .node[data-id="ticket-frontier"]'
+      )[0];
+      expect(node?.classList.contains("flare")).toBe(true);
+      expect(node?.classList.contains("enter")).toBe(false);
+      expect(node?.className).toContain("active");
+      // The HUD recomputed its counts from the latest snapshot: the
+      // frontier chip emptied, the active chip picked the ticket up.
+      expect(queryAllDeep(el, ".hud .chip.frontier").length).toBe(0);
+      expect(queryAllDeep(el, ".hud .chip.active").length).toBe(1);
+    } finally {
+      restore();
+    }
+  });
+
+  it("reduced motion suppresses the entrance and flare marks entirely", async () => {
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn(() => ({
+        matches: true,
+        media: "",
+        addEventListener() {},
+        removeEventListener() {},
+      }))
+    );
+    const { el, restore } = await mountFlowComponent(wayfinderFixtureEntries());
+    try {
+      await settle(shadowRootOf(el));
+      // No entrance wave on the first snapshot...
+      expect(queryAllDeep(el, ".map-surface .node.enter").length).toBe(0);
+
+      el.instances = entriesWithFrontierActivated();
+      await settle(shadowRootOf(el));
+      // ...and no flare on the status change. The derived status class and
+      // the HUD counts still follow the snapshot.
+      expect(queryAllDeep(el, ".map-surface .node.flare").length).toBe(0);
+      expect(
+        queryAllDeep(el, '.map-surface .node[data-id="ticket-frontier"]')[0]
+          ?.className
+      ).toContain("active");
+    } finally {
+      restore();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("the drawer stays open on its selection and refreshes from a later snapshot", async () => {
+    // While the ticket resolves, a Done action is offered; the later
+    // snapshot advances the same WorkflowItem to closed with no actions —
+    // the known manual-testing case (a stale Done staying clickable).
+    const baseline = wayfinderFixtureEntries();
+    const resolving = baseline.find((entry) => entry.id === "ticket-resolving");
+    if (resolving !== undefined) {
+      resolving.availableActions = [
+        { id: "done", label: "Done", variant: "primary" },
+      ];
+    }
+    const { el, restore } = await mountFlowComponent(baseline);
+    try {
+      selectNode(el, "ticket-resolving");
+      await settle(shadowRootOf(el));
+      expect(queryAllDeep(el, ".drawer").length).toBe(1);
+      expect(queryAllDeep(el, ".drawer-actions button").length).toBe(1);
+      const node = queryAllDeep(
+        el,
+        '.map-surface .node[data-id="ticket-resolving"]'
+      )[0];
+      expect(node?.classList.contains("selected")).toBe(true);
+
+      const later = wayfinderFixtureEntries();
+      const advanced = later.find((entry) => entry.id === "ticket-resolving");
+      if (advanced !== undefined) {
+        advanced.state.currentState = "closed";
+        advanced.availableActions = [];
+      }
+      el.instances = later;
+      await settle(shadowRootOf(el));
+
+      // The drawer stayed open on the still-existing node, followed the
+      // snapshot's presentation, and the stale action disappeared.
+      expect(queryAllDeep(el, ".drawer").length).toBe(1);
+      expect(queryAllDeep(el, ".drawer-name")[0]?.textContent).toBe(
+        "Grill the provider seam"
+      );
+      expect(queryAllDeep(el, ".status-chip")[0]?.textContent?.trim()).toBe(
+        "Decision"
+      );
+      expect(queryAllDeep(el, ".drawer-actions button").length).toBe(0);
+      expect(node?.classList.contains("selected")).toBe(true);
+    } finally {
+      restore();
+    }
+  });
 });

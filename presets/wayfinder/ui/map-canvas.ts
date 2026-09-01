@@ -13,10 +13,12 @@
  * Registered under a generated tag through the entry's registrations; the
  * entry references it by constructor, never by tag. */
 
+import type { PropertyValues } from "lit";
 import type { FlowComponentDeps } from "workflow-engine/workflow-types";
-import { MapController } from "./map-controller.ts";
+import { MapController, prefersReducedMotion } from "./map-controller.ts";
 import { nodeStatusGlyph } from "./map-visuals.ts";
 import type { WayfinderMap, WayfinderNode } from "./wayfinder-map.ts";
+import { deriveMapTransitions } from "./wayfinder-map-transitions.ts";
 import type { ExpeditionTheme } from "./wayfinder-themes.ts";
 
 // The public surface contract the shell syncs each render: the data props
@@ -254,6 +256,51 @@ export function createMapCanvas(
         }
       }
 
+      /* The live-update marks: a node that just arrived plays the entrance
+         (fade + grow into its camera-projected place); a node whose derived
+         presentation just changed flares once (a single pulse, with its
+         caption shown so the change is not motion-only). Both play once and
+         are inert afterwards — ordinary data refreshes never move the
+         constellation or repeat the marks. */
+      .node.enter {
+        animation: node-enter 0.45s ease-out;
+      }
+      @keyframes node-enter {
+        from {
+          opacity: 0;
+          transform: translate(var(--node-x, 0px), var(--node-y, 0px))
+            translate(-50%, -50%) scale(0.4);
+        }
+        to {
+          opacity: 1;
+          transform: translate(var(--node-x, 0px), var(--node-y, 0px))
+            translate(-50%, -50%) scale(1);
+        }
+      }
+      .node.flare {
+        animation: flare-pulse 1s ease-in-out 1;
+      }
+      .node.flare .cap {
+        display: block;
+      }
+      @keyframes flare-pulse {
+        0%,
+        100% {
+          transform: translate(var(--node-x, 0px), var(--node-y, 0px))
+            translate(-50%, -50%) scale(1);
+        }
+        40% {
+          transform: translate(var(--node-x, 0px), var(--node-y, 0px))
+            translate(-50%, -50%) scale(1.4);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .node.enter,
+        .node.flare {
+          animation: none;
+        }
+      }
+
       .panel {
         border-left: 1px solid var(--border);
         padding: 0.9rem;
@@ -350,6 +397,15 @@ export function createMapCanvas(
     // animation owner live here — never in a render.
     private controller: MapController;
 
+    // The one-shot live-update marks, keyed by node id and derived in
+    // willUpdate from the previous snapshot: arrived ids play the entrance,
+    // presentation-changed ids flare once. Non-reactive — render reads them;
+    // only the next model change that actually transitions something
+    // rewrites them, so unrelated re-renders (hover, focus pulses) never cut
+    // a playing animation or re-trigger it.
+    private enterIds: ReadonlySet<string> = new Set();
+    private flareIds: ReadonlySet<string> = new Set();
+
     constructor() {
       super();
       this.controller = new MapController({
@@ -372,6 +428,28 @@ export function createMapCanvas(
     disconnectedCallback(): void {
       super.disconnectedCallback();
       this.controller.dispose();
+    }
+
+    protected override willUpdate(changed: PropertyValues<this>): void {
+      // Derived live-update feedback, only on a model change: diff the
+      // previous snapshot against the next one (the pure transitions seam).
+      // Reduced motion drops the motion marks entirely; the class changes
+      // themselves are the DOM trace, and the CSS media query backs them up.
+      if (!changed.has("model") || this.model === undefined) return;
+      const transitions = deriveMapTransitions(
+        changed.get("model"),
+        this.model
+      );
+      if (
+        transitions.addedIds.length === 0 &&
+        transitions.statusChanges.length === 0
+      )
+        return;
+      const reducedMotion = prefersReducedMotion();
+      this.enterIds = reducedMotion ? new Set() : new Set(transitions.addedIds);
+      this.flareIds = reducedMotion
+        ? new Set()
+        : new Set(transitions.statusChanges.map((change) => change.id));
     }
 
     protected override updated(): void {
@@ -438,6 +516,15 @@ export function createMapCanvas(
       </div>`;
     }
 
+    // The one-shot live-update class suffix: `enter` for a node that just
+    // arrived, `flare` for one whose presentation just changed (see
+    // willUpdate).
+    private transitionClass(id: string): string {
+      return `${this.enterIds.has(id) ? " enter" : ""}${
+        this.flareIds.has(id) ? " flare" : ""
+      }`;
+    }
+
     private renderNode(node: WayfinderNode) {
       const glyph = nodeStatusGlyph(node.presentation, this.theme);
       const caption =
@@ -446,7 +533,7 @@ export function createMapCanvas(
           : nothing;
       const id = node.id;
       return html`<div
-        class="node ${node.presentation}${this.stateClass(id)}"
+        class="node ${node.presentation}${this.stateClass(id)}${this.transitionClass(id)}"
         data-id=${id}
         tabindex="0"
         @mouseenter=${() => this.onHover?.(id)}

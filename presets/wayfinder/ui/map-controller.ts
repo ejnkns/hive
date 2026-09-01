@@ -5,7 +5,8 @@
  * zoom) plus fit/reset. Framework-free — the map surface element mounts it
  * once and keeps it across renders, so no camera or animation owner is
  * constructed during a Lit render. mount/update/fit/reset/dispose is the
- * whole interface; the frame loop, listeners, and resize observer live behind
+ * whole interface (plus the shared prefersReducedMotion animation-policy
+ * probe); the frame loop, listeners, and resize observer live behind
  * it and are torn down on dispose. All geometry goes through the same camera
  * (map-camera), so hit testing and drawing can never drift apart. */
 
@@ -454,7 +455,11 @@ function pinchState(pointers: ReadonlyMap<number, { x: number; y: number }>): {
   };
 }
 
-function prefersReducedMotion(): boolean {
+/** Whether the user asked the OS to reduce motion. The shared animation-
+ * policy probe for the wayfinder map: the controller reads it once per mount
+ * (snapping the camera easing and freezing the twinkle), and the map surface
+ * reads it per model change to skip the entrance/flare marks. */
+export function prefersReducedMotion(): boolean {
   if (typeof matchMedia !== "function") return false;
   return matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
