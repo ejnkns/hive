@@ -9,3 +9,8 @@ pre-commit:
     - name: typecheck
       glob: "*.{ts,js}"
       run: pnpm run typecheck
+    # Every commit must leave the server suite green — no file filter, so
+    # this runs unconditionally (the authoring-session tests silently rotted
+    # on environment debris exactly because tests were not a commit gate).
+    - name: server-tests
+      run: pnpm --filter server test

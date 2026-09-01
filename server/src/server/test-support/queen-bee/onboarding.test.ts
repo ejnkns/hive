@@ -21,6 +21,7 @@ import {
   setFlowPersistence,
 } from "../../flow-registry.ts";
 import { queenBeeCompiled as queenBeeFlow } from "../compiled-presets.ts";
+import { scrubGitHookContext } from "./card-flow-harness.ts";
 
 describe("queen-bee onboarding workflow", () => {
   let root: string;
@@ -28,6 +29,7 @@ describe("queen-bee onboarding workflow", () => {
   let persistence: FlowStore;
 
   beforeEach(() => {
+    scrubGitHookContext();
     root = mkdtempSync(join(tmpdir(), "hive-onboarding-"));
     basePath = join(root, "repo");
     mkdirSync(basePath);

@@ -304,6 +304,35 @@ function validateCall(): ToolCall {
   };
 }
 
+// The referenced-module implementations the REFS_MODULE entry declares (the
+// same sources the direct-executor tests pass in instance state). A real
+// authoring conversation implements the refs with write_definition_file
+// before validating — the gate materializes exactly the declared set.
+const APPROVED_GATE_IMPLEMENTATION = `import type { GateContract } from "workflow-engine/workflow-types";
+export const approved: GateContract = () => true;
+`;
+
+const PARSE_EXTRACTOR_IMPLEMENTATION = `import type { OutputExtractor } from "workflow-engine/workflow-types";
+export const parse: OutputExtractor = () => ({ verdict: "x" });
+`;
+
+function writeFileCall(path: string, content: string): ToolCall {
+  return {
+    id: `w-${path}`,
+    name: "write_definition_file",
+    arguments: JSON.stringify({ path, content }),
+  };
+}
+
+// The write calls that implement every file REFS_MODULE references.
+function refFileWrites(): ToolCall[] {
+  return [
+    writeFileCall("./tools/websearch.ts", LOOP_TOOL_IMPLEMENTATION),
+    writeFileCall("./gates/approved.ts", APPROVED_GATE_IMPLEMENTATION),
+    writeFileCall("./extractors/parse.ts", PARSE_EXTRACTOR_IMPLEMENTATION),
+  ];
+}
+
 // A definition module that fails validation (a transition to an unknown
 // state).
 const BAD_MODULE = REFS_MODULE.replace(
@@ -311,21 +340,40 @@ const BAD_MODULE = REFS_MODULE.replace(
   '{ to: "missing", gate: { kind: "file", ref: "./gates/approved.ts" } },'
 );
 
-async function settle(): Promise<void> {
-  // Let the engine's async chains (model turns, tool execution, the gate) run.
-  await new Promise((resolve) => setTimeout(resolve, 50));
-}
-
 async function runConversation(script: Array<ToolCall | string>) {
   const model = scriptedModel(script);
   const runtime = buildRuntime(model);
   const controller = runtime.addWorkflowInstance("session");
   controller.patchWorkflowInstanceState({ moduleSetSlug: AUTHOR_TEST_SLUG });
-  await settle();
+  // The session's chat task starts asynchronously; wait until it is running.
+  for (let poll = 0; poll < 200; poll++) {
+    if (controller.getState().hasRunningTask) break;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
   assert.equal(controller.getState().currentState, "drafting");
   assert.equal(controller.getState().hasRunningTask, true);
   controller.sendTaskInput("assistant", "Build a triage flow", "user");
-  for (let i = 0; i < 8; i++) await settle();
+  // Wait for the conversation to go quiescent instead of sleeping a fixed
+  // budget: each scripted entry is one model turn whose tool chain completes
+  // before the next turn, so once the transcript stops growing for several
+  // consecutive polls the engine chains have drained. A fixed sleep flakes
+  // under load (e.g. inside a pre-commit hook running on a busy machine).
+  let previousHistoryLength = -1;
+  let stablePolls = 0;
+  for (let poll = 0; poll < 400 && stablePolls < 6; poll++) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    const historyLength = controller.getState().history.length;
+    if (historyLength === previousHistoryLength) {
+      stablePolls++;
+    } else {
+      stablePolls = 0;
+      previousHistoryLength = historyLength;
+    }
+  }
+  assert.ok(
+    stablePolls >= 6,
+    "the conversation must drain within the quiescence budget"
+  );
   return controller;
 }
 
@@ -333,6 +381,10 @@ describe("flow-authoring session", () => {
   it("converges on a definition module and validates gate-clean source in the same conversation", async () => {
     const controller = await runConversation([
       setDefinitionCall(REFS_MODULE),
+      // A real conversation implements the declared refs before validating —
+      // the gate materializes exactly the declared set and fails on a missing
+      // referenced file.
+      ...refFileWrites(),
       validateCall(),
       "Done!",
     ]);
@@ -366,6 +418,7 @@ describe("flow-authoring session", () => {
   it("returns gate failures to the agent in-conversation, which fixes and revalidates", async () => {
     const controller = await runConversation([
       setDefinitionCall(BAD_MODULE),
+      ...refFileWrites(),
       validateCall(),
       setDefinitionCall(REFS_MODULE),
       validateCall(),

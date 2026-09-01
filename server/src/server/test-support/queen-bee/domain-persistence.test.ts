@@ -42,6 +42,7 @@ import {
   queenBeeCompiled as queenBeeFlow,
   queenBeeWorkflows,
 } from "../compiled-presets.ts";
+import { scrubGitHookContext } from "./card-flow-harness.ts";
 
 const dummyTask: TaskDefinition = { id: "t", label: "T", role: "operation" };
 
@@ -106,6 +107,7 @@ describe("queen-bee domain persistence", () => {
   let basePath: string;
 
   beforeEach(() => {
+    scrubGitHookContext();
     root = mkdtempSync(join(tmpdir(), "hive-domain-persist-"));
     basePath = join(root, "repo");
     mkdirSync(basePath);
