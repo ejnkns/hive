@@ -215,14 +215,29 @@ export async function dragFogCardAbove(firstId, secondId) {
   return app.evaluate(
     ({ firstId, secondId }) => {
       const host = document.querySelector("workflow-instances");
-      const servedRoot = host?.shadowRoot
+      const root = host?.shadowRoot
         ?.querySelector("dynamic-element-host")
         ?.shadowRoot?.querySelector(".mount > *")?.shadowRoot;
-      if (!servedRoot) return null;
-      const byId = (id) =>
-        servedRoot.querySelector(`.fog-card[data-id="${id}"]`);
-      const first = byId(firstId);
-      const second = byId(secondId);
+      if (!root) return null;
+      // The spatial shell nests the table workbench, and served elements get
+      // generated hive-served-* tags, so selectors cannot name the layers —
+      // pierce every shadow root under the served element for the fog cards.
+      const fogCards = [];
+      const walk = (shadow) => {
+        for (const el of shadow.querySelectorAll(".fog-card")) {
+          fogCards.push(el);
+        }
+        for (const el of shadow.querySelectorAll("*")) {
+          if (el.shadowRoot !== null) walk(el.shadowRoot);
+        }
+      };
+      walk(root);
+      const first = fogCards.find(
+        (card) => card.getAttribute("data-id") === firstId
+      );
+      const second = fogCards.find(
+        (card) => card.getAttribute("data-id") === secondId
+      );
       if (!first || !second) return null;
       const pile = second.parentElement;
       const firstRect = first.getBoundingClientRect();
