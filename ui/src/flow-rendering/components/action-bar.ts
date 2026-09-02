@@ -1,6 +1,7 @@
 import { css, html, LitElement } from "lit";
 import type { VisibleAction } from "workflow-engine/workflow-types";
 import "./config-field-form.ts";
+import { servedUtilityStyles } from "../served-utility-styles.ts";
 import type { ConfigFieldValue } from "./config-field-form.ts";
 
 // The action row on a workflow instance: buttons per available action, with a
@@ -21,16 +22,16 @@ export class ActionBar extends LitElement {
     pendingPayload: { attribute: false },
   };
 
-  static styles = css`
+  // The injected utility sheet first, the component css after it — ticket
+  // 15's default-component adoption.
+  static styles = [
+    servedUtilityStyles,
+    css`
     .actions {
-      display: flex;
-      flex-wrap: wrap;
       gap: 0.375rem;
     }
 
     .confirm-row {
-      display: flex;
-      align-items: center;
       gap: 0.375rem;
       width: 100%;
       padding: 0.25rem;
@@ -41,7 +42,6 @@ export class ActionBar extends LitElement {
 
     .confirm-text {
       font-size: 0.625rem;
-      color: var(--error);
       font-weight: 600;
       margin-right: auto;
     }
@@ -87,7 +87,8 @@ export class ActionBar extends LitElement {
     button.destructive:hover {
       filter: brightness(1.1);
     }
-  `;
+  `,
+  ];
 
   actions: VisibleAction[] = [];
 
@@ -107,11 +108,11 @@ export class ActionBar extends LitElement {
         @hive-fields-cancel=${() => (this.formAction = null)}
       ></config-field-form>`;
     }
-    return html`<div class="actions">
+    return html`<div class="actions flex flex-wrap">
       ${this.actions.map((action) =>
         this.pendingConfirm === action.id
-          ? html`<div class="confirm-row">
-              <span class="confirm-text"
+          ? html`<div class="confirm-row flex items-center">
+              <span class="confirm-text text-error"
                 >${
                   action.confirmText ?? `Confirm ${action.label.toLowerCase()}?`
                 }</span

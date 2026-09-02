@@ -34,6 +34,7 @@ export function buildAuthoringSessionPrompt(): string {
     "- `vocabulary` — the FlowDefinition data shape and its constraints",
     "- `capabilities` — engine operations, infrastructure tools, and state fields",
     "- `rules` — the failure-mode guardrails (consult before validate_definition)",
+    "- `styling` — the utility-class vocabulary for flow UIs (consult before styling a served component)",
     "Do not recite these from memory; read the section you need.",
   ].join("\n");
 }

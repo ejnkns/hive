@@ -255,6 +255,52 @@ describe("wayfinder served modules", () => {
     }
   });
 
+  it("ticket-card styles with the injected utility vocabulary", async () => {
+    // Ticket 15: the served card composes the utility sheet — generic
+    // layout/typography rides utility classes, component css keeps the
+    // off-scale specifics (badges, chips, variant colors).
+    defineFlowRenderingComponents();
+    localStorage.clear();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, text: async () => "" }))
+    );
+    const restore = await loadFlowComponents(
+      { "ticket-card": "/api/.../ticket-card" },
+      load(ticketCardModule)
+    );
+    try {
+      const instance = ticketEntry("t-1", "resolving_research");
+      instance.state.workflowInstanceState = {
+        title: "Pick the routing layer",
+        type: "research",
+        dependsOn: ["t-3"],
+      };
+      const el = await mount(
+        Object.assign(new WorkflowInstances(), {
+          flowId: "flow-1",
+          workflowDefs: [ticketDef()],
+          instances: [instance],
+          customKinds: [],
+        })
+      );
+      await settle(shadowRootOf(el));
+
+      const ticket = queryAllDeep(el, ".ticket")[0];
+      expect(ticket?.classList.contains("flex")).toBe(true);
+      expect(ticket?.classList.contains("flex-col")).toBe(true);
+      const badge = queryAllDeep(el, ".type-badge")[0];
+      expect(badge?.classList.contains("uppercase")).toBe(true);
+      expect(badge?.classList.contains("border")).toBe(true);
+      const chips = queryAllDeep(el, ".depends-chips")[0];
+      expect(chips).toBeDefined();
+      expect(chips?.classList.contains("flex")).toBe(true);
+      expect(chips?.classList.contains("flex-wrap")).toBe(true);
+    } finally {
+      restore();
+    }
+  });
+
   it("ticket-card marks an out-of-scope ticket as ruled out, distinct from a decision", async () => {
     defineFlowRenderingComponents();
     localStorage.clear();
@@ -1026,6 +1072,39 @@ describe("wayfinder served modules", () => {
       entryRow?.dispatchEvent(new FocusEvent("blur"));
       await settle(shadowRootOf(el));
       expect(node?.classList.contains("hl")).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
+  it("the table workbench styles with the injected utility vocabulary", async () => {
+    // Ticket 15's migration guinea pig: the workbench composes the injected
+    // utility sheet — utility classes carry the generic layout/typography
+    // declarations, component css keeps only the wayfinder-specific rules.
+    const { el, restore } = await mountFlowComponent(
+      wayfinderFixtureEntries(),
+      { availableFlowActions: [addTicketAction] }
+    );
+    try {
+      await switchView(el, "table");
+
+      // Station heads: the utility classes carry flex + uppercase + ink.
+      const head = queryAllDeep(el, ".station-head")[0];
+      expect(head).toBeDefined();
+      for (const utility of ["flex", "items-center", "uppercase", "wf-body"]) {
+        expect(head?.classList.contains(utility)).toBe(true);
+      }
+
+      // Piles are the utility flex column; the off-scale gap stays in
+      // component css.
+      const pile = queryAllDeep(el, ".pile")[0];
+      expect(pile?.classList.contains("flex")).toBe(true);
+      expect(pile?.classList.contains("flex-col")).toBe(true);
+
+      // The mini-map card's destination note is flex-1 min-w-0.
+      const destNote = queryAllDeep(el, ".dest-note")[0];
+      expect(destNote?.classList.contains("flex-1")).toBe(true);
+      expect(destNote?.classList.contains("min-w-0")).toBe(true);
     } finally {
       restore();
     }

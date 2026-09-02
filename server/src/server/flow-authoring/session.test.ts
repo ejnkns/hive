@@ -32,6 +32,7 @@ import {
   runtimeDefinitionsDir,
   setDefinitionsBasePathForTest,
 } from "../flow-definitions.ts";
+import { readKnowledge } from "./knowledge.ts";
 import { FLOW_SCAFFOLD_SOURCE } from "./scaffold.ts";
 import {
   type AuthoringItemState,
@@ -536,7 +537,7 @@ describe("flow-authoring session", () => {
     );
     assert.ok(tool, "read_authoring_knowledge tool must be defined");
 
-    for (const topic of ["vocabulary", "capabilities", "rules"]) {
+    for (const topic of ["vocabulary", "capabilities", "rules", "styling"]) {
       const result = await tool.executor(
         {
           id: `k-${topic}`,
@@ -562,6 +563,16 @@ describe("flow-authoring session", () => {
     );
     assert.equal(unknown.isError, true);
     assert.match(unknown.content, /Unknown topic/);
+  });
+
+  it("the styling page teaches the served-component contract it ships against", () => {
+    // The page is the AI-facing spec of the injected utility stylesheet: it
+    // must name the deps member and the contract type exactly as the engine
+    // ships them, or generated UIs compose a seam that does not exist.
+    const styling = readKnowledge("styling");
+    assert.match(styling, /\butilities\b/);
+    assert.match(styling, /FlowComponentDeps/);
+    assert.match(styling, /static styles/);
   });
 
   it("the canonical scaffold is a valid definition module with zero errors and zero warnings", () => {

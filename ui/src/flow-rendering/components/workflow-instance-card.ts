@@ -16,6 +16,7 @@ import type {
 import { type ResolvedRender, resolveRender } from "../contract-resolution.ts";
 import { getKindRenderer } from "../renderer-registry.ts";
 import { resolvePath } from "../resolve-path.ts";
+import { servedUtilityStyles } from "../served-utility-styles.ts";
 import "./config-field-form.ts";
 import type { ConfigFieldValue } from "./config-field-form.ts";
 import "./dynamic-element-host.ts";
@@ -62,7 +63,11 @@ export class WorkflowInstanceCard extends LitElement {
   // Reactive so the edit form toggles re-render.
   editing = false;
 
-  static styles = css`
+  // The injected utility sheet first, the component css after it — ticket
+  // 15's default-component adoption.
+  static styles = [
+    servedUtilityStyles,
+    css`
     :host {
       display: block;
     }
@@ -88,15 +93,11 @@ export class WorkflowInstanceCard extends LitElement {
     }
 
     .body {
-      display: flex;
-      flex-direction: column;
       gap: 0.75rem;
       margin-bottom: 0.75rem;
     }
 
     .state-path {
-      display: flex;
-      align-items: center;
       gap: 4px;
       margin-bottom: 0.5rem;
     }
@@ -126,57 +127,38 @@ export class WorkflowInstanceCard extends LitElement {
     }
 
     .task-panel {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 6px;
       padding: 0.5rem;
       // A chat-heavy card (an authoring session, a requirements session) needs
       // room for a real conversation; cap by viewport so it never dominates.
       max-height: min(50vh, 420px);
-      overflow-y: auto;
     }
 
     .task-outputs {
-      display: flex;
-      flex-direction: column;
       gap: 0.5rem;
       font-size: 0.6875rem;
     }
 
     .outputs-label {
-      color: var(--muted);
-      font-weight: 700;
       font-size: 0.5625rem;
-      text-transform: uppercase;
       letter-spacing: 0.08em;
       margin-bottom: 0.125rem;
     }
 
     .output-item {
-      display: flex;
-      flex-direction: column;
       gap: 0.375rem;
       padding: 0.5rem 0.625rem;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 6px;
     }
 
     .output-head {
-      display: flex;
-      align-items: center;
       gap: 0.5rem;
     }
 
     .output-task-id {
-      color: var(--flow-accent, var(--accent));
       font-family: monospace;
       font-size: 0.6875rem;
     }
 
     .output-status {
-      color: var(--muted);
-      text-transform: uppercase;
       letter-spacing: 0.05em;
       font-weight: 600;
       font-size: 0.5625rem;
@@ -191,15 +173,11 @@ export class WorkflowInstanceCard extends LitElement {
     }
 
     .domain-data {
-      display: flex;
-      flex-direction: column;
       gap: 0.375rem;
       font-size: 0.6875rem;
     }
 
     .domain-data-item {
-      display: flex;
-      flex-direction: column;
       gap: 0.25rem;
       padding: 0.375rem 0;
       border-top: 1px solid var(--border);
@@ -210,7 +188,6 @@ export class WorkflowInstanceCard extends LitElement {
     }
 
     .domain-data-key {
-      color: var(--flow-accent, var(--accent));
       font-family: monospace;
       font-weight: 600;
     }
@@ -224,8 +201,6 @@ export class WorkflowInstanceCard extends LitElement {
     }
 
     .domain-progress {
-      display: flex;
-      flex-direction: column;
       gap: 0.25rem;
     }
 
@@ -253,9 +228,6 @@ export class WorkflowInstanceCard extends LitElement {
     }
 
     .edit-row {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
       gap: 0.375rem;
     }
 
@@ -275,7 +247,8 @@ export class WorkflowInstanceCard extends LitElement {
     button.edit-btn:hover {
       background: var(--border);
     }
-  `;
+  `,
+  ];
 
   // Lit reactive properties need a default value, but these are always set by
   // the parent before first paint; the null cast satisfies the initializer.
@@ -326,7 +299,7 @@ export class WorkflowInstanceCard extends LitElement {
         state.category ?? "active",
       ])
     );
-    return html`<div class="state-path">
+    return html`<div class="state-path flex items-center">
       ${path.map((stateId) => {
         const current = stateId === this.instanceEntry.state.currentState;
         return html`<span
@@ -340,7 +313,7 @@ export class WorkflowInstanceCard extends LitElement {
 
   private renderBody() {
     return html`
-      <div class="body">
+      <div class="body flex flex-col">
         ${
           this.instanceEntry.state.hasRunningTask
             ? this.renderRunningTask()
@@ -354,7 +327,7 @@ export class WorkflowInstanceCard extends LitElement {
   private renderRunningTask() {
     const ctx = this.instanceEntry.state.runningTaskContext;
     if (ctx === null) return nothing;
-    return html`<div class="task-panel">
+    return html`<div class="task-panel bg-bg border rounded-md overflow-y-auto">
       ${
         ctx.role === "ai-chat"
           ? html`<chat-session
@@ -396,8 +369,8 @@ export class WorkflowInstanceCard extends LitElement {
       return outcomeStatus(outcome) !== "success";
     });
     if (visible.length === 0) return nothing;
-    return html`<div class="task-outputs">
-      <span class="outputs-label">Task outputs</span>
+    return html`<div class="task-outputs flex flex-col">
+      <span class="outputs-label text-muted font-bold uppercase">Task outputs</span>
       ${repeat(
         visible,
         ([taskId]) => taskId,
@@ -405,12 +378,12 @@ export class WorkflowInstanceCard extends LitElement {
           const taskDef = this.findTaskDef(taskId);
           const status = outcomeStatus(outcome);
           const error = outcomeError(outcome);
-          return html`<div class="output-item">
-            <div class="output-head">
-              <span class="output-task-id"
+          return html`<div class="output-item flex flex-col bg-bg border rounded-md">
+            <div class="output-head flex items-center">
+              <span class="output-task-id text-accent"
                 >${taskDef?.label ?? taskId}</span
               >
-              <span class="output-status output-status-${status}"
+              <span class="output-status output-status-${status} text-muted uppercase"
                 >${status}</span
               >
             </div>
@@ -459,7 +432,7 @@ export class WorkflowInstanceCard extends LitElement {
     const instanceState = this.instanceEntry.state.workflowInstanceState;
     const display = this.workflowDef.display;
     if (display && display.fields.length > 0) {
-      return html`<div class="domain-data">
+      return html`<div class="domain-data flex flex-col">
         ${display.fields.map((field) => {
           const value = resolvePath(instanceState, field.path);
           const label = field.label ?? field.path;
@@ -483,8 +456,8 @@ export class WorkflowInstanceCard extends LitElement {
             derived !== undefined && derived.kind !== "progress"
               ? derived.value
               : value;
-          return html`<div class="domain-data-item">
-            <span class="domain-data-key">${label}</span>
+          return html`<div class="domain-data-item flex flex-col">
+            <span class="domain-data-key text-accent">${label}</span>
             ${
               derived?.kind === "progress"
                 ? this.renderProgress(derived.count, derived.total)
@@ -507,11 +480,11 @@ export class WorkflowInstanceCard extends LitElement {
     }
     const entries = Object.entries(instanceState);
     if (entries.length === 0) return nothing;
-    return html`<div class="domain-data">
-      <span class="outputs-label">Session data</span>
+    return html`<div class="domain-data flex flex-col">
+      <span class="outputs-label text-muted font-bold uppercase">Session data</span>
       ${entries.map(
-        ([key, value]) => html`<div class="domain-data-item">
-          <span class="domain-data-key">${key}</span>
+        ([key, value]) => html`<div class="domain-data-item flex flex-col">
+          <span class="domain-data-key text-accent">${key}</span>
           <pre class="domain-data-value">${stringifyValue(value)}</pre>
         </div>`
       )}
@@ -521,7 +494,7 @@ export class WorkflowInstanceCard extends LitElement {
   // A progress derive renders as a small bar with "count of total".
   private renderProgress(count: number, total: number) {
     const pct = total > 0 ? Math.round((count / total) * 100) : 0;
-    return html`<div class="domain-progress">
+    return html`<div class="domain-progress flex flex-col">
       <span class="domain-progress-text">${count} of ${total}</span>
       <div class="domain-progress-track">
         <div
@@ -559,7 +532,7 @@ export class WorkflowInstanceCard extends LitElement {
               @hive-fields-submit=${this.handleEditSubmit}
               @hive-fields-cancel=${() => (this.editing = false)}
             ></config-field-form>`
-          : html`<div class="edit-row">
+          : html`<div class="edit-row flex flex-wrap items-center">
               <action-bar
                 .actions=${actions}
                 @hive-action=${this.handleAction}

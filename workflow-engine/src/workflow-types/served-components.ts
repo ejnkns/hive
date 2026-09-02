@@ -6,7 +6,7 @@
  * files can type their modules with a type-only import from the allowlist
  * (workflow-engine/workflow-types) — the module-set gate typechecks them. */
 
-import type { css, html, LitElement, nothing, svg } from "lit";
+import type { CSSResult, css, html, LitElement, nothing, svg } from "lit";
 import type {
   WorkflowDefResponse,
   WorkflowInstanceEntry,
@@ -32,6 +32,13 @@ export type FlowComponentDeps = {
   // — SVG is a distinct XML namespace, so its elements must be created with
   // createElementNS). The map view uses it for the semantic backdrop.
   svg: typeof svg;
+  // The hive utility-class stylesheet (Tailwind-compatible class names bound
+  // to the app's theme tokens), composed FIRST in a served component's
+  // `static styles` so component css can override it. A global stylesheet
+  // cannot reach shadow DOM, so the utilities ride the same injection as the
+  // lit runtime; a component that never composes it renders exactly as
+  // before — the injection is additive.
+  utilities: CSSResult;
 };
 
 // The registrations a served component module returns: instance components

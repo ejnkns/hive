@@ -75,7 +75,7 @@ export type WayfinderTableElement = HTMLElement & {
 export function createWayfinderTable(
   lit: FlowComponentDeps
 ): new () => WayfinderTableElement {
-  const { LitElement: Base, html, css, nothing, svg } = lit;
+  const { LitElement: Base, html, css, nothing, svg, utilities } = lit;
   const drawing = createWayfinderDrawing(lit);
 
   class WayfinderTable extends Base {
@@ -98,7 +98,9 @@ export function createWayfinderTable(
       onViewChange: { attribute: false },
     };
 
-    static styles = wayfinderTableStyles(css);
+    // The injected utility sheet first, the component-specific wayfinder css
+    // after it (later sheets win) — ticket 15's migration.
+    static styles = [utilities, wayfinderTableStyles(css)];
 
     declare model: WayfinderMap;
     declare theme: ExpeditionTheme;
@@ -226,12 +228,12 @@ export function createWayfinderTable(
         (entry) => entry.workflowId === "charting"
       );
       return html`<div class="station">
-        <h2 class="station-head">Base camp</h2>
-        <div class="pile">
+        <h2 class="station-head flex items-center tracking-wide uppercase wf-body">Base camp</h2>
+        <div class="pile flex flex-col">
           ${charting.map((entry, index) => {
             const destination = entry.state.workflowInstanceState.destination;
             return html`<div
-              class="card${this.hotClass("base")}"
+              class="card wf-paper border wf-paper-edge cursor-pointer${this.hotClass("base")}"
               style=${`--rot:${cardRotation(index)}`}
               data-id="base"
               tabindex="0"
@@ -243,8 +245,8 @@ export function createWayfinderTable(
               @keydown=${(event: KeyboardEvent) =>
                 this.focusFromKey(event, "base")}
             >
-              <div class="lbl">${entry.state.currentState}</div>
-              <div class="card-title">${
+              <div class="lbl uppercase text-muted truncate">${entry.state.currentState}</div>
+              <div class="card-title wf-ink truncate">${
                 typeof destination === "string" && destination !== ""
                   ? destination
                   : "Base camp"
@@ -254,7 +256,7 @@ export function createWayfinderTable(
           })}
           ${
             charting.length === 0
-              ? html`<div class="empty">No base camp yet.</div>`
+              ? html`<div class="empty text-muted">No base camp yet.</div>`
               : nothing
           }
         </div>
@@ -270,12 +272,12 @@ export function createWayfinderTable(
           RESOLVING_STATES.includes(entry.state.currentState)
       );
       return html`<div class="station">
-        <h2 class="station-head">On expedition</h2>
-        <div class="pile">
+        <h2 class="station-head flex items-center tracking-wide uppercase wf-body">On expedition</h2>
+        <div class="pile flex flex-col">
           ${resolving.map((entry, index) => {
             const id = entry.id;
             return html`<div
-              class="card${this.hotClass(id)}"
+              class="card wf-paper border wf-paper-edge cursor-pointer${this.hotClass(id)}"
               style=${`--rot:${cardRotation(index)}`}
               data-id=${id}
               tabindex="0"
@@ -286,15 +288,15 @@ export function createWayfinderTable(
               @click=${() => this.onFocus?.(id)}
               @keydown=${(event: KeyboardEvent) => this.focusFromKey(event, id)}
             >
-              <div class="lbl">${resolvingLabel(entry.state.currentState)}</div>
-              <div class="card-title">${ticketTitle(entry)}</div>
+              <div class="lbl uppercase text-muted truncate">${resolvingLabel(entry.state.currentState)}</div>
+              <div class="card-title wf-ink truncate">${ticketTitle(entry)}</div>
               ${this.renderTaskStatus(entry)} ${this.renderTaskError(entry)}
               ${this.renderActions(entry)} ${this.renderChat(entry)}
             </div>`;
           })}
           ${
             resolving.length === 0
-              ? html`<div class="empty">Nothing in flight.</div>`
+              ? html`<div class="empty text-muted">Nothing in flight.</div>`
               : nothing
           }
         </div>
@@ -313,7 +315,7 @@ export function createWayfinderTable(
       const ctx = state.runningTaskContext;
       if (ctx.role !== "ai-task") return nothing;
       const label = modelStatusLabel(ctx.modelStatus);
-      return html`<div class="task-status">
+      return html`<div class="task-status flex items-center wf-body">
         <span class="pulse"></span>
         <span>${label}</span>
       </div>`;
@@ -338,7 +340,7 @@ export function createWayfinderTable(
     // labels and ids come from the entry's availableActions, never hardcoded).
     private renderActions(entry: FlowViewPropsEntries[number]) {
       if (entry.availableActions.length === 0) return nothing;
-      return html`<div class="card-actions">
+      return html`<div class="card-actions flex flex-wrap">
         ${entry.availableActions.map(
           (action) => html`<button
             class=${action.variant}
@@ -366,9 +368,9 @@ export function createWayfinderTable(
       const stateDef = workflowDef?.states.find(
         (workflowState) => workflowState.id === state.currentState
       );
-      return html`<div class="card-chat">
-        <div class="session-header">
-          <span class="session-label"
+      return html`<div class="card-chat flex flex-col">
+        <div class="session-header flex flex-col">
+          <span class="session-label font-bold uppercase"
             >${stateDef?.label ?? state.currentState}</span
           >
         </div>
@@ -388,14 +390,14 @@ export function createWayfinderTable(
     private renderBriefingDeck() {
       const dossiers = this.readyDossiers();
       return html`<div class="station">
-        <h2 class="station-head">The briefing deck</h2>
-        <div class="pile">
+        <h2 class="station-head flex items-center tracking-wide uppercase wf-body">The briefing deck</h2>
+        <div class="pile flex flex-col">
           ${dossiers.map((dossier, index) =>
             this.renderDossierCard(dossier, index)
           )}
           ${
             dossiers.length === 0
-              ? html`<div class="empty">No claimable tickets yet.</div>`
+              ? html`<div class="empty text-muted">No claimable tickets yet.</div>`
               : nothing
           }
         </div>
@@ -454,7 +456,7 @@ export function createWayfinderTable(
             ? "blocked"
             : type;
       return html`<div
-        class="card${dossier.blocked ? " blocked" : ""}${this.hotClass(id)}"
+        class="card wf-paper border wf-paper-edge cursor-pointer${dossier.blocked ? " blocked" : ""}${this.hotClass(id)}"
         style=${`--rot:${cardRotation(index)}`}
         data-id=${id}
         tabindex="0"
@@ -465,10 +467,10 @@ export function createWayfinderTable(
         @click=${() => this.onFocus?.(id)}
         @keydown=${(event: KeyboardEvent) => this.focusFromKey(event, id)}
       >
-        <div class="card-title">${title}</div>
+        <div class="card-title wf-ink truncate">${title}</div>
         ${
           question !== undefined && question !== ""
-            ? html`<div class="body">${question}</div>`
+            ? html`<div class="body wf-body">${question}</div>`
             : nothing
         }
         ${
@@ -483,7 +485,7 @@ export function createWayfinderTable(
     private renderFogTray() {
       const fog = inClearOrder(this.ticketsInState("fog"), this.fogOrder);
       return html`<div class="station">
-        <h2 class="station-head">The fog tray</h2>
+        <h2 class="station-head flex items-center tracking-wide uppercase wf-body">The fog tray</h2>
         <div
           class="pile"
           @dragstart=${this.onFogDragStart}
@@ -494,7 +496,7 @@ export function createWayfinderTable(
           ${fog.map((entry, index) => this.renderFogCard(entry, index))}
           ${
             fog.length === 0
-              ? html`<div class="empty">The fog is clear.</div>`
+              ? html`<div class="empty text-muted">The fog is clear.</div>`
               : nothing
           }
         </div>
@@ -504,7 +506,7 @@ export function createWayfinderTable(
     private renderFogCard(entry: FlowViewPropsEntries[number], index: number) {
       const id = entry.id;
       return html`<div
-        class="card fog-card${this.hotClass(id)}"
+        class="card fog-card wf-paper cursor-pointer${this.hotClass(id)}"
         style=${`--rot:${cardRotation(index)}`}
         data-id=${id}
         draggable="true"
@@ -516,7 +518,7 @@ export function createWayfinderTable(
         @click=${() => this.onFocus?.(id)}
         @keydown=${(event: KeyboardEvent) => this.focusFromKey(event, id)}
       >
-        <div class="fog-title"><span class="q">?</span><span class="card-title">${ticketTitle(entry)}</span></div>
+        <div class="fog-title flex items-center"><span class="q">?</span><span class="card-title wf-ink truncate flex-1 min-w-0">${ticketTitle(entry)}</span></div>
         <span class="tag">needs clarity</span>
         ${this.renderActions(entry)}
       </div>`;
@@ -525,13 +527,13 @@ export function createWayfinderTable(
     private renderJournal() {
       const closed = this.ticketsInState("closed");
       return html`<div class="station">
-        <h2 class="station-head">The journal</h2>
+        <h2 class="station-head flex items-center tracking-wide uppercase wf-body">The journal</h2>
         <div class="journal">
           ${closed.map((entry) => {
             const id = entry.id;
             const record = readDecisionRecord(this.persistedOutputDirs, id);
             return html`<div
-              class="entry${this.hotClass(id)}"
+              class="entry flex items-baseline cursor-pointer${this.hotClass(id)}"
               data-id=${id}
               tabindex="0"
               @mouseenter=${() => this.onHover?.(id)}
@@ -542,15 +544,15 @@ export function createWayfinderTable(
               @keydown=${(event: KeyboardEvent) =>
                 this.decisionFromKey(event, id)}
             >
-              <span class="cairn">▴</span>
-              <span class="txt">${ticketTitle(entry)}</span>
+              <span class="cairn text-success">▴</span>
+              <span class="txt wf-ink truncate min-w-0">${ticketTitle(entry)}</span>
             </div>
             ${
               this.openDecisionId === id
                 ? html`<div class="decision">
                     ${
                       record === undefined
-                        ? html`<div class="decision-empty">
+                        ? html`<div class="decision-empty text-muted">
                             No decision record persisted.
                           </div>`
                         : html`<markdown-view .content=${record}></markdown-view>`
@@ -561,7 +563,7 @@ export function createWayfinderTable(
           })}
           ${
             closed.length === 0
-              ? html`<div class="empty">No decisions recorded yet.</div>`
+              ? html`<div class="empty text-muted">No decisions recorded yet.</div>`
               : nothing
           }
         </div>
@@ -582,28 +584,28 @@ export function createWayfinderTable(
       const hasAny =
         hasSpec || hasPlan || builds.length > 0 || buildItems.length > 0;
       return html`<div class="station">
-        <h2 class="station-head">The supply depot</h2>
-        <div class="pile">
+        <h2 class="station-head flex items-center tracking-wide uppercase wf-body">The supply depot</h2>
+        <div class="pile flex flex-col">
           ${
             hasSpec
-              ? html`<div class="crate spec">
-                <div class="lbl">manifest · spec</div>
-                <div class="card-title">${firstLine(spec ?? "")}</div>
+              ? html`<div class="crate spec wf-paper border wf-paper-edge">
+                <div class="lbl uppercase text-muted truncate">manifest · spec</div>
+                <div class="card-title wf-ink truncate">${firstLine(spec ?? "")}</div>
               </div>`
               : nothing
           }
           ${
             hasPlan
               ? html`<div class="crate">
-                <div class="lbl">route plan</div>
-                <div class="card-title">${firstLine(plan ?? "")}</div>
+                <div class="lbl uppercase text-muted truncate">route plan</div>
+                <div class="card-title wf-ink truncate">${firstLine(plan ?? "")}</div>
               </div>`
               : nothing
           }
           ${builds.map((entry, index) => {
             const id = entry.id;
             return html`<div
-              class="crate${this.hotClass(id)}"
+              class="crate wf-paper border wf-paper-edge cursor-pointer${this.hotClass(id)}"
               style=${`--rot:${cardRotation(index)}`}
               data-id=${id}
               tabindex="0"
@@ -614,15 +616,15 @@ export function createWayfinderTable(
               @click=${() => this.onFocus?.(id)}
               @keydown=${(event: KeyboardEvent) => this.focusFromKey(event, id)}
             >
-              <div class="lbl">build · ${entry.state.currentState}</div>
-              <div class="card-title">The implementation phase</div>
+              <div class="lbl uppercase text-muted truncate">build · ${entry.state.currentState}</div>
+              <div class="card-title wf-ink truncate">The implementation phase</div>
               ${this.renderActions(entry)} ${this.renderChat(entry)}
             </div>`;
           })}
           ${buildItems.map((entry, index) => {
             const id = entry.id;
             return html`<div
-              class="crate${this.hotClass(id)}"
+              class="crate wf-paper border wf-paper-edge cursor-pointer${this.hotClass(id)}"
               style=${`--rot:${cardRotation(index)}`}
               data-id=${id}
               tabindex="0"
@@ -633,15 +635,15 @@ export function createWayfinderTable(
               @click=${() => this.onFocus?.(id)}
               @keydown=${(event: KeyboardEvent) => this.focusFromKey(event, id)}
             >
-              <div class="lbl">gear · build item</div>
-              <div class="card-title">${implementationTitle(entry)}</div>
+              <div class="lbl uppercase text-muted truncate">gear · build item</div>
+              <div class="card-title wf-ink truncate">${implementationTitle(entry)}</div>
               ${this.renderActions(entry)}
             </div>`;
           })}
           ${
             hasAny
               ? nothing
-              : html`<div class="empty">No supplies yet — start a build.</div>`
+              : html`<div class="empty text-muted">No supplies yet — start a build.</div>`
           }
         </div>
       </div>`;
@@ -650,12 +652,12 @@ export function createWayfinderTable(
     private renderOutOfScope() {
       const outOfScope = this.ticketsInState("out_of_scope");
       return html`<div class="station">
-        <h2 class="station-head">Do not enter</h2>
-        <div class="pile">
+        <h2 class="station-head flex items-center tracking-wide uppercase wf-body">Do not enter</h2>
+        <div class="pile flex flex-col">
           ${outOfScope.map((entry) => {
             const id = entry.id;
             return html`<div
-              class="card${this.hotClass(id)}"
+              class="card wf-paper border wf-paper-edge cursor-pointer${this.hotClass(id)}"
               data-id=${id}
               tabindex="0"
               @mouseenter=${() => this.onHover?.(id)}
@@ -665,13 +667,13 @@ export function createWayfinderTable(
               @click=${() => this.onFocus?.(id)}
               @keydown=${(event: KeyboardEvent) => this.focusFromKey(event, id)}
             >
-              <div class="card-title">⊘ ${ticketTitle(entry)}</div>
+              <div class="card-title wf-ink truncate">⊘ ${ticketTitle(entry)}</div>
               <span class="stamp">ruled out</span>
             </div>`;
           })}
           ${
             outOfScope.length === 0
-              ? html`<div class="empty">Nothing ruled out.</div>`
+              ? html`<div class="empty text-muted">Nothing ruled out.</div>`
               : nothing
           }
         </div>
@@ -679,11 +681,11 @@ export function createWayfinderTable(
     }
 
     private renderMapCard(theme: ExpeditionTheme) {
-      return html`<div class="map-card">
-        <div class="map-top">
-          <div class="dest-note">
-            <div class="name">${this.model.destination}</div>
-            <div class="sub">Destination</div>
+      return html`<div class="map-card h-full flex flex-col relative border">
+        <div class="map-top flex items-start">
+          <div class="dest-note flex-1 min-w-0">
+            <div class="name font-bold truncate">${this.model.destination}</div>
+            <div class="sub text-muted truncate">Destination</div>
           </div>
           <button class="open-map" type="button" @click=${() => this.onViewChange?.("map")}>
             Open the map view →

@@ -10,6 +10,7 @@ import type {
   WorkflowInstanceEntry,
 } from "workflow-engine/create-flow-runtime";
 import type { CustomRenderKind } from "workflow-engine/workflow-types";
+import { servedUtilityStyles } from "../served-utility-styles.ts";
 import {
   type BoardContentCallbacks,
   boardContentStyles,
@@ -26,7 +27,10 @@ export class WorkflowBoardContent extends LitElement {
     onPatchState: { attribute: false },
   };
 
+  // The injected utility sheet first (the board markup's utility classes),
+  // then the host's :host css and the shared board content css — ticket 15.
   static styles = [
+    servedUtilityStyles,
     css`
       :host {
         display: block;

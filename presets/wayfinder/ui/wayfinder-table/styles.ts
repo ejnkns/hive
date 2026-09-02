@@ -1,8 +1,11 @@
 /** @private — only imported by wayfinder-table.ts: the table workbench's
- * themed CSS — the expedition-desks stations (base camp, briefing deck,
- * fog tray, on-expedition, journal, depot, do-not-enter) around the
- * mini-map centre column. Served modules receive the lit runtime via the
- * factory, so the css tag is passed in rather than imported. */
+ * component-specific CSS — the expedition-desks styling (per-theme paper
+ * textures, card lift/glow, fog drag, journal, depot, mini-map chrome) that
+ * the shared utility vocabulary does not cover. Generic layout/typography
+ * declarations ride the injected utility classes in the markup; what remains
+ * here is off-scale values, pseudo-elements, state variants, and theme
+ * textures. Served modules receive the lit runtime via the factory, so the
+ * css tag is passed in rather than imported. */
 import type { FlowComponentDeps } from "workflow-engine/workflow-types";
 
 export function wayfinderTableStyles(css: FlowComponentDeps["css"]) {
@@ -111,12 +114,7 @@ export function wayfinderTableStyles(css: FlowComponentDeps["css"]) {
       }
       .station-head {
         font-size: 0.68rem;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: var(--wf-body);
         margin: 0 0 0.55rem;
-        display: flex;
-        align-items: center;
         gap: 0.45rem;
       }
       .station-head::after {
@@ -126,40 +124,15 @@ export function wayfinderTableStyles(css: FlowComponentDeps["css"]) {
         background: rgba(203, 185, 143, 0.25);
       }
       .pile {
-        display: flex;
-        flex-direction: column;
         gap: 0.7rem;
         min-height: 40px;
       }
       .empty {
         font-size: 0.68rem;
-        color: var(--muted);
         padding: 0.4rem 0;
-      }
-      .card .card-title,
-      .card .lbl,
-      .crate .card-title,
-      .crate .lbl,
-      .journal .txt,
-      .dest-note .name,
-      .dest-note .sub {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      .card .body {
-        overflow: hidden;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-      }
-      .journal .txt {
-        min-width: 0;
       }
 
       .card {
-        background: var(--wf-paper);
-        border: 1px solid var(--wf-paper-edge);
         border-radius: 10px;
         padding: 0.75rem 0.85rem;
         box-shadow:
@@ -197,11 +170,6 @@ export function wayfinderTableStyles(css: FlowComponentDeps["css"]) {
             0 0 0 6px color-mix(in srgb, var(--wf-accent) 55%, transparent);
         }
       }
-      .card,
-      .crate,
-      .journal .entry {
-        cursor: pointer;
-      }
       .card:focus-visible,
       .crate:focus-visible,
       .journal .entry:focus-visible {
@@ -211,19 +179,16 @@ export function wayfinderTableStyles(css: FlowComponentDeps["css"]) {
       .card .card-title {
         font-weight: 600;
         font-size: 0.84rem;
-        color: var(--wf-ink);
       }
       .card .body {
         font-size: 0.7rem;
-        color: var(--wf-body);
         margin-top: 0.28rem;
       }
-      .card .card-title,
-      .card .body,
-      .journal .txt,
-      .crate .card-title,
-      .dest-note .name {
-        font-family: var(--wf-font);
+      .card .body {
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
       }
       .stamp {
         display: inline-block;
@@ -241,15 +206,12 @@ export function wayfinderTableStyles(css: FlowComponentDeps["css"]) {
         color: var(--warning);
         border-color: var(--warning);
       }
-      .card .lbl {
+      .card .lbl,
+      .crate .lbl {
         font-size: 0.6rem;
         letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--muted);
       }
       .card-actions {
-        display: flex;
-        flex-wrap: wrap;
         gap: 0.375rem;
         margin-top: 0.5rem;
       }
@@ -278,12 +240,9 @@ export function wayfinderTableStyles(css: FlowComponentDeps["css"]) {
         color: var(--muted);
       }
       .task-status {
-        display: flex;
-        align-items: center;
         gap: 0.4rem;
         margin-top: 0.45rem;
         font-size: 0.62rem;
-        color: var(--wf-body);
       }
       .task-status .pulse {
         width: 7px;
@@ -305,22 +264,16 @@ export function wayfinderTableStyles(css: FlowComponentDeps["css"]) {
         padding: 0.3rem 0.5rem;
       }
       .card-chat {
-        display: flex;
-        flex-direction: column;
         gap: 0.375rem;
         border-top: 1px dashed var(--border);
         padding-top: 0.5rem;
         margin-top: 0.5rem;
       }
       .session-header {
-        display: flex;
-        flex-direction: column;
         gap: 0.125rem;
       }
       .session-label {
         font-size: 0.5625rem;
-        font-weight: 700;
-        text-transform: uppercase;
         letter-spacing: 0.06em;
         color: var(--wf-accent);
       }
@@ -338,13 +291,7 @@ export function wayfinderTableStyles(css: FlowComponentDeps["css"]) {
         opacity: 0.4;
       }
       .fog-title {
-        display: flex;
-        align-items: center;
         gap: 0.35rem;
-      }
-      .fog-title .card-title {
-        flex: 1;
-        min-width: 0;
       }
       .fog-card .q {
         flex-shrink: 0;
@@ -375,28 +322,19 @@ export function wayfinderTableStyles(css: FlowComponentDeps["css"]) {
       }
 
       .journal {
-        background: var(--wf-paper);
-        border: 1px solid var(--wf-paper-edge);
         border-radius: 10px;
-        overflow: hidden;
         box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
       }
       .journal .entry {
         padding: 0.6rem 0.8rem;
         border-bottom: 1px dashed var(--wf-paper-edge);
-        display: flex;
         gap: 0.6rem;
-        align-items: baseline;
       }
       .journal .entry:last-child {
         border-bottom: none;
       }
-      .journal .cairn {
-        color: var(--success);
-      }
       .journal .txt {
         font-size: 0.8rem;
-        color: var(--wf-ink);
       }
       .journal .decision {
         padding: 0 0.8rem 0.7rem 2.2rem;
@@ -407,13 +345,10 @@ export function wayfinderTableStyles(css: FlowComponentDeps["css"]) {
       }
       .journal .decision-empty {
         font-size: 0.72rem;
-        color: var(--muted);
         font-style: italic;
       }
 
       .crate {
-        background: var(--wf-paper);
-        border: 1px solid var(--wf-paper-edge);
         border-radius: 10px;
         padding: 0.7rem 0.8rem;
         border-top: 3px solid var(--warning);
@@ -425,27 +360,19 @@ export function wayfinderTableStyles(css: FlowComponentDeps["css"]) {
       .crate .lbl {
         font-size: 0.6rem;
         letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--muted);
       }
       .crate .card-title {
         font-weight: 600;
         font-size: 0.8rem;
-        color: var(--wf-ink);
       }
 
       .map-card {
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-        border: 1px solid var(--border);
         border-radius: 14px;
         padding: 0.9rem;
         background: var(
           --map-backdrop,
           radial-gradient(120% 90% at 70% 20%, #172030 0%, #10151d 55%, #0c1015 100%)
         );
-        position: relative;
       }
       :host([data-theme="stars"]) .map-card {
         color: #ffffff;
@@ -455,22 +382,14 @@ export function wayfinderTableStyles(css: FlowComponentDeps["css"]) {
       }
       .map-card .map-top {
         flex-shrink: 0;
-        display: flex;
-        align-items: flex-start;
         gap: 0.75rem;
         margin-bottom: 0.5rem;
       }
-      .map-card .dest-note {
-        flex: 1;
-        min-width: 0;
-      }
       .map-card .dest-note .name {
-        font-weight: 700;
         font-size: 0.8rem;
       }
       .map-card .dest-note .sub {
         font-size: 0.66rem;
-        color: var(--muted);
       }
       .map-card .open-map {
         flex-shrink: 0;

@@ -15,17 +15,18 @@ const KNOWLEDGE_TOPICS: Record<string, string> = {
   vocabulary: readKnowledge("vocabulary"),
   capabilities: authoringGuide(),
   rules: readKnowledge("rules"),
+  styling: readKnowledge("styling"),
 };
 
 export const readAuthoringKnowledgeTool = defineTool<AuthoringItemState>({
   name: "read_authoring_knowledge",
   description:
-    "Read a section of the flow-authoring reference before writing or extending a definition. Topics: 'vocabulary' (the FlowDefinition data shape and constraints), 'capabilities' (engine operations, infrastructure tools, state fields), or 'rules' (failure-mode guardrails).",
+    "Read a section of the flow-authoring reference before writing or extending a definition. Topics: 'vocabulary' (the FlowDefinition data shape and constraints), 'capabilities' (engine operations, infrastructure tools, state fields), 'rules' (failure-mode guardrails), or 'styling' (the utility-class vocabulary for flow UIs).",
   parameters: {
     properties: {
       topic: {
         type: "string",
-        enum: ["vocabulary", "capabilities", "rules"],
+        enum: ["vocabulary", "capabilities", "rules", "styling"],
       },
     },
     required: ["topic"],
