@@ -8,6 +8,7 @@ dist-package/
 .env
 *.log
 server/.runtime/
+visual-matrix/storybook-build/
 
 contexts/
 *.md

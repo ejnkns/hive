@@ -1,0 +1,19 @@
+# Percy configuration for the visual matrix (`percy storybook` from the
+# visual-matrix package). Percy owns baseline selection, diffing, grouping,
+# and human review in the cloud — no images are committed to git.
+#
+# Widths are the narrow/medium/wide axis of the matrix; themes × light/dark
+# come from each story file's percy.additionalSnapshots (see
+# src/expedition-chrome.ts). Percy disables CSS animations during capture and
+# serializes <canvas> content; the JS-side reduced-motion seam is emulated per
+# story by the shared expedition decorator, which freezes the map's twinkle
+# layer and snaps the camera easing — the two wall-clock sources that made the
+# retired e2e pixel baselines structurally nondeterministic.
+version: 2
+snapshot:
+  widths:
+    - 480
+    - 900
+    - 1280
+  minHeight: 480
+  enableJavaScript: true
