@@ -19,6 +19,7 @@
     "test": "pnpm run test:dev-proxy && pnpm -r test && pnpm run test:build && pnpm run test:e2e:vitest",
     "typecheck": "pnpm -r typecheck",
     "lint": "biome lint .",
+    "stack:check": "node scripts/check-stack.mjs",
     "format": "biome format --write .",
     "check:biome": "biome check --write --no-errors-on-unmatched",
     "prepare": "lefthook install"
