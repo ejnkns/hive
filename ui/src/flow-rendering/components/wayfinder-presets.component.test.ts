@@ -301,6 +301,125 @@ describe("wayfinder served modules", () => {
     }
   });
 
+  it("map-shell chrome styles with the injected utility vocabulary", async () => {
+    // Ticket 16: the map-first shell composes the utility sheet — the HUD
+    // and map body ride utility classes; the theme texture/gradient rules
+    // stay component-specific.
+    const { el, restore } = await mountFlowComponent(wayfinderFixtureEntries());
+    try {
+      const hud = queryAllDeep(el, ".hud")[0];
+      expect(hud?.classList.contains("flex")).toBe(true);
+      expect(hud?.classList.contains("flex-wrap")).toBe(true);
+      expect(hud?.classList.contains("items-center")).toBe(true);
+      const titleGroup = queryAllDeep(el, ".title-group")[0];
+      expect(titleGroup?.classList.contains("flex-col")).toBe(true);
+      expect(titleGroup?.classList.contains("min-w-0")).toBe(true);
+      const mapBody = queryAllDeep(el, ".map-body")[0];
+      expect(mapBody?.classList.contains("flex-1")).toBe(true);
+      expect(mapBody?.classList.contains("relative")).toBe(true);
+    } finally {
+      restore();
+    }
+  });
+
+  it("the drawer styles with the injected utility vocabulary", async () => {
+    const { el, restore } = await mountFlowComponent(wayfinderFixtureEntries());
+    try {
+      selectNode(el, "ticket-frontier");
+      await settle(shadowRootOf(el));
+      const head = queryAllDeep(el, ".drawer-head")[0];
+      expect(head?.classList.contains("flex")).toBe(true);
+      expect(head?.classList.contains("items-start")).toBe(true);
+      expect(head?.classList.contains("gap-2")).toBe(true);
+      const body = queryAllDeep(el, ".drawer-body")[0];
+      expect(body?.classList.contains("flex-1")).toBe(true);
+      expect(body?.classList.contains("overflow-y-auto")).toBe(true);
+      expect(body?.classList.contains("flex-col")).toBe(true);
+    } finally {
+      restore();
+    }
+  });
+
+  it("base camp styles with the injected utility vocabulary", async () => {
+    const chartingEntry = entry("c-1", "naming");
+    chartingEntry.workflowId = "charting";
+    chartingEntry.state.workflowInstanceState = {
+      destination: "Hive router resilience",
+    };
+    const { el, restore } = await mountFlowComponent([chartingEntry]);
+    try {
+      const panel = queryAllDeep(el, ".base-panel")[0];
+      expect(panel?.classList.contains("wf-paper")).toBe(true);
+      expect(panel?.classList.contains("flex-col")).toBe(true);
+      expect(panel?.classList.contains("gap-4")).toBe(true);
+      const header = queryAllDeep(el, ".header")[0];
+      expect(header?.classList.contains("border")).toBe(true);
+      expect(header?.classList.contains("rounded-lg")).toBe(true);
+    } finally {
+      restore();
+    }
+  });
+
+  it("build-item-card styles with the injected utility vocabulary", async () => {
+    // Ticket 16: the build family composes the utility sheet — the card
+    // frame rides utilities, the button element rules and off-scale paddings
+    // stay component-specific.
+    defineFlowRenderingComponents();
+    localStorage.clear();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, text: async () => "" }))
+    );
+    const restore = await loadFlowComponents(
+      { "build-item-card": "/api/.../build-item-card" },
+      load(buildItemCardModule)
+    );
+    try {
+      const def = cardDef({
+        id: "buildItem",
+        label: "Build Item",
+        states: [
+          {
+            id: "reviewing",
+            label: "Reviewing",
+            category: "active",
+            actions: [],
+            tasks: [],
+          },
+        ],
+        ui: { view: "board", instanceComponent: "build-item-card" },
+      });
+      const item = entry("b-1", "reviewing");
+      item.workflowId = "buildItem";
+      item.state.workflowInstanceState = {
+        ticket: { title: "Add the retry loop" },
+        branchName: "retry-loop",
+      };
+      const el = await mount(
+        Object.assign(new WorkflowInstances(), {
+          flowId: "flow-1",
+          workflowDefs: [def],
+          instances: [item],
+          customKinds: [],
+        })
+      );
+      await settle(shadowRootOf(el));
+
+      const item_ = queryAllDeep(el, ".item")[0];
+      expect(item_?.classList.contains("border")).toBe(true);
+      expect(item_?.classList.contains("rounded-lg")).toBe(true);
+      expect(item_?.classList.contains("bg-surface")).toBe(true);
+      expect(item_?.classList.contains("flex-col")).toBe(true);
+      const title = queryAllDeep(el, ".item-title")[0];
+      expect(title?.classList.contains("text-base")).toBe(true);
+      expect(title?.classList.contains("font-bold")).toBe(true);
+      const branch = queryAllDeep(el, ".branch-line")[0];
+      expect(branch?.classList.contains("truncate")).toBe(true);
+    } finally {
+      restore();
+    }
+  });
+
   it("ticket-card marks an out-of-scope ticket as ruled out, distinct from a decision", async () => {
     defineFlowRenderingComponents();
     localStorage.clear();

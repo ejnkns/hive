@@ -15,7 +15,7 @@ const RUN_TASK = "runAgent";
 const REVIEW_TASK = "review";
 
 export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
-  const { LitElement: Base, html, css, nothing } = lit;
+  const { LitElement: Base, html, css, utilities, nothing } = lit;
 
   class BuildItemCard extends Base {
     static properties = {
@@ -26,125 +26,94 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       onSendMessage: { attribute: false },
     };
 
-    static styles = css`
-      :host {
-        display: block;
-      }
-      .item {
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        background: var(--surface);
-        padding: 0.75rem 0.875rem;
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-      }
-      .item-title {
-        font-weight: 700;
-        font-size: 0.8125rem;
-        color: var(--text);
-      }
-      .item-desc {
-        font-size: 0.625rem;
-        color: var(--muted);
-        white-space: pre-wrap;
-        margin: 0;
-      }
-      .acceptance {
-        font-size: 0.5625rem;
-        color: var(--muted);
-        list-style: none;
-        margin: 0;
-        padding: 0;
-      }
-      .acceptance li::before {
-        content: "— ";
-        color: var(--flow-accent, var(--accent));
-      }
-      .branch-line {
-        font-size: 0.5625rem;
-        font-family: var(--font-mono, monospace);
-        color: var(--muted);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      .outcome {
-        background: var(--bg);
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        padding: 0.5rem 0.625rem;
-        display: flex;
-        flex-direction: column;
-        gap: 0.25rem;
-      }
-      .outcome-head {
-        display: flex;
-        align-items: center;
-        gap: 0.375rem;
-        font-size: 0.5625rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-      }
-      .outcome-head[data-outcome="implemented"] {
-        color: var(--success);
-      }
-      .outcome-head[data-outcome="blocked"] {
-        color: var(--error);
-      }
-      .outcome-summary {
-        font-size: 0.625rem;
-        color: var(--text);
-        white-space: pre-wrap;
-        margin: 0;
-      }
-      .review {
-        background: var(--bg);
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        padding: 0.5rem 0.625rem;
-        display: flex;
-        flex-direction: column;
-        gap: 0.375rem;
-      }
-      .review-verdict {
-        font-size: 0.5625rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-      }
-      .review-verdict[data-verdict="approved"] {
-        color: var(--success);
-      }
-      .review-verdict[data-verdict="changes_requested"] {
-        color: var(--error);
-      }
-      .review-finding {
-        font-size: 0.5625rem;
-        color: var(--muted);
-      }
-      .review-finding .axis {
-        font-weight: 700;
-        color: var(--text);
-      }
-      .item-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.375rem;
-      }
-      button {
-        font-family: inherit;
-        font-size: 0.625rem;
-        height: 24px;
-        padding: 0 0.5rem;
-        border-radius: 4px;
-        border: 1px solid var(--border);
-        background: var(--bg);
-        color: var(--text);
-        cursor: pointer;
-      }
-    `;
+    static styles = [
+      utilities,
+      css`
+        :host {
+          display: block;
+        }
+        .item {
+          padding: 0.75rem 0.875rem;
+        }
+        .item-title {
+          color: var(--text);
+        }
+        .item-desc {
+          font-size: 0.625rem;
+          white-space: pre-wrap;
+          margin: 0;
+        }
+        .acceptance {
+          font-size: 0.5625rem;
+          list-style: none;
+          margin: 0;
+          padding: 0;
+        }
+        .acceptance li::before {
+          content: "— ";
+          color: var(--flow-accent, var(--accent));
+        }
+        .branch-line {
+          font-size: 0.5625rem;
+          font-family: var(--font-mono, monospace);
+        }
+        .outcome {
+          padding: 0.5rem 0.625rem;
+          gap: 0.25rem;
+        }
+        .outcome-head {
+          gap: 0.375rem;
+          font-size: 0.5625rem;
+          letter-spacing: 0.06em;
+        }
+        .outcome-head[data-outcome="implemented"] {
+          color: var(--success);
+        }
+        .outcome-head[data-outcome="blocked"] {
+          color: var(--error);
+        }
+        .outcome-summary {
+          font-size: 0.625rem;
+          color: var(--text);
+          white-space: pre-wrap;
+          margin: 0;
+        }
+        .review {
+          padding: 0.5rem 0.625rem;
+          gap: 0.375rem;
+        }
+        .review-verdict {
+          font-size: 0.5625rem;
+          letter-spacing: 0.06em;
+        }
+        .review-verdict[data-verdict="approved"] {
+          color: var(--success);
+        }
+        .review-verdict[data-verdict="changes_requested"] {
+          color: var(--error);
+        }
+        .review-finding {
+          font-size: 0.5625rem;
+        }
+        .review-finding .axis {
+          color: var(--text);
+        }
+        .item-actions {
+          gap: 0.375rem;
+        }
+        button {
+          font-family: inherit;
+          font-size: 0.625rem;
+          height: 24px;
+          padding: 0 0.5rem;
+          border-radius: 4px;
+          border: 1px solid var(--border);
+          background: var(--bg);
+          color: var(--text);
+          cursor: pointer;
+        }
+      `,
+    ];
 
     declare workflowDef: InstanceComponentProps["workflowDef"];
     declare instanceEntry: InstanceComponentProps["instanceEntry"];
@@ -168,28 +137,28 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       const worktreePath = instanceState.worktreePath as string | undefined;
       const actions = this.instanceEntry.availableActions ?? [];
 
-      return html`<div class="item">
-        <div class="item-title">${title}</div>
+      return html`<div class="item border rounded-lg bg-surface flex flex-col gap-2">
+        <div class="item-title text-base font-bold">${title}</div>
         ${
           description !== ""
-            ? html`<p class="item-desc">${description}</p>`
+            ? html`<p class="item-desc text-muted">${description}</p>`
             : nothing
         }
         ${
           acceptance.length > 0
-            ? html`<ul class="acceptance">
+            ? html`<ul class="acceptance text-muted">
               ${acceptance.map((item) => html`<li>${item}</li>`)}
             </ul>`
             : nothing
         }
         ${
           dependsOn.length > 0
-            ? html`<div class="branch-line">depends on: ${dependsOn.join(", ")}</div>`
+            ? html`<div class="branch-line text-muted truncate">depends on: ${dependsOn.join(", ")}</div>`
             : nothing
         }
         ${
           branchName !== undefined && branchName !== ""
-            ? html`<div class="branch-line">
+            ? html`<div class="branch-line text-muted truncate">
               ${branchName}${
                 worktreePath !== undefined && worktreePath !== ""
                   ? ` · ${worktreePath}`
@@ -202,7 +171,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         ${this.renderReview()}
         ${
           actions.length > 0
-            ? html`<div class="item-actions">
+            ? html`<div class="item-actions flex flex-wrap">
               ${actions.map(
                 (a) => html`<button
                   type="button"
@@ -223,8 +192,8 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       const result = readCompletionString(outcome, "outcome");
       const summary = readCompletionString(outcome, "summary");
       if (result === "") return nothing;
-      return html`<div class="outcome">
-        <div class="outcome-head" data-outcome=${result}>${result}</div>
+      return html`<div class="outcome bg-bg border rounded-md flex flex-col gap-1">
+        <div class="outcome-head flex items-center font-bold uppercase" data-outcome=${result}>${result}</div>
         ${summary !== "" ? html`<pre class="outcome-summary">${summary}</pre>` : nothing}
       </div>`;
     }
@@ -235,11 +204,11 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       const verdict = readOutputString(review, "verdict");
       const findings = readOutputArray(review, "findings");
       if (verdict === "") return nothing;
-      return html`<div class="review">
-        <div class="review-verdict" data-verdict=${verdict}>${verdict}</div>
+      return html`<div class="review bg-bg border rounded-md flex flex-col">
+        <div class="review-verdict font-bold uppercase" data-verdict=${verdict}>${verdict}</div>
         ${findings.map(
-          (finding) => html`<div class="review-finding">
-            <span class="axis">${readString(finding, "axis")}:</span>
+          (finding) => html`<div class="review-finding text-muted">
+            <span class="axis font-bold">${readString(finding, "axis")}:</span>
             ${readString(finding, "detail")}
           </div>`
         )}

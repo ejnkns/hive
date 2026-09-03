@@ -81,7 +81,7 @@ export function createMapShell(options: {
   Drawer: new () => WayfinderDrawerElement;
 }): new () => MapShellElement {
   const { lit, MapCanvas, Drawer } = options;
-  const { LitElement: Base, html, css, nothing } = lit;
+  const { LitElement: Base, html, css, utilities, nothing } = lit;
 
   class MapShell extends Base {
     static properties = {
@@ -109,7 +109,9 @@ export function createMapShell(options: {
       onViewChange: { attribute: false },
     };
 
-    static styles = css`
+    static styles = [
+      utilities,
+      css`
       :host {
         flex: 1;
         min-height: 0;
@@ -127,12 +129,7 @@ export function createMapShell(options: {
          drawer is absolutely positioned against it (right side on desktop,
          bottom sheet on narrow viewports), so the map stays visible behind
          it. */
-      .map-body {
-        flex: 1;
-        min-height: 0;
-        display: flex;
-        position: relative;
-      }
+
       @media (max-width: 900px) {
         .map-body {
           flex: none;
@@ -140,10 +137,6 @@ export function createMapShell(options: {
       }
 
       .hud {
-        flex-shrink: 0;
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
         gap: 0.45rem 1rem;
         padding: 0.55rem 0.85rem;
         border: 1px solid var(--wf-paper-edge);
@@ -155,33 +148,20 @@ export function createMapShell(options: {
         );
         box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
       }
-      .hud-identity {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        min-width: 0;
-      }
       .emblem {
         color: var(--wf-accent);
         font-size: 1.1rem;
         line-height: 1;
       }
       .title-group {
-        display: flex;
-        flex-direction: column;
         gap: 0.1rem;
-        min-width: 0;
       }
       .title {
         font-size: 0.82rem;
-        font-weight: 700;
-        color: var(--wf-ink);
       }
       .status {
         font-size: 0.56rem;
-        text-transform: uppercase;
         letter-spacing: 0.06em;
-        color: var(--muted);
       }
       .dest {
         font-size: 0.68rem;
@@ -189,21 +169,13 @@ export function createMapShell(options: {
         border-left: 1px solid var(--wf-paper-edge);
         padding-left: 0.6rem;
         max-width: 32ch;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
       }
 
       .hud-status {
-        flex: 1;
         min-width: 260px;
-        display: flex;
-        flex-direction: column;
         gap: 0.32rem;
       }
       .hud-counts {
-        display: flex;
-        flex-wrap: wrap;
         gap: 0.3rem;
       }
       .chip {
@@ -221,21 +193,13 @@ export function createMapShell(options: {
       }
 
       .hud-progress {
-        display: flex;
-        align-items: center;
         gap: 0.55rem;
       }
       .bar-track {
-        flex: 1;
         height: 7px;
-        border-radius: 4px;
         background: color-mix(in srgb, var(--wf-paper-edge) 65%, transparent);
-        overflow: hidden;
       }
       .bar {
-        display: block;
-        height: 100%;
-        border-radius: 4px;
         background: linear-gradient(
           90deg,
           var(--wf-accent),
@@ -249,13 +213,9 @@ export function createMapShell(options: {
       }
 
       .hud-legend {
-        display: flex;
-        flex-wrap: wrap;
         gap: 0.55rem;
       }
       .legend-item {
-        display: inline-flex;
-        align-items: center;
         gap: 0.3rem;
         font-size: 0.6rem;
         color: var(--wf-body);
@@ -278,14 +238,8 @@ export function createMapShell(options: {
         background: #3fb950;
       }
 
-      .hud-tools {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-      }
+
       .hud-map-controls {
-        display: flex;
         gap: 0.3rem;
       }
       .hud-map-controls button {
@@ -304,8 +258,6 @@ export function createMapShell(options: {
       }
 
       .hud-actions {
-        display: flex;
-        flex-wrap: wrap;
         gap: 0.35rem;
       }
       .hud-actions button {
@@ -331,10 +283,8 @@ export function createMapShell(options: {
       }
 
       .view-toggle {
-        display: inline-flex;
         border: 1px solid var(--wf-paper-edge);
         border-radius: 7px;
-        overflow: hidden;
       }
       .view-toggle button {
         font: inherit;
@@ -349,7 +299,8 @@ export function createMapShell(options: {
         background: var(--wf-accent);
         color: var(--bg);
       }
-    `;
+    `,
+    ];
 
     declare flowLabel: string;
     declare flowStatus: string;
@@ -480,7 +431,7 @@ export function createMapShell(options: {
     render() {
       if (this.model === undefined) return nothing;
       return html`${this.renderHud()}
-        <div class="map-body">
+        <div class="map-body flex-1 min-h-0 flex relative">
           ${this.ensureMapView()}
           ${this.drawerDetail === undefined ? nothing : this.ensureDrawer()}
         </div>`;
@@ -489,17 +440,17 @@ export function createMapShell(options: {
     private renderHud() {
       const counts = this.model.counts;
       const progress = wayfinderProgress(counts);
-      return html`<div class="hud">
-        <div class="hud-identity">
+      return html`<div class="hud flex-none flex flex-wrap items-center">
+        <div class="hud-identity flex items-center gap-2 min-w-0">
           <span class="emblem">▲</span>
-          <div class="title-group">
-            <span class="title">${this.flowLabel}</span>
-            <span class="status">${this.flowStatus}</span>
+          <div class="title-group flex flex-col min-w-0">
+            <span class="title font-bold wf-ink">${this.flowLabel}</span>
+            <span class="status text-muted uppercase">${this.flowStatus}</span>
           </div>
-          <span class="dest">${this.model.destination}</span>
+          <span class="dest truncate">${this.model.destination}</span>
         </div>
-        <div class="hud-status">
-          <div class="hud-counts">
+        <div class="hud-status flex-1 flex flex-col">
+          <div class="hud-counts flex flex-wrap">
             ${HUD_CHIPS.map((chip) =>
               counts[chip.status] === 0
                 ? nothing
@@ -509,26 +460,26 @@ export function createMapShell(options: {
             )}
           </div>
           <div
-            class="hud-progress"
+            class="hud-progress flex items-center"
             role="progressbar"
             aria-label="charted"
             aria-valuemin="0"
             aria-valuemax="100"
             aria-valuenow=${progress}
           >
-            <span class="bar-track"><span class="bar" style=${`width:${progress}%`}></span></span>
+            <span class="bar-track flex-1 overflow-hidden"><span class="bar block h-full rounded-sm" style=${`width:${progress}%`}></span></span>
             <span class="progress-label">${progress}% charted</span>
           </div>
-          <div class="hud-legend">
+          <div class="hud-legend flex flex-wrap">
             ${HUD_LEGEND.map(
-              (item) => html`<span class="legend-item"
+              (item) => html`<span class="legend-item inline-flex items-center"
                 ><i class="dot ${item.status}"></i>${item.label}</span
               >`
             )}
           </div>
         </div>
-        <div class="hud-tools">
-          <div class="hud-map-controls">
+        <div class="hud-tools flex items-center flex-wrap gap-2">
+          <div class="hud-map-controls flex">
             <button
               class="fit"
               type="button"
@@ -546,7 +497,7 @@ export function createMapShell(options: {
               Reset
             </button>
           </div>
-          <div class="hud-actions">
+          <div class="hud-actions flex flex-wrap">
             ${this.availableFlowActions.map((action) => {
               const onClick =
                 action.createInstance !== undefined
@@ -561,7 +512,7 @@ export function createMapShell(options: {
               </button>`;
             })}
           </div>
-          <div class="view-toggle" role="group" aria-label="Expedition view">
+          <div class="view-toggle inline-flex overflow-hidden" role="group" aria-label="Expedition view">
             <button class="active" type="button" aria-pressed="true">
               Map
             </button>

@@ -60,7 +60,7 @@ export function createTableShell(options: {
   Table: new () => WayfinderTableElement;
 }): new () => TableShellElement {
   const { lit, Table } = options;
-  const { LitElement: Base, html, css, nothing } = lit;
+  const { LitElement: Base, html, css, utilities, nothing } = lit;
 
   class TableShell extends Base {
     static properties = {
@@ -86,100 +86,87 @@ export function createTableShell(options: {
       onViewChange: { attribute: false },
     };
 
-    static styles = css`
-      :host {
-        flex: 1;
-        min-height: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 0.75rem;
-      }
-      @media (max-width: 900px) {
+    static styles = [
+      utilities,
+      css`
         :host {
-          flex: none;
+          flex: 1;
+          min-height: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
         }
-      }
+        @media (max-width: 900px) {
+          :host {
+            flex: none;
+          }
+        }
 
-      .header {
-        flex-shrink: 0;
-        display: flex;
-        align-items: center;
-        gap: 0.625rem;
-        flex-wrap: wrap;
-        padding: 0.5rem 0.75rem;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        background: var(--surface);
-      }
-      .emblem {
-        color: var(--wf-accent);
-        font-size: 1.25rem;
-        line-height: 1;
-      }
-      .title-group {
-        display: flex;
-        flex-direction: column;
-        gap: 0.125rem;
-        min-width: 0;
-      }
-      .title {
-        font-size: 0.875rem;
-        font-weight: 700;
-        color: var(--text);
-      }
-      .status {
-        font-size: 0.625rem;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--muted);
-      }
-      .actions {
-        margin-left: auto;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.375rem;
-      }
-      .actions button {
-        font-family: inherit;
-        font-size: 0.625rem;
-        height: 24px;
-        padding: 0 0.5rem;
-        border-radius: 4px;
-        border: 1px solid var(--border);
-        background: var(--surface);
-        color: var(--text);
-        cursor: pointer;
-      }
-      .actions button.primary {
-        background: var(--success);
-        color: var(--bg);
-        border-color: transparent;
-      }
-      .actions button.destructive {
-        background: var(--error);
-        color: white;
-        border-color: transparent;
-      }
-      .view-toggle {
-        display: inline-flex;
-        border: 1px solid var(--wf-paper-edge);
-        border-radius: 7px;
-        overflow: hidden;
-      }
-      .view-toggle button {
-        font: inherit;
-        font-size: 0.62rem;
-        padding: 0.28rem 0.6rem;
-        border: none;
-        background: transparent;
-        color: var(--wf-body);
-        cursor: pointer;
-      }
-      .view-toggle button.active {
-        background: var(--wf-accent);
-        color: var(--bg);
-      }
-    `;
+        .header {
+          gap: 0.625rem;
+          padding: 0.5rem 0.75rem;
+        }
+        .emblem {
+          color: var(--wf-accent);
+          font-size: 1.25rem;
+          line-height: 1;
+        }
+        .title-group {
+          gap: 0.125rem;
+        }
+        .title {
+          font-size: 0.875rem;
+          color: var(--text);
+        }
+        .status {
+          font-size: 0.625rem;
+          letter-spacing: 0.06em;
+        }
+        .actions {
+          margin-left: auto;
+          gap: 0.375rem;
+        }
+        .actions button {
+          font-family: inherit;
+          font-size: 0.625rem;
+          height: 24px;
+          padding: 0 0.5rem;
+          border-radius: 4px;
+          border: 1px solid var(--border);
+          background: var(--surface);
+          color: var(--text);
+          cursor: pointer;
+        }
+        .actions button.primary {
+          background: var(--success);
+          color: var(--bg);
+          border-color: transparent;
+        }
+        .actions button.destructive {
+          background: var(--error);
+          color: white;
+          border-color: transparent;
+        }
+        .view-toggle {
+          border: 1px solid var(--wf-paper-edge);
+          border-radius: 7px;
+          overflow: hidden;
+        }
+        .view-toggle button {
+          font: inherit;
+          font-size: 0.62rem;
+          padding: 0.28rem 0.6rem;
+          border: none;
+          background: transparent;
+          color: var(--wf-body);
+          cursor: pointer;
+        }
+        .view-toggle button.active {
+          background: var(--wf-accent);
+          color: var(--bg);
+        }
+      `,
+    ];
 
     declare flowLabel: string;
     declare flowStatus: string;
@@ -250,13 +237,13 @@ export function createTableShell(options: {
     }
 
     private renderHeader() {
-      return html`<div class="header">
+      return html`<div class="header flex-none flex items-center flex-wrap border rounded-lg bg-surface py-2 px-3">
         <span class="emblem">▲</span>
-        <div class="title-group">
-          <span class="title">${this.flowLabel}</span>
-          <span class="status">${this.flowStatus}</span>
+        <div class="title-group flex flex-col min-w-0">
+          <span class="title font-bold">${this.flowLabel}</span>
+          <span class="status text-muted uppercase">${this.flowStatus}</span>
         </div>
-        <div class="actions">
+        <div class="actions flex flex-wrap">
           ${this.availableFlowActions.map((action) => {
             const onClick =
               action.createInstance !== undefined
@@ -271,7 +258,7 @@ export function createTableShell(options: {
             </button>`;
           })}
         </div>
-        <div class="view-toggle" role="group" aria-label="Expedition view">
+        <div class="view-toggle inline-flex" role="group" aria-label="Expedition view">
           <button
             type="button"
             aria-pressed="false"

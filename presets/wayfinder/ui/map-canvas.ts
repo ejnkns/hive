@@ -52,7 +52,7 @@ export type MapCanvasElement = HTMLElement & {
 export function createMapCanvas(
   lit: FlowComponentDeps
 ): new () => MapCanvasElement {
-  const { LitElement: Base, html, css, nothing } = lit;
+  const { LitElement: Base, html, css, utilities, nothing } = lit;
 
   class MapCanvas extends Base {
     static properties = {
@@ -67,7 +67,9 @@ export function createMapCanvas(
       onBlankTap: { attribute: false },
     };
 
-    static styles = css`
+    static styles = [
+      utilities,
+      css`
       :host {
         flex: 1;
         min-height: 0;
@@ -81,9 +83,6 @@ export function createMapCanvas(
       }
 
       .map-layout {
-        flex: 1;
-        min-height: 0;
-        display: grid;
         grid-template-columns: minmax(0, 1fr) 300px;
       }
       @media (max-width: 900px) {
@@ -100,9 +99,6 @@ export function createMapCanvas(
       }
 
       .map-surface {
-        position: relative;
-        overflow: hidden;
-        border: 1px solid var(--border);
         border-radius: 14px;
         background: var(--map-backdrop, #0a0e15);
         touch-action: none;
@@ -115,8 +111,6 @@ export function createMapCanvas(
         display: block;
       }
       .map-nodes {
-        position: absolute;
-        inset: 0;
         pointer-events: none;
       }
 
@@ -128,7 +122,6 @@ export function createMapCanvas(
         transform: translate(var(--node-x, 0px), var(--node-y, 0px))
           translate(-50%, -50%);
         text-align: center;
-        cursor: pointer;
         z-index: 3;
         will-change: transform;
       }
@@ -310,25 +303,18 @@ export function createMapCanvas(
       .panel {
         border-left: 1px solid var(--border);
         padding: 0.9rem;
-        background: var(--surface);
-        overflow-y: auto;
       }
       .panel .group {
         margin-bottom: 0.8rem;
       }
       .panel .gh {
         font-size: 0.66rem;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: var(--muted);
         margin: 0.7rem 0 0.3rem;
       }
       .panel .entry {
         font-size: 0.78rem;
         padding: 0.38rem 0.5rem;
-        border-radius: 8px;
         border: 1px solid transparent;
-        cursor: pointer;
       }
       .panel .entry.hl {
         background: rgba(91, 192, 232, 0.1);
@@ -386,7 +372,8 @@ export function createMapCanvas(
       .panel .entry .card-title {
         font-family: var(--wf-font);
       }
-    `;
+    `,
+    ];
 
     declare model: WayfinderMap;
     declare theme: ExpeditionTheme;
@@ -512,18 +499,18 @@ export function createMapCanvas(
     render() {
       const model = this.model;
       if (model === undefined) return nothing;
-      return html`<div class="map-layout">
+      return html`<div class="map-layout flex-1 min-h-0 grid">
         <div
-          class="map-surface"
+          class="map-surface relative overflow-hidden border"
           role="group"
           aria-label="Expedition map — use the panel or the node markers to select tickets"
         >
           <canvas class="map-canvas" aria-hidden="true"></canvas>
-          <div class="map-nodes">
+          <div class="map-nodes absolute inset-0">
             ${model.nodes.map((node) => this.renderNode(node))}
           </div>
         </div>
-        <aside class="panel">${this.renderPanel(model)}</aside>
+        <aside class="panel bg-surface overflow-y-auto">${this.renderPanel(model)}</aside>
       </div>`;
     }
 
@@ -544,7 +531,7 @@ export function createMapCanvas(
           : nothing;
       const id = node.id;
       return html`<div
-        class="node ${node.presentation}${this.stateClass(id)}${this.transitionClass(id)}"
+        class="node cursor-pointer ${node.presentation}${this.stateClass(id)}${this.transitionClass(id)}"
         data-id=${id}
         tabindex="0"
         @mouseenter=${() => this.onHover?.(id)}
@@ -563,10 +550,10 @@ export function createMapCanvas(
     private renderPanel(model: WayfinderMap) {
       return html`${model.groups.map(
         (group) => html`<div class="group">
-          <div class="gh">${group.label}</div>
+          <div class="gh tracking-wide uppercase text-muted">${group.label}</div>
           ${group.nodes.map(
             (node) => html`<div
-              class="entry${this.stateClass(node.id)}"
+              class="entry rounded-lg cursor-pointer${this.stateClass(node.id)}"
               data-id=${node.id}
               tabindex="0"
               @mouseenter=${() => this.onHover?.(node.id)}

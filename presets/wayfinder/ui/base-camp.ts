@@ -46,7 +46,7 @@ export type BaseCampElement = HTMLElement & {
 export function createBaseCamp(
   lit: FlowComponentDeps
 ): new () => BaseCampElement {
-  const { LitElement: Base, html, css, nothing } = lit;
+  const { LitElement: Base, html, css, utilities, nothing } = lit;
 
   class BaseCamp extends Base {
     static properties = {
@@ -64,243 +64,192 @@ export function createBaseCamp(
       onViewChange: { attribute: false },
     };
 
-    static styles = css`
-      :host {
-        flex: 1;
-        min-height: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 0.75rem;
-      }
-      @media (max-width: 900px) {
+    static styles = [
+      utilities,
+      css`
         :host {
-          flex: none;
+          flex: 1;
+          min-height: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+        }
+        @media (max-width: 900px) {
+          :host {
+            flex: none;
+          }
+          .base-panel {
+            overflow: visible;
+          }
+        }
+
+        .header {
+          gap: 0.625rem;
+          padding: 0.5rem 0.75rem;
+        }
+        .emblem {
+          color: var(--wf-accent);
+          font-size: 1.25rem;
+          line-height: 1;
+        }
+        .title-group {
+          gap: 0.125rem;
+        }
+        .title {
+          font-size: 0.875rem;
+          color: var(--text);
+        }
+        .status {
+          font-size: 0.625rem;
+          letter-spacing: 0.06em;
+        }
+        .actions {
+          margin-left: auto;
+          gap: 0.375rem;
+        }
+        .actions button {
+          font-family: inherit;
+          font-size: 0.625rem;
+          height: 24px;
+          padding: 0 0.5rem;
+          border-radius: 4px;
+          border: 1px solid var(--border);
+          background: var(--surface);
+          color: var(--text);
+          cursor: pointer;
+        }
+        .actions button.primary {
+          background: var(--success);
+          color: var(--bg);
+          border-color: transparent;
+        }
+        .actions button.destructive {
+          background: var(--error);
+          color: white;
+          border-color: transparent;
+        }
+        .view-toggle {
+          border: 1px solid var(--wf-paper-edge);
+          border-radius: 7px;
+          overflow: hidden;
+        }
+        .view-toggle button {
+          font: inherit;
+          font-size: 0.62rem;
+          padding: 0.28rem 0.6rem;
+          border: none;
+          background: transparent;
+          color: var(--wf-body);
+          cursor: pointer;
+        }
+        .view-toggle button.active {
+          background: var(--wf-accent);
+          color: var(--bg);
         }
         .base-panel {
-          overflow: visible;
+          max-width: 46rem;
+          margin: 0 auto;
+          padding: 1.5rem 1.25rem;
+          border: 1px solid var(--wf-paper-edge);
+          border-radius: 18px;
+          box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
         }
-      }
-
-      .header {
-        flex-shrink: 0;
-        display: flex;
-        align-items: center;
-        gap: 0.625rem;
-        flex-wrap: wrap;
-        padding: 0.5rem 0.75rem;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        background: var(--surface);
-      }
-      .emblem {
-        color: var(--wf-accent);
-        font-size: 1.25rem;
-        line-height: 1;
-      }
-      .title-group {
-        display: flex;
-        flex-direction: column;
-        gap: 0.125rem;
-        min-width: 0;
-      }
-      .title {
-        font-size: 0.875rem;
-        font-weight: 700;
-        color: var(--text);
-      }
-      .status {
-        font-size: 0.625rem;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--muted);
-      }
-      .actions {
-        margin-left: auto;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.375rem;
-      }
-      .actions button {
-        font-family: inherit;
-        font-size: 0.625rem;
-        height: 24px;
-        padding: 0 0.5rem;
-        border-radius: 4px;
-        border: 1px solid var(--border);
-        background: var(--surface);
-        color: var(--text);
-        cursor: pointer;
-      }
-      .actions button.primary {
-        background: var(--success);
-        color: var(--bg);
-        border-color: transparent;
-      }
-      .actions button.destructive {
-        background: var(--error);
-        color: white;
-        border-color: transparent;
-      }
-      .view-toggle {
-        display: inline-flex;
-        border: 1px solid var(--wf-paper-edge);
-        border-radius: 7px;
-        overflow: hidden;
-      }
-      .view-toggle button {
-        font: inherit;
-        font-size: 0.62rem;
-        padding: 0.28rem 0.6rem;
-        border: none;
-        background: transparent;
-        color: var(--wf-body);
-        cursor: pointer;
-      }
-      .view-toggle button.active {
-        background: var(--wf-accent);
-        color: var(--bg);
-      }
-      .base-panel {
-        flex: 1;
-        min-height: 0;
-        overflow-y: auto;
-        display: flex;
-        flex-direction: column;
-        align-items: stretch;
-        gap: 1rem;
-        max-width: 46rem;
-        width: 100%;
-        margin: 0 auto;
-        padding: 1.5rem 1.25rem;
-        border: 1px solid var(--wf-paper-edge);
-        border-radius: 18px;
-        background: var(--wf-paper);
-        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
-      }
-      .base-dest {
-        display: flex;
-        flex-direction: column;
-        gap: 0.2rem;
-      }
-      .base-dest .name {
-        font-size: 1.05rem;
-        font-weight: 700;
-        color: var(--wf-ink);
-      }
-      .base-dest .sub {
-        font-size: 0.62rem;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: var(--wf-body);
-      }
-      .card-notes {
-        font-size: 0.72rem;
-        line-height: 1.4;
-        color: var(--wf-body);
-        white-space: pre-wrap;
-        overflow-wrap: anywhere;
-      }
-      .station-head {
-        font-size: 0.68rem;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: var(--wf-body);
-        margin: 0 0 0.55rem;
-        display: flex;
-        align-items: center;
-        gap: 0.45rem;
-      }
-      .station-head::after {
-        content: "";
-        flex: 1;
-        height: 1px;
-        background: rgba(203, 185, 143, 0.25);
-      }
-      .card {
-        background: var(--wf-paper);
-        border: 1px solid var(--wf-paper-edge);
-        border-radius: 10px;
-        padding: 0.75rem 0.85rem;
-        box-shadow:
-          0 2px 0 rgba(0, 0, 0, 0.3),
-          0 5px 10px rgba(0, 0, 0, 0.3);
-      }
-      .card .lbl {
-        font-size: 0.6rem;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--muted);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      .card .card-title {
-        font-weight: 600;
-        font-size: 0.84rem;
-        color: var(--wf-ink);
-        font-family: var(--wf-font);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      .card-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.375rem;
-        margin-top: 0.5rem;
-      }
-      .card-actions button {
-        font: inherit;
-        font-size: 0.68rem;
-        padding: 0.26rem 0.6rem;
-        border-radius: 6px;
-        border: 1px solid var(--wf-accent);
-        background: transparent;
-        color: var(--wf-accent);
-        cursor: pointer;
-      }
-      .card-actions button.primary {
-        background: var(--wf-accent);
-        color: var(--bg);
-        border-color: transparent;
-      }
-      .card-actions button.secondary {
-        border-color: var(--border);
-        color: var(--muted);
-      }
-      .card-chat {
-        display: flex;
-        flex-direction: column;
-        gap: 0.375rem;
-        border-top: 1px dashed var(--border);
-        padding-top: 0.5rem;
-        margin-top: 0.5rem;
-      }
-      .session-header {
-        display: flex;
-        flex-direction: column;
-        gap: 0.125rem;
-      }
-      .session-label {
-        font-size: 0.5625rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--wf-accent);
-      }
-      .empty {
-        font-size: 0.68rem;
-        color: var(--muted);
-        padding: 0.4rem 0;
-      }
-      .base-hint {
-        margin: 0;
-        font-size: 0.72rem;
-        color: var(--wf-body);
-        border-top: 1px dashed var(--wf-paper-edge);
-        padding-top: 0.9rem;
-      }
-    `;
+        .base-dest {
+          gap: 0.2rem;
+        }
+        .base-dest .name {
+          font-size: 1.05rem;
+          color: var(--wf-ink);
+        }
+        .base-dest .sub {
+          font-size: 0.62rem;
+          color: var(--wf-body);
+        }
+        .card-notes {
+          font-size: 0.72rem;
+          line-height: 1.4;
+          color: var(--wf-body);
+          white-space: pre-wrap;
+          overflow-wrap: anywhere;
+        }
+        .station-head {
+          font-size: 0.68rem;
+          color: var(--wf-body);
+          margin: 0 0 0.55rem;
+          gap: 0.45rem;
+        }
+        .station-head::after {
+          content: "";
+          flex: 1;
+          height: 1px;
+          background: rgba(203, 185, 143, 0.25);
+        }
+        .card {
+          border: 1px solid var(--wf-paper-edge);
+          border-radius: 10px;
+          padding: 0.75rem 0.85rem;
+          box-shadow:
+            0 2px 0 rgba(0, 0, 0, 0.3),
+            0 5px 10px rgba(0, 0, 0, 0.3);
+        }
+        .card .lbl {
+          font-size: 0.6rem;
+          letter-spacing: 0.08em;
+        }
+        .card .card-title {
+          font-weight: 600;
+          font-size: 0.84rem;
+          font-family: var(--wf-font);
+        }
+        .card-actions {
+          gap: 0.375rem;
+          margin-top: 0.5rem;
+        }
+        .card-actions button {
+          font: inherit;
+          font-size: 0.68rem;
+          padding: 0.26rem 0.6rem;
+          border-radius: 6px;
+          border: 1px solid var(--wf-accent);
+          background: transparent;
+          color: var(--wf-accent);
+          cursor: pointer;
+        }
+        .card-actions button.primary {
+          background: var(--wf-accent);
+          color: var(--bg);
+          border-color: transparent;
+        }
+        .card-actions button.secondary {
+          border-color: var(--border);
+          color: var(--muted);
+        }
+        .card-chat {
+          gap: 0.375rem;
+          border-top: 1px dashed var(--border);
+          padding-top: 0.5rem;
+          margin-top: 0.5rem;
+        }
+        .session-header {
+          gap: 0.125rem;
+        }
+        .session-label {
+          font-size: 0.5625rem;
+          letter-spacing: 0.06em;
+        }
+        .empty {
+          font-size: 0.68rem;
+          padding: 0.4rem 0;
+        }
+        .base-hint {
+          margin: 0;
+          font-size: 0.72rem;
+          color: var(--wf-body);
+          border-top: 1px dashed var(--wf-paper-edge);
+          padding-top: 0.9rem;
+        }
+      `,
+    ];
 
     declare flowLabel: string;
     declare flowStatus: string;
@@ -320,14 +269,14 @@ export function createBaseCamp(
     render() {
       if (this.model === undefined) return nothing;
       return html`${this.renderHeader()}
-        <div class="base-panel">
-          <div class="base-dest">
-            <span class="name">${
+        <div class="base-panel flex-1 min-h-0 overflow-y-auto flex flex-col items-stretch gap-4 w-full wf-paper">
+          <div class="base-dest flex flex-col">
+            <span class="name font-bold">${
               this.model.destination !== ""
                 ? this.model.destination
                 : "Uncharted territory"
             }</span>
-            <span class="sub">destination</span>
+            <span class="sub tracking-wide uppercase">destination</span>
           </div>
           ${this.renderChartingStation()}
           <p class="base-hint">
@@ -337,13 +286,13 @@ export function createBaseCamp(
     }
 
     private renderHeader() {
-      return html`<div class="header">
+      return html`<div class="header flex-none flex items-center flex-wrap border rounded-lg bg-surface py-2 px-3">
         <span class="emblem">▲</span>
-        <div class="title-group">
-          <span class="title">${this.flowLabel}</span>
-          <span class="status">${this.flowStatus}</span>
+        <div class="title-group flex flex-col min-w-0">
+          <span class="title font-bold">${this.flowLabel}</span>
+          <span class="status text-muted uppercase">${this.flowStatus}</span>
         </div>
-        <div class="actions">
+        <div class="actions flex flex-wrap">
           ${this.availableFlowActions.map((action) => {
             const onClick =
               action.createInstance !== undefined
@@ -358,7 +307,7 @@ export function createBaseCamp(
             </button>`;
           })}
         </div>
-        <div class="view-toggle" role="group" aria-label="Expedition view">
+        <div class="view-toggle inline-flex" role="group" aria-label="Expedition view">
           <button
             type="button"
             aria-pressed="true"
@@ -385,13 +334,13 @@ export function createBaseCamp(
         (entry) => entry.workflowId === "charting"
       );
       return html`<div class="station">
-        <h2 class="station-head">Base camp</h2>
+        <h2 class="station-head flex items-center tracking-wide uppercase">Base camp</h2>
         ${charting.map((entry) => {
           const destination = entry.state.workflowInstanceState.destination;
           const notes = entry.state.workflowInstanceState.notes;
-          return html`<div class="card" data-id="base">
-            <div class="lbl">${entry.state.currentState}</div>
-            <div class="card-title">${
+          return html`<div class="card wf-paper" data-id="base">
+            <div class="lbl text-muted uppercase truncate">${entry.state.currentState}</div>
+            <div class="card-title wf-ink truncate">${
               typeof destination === "string" && destination !== ""
                 ? destination
                 : "Base camp"
@@ -406,7 +355,7 @@ export function createBaseCamp(
         })}
         ${
           charting.length === 0
-            ? html`<div class="empty">No base camp yet.</div>`
+            ? html`<div class="empty text-muted">No base camp yet.</div>`
             : nothing
         }
       </div>`;
@@ -414,7 +363,7 @@ export function createBaseCamp(
 
     private renderActions(entry: FlowViewPropsEntries[number]) {
       if (entry.availableActions.length === 0) return nothing;
-      return html`<div class="card-actions">
+      return html`<div class="card-actions flex flex-wrap">
         ${entry.availableActions.map(
           (action) => html`<button
             class=${action.variant}
@@ -442,9 +391,9 @@ export function createBaseCamp(
       const stateDef = workflowDef?.states.find(
         (workflowState) => workflowState.id === state.currentState
       );
-      return html`<div class="card-chat">
-        <div class="session-header">
-          <span class="session-label"
+      return html`<div class="card-chat flex flex-col">
+        <div class="session-header flex flex-col">
+          <span class="session-label font-bold uppercase"
             >${stateDef?.label ?? state.currentState}</span
           >
         </div>

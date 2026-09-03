@@ -11,7 +11,7 @@ import type {
 import { agentIsThinking } from "./wayfinder-status.ts";
 
 export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
-  const { LitElement: Base, html, css, nothing } = lit;
+  const { LitElement: Base, html, css, utilities, nothing } = lit;
 
   class ChartingCard extends Base {
     static properties = {
@@ -22,78 +22,59 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       onSendMessage: { attribute: false },
     };
 
-    static styles = css`
-      :host {
-        display: block;
-      }
-      .charting {
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        background: var(--surface);
-        padding: 0.75rem 0.875rem;
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-      }
-      .charting-state {
-        font-size: 0.5625rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--flow-accent, var(--accent));
-      }
-      .charting-title {
-        font-weight: 700;
-        font-size: 0.8125rem;
-        color: var(--text);
-      }
-      .charting-notes {
-        font-size: 0.625rem;
-        color: var(--muted);
-        white-space: pre-wrap;
-        margin: 0;
-      }
-      .charting-chat {
-        display: flex;
-        flex-direction: column;
-        gap: 0.375rem;
-        border-top: 1px dashed var(--border);
-        padding-top: 0.5rem;
-      }
-      .session-header {
-        display: flex;
-        flex-direction: column;
-        gap: 0.125rem;
-      }
-      .session-label {
-        font-size: 0.5625rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--flow-accent, var(--accent));
-      }
-      .session-desc {
-        font-size: 0.625rem;
-        color: var(--muted);
-        margin: 0;
-      }
-      .charting-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.375rem;
-      }
-      .charting-actions button {
-        font-family: inherit;
-        font-size: 0.625rem;
-        height: 24px;
-        padding: 0 0.5rem;
-        border-radius: 4px;
-        border: 1px solid var(--border);
-        background: var(--surface);
-        color: var(--text);
-        cursor: pointer;
-      }
-    `;
+    static styles = [
+      utilities,
+      css`
+        :host {
+          display: block;
+        }
+        .charting {
+          padding: 0.75rem 0.875rem;
+        }
+        .charting-state {
+          font-size: 0.5625rem;
+          letter-spacing: 0.06em;
+        }
+        .charting-title {
+          color: var(--text);
+        }
+        .charting-notes {
+          font-size: 0.625rem;
+          white-space: pre-wrap;
+          margin: 0;
+        }
+        .charting-chat {
+          gap: 0.375rem;
+          border-top: 1px dashed var(--border);
+          padding-top: 0.5rem;
+        }
+        .session-header {
+          gap: 0.125rem;
+        }
+        .session-label {
+          font-size: 0.5625rem;
+          letter-spacing: 0.06em;
+        }
+        .session-desc {
+          font-size: 0.625rem;
+          margin: 0;
+        }
+        .charting-actions {
+          gap: 0.375rem;
+        }
+        .charting-actions button {
+          font-family: inherit;
+          font-size: 0.625rem;
+          height: 24px;
+          padding: 0 0.5rem;
+          border-radius: 4px;
+          border: 1px solid var(--border);
+          background: var(--surface);
+          color: var(--text);
+          cursor: pointer;
+        }
+      `,
+    ];
 
     declare workflowDef: InstanceComponentProps["workflowDef"];
     declare instanceEntry: InstanceComponentProps["instanceEntry"];
@@ -113,18 +94,18 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       const notes = instanceState.notes as string | undefined;
       const actions = this.instanceEntry.availableActions ?? [];
 
-      return html`<div class="charting">
-        <div class="charting-state">${stateDef?.label ?? state.currentState}</div>
-        <div class="charting-title">${destination}</div>
+      return html`<div class="charting border rounded-lg bg-surface flex flex-col gap-2">
+        <div class="charting-state text-accent font-bold uppercase">${stateDef?.label ?? state.currentState}</div>
+        <div class="charting-title text-base font-bold">${destination}</div>
         ${
           notes !== undefined && notes !== ""
-            ? html`<p class="charting-notes">${notes}</p>`
+            ? html`<p class="charting-notes text-muted">${notes}</p>`
             : nothing
         }
         ${this.renderChat()}
         ${
           actions.length > 0
-            ? html`<div class="charting-actions">
+            ? html`<div class="charting-actions flex flex-wrap">
               ${actions.map(
                 (a) => html`<button
                   type="button"
@@ -151,12 +132,12 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       const stateDef = this.workflowDef.states.find(
         (s) => s.id === state.currentState
       );
-      return html`<div class="charting-chat">
-        <div class="session-header">
-          <span class="session-label">${stateDef?.label ?? state.currentState}</span>
+      return html`<div class="charting-chat flex flex-col">
+        <div class="session-header flex flex-col">
+          <span class="session-label text-accent font-bold uppercase">${stateDef?.label ?? state.currentState}</span>
           ${
             stateDef?.description !== undefined && stateDef.description !== ""
-              ? html`<p class="session-desc">${stateDef.description}</p>`
+              ? html`<p class="session-desc text-muted">${stateDef.description}</p>`
               : nothing
           }
         </div>

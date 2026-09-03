@@ -10,7 +10,7 @@ import type {
 } from "workflow-engine/workflow-types";
 
 export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
-  const { LitElement: Base, html, css, nothing } = lit;
+  const { LitElement: Base, html, css, utilities, nothing } = lit;
 
   class PrototypeDecision extends Base {
     static properties = {
@@ -19,53 +19,52 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       artifactPath: { attribute: false },
     };
 
-    static styles = css`
-      :host {
-        display: block;
-      }
-      .decision {
-        display: flex;
-        flex-direction: column;
-        gap: 0.375rem;
-      }
-      .gist {
-        font-size: 0.6875rem;
-        font-weight: 600;
-        color: var(--text);
-        margin: 0;
-      }
-      .body {
-        font-size: 0.625rem;
-        color: var(--muted);
-        white-space: pre-wrap;
-        margin: 0;
-      }
-      .artifact {
-        font-size: 0.5625rem;
-        font-family: var(--font-mono, monospace);
-        color: var(--flow-accent, var(--accent));
-      }
-    `;
+    static styles = [
+      utilities,
+      css`
+        :host {
+          display: block;
+        }
+        .decision {
+          gap: 0.375rem;
+        }
+        .gist {
+          font-weight: 600;
+          color: var(--text);
+          margin: 0;
+        }
+        .body {
+          font-size: 0.625rem;
+          color: var(--muted);
+          white-space: pre-wrap;
+          margin: 0;
+        }
+        .artifact {
+          font-size: 0.5625rem;
+          font-family: var(--font-mono, monospace);
+        }
+      `,
+    ];
 
     decision: string | undefined = undefined;
     gist: string | undefined = undefined;
     artifactPath: string | undefined = undefined;
 
     render() {
-      return html`<div class="decision">
+      return html`<div class="decision flex flex-col">
         ${
           this.gist !== undefined && this.gist !== ""
-            ? html`<p class="gist">${this.gist}</p>`
+            ? html`<p class="gist text-xs">${this.gist}</p>`
             : nothing
         }
         ${
           this.decision !== undefined && this.decision !== ""
-            ? html`<pre class="body">${this.decision}</pre>`
+            ? html`<pre class="body text-muted">${this.decision}</pre>`
             : nothing
         }
         ${
           this.artifactPath !== undefined && this.artifactPath !== ""
-            ? html`<span class="artifact">artifact: ${this.artifactPath}</span>`
+            ? html`<span class="artifact text-accent">artifact: ${this.artifactPath}</span>`
             : nothing
         }
       </div>`;

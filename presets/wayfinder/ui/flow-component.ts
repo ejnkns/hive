@@ -45,7 +45,7 @@ import type { ExpeditionTheme } from "./wayfinder-themes.ts";
 import { resolveTheme } from "./wayfinder-themes.ts";
 
 export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
-  const { LitElement: Base, html, css } = lit;
+  const { LitElement: Base, html, css, utilities } = lit;
   const MapCanvas = createMapCanvas(lit);
   const Drawer = createWayfinderDrawer(lit);
   const MapShell = createMapShell({ lit, MapCanvas, Drawer });
@@ -75,134 +75,133 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       fogOrder: { attribute: false },
     };
 
-    static styles = css`
-      :host {
-        display: block;
-        height: 100%;
-      }
-      /* The expedition chrome: the theme wrapper every renderer sits inside.
-         The per-theme --wf-* variables and --map-backdrop are defined here so
-         the shells (separate shadow roots) inherit them through the DOM. */
-      .expedition {
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-        gap: 0.75rem;
-        --wf-accent: #4a9fe0;
-        --wf-paper: #241f18;
-        --wf-paper-edge: #352d22;
-        --wf-ink: #f0ead9;
-        --wf-body: #b7ad97;
-        --wf-font:
-          system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
-          sans-serif;
-        font-family: var(--wf-font);
-        transition:
-          --wf-accent var(--dur-slow) var(--ease-in-out),
-          --wf-paper var(--dur-slow) var(--ease-in-out),
-          --wf-paper-edge var(--dur-slow) var(--ease-in-out),
-          --wf-ink var(--dur-slow) var(--ease-in-out),
-          --wf-body var(--dur-slow) var(--ease-in-out);
-      }
-      .expedition[data-theme="mountain"] {
-        --wf-accent: #4a9fe0;
-        --wf-paper: #241f18;
-        --wf-paper-edge: #352d22;
-        --wf-ink: #f0ead9;
-        --wf-body: #b7ad97;
-      }
-      .expedition[data-theme="topo"] {
-        --wf-accent: #58a06a;
-        --wf-paper: #25221a;
-        --wf-paper-edge: #3a3426;
-        --wf-ink: #f0ead9;
-        --wf-body: #b7ad97;
-      }
-      .expedition[data-theme="stars"] {
-        --wf-accent: #5bc0e8;
-        --wf-paper: #10161f;
-        --wf-paper-edge: #1e2a3a;
-        --wf-ink: #d6e6f5;
-        --wf-body: #8ba6c2;
-      }
-      :host-context(html.light) .expedition {
-        --wf-accent: #2f7bb5;
-        --wf-paper: #f2ead9;
-        --wf-paper-edge: #d9c7a3;
-        --wf-ink: #2a2418;
-        --wf-body: #6b5f4a;
-      }
-      :host-context(html.light) .expedition[data-theme="topo"] {
-        --wf-accent: #3f7d4d;
-        --wf-paper: #f0f2e6;
-        --wf-paper-edge: #ccd2b0;
-        --wf-ink: #23281a;
-        --wf-body: #5f6b4a;
-      }
-      :host-context(html.light) .expedition[data-theme="stars"] {
-        --wf-accent: #2f86b5;
-        --wf-paper: #e8eef4;
-        --wf-paper-edge: #c3d0e0;
-        --wf-ink: #1a2430;
-        --wf-body: #4a5b6a;
-      }
-
-      /* The map backdrop surface, keyed by theme and light/dark mode. The
-         mountain theme is a sky with a fog bank across the valley floor;
-         topo stays all-green; stars is pure black (white in light mode so
-         the currentColor starfield draws black). Both the table's mini-map
-         card and the full map view's canvas read --map-backdrop. */
-      .expedition[data-theme="mountain"] {
-        --map-backdrop: linear-gradient(
-          180deg,
-          #0a1226 0%,
-          #16284a 30%,
-          #24395c 46%,
-          #6c7c8c 68%,
-          #b7c1c9 86%,
-          #dde4e8 100%
-        );
-      }
-      .expedition[data-theme="topo"] {
-        --map-backdrop: radial-gradient(
-          130% 110% at 50% 5%,
-          #1c3626 0%,
-          #152b1c 52%,
-          #0c1e11 100%
-        );
-      }
-      .expedition[data-theme="stars"] {
-        --map-backdrop: #000000;
-      }
-      :host-context(html.light) .expedition[data-theme="mountain"] {
-        --map-backdrop: linear-gradient(
-          180deg,
-          #66b4e8 0%,
-          #8ec4ea 34%,
-          #a9cbd9 52%,
-          #c2d2d7 72%,
-          #e0e7ea 90%,
-          #f1f4f6 100%
-        );
-      }
-      :host-context(html.light) .expedition[data-theme="topo"] {
-        --map-backdrop: radial-gradient(
-          130% 110% at 50% 5%,
-          #cfe5bd 0%,
-          #b4d3a1 52%,
-          #97c283 100%
-        );
-      }
-      :host-context(html.light) .expedition[data-theme="stars"] {
-        --map-backdrop: #ffffff;
-      }
-
-      @media (max-width: 900px) {
-        .expedition {
-          height: auto;
+    static styles = [
+      utilities,
+      css`
+        :host {
+          display: block;
+          height: 100%;
         }
-      }
-    `;
+        /* The expedition chrome: the theme wrapper every renderer sits inside.
+           The per-theme --wf-* variables and --map-backdrop are defined here so
+           the shells (separate shadow roots) inherit them through the DOM. */
+        .expedition {
+          --wf-accent: #4a9fe0;
+          --wf-paper: #241f18;
+          --wf-paper-edge: #352d22;
+          --wf-ink: #f0ead9;
+          --wf-body: #b7ad97;
+          --wf-font:
+            system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+            sans-serif;
+          font-family: var(--wf-font);
+          transition:
+            --wf-accent var(--dur-slow) var(--ease-in-out),
+            --wf-paper var(--dur-slow) var(--ease-in-out),
+            --wf-paper-edge var(--dur-slow) var(--ease-in-out),
+            --wf-ink var(--dur-slow) var(--ease-in-out),
+            --wf-body var(--dur-slow) var(--ease-in-out);
+        }
+        .expedition[data-theme="mountain"] {
+          --wf-accent: #4a9fe0;
+          --wf-paper: #241f18;
+          --wf-paper-edge: #352d22;
+          --wf-ink: #f0ead9;
+          --wf-body: #b7ad97;
+        }
+        .expedition[data-theme="topo"] {
+          --wf-accent: #58a06a;
+          --wf-paper: #25221a;
+          --wf-paper-edge: #3a3426;
+          --wf-ink: #f0ead9;
+          --wf-body: #b7ad97;
+        }
+        .expedition[data-theme="stars"] {
+          --wf-accent: #5bc0e8;
+          --wf-paper: #10161f;
+          --wf-paper-edge: #1e2a3a;
+          --wf-ink: #d6e6f5;
+          --wf-body: #8ba6c2;
+        }
+        :host-context(html.light) .expedition {
+          --wf-accent: #2f7bb5;
+          --wf-paper: #f2ead9;
+          --wf-paper-edge: #d9c7a3;
+          --wf-ink: #2a2418;
+          --wf-body: #6b5f4a;
+        }
+        :host-context(html.light) .expedition[data-theme="topo"] {
+          --wf-accent: #3f7d4d;
+          --wf-paper: #f0f2e6;
+          --wf-paper-edge: #ccd2b0;
+          --wf-ink: #23281a;
+          --wf-body: #5f6b4a;
+        }
+        :host-context(html.light) .expedition[data-theme="stars"] {
+          --wf-accent: #2f86b5;
+          --wf-paper: #e8eef4;
+          --wf-paper-edge: #c3d0e0;
+          --wf-ink: #1a2430;
+          --wf-body: #4a5b6a;
+        }
+
+        /* The map backdrop surface, keyed by theme and light/dark mode. The
+           mountain theme is a sky with a fog bank across the valley floor;
+           topo stays all-green; stars is pure black (white in light mode so
+           the currentColor starfield draws black). Both the table's mini-map
+           card and the full map view's canvas read --map-backdrop. */
+        .expedition[data-theme="mountain"] {
+          --map-backdrop: linear-gradient(
+            180deg,
+            #0a1226 0%,
+            #16284a 30%,
+            #24395c 46%,
+            #6c7c8c 68%,
+            #b7c1c9 86%,
+            #dde4e8 100%
+          );
+        }
+        .expedition[data-theme="topo"] {
+          --map-backdrop: radial-gradient(
+            130% 110% at 50% 5%,
+            #1c3626 0%,
+            #152b1c 52%,
+            #0c1e11 100%
+          );
+        }
+        .expedition[data-theme="stars"] {
+          --map-backdrop: #000000;
+        }
+        :host-context(html.light) .expedition[data-theme="mountain"] {
+          --map-backdrop: linear-gradient(
+            180deg,
+            #66b4e8 0%,
+            #8ec4ea 34%,
+            #a9cbd9 52%,
+            #c2d2d7 72%,
+            #e0e7ea 90%,
+            #f1f4f6 100%
+          );
+        }
+        :host-context(html.light) .expedition[data-theme="topo"] {
+          --map-backdrop: radial-gradient(
+            130% 110% at 50% 5%,
+            #cfe5bd 0%,
+            #b4d3a1 52%,
+            #97c283 100%
+          );
+        }
+        :host-context(html.light) .expedition[data-theme="stars"] {
+          --map-backdrop: #ffffff;
+        }
+
+        @media (max-width: 900px) {
+          .expedition {
+            height: auto;
+          }
+        }
+      `,
+    ];
 
     declare flow: FlowViewProps["flow"];
     declare workflowDefs: FlowViewProps["workflowDefs"];
@@ -434,16 +433,16 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       // of an empty expedition has nothing to show, so the Base Camp empty
       // state stands in for it until the first content node exists.
       if (this.view === "table") {
-        return html`<div class="expedition" data-theme=${theme}>
+        return html`<div class="expedition h-full flex flex-col gap-3" data-theme=${theme}>
           ${this.ensureTableShell()}
         </div>`;
       }
       if (expeditionIsEmpty(model)) {
-        return html`<div class="expedition" data-theme=${theme}>
+        return html`<div class="expedition h-full flex flex-col gap-3" data-theme=${theme}>
           ${this.ensureBaseCamp()}
         </div>`;
       }
-      return html`<div class="expedition" data-theme=${theme}>
+      return html`<div class="expedition h-full flex flex-col gap-3" data-theme=${theme}>
         ${this.ensureMapShell()}
       </div>`;
     }

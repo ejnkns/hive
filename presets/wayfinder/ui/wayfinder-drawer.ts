@@ -42,7 +42,7 @@ export type WayfinderDrawerElement = HTMLElement & {
 export function createWayfinderDrawer(
   lit: FlowComponentDeps
 ): new () => WayfinderDrawerElement {
-  const { LitElement: Base, html, css, nothing } = lit;
+  const { LitElement: Base, html, css, utilities, nothing } = lit;
 
   class WayfinderDrawer extends Base {
     static properties = {
@@ -53,7 +53,9 @@ export function createWayfinderDrawer(
       onSendMessage: { attribute: false },
     };
 
-    static styles = css`
+    static styles = [
+      utilities,
+      css`
       :host {
         position: absolute;
         top: 0;
@@ -114,42 +116,26 @@ export function createWayfinderDrawer(
       }
 
       .drawer {
-        flex: 1;
-        min-height: 0;
-        display: flex;
-        flex-direction: column;
         outline: none;
       }
       .drawer-head {
-        flex-shrink: 0;
-        display: flex;
-        align-items: flex-start;
-        gap: 0.5rem;
         padding: 0.75rem 0.85rem 0.5rem;
         border-bottom: 1px dashed var(--wf-paper-edge, var(--border));
       }
       .drawer-title {
-        flex: 1;
-        min-width: 0;
-        display: flex;
-        flex-direction: column;
         gap: 0.15rem;
       }
       .drawer-kicker {
         font-size: 0.58rem;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
         color: var(--wf-body, var(--muted));
       }
       .drawer-name {
         margin: 0;
         font-size: 0.92rem;
-        font-weight: 700;
         color: var(--wf-ink, var(--text));
         overflow-wrap: anywhere;
       }
       .drawer-close {
-        flex-shrink: 0;
         font: inherit;
         font-size: 0.85rem;
         line-height: 1;
@@ -167,17 +153,12 @@ export function createWayfinderDrawer(
       }
 
       .drawer-status {
-        flex-shrink: 0;
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
         gap: 0.4rem;
         padding: 0.45rem 0.85rem;
         border-bottom: 1px solid var(--wf-paper-edge, var(--border));
       }
       .status-chip {
         font-size: 0.58rem;
-        text-transform: uppercase;
         letter-spacing: 0.08em;
         padding: 0.12rem 0.5rem;
         border-radius: 999px;
@@ -203,21 +184,14 @@ export function createWayfinderDrawer(
       }
       .type-label {
         font-size: 0.58rem;
-        text-transform: uppercase;
         letter-spacing: 0.06em;
         color: var(--wf-body, var(--muted));
         border: 1px solid var(--wf-paper-edge, var(--border));
-        border-radius: 4px;
         padding: 0.06rem 0.4rem;
       }
 
       .drawer-body {
-        flex: 1;
-        min-height: 0;
-        overflow-y: auto;
         padding: 0.6rem 0.85rem 0.9rem;
-        display: flex;
-        flex-direction: column;
         gap: 0.8rem;
       }
       .drawer-question {
@@ -227,20 +201,14 @@ export function createWayfinderDrawer(
         color: var(--wf-ink, var(--text));
       }
       .drawer-section {
-        display: flex;
-        flex-direction: column;
         gap: 0.35rem;
       }
       .drawer-section-title {
         margin: 0;
         font-size: 0.6rem;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
         color: var(--wf-body, var(--muted));
       }
       .resolution-block {
-        display: flex;
-        flex-direction: column;
         gap: 0.3rem;
       }
       .resolution-gist {
@@ -259,20 +227,16 @@ export function createWayfinderDrawer(
       .resolution-meta {
         margin: 0;
         font-size: 0.6rem;
-        color: var(--muted);
       }
       .resolution-error {
         font-size: 0.66rem;
         color: var(--error);
         border: 1px solid color-mix(in srgb, var(--error) 45%, transparent);
-        border-radius: 6px;
         padding: 0.35rem 0.55rem;
       }
       .map-document-empty {
         font-size: 0.66rem;
-        color: var(--muted);
         border: 1px dashed var(--wf-paper-edge, var(--border));
-        border-radius: 6px;
         padding: 0.4rem 0.55rem;
       }
       .standing-notes {
@@ -286,12 +250,9 @@ export function createWayfinderDrawer(
         margin: 0;
         font-size: 0.6rem;
         font-family: var(--font-mono, monospace);
-        color: var(--muted);
         overflow-wrap: anywhere;
       }
       .ref-chips {
-        display: flex;
-        flex-wrap: wrap;
         gap: 0.35rem;
       }
       .ref-chip {
@@ -308,23 +269,15 @@ export function createWayfinderDrawer(
         background: color-mix(in srgb, var(--wf-accent) 12%, transparent);
       }
       .review-finding {
-        border: 1px solid var(--border);
-        border-radius: 6px;
         padding: 0.35rem 0.5rem;
-        display: flex;
-        flex-direction: column;
         gap: 0.15rem;
       }
       .review-axis {
         font-size: 0.58rem;
-        font-weight: 700;
-        text-transform: uppercase;
         letter-spacing: 0.05em;
-        color: var(--muted);
       }
       .review-severity {
         font-size: 0.56rem;
-        color: var(--error);
       }
       .review-detail {
         margin: 0;
@@ -332,23 +285,17 @@ export function createWayfinderDrawer(
         color: var(--text);
       }
       .plan-ticket {
-        border: 1px solid var(--border);
-        border-radius: 6px;
         padding: 0.4rem 0.55rem;
       }
       .plan-ticket-title {
         font-size: 0.68rem;
-        font-weight: 700;
         color: var(--text);
       }
       .plan-ticket-desc {
         margin: 0.1rem 0 0;
         font-size: 0.62rem;
-        color: var(--muted);
       }
       .drawer-actions {
-        display: flex;
-        flex-wrap: wrap;
         gap: 0.4rem;
       }
       .drawer-actions button {
@@ -379,7 +326,8 @@ export function createWayfinderDrawer(
         border-top: 1px dashed var(--border);
         padding-top: 0.5rem;
       }
-    `;
+    `,
+    ];
 
     declare detail: DrawerDetail | undefined;
     declare onClose: (() => void) | undefined;
@@ -442,18 +390,18 @@ export function createWayfinderDrawer(
       const detail = this.detail;
       if (detail === undefined) return nothing;
       return html`<div
-        class="drawer"
+        class="drawer flex-1 min-h-0 flex flex-col"
         role="region"
         aria-label="WorkflowItem detail"
         tabindex="-1"
       >
-        <header class="drawer-head">
-          <div class="drawer-title">
-            <span class="drawer-kicker">${detail.presentationLabel}</span>
-            <h2 class="drawer-name">${detail.title}</h2>
+        <header class="drawer-head flex-none flex items-start gap-2">
+          <div class="drawer-title flex-1 min-w-0 flex flex-col">
+            <span class="drawer-kicker tracking-wide uppercase">${detail.presentationLabel}</span>
+            <h2 class="drawer-name font-bold">${detail.title}</h2>
           </div>
           <button
-            class="drawer-close"
+            class="drawer-close flex-none"
             type="button"
             aria-label="Close detail"
             @click=${() => this.onClose?.()}
@@ -461,18 +409,18 @@ export function createWayfinderDrawer(
             ×
           </button>
         </header>
-        <div class="drawer-status">
-          <span class="status-chip ${detail.presentation}"
+        <div class="drawer-status flex-none flex items-center flex-wrap">
+          <span class="status-chip uppercase ${detail.presentation}"
             >${detail.presentationLabel}</span
           >
           <span class="state-label">${detail.stateLabel}</span>
           ${
             detail.type !== undefined
-              ? html`<span class="type-label">${detail.type}</span>`
+              ? html`<span class="type-label uppercase rounded-sm">${detail.type}</span>`
               : nothing
           }
         </div>
-        <div class="drawer-body">
+        <div class="drawer-body flex-1 min-h-0 overflow-y-auto flex flex-col">
           ${
             detail.question !== undefined
               ? html`<p class="drawer-question">${detail.question}</p>`
@@ -483,8 +431,8 @@ export function createWayfinderDrawer(
           ${this.renderMapDocument(detail)}
           ${
             detail.decisionRecord !== undefined
-              ? html`<section class="drawer-section">
-                <h3 class="drawer-section-title">Decision record</h3>
+              ? html`<section class="drawer-section flex flex-col">
+                <h3 class="drawer-section-title tracking-wide uppercase">Decision record</h3>
                 <markdown-view .content=${detail.decisionRecord}></markdown-view>
               </section>`
               : nothing
@@ -504,10 +452,10 @@ export function createWayfinderDrawer(
     private renderResolution(detail: DrawerDetail) {
       if (detail.resolution.length === 0) {
         return detail.resolutionError !== undefined
-          ? html`<div class="resolution-error">${detail.resolutionError}</div>`
+          ? html`<div class="resolution-error rounded-md">${detail.resolutionError}</div>`
           : nothing;
       }
-      return html`<section class="drawer-section">
+      return html`<section class="drawer-section flex flex-col">
         ${detail.resolution.map((entry) => this.renderResolutionBlock(entry))}
       </section>`;
     }
@@ -515,20 +463,20 @@ export function createWayfinderDrawer(
     private renderResolutionBlock(resolution: DrawerResolution) {
       switch (resolution.kind) {
         case "research":
-          return html`<div class="resolution-block">
-            <h3 class="drawer-section-title">Research findings</h3>
+          return html`<div class="resolution-block flex flex-col">
+            <h3 class="drawer-section-title tracking-wide uppercase">Research findings</h3>
             <markdown-view .content=${resolution.findings}></markdown-view>
             ${
               resolution.sources.length > 0
-                ? html`<p class="resolution-meta"
+                ? html`<p class="resolution-meta text-muted"
                   >${resolution.sources.length} sources</p
                 >`
                 : nothing
             }
           </div>`;
         case "decision":
-          return html`<div class="resolution-block">
-            <h3 class="drawer-section-title">Resolution</h3>
+          return html`<div class="resolution-block flex flex-col">
+            <h3 class="drawer-section-title tracking-wide uppercase">Resolution</h3>
             ${
               resolution.gist !== ""
                 ? html`<p class="resolution-gist">${resolution.gist}</p>`
@@ -541,14 +489,14 @@ export function createWayfinderDrawer(
             }
             ${
               resolution.artifactPath !== undefined
-                ? html`<p class="resolution-meta"
+                ? html`<p class="resolution-meta text-muted"
                   >artifact: ${resolution.artifactPath}</p
                 >`
                 : nothing
             }
           </div>`;
         case "build-outcome":
-          return html`<div class="resolution-block">
+          return html`<div class="resolution-block flex flex-col">
             <h3 class="drawer-section-title"
               >Build outcome · ${resolution.outcome}</h3
             >
@@ -559,20 +507,22 @@ export function createWayfinderDrawer(
             }
           </div>`;
         case "review":
-          return html`<div class="resolution-block">
+          return html`<div class="resolution-block flex flex-col">
             <h3 class="drawer-section-title"
               >Review · ${resolution.verdict}</h3
             >
             ${resolution.findings.map(
-              (finding) => html`<div class="review-finding">
+              (
+                finding
+              ) => html`<div class="review-finding border rounded-md flex flex-col">
                 ${
                   finding.axis !== ""
-                    ? html`<span class="review-axis">${finding.axis}</span>`
+                    ? html`<span class="review-axis text-muted font-bold uppercase">${finding.axis}</span>`
                     : nothing
                 }
                 ${
                   finding.severity !== ""
-                    ? html`<span class="review-severity"
+                    ? html`<span class="review-severity text-error"
                       >${finding.severity}</span
                     >`
                     : nothing
@@ -586,14 +536,14 @@ export function createWayfinderDrawer(
             )}
           </div>`;
         case "plan":
-          return html`<div class="resolution-block">
-            <h3 class="drawer-section-title">Build plan</h3>
+          return html`<div class="resolution-block flex flex-col">
+            <h3 class="drawer-section-title tracking-wide uppercase">Build plan</h3>
             ${resolution.tickets.map(
-              (planTicket) => html`<div class="plan-ticket">
-                <div class="plan-ticket-title">${planTicket.title}</div>
+              (planTicket) => html`<div class="plan-ticket border rounded-md">
+                <div class="plan-ticket-title font-bold">${planTicket.title}</div>
                 ${
                   planTicket.description !== ""
-                    ? html`<p class="plan-ticket-desc"
+                    ? html`<p class="plan-ticket-desc text-muted"
                       >${planTicket.description}</p
                     >`
                     : nothing
@@ -611,22 +561,22 @@ export function createWayfinderDrawer(
     // instead of hiding (the anchor owns the document either way).
     private renderStandingNotes(detail: DrawerDetail) {
       if (detail.notes === undefined) return nothing;
-      return html`<section class="drawer-section">
-        <h3 class="drawer-section-title">Standing notes</h3>
+      return html`<section class="drawer-section flex flex-col">
+        <h3 class="drawer-section-title tracking-wide uppercase">Standing notes</h3>
         <p class="standing-notes">${detail.notes}</p>
       </section>`;
     }
 
     private renderMapDocument(detail: DrawerDetail) {
       if (detail.mapDocument === undefined) return nothing;
-      return html`<section class="drawer-section">
-        <h3 class="drawer-section-title">Map document</h3>
+      return html`<section class="drawer-section flex flex-col">
+        <h3 class="drawer-section-title tracking-wide uppercase">Map document</h3>
         ${
           detail.mapDocument !== ""
             ? html`<markdown-view
                 .content=${detail.mapDocument}
               ></markdown-view>`
-            : html`<div class="map-document-empty">
+            : html`<div class="map-document-empty text-muted rounded-md">
                 No map recorded yet — the chart persists when the frontier
                 settles.
               </div>`
@@ -641,9 +591,9 @@ export function createWayfinderDrawer(
       const parts = [detail.branch, detail.worktree].filter(
         (value): value is string => value !== undefined
       );
-      return html`<section class="drawer-section">
-        <h3 class="drawer-section-title">Workspace</h3>
-        <p class="branch-line">${parts.join(" · ")}</p>
+      return html`<section class="drawer-section flex flex-col">
+        <h3 class="drawer-section-title tracking-wide uppercase">Workspace</h3>
+        <p class="branch-line text-muted">${parts.join(" · ")}</p>
       </section>`;
     }
 
@@ -653,19 +603,19 @@ export function createWayfinderDrawer(
       const hasBlockers = detail.blockers.length > 0;
       const hasDependents = detail.dependents.length > 0;
       if (!hasBlockers && !hasDependents) return nothing;
-      return html`<section class="drawer-section">
+      return html`<section class="drawer-section flex flex-col">
         ${
           hasBlockers
-            ? html`<h3 class="drawer-section-title">Blocks on</h3>
-              <div class="ref-chips">
+            ? html`<h3 class="drawer-section-title tracking-wide uppercase">Blocks on</h3>
+              <div class="ref-chips flex flex-wrap">
                 ${detail.blockers.map((ref) => this.renderRef(ref))}
               </div>`
             : nothing
         }
         ${
           hasDependents
-            ? html`<h3 class="drawer-section-title">Dependents</h3>
-              <div class="ref-chips">
+            ? html`<h3 class="drawer-section-title tracking-wide uppercase">Dependents</h3>
+              <div class="ref-chips flex flex-wrap">
                 ${detail.dependents.map((ref) => this.renderRef(ref))}
               </div>`
             : nothing
@@ -690,7 +640,7 @@ export function createWayfinderDrawer(
       const chat = detail.chat;
       if (chat === undefined) return nothing;
       return html`<section class="drawer-section drawer-chat">
-        <h3 class="drawer-section-title">Session</h3>
+        <h3 class="drawer-section-title tracking-wide uppercase">Session</h3>
         <chat-session
           .messages=${chat.messages}
           .sessionId=${chat.sessionId}
@@ -711,9 +661,9 @@ export function createWayfinderDrawer(
     // onAction seam as every other wayfinder surface.
     private renderActions(detail: DrawerDetail) {
       if (detail.actions.length === 0) return nothing;
-      return html`<section class="drawer-section">
-        <h3 class="drawer-section-title">Actions</h3>
-        <div class="drawer-actions">
+      return html`<section class="drawer-section flex flex-col">
+        <h3 class="drawer-section-title tracking-wide uppercase">Actions</h3>
+        <div class="drawer-actions flex flex-wrap">
           ${detail.actions.map(
             (action) => html`<button
               class=${action.variant}
