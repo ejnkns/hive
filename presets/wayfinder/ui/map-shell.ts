@@ -467,7 +467,7 @@ export function createMapShell(options: {
             aria-valuemax="100"
             aria-valuenow=${progress}
           >
-            <span class="bar-track flex-1 overflow-hidden"><span class="bar block h-full rounded-sm" style=${`width:${progress}%`}></span></span>
+            <span class="bar-track flex-1 overflow-hidden rounded-sm"><span class="bar block h-full rounded-sm" style=${`width:${progress}%`}></span></span>
             <span class="progress-label">${progress}% charted</span>
           </div>
           <div class="hud-legend flex flex-wrap">
