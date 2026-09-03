@@ -48,6 +48,32 @@ export const expeditionMatrix = (
   args: { theme, mode },
 }));
 
+// The mode-only matrix for theme-INERT surfaces (components that read no
+// expedition `--wf-*` variable — the card family and the default flow
+// components): a theme snapshot would duplicate the same pixels under a
+// second name, so those stories vary light/dark only and their meta hides
+// the theme control (noInline: the dead control would only promise a change
+// that cannot happen).
+export const modeOnlyMatrix = [{ suffix: " (light)", args: { mode: "light" } }];
+
+export const themeInertArgTypes = {
+  ...expeditionArgTypes,
+  theme: {
+    ...expeditionArgTypes.theme,
+    control: false,
+    table: { disable: true },
+  },
+} as const;
+
+// The args/argTypes for surfaces with no expedition axis at all (the default
+// flow components render in the hive app shell, not the expedition chrome):
+// light/dark only.
+export type ModeArgs = { mode: ExpeditionMode };
+export const modeOnlyArgs: ModeArgs = { mode: "dark" };
+export const modeArgTypes = {
+  mode: { control: "radio", options: ["dark", "light"] },
+} as const;
+
 /** Applies the story's light/dark mode on the document element. The served
  * components key their light palette off `:host-context(html.light)`, so the
  * mode must live on an ancestor; the preview iframe's documentElement is the
@@ -58,16 +84,20 @@ function applyMode(mode: ExpeditionMode): void {
   document.documentElement.classList.toggle("light", mode === "light");
 }
 
-/** The shared decorator: mounts the story inside the expedition chrome
- * (expedition-chrome.css) with the story's theme, and emulates
- * prefers-reduced-motion for the story's mount (see reduced-motion.ts —
- * Percy's browser has no media emulation, so the controller's read-once
- * matchMedia seam is the lever that makes every canvas-bearing snapshot
- * deterministic). Reduced motion is on by default for every story
- * (preview.ts); per animated surface, explicit "reduced motion" stories
- * keep the accessibility behaviour a reviewed artifact. */
-export const withExpedition: Decorator = (Story, context) => {
-  const theme = context.args.theme as ExpeditionTheme;
+/** The mode + reduced-motion half of the matrix decorator, without the
+ * expedition chrome: applies the story's light/dark mode (the served
+ * components key their light palette off `:host-context(html.light)`, so the
+ * mode must live on an ancestor — the preview iframe's documentElement is the
+ * served host's `html`; set, not toggled, so the mode is correct regardless
+ * of story order) and emulates prefers-reduced-motion for the story's mount
+ * (see reduced-motion.ts — Percy's browser has no media emulation, so the
+ * controller's read-once matchMedia seam is the lever that makes every
+ * canvas-bearing snapshot deterministic). Reduced motion is on by default for
+ * every story (preview.ts); per animated surface, explicit "reduced motion"
+ * stories keep the accessibility behaviour a reviewed artifact. Used
+ * directly by the default flow-component stories, which render in the hive
+ * app shell's token context, not the expedition chrome. */
+export const withMode: Decorator = (Story, context) => {
   const mode = context.args.mode as ExpeditionMode;
   applyMode(mode);
   const reducedMotion =
@@ -84,8 +114,18 @@ export const withExpedition: Decorator = (Story, context) => {
       setTimeout(uninstallReducedMotionEmulation, 100);
     });
   }
+  return Story();
+};
+
+/** The wayfinder matrix decorator: the mode + reduced-motion handling plus
+ * the expedition chrome (expedition-chrome.css) — the theme wrapper the
+ * served host composes, with the per-theme --wf-* variables and
+ * --map-backdrop keyed off the story's theme arg. */
+export const withExpedition: Decorator = (Story, context) => {
+  const themed = withMode(Story, context);
+  const theme = context.args.theme as ExpeditionTheme;
   return html`<div class="expedition-chrome" data-theme=${theme}>
-    ${Story()}
+    ${themed}
   </div>`;
 };
 

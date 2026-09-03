@@ -8,9 +8,8 @@ import { entry } from "ui/flow-rendering/test-fixtures";
 import type { WorkflowInstanceEntry } from "workflow-engine/create-flow-runtime";
 import {
   expeditionArgs,
-  expeditionArgTypes,
-  expeditionMatrix,
-  type MatrixArgs,
+  modeOnlyMatrix,
+  themeInertArgTypes,
   withExpedition,
 } from "./expedition-chrome.ts";
 import { servedComponent } from "./flow-deps.ts";
@@ -44,12 +43,12 @@ const meta = {
   title: "Wayfinder/Build item card",
   decorators: [withExpedition],
   args: expeditionArgs,
-  argTypes: expeditionArgTypes,
-  parameters: { percy: { additionalSnapshots: expeditionMatrix } },
-} satisfies Meta<MatrixArgs>;
+  argTypes: themeInertArgTypes,
+  parameters: { percy: { additionalSnapshots: modeOnlyMatrix } },
+} satisfies Meta<{ mode: "dark" | "light" }>;
 
 export default meta;
-type Story = StoryObj<MatrixArgs>;
+type Story = StoryObj<{ mode: "dark" | "light" }>;
 
 export const Ready: Story = {
   name: "ready",

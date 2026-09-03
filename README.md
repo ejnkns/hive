@@ -172,3 +172,21 @@ pnpm dev            # server (watch, port 8154) + UI (Vite, port 8153, proxying 
 pnpm build          # telemetry → ui → server (bundled binary at server/dist/main.mjs)
 pnpm test           # unit + e2e suite
 ```
+
+### Visual matrix (Storybook + Percy)
+
+The visual contract of the served flow UIs — the wayfinder map, table
+workbench, drawer, card family, and the default flow components — lives in
+`visual-matrix/` as Storybook stories snapshotted by Percy. Baselines are
+owned by Percy's cloud (approve/review in the Percy UI); no images are
+committed to git. See `docs/decisions/2026-09-01-visual-testing-storybook-percy.md`.
+
+```bash
+pnpm --filter visual-matrix dev            # Storybook UI at http://localhost:6006
+pnpm --filter visual-matrix build          # static build → visual-matrix/storybook-build
+pnpm --filter visual-matrix percy:dry-run  # discover the snapshot matrix locally (no upload)
+PERCY_TOKEN=<token> pnpm --filter visual-matrix percy   # upload a Percy build for diff/review
+```
+
+`PERCY_TOKEN` comes from the Percy project (BrowserStack) and is required
+only for uploads — CI sets it; local dry-runs work without it.

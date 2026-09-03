@@ -3,7 +3,9 @@
  * workbench, across the theme × light/dark matrix (Percy widths give the
  * narrow/medium/wide axis). These stories render the REAL expedition chrome
  * — the component owns it — so they are the drift reference for the
- * harness-chrome component stories beside them. */
+ * harness-chrome component stories beside them. The theme arg IS the flow's
+ * static config (`expeditionTheme`), so the control re-themes the whole
+ * surface exactly as the served host does. */
 
 import type { Meta, StoryObj } from "@storybook/web-components-vite";
 import { html } from "lit";
@@ -50,11 +52,12 @@ type Story = StoryObj<MatrixArgs>;
  * over the mixed lifecycle constellation. */
 export const Mixed: Story = {
   name: "map shell (mixed)",
-  render: () =>
+  render: ({ theme }: MatrixArgs) =>
     storyStage(
       html`${flowSurface({
         flowId: "story-map-mixed",
         entries: snapshotShape("mixed"),
+        theme,
         persistedOutputs: { "map.md": MAP_DOCUMENT },
       })}`,
       560
@@ -66,11 +69,12 @@ export const Mixed: Story = {
  * build/build-item mix. Base themes: mountain dark (the matrix multiplies). */
 export const Empty: Story = {
   name: "base camp (empty)",
-  render: () =>
+  render: ({ theme }: MatrixArgs) =>
     storyStage(
       html`${flowSurface({
         flowId: "story-map-empty",
         entries: snapshotShape("empty"),
+        theme,
       })}`,
       560
     ),
@@ -78,11 +82,12 @@ export const Empty: Story = {
 
 export const FogHeavy: Story = {
   name: "map shell (fog-heavy)",
-  render: () =>
+  render: ({ theme }: MatrixArgs) =>
     storyStage(
       html`${flowSurface({
         flowId: "story-map-fog-heavy",
         entries: snapshotShape("fog-heavy"),
+        theme,
       })}`,
       560
     ),
@@ -90,11 +95,12 @@ export const FogHeavy: Story = {
 
 export const DependencyHeavy: Story = {
   name: "map shell (dependency-heavy)",
-  render: () =>
+  render: ({ theme }: MatrixArgs) =>
     storyStage(
       html`${flowSurface({
         flowId: "story-map-dependency-heavy",
         entries: snapshotShape("dependency-heavy"),
+        theme,
       })}`,
       560
     ),
@@ -102,11 +108,12 @@ export const DependencyHeavy: Story = {
 
 export const Active: Story = {
   name: "map shell (active)",
-  render: () =>
+  render: ({ theme }: MatrixArgs) =>
     storyStage(
       html`${flowSurface({
         flowId: "story-map-active",
         entries: snapshotShape("active"),
+        theme,
       })}`,
       560
     ),
@@ -114,11 +121,12 @@ export const Active: Story = {
 
 export const Resolved: Story = {
   name: "map shell (resolved)",
-  render: () =>
+  render: ({ theme }: MatrixArgs) =>
     storyStage(
       html`${flowSurface({
         flowId: "story-map-resolved",
         entries: snapshotShape("resolved"),
+        theme,
       })}`,
       560
     ),
@@ -126,11 +134,12 @@ export const Resolved: Story = {
 
 export const OutOfScope: Story = {
   name: "map shell (out-of-scope)",
-  render: () =>
+  render: ({ theme }: MatrixArgs) =>
     storyStage(
       html`${flowSurface({
         flowId: "story-map-out-of-scope",
         entries: snapshotShape("out-of-scope"),
+        theme,
       })}`,
       560
     ),
@@ -138,11 +147,12 @@ export const OutOfScope: Story = {
 
 export const BuildMix: Story = {
   name: "map shell (build mix)",
-  render: () =>
+  render: ({ theme }: MatrixArgs) =>
     storyStage(
       html`${flowSurface({
         flowId: "story-map-build-mix",
         entries: snapshotShape("build-mix"),
+        theme,
       })}`,
       560
     ),
@@ -151,11 +161,12 @@ export const BuildMix: Story = {
 /** The cartographer's table workbench (the persisted table mode). */
 export const Table: Story = {
   name: "table workbench (mixed)",
-  render: () =>
+  render: ({ theme }: MatrixArgs) =>
     html`${flowSurface({
       flowId: "story-table-mixed",
       entries: snapshotShape("mixed"),
       view: "table",
+      theme,
       persistedOutputs: { "map.md": MAP_DOCUMENT },
     })}`,
 };
@@ -168,11 +179,12 @@ export const Table: Story = {
 export const ReducedMotion: Story = {
   name: "map shell (reduced motion)",
   parameters: { expedition: { reducedMotion: true } },
-  render: () =>
+  render: ({ theme }: MatrixArgs) =>
     storyStage(
       html`${flowSurface({
         flowId: "story-map-reduced",
         entries: snapshotShape("mixed"),
+        theme,
       })}`,
       560
     ),

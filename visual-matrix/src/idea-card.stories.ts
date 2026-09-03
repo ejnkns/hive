@@ -11,8 +11,8 @@ import type { WorkflowInstanceEntry } from "workflow-engine/create-flow-runtime"
 import type { VisibleAction } from "workflow-engine/workflow-types";
 import {
   expeditionArgs,
-  expeditionArgTypes,
-  type MatrixArgs,
+  modeOnlyMatrix,
+  themeInertArgTypes,
   withExpedition,
 } from "./expedition-chrome.ts";
 import { servedComponent } from "./flow-deps.ts";
@@ -85,19 +85,15 @@ const meta = {
   title: "Queen Bee/Idea card",
   decorators: [withExpedition],
   args: expeditionArgs,
-  argTypes: expeditionArgTypes,
-  parameters: {
-    percy: {
-      // The idea card reads the base hive tokens only (it never reads the
-      // wayfinder --wf-* variables), so its matrix is light/dark × widths —
-      // no per-theme snapshots.
-      additionalSnapshots: [{ suffix: " (light)", args: { mode: "light" } }],
-    },
-  },
-} satisfies Meta<MatrixArgs>;
+  // The idea card reads the base hive tokens only (it never reads the
+  // wayfinder --wf-* variables), so its matrix is light/dark × widths — no
+  // per-theme snapshots, and the theme control is hidden.
+  argTypes: themeInertArgTypes,
+  parameters: { percy: { additionalSnapshots: modeOnlyMatrix } },
+} satisfies Meta<{ mode: "dark" | "light" }>;
 
 export default meta;
-type Story = StoryObj<MatrixArgs>;
+type Story = StoryObj<{ mode: "dark" | "light" }>;
 
 export const New: Story = {
   name: "new idea",
