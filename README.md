@@ -173,20 +173,23 @@ pnpm build          # telemetry → ui → server (bundled binary at server/dist
 pnpm test           # unit + e2e suite
 ```
 
-### Visual matrix (Storybook + Percy)
+### Visual matrix (Storybook + Chromatic)
 
 The visual contract of the served flow UIs — the wayfinder map, table
 workbench, drawer, card family, and the default flow components — lives in
-`visual-matrix/` as Storybook stories snapshotted by Percy. Baselines are
-owned by Percy's cloud (approve/review in the Percy UI); no images are
-committed to git. See `docs/decisions/2026-09-01-visual-testing-storybook-percy.md`.
+`visual-matrix/` as Storybook stories snapshotted by Chromatic. Baselines
+are owned by Chromatic's cloud (approve/review in the Chromatic UI, tracked
+git-natively across branches); no images are committed to git. See
+`docs/decisions/2026-09-03-visual-testing-chromatic-replaces-percy.md`.
 
 ```bash
-pnpm --filter visual-matrix dev            # Storybook UI at http://localhost:6006
-pnpm --filter visual-matrix build          # static build → visual-matrix/storybook-build
-pnpm --filter visual-matrix percy:dry-run  # discover the snapshot matrix locally (no upload)
-PERCY_TOKEN=<token> pnpm --filter visual-matrix percy   # upload a Percy build for diff/review
+pnpm --filter visual-matrix dev          # Storybook UI at http://localhost:6006
+pnpm --filter visual-matrix build        # static build → visual-matrix/storybook-build
+pnpm --filter visual-matrix chromatic:dry-run  # run the Chromatic CLI without uploading
+pnpm --filter visual-matrix chromatic    # build + upload to Chromatic for diff/review
 ```
 
-`PERCY_TOKEN` comes from the Percy project (BrowserStack) and is required
-only for uploads — CI sets it; local dry-runs work without it.
+The project token lives in `visual-matrix/chromatic.config.json` (a
+Chromatic project token only permits publishing builds to the project — see
+the decision record). CI overrides it with `CHROMATIC_PROJECT_TOKEN`; the
+CLI also fails on unclean or unpushed git state, so push before uploading.

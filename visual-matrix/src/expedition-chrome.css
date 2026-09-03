@@ -6,7 +6,7 @@
  * component-level stories (map canvas, drawer, table, cards) sit in the same
  * chrome the served host composes. The full-surface flow-component stories
  * render the REAL chrome beside these — a palette drift between the two is
- * visible in Percy review by construction. Keep the values identical. */
+ * visible in Chromatic review by construction. Keep the values identical. */
 
 .expedition-chrome {
   display: flex;

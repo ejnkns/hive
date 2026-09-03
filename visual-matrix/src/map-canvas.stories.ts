@@ -9,9 +9,7 @@ import { createMapCanvas } from "presets/wayfinder/ui/map-canvas";
 import { deriveWayfinderMap } from "presets/wayfinder/ui/wayfinder-map";
 import type { ExpeditionTheme } from "presets/wayfinder/ui/wayfinder-themes";
 import {
-  expeditionArgs,
-  expeditionArgTypes,
-  expeditionMatrix,
+  expeditionModeSet,
   type MatrixArgs,
   storyStage,
   withExpedition,
@@ -40,9 +38,7 @@ function mapCanvas(options: {
 const meta = {
   title: "Wayfinder/Map canvas",
   decorators: [withExpedition],
-  args: expeditionArgs,
-  argTypes: expeditionArgTypes,
-  parameters: { percy: { additionalSnapshots: expeditionMatrix } },
+  parameters: { chromatic: { modes: expeditionModeSet } },
 } satisfies Meta<MatrixArgs>;
 
 export default meta;
@@ -75,7 +71,7 @@ export const DependencyHeavy: Story = {
 };
 
 /** The reduced-motion review slot for the map surface: the frozen twinkle
- * and snapped camera a reduced-motion user gets, reviewed in Percy like any
+ * and snapped camera a reduced-motion user gets, reviewed in Chromatic like any
  * other snapshot. */
 export const ReducedMotion: Story = {
   name: "node overlays (reduced motion)",

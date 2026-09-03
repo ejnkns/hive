@@ -13,9 +13,7 @@ import {
 } from "presets/wayfinder/ui/wayfinder-drawer-model";
 import { deriveWayfinderMap } from "presets/wayfinder/ui/wayfinder-map";
 import {
-  expeditionArgs,
-  expeditionArgTypes,
-  expeditionMatrix,
+  expeditionModeSet,
   type MatrixArgs,
   withExpedition,
 } from "./expedition-chrome.ts";
@@ -68,9 +66,7 @@ function drawer(selectedId: string) {
 const meta = {
   title: "Wayfinder/Drawer",
   decorators: [withExpedition],
-  args: expeditionArgs,
-  argTypes: expeditionArgTypes,
-  parameters: { percy: { additionalSnapshots: expeditionMatrix } },
+  parameters: { chromatic: { modes: expeditionModeSet } },
 } satisfies Meta<MatrixArgs>;
 
 export default meta;

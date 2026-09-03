@@ -1,19 +1,17 @@
 /** The served wayfinder flow surface (flow-component): the map-first shell
  * with its HUD, the Base Camp empty state, and the cartographer's table
- * workbench, across the theme × light/dark matrix (Percy widths give the
- * narrow/medium/wide axis). These stories render the REAL expedition chrome
- * — the component owns it — so they are the drift reference for the
- * harness-chrome component stories beside them. The theme arg IS the flow's
- * static config (`expeditionTheme`), so the control re-themes the whole
- * surface exactly as the served host does. */
+ * workbench, across the theme × light/dark matrix (the Chromatic modes give
+ * the narrow/medium/wide axis). These stories render the REAL expedition
+ * chrome — the component owns it — so they are the drift reference for the
+ * harness-chrome component stories beside them. The theme global (bridged
+ * to the render arg) IS the flow's static config (`expeditionTheme`), so
+ * the toolbar re-themes the whole surface exactly as the served host does. */
 
 import type { Meta, StoryObj } from "@storybook/web-components-vite";
 import { html } from "lit";
 import flowComponentModule from "presets/wayfinder/ui/flow-component";
 import {
-  expeditionArgs,
-  expeditionArgTypes,
-  expeditionMatrix,
+  expeditionModeSet,
   type MatrixArgs,
   storyStage,
   withExpedition,
@@ -40,9 +38,7 @@ function flowSurface(options: Parameters<typeof flowSurfaceProps>[0]) {
 const meta = {
   title: "Wayfinder/Flow surface",
   decorators: [withExpedition],
-  args: expeditionArgs,
-  argTypes: expeditionArgTypes,
-  parameters: { percy: { additionalSnapshots: expeditionMatrix } },
+  parameters: { chromatic: { modes: expeditionModeSet } },
 } satisfies Meta<MatrixArgs>;
 
 export default meta;

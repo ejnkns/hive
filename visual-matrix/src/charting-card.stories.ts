@@ -7,12 +7,7 @@ import { html } from "lit";
 import chartingCardModule from "presets/wayfinder/ui/charting-card";
 import { entry } from "ui/flow-rendering/test-fixtures";
 import type { WorkflowInstanceEntry } from "workflow-engine/create-flow-runtime";
-import {
-  expeditionArgs,
-  modeOnlyMatrix,
-  themeInertArgTypes,
-  withExpedition,
-} from "./expedition-chrome.ts";
+import { modeOnlyModeSet, withExpedition } from "./expedition-chrome.ts";
 import { servedComponent } from "./flow-deps.ts";
 import { instanceCardProps, wayfinderDef } from "./wayfinder-props.ts";
 
@@ -57,9 +52,7 @@ function chartingCard(options: {
 const meta = {
   title: "Wayfinder/Charting card",
   decorators: [withExpedition],
-  args: expeditionArgs,
-  argTypes: themeInertArgTypes,
-  parameters: { percy: { additionalSnapshots: modeOnlyMatrix } },
+  parameters: { chromatic: { modes: modeOnlyModeSet } },
 } satisfies Meta<{ mode: "dark" | "light" }>;
 
 export default meta;

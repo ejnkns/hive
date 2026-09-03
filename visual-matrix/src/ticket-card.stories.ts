@@ -5,12 +5,7 @@
 import type { Meta, StoryObj } from "@storybook/web-components-vite";
 import { html } from "lit";
 import ticketCardModule from "presets/wayfinder/ui/ticket-card";
-import {
-  expeditionArgs,
-  modeOnlyMatrix,
-  themeInertArgTypes,
-  withExpedition,
-} from "./expedition-chrome.ts";
+import { modeOnlyModeSet, withExpedition } from "./expedition-chrome.ts";
 import { servedComponent } from "./flow-deps.ts";
 import {
   claimAction,
@@ -43,9 +38,7 @@ function ticketCard(
 const meta = {
   title: "Wayfinder/Ticket card",
   decorators: [withExpedition],
-  args: expeditionArgs,
-  argTypes: themeInertArgTypes,
-  parameters: { percy: { additionalSnapshots: modeOnlyMatrix } },
+  parameters: { chromatic: { modes: modeOnlyModeSet } },
 } satisfies Meta<{ mode: "dark" | "light" }>;
 
 export default meta;

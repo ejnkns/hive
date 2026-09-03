@@ -2,7 +2,7 @@
  * mixed lifecycle baseline, empty charting, fog-heavy, dependency-heavy,
  * active, resolved, out-of-scope, and a mixed build/build-item expedition.
  * Every id is a fixed string literal so the layout seed — and therefore the
- * constellation — is stable across builds and Percy baselines. */
+ * constellation — is stable across builds and Chromatic baselines. */
 
 import {
   wayfinderCharting,

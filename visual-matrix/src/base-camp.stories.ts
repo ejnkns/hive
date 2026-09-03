@@ -8,9 +8,7 @@ import { createBaseCamp } from "presets/wayfinder/ui/base-camp";
 import { deriveWayfinderMap } from "presets/wayfinder/ui/wayfinder-map";
 import type { ExpeditionTheme } from "presets/wayfinder/ui/wayfinder-themes";
 import {
-  expeditionArgs,
-  expeditionArgTypes,
-  expeditionMatrix,
+  expeditionModeSet,
   type MatrixArgs,
   storyStage,
   withExpedition,
@@ -46,9 +44,7 @@ function baseCamp(theme: ExpeditionTheme) {
 const meta = {
   title: "Wayfinder/Base camp",
   decorators: [withExpedition],
-  args: expeditionArgs,
-  argTypes: expeditionArgTypes,
-  parameters: { percy: { additionalSnapshots: expeditionMatrix } },
+  parameters: { chromatic: { modes: expeditionModeSet } },
 } satisfies Meta<MatrixArgs>;
 
 export default meta;

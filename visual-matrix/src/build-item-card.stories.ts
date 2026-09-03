@@ -6,12 +6,7 @@ import { html } from "lit";
 import buildItemCardModule from "presets/wayfinder/ui/build-item-card";
 import { entry } from "ui/flow-rendering/test-fixtures";
 import type { WorkflowInstanceEntry } from "workflow-engine/create-flow-runtime";
-import {
-  expeditionArgs,
-  modeOnlyMatrix,
-  themeInertArgTypes,
-  withExpedition,
-} from "./expedition-chrome.ts";
+import { modeOnlyModeSet, withExpedition } from "./expedition-chrome.ts";
 import { servedComponent } from "./flow-deps.ts";
 import { instanceCardProps, wayfinderDef } from "./wayfinder-props.ts";
 
@@ -42,9 +37,7 @@ function buildItemCard(
 const meta = {
   title: "Wayfinder/Build item card",
   decorators: [withExpedition],
-  args: expeditionArgs,
-  argTypes: themeInertArgTypes,
-  parameters: { percy: { additionalSnapshots: modeOnlyMatrix } },
+  parameters: { chromatic: { modes: modeOnlyModeSet } },
 } satisfies Meta<{ mode: "dark" | "light" }>;
 
 export default meta;

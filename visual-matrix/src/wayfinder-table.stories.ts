@@ -10,9 +10,7 @@ import { deriveWayfinderMap } from "presets/wayfinder/ui/wayfinder-map";
 import { createWayfinderTable } from "presets/wayfinder/ui/wayfinder-table";
 import type { ExpeditionTheme } from "presets/wayfinder/ui/wayfinder-themes";
 import {
-  expeditionArgs,
-  expeditionArgTypes,
-  expeditionMatrix,
+  expeditionModeSet,
   type MatrixArgs,
   withExpedition,
 } from "./expedition-chrome.ts";
@@ -51,9 +49,7 @@ function table(
 const meta = {
   title: "Wayfinder/Table workbench",
   decorators: [withExpedition],
-  args: expeditionArgs,
-  argTypes: expeditionArgTypes,
-  parameters: { percy: { additionalSnapshots: expeditionMatrix } },
+  parameters: { chromatic: { modes: expeditionModeSet } },
 } satisfies Meta<MatrixArgs>;
 
 export default meta;

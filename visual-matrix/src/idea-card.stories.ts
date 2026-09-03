@@ -9,12 +9,7 @@ import ideaCardModule from "presets/queen-bee/ideas/idea-card";
 import { entry } from "ui/flow-rendering/test-fixtures";
 import type { WorkflowInstanceEntry } from "workflow-engine/create-flow-runtime";
 import type { VisibleAction } from "workflow-engine/workflow-types";
-import {
-  expeditionArgs,
-  modeOnlyMatrix,
-  themeInertArgTypes,
-  withExpedition,
-} from "./expedition-chrome.ts";
+import { modeOnlyModeSet, withExpedition } from "./expedition-chrome.ts";
 import { servedComponent } from "./flow-deps.ts";
 import { instanceCardProps } from "./wayfinder-props.ts";
 
@@ -84,12 +79,11 @@ function ideaCard(options: {
 const meta = {
   title: "Queen Bee/Idea card",
   decorators: [withExpedition],
-  args: expeditionArgs,
   // The idea card reads the base hive tokens only (it never reads the
   // wayfinder --wf-* variables), so its matrix is light/dark × widths — no
-  // per-theme snapshots, and the theme control is hidden.
-  argTypes: themeInertArgTypes,
-  parameters: { percy: { additionalSnapshots: modeOnlyMatrix } },
+  // per-theme snapshots. The preview's theme toolbar cannot affect it, and
+  // its mode set carries no theme axis.
+  parameters: { chromatic: { modes: modeOnlyModeSet } },
 } satisfies Meta<{ mode: "dark" | "light" }>;
 
 export default meta;

@@ -18,18 +18,14 @@ import type { ChatMessage } from "workflow-engine/shared/chat-message";
 import type { VisibleAction } from "workflow-engine/workflow-types";
 import {
   type ModeArgs,
-  modeArgTypes,
-  modeOnlyArgs,
-  modeOnlyMatrix,
+  modeOnlyModeSet,
   withMode,
 } from "./expedition-chrome.ts";
 
 const meta = {
   title: "Default flow components",
   decorators: [withMode],
-  args: modeOnlyArgs,
-  argTypes: modeArgTypes,
-  parameters: { percy: { additionalSnapshots: modeOnlyMatrix } },
+  parameters: { chromatic: { modes: modeOnlyModeSet } },
 } satisfies Meta<ModeArgs>;
 
 export default meta;
