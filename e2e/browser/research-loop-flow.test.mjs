@@ -25,6 +25,7 @@ import { expect, inject, test } from "vitest";
 import { app } from "../support/browser-app.mjs";
 import {
   captureFailureScreenshot,
+  clearAuthoringSessions,
   deleteDefinition,
   fetchJson,
   findSessionState,
@@ -36,8 +37,12 @@ test("a generated research-loop flow runs with its custom gate and websearch too
   const flowName = `Research One ${Date.now()}`;
   captureFailureScreenshot();
 
-  // Start a lucky authoring session asking for a research loop.
+  // Start a lucky authoring session asking for a research loop. The keys are
+  // cleared first: findSessionState returns the FIRST live `hive:author:*`
+  // flow, so a stale authoring session from an earlier test would be read
+  // back instead of this test's session for the whole poll.
   await app.open(`${baseUrl}/#/flows/new`);
+  await clearAuthoringSessions();
   // The authoring session registers the "research-loop" definition via its
   // save_definition call; on a watch re-run (shared server + data dir) that
   // save would 409 against the leftover, so drop any previous run's record

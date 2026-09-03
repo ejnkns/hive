@@ -68,6 +68,7 @@ import { expect, inject, test } from "vitest";
 import { app } from "../support/browser-app.mjs";
 import {
   captureFailureScreenshot,
+  clickChartingDone,
   dragFogCardAbove,
 } from "../support/flows.mjs";
 
@@ -115,38 +116,6 @@ async function clickWhen(selector, { hasText, timeout = 20_000 } = {}) {
     selector,
     hasText === undefined ? undefined : { hasText, first: true }
   );
-}
-
-// The expedition theme's --wf-* colors transition over --dur-slow (400ms,
-// see ui/src/app.css) when the theme changes. Screenshots must be captured
-// with the blend SETTLED — Playwright's animation disabling does not freeze
-// CSS custom-property transitions, so a mid-blend capture would be
-// run-timing-dependent. Observable-based wait: poll the computed --wf-accent
-// until two consecutive reads agree (the value stops moving only once the
-// transition completes).
-async function settleThemeColors(timeout = 10_000) {
-  let last = null;
-  await expect
-    .poll(
-      async () => {
-        const value = await app.evaluate(() => {
-          const host = document.querySelector("workflow-instances");
-          const dyn = host?.shadowRoot?.querySelector("dynamic-element-host");
-          const el = dyn?.shadowRoot?.querySelector(".mount > *");
-          const expedition = el?.shadowRoot?.querySelector(".expedition");
-          return expedition
-            ? getComputedStyle(expedition)
-                .getPropertyValue("--wf-accent")
-                .trim()
-            : "";
-        });
-        const stable = last !== null && value === last;
-        last = value;
-        return stable;
-      },
-      { timeout, interval: 100 }
-    )
-    .toBe(true);
 }
 
 // Opens a second socket to the flow WS endpoint and counts flow_snapshot
@@ -211,10 +180,11 @@ test("wayfinder surface stays mounted with view state intact through churn and r
   // Chart the map: the naming session runs the agent against the mock
   // provider; approve it, then approve the frontier session that auto-starts
   // (its file gate is what unlocks the add_fog_entry action). Each "Done" is
-  // waited on as an observable (the session's action appears only when the
-  // session lands interactive) — no fixed sleeps between them.
-  await clickWhen("button", { hasText: "Done", timeout: 40_000 });
-  await clickWhen("button", { hasText: "Done", timeout: 40_000 });
+  // scoped to its own session surface and waited on as an observable (the
+  // session's action appears only when the session lands interactive) — no
+  // fixed sleeps between them.
+  await clickChartingDone({ stateId: "naming" });
+  await clickChartingDone({ stateId: "frontier" });
 
   // Seed the two fog entries the reorder will work on (via the action API —
   // each dispatch is itself a flow event that emits a snapshot frame). The
@@ -274,7 +244,7 @@ test("wayfinder surface stays mounted with view state intact through churn and r
     .toBeGreaterThan(0);
   await expect.poll(() => captureSurface(), { timeout: 10_000 }).toBe(true);
 
-  // The baseline: the map-first surface, configured topo theme, and the
+  // The pre-churn state: the map-first surface, configured topo theme, and the
   // default per-workflow boards are not showing (the served flow-component
   // owns the page).
   expect(
@@ -289,18 +259,9 @@ test("wayfinder surface stays mounted with view state intact through churn and r
     0
   );
 
-  // Visual contract (ticket 10): the map view open with the configured
-  // expedition theme, captured now that the surface is settled (the baseline asserts
-  // above all passed on observables, so the render is stable). The theme's
-  // color blend must finish before the shot (see settleThemeColors), and the
-  // capture targets the surface element itself (workflow-instances) so the app
-  // shell's top bar — whose breadcrumb shows the RUN-UNIQUE flow name — is
-  // excluded: that text changes every run and would make the baseline
-  // inherently unstable.
-  await settleThemeColors();
-  await app.assertScreenshot("surface-map-topo", {
-    element: "workflow-instances",
-  });
+  // The visual contract for the map view (the configured theme, the map
+  // render itself) moved to the Storybook + Percy visual matrix — ticket 18.
+  // This suite asserts the DOM-observables above only.
 
   // Churn with the map open: each add_fog_entry dispatch is a flow event that
   // coalesces into a flow_snapshot frame. After each dispatch, WAIT on the
@@ -375,16 +336,10 @@ test("wayfinder surface stays mounted with view state intact through churn and r
     "the theme survives the close"
   ).toBeGreaterThan(0);
 
-  // Visual contract (ticket 10): the fog tray renders the reordered pile — the
-  // dragged card on top. Capture the tray's own box (the pile with its fanned
-  // fog cards) so the assertion is about the pile, not the rest of the page.
-  // The theme's colors are long settled here (the churn window elapsed
-  // since the theme mounted), but the settle wait keeps every capture under
-  // the same contract.
-  await settleThemeColors();
-  await app.assertScreenshot("surface-fog-reordered", {
-    element: ".station:has(.fog-card)",
-  });
+  // The visual contract for the fog tray's rendered pile moved to the
+  // Storybook + Percy visual matrix — ticket 18. The reorder contract above
+  // is asserted on DOM observables (the pile order read back from the tray
+  // and sessionStorage).
 
   // Switch back to the map: the map-first state and the topo theme restore.
   await clickWhen(".view-toggle button", { hasText: "Map" });
@@ -454,7 +409,11 @@ test("wayfinder surface stays mounted with view state intact through churn and r
 
   // The interruption is over: the surface element identity must still be the
   // same instance, and the view state (map open, topo theme, no default-UI
-  // flash) must be intact.
+  // flash) must be intact — asserted on the DOM observables below. (The true
+  // page-reload path is the wayfinder-reload e2e's seam; a reload here would
+  // break the element-identity contract asserted above.) The former visual
+  // capture of the persisted view state moved to the Storybook + Percy
+  // visual matrix — ticket 18.
   await expect
     .poll(() => surfaceStillMounted(), { timeout: 10_000 })
     .toBe(true);
@@ -470,17 +429,4 @@ test("wayfinder surface stays mounted with view state intact through churn and r
     await app.count(".flow"),
     "no default-UI flash through the interruption"
   ).toBe(0);
-
-  // Visual contract (ticket 10): the view state (map open, topo theme, and
-  // the churned fog on the map) persisted through the network-level
-  // interruption. (The true page-reload path is the wayfinder-reload e2e's
-  // seam; a reload here would break the element-identity contract asserted
-  // above, so the persistence proof across the interruption is captured
-  // visually instead.) Same surface-element capture as the first shot, for the
-  // same reasons (shell breadcrumb carries the run-unique flow name; theme
-  // colors must be settled).
-  await settleThemeColors();
-  await app.assertScreenshot("surface-view-persisted", {
-    element: "workflow-instances",
-  });
 });

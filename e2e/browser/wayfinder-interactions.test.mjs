@@ -24,6 +24,7 @@ import { expect, inject, test } from "vitest";
 import { app } from "../support/browser-app.mjs";
 import {
   captureFailureScreenshot,
+  clickChartingDone,
   dragFogCardAbove,
   submitFlowActionForm,
 } from "../support/flows.mjs";
@@ -48,11 +49,12 @@ test("wayfinder interactions: hover sync card<->marker and fog drag reorder", as
     .toBe(true);
 
   // Chart the map (the mock answers the naming and frontier sessions). Each
-  // click auto-waits for its session's Done to be actionable — the old fixed
-  // sleeps between the sessions (4s/2s) are replaced by waiting on the
-  // observable DOM state (the next session's button appearing).
-  await app.click("button", { hasText: "Done" });
-  await app.click("button", { hasText: "Done" });
+  // click is scoped to its own session surface and waits for that session's
+  // Done to disappear — the next click cannot re-hit the previous session's
+  // still-mounted button in the transition race (the old fixed sleeps 4s/2s
+  // are long gone; see clickChartingDone in flows.mjs).
+  await clickChartingDone({ stateId: "naming" });
+  await clickChartingDone({ stateId: "frontier" });
 
   // Two fog entries give the tray a pile to reorder. The first fog entry
   // makes the expedition populated, so the map-first shell takes over; the

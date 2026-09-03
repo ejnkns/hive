@@ -10,7 +10,7 @@
 // (expect.poll / app.waitForSelector / app.waitForFunction) instead of these
 // helpers; the poll-loop helpers this module used to carry were deleted once
 // the last consumer (queen-bee, ticket 09) migrated.
-import { onTestFailed } from "vitest";
+import { expect, onTestFailed } from "vitest";
 import { app } from "./browser-app.mjs";
 
 // ── flow / definition registration via the built server's API ──────────────
@@ -115,6 +115,20 @@ export async function findSessionState() {
   });
 }
 
+// Removes every `hive:author:*` localStorage key in the app page. The app
+// page's localStorage persists across the tests of one run (same app
+// context), so a stale authoring session from an earlier test is a live
+// candidate for session-state reads (findSessionState returns the first
+// `hive:author:*` flow that still fetches). Call at a test's start — after
+// the app page exists — to scope authoring sessions per test.
+export async function clearAuthoringSessions() {
+  await app.evaluate(() => {
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith("hive:author:")) localStorage.removeItem(key);
+    }
+  });
+}
+
 // ── chat reply ──────────────────────────────────────────────────────────────
 
 // Sends a chat message to the first interactive chat-session: the input only
@@ -201,6 +215,29 @@ export async function waitForEditorValue(text, timeout = 15_000) {
 export async function submitFlowActionForm() {
   await app.waitForSelector(".dialog-actions button", { timeout: 10_000 });
   await app.click(".dialog-actions button", { hasText: "Run", first: true });
+}
+
+// ── wayfinder charting sessions ───────────────────────────────────────────
+
+// Clicks the base-camp charting card's Done for ONE workflow state and waits
+// for that button to disappear. The unscoped repeated pattern
+// (`app.click("button", { hasText: "Done" })` twice) races: the second click
+// can re-hit the first session's still-mounted button in the transition
+// window. The button is therefore scoped to its own session surface (the
+// base-camp charting card carries the raw state id in its .lbl — "naming" /
+// "frontier"), and the disappearance poll guarantees the next click cannot
+// touch the previous session's button. The Done action is gated on the
+// session being interactive, so waiting for the button IS waiting for the
+// session to land interactive.
+export async function clickChartingDone({ stateId, timeoutMs = 40_000 }) {
+  const doneSelector = `.card[data-id="base"]:has(.lbl:text-is("${stateId}")) .card-actions button:text-is("Done")`;
+  await expect
+    .poll(() => app.count(doneSelector), { timeout: timeoutMs })
+    .toBeGreaterThan(0);
+  await app.click(doneSelector);
+  await expect
+    .poll(() => app.count(doneSelector), { timeout: timeoutMs })
+    .toBe(0);
 }
 
 // ── fog drag-reorder (the ONE justified dispatched-event workaround) ─────────

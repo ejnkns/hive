@@ -17,6 +17,7 @@ import { expect, inject, test } from "vitest";
 import { app } from "../support/browser-app.mjs";
 import {
   captureFailureScreenshot,
+  clickChartingDone,
   submitFlowActionForm,
 } from "../support/flows.mjs";
 
@@ -46,11 +47,12 @@ test("wayfinder ticket phase: chart → add research ticket → graduate → cla
   await app.waitForSelector(".base-panel", { timeout: 30_000 });
 
   // Chart: the naming session is agent-initiating (the mock answers it), so
-  // Done → frontier, then Done → charted. Each click auto-waits for its
-  // session's Done to be live — the old fixed sleeps between sessions are
-  // replaced by waiting on the observable DOM state.
-  await app.click("button", { hasText: "Done" });
-  await app.click("button", { hasText: "Done" });
+  // Done → frontier, then Done → charted. Each click is scoped to its own
+  // session surface and waits for that session's Done to disappear — the
+  // next click cannot re-hit the previous session's still-mounted button in
+  // the transition race (see clickChartingDone in flows.mjs).
+  await clickChartingDone({ stateId: "naming" });
+  await clickChartingDone({ stateId: "frontier" });
 
   // Add a research ticket through the flow-action create form.
   await app.click("button", { hasText: "Add ticket", first: true });
