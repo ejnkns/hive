@@ -83,7 +83,28 @@ function readConfiguredBasePath(ctx: TaskRunnerContext): string | undefined {
 }
 
 // A fresh git repo (main + queen-bee-main) to run a card against.
+// Git hook contexts export GIT_* variables (GIT_INDEX_FILE as a relative
+// path) that every git invocation this process spawns inherits. Inside a
+// linked worktree `.git` is a file, so an inherited relative index path fails
+// with "index file open failed: Not a directory". The harness drives real
+// temp-dir repos the way production does — scrub the outer context first.
+const GIT_HOOK_CONTEXT_VARS = [
+  "GIT_DIR",
+  "GIT_WORK_TREE",
+  "GIT_INDEX_FILE",
+  "GIT_OBJECT_DIRECTORY",
+  "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+  "GIT_COMMON_DIR",
+  "GIT_QUARANTINE_PATH",
+  "GIT_GRAFT_FILE",
+] as const;
+
+export function scrubGitHookContext(): void {
+  for (const name of GIT_HOOK_CONTEXT_VARS) delete process.env[name];
+}
+
 export function setupCardRepo(): { root: string; basePath: string } {
+  scrubGitHookContext();
   const root = mkdtempSync(join(tmpdir(), "hive-card-flow-"));
   const basePath = join(root, "repo");
   mkdirSync(basePath);

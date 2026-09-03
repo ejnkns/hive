@@ -28,12 +28,22 @@ class FrontierBoard extends LitElement {
   workflowDef: { label: string } = { label: "" };
   entries: Array<{ id: string }> = [];
   customKinds: unknown[] = [];
-  workflowCounts: Array<{ workflowId: string; label: string; total: number }> =
-    [];
+  workflowCounts: Array<{
+    workflowId: string;
+    label: string;
+    total: number;
+    waitingOnDependencies: number;
+    dependenciesSatisfied: number;
+  }> = [];
   onSelect: ((instanceId: string) => void) | undefined = undefined;
   render() {
     const siblingCounts = this.workflowCounts
-      .map((workflow) => `${workflow.workflowId}:${workflow.total}`)
+      .map(
+        (workflow) =>
+          `${workflow.workflowId}:${workflow.total}` +
+          `+waiting:${workflow.waitingOnDependencies}` +
+          `+satisfied:${workflow.dependenciesSatisfied}`
+      )
       .join(",");
     return html`<div class="frontier-board">
       <span class="frontier-summary-counts">${siblingCounts}</span>
@@ -134,8 +144,51 @@ describe("WorkflowInstances workflowComponent (custom workflow view)", () => {
       // The custom view sees every workflow's count (including its own); it
       // filters its own out.
       const counts = mustFind(el, ".frontier-summary-counts");
-      expect(counts.textContent).toContain("charting:1");
-      expect(counts.textContent).toContain("tickets:1");
+      expect(counts.textContent).toContain("charting:1+waiting:0+satisfied:0");
+      expect(counts.textContent).toContain("tickets:1+waiting:0+satisfied:0");
+    } finally {
+      restore();
+    }
+  });
+
+  it("aggregates the engine dependency projection into waiting vs satisfied counts", async () => {
+    defineFlowRenderingComponents();
+    localStorage.clear();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, text: async () => "" }))
+    );
+    const restore = await loadFlowComponents(
+      { "frontier-board": "/api/.../frontier-board" },
+      async () => ({
+        default: () => ({
+          components: { "frontier-board": FrontierBoard },
+        }),
+      })
+    );
+    try {
+      const def = ticketsDef("frontier-board");
+      const waiting = entry("t-1", "ready");
+      waiting.workflowId = "tickets";
+      waiting.dependencies = { blockers: ["t-2"], unsatisfied: ["t-2"] };
+      const satisfied = entry("t-3", "ready");
+      satisfied.workflowId = "tickets";
+      satisfied.dependencies = { blockers: ["t-4"], unsatisfied: [] };
+      const independent = entry("t-5", "ready");
+      independent.workflowId = "tickets";
+      const el = await mount(
+        Object.assign(new WorkflowInstances(), {
+          flowId: "flow-1",
+          workflowDefs: [def],
+          instances: [waiting, satisfied, independent],
+          customKinds: [],
+        })
+      );
+      await settle(shadowRootOf(el));
+      // One waiting entry, one with all blockers satisfied, one with no
+      // recorded blockers (counts in neither aggregate).
+      const counts = mustFind(el, ".frontier-summary-counts");
+      expect(counts.textContent).toContain("tickets:3+waiting:1+satisfied:1");
     } finally {
       restore();
     }

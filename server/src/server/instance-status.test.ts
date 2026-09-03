@@ -53,6 +53,7 @@ function entry(
       history: [],
     },
     availableActions: [],
+    dependencies: { blockers: [], unsatisfied: [] },
     editFields: [],
     workflowSummary: { total: 0, byField: {} },
   };

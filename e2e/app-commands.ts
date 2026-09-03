@@ -1,9 +1,7 @@
 import type { BrowserContext, Page } from "playwright";
 import type { BrowserCommand } from "vitest/node";
 import "@vitest/browser-playwright";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
-import { PNG } from "pngjs";
+import { join } from "node:path";
 
 // The app under test cannot live in the vitest test iframe: browser-mode tests
 // execute inside an iframe on the runner's page, and navigating that page to
@@ -243,6 +241,9 @@ export const appSetOffline: BrowserCommand<[offline: boolean]> = async (
 
 // Save an app-page screenshot next to the runner's `__screenshots__` output so
 // failures carry the app's actual state, not just the vitest runner page.
+// (Failure diagnostics only: the committed-pixel-baseline pipeline that used
+// to sit beside this command was retired — the visual contract moved to
+// Storybook + Percy, see docs/decisions/2026-09-01-visual-testing-storybook-percy.md.)
 export const appScreenshot: BrowserCommand<[name: string]> = async (
   { project, sessionId },
   name
@@ -257,189 +258,6 @@ export const appScreenshot: BrowserCommand<[name: string]> = async (
   );
   await session.page.screenshot({ path: file });
   return file;
-};
-
-// --- Visual regression (ticket 10) -------------------------------------------
-//
-// Screenshot baseline comparison for the app page. The app under test lives in
-// a SECOND page (a sibling context of the runner's), so vitest's own
-// toHaveScreenshot cannot see it, and `toMatchFileSnapshot` cannot carry binary
-// buffers here: the command channel serializes return values to JSON-ish text
-// (a Buffer comes back as a plain object) and vitest's raw snapshot files are
-// written/read as utf-8 strings, so a PNG round-trips only as its text
-// serialization — never as real image bytes. The screenshot + comparison
-// therefore both happen on the Node side, in this command:
-//
-//   * `page.screenshot()` captures the app page (deterministic: Playwright
-//     freezes CSS animations and hides the caret by default, viewport is the
-//     fixed 1280x720 default of the app context).
-//   * The committed baseline is a real PNG under
-//     e2e/browser/__image_snapshots__/<name>.png (tracked, reviewable as an
-//     image in the repo/PR — NOT gitignored like __screenshots__/).
-//   * The capture waits for the render to SETTLE (two consecutive captures
-//     within tolerance; see below): the wayfinder theme's --wf-* colors blend
-//     over --dur-slow (400ms) after a theme cycle, and the computed style
-//     reaches its final value before the paint does, so a capture taken right
-//     after a cycle lands mid-blend.
-//   * Comparison is pixel-based with a small tolerance: headless Chromium
-//     re-rasterizes the served surface's SVG contour strokes (1px strokes under
-//     preserveAspectRatio="none" non-uniform scaling) with ±1 channel
-//     antialiasing jitter between rasterizations — invisible, but it makes
-//     byte-exact comparison flaky. The thresholds (max channel delta 8,
-//     ≤ 0.05% differing pixels) absorb that jitter with ~8x headroom while any
-//     real visual regression (theme colors, fog order, layout shift, content
-//     change) produces deltas far above them. On mismatch the actual render is
-//     saved next to the runner's gitignored __screenshots__/ output and both
-//     paths + the pixel stats are reported.
-//   * Recording/update is explicit: run vitest with `-u` (snapshot update
-//     mode, same muscle memory as toMatchSnapshot) or set
-//     E2E_UPDATE_SCREENSHOTS=1. A MISSING baseline is a hard failure with
-//     instructions — the suite never silently creates baselines from a
-//     possibly-broken render.
-const BASELINE_DIR = "browser/__image_snapshots__";
-
-export type AppAssertScreenshotOptions = {
-  // Capture the element the piercing selector matches (its bounding box)
-  // instead of the whole viewport. Useful when the subject sits below the fold
-  // or when the rest of the page is not part of the contract.
-  element?: string;
-};
-
-// Absorbs the headless-SVG stroke AA jitter (see the header comment). Any
-// pixel whose max channel delta exceeds MAX_CHANNEL_DELTA, or more than
-// MAX_DIFFERING_RATIO of pixels differing at all, is a real change.
-const MAX_CHANNEL_DELTA = 8;
-const MAX_DIFFERING_RATIO = 0.0005;
-
-// Pixel comparison with tolerance. Returns the diff stats; the caller decides
-// pass/fail from them.
-function comparePixels(expected: Buffer, actual: Buffer) {
-  const a = PNG.sync.read(expected);
-  const b = PNG.sync.read(actual);
-  if (a.width !== b.width || a.height !== b.height) {
-    return {
-      sameSize: false as const,
-      widthA: a.width,
-      heightA: a.height,
-      widthB: b.width,
-      heightB: b.height,
-    };
-  }
-  let differing = 0;
-  let maxDelta = 0;
-  for (let i = 0; i < a.data.length; i += 1) {
-    const delta = Math.abs(a.data[i] - b.data[i]);
-    if (delta > maxDelta) maxDelta = delta;
-    // Count a pixel once when any of its four channels differ.
-    if (i % 4 === 0) {
-      const off = i;
-      const d =
-        Math.abs(a.data[off] - b.data[off]) +
-        Math.abs(a.data[off + 1] - b.data[off + 1]) +
-        Math.abs(a.data[off + 2] - b.data[off + 2]) +
-        Math.abs(a.data[off + 3] - b.data[off + 3]);
-      if (d > 0) differing += 1;
-    }
-  }
-  const total = a.width * a.height;
-  return {
-    sameSize: true as const,
-    differing,
-    differingRatio: differing / total,
-    maxDelta,
-    total,
-  };
-}
-
-export const appAssertScreenshot: BrowserCommand<
-  [name: string, options?: AppAssertScreenshotOptions]
-> = async ({ project, sessionId }, name, options = {}) => {
-  const session = appSessions.get(sessionId);
-  if (!session || session.page.isClosed()) {
-    throw new Error("openApp must be called before appAssertScreenshot");
-  }
-  const capture = () =>
-    options.element
-      ? session.page.locator(options.element).first().screenshot()
-      : session.page.screenshot();
-
-  // Wait for the paint to settle: keep capturing until two consecutive
-  // captures are within tolerance of each other (the theme blend and any
-  // trailing re-render must finish; the headless SVG AA jitter stays within
-  // tolerance, so it does not block settling). Bounded to ~2.5s.
-  let prev = await capture();
-  let actual = prev;
-  for (let i = 0; i < 10; i += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 250));
-    const cur = await capture();
-    const stats = comparePixels(prev, cur);
-    if (
-      stats.sameSize &&
-      stats.maxDelta <= MAX_CHANNEL_DELTA &&
-      stats.differingRatio <= MAX_DIFFERING_RATIO
-    ) {
-      actual = cur;
-      break;
-    }
-    prev = cur;
-    actual = cur;
-  }
-
-  const baselineFile = join(project.config.root, BASELINE_DIR, `${name}.png`);
-  const recording =
-    process.env.E2E_UPDATE_SCREENSHOTS === "1" ||
-    project.serializedConfig.snapshotOptions.updateSnapshot === "all";
-
-  if (recording) {
-    mkdirSync(dirname(baselineFile), { recursive: true });
-    writeFileSync(baselineFile, actual);
-    return { status: "recorded", file: baselineFile, bytes: actual.length };
-  }
-
-  if (!existsSync(baselineFile)) {
-    throw new Error(
-      `no screenshot baseline at ${relative(project.config.root, baselineFile)}. ` +
-        "Record one with `pnpm exec vitest run --config e2e/vitest.config.ts -u " +
-        "[file]` (or E2E_UPDATE_SCREENSHOTS=1)."
-    );
-  }
-
-  const expected = readFileSync(baselineFile);
-  const stats = comparePixels(expected, actual);
-  const pass =
-    stats.sameSize &&
-    stats.maxDelta <= MAX_CHANNEL_DELTA &&
-    stats.differingRatio <= MAX_DIFFERING_RATIO;
-  if (pass) {
-    return {
-      status: "matched",
-      file: baselineFile,
-      bytes: actual.length,
-      maxDelta: stats.maxDelta,
-      differingRatio: stats.differingRatio,
-    };
-  }
-
-  // Keep the actual render for visual diffing (gitignored __screenshots__ dir).
-  const actualFile = join(
-    project.config.root,
-    "__screenshots__",
-    "app",
-    `${name}-actual-${Date.now()}.png`
-  );
-  mkdirSync(dirname(actualFile), { recursive: true });
-  writeFileSync(actualFile, actual);
-  const detail = stats.sameSize
-    ? `${(stats.differingRatio * 100).toFixed(3)}% pixels differ (${stats.differing} of ${stats.total}), max channel delta ${stats.maxDelta} (tolerance: delta <= ${MAX_CHANNEL_DELTA}, ratio <= ${(MAX_DIFFERING_RATIO * 100).toFixed(3)}%)`
-    : `sizes differ: baseline ${stats.widthA}x${stats.heightA}, actual ${stats.widthB}x${stats.heightB}`;
-  throw new Error(
-    `screenshot "${name}" differs from its baseline:\n` +
-      `  baseline: ${relative(project.config.root, baselineFile)} (${expected.length} bytes)\n` +
-      `  actual:   ${relative(project.config.root, actualFile)} (${actual.length} bytes)\n` +
-      `  ${detail}\n` +
-      "Review the actual against the baseline; if the new render is intended, " +
-      "re-record with `vitest run -u`."
-  );
 };
 
 // ── helpers (declared after the exports per CONTEXT.md's main-export-first

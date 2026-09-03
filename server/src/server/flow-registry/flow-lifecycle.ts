@@ -56,7 +56,26 @@ export function createFlow(
   const flowConfig: Record<string, unknown> = {
     definitionId,
     ...config,
+    // The definition declares its domainDir (default .<definition-id>); copy
+    // it into the flow config at creation so the engine's persisted-output
+    // seam reads one source. A config-provided domainDir wins.
+    ...(definition.domainDir !== undefined && config?.domainDir === undefined
+      ? { domainDir: definition.domainDir }
+      : {}),
   };
+
+  // Apply declared configSchema defaults for fields the creation config
+  // omitted or left empty: static creation-time defaults (e.g. queen-bee's
+  // integrationBranch/branchPrefix) are part of the instance's config, not
+  // just UI pre-fills.
+  for (const field of definition.configSchema ?? []) {
+    if (
+      field.defaultValue !== undefined &&
+      (flowConfig[field.key] === undefined || flowConfig[field.key] === "")
+    ) {
+      flowConfig[field.key] = field.defaultValue;
+    }
+  }
 
   // Snapshot the definition source for user definitions so the instance keeps
   // its creation-time behavior even if the definition is later edited or
@@ -211,6 +230,24 @@ export async function rehydrateFlow(
     workflows = resolveWorkflows(definition, cfg);
     edges = definition.edges;
     domain = { tools: definition.tools, operations: definition.operations };
+  }
+
+  // Flow config is immutable after creation, and creation always normalizes
+  // basePath (an absent value is bound to the hive-owned default workspace).
+  // A persisted config that declares persist tasks but has no basePath is
+  // therefore invalid — the engine refuses to construct it — and rehydration
+  // rejects it rather than mutating the config: the flow owner must provide a
+  // basePath or delete the flow.
+  const declaresPersist = workflows.some((wf) =>
+    wf.states.some((state) =>
+      (state.tasks ?? []).some((task) => task.persist !== undefined)
+    )
+  );
+  if (declaresPersist && typeof cfg.basePath !== "string") {
+    logger.warn(
+      `Flow "${flowId}" declares persist tasks but has no basePath — skipping rehydration; the flow needs a basePath or should be deleted`
+    );
+    return null;
   }
 
   const runners = createEngineRunners(domain);

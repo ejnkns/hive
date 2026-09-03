@@ -118,13 +118,13 @@ VALUE SOURCES (patch and edge field values):
 
 OPERATION CONTEXT (what a referenced operation receives via ctx — E1/E6/E2):
   ctx.workflowInstanceState() / ctx.patchWorkflowInstanceState(patch)   // own instance state
-  ctx.flowState() / ctx.patchFlowState(patch)                          // flow-level state (E2): read + write the flow's declared cross-entity state (e.g. the taxonomy). The write mirrors patchFlowConfig — persists + emits flow_state_changed. Declare the fields in the definition's flowState; the module-set gate rejects an undeclared patchFlowState key
+  ctx.flowState() / ctx.patchFlowState(patch)                          // flow-level state (E2): read + write the flow's declared cross-entity state (e.g. the taxonomy). The write persists + emits flow_state_changed. Declare the fields in the definition's flowState; the module-set gate rejects an undeclared patchFlowState key
   ctx.workflowInstancesInState()                                      // every instance of the flow; each carries id + workflowId + currentState + workflowInstanceState
   ctx.workflowInstancesInState("ideas")                              // filter by workflow (E6): every ideas instance
   ctx.workflowInstancesInState(undefined, "done")                    // filter by state: every done instance of any workflow
   ctx.workflowInstancesInState("ideas", "done")                      // both filters
   ctx.patchInstanceState(instanceId, patch)                           // cross-instance write (E1): patches a SIBLING instance's declared state, same-flow only. Returns false for an unknown id (a NOOP the op handles); throws on a field the target workflow's instanceState does not declare. The write persists and emits like an own-instance patch. Every sibling write must be declared in the operation's writesAcross — the module-set gate rejects undeclared ones.
-  ctx.flowConfig() / ctx.patchFlowConfig(patch) / ctx.taskOutputs()   // flow config and completed sibling task outputs
+  ctx.flowConfig() / ctx.taskOutputs()                                // flow config (static, set at creation) and completed sibling task outputs
 
 EDGE: {
   fromWorkflow: "planning", fromStates: ["done"], toWorkflow: "items",

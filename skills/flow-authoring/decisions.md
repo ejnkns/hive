@@ -3,7 +3,7 @@
 1. **Entities.** One workflow per entity the flow tracks — an item, a request, a record, a session, an order — whatever the domain's unit of work is. Each workflow is a lifecycle: an initial state where instances are born, active states where work happens, terminal states where instances finish. Per-instance data lives in `instanceState`; cross-entity data lives in flow-level state (`flowState`), never duplicated on instances.
 
 2. **Who does the work.** A state's tasks run on entry:
-   - `operation` — deterministic work: an engine op (`prepare_worktree`, `verify_workspace`, `merge_branch`, `patch_flow_config`, `commit_flow_state`, `validate_repo`) or a patch op that records another task's output into instanceState.
+   - `operation` — deterministic work: an engine op (`prepare_worktree`, `verify_workspace`, `merge_branch`, `commit_flow_state`, `validate_repo`) or a patch op that records another task's output into instanceState.
    - `ai-task` — one-shot AI work that RETURNS DATA. Give it a `systemPrompt` naming the job and the completion tool, seed it with `inputFromInstanceState`, and declare `completionOutput` with exactly the fields it must return. Record those fields with a sibling operation `patch` task.
    - `ai-chat` — a multi-turn AI session. Use `startOnUserInput: true` when a human talks with the agent (HITL); the session ends when the human clicks an action with `completesRunningTask: true`, or the agent calls its completion tool.
 

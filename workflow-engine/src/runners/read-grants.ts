@@ -51,5 +51,10 @@ function resolveGrantedPath(
     return resolve(homedir(), granted.slice(2));
   }
   if (isAbsolute(granted)) return granted;
-  return resolve(basePath ?? process.cwd(), granted);
+  if (basePath === undefined) {
+    throw new Error(
+      "Cannot resolve a relative granted path without a flow basePath — the engine never resolves against the daemon's cwd"
+    );
+  }
+  return resolve(basePath, granted);
 }

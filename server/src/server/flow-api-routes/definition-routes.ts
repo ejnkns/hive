@@ -31,6 +31,7 @@ import {
   registerUserDefinition,
   updateUserDefinition,
 } from "../flow-definitions.ts";
+import { ensureDefaultWorkspace } from "../flow-registry/default-workspace.ts";
 import {
   createFlow,
   getFlowPersistence,
@@ -199,7 +200,12 @@ export function registerDefinitionRoutes(server: FastifyInstance): void {
 
     const lucky = body?.lucky === true;
     const flowId = `author-${randomUUID()}`;
-    const runtime = createFlow(flowId, AUTHORING_DEFINITION_ID, persistence);
+    // The authoring session flow binds no repository; give it a hive-owned
+    // default workspace so its agent has a workspace (the invariant: every
+    // flow runtime has an absolute basePath — never the daemon's cwd).
+    const runtime = createFlow(flowId, AUTHORING_DEFINITION_ID, persistence, {
+      basePath: ensureDefaultWorkspace(flowId),
+    });
     const instance = runtime.getWorkflowInstanceEntries()[0];
     if (!instance) {
       return reply

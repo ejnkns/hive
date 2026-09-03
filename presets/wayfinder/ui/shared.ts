@@ -10,6 +10,10 @@
 
 import type { WorkflowInstanceEntry } from "workflow-engine/create-flow-runtime";
 
+// The flow-level presentation surface: the map-first expedition shell or the
+// alternate cartographer's table. Session-scoped per FlowInstance.
+export type WayfinderView = "map" | "table";
+
 // The ticket resolution types wayfinder's badges render.
 export type TicketType = "research" | "prototype" | "grilling" | "task";
 

@@ -17,6 +17,7 @@ import { expect, inject, test } from "vitest";
 import { app } from "../support/browser-app.mjs";
 import {
   captureFailureScreenshot,
+  clickChartingDone,
   submitFlowActionForm,
 } from "../support/flows.mjs";
 
@@ -41,24 +42,17 @@ test("wayfinder ticket phase: chart → add research ticket → graduate → cla
     .poll(() => app.isVisible("workflow-instances"), { timeout: 30_000 })
     .toBe(true);
 
-  // The table renders the map card, and the map view drills in and back.
-  await app.waitForSelector(".open-map", {
-    hasText: "Open the map view",
-    timeout: 30_000,
-  });
-  await app.click(".open-map", { first: true });
-  await app.waitForSelector(".back-link", {
-    hasText: "Back to the table",
-    timeout: 30_000,
-  });
-  await app.click(".back-link", { first: true });
+  // A newly created flow is an empty expedition: the Base Camp empty state
+  // presents the charting session card (whose actions drive the charting).
+  await app.waitForSelector(".base-panel", { timeout: 30_000 });
 
   // Chart: the naming session is agent-initiating (the mock answers it), so
-  // Done → frontier, then Done → charted. Each click auto-waits for its
-  // session's Done to be live — the old fixed sleeps between sessions are
-  // replaced by waiting on the observable DOM state.
-  await app.click("button", { hasText: "Done" });
-  await app.click("button", { hasText: "Done" });
+  // Done → frontier, then Done → charted. Each click is scoped to its own
+  // session surface and waits for that session's Done to disappear — the
+  // next click cannot re-hit the previous session's still-mounted button in
+  // the transition race (see clickChartingDone in flows.mjs).
+  await clickChartingDone({ stateId: "naming" });
+  await clickChartingDone({ stateId: "frontier" });
 
   // Add a research ticket through the flow-action create form.
   await app.click("button", { hasText: "Add ticket", first: true });
@@ -67,6 +61,12 @@ test("wayfinder ticket phase: chart → add research ticket → graduate → cla
   await app.fill("#cf-question", "localStorage or IndexedDB?");
   await app.selectOption("#cf-type", "research");
   await submitFlowActionForm();
+
+  // The ticket landing makes the expedition populated: the map-first shell
+  // with its HUD takes over. Verify the surface, then switch to the table
+  // where the fog tray interactions below live.
+  await app.waitForSelector(".map-layout", { timeout: 30_000 });
+  await app.click(".view-toggle button", { hasText: "Table", first: true });
 
   // The ticket lands in the fog tray (normalize runs), highlighted as needing
   // clarity, then the graduate action opens.

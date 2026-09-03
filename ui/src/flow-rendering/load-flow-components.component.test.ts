@@ -9,6 +9,7 @@ import {
   loadFlowComponents,
 } from "./load-flow-components.ts";
 import { getComponentRenderer } from "./renderer-registry.ts";
+import { servedUtilityStyles } from "./served-utility-styles.ts";
 import { cardDef, entry } from "./test-fixtures.ts";
 import { mount, mustFind, settle, shadowRootOf } from "./test-utils.ts";
 
@@ -115,6 +116,35 @@ describe("loadFlowComponents", () => {
     expect(mounted?.shadowRoot?.querySelector(".demo-card")?.textContent).toBe(
       "demo c1"
     );
+  });
+
+  it("hands the factory the injected utility stylesheet, composable into static styles", async () => {
+    // The seam the svg tag rides: the host builds the deps, the factory
+    // composes `utilities` first in static styles, and a mounted element of
+    // that class adopts the sheet (the utility rules reach shadow DOM).
+    let receivedUtilities: FlowComponentDeps["utilities"] | undefined;
+    let StyledCard: typeof LitElement | undefined;
+    // A distinct path: the loader caches evaluated modules per versioned
+    // path, and earlier tests in this file already registered the demo URL.
+    restore = await loadFlowComponents(
+      { "demo-card": "/api/flows/definitions/demo/components/utility-card" },
+      async () => ({
+        default: (deps) => {
+          receivedUtilities = deps.utilities;
+          class StyledCardImpl extends deps.LitElement {
+            static styles = [deps.utilities];
+            render() {
+              return deps.html`<div class="flex gap-2">styled</div>`;
+            }
+          }
+          StyledCard = StyledCardImpl;
+          return { components: { "demo-card": StyledCardImpl } };
+        },
+      })
+    );
+    expect(receivedUtilities).toBe(servedUtilityStyles);
+    const cardClass = StyledCard;
+    expect(cardClass?.elementStyles).toContain(servedUtilityStyles);
   });
 
   it("skips modules whose URL import fails", async () => {

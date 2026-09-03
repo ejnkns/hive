@@ -19,18 +19,17 @@
     "test": "pnpm run test:dev-proxy && pnpm -r test && pnpm run test:build && pnpm run test:e2e:vitest",
     "typecheck": "pnpm -r typecheck",
     "lint": "biome lint .",
+    "stack:check": "node scripts/check-stack.mjs",
     "format": "biome format --write .",
     "check:biome": "biome check --write --no-errors-on-unmatched",
     "prepare": "lefthook install"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.1",
-    "@types/pngjs": "^6.0.5",
     "@vitest/browser": "4.1.10",
     "@vitest/browser-playwright": "4.1.10",
     "lefthook": "^2.1.9",
     "playwright": "^1.62.1",
-    "pngjs": "^7.0.0",
     "typescript": "^6.0.3",
     "vitest": "4.1.10"
   }

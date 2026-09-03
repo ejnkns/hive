@@ -101,7 +101,7 @@ export const engineCapabilities = {
   flowState: {
     name: "flowState",
     description:
-      "The flow's declared cross-entity state (e.g. the shared taxonomy in honeycomb) — one place instead of duplicated on instances. The definition declares its `flowState` fields (field + type, like instanceState). Operations read it via ctx.flowState() and write it via ctx.patchFlowState(patch) (mirrors patchFlowConfig: persists + emits flow_state_changed); tools read it via ctx.flowState. FlowState writes are validated like instance writes: the definition validator checks toFlowState edge transforms against the declaration, and the module-set gate checks operations' patchFlowState calls against it. Cross-entity data lives here; per-instance data stays on the instances.",
+      "The flow's declared cross-entity state (e.g. the shared taxonomy in honeycomb) — one place instead of duplicated on instances. The definition declares its `flowState` fields (field + type, like instanceState). Operations read it via ctx.flowState() and write it via ctx.patchFlowState(patch) (persists + emits flow_state_changed); tools read it via ctx.flowState. FlowState writes are validated like instance writes: the definition validator checks toFlowState edge transforms against the declaration, and the module-set gate checks operations' patchFlowState calls against it. Cross-entity data lives here; per-instance data stays on the instances.",
   } as const,
 
   // toFlowState edges (E2): an edge whose transform output updates flowState
@@ -188,13 +188,6 @@ export const engineCapabilities = {
       description:
         "No-ff merge a workflow instance's feature branch into the integration branch; discards the worktree and deletes the branch. Reads attempt/worktreePath.",
       reads: ["attempt", "worktreePath"],
-      writes: [],
-    },
-    {
-      name: "patch_flow_config",
-      description:
-        "Write fields into FlowConfig from within a task; @flow:<field> copies a current config value.",
-      reads: [],
       writes: [],
     },
     {

@@ -68,6 +68,7 @@ export function entry(
       ...overrides,
     },
     availableActions: [],
+    dependencies: { blockers: [], unsatisfied: [] },
     editFields: [],
     workflowSummary: { total: 0, byField: {} },
   };

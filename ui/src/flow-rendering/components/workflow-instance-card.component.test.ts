@@ -28,6 +28,21 @@ function card(def = cardDef(), instance = entry("c1", "ready")) {
 }
 
 describe("WorkflowInstanceCard", () => {
+  it("styles with the shared utility vocabulary", async () => {
+    // Ticket 15: the default card composes the injected utility sheet.
+    const def = cardDef({
+      display: { fields: [{ path: "cardSpec.title", label: "Title" }] },
+    });
+    const el = await mount(card(def));
+    await settle(shadowRootOf(el));
+    const item = mustFind(el, ".domain-data-item");
+    for (const utility of ["flex", "flex-col"]) {
+      expect(item.classList.contains(utility)).toBe(true);
+    }
+    const key = mustFind(el, ".domain-data-key");
+    expect(key.classList.contains("text-accent")).toBe(true);
+  });
+
   it("renders the instance-hint title from workflowInstanceState", async () => {
     const el = await mount(card());
     await settle(shadowRootOf(el));

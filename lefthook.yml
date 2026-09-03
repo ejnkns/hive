@@ -1,5 +1,9 @@
 pre-commit:
   jobs:
+    # The stack-register gate: no dependency lands without a docs/stack.md
+    # entry backed by an approved decision record. Cheap, unconditional.
+    - name: stack-register
+      run: node scripts/check-stack.mjs
     - name: biome
       glob: "*.{ts,js,tsx,jsx,json,jsonc,svelte}"
       run: pnpm run check:biome {staged_files} && git add {staged_files}
@@ -9,3 +13,8 @@ pre-commit:
     - name: typecheck
       glob: "*.{ts,js}"
       run: pnpm run typecheck
+    # Every commit must leave the server suite green — no file filter, so
+    # this runs unconditionally (the authoring-session tests silently rotted
+    # on environment debris exactly because tests were not a commit gate).
+    - name: server-tests
+      run: pnpm --filter server test

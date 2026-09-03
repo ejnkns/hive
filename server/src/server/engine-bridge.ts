@@ -167,35 +167,6 @@ function readNumber(value: unknown): number | undefined {
     : undefined;
 }
 
-// ─── patch_flow_config ─────────────────────────────────────────────────
-
-// patch_flow_config writes fields into FlowConfig from within a workflow task,
-// wrapping the runtime's patchFlowConfig. Params come from the task's
-// operationInputs. A value equal to `@flow:<field>` copies the current value
-// of that flow config field instead — used when the task's inputs are decided
-// by an earlier step at runtime (e.g. a computed targetBranch).
-const FLOW_CONFIG_REF_PREFIX = "@flow:";
-
-function isFlowConfigRef(value: unknown): value is string {
-  return typeof value === "string" && value.startsWith(FLOW_CONFIG_REF_PREFIX);
-}
-
-function resolveAndPatchFlowConfig(
-  _task: TaskDefinition,
-  params: Record<string, unknown>,
-  ctx: OperationContext
-): OperationResult {
-  const config = ctx.flowConfig();
-  const patch: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(params)) {
-    patch[key] = isFlowConfigRef(value)
-      ? config[value.slice(FLOW_CONFIG_REF_PREFIX.length)]
-      : value;
-  }
-  ctx.patchFlowConfig(patch);
-  return { ok: true, config: ctx.flowConfig() };
-}
-
 // ─── Model caller adapter ──────────────────────────────────────────────
 
 // A mid-stream upstream failure (a connection reset after the response
@@ -376,7 +347,6 @@ export function createEngineRunners(
   function buildOperationContext(ctx: TaskRunnerContext): OperationContext {
     return {
       flowConfig: () => ctx.flowConfig,
-      patchFlowConfig: ctx.patchFlowConfig,
       instanceId: ctx.instanceId,
       workflowId: ctx.workflowId,
       currentState: ctx.currentState,
@@ -416,9 +386,18 @@ export function createEngineRunners(
       .filter((entry): entry is string => typeof entry === "string")
       .map((entry) => entry.trim())
       .filter((entry) => entry !== "")
-      .map((entry) =>
-        isAbsolute(entry) ? entry : resolve(basePath ?? process.cwd(), entry)
-      );
+      .map((entry) => {
+        // Relative roots anchor to the flow's basePath (never the daemon's
+        // cwd): basePath is absolute by construction, or this flow has no
+        // binding and relative roots cannot resolve.
+        if (isAbsolute(entry)) return entry;
+        if (basePath === undefined) {
+          throw new Error(
+            `Cannot resolve relative extraReadRoots entry "${entry}" without a flow basePath — the engine never resolves against the daemon's cwd`
+          );
+        }
+        return resolve(basePath, entry);
+      });
     return roots.length > 0 ? roots : undefined;
   }
 
@@ -431,7 +410,6 @@ export function createEngineRunners(
         operations: {
           prepare_worktree: wrapPrepareWorktree,
           verify_workspace: wrapVerifyWorkspace,
-          patch_flow_config: resolveAndPatchFlowConfig,
           commit_flow_state: commitFlowState,
           merge_branch: mergeBranch,
           validate_repo: validateRepo,

@@ -1,0 +1,91 @@
+/* The storybook-side expedition chrome: the theme wrapper the served
+ * flow-component renders around every wayfinder surface (presets/wayfinder/
+ * ui/flow-component.ts, the .expedition rules). Product code owns that
+ * wrapper; the harness cannot reach into its shadow root, so the per-theme
+ * --wf-* variables and --map-backdrop gradients are mirrored here 1:1 so
+ * component-level stories (map canvas, drawer, table, cards) sit in the same
+ * chrome the served host composes. The full-surface flow-component stories
+ * render the REAL chrome beside these — a palette drift between the two is
+ * visible in Chromatic review by construction. Keep the values identical. */
+
+.expedition-chrome {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 480px;
+  --wf-accent: #4a9fe0;
+  --wf-paper: #241f18;
+  --wf-paper-edge: #352d22;
+  --wf-ink: #f0ead9;
+  --wf-body: #b7ad97;
+  --wf-font:
+    system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--wf-font);
+  --map-backdrop: linear-gradient(
+    180deg,
+    #0a1226 0%,
+    #16284a 30%,
+    #24395c 46%,
+    #6c7c8c 68%,
+    #b7c1c9 86%,
+    #dde4e8 100%
+  );
+}
+.expedition-chrome[data-theme="topo"] {
+  --wf-accent: #58a06a;
+  --wf-paper: #25221a;
+  --wf-paper-edge: #3a3426;
+  --wf-ink: #f0ead9;
+  --wf-body: #b7ad97;
+  --map-backdrop: radial-gradient(
+    130% 110% at 50% 5%,
+    #1c3626 0%,
+    #152b1c 52%,
+    #0c1e11 100%
+  );
+}
+.expedition-chrome[data-theme="stars"] {
+  --wf-accent: #5bc0e8;
+  --wf-paper: #10161f;
+  --wf-paper-edge: #1e2a3a;
+  --wf-ink: #d6e6f5;
+  --wf-body: #8ba6c2;
+  --map-backdrop: #000000;
+}
+html.light .expedition-chrome {
+  --wf-accent: #2f7bb5;
+  --wf-paper: #f2ead9;
+  --wf-paper-edge: #d9c7a3;
+  --wf-ink: #2a2418;
+  --wf-body: #6b5f4a;
+  --map-backdrop: linear-gradient(
+    180deg,
+    #66b4e8 0%,
+    #8ec4ea 34%,
+    #a9cbd9 52%,
+    #c2d2d7 72%,
+    #e0e7ea 90%,
+    #f1f4f6 100%
+  );
+}
+html.light .expedition-chrome[data-theme="topo"] {
+  --wf-accent: #3f7d4d;
+  --wf-paper: #f0f2e6;
+  --wf-paper-edge: #ccd2b0;
+  --wf-ink: #23281a;
+  --wf-body: #5f6b4a;
+  --map-backdrop: radial-gradient(
+    130% 110% at 50% 5%,
+    #cfe5bd 0%,
+    #b4d3a1 52%,
+    #97c283 100%
+  );
+}
+html.light .expedition-chrome[data-theme="stars"] {
+  --wf-accent: #2f86b5;
+  --wf-paper: #e8eef4;
+  --wf-paper-edge: #c3d0e0;
+  --wf-ink: #1a2430;
+  --wf-body: #4a5b6a;
+  --map-backdrop: #ffffff;
+}

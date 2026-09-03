@@ -18,7 +18,8 @@ export const flow: FlowDefinition = {
       key: "basePath",
       label: "Base path",
       type: "string",
-      hint: "The repository wayfinder is bound to — charting and build sessions read and write code here. Leave empty to work in the current directory.",
+      required: true,
+      hint: "The repository wayfinder is bound to — charting and build sessions read and write code here, and the persisted artifacts (map.md, decisions/, spec/build-plan) live under its .wayfinder/ directory. Required: without a bound base path nothing persists and the build phase has nothing to read.",
       placeholder: "e.g. . or a repo path",
     },
     {
@@ -38,6 +39,12 @@ export const flow: FlowDefinition = {
     },
   ],
   domainDir: ".wayfinder",
+  // Mutable flow-level standing facts (settled destination/notes) live in
+  // flowState; the flow config is static (set at creation).
+  flowState: [
+    { field: "destination", type: "string" },
+    { field: "notes", type: "string" },
+  ],
   // Declarative theme: clear sky blue accent, mountain emblem — "clearing the
   // fog" matches wayfinder's chart-fog-then-build workflows. queen-bee /
   // honeycomb stay on the default golden. The served component modules (the
@@ -95,9 +102,6 @@ export const flow: FlowDefinition = {
       "build-card": { ref: "./ui/build-card.ts" },
       "build-item-card": { ref: "./ui/build-item-card.ts" },
       "charting-card": { ref: "./ui/charting-card.ts" },
-      "expedition-map": { ref: "./ui/expedition-map.ts" },
-      "frontier-board": { ref: "./ui/frontier-board.ts" },
-      "build-pipeline": { ref: "./ui/build-pipeline.ts" },
       "findings-report": { ref: "./ui/findings-report.ts" },
       "prototype-decision": { ref: "./ui/prototype-decision.ts" },
       "plan-tickets": { ref: "./ui/plan-tickets.ts" },
@@ -165,7 +169,6 @@ export const flow: FlowDefinition = {
       ui: {
         view: "list",
         instanceComponent: "charting-card",
-        workflowComponent: "expedition-map",
       },
       instanceState: [
         {
@@ -317,7 +320,6 @@ export const flow: FlowDefinition = {
       ui: {
         view: "board",
         instanceComponent: "ticket-card",
-        workflowComponent: "frontier-board",
         columns: [
           {
             id: "fog",
@@ -344,7 +346,12 @@ export const flow: FlowDefinition = {
           {
             id: "closed",
             label: "Closed",
-            states: ["closed", "out_of_scope"],
+            states: ["closed"],
+          },
+          {
+            id: "out_of_scope",
+            label: "Out of scope",
+            states: ["out_of_scope"],
           },
         ],
       },
@@ -1064,7 +1071,6 @@ export const flow: FlowDefinition = {
       ui: {
         view: "list",
         instanceComponent: "build-card",
-        workflowComponent: "build-pipeline",
       },
       instanceState: [
         {

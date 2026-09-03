@@ -11,12 +11,13 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { findServerPackageRoot } from "../flow-definitions.ts";
 
-export type KnowledgeTopic = "decisions" | "rules" | "vocabulary";
+export type KnowledgeTopic = "decisions" | "rules" | "vocabulary" | "styling";
 
 const KNOWLEDGE_FILES: Record<KnowledgeTopic, string> = {
   decisions: "decisions.md",
   rules: "rules.md",
   vocabulary: "vocabulary.md",
+  styling: "styling.md",
 };
 
 // Read once per process; the files are static knowledge, not live documents.

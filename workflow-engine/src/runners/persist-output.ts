@@ -10,7 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, isAbsolute, join, normalize, sep } from "node:path";
-import { readFlowSettings } from "../read-flow-settings.ts";
+import { readFlowSettings, resolveDomainRoot } from "../read-flow-settings.ts";
 
 export type PersistOutputParams = {
   output: unknown;
@@ -31,20 +31,19 @@ export type PersistPathVars = {
   attempt: number;
 };
 
-// Resolves a declared persist path to its absolute location under
-// basePath/<domainDir>, substituting {instanceId}/{attempt}. Shared by the
-// write and read helpers so a task's persist path and an operation that reads
-// the output back never drift.
+// Resolves a declared persist path to its absolute location under the flow's
+// domain root, substituting {instanceId}/{attempt}. Shared by the write and
+// read helpers so a task's persist path and an operation that reads the
+// output back never drift. The path is confined to the domain root.
 export function resolvePersistedPath(
-  basePath: string,
-  domainDir: string,
+  domainRoot: string,
   persistPath: string,
   vars: PersistPathVars
 ): string {
   const relativePath = persistPath
     .replaceAll("{instanceId}", vars.instanceId)
     .replaceAll("{attempt}", String(vars.attempt));
-  return resolveDomainPath(basePath, domainDir, relativePath);
+  return resolveDomainPath(domainRoot, relativePath);
 }
 
 // Writes a task's output to basePath/<domainDir>/<path> on successful
@@ -54,8 +53,7 @@ export function resolvePersistedPath(
 // path.
 export function persistOutput(params: PersistOutputParams): string {
   const target = resolvePersistedPath(
-    params.basePath,
-    params.domainDir,
+    join(params.basePath, params.domainDir),
     params.persistPath,
     { instanceId: params.instanceId, attempt: params.attempt }
   );
@@ -70,17 +68,16 @@ export function persistOutput(params: PersistOutputParams): string {
 
 // Reads a task's persisted output back at basePath/<domainDir>/<path>,
 // returning "" when the file does not exist. The engine owns persist-path
-// resolution, so operations read exactly what the engine wrote.
+// resolution, so operations read exactly what the engine wrote. A flow
+// without a bound basePath/domainDir is a creation-time error, not a silent
+// no-op — the caller (e.g. the flow snapshot builder) degrades to empty.
 export function readPersistedOutput(
   flowConfig: Record<string, unknown>,
   persistPath: string,
   vars?: PersistPathVars
 ): string {
-  const settings = readFlowSettings(flowConfig);
-  if (!settings.basePath || !settings.domainDir) return "";
   const target = resolvePersistedPath(
-    settings.basePath,
-    settings.domainDir,
+    resolveDomainRoot(flowConfig),
     persistPath,
     vars ?? { instanceId: "", attempt: 1 }
   );
@@ -96,11 +93,8 @@ export function readPersistedDirectory(
   flowConfig: Record<string, unknown>,
   directoryPath: string
 ): Record<string, string> {
-  const settings = readFlowSettings(flowConfig);
-  if (!settings.basePath || !settings.domainDir) return {};
   const target = resolveDomainPath(
-    settings.basePath,
-    settings.domainDir,
+    resolveDomainRoot(flowConfig),
     directoryPath
   );
   if (!existsSync(target)) return {};
@@ -113,15 +107,11 @@ export function readPersistedDirectory(
 }
 
 // Rejects absolute paths and any resolved path that escapes the domain root.
-function resolveDomainPath(
-  basePath: string,
-  domainDir: string,
-  relativePath: string
-): string {
+function resolveDomainPath(domainRoot: string, relativePath: string): string {
   if (isAbsolute(relativePath)) {
     throw new Error(`Persist path must be relative: ${relativePath}`);
   }
-  const root = normalize(join(basePath, domainDir));
+  const root = normalize(domainRoot);
   const target = normalize(join(root, relativePath));
   if (target !== root && !target.startsWith(`${root}${sep}`)) {
     throw new Error(`Persist path escapes the domain root: ${relativePath}`);

@@ -45,26 +45,18 @@ export type BoardContentCallbacks = {
 // standalone <workflow-board-content> element.
 export const boardContentStyles: CSSResult = css`
   .flow-board {
-    display: flex;
-    align-items: flex-start;
     gap: 0.625rem;
-    overflow-x: auto;
     padding-top: 0.625rem;
   }
 
   .flow-list {
-    display: flex;
-    flex-direction: column;
     gap: 0.625rem;
     padding-top: 0.625rem;
   }
 
   .board-column {
-    flex: 1 1 0;
     min-width: 200px;
     max-width: 300px;
-    display: flex;
-    flex-direction: column;
     gap: 0.5rem;
   }
 
@@ -74,16 +66,9 @@ export const boardContentStyles: CSSResult = css`
   }
 
   .column-header {
-    display: flex;
-    align-items: center;
     gap: 0.375rem;
     padding: 0.375rem 0.5rem;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--bg);
     font-size: 0.5625rem;
-    font-weight: 700;
-    text-transform: uppercase;
     letter-spacing: 0.06em;
   }
 
@@ -103,13 +88,10 @@ export const boardContentStyles: CSSResult = css`
 
   .column-count {
     margin-left: auto;
-    color: var(--muted);
     font-family: monospace;
   }
 
   .column-body {
-    display: flex;
-    flex-direction: column;
     gap: 0.5rem;
   }
 `;
@@ -128,14 +110,14 @@ export function renderBoardContent(
 ): TemplateResult {
   const flatView = def.ui?.view !== undefined && def.ui.view !== "board";
   return flatView
-    ? html`<div class="flow-list">
+    ? html`<div class="flow-list flex flex-col">
         ${repeat(
           entries,
           (entry) => entry.id,
           (entry) => renderInstance(def, entry, customKinds, callbacks)
         )}
       </div>`
-    : html`<div class="flow-board">
+    : html`<div class="flow-board flex items-start overflow-x-auto">
         ${groupBoard(def, entries).map((column) =>
           renderColumn(def, column, customKinds, callbacks)
         )}
@@ -164,17 +146,17 @@ function renderColumn(
   callbacks: BoardContentCallbacks
 ) {
   return html`<div
-    class="board-column"
+    class="board-column flex-1 flex flex-col"
     data-category=${column.category}
     data-empty=${column.entries.length === 0 ? "true" : "false"}
   >
-    <div class="column-header" data-category=${column.category}>
+    <div class="column-header flex items-center border bg-bg font-bold uppercase rounded-md" data-category=${column.category}>
       <span class="column-label">${column.label}</span>
-      <span class="column-count">${column.entries.length}</span>
+      <span class="column-count text-muted">${column.entries.length}</span>
     </div>
     ${
       column.entries.length > 0
-        ? html`<div class="column-body">
+        ? html`<div class="column-body flex flex-col">
           ${repeat(
             column.entries,
             (entry) => entry.id,

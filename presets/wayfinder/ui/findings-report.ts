@@ -9,7 +9,7 @@ import type {
 } from "workflow-engine/workflow-types";
 
 export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
-  const { LitElement: Base, html, css, nothing } = lit;
+  const { LitElement: Base, html, css, utilities, nothing } = lit;
 
   class FindingsReport extends Base {
     static properties = {
@@ -17,55 +17,48 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       sources: { attribute: false },
     };
 
-    static styles = css`
-      :host {
-        display: block;
-      }
-      .findings {
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-      }
-      .findings-body {
-        font-size: 0.6875rem;
-        line-height: 1.5;
-        color: var(--text);
-        white-space: pre-wrap;
-        margin: 0;
-      }
-      .sources-label {
-        font-size: 0.5625rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--muted);
-      }
-      .source {
-        font-size: 0.5625rem;
-        font-family: var(--font-mono, monospace);
-        color: var(--flow-accent, var(--accent));
-        display: block;
-        overflow-wrap: anywhere;
-      }
-    `;
+    static styles = [
+      utilities,
+      css`
+        :host {
+          display: block;
+        }
+        .findings-body {
+          line-height: 1.5;
+          color: var(--text);
+          white-space: pre-wrap;
+          margin: 0;
+        }
+        .sources-label {
+          font-size: 0.5625rem;
+          letter-spacing: 0.06em;
+        }
+        .source {
+          font-size: 0.5625rem;
+          font-family: var(--font-mono, monospace);
+          overflow-wrap: anywhere;
+        }
+      `,
+    ];
 
     findings: string | undefined = undefined;
     sources: string[] = [];
 
     render() {
       const sources = Array.isArray(this.sources) ? this.sources : [];
-      return html`<div class="findings">
+      return html`<div class="findings flex flex-col gap-2">
         ${
           this.findings !== undefined && this.findings !== ""
-            ? html`<pre class="findings-body">${this.findings}</pre>`
+            ? html`<pre class="findings-body text-xs">${this.findings}</pre>`
             : nothing
         }
         ${
           sources.length > 0
             ? html`<div>
-              <div class="sources-label">sources</div>
+              <div class="sources-label text-muted font-bold uppercase">sources</div>
               ${sources.map(
-                (source) => html`<span class="source">${source}</span>`
+                (source) =>
+                  html`<span class="source text-accent block">${source}</span>`
               )}
             </div>`
             : nothing

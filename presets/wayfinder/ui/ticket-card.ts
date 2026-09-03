@@ -2,28 +2,25 @@
  * decision ticket: type badge, question, dependsOn chips, HITL marker,
  * worktree/branch when the resolution workspace exists, the resolved-decision
  * preview from whichever resolution task ran, live HITL chat, and the state
- * actions. Self-contained (no value imports — the lit runtime arrives through
- * the default-export factory). */
+ * actions. Shares the WorkflowItem status readers with the other card
+ * surfaces (wayfinder-status.ts); the lit runtime arrives through the
+ * default-export factory. */
 
 import type {
-  ChatMessage,
   FlowComponentDeps,
   FlowComponentRegistrations,
   InstanceComponentProps,
 } from "workflow-engine/workflow-types";
 import type { TicketType } from "./shared.ts";
-
-// The resolution task ids per ticket type (the card previews whichever ran).
-const RESEARCH_TASK = "research";
-const CHAT_RESOLUTION_TASKS = [
-  "prototypeSession",
-  "grillSession",
-  "taskSession",
-  "taskHitlSession",
-];
+import {
+  agentIsThinking,
+  CHAT_RESOLUTION_TASKS,
+  RESEARCH_TASK,
+  readOutcomeError,
+} from "./wayfinder-status.ts";
 
 export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
-  const { LitElement: Base, html, css, nothing } = lit;
+  const { LitElement: Base, html, css, nothing, utilities } = lit;
 
   class TicketCard extends Base {
     static properties = {
@@ -34,7 +31,11 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       onSendMessage: { attribute: false },
     };
 
-    static styles = css`
+    // The injected utility sheet first, the card's component css after it —
+    // ticket 15's migration.
+    static styles = [
+      utilities,
+      css`
       :host {
         display: block;
       }
@@ -43,24 +44,17 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         border-radius: 8px;
         background: var(--surface);
         padding: 0.75rem 0.875rem;
-        display: flex;
-        flex-direction: column;
         gap: 0.5rem;
       }
       .ticket-head {
-        display: flex;
-        align-items: center;
         gap: 0.375rem;
       }
       .type-badge {
         font-size: 0.5625rem;
         font-weight: 700;
-        text-transform: uppercase;
         letter-spacing: 0.06em;
         padding: 0.125rem 0.375rem;
         border-radius: 4px;
-        border: 1px solid var(--border);
-        color: var(--muted);
       }
       .type-badge[data-type="research"] {
         color: var(--flow-accent, var(--accent));
@@ -80,28 +74,27 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       }
       .hitl-marker {
         font-size: 0.5625rem;
-        font-weight: 700;
-        text-transform: uppercase;
         letter-spacing: 0.06em;
         color: var(--bg);
-        background: var(--flow-accent, var(--accent));
+        padding: 0.125rem 0.375rem;
+        border-radius: 4px;
+      }
+      .scope-marker {
+        font-size: 0.5625rem;
+        letter-spacing: 0.06em;
         padding: 0.125rem 0.375rem;
         border-radius: 4px;
       }
       .ticket-title {
-        font-weight: 700;
         font-size: 0.8125rem;
         color: var(--text);
       }
       .ticket-question {
         font-size: 0.6875rem;
-        color: var(--muted);
         white-space: pre-wrap;
         margin: 0;
       }
       .depends-chips {
-        display: flex;
-        flex-wrap: wrap;
         gap: 0.25rem;
       }
       .depends-chip {
@@ -109,25 +102,25 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         font-family: var(--font-mono, monospace);
         color: var(--text);
         background: var(--bg);
-        border: 1px solid var(--border);
         border-radius: 4px;
         padding: 0.125rem 0.375rem;
+      }
+      .depends-chip[data-unsatisfied] {
+        border-style: dashed;
+        border-width: 2px;
+        padding: 0 0.25rem;
+      }
+      .waiting-note {
+        font-size: 0.625rem;
+        border-radius: 4px;
+        padding: 0.25rem 0.5rem;
       }
       .branch-line {
         font-size: 0.5625rem;
         font-family: var(--font-mono, monospace);
-        color: var(--muted);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
       }
       .decision {
-        background: var(--bg);
-        border: 1px solid var(--border);
-        border-radius: 6px;
         padding: 0.5rem 0.625rem;
-        display: flex;
-        flex-direction: column;
         gap: 0.375rem;
       }
       .decision-gist {
@@ -137,42 +130,30 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       }
       .decision-text {
         font-size: 0.625rem;
-        color: var(--muted);
         white-space: pre-wrap;
         max-height: 6rem;
-        overflow-y: auto;
         margin: 0;
       }
       .ticket-chat {
-        display: flex;
-        flex-direction: column;
         gap: 0.375rem;
         border-top: 1px dashed var(--border);
         padding-top: 0.5rem;
       }
       .session-error {
         font-size: 0.625rem;
-        color: var(--error);
-        border: 1px solid var(--error);
-        border-radius: 4px;
+        border-color: var(--error);
         padding: 0.375rem 0.5rem;
-        background: var(--bg);
       }
       .session-header {
-        display: flex;
-        flex-direction: column;
         gap: 0.125rem;
       }
       .session-label {
         font-size: 0.5625rem;
-        font-weight: 700;
-        text-transform: uppercase;
         letter-spacing: 0.06em;
         color: var(--flow-accent, var(--accent));
       }
       .session-desc {
         font-size: 0.625rem;
-        color: var(--muted);
         margin: 0;
       }
       button {
@@ -187,14 +168,13 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         cursor: pointer;
       }
       .ticket-actions {
-        display: flex;
-        flex-wrap: wrap;
         gap: 0.375rem;
       }
       .ticket-actions button {
         background: var(--bg);
       }
-    `;
+    `,
+    ];
 
     declare workflowDef: InstanceComponentProps["workflowDef"];
     declare instanceEntry: InstanceComponentProps["instanceEntry"];
@@ -212,38 +192,66 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       const dependsOn = Array.isArray(instanceState.dependsOn)
         ? (instanceState.dependsOn as string[])
         : [];
+      // The engine-projected dependency fact (ticket 12): which recorded
+      // blockers the engine has not resolved. A ready ticket with unresolved
+      // dependencies is waiting on them, not unconditionally actionable —
+      // the claim actions are already withheld by the engine's gates.
+      const waitingOn =
+        state.currentState === "ready"
+          ? (this.instanceEntry.dependencies?.unsatisfied ?? [])
+          : [];
       const hitl = instanceState.hitl === true;
+      // out_of_scope is a distinct terminal (ruled out — it never satisfies
+      // dependencies and records no decision); the card names it as such so a
+      // ruled-out ticket is never mistaken for a recorded decision.
+      const outOfScope = state.currentState === "out_of_scope";
       const branchName = instanceState.branchName as string | undefined;
       const worktreePath = instanceState.worktreePath as string | undefined;
       const actions = this.instanceEntry.availableActions ?? [];
 
-      return html`<div class="ticket">
-        <div class="ticket-head">
+      return html`<div class="ticket flex flex-col">
+        <div class="ticket-head flex items-center">
           ${
             type !== undefined
-              ? html`<span class="type-badge" data-type=${type}>${type}</span>`
+              ? html`<span class="type-badge uppercase text-muted border" data-type=${type}>${type}</span>`
               : nothing
           }
-          ${hitl ? html`<span class="hitl-marker">hitl</span>` : nothing}
+          ${hitl ? html`<span class="hitl-marker font-bold uppercase bg-accent">hitl</span>` : nothing}
+          ${
+            outOfScope
+              ? html`<span class="scope-marker font-bold uppercase text-muted border">ruled out</span>`
+              : nothing
+          }
         </div>
-        <div class="ticket-title">${title}</div>
+        <div class="ticket-title font-bold">${title}</div>
         ${
           question !== undefined && question !== ""
-            ? html`<p class="ticket-question">${question}</p>`
+            ? html`<p class="ticket-question text-muted">${question}</p>`
             : nothing
         }
         ${
           dependsOn.length > 0
-            ? html`<div class="depends-chips">
+            ? html`<div class="depends-chips flex flex-wrap">
               ${dependsOn.map(
-                (id) => html`<span class="depends-chip">${id}</span>`
+                (id) => html`<span
+                  class="depends-chip border"
+                  ?data-unsatisfied=${waitingOn.includes(id)}
+                  >${id}</span
+                >`
               )}
             </div>`
             : nothing
         }
         ${
+          waitingOn.length > 0
+            ? html`<div class="waiting-note text-muted border border-dashed" role="note">
+              Waiting on dependencies: ${waitingOn.join(", ")}
+            </div>`
+            : nothing
+        }
+        ${
           branchName !== undefined && branchName !== ""
-            ? html`<div class="branch-line">
+            ? html`<div class="branch-line text-muted truncate">
               ${branchName}${
                 worktreePath !== undefined && worktreePath !== ""
                   ? ` · ${worktreePath}`
@@ -257,7 +265,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         ${this.renderSessionError()}
         ${
           actions.length > 0
-            ? html`<div class="ticket-actions">
+            ? html`<div class="ticket-actions flex flex-wrap">
               ${actions.map(
                 (a) => html`<button
                   type="button"
@@ -282,8 +290,8 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       const findings = readOutputString(research, "findings");
       const researchSources = readOutputArray(research, "sources");
       if (findings !== "") {
-        return html`<div class="decision">
-          <p class="decision-text">${findings}</p>
+        return html`<div class="decision bg-bg border rounded-md flex flex-col">
+          <p class="decision-text text-muted overflow-y-auto">${findings}</p>
           ${
             researchSources.length > 0
               ? html`<p class="decision-gist">${researchSources.length} sources</p>`
@@ -297,9 +305,9 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         const decision = readCompletionString(outcome, "decision");
         const gist = readCompletionString(outcome, "gist");
         if (decision === "" && gist === "") continue;
-        return html`<div class="decision">
+        return html`<div class="decision bg-bg border rounded-md flex flex-col">
           ${gist !== "" ? html`<p class="decision-gist">${gist}</p>` : nothing}
-          ${decision !== "" ? html`<p class="decision-text">${decision}</p>` : nothing}
+          ${decision !== "" ? html`<p class="decision-text text-muted overflow-y-auto">${decision}</p>` : nothing}
         </div>`;
       }
       return nothing;
@@ -315,7 +323,7 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         const outcome = state.taskOutputs[taskId];
         if (outcome !== undefined && outcome.status === "error") {
           const error = readOutcomeError(outcome);
-          return html`<div class="session-error"
+          return html`<div class="session-error text-error border bg-bg rounded-sm"
             >Resolution failed: ${error} — retry to start a new session.</div
           >`;
         }
@@ -335,12 +343,12 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       const stateDef = this.workflowDef.states.find(
         (s) => s.id === state.currentState
       );
-      return html`<div class="ticket-chat">
-        <div class="session-header">
-          <span class="session-label">${stateDef?.label ?? state.currentState}</span>
+      return html`<div class="ticket-chat flex flex-col">
+        <div class="session-header flex flex-col">
+          <span class="session-label font-bold uppercase">${stateDef?.label ?? state.currentState}</span>
           ${
             stateDef?.description !== undefined && stateDef.description !== ""
-              ? html`<p class="session-desc">${stateDef.description}</p>`
+              ? html`<p class="session-desc text-muted">${stateDef.description}</p>`
               : nothing
           }
         </div>
@@ -361,17 +369,6 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
   return { components: { "ticket-card": TicketCard } };
 }
 
-// The agent is composing its next reply while the transcript ends on a message
-// it must answer (a user message it hasn't replied to yet, or a tool result
-// mid-loop). A transcript that ends on the system prompt (or is empty) is a
-// session waiting for its first user input — the agent is NOT thinking, and
-// showing the indicator there is what makes a claimed-but-idle session look
-// stuck.
-function agentIsThinking(messages: readonly ChatMessage[]): boolean {
-  const last = messages[messages.length - 1];
-  return last !== undefined && (last.role === "user" || last.role === "tool");
-}
-
 // Reads a string field off a task-outcome output (the output shape is open;
 // the read is defensive — an absent or non-string value reads as empty).
 function readOutputString(outcome: unknown, field: string): string {
@@ -388,14 +385,6 @@ function readOutputArray(outcome: unknown, field: string): string[] {
   if (output === null || typeof output !== "object") return [];
   const value = (output as Record<string, unknown>)[field];
   return Array.isArray(value) ? (value as string[]) : [];
-}
-
-// Reads the error message off a task-outcome entry (the wire shape is open;
-// the read is defensive — an absent message reads as a generic failure).
-function readOutcomeError(outcome: unknown): string {
-  if (outcome === null || typeof outcome !== "object") return "unknown error";
-  const error = (outcome as Record<string, unknown>).error;
-  return typeof error === "string" && error !== "" ? error : "unknown error";
 }
 
 // Reads a string field off an ai-chat task's completion arguments (wrapped as

@@ -24,6 +24,7 @@ import { expect, inject, test } from "vitest";
 import { app } from "../support/browser-app.mjs";
 import {
   captureFailureScreenshot,
+  clickChartingDone,
   dragFogCardAbove,
   submitFlowActionForm,
 } from "../support/flows.mjs";
@@ -38,6 +39,7 @@ test("wayfinder interactions: hover sync card<->marker and fog drag reorder", as
   const created = await app.createFlow("wayfinder", {
     name: flowName,
     destination: "Pick the editor's storage layer",
+    basePath: inject("projectPath"),
   });
   expect(created.ok, JSON.stringify(created)).toBe(true);
 
@@ -47,19 +49,25 @@ test("wayfinder interactions: hover sync card<->marker and fog drag reorder", as
     .toBe(true);
 
   // Chart the map (the mock answers the naming and frontier sessions). Each
-  // click auto-waits for its session's Done to be actionable — the old fixed
-  // sleeps between the sessions (4s/2s) are replaced by waiting on the
-  // observable DOM state (the next session's button appearing).
-  await app.click("button", { hasText: "Done" });
-  await app.click("button", { hasText: "Done" });
+  // click is scoped to its own session surface and waits for that session's
+  // Done to disappear — the next click cannot re-hit the previous session's
+  // still-mounted button in the transition race (the old fixed sleeps 4s/2s
+  // are long gone; see clickChartingDone in flows.mjs).
+  await clickChartingDone({ stateId: "naming" });
+  await clickChartingDone({ stateId: "frontier" });
 
-  // Two fog entries give the tray a pile to reorder.
+  // Two fog entries give the tray a pile to reorder. The first fog entry
+  // makes the expedition populated, so the map-first shell takes over; the
+  // flow actions live in its HUD, and the fog tray itself sits in the table.
   for (const brief of ["Choose the store", "Plot the reorder seam"]) {
     await app.click("button", { hasText: "Add fog entry", first: true });
     await app.waitForSelector("#cf-brief", { timeout: 10_000 });
     await app.fill("#cf-brief", brief);
     await submitFlowActionForm();
   }
+  // Switch to the table, where the fog tray and the mini-map live.
+  await app.waitForSelector(".view-toggle", { timeout: 30_000 });
+  await app.click(".view-toggle button", { hasText: "Table", first: true });
   await app.waitForSelector(".fog-card", {
     hasText: "Choose the store",
     timeout: 30_000,

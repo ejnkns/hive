@@ -42,6 +42,7 @@ import {
   queenBeeCompiled as queenBeeFlow,
   queenBeeWorkflows,
 } from "../compiled-presets.ts";
+import { scrubGitHookContext } from "./card-flow-harness.ts";
 
 const dummyTask: TaskDefinition = { id: "t", label: "T", role: "operation" };
 
@@ -58,7 +59,6 @@ function makeEngineRunner(
   const baseRunners = createEngineRunners({ tools: [], operations: {} });
   return baseRunners.operationRunner({
     flowConfig,
-    patchFlowConfig: () => {},
     instanceId: "card-1",
     workflowId: "cards",
     currentState: "ready",
@@ -78,7 +78,6 @@ function makeRunner(
   return createOperationRunner({
     getContext: (): OperationContext => ({
       flowConfig: () => flowConfig,
-      patchFlowConfig: () => {},
       instanceId: "card-1",
       workflowId: "cards",
       currentState: "ready",
@@ -108,6 +107,7 @@ describe("queen-bee domain persistence", () => {
   let basePath: string;
 
   beforeEach(() => {
+    scrubGitHookContext();
     root = mkdtempSync(join(tmpdir(), "hive-domain-persist-"));
     basePath = join(root, "repo");
     mkdirSync(basePath);

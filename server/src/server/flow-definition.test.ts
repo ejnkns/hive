@@ -518,6 +518,29 @@ export const flow: FlowDefinition = {
     assert.deepEqual(analyzeFlowDefinition(definition), []);
   });
 
+  it("flags a flow that persists outputs but does not require a basePath", () => {
+    const { definition } = parseDefinition(PERSISTED_WITHOUT_BASE_PATH_MODULE);
+    assert.deepEqual(analyzeFlowDefinition(definition), [
+      "flow persists outputs (ui.persistedOutputs / ui.persistedOutputDirs / task persist paths) but its configSchema does not require a basePath — instances without one are bound to a hive-owned default workspace (HIVE_DIR/workspaces/<flow>) instead of the user's project; require a basePath if the artifacts belong there",
+    ]);
+  });
+
+  it("stays silent when the persisted-output flow requires a basePath", () => {
+    const { definition } = parseDefinition(
+      PERSISTED_WITH_REQUIRED_BASE_PATH_MODULE
+    );
+    assert.deepEqual(analyzeFlowDefinition(definition), []);
+  });
+
+  it("flags a task persist path even without ui.persistedOutputs", () => {
+    const { definition } = parseDefinition(
+      TASK_PERSIST_WITHOUT_BASE_PATH_MODULE
+    );
+    assert.deepEqual(analyzeFlowDefinition(definition), [
+      "flow persists outputs (ui.persistedOutputs / ui.persistedOutputDirs / task persist paths) but its configSchema does not require a basePath — instances without one are bound to a hive-owned default workspace (HIVE_DIR/workspaces/<flow>) instead of the user's project; require a basePath if the artifacts belong there",
+    ]);
+  });
+
   it("accepts a board groupByField on a declared instance-state field and rejects undeclared ones (E3)", () => {
     const base = `import type { FlowDefinition } from "workflow-engine/workflow-types";
 
@@ -754,7 +777,6 @@ function operationRunners(compiled: CompiledFlowDefinition) {
         operations: compiled.operations ?? {},
         getContext: () => ({
           flowConfig: () => ctx.flowConfig,
-          patchFlowConfig: ctx.patchFlowConfig,
           instanceId: ctx.instanceId,
           workflowId: ctx.workflowId,
           currentState: ctx.currentState,
@@ -1431,6 +1453,170 @@ export const crossOperations = defineOperations({
 
 // A completionOutput task nobody reads, with no referenced files that could
 // read it: the discarded-output advisory must fire.
+// A persisted-output flow whose configSchema does not require a basePath:
+// an instance without one is bound to a hive-owned default workspace instead
+// of the user's project, so the advisory must fire. The module is otherwise
+// clean (a creation path exists, so no other advisory applies).
+const PERSISTED_WITHOUT_BASE_PATH_MODULE = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "persistedFlow",
+  label: "Persisted Flow",
+  configSchema: [],
+  ui: { persistedOutputs: ["map.md"] },
+  workflows: [
+    {
+      id: "items",
+      label: "Items",
+      instanceState: [{ field: "note", type: "string" }],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
+        {
+          id: "new",
+          label: "New",
+          category: "initial",
+          tasks: [
+            {
+              id: "research",
+              label: "Research",
+              role: "ai-task",
+              systemPrompt: "Research and call the completion tool.",
+            },
+          ],
+          autoTransitions: [
+            { to: "done", gate: { kind: "taskSuccess", task: "research" } },
+          ],
+        },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  actions: [
+    {
+      id: "add_item",
+      label: "Add an item",
+      variant: "primary",
+      createInstance: {
+        workflowId: "items",
+        fields: [
+          { key: "title", label: "Title", type: "string", required: true },
+        ],
+      },
+    },
+  ],
+};
+`;
+
+// The same persisted-output flow with a required basePath config field: the
+// artifacts have a home, so the advisory stays quiet.
+const PERSISTED_WITH_REQUIRED_BASE_PATH_MODULE = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "persistedFlow",
+  label: "Persisted Flow",
+  configSchema: [
+    { key: "basePath", label: "Base path", type: "string", required: true },
+  ],
+  ui: { persistedOutputs: ["map.md"] },
+  workflows: [
+    {
+      id: "items",
+      label: "Items",
+      instanceState: [{ field: "note", type: "string" }],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
+        {
+          id: "new",
+          label: "New",
+          category: "initial",
+          tasks: [
+            {
+              id: "research",
+              label: "Research",
+              role: "ai-task",
+              systemPrompt: "Research and call the completion tool.",
+            },
+          ],
+          autoTransitions: [
+            { to: "done", gate: { kind: "taskSuccess", task: "research" } },
+          ],
+        },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  actions: [
+    {
+      id: "add_item",
+      label: "Add an item",
+      variant: "primary",
+      createInstance: {
+        workflowId: "items",
+        fields: [
+          { key: "title", label: "Title", type: "string", required: true },
+        ],
+      },
+    },
+  ],
+};
+`;
+
+// A flow with no ui.persistedOutputs but a task persist path: the write
+// lands in the hive-owned default without a basePath, so the advisory still
+// fires.
+const TASK_PERSIST_WITHOUT_BASE_PATH_MODULE = `import type { FlowDefinition } from "workflow-engine/workflow-types";
+
+export const flow: FlowDefinition = {
+  id: "persistedFlow",
+  label: "Persisted Flow",
+  configSchema: [],
+  workflows: [
+    {
+      id: "items",
+      label: "Items",
+      instanceState: [{ field: "note", type: "string" }],
+      initial: "new",
+      terminalStates: ["done"],
+      states: [
+        {
+          id: "new",
+          label: "New",
+          category: "initial",
+          tasks: [
+            {
+              id: "research",
+              label: "Research",
+              role: "ai-task",
+              systemPrompt: "Research and call the completion tool.",
+              persist: { path: "map.md" },
+            },
+          ],
+          autoTransitions: [
+            { to: "done", gate: { kind: "taskSuccess", task: "research" } },
+          ],
+        },
+        { id: "done", label: "Done", category: "terminal" },
+      ],
+    },
+  ],
+  actions: [
+    {
+      id: "add_item",
+      label: "Add an item",
+      variant: "primary",
+      createInstance: {
+        workflowId: "items",
+        fields: [
+          { key: "title", label: "Title", type: "string", required: true },
+        ],
+      },
+    },
+  ],
+};
+`;
+
 const DISCARDED_MODULE = `import type { FlowDefinition } from "workflow-engine/workflow-types";
 
 export const flow: FlowDefinition = {
@@ -1636,7 +1822,6 @@ describe("honeycomb preset runs the full pipeline (paste → classified cards �
 
     const operationContext = (ctx: TaskRunnerContext) => ({
       flowConfig: () => ctx.flowConfig,
-      patchFlowConfig: ctx.patchFlowConfig,
       instanceId: ctx.instanceId,
       workflowId: ctx.workflowId,
       currentState: ctx.currentState,

@@ -55,6 +55,7 @@ describe("createAiChatRunner", () => {
       modelCaller: mockCaller([{ content: "##COMPLETE##" }]),
       toolDefinitions: {},
       toolExecutors: {},
+      basePath: tempDir(),
       completionSignal: "##COMPLETE##",
     });
 
@@ -69,6 +70,7 @@ describe("createAiChatRunner", () => {
       modelCaller: mockCaller([{ content: "REQUIREMENTS_COMPLETE" }]),
       toolDefinitions: {},
       toolExecutors: {},
+      basePath: tempDir(),
     });
 
     const result = await runner.run({
@@ -92,6 +94,7 @@ describe("createAiChatRunner", () => {
       ]),
       toolDefinitions: {},
       toolExecutors: {},
+      basePath: tempDir(),
     });
 
     const result = await runner.run({
@@ -120,6 +123,7 @@ describe("createAiChatRunner", () => {
       ]),
       toolDefinitions: {},
       toolExecutors: {},
+      basePath: tempDir(),
     });
 
     const result = await runner.run({
@@ -142,6 +146,7 @@ describe("createAiChatRunner", () => {
       ]),
       toolDefinitions: {},
       toolExecutors: {},
+      basePath: tempDir(),
     });
 
     const result = await runner.run({
@@ -196,6 +201,7 @@ describe("createAiChatRunner", () => {
       ]),
       toolDefinitions: {},
       toolExecutors: {},
+      basePath: tempDir(),
       completionTool: "submit_work",
     });
 
@@ -229,6 +235,7 @@ describe("createAiChatRunner", () => {
           isError: false,
         }),
       },
+      basePath: tempDir(),
       completionSignal: "##COMPLETE##",
     });
 
@@ -262,6 +269,7 @@ describe("createAiChatRunner", () => {
       modelCaller,
       toolDefinitions: {},
       toolExecutors: {},
+      basePath: tempDir(),
       completionSignal: "##COMPLETE##",
     });
 
@@ -287,6 +295,7 @@ describe("createAiChatRunner", () => {
       modelCaller,
       toolDefinitions: {},
       toolExecutors: {},
+      basePath: tempDir(),
       workflowInstanceState: () => ({ brief: "My idea" }),
       completionSignal: "##COMPLETE##",
     });
@@ -321,6 +330,7 @@ describe("createAiChatRunner", () => {
       modelCaller,
       toolDefinitions: {},
       toolExecutors: {},
+      basePath: tempDir(),
       completionSignal: "##COMPLETE##",
     });
 
@@ -360,6 +370,7 @@ describe("createAiChatRunner", () => {
           throw new Error("ENOENT: no such file");
         },
       },
+      basePath: tempDir(),
       completionSignal: "##COMPLETE##",
     });
 
@@ -417,6 +428,7 @@ describe("createAiChatRunner", () => {
           isError: false,
         }),
       },
+      basePath: tempDir(),
       completionSignal: "##COMPLETE##",
     });
 
@@ -442,6 +454,7 @@ describe("createAiChatRunner", () => {
       },
       toolDefinitions: {},
       toolExecutors: {},
+      basePath: tempDir(),
     });
 
     const runPromise = runner.run(dummyTask);
@@ -458,6 +471,7 @@ describe("createAiChatRunner", () => {
       ]),
       toolDefinitions: {},
       toolExecutors: {},
+      basePath: tempDir(),
       completionSignal: "##COMPLETE##",
       patchRunningTaskMessages: (messages) => snapshots.push([...messages]),
     });
@@ -495,6 +509,7 @@ describe("createAiChatRunner", () => {
       },
       toolDefinitions: {},
       toolExecutors: {},
+      basePath: tempDir(),
       workflowInstanceState: () => ({ ticket: { title: "Build the thing" } }),
       completionSignal: "##COMPLETE##",
     });
@@ -529,6 +544,7 @@ describe("createAiChatRunner", () => {
       modelCaller,
       toolDefinitions: {},
       toolExecutors: {},
+      basePath: tempDir(),
       patchRunningTaskStatus: (status) => {
         statuses.push(
           status.stage === "dispatched"
@@ -564,6 +580,7 @@ describe("createAiChatRunner", () => {
       },
       toolDefinitions: {},
       toolExecutors: {},
+      basePath: tempDir(),
       workflowInstanceState: () => ({}),
     });
 
@@ -593,6 +610,7 @@ describe("createAiChatRunner", () => {
       },
       toolDefinitions: {},
       toolExecutors: {},
+      basePath: tempDir(),
       workflowInstanceState: () => ({}),
     });
 
@@ -622,6 +640,7 @@ describe("createAiChatRunner", () => {
       modelCaller,
       toolDefinitions: {},
       toolExecutors: {},
+      basePath: tempDir(),
       completionSignal: "##COMPLETE##",
       patchRunningTaskMessages: (messages) => snapshots.push([...messages]),
     });
@@ -660,6 +679,7 @@ describe("createAiChatRunner", () => {
       },
       toolDefinitions: {},
       toolExecutors: {},
+      basePath: tempDir(),
     });
 
     await assert.rejects(runner.run(dummyTask), /read ECONNRESET/);

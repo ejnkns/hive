@@ -1,5 +1,6 @@
 /** @public — the flow runtime factory and its API surface. Import from here, not from create-flow-runtime/ directly. */
 
+import { isAbsolute } from "node:path";
 import type { FlowPersistence } from "./create-flow-runtime/flow-persistence.ts";
 import type { FlowRuntimeAPI } from "./create-flow-runtime/flow-runtime-api.ts";
 import type {
@@ -14,6 +15,10 @@ import {
   createWorkflowInstanceController,
   type WorkflowInstanceControllerAPI,
 } from "./create-workflow-instance-controller.ts";
+import {
+  projectDependencySatisfaction,
+  type WorkflowDependencyProjection,
+} from "./dependency-satisfaction.ts";
 import { summarizeWorkflowInstances } from "./derive-display.ts";
 import { evaluateEdges } from "./evaluate-edges.ts";
 import { evaluateGate } from "./evaluate-gate.ts";
@@ -35,6 +40,7 @@ export type {
   FlowRuntimeAPI,
   FlowRuntimeEvent,
   WorkflowDefResponse,
+  WorkflowDependencyProjection,
   WorkflowInstanceEntry,
   WorkflowSummary,
 };
@@ -55,12 +61,60 @@ export function createFlowRuntime<
   persistence?: FlowPersistence
 ): FlowRuntimeAPI<TFlowConfig, TFlowState> {
   // config/initialState are optional; {} satisfies the Record constraint
+  // The engine's basePath rule is narrow: a PRESENT basePath must be
+  // absolute — the engine never re-anchors a relative value to the daemon's
+  // cwd. Normalization (tilde expansion, the hive-owned default workspace for
+  // an absent value) is the server's creation-time job; a relative value
+  // reaching the engine is a caller bug.
+  const declaredBasePath = (config as Record<string, unknown> | undefined)
+    ?.basePath;
+  if (
+    typeof declaredBasePath === "string" &&
+    declaredBasePath !== "" &&
+    !isAbsolute(declaredBasePath)
+  ) {
+    throw new Error(
+      `Flow config basePath must be an absolute path (got "${declaredBasePath}") — the engine never resolves against the daemon's cwd`
+    );
+  }
+
+  // Hard rejection: a flow that declares persist paths needs a basePath to
+  // write them under. Creation always provides one (the server binds the
+  // hive-owned default workspace when absent), so a persist-declaring flow
+  // without a basePath is an invalid config — the caller must surface it
+  // (e.g. rehydration skips the flow with a warning), never silently patch
+  // it, or the mistake would surface as a confusing mid-task error.
+  const hasBasePath =
+    typeof declaredBasePath === "string" && declaredBasePath !== "";
+  const declaresPersist = workflowDefs.some((wf) =>
+    wf.states.some((state) =>
+      (state.tasks ?? []).some((task) => task.persist !== undefined)
+    )
+  );
+  if (declaresPersist && !hasBasePath) {
+    throw new Error(
+      "Flow declares persist paths (task persist) but the flow config has no basePath — provide an absolute basePath (the server binds a hive-owned default workspace at creation)"
+    );
+  }
+
   const _flowConfig = (config ?? {}) as TFlowConfig;
   const _flowState = (initialState ?? {}) as TFlowState;
   const controllers = new Map<string, WorkflowInstanceControllerAPI>();
   const instanceWorkflowIds = new Map<string, string>();
   const workflowMap = new Map<string, RuntimeWorkflowConfig>();
   const eventHandlers = new Set<FlowEventHandler>();
+  let revision = 0;
+
+  // The flow's revision stamp: a monotonic counter advanced once per emitted
+  // runtime event. Every emitted event is a snapshot-affecting mutation (an
+  // instance created, its state or domain data changed, it terminated or was
+  // removed, or the flow state was patched), so the counter advances exactly
+  // when the serialized snapshot's content can have changed. Read-only
+  // re-delivery — snapshot serialization for an init frame, an HTTP fetch, a
+  // host re-render — reads the counter without advancing it, so equal stamps
+  // mean identical content. The count lives per runtime (independent across
+  // flows) and restarts at process rehydration, which is unobservable because
+  // every client re-initializes from a fresh init frame on reconnect.
 
   for (const wf of workflowDefs) {
     workflowMap.set(wf.id, wf);
@@ -69,6 +123,7 @@ export function createFlowRuntime<
   // ── internal helpers ──
 
   function emit(event: FlowRuntimeEvent): void {
+    revision += 1;
     for (const handler of eventHandlers) {
       handler(event);
     }
@@ -145,11 +200,6 @@ export function createFlowRuntime<
     emit({ type: "instance_removed", instanceId, workflowId });
     persistence?.deleteInstance?.(flowId, instanceId);
     return true;
-  }
-
-  function patchFlowConfig(patch: Partial<TFlowConfig>): void {
-    Object.assign(_flowConfig, patch);
-    persistence?.saveFlow(flowId, _flowConfig, _flowState);
   }
 
   function patchFlowState(patch: Partial<TFlowState>): void {
@@ -366,11 +416,22 @@ export function createFlowRuntime<
   function getWorkflowInstanceEntries(): WorkflowInstanceEntry[] {
     const entries = Array.from(controllers.entries()).map(([id, ctrl]) => {
       const workflowId = instanceWorkflowIds.get(id) ?? "";
+      const workflow = workflowMap.get(workflowId);
+      const state = ctrl.getState();
       return {
         id,
         workflowId,
-        state: ctrl.getState(),
+        state,
         availableActions: ctrl.getAvailableActions(),
+        // The engine's own dependsOnState evaluation, projected per entry so
+        // any surface reads the same fact the dispatch-time gate enforces.
+        dependencies: projectDependencySatisfaction({
+          states: workflow?.states ?? [],
+          currentState: state.currentState,
+          workflowInstanceState: state.workflowInstanceState,
+          workflowInstancesInState,
+          instanceTitlePath: workflow?.instance?.title,
+        }),
         editFields: (workflowMap.get(workflowId)?.editFields ?? []).map(
           resolveEditFieldOptions
         ),
@@ -440,7 +501,6 @@ export function createFlowRuntime<
       _flowState,
       {
         flowConfig: _flowConfig,
-        patchFlowConfig,
         instanceId,
         workflowId,
         // Expose instance creation to agents via the create_instance tool: the
@@ -511,7 +571,8 @@ export function createFlowRuntime<
   return {
     getFlowConfig: () => _flowConfig,
     getFlowState: () => _flowState,
-    patchFlowConfig,
+    // The snapshot revision stamp (see the counter declaration above).
+    getRevision: () => revision,
     patchFlowState,
     addWorkflowInstance,
     getWorkflowInstance: (instanceId: string) => controllers.get(instanceId),

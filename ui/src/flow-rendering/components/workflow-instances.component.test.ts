@@ -40,6 +40,19 @@ function host(def = cardDef(), instances = [entry("c1", "ready")]) {
 }
 
 describe("WorkflowInstances board rendering", () => {
+  it("the board content styles with the shared utility vocabulary", async () => {
+    // Ticket 15: the canonical board composes the injected utility sheet —
+    // both hosts (this section and <workflow-board-content>) must carry it.
+    const def = boardDef([{ id: "ready", label: "Ready", states: ["ready"] }]);
+    const el = await mount(host(def, [entry("a", "ready")]));
+    await settle(shadowRootOf(el));
+    const header = shadowRootOf(el).querySelector(".column-header");
+    expect(header).not.toBeNull();
+    for (const utility of ["flex", "items-center", "border", "uppercase"]) {
+      expect(header?.classList.contains(utility)).toBe(true);
+    }
+  });
+
   it("renders curated columns from ui.columns in declaration order", async () => {
     const def = boardDef([
       { id: "ready", label: "Ready", states: ["ready"] },

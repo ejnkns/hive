@@ -12,7 +12,7 @@ import type {
 const PLAN_TASK = "plan";
 
 export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
-  const { LitElement: Base, html, css, nothing } = lit;
+  const { LitElement: Base, html, css, utilities, nothing } = lit;
 
   class BuildCard extends Base {
     static properties = {
@@ -23,68 +23,50 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       onSendMessage: { attribute: false },
     };
 
-    static styles = css`
-      :host {
-        display: block;
-      }
-      .build {
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        background: var(--surface);
-        padding: 0.75rem 0.875rem;
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-      }
-      .build-state {
-        font-size: 0.5625rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--flow-accent, var(--accent));
-      }
-      .build-title {
-        font-weight: 700;
-        font-size: 0.8125rem;
-        color: var(--text);
-      }
-      .spec-excerpt {
-        font-size: 0.625rem;
-        color: var(--muted);
-        white-space: pre-wrap;
-        max-height: 6rem;
-        overflow-y: auto;
-        margin: 0;
-        background: var(--bg);
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        padding: 0.5rem 0.625rem;
-      }
-      .plan-progress {
-        display: flex;
-        align-items: center;
-        gap: 0.375rem;
-        font-size: 0.5625rem;
-        font-family: var(--font-mono, monospace);
-        color: var(--muted);
-      }
-      .build-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.375rem;
-      }
-      button {
-        font-family: inherit;
-        font-size: 0.625rem;
-        height: 24px;
-        padding: 0 0.5rem;
-        border-radius: 4px;
-        border: 1px solid var(--border);
-        background: var(--bg);
-        color: var(--text);
-        cursor: pointer;
-      }
-    `;
+    static styles = [
+      utilities,
+      css`
+        :host {
+          display: block;
+        }
+        .build {
+          padding: 0.75rem 0.875rem;
+        }
+        .build-state {
+          font-size: 0.5625rem;
+          letter-spacing: 0.06em;
+        }
+        .build-title {
+          color: var(--text);
+        }
+        .spec-excerpt {
+          font-size: 0.625rem;
+          white-space: pre-wrap;
+          max-height: 6rem;
+          margin: 0;
+          padding: 0.5rem 0.625rem;
+        }
+        .plan-progress {
+          gap: 0.375rem;
+          font-size: 0.5625rem;
+          font-family: var(--font-mono, monospace);
+        }
+        .build-actions {
+          gap: 0.375rem;
+        }
+        button {
+          font-family: inherit;
+          font-size: 0.625rem;
+          height: 24px;
+          padding: 0 0.5rem;
+          border-radius: 4px;
+          border: 1px solid var(--border);
+          background: var(--bg);
+          color: var(--text);
+          cursor: pointer;
+        }
+      `,
+    ];
 
     declare workflowDef: InstanceComponentProps["workflowDef"];
     declare instanceEntry: InstanceComponentProps["instanceEntry"];
@@ -103,26 +85,26 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       const ticketCount = readOutputArrayLength(plan);
       const actions = this.instanceEntry.availableActions ?? [];
 
-      return html`<div class="build">
-        <div class="build-state">${stateDef?.label ?? state.currentState}</div>
-        <div class="build-title">
+      return html`<div class="build border rounded-lg bg-surface flex flex-col gap-2">
+        <div class="build-state text-accent font-bold uppercase">${stateDef?.label ?? state.currentState}</div>
+        <div class="build-title text-base font-bold">
           ${instanceState.destination ?? "Build phase"}
         </div>
         ${
           spec !== undefined && spec !== ""
-            ? html`<pre class="spec-excerpt">${excerpt(spec, 280)}</pre>`
+            ? html`<pre class="spec-excerpt text-muted bg-bg border rounded-md overflow-y-auto">${excerpt(spec, 280)}</pre>`
             : nothing
         }
         ${
           ticketCount > 0
-            ? html`<div class="plan-progress"
+            ? html`<div class="plan-progress flex items-center text-muted"
               >${ticketCount} plan tickets</div
             >`
             : nothing
         }
         ${
           actions.length > 0
-            ? html`<div class="build-actions">
+            ? html`<div class="build-actions flex flex-wrap">
               ${actions.map(
                 (a) => html`<button
                   type="button"

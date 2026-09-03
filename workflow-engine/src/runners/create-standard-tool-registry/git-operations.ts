@@ -209,9 +209,14 @@ export function validateRepo(
     configuredBase;
   if (!rawBasePath) throw new Error("No basePath to validate");
 
-  const basePath = rawBasePath.startsWith("/")
-    ? rawBasePath
-    : join(process.cwd(), rawBasePath);
+  // basePath is absolute by construction (creation normalization); a relative
+  // value is a bug in the caller, never a reason to re-anchor on the cwd.
+  if (!rawBasePath.startsWith("/")) {
+    throw new Error(
+      `basePath must be absolute (got "${rawBasePath}") — the engine never resolves against the daemon's cwd`
+    );
+  }
+  const basePath = rawBasePath;
   if (!existsSync(basePath)) {
     throw new Error(`Path does not exist: ${basePath}`);
   }

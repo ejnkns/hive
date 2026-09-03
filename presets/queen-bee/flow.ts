@@ -13,7 +13,24 @@ export const flow: FlowDefinition = {
       required: true,
       hint: "A git repository root or a plain directory to bind the flow to.",
     },
+    {
+      key: "integrationBranch",
+      label: "Integration branch",
+      type: "string",
+      defaultValue: "queen-bee-main",
+      hint: "The branch accepted work merges into.",
+    },
+    {
+      key: "branchPrefix",
+      label: "Feature branch prefix",
+      type: "string",
+      defaultValue: "queen-bee/",
+      hint: "Prefix for per-card feature branches.",
+    },
   ],
+  // Flow config is static (set at creation); mutable flow-level decisions —
+  // the target branch inferred at onboarding — live in flowState.
+  flowState: [{ field: "targetBranch", type: "string" }],
   domainDir: ".queen-bee",
   ui: {
     components: {
@@ -64,7 +81,7 @@ export const flow: FlowDefinition = {
       id: "onboarding",
       label: "Onboarding",
       description:
-        "Bind a repository to a flow: configure the git identity, validate, ensure the integration branch, write project metadata, patch flow config.",
+        "Bind a repository to a flow: validate it, ensure the integration branch, write project metadata.",
       ui: {
         view: "list",
       },
@@ -72,36 +89,9 @@ export const flow: FlowDefinition = {
       terminalStates: ["complete"],
       states: [
         {
-          id: "configuring",
-          label: "Configuring",
-          category: "initial",
-          tasks: [
-            {
-              id: "configureFlow",
-              label: "Configure git identity",
-              role: "operation",
-              operations: ["patch_flow_config"],
-              operationInputs: {
-                integrationBranch: "queen-bee-main",
-                branchPrefix: "queen-bee/",
-                domainDir: ".queen-bee",
-              },
-            },
-          ],
-          autoTransitions: [
-            {
-              to: "validating",
-              gate: {
-                kind: "taskSuccess",
-                task: "configureFlow",
-              },
-            },
-          ],
-        },
-        {
           id: "validating",
           label: "Validating",
-          category: "active",
+          category: "initial",
           tasks: [
             {
               id: "validateRepo",
@@ -179,7 +169,7 @@ export const flow: FlowDefinition = {
           ],
           autoTransitions: [
             {
-              to: "binding",
+              to: "complete",
               gate: {
                 kind: "and",
                 gates: [
@@ -213,40 +203,6 @@ export const flow: FlowDefinition = {
           ],
         },
         {
-          id: "binding",
-          label: "Binding flow config",
-          category: "active",
-          tasks: [
-            {
-              id: "bindFlow",
-              label: "Bind repository to flow config",
-              role: "operation",
-              operations: ["patch_flow_config"],
-              operationInputs: {
-                basePath: "@flow:basePath",
-                targetBranch: "@flow:targetBranch",
-                name: "@flow:name",
-              },
-            },
-          ],
-          autoTransitions: [
-            {
-              to: "complete",
-              gate: {
-                kind: "taskSuccess",
-                task: "bindFlow",
-              },
-            },
-            {
-              to: "failed",
-              gate: {
-                kind: "taskError",
-                task: "bindFlow",
-              },
-            },
-          ],
-        },
-        {
           id: "complete",
           label: "Complete",
           category: "terminal",
@@ -265,7 +221,7 @@ export const flow: FlowDefinition = {
           ],
         },
       ],
-      initial: "configuring",
+      initial: "validating",
     },
     {
       id: "requirements",

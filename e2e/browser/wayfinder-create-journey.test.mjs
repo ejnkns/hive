@@ -28,6 +28,7 @@ test("creating a wayfinder instance starts the charting session with the destina
   const created = await app.createFlow("wayfinder", {
     name: flowName,
     destination: "A spec for the routing layer",
+    basePath: inject("projectPath"),
   });
   expect(created.ok, JSON.stringify(created)).toBe(true);
 
@@ -36,8 +37,9 @@ test("creating a wayfinder instance starts the charting session with the destina
     .poll(() => app.isVisible("workflow-instances"), { timeout: 30_000 })
     .toBe(true);
 
-  // The creation destination lands on the map.
-  await app.waitForSelector(".dest-note", {
+  // The creation destination lands on the Base Camp (a newly created flow is
+  // an empty expedition, so it presents the Base Camp empty state).
+  await app.waitForSelector(".base-dest .name", {
     hasText: "routing layer",
     timeout: 30_000,
   });
@@ -67,7 +69,7 @@ test("creating a wayfinder instance starts the charting session with the destina
   await expect
     .poll(() => app.isVisible("workflow-instances"), { timeout: 30_000 })
     .toBe(true);
-  await app.waitForSelector(".dest-note", {
+  await app.waitForSelector(".base-dest .name", {
     hasText: "routing layer",
     timeout: 30_000,
   });

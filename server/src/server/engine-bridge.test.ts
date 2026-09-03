@@ -36,7 +36,6 @@ function makeContext(
 ): TaskRunnerContext {
   return {
     flowConfig: {},
-    patchFlowConfig: () => {},
     instanceId: "instance-1",
     workflowId: "test-wf",
     currentState: "ready",
@@ -240,42 +239,5 @@ describe("createEngineRunners", () => {
     assert.ok(
       existsSync(join(workspacesBasePath, "cards", "instance-1", "attempt-2"))
     );
-  });
-
-  it("patch_flow_config writes inputs into flow config", async () => {
-    const config: Record<string, unknown> = {
-      basePath: "/tmp/repo",
-      name: "Project",
-      targetBranch: "main",
-    };
-    const runners = createEngineRunners();
-
-    const task: TaskDefinition = {
-      id: "bind",
-      label: "Bind",
-      role: "operation",
-      operations: ["patch_flow_config"],
-      operationInputs: {
-        basePath: "@flow:basePath",
-        targetBranch: "@flow:targetBranch",
-        name: "@flow:name",
-        maxConcurrentWorkers: 5,
-      },
-    };
-    const result = await runners
-      .operationRunner(
-        makeContext({
-          flowConfig: config,
-          patchFlowConfig: (patch) => Object.assign(config, patch),
-        })
-      )
-      .run(task);
-
-    const output = result.output as Record<string, unknown>;
-    assert.equal(output.ok, true);
-    assert.equal(config.name, "Project");
-    assert.equal(config.basePath, "/tmp/repo");
-    assert.equal(config.targetBranch, "main");
-    assert.equal(config.maxConcurrentWorkers, 5);
   });
 });

@@ -10,7 +10,7 @@
 // (expect.poll / app.waitForSelector / app.waitForFunction) instead of these
 // helpers; the poll-loop helpers this module used to carry were deleted once
 // the last consumer (queen-bee, ticket 09) migrated.
-import { onTestFailed } from "vitest";
+import { expect, onTestFailed } from "vitest";
 import { app } from "./browser-app.mjs";
 
 // ── flow / definition registration via the built server's API ──────────────
@@ -115,6 +115,20 @@ export async function findSessionState() {
   });
 }
 
+// Removes every `hive:author:*` localStorage key in the app page. The app
+// page's localStorage persists across the tests of one run (same app
+// context), so a stale authoring session from an earlier test is a live
+// candidate for session-state reads (findSessionState returns the first
+// `hive:author:*` flow that still fetches). Call at a test's start — after
+// the app page exists — to scope authoring sessions per test.
+export async function clearAuthoringSessions() {
+  await app.evaluate(() => {
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith("hive:author:")) localStorage.removeItem(key);
+    }
+  });
+}
+
 // ── chat reply ──────────────────────────────────────────────────────────────
 
 // Sends a chat message to the first interactive chat-session: the input only
@@ -203,6 +217,29 @@ export async function submitFlowActionForm() {
   await app.click(".dialog-actions button", { hasText: "Run", first: true });
 }
 
+// ── wayfinder charting sessions ───────────────────────────────────────────
+
+// Clicks the base-camp charting card's Done for ONE workflow state and waits
+// for that button to disappear. The unscoped repeated pattern
+// (`app.click("button", { hasText: "Done" })` twice) races: the second click
+// can re-hit the first session's still-mounted button in the transition
+// window. The button is therefore scoped to its own session surface (the
+// base-camp charting card carries the raw state id in its .lbl — "naming" /
+// "frontier"), and the disappearance poll guarantees the next click cannot
+// touch the previous session's button. The Done action is gated on the
+// session being interactive, so waiting for the button IS waiting for the
+// session to land interactive.
+export async function clickChartingDone({ stateId, timeoutMs = 40_000 }) {
+  const doneSelector = `.card[data-id="base"]:has(.lbl:text-is("${stateId}")) .card-actions button:text-is("Done")`;
+  await expect
+    .poll(() => app.count(doneSelector), { timeout: timeoutMs })
+    .toBeGreaterThan(0);
+  await app.click(doneSelector);
+  await expect
+    .poll(() => app.count(doneSelector), { timeout: timeoutMs })
+    .toBe(0);
+}
+
 // ── fog drag-reorder (the ONE justified dispatched-event workaround) ─────────
 
 // Page-side drag of the fog card `secondId` above `firstId`: synthetic
@@ -215,14 +252,29 @@ export async function dragFogCardAbove(firstId, secondId) {
   return app.evaluate(
     ({ firstId, secondId }) => {
       const host = document.querySelector("workflow-instances");
-      const servedRoot = host?.shadowRoot
+      const root = host?.shadowRoot
         ?.querySelector("dynamic-element-host")
         ?.shadowRoot?.querySelector(".mount > *")?.shadowRoot;
-      if (!servedRoot) return null;
-      const byId = (id) =>
-        servedRoot.querySelector(`.fog-card[data-id="${id}"]`);
-      const first = byId(firstId);
-      const second = byId(secondId);
+      if (!root) return null;
+      // The spatial shell nests the table workbench, and served elements get
+      // generated hive-served-* tags, so selectors cannot name the layers —
+      // pierce every shadow root under the served element for the fog cards.
+      const fogCards = [];
+      const walk = (shadow) => {
+        for (const el of shadow.querySelectorAll(".fog-card")) {
+          fogCards.push(el);
+        }
+        for (const el of shadow.querySelectorAll("*")) {
+          if (el.shadowRoot !== null) walk(el.shadowRoot);
+        }
+      };
+      walk(root);
+      const first = fogCards.find(
+        (card) => card.getAttribute("data-id") === firstId
+      );
+      const second = fogCards.find(
+        (card) => card.getAttribute("data-id") === secondId
+      );
       if (!first || !second) return null;
       const pile = second.parentElement;
       const firstRect = first.getBoundingClientRect();

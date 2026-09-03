@@ -312,7 +312,6 @@ export const websearchTools = [
 function operationContext(ctx: TaskRunnerContext): OperationContext {
   return {
     flowConfig: () => ctx.flowConfig,
-    patchFlowConfig: ctx.patchFlowConfig,
     instanceId: ctx.instanceId,
     workflowId: ctx.workflowId,
     currentState: ctx.currentState,
@@ -386,6 +385,7 @@ function buildRuntime(
         modelCaller,
         toolDefinitions,
         toolExecutors,
+        basePath: join(tmpdir(), "hive-module-set"),
         patchWorkflowInstanceState: ctx.patchWorkflowInstanceState,
         workflowInstanceState: ctx.workflowInstanceState,
         patchRunningTaskMessages: ctx.patchRunningTaskMessages,
@@ -1126,6 +1126,37 @@ export const scoreOperations = defineOperations<Record<string, unknown>>({
       assert.deepEqual(result.errors, [], `${presetName} gate errors`);
       assert.ok(result.flow, `${presetName} must load (compile)`);
     }
+  });
+
+  it("the wayfinder ticket board keeps decision and out-of-scope lanes distinct", async () => {
+    const source = readFileSync(
+      join(presetRoot("wayfinder"), "flow.ts"),
+      "utf-8"
+    );
+    const { definition, findings } = parseDefinition(source);
+    assert.deepEqual(findings, [], "wayfinder parse findings");
+    const ticket = definition.workflows.find(
+      (workflow) => workflow.id === "ticket"
+    );
+    assert.ok(ticket, "wayfinder declares a ticket workflow");
+    const columns = ticket.ui?.columns ?? [];
+    // `closed` is the recorded-decision terminal; `out_of_scope` is a distinct
+    // terminal (ruled out, never satisfies dependencies). The generic board —
+    // the degraded path — groups by these columns, so sharing a column would
+    // present ruled-out tickets as decisions.
+    const closedColumn = columns.find((column) =>
+      column.states.includes("closed")
+    );
+    const scopeColumn = columns.find((column) =>
+      column.states.includes("out_of_scope")
+    );
+    assert.ok(closedColumn, "a column holds the closed state");
+    assert.ok(scopeColumn, "a column holds the out_of_scope state");
+    assert.notEqual(
+      closedColumn.id,
+      scopeColumn.id,
+      "closed and out_of_scope must not share a lane"
+    );
   });
 });
 

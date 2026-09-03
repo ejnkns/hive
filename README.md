@@ -23,15 +23,13 @@ _replaced with the alive._
 
 > **Work in progress.**
 
-Hive is a local LLM proxy daemon with telemetry-driven model routing, plus a
-declarative flow engine that runs AI agents server-side. It hides the
-volatility of free model providers by continuously monitoring quality and
-swapping providers automatically.
+Hive is an intelligent model router and a platform for authoring and running
+AI-enabled workflows. The router selects provider/model nodes, preserves useful
+session affinity, and fails over according to policy. The workflow platform lets
+AI and humans create versioned FlowPackages containing definitions, execution
+modules, and bespoke UI, then instantiate them as durable FlowInstances.
 
-New here? Read the tutorial in `docs/tutorial/` — a step-by-step walkthrough
-of how the codebase works, pointing at the exact files:
-[01-what-is-hive.md](docs/tutorial/01-what-is-hive.md) starts with the package
-map and boot sequence.
+
 
 ## What Hive does
 
@@ -44,9 +42,6 @@ map and boot sequence.
   reviewer agents), **honeycomb** (self-organizing content), **wayfinder**
   (research/collection flows).
 
-The README's design mantra: *flows = product, proxy = backbone* (see
-`docs/design-plan.md`). Repo layout: `server/` (the daemon), `ui/` (Svelte
-dashboard), `workflow-engine/`, `telemetry/`, `shared/`, `presets/`, `e2e/`.
 
 ### Dynamic Model Routing
 
@@ -69,11 +64,13 @@ dashboard), `workflow-engine/`, `telemetry/`, `shared/`, `presets/`, `e2e/`.
 
 ### Flows
 
-A flow definition is pure data — workflows, states, tasks, gates, edges — that
-the engine (`workflow-engine/`) compiles into a runtime. AI tasks call models
-**through the same routing pipeline** as external clients, with a standard tool
-registry (file read/write, command execution, git, web fetch). The server
-registers, persists, serves, and can even **AI-author** definitions
+A FlowDefinition is reusable flow code — workflows, states, tasks, gates, edges,
+relationships, and UI metadata — that the engine compiles into a runtime. A
+FlowInstance is a long-lived workspace created from an immutable FlowConfig;
+it contains WorkflowItems, each progressing through one workflow graph. AI tasks
+call models **through the same routing pipeline** as external clients, with a
+standard tool registry (file read/write, command execution, git, web fetch).
+The server registers, persists, serves, and can even **AI-author** definitions
 (`POST /api/flows/definitions/author` — an agentic session that writes the
 definition module and validates it against a typechecking gate).
 
@@ -176,6 +173,23 @@ pnpm build          # telemetry → ui → server (bundled binary at server/dist
 pnpm test           # unit + e2e suite
 ```
 
-See `docs/tutorial/08-tests-and-tooling.md` for the test layout, and
-`CONTEXT.md` for code conventions (fractal file structure, `.ts`-suffixed
-relative imports, no emojis).
+### Visual matrix (Storybook + Chromatic)
+
+The visual contract of the served flow UIs — the wayfinder map, table
+workbench, drawer, card family, and the default flow components — lives in
+`visual-matrix/` as Storybook stories snapshotted by Chromatic. Baselines
+are owned by Chromatic's cloud (approve/review in the Chromatic UI, tracked
+git-natively across branches); no images are committed to git. See
+`docs/decisions/2026-09-03-visual-testing-chromatic-replaces-percy.md`.
+
+```bash
+pnpm --filter visual-matrix dev          # Storybook UI at http://localhost:6006
+pnpm --filter visual-matrix build        # static build → visual-matrix/storybook-build
+pnpm --filter visual-matrix chromatic:dry-run  # run the Chromatic CLI without uploading
+pnpm --filter visual-matrix chromatic    # build + upload to Chromatic for diff/review
+```
+
+The project token lives in `visual-matrix/chromatic.config.json` (a
+Chromatic project token only permits publishing builds to the project — see
+the decision record). CI overrides it with `CHROMATIC_PROJECT_TOKEN`; the
+CLI also fails on unclean or unpushed git state, so push before uploading.

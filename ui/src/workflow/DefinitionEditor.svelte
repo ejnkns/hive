@@ -733,6 +733,7 @@ h1 {
 }
 
 .draft-hint {
+  flex-basis: 100%;
   font-size: var(--text-sm);
   color: var(--muted);
   line-height: 1.4;
@@ -741,6 +742,7 @@ h1 {
 
 .session-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: 0.5rem;
   margin-bottom: 0.5rem;

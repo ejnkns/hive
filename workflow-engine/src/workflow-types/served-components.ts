@@ -6,7 +6,7 @@
  * files can type their modules with a type-only import from the allowlist
  * (workflow-engine/workflow-types) — the module-set gate typechecks them. */
 
-import type { css, html, LitElement, nothing, svg } from "lit";
+import type { CSSResult, css, html, LitElement, nothing, svg } from "lit";
 import type {
   WorkflowDefResponse,
   WorkflowInstanceEntry,
@@ -32,6 +32,13 @@ export type FlowComponentDeps = {
   // — SVG is a distinct XML namespace, so its elements must be created with
   // createElementNS). The map view uses it for the semantic backdrop.
   svg: typeof svg;
+  // The hive utility-class stylesheet (Tailwind-compatible class names bound
+  // to the app's theme tokens), composed FIRST in a served component's
+  // `static styles` so component css can override it. A global stylesheet
+  // cannot reach shadow DOM, so the utilities ride the same injection as the
+  // lit runtime; a component that never composes it renders exactly as
+  // before — the injection is additive.
+  utilities: CSSResult;
 };
 
 // The registrations a served component module returns: instance components
@@ -80,12 +87,18 @@ export type WorkflowViewProps = {
   // Cross-workflow context: every workflow of the flow with its instance
   // count by current state — so a workflow-level view can render
   // sibling-workflow state (e.g. the expedition map shows the ticket
-  // frontier/fog/decisions). Includes the view's own workflow.
+  // frontier/fog/decisions). Includes the view's own workflow. The
+  // dependency aggregates carry the engine-evaluated dependency projection:
+  // `waitingOnDependencies` counts entries with at least one unsatisfied
+  // blocker; `dependenciesSatisfied` counts entries whose recorded blockers
+  // are all satisfied. Entries with no recorded blockers count in neither.
   workflowCounts: ReadonlyArray<{
     workflowId: string;
     label: string;
     total: number;
     byState: Readonly<Record<string, number>>;
+    waitingOnDependencies: number;
+    dependenciesSatisfied: number;
   }>;
   // The existing hive-action / hive-send-message callbacks, scoped to a
   // workflow instance id.
@@ -111,6 +124,16 @@ export type FlowViewFlow = {
   label: string;
   status: FlowStatus;
   config: Record<string, unknown>;
+  // The flow snapshot's revision stamp: a monotonic per-flow counter the
+  // runtime advances once per snapshot-affecting mutation (an instance
+  // created, its state or domain data changed, it terminated or was removed,
+  // or the flow state was patched) and reads — never advances — when a
+  // snapshot is serialized or re-delivered (reconnect init, host re-render),
+  // so equal stamps mean identical content. Surfaces may compare stamps to
+  // skip no-op diffing of a re-delivered snapshot; the field is optional and
+  // absent on degraded paths (older hosts), where consumers must fall back
+  // to always-diff.
+  revision?: number;
 };
 
 // The gate-evaluated, UI-facing view of a flow-level action (no gate function

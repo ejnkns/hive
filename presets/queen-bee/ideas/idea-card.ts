@@ -13,7 +13,7 @@ import type {
 } from "workflow-engine/workflow-types";
 
 export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
-  const { LitElement: Base, html, css } = lit;
+  const { LitElement: Base, html, css, utilities } = lit;
 
   class IdeaCard extends Base {
     static properties = {
@@ -23,78 +23,65 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       onSendMessage: { attribute: false },
     };
 
-    static styles = css`
-      :host {
-        display: block;
-      }
-      .idea {
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        background: var(--surface);
-        padding: 0.75rem 0.875rem;
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-      }
-      .idea-title {
-        font-weight: 700;
-        font-size: 0.8125rem;
-        color: var(--text);
-      }
-      .idea-state {
-        font-size: 0.5625rem;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--muted);
-      }
-      .idea-spec {
-        font-size: 0.6875rem;
-        line-height: 1.5;
-        color: var(--text);
-        white-space: pre-wrap;
-        margin: 0;
-      }
-      .idea-chat {
-        display: flex;
-        flex-direction: column;
-        gap: 0.375rem;
-      }
-      .idea-msg {
-        font-size: 0.625rem;
-        color: var(--text);
-      }
-      .idea-input-row {
-        display: flex;
-        gap: 0.375rem;
-      }
-      input {
-        flex: 1;
-        font-family: inherit;
-        font-size: 0.625rem;
-        padding: 0.25rem 0.5rem;
-        border: 1px solid var(--border);
-        border-radius: 4px;
-        background: var(--bg);
-        color: var(--text);
-        outline: none;
-      }
-      button {
-        font-family: inherit;
-        font-size: 0.625rem;
-        height: 24px;
-        padding: 0 0.5rem;
-        border-radius: 4px;
-        border: 1px solid var(--border);
-        background: var(--success);
-        color: var(--bg);
-        cursor: pointer;
-      }
-      .idea-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.375rem;
-      }
-    `;
+    static styles = [
+      utilities,
+      css`
+        :host {
+          display: block;
+        }
+        .idea {
+          padding: 0.75rem 0.875rem;
+        }
+        .idea-title {
+          color: var(--text);
+        }
+        .idea-state {
+          font-size: 0.5625rem;
+          letter-spacing: 0.06em;
+        }
+        .idea-spec {
+          line-height: 1.5;
+          color: var(--text);
+          white-space: pre-wrap;
+          margin: 0;
+        }
+        .idea-chat {
+          gap: 0.375rem;
+        }
+        .idea-msg {
+          font-size: 0.625rem;
+          color: var(--text);
+        }
+        .idea-input-row {
+          gap: 0.375rem;
+        }
+        input {
+          flex: 1;
+          font-family: inherit;
+          font-size: 0.625rem;
+          padding: 0.25rem 0.5rem;
+          border: 1px solid var(--border);
+          border-radius: 4px;
+          background: var(--bg);
+          color: var(--text);
+          outline: none;
+        }
+        button {
+          font-family: inherit;
+          font-size: 0.625rem;
+          height: 24px;
+          padding: 0 0.5rem;
+          border-radius: 4px;
+          border: 1px solid var(--border);
+          background: var(--success);
+          color: var(--bg);
+          cursor: pointer;
+        }
+        .idea-actions {
+          gap: 0.375rem;
+        }
+      `,
+    ];
 
     declare workflowDef: InstanceComponentProps["workflowDef"];
     declare instanceEntry: InstanceComponentProps["instanceEntry"];
@@ -119,19 +106,19 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
           ? state.runningTaskContext
           : null;
       return html`
-        <div class="idea">
-          <div class="idea-title">${title}</div>
-          <div class="idea-state">
+        <div class="idea border rounded-lg bg-surface flex flex-col gap-2">
+          <div class="idea-title text-base font-bold">${title}</div>
+          <div class="idea-state text-muted uppercase">
             ${stateDef !== undefined ? stateDef.label : state.currentState}
           </div>
           ${
             running !== null && running.role === "ai-chat"
-              ? html`<div class="idea-chat">
+              ? html`<div class="idea-chat flex flex-col">
                 ${(running.messages ?? []).map(
                   (m) =>
                     html`<div class="idea-msg">${m.role}: ${m.content}</div>`
                 )}
-                <div class="idea-input-row">
+                <div class="idea-input-row flex">
                   <input
                     placeholder="Message the elaborating agent..."
                     @input=${(e: Event) => {
@@ -152,10 +139,10 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
               </div>`
               : ""
           }
-          ${spec !== "" ? html`<pre class="idea-spec">${spec}</pre>` : ""}
+          ${spec !== "" ? html`<pre class="idea-spec text-xs">${spec}</pre>` : ""}
           ${
             actions.length > 0
-              ? html`<div class="idea-actions">
+              ? html`<div class="idea-actions flex flex-wrap">
                 ${actions.map(
                   (a) =>
                     html`<button

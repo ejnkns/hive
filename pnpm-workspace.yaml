@@ -5,8 +5,11 @@ packages:
   - "ui"
   - "workflow-engine"
   - "presets"
+  - "visual-matrix"
 allowBuilds:
+  '@percy/core': true
   esbuild: true
   lefthook: true
+  protobufjs: true
 minimumReleaseAgeExclude:
   - tsx@4.23.9

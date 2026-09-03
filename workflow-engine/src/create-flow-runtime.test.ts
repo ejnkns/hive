@@ -234,6 +234,76 @@ describe("FlowRuntime", () => {
     });
   });
 
+  describe("getRevision", () => {
+    it("advances across snapshot-affecting mutations", () => {
+      const runtime = createFlowRuntime("test", [sourceWorkflow], [], {});
+      const start = runtime.getRevision();
+      const instance = runtime.addWorkflowInstance("source");
+      const afterCreate = runtime.getRevision();
+      assert.ok(afterCreate > start, "instance creation advances the revision");
+
+      instance.dispatchAction("start");
+      assert.ok(
+        runtime.getRevision() > afterCreate,
+        "a state transition advances the revision"
+      );
+
+      const beforePatch = runtime.getRevision();
+      runtime.patchFlowState({ key: "val" });
+      assert.ok(
+        runtime.getRevision() > beforePatch,
+        "a flow state patch advances the revision"
+      );
+
+      const beforeRemove = runtime.getRevision();
+      runtime.removeWorkflowInstance(instance.id);
+      assert.ok(
+        runtime.getRevision() > beforeRemove,
+        "instance removal advances the revision"
+      );
+    });
+
+    it("holds across read-only re-delivery (serialization reads, never writes)", () => {
+      const runtime = createFlowRuntime("test", [sourceWorkflow], [], {});
+      const instance = runtime.addWorkflowInstance("source");
+      const afterCreate = runtime.getRevision();
+
+      // Content-neutral re-delivery: re-serializing the snapshot (the init
+      // frame and every host re-render) reads the stamp without advancing it.
+      runtime.getWorkflowInstanceEntries();
+      runtime.getWorkflowDefinitions();
+      runtime.getWorkflowInstanceEntries();
+      assert.equal(
+        runtime.getRevision(),
+        afterCreate,
+        "read-only snapshot serialization holds the revision"
+      );
+
+      // A mutation still advances it afterwards.
+      instance.dispatchAction("start");
+      assert.ok(runtime.getRevision() > afterCreate);
+    });
+
+    it("is monotonic within a flow and independent across flows", () => {
+      const first = createFlowRuntime("first", [sourceWorkflow], [], {});
+      const second = createFlowRuntime("second", [sourceWorkflow], [], {});
+
+      const firstStart = first.getRevision();
+      first.addWorkflowInstance("source");
+      const firstAfterCreate = first.getRevision();
+      assert.ok(firstAfterCreate > firstStart, "monotonic within a flow");
+      assert.equal(
+        second.getRevision(),
+        firstStart,
+        "an untouched flow's revision is independent of a sibling's mutations"
+      );
+
+      second.addWorkflowInstance("source");
+      assert.ok(second.getRevision() > firstStart);
+      assert.ok(first.getRevision() >= firstAfterCreate);
+    });
+  });
+
   describe("addWorkflowInstance", () => {
     it("creates a controller in the workflow's initial state", () => {
       const runtime = createFlowRuntime("test", [sourceWorkflow], [], {});
@@ -551,7 +621,6 @@ describe("FlowRuntime", () => {
             },
             getContext: () => ({
               flowConfig: () => ctx.flowConfig,
-              patchFlowConfig: ctx.patchFlowConfig,
               instanceId: ctx.instanceId,
               workflowId: ctx.workflowId,
               currentState: ctx.currentState,
@@ -786,7 +855,6 @@ describe("FlowRuntime", () => {
               },
               getContext: () => ({
                 flowConfig: () => ctx.flowConfig,
-                patchFlowConfig: ctx.patchFlowConfig,
                 instanceId: ctx.instanceId,
                 workflowId: ctx.workflowId,
                 currentState: ctx.currentState,
@@ -1513,7 +1581,6 @@ describe("FlowRuntime", () => {
             createOperationRunner({
               getContext: () => ({
                 flowConfig: () => ({}),
-                patchFlowConfig: () => {},
                 instanceId: "",
                 workflowId: "",
                 currentState: "",
@@ -1582,70 +1649,71 @@ describe("FlowRuntime", () => {
       assert.equal(written[0], `${entry.id}-2.json`);
     });
 
-    it("does not persist when no base path is bound", async () => {
+    it("rejects a persist task with no bound base path at construction", () => {
       root = mkdtempSync(join(tmpdir(), "hive-persist-"));
-      const runtime = createFlowRuntime(
-        "test",
-        [
-          defineWorkflow({
-            id: "persist",
-            label: "Persist",
-            taskOutputs: { save: {} as { hello: string } },
-            states: [
-              {
-                id: "ready",
-                label: "Ready",
-                tasks: [
+      assert.throws(
+        () =>
+          createFlowRuntime(
+            "test",
+            [
+              defineWorkflow({
+                id: "persist",
+                label: "Persist",
+                taskOutputs: { save: {} as { hello: string } },
+                states: [
                   {
-                    id: "save",
-                    label: "Save",
-                    trigger: "auto",
-                    role: "operation",
-                    operations: ["save_output"],
-                    persist: { path: "output.json" },
+                    id: "ready",
+                    label: "Ready",
+                    tasks: [
+                      {
+                        id: "save",
+                        label: "Save",
+                        trigger: "auto",
+                        role: "operation",
+                        operations: ["save_output"],
+                        persist: { path: "output.json" },
+                      },
+                    ],
+                    autoTransitions: [
+                      {
+                        to: "done",
+                        gate: (ctx) =>
+                          ctx.taskOutputs.save?.status === "success",
+                      },
+                    ],
                   },
+                  { id: "done", label: "Done" },
                 ],
-                autoTransitions: [
-                  {
-                    to: "done",
-                    gate: (ctx) => ctx.taskOutputs.save?.status === "success",
-                  },
-                ],
-              },
-              { id: "done", label: "Done" },
-            ],
-            initial: "ready",
-            terminalStates: ["done"],
-          }),
-        ],
-        [],
-        {
-          operation: () =>
-            createOperationRunner({
-              getContext: () => ({
-                flowConfig: () => ({}),
-                patchFlowConfig: () => {},
-                instanceId: "",
-                workflowId: "",
-                currentState: "",
-                workflowInstanceState: () => ({}),
-                taskOutputs: () => ({}),
-                patchWorkflowInstanceState: () => {},
-                flowState: () => ({}),
-                patchFlowState: () => {},
-                workflowInstancesInState: () => [],
-                patchInstanceState: () => false,
+                initial: "ready",
+                terminalStates: ["done"],
               }),
-              operations: {
-                save_output: () => ({ hello: "world" }),
-              },
-            }),
-        },
-        { definitionId: "test" }
+            ],
+            [],
+            {
+              operation: () =>
+                createOperationRunner({
+                  getContext: () => ({
+                    flowConfig: () => ({}),
+                    instanceId: "",
+                    workflowId: "",
+                    currentState: "",
+                    workflowInstanceState: () => ({}),
+                    taskOutputs: () => ({}),
+                    patchWorkflowInstanceState: () => {},
+                    flowState: () => ({}),
+                    patchFlowState: () => {},
+                    workflowInstancesInState: () => [],
+                    patchInstanceState: () => false,
+                  }),
+                  operations: {
+                    save_output: () => ({ hello: "world" }),
+                  },
+                }),
+            },
+            { definitionId: "test" }
+          ),
+        /persist paths.*basePath/
       );
-      runtime.addWorkflowInstance("persist");
-      await waitForDone(runtime);
-      assert.ok(!existsSync(join(root, ".test")));
     });
   });
 });
@@ -1896,6 +1964,7 @@ describe("agent-created instances", () => {
             },
             toolDefinitions: createStandardToolDefinitions(),
             toolExecutors: createStandardToolRegistry(),
+            basePath: join(tmpdir(), "hive-agent-created"),
             createWorkflowInstance: ctx.createWorkflowInstance,
           }),
       }
@@ -1912,5 +1981,208 @@ describe("agent-created instances", () => {
       title: "Graduated ticket",
     });
     assert.equal(tickets[0]?.state.currentState, "fog");
+  });
+});
+
+// A workflow whose ready state declares two actions with DISAGREEING
+// dependsOnState targets, so the projection's multi-action resolution is
+// observable. `instance` gives the workflow an instance-title path so
+// name-vs-id dependency references are exercised too.
+const dependencyWorkflow = defineWorkflow({
+  id: "card",
+  label: "Card",
+  instance: { title: "title" },
+  taskOutputs: {} as Record<string, never>,
+  states: [
+    {
+      id: "ready",
+      label: "Ready",
+      actions: [
+        {
+          id: "run",
+          label: "Run",
+          dependsOnState: "done",
+          transitionTo: "working",
+        },
+        {
+          id: "ship",
+          label: "Ship",
+          dependsOnState: "shipped",
+          transitionTo: "working",
+        },
+      ],
+    },
+    { id: "working", label: "Working" },
+    { id: "done", label: "Done" },
+    { id: "shipped", label: "Shipped" },
+  ],
+  initial: "ready",
+  terminalStates: ["done", "shipped"],
+});
+
+describe("instance dependency projection", () => {
+  it("projects a recorded dependency as satisfied when the blocker is in the declared dependsOnState", () => {
+    const runtime = createFlowRuntime("test", [dependencyWorkflow], [], {});
+    runtime.addWorkflowInstance("card", {
+      workflowInstanceState: {
+        title: "Blocked card",
+        dependsOn: ["blocker-1"],
+      },
+    });
+    runtime.addWorkflowInstance(
+      "card",
+      { currentState: "done", workflowInstanceState: { title: "Blocker" } },
+      "blocker-1"
+    );
+
+    const entries = runtime.getWorkflowInstanceEntries();
+    const blocked = entries.find(
+      (entry) => entry.state.currentState === "ready"
+    );
+    assert.deepEqual(blocked?.dependencies, {
+      blockers: ["blocker-1"],
+      unsatisfied: [],
+    });
+  });
+
+  it("projects a recorded dependency as unsatisfied while the blocker has not reached the declared state", () => {
+    const runtime = createFlowRuntime("test", [dependencyWorkflow], [], {});
+    runtime.addWorkflowInstance("card", {
+      workflowInstanceState: {
+        title: "Blocked card",
+        dependsOn: ["blocker-1"],
+      },
+    });
+    runtime.addWorkflowInstance(
+      "card",
+      { currentState: "working", workflowInstanceState: { title: "Blocker" } },
+      "blocker-1"
+    );
+
+    const entries = runtime.getWorkflowInstanceEntries();
+    const blocked = entries.find(
+      (entry) => entry.state.currentState === "ready"
+    );
+    assert.deepEqual(blocked?.dependencies, {
+      blockers: ["blocker-1"],
+      unsatisfied: ["blocker-1"],
+    });
+  });
+
+  it("never satisfies a dangling dependency reference", () => {
+    const runtime = createFlowRuntime("test", [dependencyWorkflow], [], {});
+    runtime.addWorkflowInstance("card", {
+      workflowInstanceState: {
+        title: "Blocked card",
+        dependsOn: ["no-such-instance"],
+      },
+    });
+
+    const [blocked] = runtime.getWorkflowInstanceEntries();
+    assert.deepEqual(blocked?.dependencies, {
+      blockers: ["no-such-instance"],
+      unsatisfied: ["no-such-instance"],
+    });
+  });
+
+  it("satisfies a dependency by NAME when a titled blocker sits in the declared state", () => {
+    const runtime = createFlowRuntime("test", [dependencyWorkflow], [], {});
+    runtime.addWorkflowInstance("card", {
+      workflowInstanceState: {
+        title: "Blocked card",
+        dependsOn: ["Named blocker"],
+      },
+    });
+    runtime.addWorkflowInstance(
+      "card",
+      {
+        currentState: "done",
+        workflowInstanceState: { title: "Named blocker" },
+      },
+      "blocker-named"
+    );
+
+    const entries = runtime.getWorkflowInstanceEntries();
+    const blocked = entries.find(
+      (entry) => entry.state.currentState === "ready"
+    );
+    assert.deepEqual(blocked?.dependencies, {
+      blockers: ["Named blocker"],
+      unsatisfied: [],
+    });
+  });
+
+  it("keeps a reference unsatisfied when no declared action's requirement resolves it, even with disagreeing targets", () => {
+    const runtime = createFlowRuntime("test", [dependencyWorkflow], [], {});
+    // Two actions declare DISAGREEING targets ("run" wants done, "ship"
+    // wants shipped). blocker-1 is done (satisfies "run"), blocker-2 is
+    // shipped (satisfies "ship") — each is resolved by some declared action,
+    // so the entry can act. blocker-3 sits in neither target: no declared
+    // action resolves it, so it stays unsatisfied.
+    runtime.addWorkflowInstance("card", {
+      workflowInstanceState: {
+        title: "Blocked card",
+        dependsOn: ["blocker-1", "blocker-2", "blocker-3"],
+      },
+    });
+    runtime.addWorkflowInstance(
+      "card",
+      { currentState: "done", workflowInstanceState: { title: "Blocker one" } },
+      "blocker-1"
+    );
+    runtime.addWorkflowInstance(
+      "card",
+      {
+        currentState: "shipped",
+        workflowInstanceState: { title: "Blocker two" },
+      },
+      "blocker-2"
+    );
+    runtime.addWorkflowInstance(
+      "card",
+      {
+        currentState: "working",
+        workflowInstanceState: { title: "Blocker three" },
+      },
+      "blocker-3"
+    );
+
+    const entries = runtime.getWorkflowInstanceEntries();
+    const blocked = entries.find(
+      (entry) => entry.state.currentState === "ready"
+    );
+    assert.deepEqual(blocked?.dependencies, {
+      blockers: ["blocker-1", "blocker-2", "blocker-3"],
+      unsatisfied: ["blocker-3"],
+    });
+  });
+
+  it("leaves entries with no recorded dependencies and states with no dependsOnState actions unprojected", () => {
+    const runtime = createFlowRuntime("test", [dependencyWorkflow], [], {});
+    runtime.addWorkflowInstance("card", {
+      workflowInstanceState: { title: "Independent card" },
+    });
+    runtime.addWorkflowInstance("card", {
+      currentState: "working",
+      workflowInstanceState: { title: "Busy card", dependsOn: ["blocker-1"] },
+    });
+
+    const entries = runtime.getWorkflowInstanceEntries();
+    const independent = entries.find(
+      (entry) => entry.state.currentState === "ready"
+    );
+    assert.deepEqual(independent?.dependencies, {
+      blockers: [],
+      unsatisfied: [],
+    });
+    // The working state declares no actions with dependsOnState — the engine
+    // imposes no dependency requirement there, even with references recorded.
+    const busy = entries.find(
+      (entry) => entry.state.currentState === "working"
+    );
+    assert.deepEqual(busy?.dependencies, {
+      blockers: ["blocker-1"],
+      unsatisfied: [],
+    });
   });
 });

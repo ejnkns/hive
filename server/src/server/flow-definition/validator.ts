@@ -1376,6 +1376,36 @@ export function analyzeFlowDefinition(definition: FlowDefinition): string[] {
     );
   }
 
+  // 6. A flow that persists outputs — via ui.persistedOutputs/
+  //    ui.persistedOutputDirs (shipped to the UI in the snapshot) or a task
+  //    persist path (written to basePath/<domainDir>) — whose configSchema
+  //    does not require a basePath: an instance without one is bound to a
+  //    hive-owned default workspace (HIVE_DIR/workspaces/<flow>) at creation
+  //    instead of the user's project, so the artifacts persist outside the
+  //    repo. Advisory, not an error — the flow still runs; the warning tells
+  //    the author the durable outputs will not land where a user expects.
+  const declaresPersistedOutputs =
+    (definition.ui?.persistedOutputs?.length ?? 0) > 0 ||
+    (definition.ui?.persistedOutputDirs?.length ?? 0) > 0 ||
+    definition.workflows.some((wf) =>
+      wf.states.some((state) =>
+        (state.tasks ?? []).some((task) => task.persist !== undefined)
+      )
+    );
+  const basePathField = (definition.configSchema ?? []).find(
+    (field) => field.key === "basePath"
+  );
+  const guaranteesBasePath =
+    basePathField !== undefined &&
+    (basePathField.required === true ||
+      (typeof basePathField.defaultValue === "string" &&
+        basePathField.defaultValue !== ""));
+  if (declaresPersistedOutputs && !guaranteesBasePath) {
+    findings.push(
+      "flow persists outputs (ui.persistedOutputs / ui.persistedOutputDirs / task persist paths) but its configSchema does not require a basePath — instances without one are bound to a hive-owned default workspace (HIVE_DIR/workspaces/<flow>) instead of the user's project; require a basePath if the artifacts belong there"
+    );
+  }
+
   return findings;
 }
 

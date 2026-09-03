@@ -15,6 +15,7 @@ import {
   unregisterComponentRenderer,
   unregisterKindRenderer,
 } from "./renderer-registry.ts";
+import { servedUtilityStyles } from "./served-utility-styles.ts";
 
 // The served-module contract types now live in the engine (the allowlist the
 // module-set gate typechecks component files against); the UI re-exports them
@@ -53,7 +54,14 @@ export async function loadFlowComponents(
   components: Record<string, string>,
   evaluate: FlowComponentEvaluator = evaluateModuleByUrl
 ): Promise<() => void> {
-  const deps: FlowComponentDeps = { LitElement, html, css, nothing, svg };
+  const deps: FlowComponentDeps = {
+    LitElement,
+    html,
+    css,
+    nothing,
+    svg,
+    utilities: servedUtilityStyles,
+  };
   const cleanups: Array<() => void> = [];
 
   for (const [componentId, path] of Object.entries(components)) {

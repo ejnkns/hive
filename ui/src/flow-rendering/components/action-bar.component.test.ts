@@ -3,6 +3,7 @@ import { action } from "../test-fixtures.ts";
 import {
   click,
   mount,
+  mustFind,
   mustQuery,
   queryAllDeep,
   settle,
@@ -15,6 +16,20 @@ function buttons(el: ActionBar): HTMLButtonElement[] {
 }
 
 describe("ActionBar", () => {
+  it("styles the action row with the shared utility vocabulary", async () => {
+    // Ticket 15: the default components compose the injected utility sheet —
+    // generic layout rides utility classes, component css keeps the rest.
+    const el = await mount(
+      Object.assign(new ActionBar(), {
+        actions: [action("run", "Run")],
+      })
+    );
+    await settle(shadowRootOf(el));
+    const row = mustFind(el, ".actions");
+    expect(row.classList.contains("flex")).toBe(true);
+    expect(row.classList.contains("flex-wrap")).toBe(true);
+  });
+
   it("emits hive-action immediately for non-destructive actions", async () => {
     const el = await mount(
       Object.assign(new ActionBar(), {

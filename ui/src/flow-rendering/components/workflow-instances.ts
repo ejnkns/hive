@@ -12,6 +12,7 @@ import type {
 } from "workflow-engine/workflow-types";
 import type { FlowLevelAction } from "../../flow-api.ts";
 import { getComponentRenderer } from "../renderer-registry.ts";
+import { servedUtilityStyles } from "../served-utility-styles.ts";
 import "./dynamic-element-host.ts";
 import "./flow-actions-bar.ts";
 import "./flow-overview.ts";
@@ -56,8 +57,6 @@ export class WorkflowInstances extends LitElement {
       }
 
       .flow-header {
-        display: flex;
-        align-items: center;
         gap: 0.5rem;
         padding: 0.375rem 0 0.5rem;
         border-bottom: 1px solid var(--border);
@@ -67,7 +66,6 @@ export class WorkflowInstances extends LitElement {
         border-right: none;
         width: 100%;
         text-align: left;
-        cursor: pointer;
         font: inherit;
       }
 
@@ -87,15 +85,11 @@ export class WorkflowInstances extends LitElement {
 
       .flow-label {
         font-size: 0.6875rem;
-        font-weight: 700;
-        color: var(--text);
-        text-transform: uppercase;
         letter-spacing: 0.08em;
       }
 
       .flow-count {
         font-size: 0.5625rem;
-        color: var(--muted);
         font-family: monospace;
       }
 
@@ -173,7 +167,7 @@ export class WorkflowInstances extends LitElement {
           const running = entries.some((entry) => entry.state.hasRunningTask);
           return html`<div class="flow" data-workflow-id=${workflowId}>
             <button
-              class="flow-header"
+              class="flow-header flex items-center cursor-pointer"
               type="button"
               aria-expanded=${!collapsed}
               @click=${() => this.toggle(workflowId)}
@@ -182,8 +176,8 @@ export class WorkflowInstances extends LitElement {
                 class="flow-chevron"
                 data-collapsed=${collapsed ? "true" : "false"}
               ></span>
-              <span class="flow-label">${def.label}</span>
-              ${entries.length > 1 ? html`<span class="flow-count">${entries.length} workflow instances</span>` : nothing}
+              <span class="flow-label font-bold uppercase">${def.label}</span>
+              ${entries.length > 1 ? html`<span class="flow-count text-muted">${entries.length} workflow instances</span>` : nothing}
               ${running ? html`<span class="running-pulse"></span>` : nothing}
             </button>
             ${collapsed ? nothing : this.renderSectionContent(def, entries)}
@@ -294,9 +288,11 @@ export class WorkflowInstances extends LitElement {
   }
 
   // The cross-workflow state counts the custom workflow views receive: per
-  // workflow, the instance count by current state. A derived view over the
+  // workflow, the instance count by current state plus the engine-evaluated
+  // dependency aggregates (waiting vs satisfied). A derived view over the
   // same snapshot the sections render — a workflow-level view uses it to
-  // render sibling-workflow context (the expedition map's frontier summary).
+  // present sibling-workflow context and waiting-vs-actionable counts
+  // without sibling entries.
   private workflowCounts(): WorkflowViewProps["workflowCounts"] {
     const entriesByWorkflow = new Map<string, WorkflowInstanceEntry[]>();
     for (const entry of this.instances) {
@@ -307,15 +303,24 @@ export class WorkflowInstances extends LitElement {
     return this.workflowDefs.map((def) => {
       const entries = entriesByWorkflow.get(def.id) ?? [];
       const byState: Record<string, number> = {};
+      let waitingOnDependencies = 0;
+      let dependenciesSatisfied = 0;
       for (const entry of entries) {
         byState[entry.state.currentState] =
           (byState[entry.state.currentState] ?? 0) + 1;
+        if (entry.dependencies.unsatisfied.length > 0) {
+          waitingOnDependencies += 1;
+        } else if (entry.dependencies.blockers.length > 0) {
+          dependenciesSatisfied += 1;
+        }
       }
       return {
         workflowId: def.id,
         label: def.label,
         total: entries.length,
         byState,
+        waitingOnDependencies,
+        dependenciesSatisfied,
       };
     });
   }

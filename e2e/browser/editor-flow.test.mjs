@@ -30,6 +30,7 @@ import { expect, inject, test } from "vitest";
 import { app } from "../support/browser-app.mjs";
 import {
   captureFailureScreenshot,
+  clearAuthoringSessions,
   deleteDefinition,
   editorValue,
   fetchJson,
@@ -46,8 +47,11 @@ test("authoring session renders as the flow editor, co-edits, and saves", async 
 
   // Definition editor (new definition): start a lucky session. The session's
   // save registers "review-flow"; drop any previous run's record first (the
-  // app page must exist before page code can run).
+  // app page must exist before page code can run). Stale authoring sessions
+  // from earlier tests are cleared so this test's session is the only live
+  // `hive:author:*` candidate.
   await app.open(`${baseUrl}/#/flows/new`);
+  await clearAuthoringSessions();
   await deleteDefinition("review-flow");
   await app.waitForSelector("textarea", { timeout: 15_000 });
   await app.fill("textarea", "A review flow with approve and reject actions", {
@@ -215,7 +219,10 @@ test("hand-writing the scaffold saves a definition without a session", async () 
 test("a conversation seeds from the editor's scaffold edits", async () => {
   captureFailureScreenshot();
 
+  // Scope this test's authoring session (stale `hive:author:*` keys from
+  // earlier tests would otherwise be live session-state candidates).
   await app.open(`${baseUrl}/#/flows/new`);
+  await clearAuthoringSessions();
   await waitForEditorValue("myFlow");
   // Edit the scaffold's label before starting the conversation.
   const scaffold = await editorValue();
@@ -307,8 +314,11 @@ test("closing the authoring session keeps the definition's files visible and edi
   captureFailureScreenshot();
 
   // Register a definition to work on (a data module with a referenced file).
-  // Navigate first so the page origin matches the API host.
+  // Navigate first so the page origin matches the API host, and scope this
+  // test's authoring session (stale `hive:author:*` keys from earlier tests
+  // would otherwise be live session-state candidates).
   await app.open(`${baseUrl}/#/flows`);
+  await clearAuthoringSessions();
   const created = await registerDefinition(
     "Close Me",
     CLOSE_SOURCE,
@@ -421,7 +431,10 @@ test("hand edits are the state: the agent continues with them in force", async (
   captureFailureScreenshot();
 
   // Lucky session: the generated definition module renders as the editor.
+  // Scope this test's session (stale `hive:author:*` keys from earlier tests
+  // would otherwise be live session-state candidates).
   await app.open(`${baseUrl}/#/flows/new`);
+  await clearAuthoringSessions();
   await app.waitForSelector("textarea", { timeout: 15_000 });
   await app.fill("textarea", "A review flow with approve and reject actions", {
     first: true,
@@ -486,6 +499,11 @@ test("hand edits are the state: the agent continues with them in force", async (
 test("revising an existing definition starts a session with its source as context", async () => {
   captureFailureScreenshot();
 
+  // Scope this test's authoring session (stale `hive:author:*` keys from
+  // earlier tests would otherwise be live session-state candidates; the app
+  // page from the previous test is still open, so page code can run).
+  await clearAuthoringSessions();
+
   // Register a definition to revise.
   const created = await registerDefinition("Revise Me", REVISE_SOURCE);
   expect(created, "definition registered").toBeTruthy();
@@ -522,7 +540,10 @@ test("a referenced file opens as an editable tab and the edit persists across a 
 
   // Register a definition to author (an existing-definition session resumes
   // across a reload; a new-definition session intentionally starts fresh).
+  // Scope this test's authoring session (stale `hive:author:*` keys from
+  // earlier tests would otherwise be live session-state candidates).
   await app.open(`${baseUrl}/#/flows`);
+  await clearAuthoringSessions();
   const created = await registerDefinition("Tab Me", REVISE_SOURCE);
   expect(created, "definition registered").toBeTruthy();
   expect(created?.id).toBe("tab-me");
@@ -592,8 +613,11 @@ test("a referenced file opens as an editable tab and the edit persists across a 
 test("revising an existing definition shows its referenced files as editable tabs", async () => {
   captureFailureScreenshot();
 
-  // Register a module-set definition with a referenced file.
+  // Register a module-set definition with a referenced file, and scope this
+  // test's authoring session (stale `hive:author:*` keys from earlier tests
+  // would otherwise be live session-state candidates).
   await app.open(`${baseUrl}/#/flows`);
+  await clearAuthoringSessions();
   const created = await registerDefinition(
     "Tab Seed",
     `import type { FlowDefinition } from "workflow-engine/workflow-types";

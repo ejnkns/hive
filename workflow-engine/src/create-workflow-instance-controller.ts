@@ -1,6 +1,6 @@
 import { collectConfigFieldValues } from "./collect-config-field-values.ts";
 import { getAvailableActions } from "./get-available-actions.ts";
-import { readFlowSettings } from "./read-flow-settings.ts";
+import { readFlowSettings, resolveFlowRoot } from "./read-flow-settings.ts";
 import { reduce, type WorkflowEvent } from "./reduce.ts";
 import { persistOutput } from "./runners/persist-output.ts";
 import { discardIsolatedWorkspace } from "./runners/prepare-isolated-workspace.ts";
@@ -63,7 +63,6 @@ export type WorkflowInstanceControllerAPI = {
 // patches a sibling instance's state).
 export type ControllerRuntimeContext = {
   flowConfig: Record<string, unknown>;
-  patchFlowConfig(patch: Record<string, unknown>): void;
   instanceId: string;
   workflowId: string;
   createWorkflowInstance: (
@@ -94,11 +93,6 @@ export function createWorkflowInstanceController(
 ): WorkflowInstanceControllerAPI {
   const taskContext = {
     flowConfig: runtimeContext?.flowConfig ?? {},
-    patchFlowConfig:
-      runtimeContext?.patchFlowConfig ??
-      ((_patch: Record<string, unknown>) => {
-        /* no runtime bound */
-      }),
     instanceId: runtimeContext?.instanceId ?? "",
     workflowId: runtimeContext?.workflowId ?? "",
     createWorkflowInstance:
@@ -216,16 +210,20 @@ export function createWorkflowInstanceController(
   }
 
   // Declared persist paths write the task output to the flow's domain root on
-  // successful completion. Without a bound base path there is nowhere to write
-  // and persistence is a no-op; a failed write surfaces as a task error.
+  // successful completion. basePath/domainDir are guaranteed by creation
+  // (the server normalizes basePath and copies the definition's domainDir
+  // into the config), so a missing binding is a hard error, not a silent
+  // skip — the flow declared this persist path, it must land.
   function persistTaskOutput(task: TaskDefinition, output: unknown): void {
     if (!task.persist) return;
     const settings = readFlowSettings(taskContext.flowConfig);
-    if (!settings.basePath || !settings.domainDir) return;
+    if (!settings.domainDir) {
+      throw new Error("Flow config domainDir is not set");
+    }
     persistOutput({
       output,
       persistPath: task.persist.path,
-      basePath: settings.basePath,
+      basePath: resolveFlowRoot(taskContext.flowConfig),
       domainDir: settings.domainDir,
       instanceId: taskContext.instanceId,
       attempt: readWorkflowAttempt(state.workflowInstanceState),
