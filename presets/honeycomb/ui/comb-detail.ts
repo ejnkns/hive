@@ -15,9 +15,16 @@
  * editable fields (status/priority/effort/category via onPatchState, tags
  * as a comma list), the original notes (collapsed), and the state actions
  * (Mark done / Park / Discard via onAction). The scrim click and the ✕
- * both close. Routing to the standard workflow-instance page is not wired
- * yet (the host's hive-select seam is a no-op until a dedicated instance
- * page exists) — the affordance returns when that seam lands. */
+ * both close — closing is an exit animation (the hexagon shrinks back to
+ * its cell and unflips, the scrim fades), and the selection clears when
+ * the exit finishes, at which point the element unmounts. Routing to the
+ * standard workflow-instance page is not wired yet (the host's
+ * hive-select seam is a no-op until a dedicated instance page exists) —
+ * the affordance returns when that seam lands. */
+
+// The exit animation's duration in ms; the close callback fires on this
+// timer (deterministic — no animationend listener to miss).
+const EXIT_MS = 420;
 
 import type { FlowComponentDeps } from "workflow-engine/workflow-types";
 import type { WorldPoint } from "./hex-layout.ts";
@@ -53,6 +60,7 @@ export function createCombDetail(
       cell: { attribute: false },
       origin: { attribute: false },
       hiveLabels: { attribute: false },
+      exiting: { state: true },
       onPatchState: { attribute: false },
       onAction: { attribute: false },
       onClose: { attribute: false },
@@ -107,6 +115,53 @@ export function createCombDetail(
         }
         to {
           transform: translate(-50%, -50%) scale(1);
+        }
+      }
+      /* The exit: the same paths reversed over a shorter window. The
+         exiting classes swap the animation-name while the element stays
+         mounted; the selection clears when the timer lands. */
+      .detail.exiting {
+        animation-name: comb-close;
+        animation-duration: 0.4s;
+        pointer-events: none;
+      }
+      .detail.exiting .face {
+        pointer-events: none;
+      }
+      @keyframes comb-close {
+        from {
+          transform: translate(-50%, -50%) scale(1);
+        }
+        to {
+          transform: translate(
+              calc(-50% + var(--from-x, 0px)),
+              calc(-50% + var(--from-y, 0px))
+            )
+            scale(0.18);
+        }
+      }
+      .flip.exiting {
+        animation-name: comb-unflip;
+        animation-duration: 0.4s;
+      }
+      @keyframes comb-unflip {
+        from {
+          transform: rotateY(180deg);
+        }
+        to {
+          transform: rotateY(0deg);
+        }
+      }
+      .scrim.exiting {
+        animation-name: comb-fade-out;
+        animation-duration: 0.4s;
+      }
+      @keyframes comb-fade-out {
+        from {
+          opacity: 1;
+        }
+        to {
+          opacity: 0;
         }
       }
       .flip {
@@ -319,11 +374,23 @@ export function createCombDetail(
       | undefined;
     declare onClose: (() => void) | undefined;
 
+    declare exiting: boolean;
+    private exitTimer: ReturnType<typeof setTimeout> | undefined;
+
     constructor() {
       super();
       this.cell = undefined;
       this.origin = undefined;
       this.hiveLabels = [];
+      this.exiting = false;
+    }
+
+    disconnectedCallback(): void {
+      super.disconnectedCallback();
+      if (this.exitTimer !== undefined) {
+        clearTimeout(this.exitTimer);
+        this.exitTimer = undefined;
+      }
     }
 
     private patch(values: Record<string, unknown>): void {
@@ -332,11 +399,28 @@ export function createCombDetail(
       this.onPatchState?.(cell.id, values);
     }
 
+    /** Play the exit animation, then clear the selection. Idempotent — a
+     * second close request during the exit is a no-op. */
+    private requestClose(): void {
+      if (this.exiting) return;
+      this.exiting = true;
+      this.exitTimer = setTimeout(() => this.finishClose(), EXIT_MS);
+    }
+
+    private finishClose(): void {
+      if (this.exitTimer !== undefined) {
+        clearTimeout(this.exitTimer);
+        this.exitTimer = undefined;
+      }
+      this.exiting = false;
+      this.onClose?.();
+    }
+
     private act(actionId: string): void {
       const cell = this.cell;
       if (cell === undefined) return;
       this.onAction?.(cell.id, actionId);
-      this.onClose?.();
+      this.requestClose();
     }
 
     private onTagsInput(event: Event): void {
@@ -367,13 +451,16 @@ export function createCombDetail(
       const actions = entry.availableActions;
       const categoryOptions = [...new Set([cell.category, ...this.hiveLabels])];
       return html`
-        <div class="scrim" @click=${() => this.onClose?.()}></div>
         <div
-          class="detail"
+          class=${`scrim${this.exiting ? " exiting" : ""}`}
+          @click=${() => this.requestClose()}
+        ></div>
+        <div
+          class=${`detail${this.exiting ? " exiting" : ""}`}
           data-cell=${cell.id}
           style=${`width:${width}px;height:${height}px;--from-x:${fromX}px;--from-y:${fromY}px`}
         >
-          <div class="flip">
+          <div class=${`flip${this.exiting ? " exiting" : ""}`}>
             <div class="face front status-${cell.status}">
               <div class="face-fill"></div>
               <span class="cell-title">${cell.title}</span>
@@ -383,7 +470,7 @@ export function createCombDetail(
                 <div class="back-scroll">
                 <div class="back-head">
                   <h2>${cell.title}</h2>
-                  <button class="close" @click=${() => this.onClose?.()}>✕</button>
+                  <button class="close" @click=${() => this.requestClose()}>✕</button>
                 </div>
                 <span class="chip">${cell.category}</span>
                 <p class="summary">${cell.summary ?? "No summary yet."}</p>

@@ -12,13 +12,14 @@
  * fill element showing the edge color beneath the honey fill — a clipped
  * element cannot carry a real border or box-shadow (the corners cut it).
  *
- * The overview cross-fade is calibrated between the two navigation
+ * The overview/cells handoff is calibrated between the two navigation
  * levels: fully visible hive hexagons at the fit-all overview, fully
  * faded at the zoomed reference (the smallest patch's fit — the scale you
- * land on clicking into a hive). Zooming out from inside a hive brings
- * the group hexagons back before you are anywhere near fully zoomed out.
- * Pointer-events ride the opacity, so at overview distance you click
- * hives, zoomed in you click cells.
+ * land on clicking into a hive). The two layers crossfade over a narrow
+ * band around the midpoint, while the pointer-events swap sits exactly at
+ * the midpoint: either the group hexagons are clickable or the cells are,
+ * never both, at every scale. Zooming out from inside a hive brings the
+ * group hexagons back before you are anywhere near fully zoomed out.
  *
  * The pointer/click split matters: the pointer capture that makes a drag
  * smooth is only taken once the movement exceeds the click tolerance —
@@ -436,20 +437,24 @@ export function createCombSurface(
       world.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
       const map = this.map;
       if (map === undefined) return;
-      // The layer handoff is a hard swap at the band's midpoint, not a
-      // cross-fade: while any group hexagon is visible enough to click, the
-      // cells are not, and vice versa — there is no in-between state where
-      // both are semi-visible and clickable. The shapes themselves keep
-      // scaling continuously through the swap, so it reads as a reveal,
-      // not a cut.
+      // The layer handoff: a NARROW crossfade around the band's midpoint,
+      // with the pointer handoff still at the exact midpoint — so the
+      // transition between the two states is animated, but the two states
+      // are never both clickable, and the crossfade is over before either
+      // layer is meaningfully interactive at a mixed opacity.
       const midpoint = (this.fitScale + this.cellsAtScale) / 2;
+      const fadeHalf = (this.cellsAtScale - this.fitScale) * 0.12;
       const cellsOn = scale >= midpoint;
+      const mix = Math.max(
+        0,
+        Math.min(1, (scale - (midpoint - fadeHalf)) / (fadeHalf * 2))
+      );
       if (this.cellLayer !== undefined) {
-        this.cellLayer.style.opacity = cellsOn ? "1" : "0";
+        this.cellLayer.style.opacity = `${mix}`;
         this.cellLayer.style.pointerEvents = cellsOn ? "auto" : "none";
       }
       if (this.hiveLayer !== undefined) {
-        this.hiveLayer.style.opacity = cellsOn ? "0" : "1";
+        this.hiveLayer.style.opacity = `${1 - mix}`;
         this.hiveLayer.style.pointerEvents = cellsOn ? "none" : "auto";
       }
       // The reset control shows while the camera is meaningfully zoomed

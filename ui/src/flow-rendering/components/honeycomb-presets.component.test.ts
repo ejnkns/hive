@@ -209,8 +209,10 @@ describe("honeycomb served modules", () => {
       ]);
       // The original notes render collapsed in a details element.
       expect(queryDeep(el, ".original")).not.toBeNull();
-      // The scrim closes it.
+      // The scrim closes it — after the exit animation (the selection
+      // clears on its timer, ~420ms).
       queryDeep(el, ".scrim")!.dispatchEvent(click());
+      await new Promise((resolve) => setTimeout(resolve, 550));
       await settle(shadowRootOf(el));
       expect(queryDeep(el, ".detail")).toBeNull();
     } finally {
@@ -274,7 +276,9 @@ describe("honeycomb served modules", () => {
         instanceId: "i-1",
         actionId: "markDone",
       });
-      // Dispatching an action closes the detail.
+      // Dispatching an action closes the detail, after the exit animation.
+      await new Promise((resolve) => setTimeout(resolve, 550));
+      await settle(shadowRootOf(el));
       expect(queryDeep(el, ".detail")).toBeNull();
 
       // Reopening the same cell does not replay the entrance (a data churn
