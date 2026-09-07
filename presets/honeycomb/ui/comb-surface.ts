@@ -7,14 +7,24 @@
  * camera to its patch, and the reset control returns to the fit-all
  * overview.
  *
+ * The hexagons are flat-top (flat edges on top and bottom, points left and
+ * right), clipped with a hexagon clip-path; their "border" is an inset
+ * fill element showing the edge color beneath the honey fill — a clipped
+ * element cannot carry a real border or box-shadow (the corners cut it).
+ *
  * The overview cross-fade is driven by the camera scale against the fit-all
  * scale: at overview distance the representative hive hexes show (the
  * cells would be unreadable specks); zooming in fades the hives out and
  * the actual member cells in. Pointer-events ride the opacity, so at
  * overview distance you click hives, zoomed in you click cells.
  *
- * The camera loop mutates transforms, hive positions, and layer opacities
- * directly each frame — lit re-renders only when the map data changes. */
+ * The pointer/click split matters: the pointer capture that makes a drag
+ * smooth is only taken once the movement exceeds the click tolerance —
+ * capturing on pointerdown would retarget the subsequent click to the
+ * surface (real browsers dispatch the click to the capture target), and
+ * cell/hive clicks would die. The camera loop mutates transforms, hive
+ * positions, and layer opacities directly each frame — lit re-renders only
+ * when the map data changes. */
 
 import type { PropertyValues } from "lit";
 import type { FlowComponentDeps } from "workflow-engine/workflow-types";
@@ -28,16 +38,12 @@ import {
   stepCombCamera,
   zoomCombAt,
 } from "./comb-camera.ts";
-import type { WorldPoint } from "./hex-layout.ts";
+import { SQRT3, type WorldPoint } from "./hex-layout.ts";
 import { combBounds } from "./honeycomb-map.ts";
 import type { CombCell, HoneycombMap } from "./shared.ts";
 
 // A drag of at most this many pixels still counts as a click.
 const DRAG_CLICK_TOLERANCE = 6;
-
-// The width/height pitch factors of a pointy-top hexagon bounding box
-// (width √3·s, height 2s), read by both the render and the camera frame.
-const SQRT3_SCALE = Math.sqrt(3);
 
 // The world-space size of a hive's overview hexagon: comfortably smaller
 // than the patch it stands for, never larger than the lattice spacing.
@@ -72,6 +78,7 @@ export function createCombSurface(
 
     static styles = css`
       :host {
+        --hex: polygon(75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%, 25% 0%);
         flex: 1;
         min-height: 0;
         display: block;
@@ -99,66 +106,87 @@ export function createCombSurface(
       .hives {
         pointer-events: none;
       }
-      .cell {
+      .cell,
+      .hive {
         position: absolute;
         box-sizing: border-box;
-        clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        text-align: center;
+        clip-path: var(--hex);
+      }
+      .cell {
         cursor: pointer;
         transition: filter 0.15s ease;
       }
       .cell:hover {
-        filter: brightness(1.2);
+        filter: brightness(1.18);
       }
-      .cell-title {
-        font-size: 11px;
-        line-height: 1.25;
-        color: var(--hc-ink, #f4e9d0);
-        padding: 0 16%;
-        overflow: hidden;
-        display: -webkit-box;
-        -webkit-line-clamp: 3;
-        -webkit-box-orient: vertical;
+      .fill {
+        position: absolute;
+        inset: 2px;
+        clip-path: var(--hex);
         pointer-events: none;
       }
-      /* Status → honey fill: the shared visual language. */
-      .cell.status-backlog {
-        background: var(--wax-empty);
-        box-shadow: inset 0 0 0 2px var(--wax-edge);
-      }
-      .cell.status-in-progress {
-        background: linear-gradient(
-          to top,
-          var(--honey) 0%,
-          var(--honey) 46%,
-          var(--wax-empty) 46%
-        );
-        box-shadow: inset 0 0 0 2px var(--wax-edge);
-      }
-      .cell.status-done {
-        background: var(--honey);
-        box-shadow: inset 0 0 0 2px var(--honey-edge);
-      }
-      .cell.status-blocked {
-        background: var(--honey-crystal);
-        box-shadow: inset 0 0 0 3px var(--honey-crystal-edge);
-      }
-      .cell.status-parked {
-        background: var(--wax-empty);
-        opacity: 0.35;
-        box-shadow: inset 0 0 0 2px var(--wax-edge);
-      }
-      .hive {
+      .cell-title {
         position: absolute;
-        box-sizing: border-box;
-        transform: translate(-50%, -50%);
-        clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+        inset: 0;
+        z-index: 1;
         display: flex;
         align-items: center;
         justify-content: center;
+        text-align: center;
+        font-size: 12px;
+        line-height: 1.25;
+        color: var(--hc-ink, #f4e9d0);
+        padding: 0 13%;
+        overflow: hidden;
+        pointer-events: none;
+      }
+      .cell-title span {
+        display: -webkit-box;
+        -webkit-line-clamp: 4;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      /* Status → honey fill, two layers: the cell's own background is the
+         edge color (the visible "border" between the clipped fill and the
+         hexagon edge), the inset fill is the honey. */
+      .cell.status-backlog {
+        background: var(--wax-edge, #4a3618);
+      }
+      .cell.status-backlog .fill {
+        background: var(--wax-empty, #2a1e0e);
+      }
+      .cell.status-in-progress {
+        background: var(--wax-edge, #4a3618);
+      }
+      .cell.status-in-progress .fill {
+        background: linear-gradient(
+          to top,
+          var(--honey, #e8a020) 0%,
+          var(--honey, #e8a020) 46%,
+          var(--wax-empty, #2a1e0e) 46%
+        );
+      }
+      .cell.status-done {
+        background: var(--honey-edge, #b97a10);
+      }
+      .cell.status-done .fill {
+        background: var(--honey, #e8a020);
+      }
+      .cell.status-blocked {
+        background: var(--honey-crystal-edge, #a04a2a);
+      }
+      .cell.status-blocked .fill {
+        background: var(--honey-crystal, #4a3326);
+      }
+      .cell.status-parked {
+        background: var(--wax-edge, #4a3618);
+        opacity: 0.35;
+      }
+      .cell.status-parked .fill {
+        background: var(--wax-empty, #2a1e0e);
+      }
+      .hive {
+        transform: translate(-50%, -50%);
         cursor: pointer;
         transition: filter 0.2s ease;
       }
@@ -166,13 +194,18 @@ export function createCombSurface(
         filter: brightness(1.3);
       }
       .hive-inner {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
         display: flex;
         flex-direction: column;
+        align-items: center;
+        justify-content: center;
         gap: 2px;
         color: var(--hc-ink, #f4e9d0);
         font-size: 15px;
         text-align: center;
-        max-width: 84%;
+        padding: 0 18%;
         pointer-events: none;
       }
       .hive-label {
@@ -180,6 +213,7 @@ export function createCombSurface(
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        max-width: 100%;
       }
       .hive-count {
         opacity: 0.75;
@@ -189,6 +223,7 @@ export function createCombSurface(
         position: absolute;
         right: 14px;
         bottom: 14px;
+        z-index: 2;
         border: 1px solid var(--hc-edge, #3d2c14);
         background: color-mix(in srgb, var(--hc-paper, #241a0c) 85%, transparent);
         color: var(--hc-body, #b39b72);
@@ -219,8 +254,12 @@ export function createCombSurface(
     private fitScale = 1;
     private viewportMeasured = false;
 
-    // Interaction state.
+    // Interaction state: `dragged` latches once a gesture becomes a drag
+    // (the pointer capture is taken at that moment), and survives the
+    // pointerup so the trailing click can be ignored.
+    private dragged = false;
     private dragDistance = 0;
+    private captured = false;
     private lastPointer: { x: number; y: number } | undefined;
 
     // The animation loop handle and the cached elements the loop drives.
@@ -235,15 +274,16 @@ export function createCombSurface(
 
     connectedCallback(): void {
       super.connectedCallback();
-      // Bind before adding: the handlers are prototype methods.
+      // Bind before adding: the handlers are prototype methods. Pointer
+      // events live on the host (pan/zoom); clicks are caught on the shadow
+      // root, because a host listener would miss them once a drag's pointer
+      // capture retargets — and the shadow root is where the rendered
+      // children's clicks bubble.
       this.onPointerDown = this.onPointerDown.bind(this);
       this.onPointerMove = this.onPointerMove.bind(this);
       this.onPointerUp = this.onPointerUp.bind(this);
       this.onWheel = this.onWheel.bind(this);
       this.onClick = this.onClick.bind(this);
-      // The interaction handlers live on the host surface: pointer events
-      // for pan/zoom, clicks for cell/hive selection (bubbled out of the
-      // shadow tree).
       this.addEventListener("pointerdown", this.onPointerDown);
       this.addEventListener("pointermove", this.onPointerMove);
       this.addEventListener("pointerup", this.onPointerUp);
@@ -280,8 +320,7 @@ export function createCombSurface(
     protected firstUpdated(): void {
       // Cell/hive clicks bubble within the shadow root (rendered children
       // are replaced per render, so the root — not the children — carries
-      // the listener). The shadow root itself (not the Lit renderRoot
-      // union) so the typed click listener applies.
+      // the listener).
       const shadowRoot = this.shadowRoot;
       if (shadowRoot !== null) {
         shadowRoot.addEventListener("click", this.onClick);
@@ -368,9 +407,9 @@ export function createCombSurface(
         this.hiveLayer.style.opacity = `${1 - t}`;
         this.hiveLayer.style.pointerEvents = t > 0.5 ? "none" : "auto";
       }
+      // The reset control shows while the camera is meaningfully zoomed
+      // past the fit-all overview (the user is inside a hive).
       if (this.resetEl !== undefined) {
-        // The reset control shows while the camera is meaningfully zoomed
-        // past the fit-all overview (the user is inside a hive).
         this.resetEl.hidden = scale <= this.fitScale * 1.05;
       }
       for (const hive of map.hives) {
@@ -380,8 +419,8 @@ export function createCombSurface(
         el.style.left = `${screen.x}px`;
         el.style.top = `${screen.y}px`;
         const size = hiveHexWorldSize(map, hive) * scale;
-        el.style.width = `${size * SQRT3_SCALE}px`;
-        el.style.height = `${size * 2}px`;
+        el.style.width = `${size * 2}px`;
+        el.style.height = `${size * SQRT3}px`;
       }
     }
 
@@ -409,38 +448,53 @@ export function createCombSurface(
       this.applyFit(true);
     }
 
-    private onPointerDown(event: PointerEvent): void {
-      if (event.button !== 0) return;
-      this.setAttribute("dragging", "");
+    private onPointerDown(event: Event): void {
+      if (!(event instanceof PointerEvent) || event.button !== 0) return;
+      this.dragged = false;
       this.dragDistance = 0;
+      this.captured = false;
       this.lastPointer = { x: event.clientX, y: event.clientY };
-      this.setPointerCapture(event.pointerId);
     }
 
-    private onPointerMove(event: PointerEvent): void {
-      if (this.lastPointer === undefined) return;
+    private onPointerMove(event: Event): void {
+      if (!(event instanceof PointerEvent) || this.lastPointer === undefined) {
+        return;
+      }
       const dx = event.clientX - this.lastPointer.x;
       const dy = event.clientY - this.lastPointer.y;
       this.lastPointer = { x: event.clientX, y: event.clientY };
       this.dragDistance += Math.hypot(dx, dy);
-      if (this.dragDistance > DRAG_CLICK_TOLERANCE) {
-        this.setAttribute("dragging", "");
-        this.camera = panCombCamera(this.camera, dx, dy);
-        this.goal = this.camera;
-        this.applyCameraFrame();
+      if (this.dragDistance <= DRAG_CLICK_TOLERANCE) return;
+      // Now it is a drag, not a click: latch the flag (the trailing click
+      // must be ignored) and only now take the capture that keeps the pan
+      // smooth outside the surface.
+      this.dragged = true;
+      this.setAttribute("dragging", "");
+      if (!this.captured && this.hasPointerCapture(event.pointerId) === false) {
+        try {
+          this.setPointerCapture(event.pointerId);
+          this.captured = true;
+        } catch {
+          // Capture is a smoothness nicety; panning works without it.
+        }
       }
+      this.camera = panCombCamera(this.camera, dx, dy);
+      this.goal = this.camera;
+      this.applyCameraFrame();
     }
 
-    private onPointerUp(event: PointerEvent): void {
+    private onPointerUp(event: Event): void {
+      if (!(event instanceof PointerEvent)) return;
       this.lastPointer = undefined;
-      this.dragDistance = 0;
-      this.removeAttribute("dragging");
-      try {
-        this.releasePointerCapture(event.pointerId);
-      } catch {
-        // The pointer may already be released; the state reset above is
-        // what matters.
+      if (this.captured) {
+        try {
+          this.releasePointerCapture(event.pointerId);
+        } catch {
+          // The capture may already be gone.
+        }
       }
+      this.captured = false;
+      this.removeAttribute("dragging");
     }
 
     private onWheel(event: Event): void {
@@ -459,6 +513,10 @@ export function createCombSurface(
     }
 
     private onClick(event: Event): void {
+      if (this.dragged) {
+        this.dragged = false;
+        return;
+      }
       const target = event.target;
       if (!(target instanceof Element)) return;
       const hiveEl = target.closest("[data-hive]");
@@ -487,8 +545,8 @@ export function createCombSurface(
       return html`
         <div class="world">
           <div class="cells">
-            ${map.hives.flatMap((hive, hiveIndex) =>
-              hive.cells.map((cell) => this.renderCell(cell, hiveIndex))
+            ${map.hives.flatMap((hive) =>
+              hive.cells.map((cell) => this.renderCell(cell))
             )}
           </div>
         </div>
@@ -514,8 +572,9 @@ export function createCombSurface(
         <div
           class="hive"
           data-hive=${hive.id}
-          style="left:0;top:0;--hive-face:hsl(${hue} 55% 24%);width:${size * SQRT3_SCALE}px;height:${size * 2}px"
+          style="left:0;top:0;background:hsl(${hue} 70% 30%);width:${size * 2}px;height:${size * SQRT3}px"
         >
+          <div class="fill" style="background:hsl(${hue} 55% 24%)"></div>
           <div class="hive-inner">
             <span class="hive-label">${hive.label}</span>
             <span class="hive-count"
@@ -527,18 +586,19 @@ export function createCombSurface(
       `;
     }
 
-    private renderCell(cell: CombCell, hiveIndex: number) {
-      const scale = this.map?.cellScale ?? 46;
-      const width = SQRT3_SCALE * scale;
-      const hue = 36 + hiveIndex * 7;
+    private renderCell(cell: CombCell) {
+      const scale = this.map?.cellScale ?? 58;
       return html`
         <div
           class="cell status-${cell.status}"
           data-cell=${cell.id}
-          style="left:${cell.x - width / 2}px;top:${cell.y - scale}px;width:${width}px;height:${scale * 2}px;--tint:hsl(${hue} 60% 50%)"
+          style="left:${cell.x - scale}px;top:${
+            cell.y - (SQRT3 * scale) / 2
+          }px;width:${scale * 2}px;height:${SQRT3 * scale}px"
           title=${cell.title}
         >
-          <span class="cell-title">${cell.title}</span>
+          <div class="fill"></div>
+          <span class="cell-title"><span>${cell.title}</span></span>
         </div>
       `;
     }

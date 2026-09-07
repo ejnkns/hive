@@ -22,13 +22,13 @@ describe("axialToWorld", () => {
     assert.deepEqual(axialToWorld(0, 0, 46), { x: 0, y: 0 });
   });
 
-  it("uses the pointy-top pitches: √3·s horizontal (row r=0), 1.5·s vertical", () => {
+  it("uses the flat-top pitches: 1.5·s horizontal per column, √3·s vertical per row", () => {
     const east = axialToWorld(1, 0, 46);
-    assert.ok(Math.abs(east.x - SQRT3 * 46) < 1e-9);
-    assert.equal(east.y, 0);
-    const southEast = axialToWorld(0, 1, 46);
-    assert.ok(Math.abs(southEast.y - 1.5 * 46) < 1e-9);
-    assert.ok(Math.abs(southEast.x - SQRT3 * 46 * 0.5) < 1e-9);
+    assert.ok(Math.abs(east.x - 1.5 * 46) < 1e-9);
+    assert.ok(Math.abs(east.y - (SQRT3 * 46) / 2) < 1e-9);
+    const south = axialToWorld(0, 1, 46);
+    assert.equal(south.x, 0);
+    assert.ok(Math.abs(south.y - SQRT3 * 46) < 1e-9);
   });
 
   it("tiles neighbors edge-to-edge: adjacent cells are exactly one hex apart", () => {
@@ -127,11 +127,11 @@ describe("boundsOf", () => {
 });
 
 describe("hexBox", () => {
-  it("centers a √3·s × 2s box on the hexagon center", () => {
+  it("centers a 2s × √3·s box on the hexagon center", () => {
     const box = hexBox({ x: 100, y: 50 }, 40);
-    assert.ok(Math.abs(box.width - SQRT3 * 40) < 1e-9);
-    assert.equal(box.height, 80);
-    assert.ok(Math.abs(box.left - (100 - (SQRT3 * 40) / 2)) < 1e-9);
-    assert.equal(box.top, 50 - 40);
+    assert.equal(box.width, 80);
+    assert.ok(Math.abs(box.height - SQRT3 * 40) < 1e-9);
+    assert.equal(box.left, 60);
+    assert.ok(Math.abs(box.top - (50 - (SQRT3 * 40) / 2)) < 1e-9);
   });
 });

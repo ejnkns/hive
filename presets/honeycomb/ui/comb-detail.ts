@@ -99,17 +99,26 @@ export function createCombDetail(
         position: absolute;
         inset: 0;
         backface-visibility: hidden;
-        clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+        clip-path: polygon(75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%, 25% 0%);
         display: flex;
         align-items: center;
         justify-content: center;
         overflow: hidden;
       }
+      /* The hexagon "border": a clipped element cannot carry a real border
+         or box-shadow (the corners cut it), so the face's own background is
+         the edge color and the inset fill shows the surface beneath. */
       .face.front {
-        background: var(--honey);
-        box-shadow: inset 0 0 0 3px var(--honey-edge);
+        background: var(--honey-edge, #b97a10);
+      }
+      .face.front .face-fill {
+        position: absolute;
+        inset: 3px;
+        clip-path: polygon(75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%, 25% 0%);
+        background: var(--honey, #e8a020);
       }
       .face.front .cell-title {
+        position: relative;
         font-size: clamp(11px, 2.2vw, 16px);
         line-height: 1.3;
         color: var(--hc-ink, #f4e9d0);
@@ -122,8 +131,14 @@ export function createCombDetail(
       }
       .face.back {
         transform: rotateY(180deg);
+        background: var(--wax-edge, #4a3618);
+      }
+      .face.back .face-fill {
+        position: absolute;
+        inset: 3px;
+        clip-path: polygon(75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%, 25% 0%);
         background: var(--hc-paper, #241a0c);
-        box-shadow: inset 0 0 0 3px var(--wax-edge, #4a3618);
+        overflow: hidden;
       }
       .back-scroll {
         position: absolute;
@@ -339,9 +354,9 @@ export function createCombDetail(
       if (cell === undefined) return nothing;
       const origin = this.origin;
       // The hexagon's screen size: generous but never taller than the
-      // viewport (the bounding box is √3·s wide by 2s tall).
+      // viewport (the flat-top bounding box is 2s wide by √3·s tall).
       const height = Math.min(this.clientHeight * 0.82, 560);
-      const width = (height * Math.sqrt(3)) / 2;
+      const width = (height * 2) / Math.sqrt(3);
       const centerLeft = (this.clientWidth - width) / 2;
       const centerTop = (this.clientHeight - height) / 2;
       const left = origin?.x ?? this.clientWidth / 2;
@@ -361,10 +376,12 @@ export function createCombDetail(
         >
           <div class=${`flip${this.entered ? " open" : ""}`}>
             <div class="face front status-${cell.status}">
+              <div class="face-fill"></div>
               <span class="cell-title">${cell.title}</span>
             </div>
             <div class="face back">
-              <div class="back-scroll">
+              <div class="face-fill">
+                <div class="back-scroll">
                 <div class="back-head">
                   <h2>${cell.title}</h2>
                   <button class="close" @click=${() => this.onClose?.()}>✕</button>
@@ -470,6 +487,7 @@ export function createCombDetail(
                 <button class="open-page" @click=${() => this.onSelect?.(cell.id)}>
                   Open page →
                 </button>
+                </div>
               </div>
             </div>
           </div>

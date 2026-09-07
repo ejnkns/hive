@@ -11,9 +11,9 @@ export type Axial = { q: number; r: number };
 // A world position in pixels.
 export type WorldPoint = { x: number; y: number };
 
-// The default cell circumradius, in world pixels: a cell is √3·s wide and
-// 2s tall, comfortably fitting a two-line title at s = 46.
-export const CELL_SCALE = 46;
+// The default cell circumradius, in world pixels: a cell is 2s wide and
+// √3·s tall, comfortably fitting a four-line title at s = 58.
+export const CELL_SCALE = 58;
 
 // The minimum hive lattice scale (the overview spacing between hive
 // centers, in world pixels). One cell of visual separation between
@@ -27,11 +27,11 @@ export const PATCH_GAP = CELL_SCALE * 2;
 // √3, the horizontal pitch factor of a pointy-top hex grid.
 export const SQRT3 = Math.sqrt(3);
 
-/** Axial hex coordinates → world pixels (pointy-top orientation):
- * x = s·√3·(q + r/2), y = s·1.5·r. Neighbors tile edge-to-edge — the
- * honeycomb. */
+/** Axial hex coordinates → world pixels (flat-top orientation — flat
+ * edges on top and bottom, points left and right): x = s·1.5·q,
+ * y = s·√3·(q/2 + r). Neighbors tile edge-to-edge — the honeycomb. */
 export function axialToWorld(q: number, r: number, size: number): WorldPoint {
-  return { x: size * SQRT3 * (q + r / 2), y: size * 1.5 * r };
+  return { x: size * 1.5 * q, y: size * SQRT3 * (q / 2 + r) };
 }
 
 /** The six axial neighbor directions, clockwise from east. */
@@ -114,15 +114,16 @@ export function boundsOf(
 }
 
 /** The bounding box of one hexagon of circumradius `size`, centered on the
- * given world point: the left/top/width/height its element needs. */
+ * given world point: the left/top/width/height its element needs. Flat-top:
+ * the box is 2s wide by √3·s tall. */
 export function hexBox(
   center: WorldPoint,
   size: number
 ): { left: number; top: number; width: number; height: number } {
   return {
-    left: center.x - (SQRT3 * size) / 2,
-    top: center.y - size,
-    width: SQRT3 * size,
-    height: 2 * size,
+    left: center.x - size,
+    top: center.y - (SQRT3 * size) / 2,
+    width: 2 * size,
+    height: SQRT3 * size,
   };
 }

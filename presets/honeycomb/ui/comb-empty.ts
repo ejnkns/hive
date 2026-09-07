@@ -10,15 +10,17 @@ export type CombEmptyElement = HTMLElement & {
 };
 
 // The placeholder cluster: seven faint hexagons in a ring — the comb
-// waiting to be filled. Positioned as hexagon centers in cell units.
-const PLACEHOLDER_CELLS: readonly { x: number; y: number; s: number }[] = [
-  { x: 0, y: 0, s: 1 },
-  { x: 1, y: 0.5, s: 0.9 },
-  { x: 0.5, y: 1.5, s: 0.9 },
-  { x: -0.5, y: 1.5, s: 0.9 },
-  { x: -1, y: 0.5, s: 0.9 },
-  { x: -0.5, y: -0.5, s: 0.9 },
-  { x: 0.5, y: -0.5, s: 0.9 },
+// waiting to be filled. Axial coordinates on a flat-top grid; the render
+// converts them with the shared flat-top pitch (x = 1.5·s·q,
+// y = √3·s·(q/2 + r)).
+const PLACEHOLDER_CELLS: readonly { q: number; r: number; s: number }[] = [
+  { q: 0, r: 0, s: 1 },
+  { q: 1, r: 0, s: 0.9 },
+  { q: 0, r: 1, s: 0.9 },
+  { q: -1, r: 1, s: 0.9 },
+  { q: -1, r: 0, s: 0.9 },
+  { q: 0, r: -1, s: 0.9 },
+  { q: 1, r: -1, s: 0.9 },
 ];
 
 export function createCombEmpty(
@@ -52,16 +54,21 @@ export function createCombEmpty(
       }
       .cluster {
         position: relative;
-        width: 220px;
-        height: 200px;
+        width: 300px;
+        height: 260px;
       }
       .ghost {
         position: absolute;
-        clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-        background: var(--wax-empty, #2a1e0e);
-        box-shadow: inset 0 0 0 2px var(--wax-edge, #4a3618);
+        clip-path: polygon(75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%, 25% 0%);
+        background: var(--wax-edge, #4a3618);
         opacity: 0.55;
         animation: breathe 3.2s ease-in-out infinite;
+      }
+      .ghost .fill {
+        position: absolute;
+        inset: 2px;
+        clip-path: polygon(75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%, 25% 0%);
+        background: var(--wax-empty, #2a1e0e);
       }
       .ghost:nth-child(2n) {
         animation-delay: -1.6s;
@@ -116,19 +123,24 @@ export function createCombEmpty(
     }
 
     render() {
-      // The placeholder hexagons: laid out in world units with √3 horizontal
-      // pitch, sized against the cluster box.
-      const unit = 62;
+      // The placeholder hexagons on the flat-top axial grid, sized against
+      // the cluster box (unit = the cell circumradius; boxes are 2s × √3·s).
+      const unit = 54;
+      const SQRT3 = Math.sqrt(3);
+      const clusterWidth = 300;
+      const clusterHeight = 260;
       return html`
         <div class="camp">
           <div class="cluster">
             ${PLACEHOLDER_CELLS.map((cell) => {
-              const width = Math.sqrt(3) * cell.s * unit * 0.5;
-              const height = cell.s * unit;
+              const width = 2 * cell.s * unit;
+              const height = SQRT3 * cell.s * unit;
+              const x = 1.5 * cell.s * unit * cell.q;
+              const y = SQRT3 * cell.s * unit * (cell.q / 2 + cell.r);
               return html`<div
                 class="ghost"
-                style=${`left:${110 + (cell.x * Math.sqrt(3) * unit * 0.5 - width / 2)}px;top:${100 + cell.y * unit * 0.75 - height / 2}px;width:${width}px;height:${height}px`}
-              ></div>`;
+                style=${`left:${clusterWidth / 2 + x - width / 2}px;top:${clusterHeight / 2 + y - height / 2}px;width:${width}px;height:${height}px`}
+              ><div class="fill"></div></div>`;
             })}
           </div>
           <h1>${this.flowLabel || "Honeycomb"}</h1>
