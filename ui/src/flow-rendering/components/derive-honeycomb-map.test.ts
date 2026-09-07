@@ -211,7 +211,7 @@ describe("combBounds", () => {
     }
   });
 
-  it("the overview hexagon reaches exactly to its patch's extent", () => {
+  it("the overview hexagon nearly reaches its patch's extent, deliberately under", () => {
     const ideas = Array.from({ length: 25 }, (_, i) =>
       idea(`i-${i}`, { title: `Idea ${i}`, category: "Big" })
     );
@@ -221,10 +221,11 @@ describe("combBounds", () => {
       bounds.maxX - bounds.minX,
       bounds.maxY - bounds.minY
     );
-    // The group hexagon must cover its own children at the layer handoff:
-    // its reach is the patch's reach, so the framing is exactly the patch
-    // extent for a single hive.
-    assert.ok(Math.abs(overviewExtent - map.hives[0].patchRadius * 2) < 1e-6);
+    // The group hexagon reads as the group's wax cap: well over the cell
+    // scale, but deliberately shy of the full patch reach — the honey
+    // peeks out around the edges at the layer handoff.
+    assert.ok(overviewExtent < map.hives[0].patchRadius * 2);
+    assert.ok(overviewExtent > map.hives[0].patchRadius * 2 * 0.85);
   });
 
   it("is undefined for an empty comb", () => {

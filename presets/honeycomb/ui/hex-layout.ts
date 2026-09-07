@@ -21,8 +21,9 @@ export const CELL_SCALE = 58;
 // keep large patches from touching.
 export const MIN_HIVE_SCALE = CELL_SCALE * 5;
 
-// The breathing room between neighboring patches, in world pixels.
-export const PATCH_GAP = CELL_SCALE * 2;
+// The breathing room between neighboring patches, in world pixels — a
+// fraction of a cell, so the comb reads as one dense hive.
+export const PATCH_GAP = CELL_SCALE * 0.6;
 
 // √3, the horizontal pitch factor of a pointy-top hex grid.
 export const SQRT3 = Math.sqrt(3);

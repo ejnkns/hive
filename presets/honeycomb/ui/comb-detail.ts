@@ -27,7 +27,7 @@
 const EXIT_MS = 420;
 
 import type { FlowComponentDeps } from "workflow-engine/workflow-types";
-import type { WorldPoint } from "./hex-layout.ts";
+import { CELL_SCALE, type WorldPoint } from "./hex-layout.ts";
 import type { CombCell } from "./shared.ts";
 
 // The select options the ideas workflow declares on its editFields. This
@@ -41,6 +41,10 @@ export type CombDetailElement = HTMLElement & {
   // The clicked cell's screen position — the point the entrance animation
   // grows out of. Undefined → the hexagon simply rises from the center.
   origin: WorldPoint | undefined;
+  // The camera scale at the moment the cell was opened — the entrance
+  // and exit scale the hexagon to the cell's ON-SCREEN size (world cell
+  // size × this), so the animation never jumps size across zoom levels.
+  fromScale: number | undefined;
   // The category options (the hive labels) for the category select.
   hiveLabels: readonly string[];
   onPatchState:
@@ -59,6 +63,7 @@ export function createCombDetail(
     static properties = {
       cell: { attribute: false },
       origin: { attribute: false },
+      fromScale: { attribute: false },
       hiveLabels: { attribute: false },
       exiting: { state: true },
       onPatchState: { attribute: false },
@@ -111,7 +116,7 @@ export function createCombDetail(
               calc(-50% + var(--from-x, 0px)),
               calc(-50% + var(--from-y, 0px))
             )
-            scale(0.18);
+            scale(var(--from-scale, 0.18));
         }
         to {
           transform: translate(-50%, -50%) scale(1);
@@ -137,7 +142,7 @@ export function createCombDetail(
               calc(-50% + var(--from-x, 0px)),
               calc(-50% + var(--from-y, 0px))
             )
-            scale(0.18);
+            scale(var(--from-scale, 0.18));
         }
       }
       .flip.exiting {
@@ -365,6 +370,7 @@ export function createCombDetail(
 
     declare cell: CombCell | undefined;
     declare origin: WorldPoint | undefined;
+    declare fromScale: number | undefined;
     declare hiveLabels: readonly string[];
     declare onPatchState:
       | ((instanceId: string, values: Record<string, unknown>) => void)
@@ -381,6 +387,7 @@ export function createCombDetail(
       super();
       this.cell = undefined;
       this.origin = undefined;
+      this.fromScale = undefined;
       this.hiveLabels = [];
       this.exiting = false;
     }
@@ -447,6 +454,11 @@ export function createCombDetail(
       const fromX = (origin?.x ?? this.clientWidth / 2) - this.clientWidth / 2;
       const fromY =
         (origin?.y ?? this.clientHeight / 2) - this.clientHeight / 2;
+      // The animation's start scale: the cell's on-screen size over the
+      // detail's size, so the hexagon grows out of (and shrinks back
+      // into) the exact cell the user clicked, at any zoom level.
+      const cellScreenWidth = 2 * CELL_SCALE * (this.fromScale ?? 1);
+      const fromScale = Math.max(0.05, Math.min(1, cellScreenWidth / width));
       const entry = cell.entry;
       const actions = entry.availableActions;
       const categoryOptions = [...new Set([cell.category, ...this.hiveLabels])];
@@ -458,7 +470,7 @@ export function createCombDetail(
         <div
           class=${`detail${this.exiting ? " exiting" : ""}`}
           data-cell=${cell.id}
-          style=${`width:${width}px;height:${height}px;--from-x:${fromX}px;--from-y:${fromY}px`}
+          style=${`width:${width}px;height:${height}px;--from-x:${fromX}px;--from-y:${fromY}px;--from-scale:${fromScale}`}
         >
           <div class=${`flip${this.exiting ? " exiting" : ""}`}>
             <div class="face front status-${cell.status}">

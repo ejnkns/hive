@@ -54,7 +54,11 @@ const DRAG_CLICK_TOLERANCE = 6;
 // the served ElementConstructor contract.
 export type CombSurfaceElement = HTMLElement & {
   map: HoneycombMap | undefined;
-  onCellOpen: ((instanceId: string, origin: WorldPoint) => void) | undefined;
+  // Camera scale rides along: the detail entrance/exit must start and end
+  // at the cell's ON-SCREEN size, which is the cell's world size × this.
+  onCellOpen:
+    | ((instanceId: string, origin: WorldPoint, cameraScale: number) => void)
+    | undefined;
   /** Tween the camera back to the fit-all overview (the HUD's control). */
   resetView(): void;
 };
@@ -75,6 +79,10 @@ export function createCombSurface(
         --hex: polygon(75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%, 25% 0%);
         flex: 1;
         min-height: 0;
+        /* Own margin (not the shell's padding) so the detail overlay —
+           a sibling positioned at inset 0 of the same parent — shares
+           exactly this box's coordinate space. */
+        margin: 0 16px 16px;
         display: block;
         position: relative;
         overflow: hidden;
@@ -109,10 +117,20 @@ export function createCombSurface(
       }
       .cell {
         cursor: pointer;
-        transition: filter 0.15s ease;
       }
-      .cell:hover {
-        filter: brightness(1.18);
+      /* The hover sheen is an overlay above the honey fill and below the
+         title text — a filter on the whole cell would composite the text
+         onto its own layer and visibly jump the antialiasing on hover. */
+      .cell::after {
+        content: "";
+        position: absolute;
+        inset: 2px;
+        background: rgba(255, 240, 200, 0.14);
+        opacity: 0;
+        transition: opacity 0.15s ease;
+      }
+      .cell:hover::after {
+        opacity: 1;
       }
       .fill {
         position: absolute;
@@ -183,10 +201,17 @@ export function createCombSurface(
       .hive {
         transform: translate(-50%, -50%);
         cursor: pointer;
-        transition: filter 0.2s ease;
       }
-      .hive:hover {
-        filter: brightness(1.3);
+      .hive::after {
+        content: "";
+        position: absolute;
+        inset: 2px;
+        background: rgba(255, 240, 200, 0.14);
+        opacity: 0;
+        transition: opacity 0.2s ease;
+      }
+      .hive:hover::after {
+        opacity: 1;
       }
       .hive-inner {
         position: absolute;
@@ -240,7 +265,7 @@ export function createCombSurface(
 
     declare map: HoneycombMap | undefined;
     declare onCellOpen:
-      | ((instanceId: string, origin: WorldPoint) => void)
+      | ((instanceId: string, origin: WorldPoint, cameraScale: number) => void)
       | undefined;
 
     // The camera and its goal; `goalKind` tracks what the goal is, and
@@ -589,7 +614,8 @@ export function createCombSurface(
         if (opened !== undefined) {
           this.onCellOpen?.(
             opened.id,
-            combWorldToScreen(this.camera, opened.x, opened.y)
+            combWorldToScreen(this.camera, opened.x, opened.y),
+            this.camera.scale
           );
         }
       }

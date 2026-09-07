@@ -126,12 +126,16 @@ export function createCombShell(
         border-color: var(--honey, #e8a020);
         color: var(--honey, #e8a020);
       }
+      /* No padding: the comb surface carries its own margin, so the
+         detail overlay (positioned at inset 0, the same box as the
+         surface's client area) shares the surface's coordinate space —
+         the detail flip's --from-x/--from-y offsets are surface-relative
+         screen positions. */
       .body {
         flex: 1;
         min-height: 0;
         position: relative;
         display: flex;
-        padding: 0 16px 16px;
         box-sizing: border-box;
       }
       .map-panel {
@@ -206,6 +210,9 @@ export function createCombShell(
       | undefined;
     declare selectedId: string | undefined;
     declare origin: WorldPoint | undefined;
+    // The camera scale at the moment the cell was opened — the detail's
+    // entrance/exit scale to the cell's on-screen size.
+    declare openScale: number | undefined;
     declare mapOpen: boolean;
     declare onAction:
       | ((instanceId: string, actionId: string) => void)
@@ -221,6 +228,9 @@ export function createCombShell(
       this.entries = [];
       this.persistedOutputs = undefined;
       this.availableFlowActions = [];
+      this.selectedId = undefined;
+      this.origin = undefined;
+      this.openScale = undefined;
       this.mapOpen = false;
     }
 
@@ -272,9 +282,10 @@ export function createCombShell(
       const existing = this.surface;
       if (existing !== undefined) return existing;
       const surface: CombSurfaceElement = new Surface();
-      surface.onCellOpen = (id, origin) => {
+      surface.onCellOpen = (id, origin, cameraScale) => {
         this.selectedId = id;
         this.origin = origin;
+        this.openScale = cameraScale;
       };
       this.surface = surface;
       return surface;
@@ -289,6 +300,7 @@ export function createCombShell(
       detail.onClose = () => {
         this.selectedId = undefined;
         this.origin = undefined;
+        this.openScale = undefined;
       };
       this.detail = detail;
       return detail;
@@ -324,6 +336,9 @@ export function createCombShell(
         }
         if (this.detail.origin !== this.origin) {
           this.detail.origin = this.origin;
+        }
+        if (this.detail.fromScale !== this.openScale) {
+          this.detail.fromScale = this.openScale;
         }
         if (this.detail.hiveLabels.join("|") !== labels.join("|")) {
           this.detail.hiveLabels = labels;

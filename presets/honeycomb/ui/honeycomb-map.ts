@@ -149,13 +149,13 @@ function makeCell(
   };
 }
 
-// The world-space size of a hive's overview hexagon: the full reach of
-// the patch it stands for, so the zooming-in hexagon grows exactly into
-// the cells' extent — at the layer handoff the group hexagon covers its
-// own children completely — floored at one cell so single-idea hives
-// still read as a group hexagon.
+// The world-space size of a hive's overview hexagon: just shy of the
+// patch it stands for — big enough to read as the group's wax cap and to
+// nearly cover its children at the layer handoff, deliberately not
+// completely covering them (the honey peeks out around the edges).
+// Floored at one cell so single-idea hives still read as a group.
 export function hiveOverviewSize(hive: { patchRadius: number }): number {
-  return Math.max(CELL_SCALE, hive.patchRadius);
+  return Math.max(CELL_SCALE, hive.patchRadius * 0.92);
 }
 
 // The bounds of the OVERVIEW — the representative hive hexagons, not the
