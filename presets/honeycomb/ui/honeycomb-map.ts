@@ -149,14 +149,26 @@ function makeCell(
   };
 }
 
-// The overall bounds of the whole comb (hive centers + their patch radii),
-// the fit-all camera target. Undefined for an empty comb.
+// The world-space size of a hive's overview hexagon: comfortably smaller
+// than the patch it stands for, never larger than the lattice spacing.
+export function hiveOverviewSize(
+  map: HoneycombMap,
+  hive: { patchRadius: number }
+): number {
+  return Math.max(90, Math.min(map.hiveScale * 0.7, hive.patchRadius * 0.55));
+}
+
+// The bounds of the OVERVIEW — the representative hive hexagons, not the
+// patches they stand for. This is the fit-all ("Whole hive") camera target:
+// at overview distance the cells are invisible, so framing the lattice
+// keeps the group hexagons large and readable instead of framing empty
+// space around patches you cannot see. Undefined for an empty comb.
 export function combBounds(
   map: HoneycombMap
 ): { minX: number; minY: number; maxX: number; maxY: number } | undefined {
   return boundsOf(
     map.hives.map((hive) => ({ x: hive.x, y: hive.y })),
-    map.hiveScale + Math.max(0, ...map.hives.map((hive) => hive.patchRadius))
+    Math.max(0, ...map.hives.map((hive) => hiveOverviewSize(map, hive)))
   );
 }
 

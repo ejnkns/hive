@@ -34,7 +34,6 @@ export type CombShellElement = HTMLElement & {
   onPatchState:
     | ((instanceId: string, values: Record<string, unknown>) => void)
     | undefined;
-  onSelect: ((instanceId: string) => void) | undefined;
   onCreate: ((actionId: string) => void) | undefined;
 };
 
@@ -55,7 +54,6 @@ export function createCombShell(
       mapOpen: { type: Boolean, attribute: "data-map-open", reflect: true },
       onAction: { attribute: false },
       onPatchState: { attribute: false },
-      onSelect: { attribute: false },
       onCreate: { attribute: false },
     };
 
@@ -215,7 +213,6 @@ export function createCombShell(
     declare onPatchState:
       | ((instanceId: string, values: Record<string, unknown>) => void)
       | undefined;
-    declare onSelect: ((instanceId: string) => void) | undefined;
     declare onCreate: ((actionId: string) => void) | undefined;
 
     constructor() {
@@ -233,8 +230,23 @@ export function createCombShell(
     private detail: CombDetailElement | undefined;
     private empty: CombEmptyElement | undefined;
 
+    // The derived map, cached on the entries array's identity: the host
+    // re-renders (and re-delivers snapshots) far more often than the idea
+    // set changes, and a re-derived map object would churn every
+    // downstream identity — retriggering camera re-fits and the detail
+    // entrance on unrelated renders.
+    private mapCache:
+      | { entries: WorkflowInstanceEntry[]; map: HoneycombMap }
+      | undefined;
+
     private get map(): HoneycombMap {
-      return deriveHoneycombMap(this.entries);
+      const entries = this.entries;
+      if (this.mapCache !== undefined && this.mapCache.entries === entries) {
+        return this.mapCache.map;
+      }
+      const map = deriveHoneycombMap(entries);
+      this.mapCache = { entries, map };
+      return map;
     }
 
     // The selected cell, resolved from the CURRENT map each render — the
@@ -274,7 +286,6 @@ export function createCombShell(
       const detail: CombDetailElement = new Detail();
       detail.onPatchState = (id, values) => this.onPatchState?.(id, values);
       detail.onAction = (id, actionId) => this.onAction?.(id, actionId);
-      detail.onSelect = (id) => this.onSelect?.(id);
       detail.onClose = () => {
         this.selectedId = undefined;
         this.origin = undefined;
@@ -297,17 +308,26 @@ export function createCombShell(
 
     protected override updated(changedProperties: Map<string, unknown>): void {
       super.updated(changedProperties);
-      // Data flows down into the persistent instances after every render.
+      // Data flows down into the persistent instances after every render —
+      // but only when a value's identity actually changed, so an unrelated
+      // re-render never restarts the surface's camera logic or the detail's
+      // entrance animation.
       const map = this.map;
       const labels = map.hives.map((hive) => hive.label);
       const cell = this.selectedCell;
-      if (this.surface !== undefined) {
+      if (this.surface !== undefined && this.surface.map !== map) {
         this.surface.map = map;
       }
       if (this.detail !== undefined) {
-        this.detail.cell = cell;
-        this.detail.origin = this.origin;
-        this.detail.hiveLabels = labels;
+        if (this.detail.cell !== cell) {
+          this.detail.cell = cell;
+        }
+        if (this.detail.origin !== this.origin) {
+          this.detail.origin = this.origin;
+        }
+        if (this.detail.hiveLabels.join("|") !== labels.join("|")) {
+          this.detail.hiveLabels = labels;
+        }
       }
       if (this.empty !== undefined) {
         this.empty.flowLabel = this.flow?.label ?? "";

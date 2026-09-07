@@ -237,15 +237,11 @@ describe("honeycomb served modules", () => {
         values: Record<string, unknown>;
       }> = [];
       const actions: Array<{ instanceId: string; actionId: string }> = [];
-      const selected_: Array<{ instanceId: string }> = [];
       el.addEventListener("hive-patch-state", (event) => {
         patched.push((event as CustomEvent).detail);
       });
       el.addEventListener("hive-action", (event) => {
         actions.push((event as CustomEvent).detail);
-      });
-      el.addEventListener("hive-select", (event) => {
-        selected_.push((event as CustomEvent).detail);
       });
       mustFind(el, '[data-cell="i-1"]').dispatchEvent(click());
       await settle(shadowRootOf(el));
@@ -281,12 +277,11 @@ describe("honeycomb served modules", () => {
       // Dispatching an action closes the detail.
       expect(queryDeep(el, ".detail")).toBeNull();
 
-      // The escape hatch routes through hive-select.
+      // Reopening the same cell does not replay the entrance (a data churn
+      // re-delivers the same idea as a fresh object).
       mustFind(el, '[data-cell="i-1"]').dispatchEvent(click());
       await settle(shadowRootOf(el));
-      queryDeep(el, ".open-page")!.dispatchEvent(click());
-      await settle(shadowRootOf(el));
-      expect(selected_[0]).toMatchObject({ instanceId: "i-1" });
+      expect(queryDeep(el, ".detail")).not.toBeNull();
     } finally {
       restore();
     }
@@ -362,6 +357,47 @@ describe("honeycomb served modules", () => {
       reset.dispatchEvent(click());
       await new Promise((resolve) => setTimeout(resolve, 700));
       expect(reset.hidden).toBe(true);
+    } finally {
+      restore();
+    }
+  });
+  it("opening a cell does not yank the camera back to the overview", async () => {
+    const { el, restore } = await mountHoneycomb([
+      idea("i-1", { title: "One", category: "Parsing" }),
+      idea("i-2", { title: "Two", category: "Parsing" }),
+      idea("i-3", { title: "Three", category: "Scoring" }),
+    ]);
+    try {
+      const surface = worldSurface(el);
+      Object.defineProperty(surface, "clientWidth", {
+        value: 800,
+        configurable: true,
+      });
+      Object.defineProperty(surface, "clientHeight", {
+        value: 600,
+        configurable: true,
+      });
+      const world = mustFind(el, ".world") as HTMLElement;
+      const overview = world.style.transform;
+      // Zoom into a hive.
+      mustFind(el, '[data-hive="Parsing"]').dispatchEvent(click());
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      const zoomed = world.style.transform;
+      expect(zoomed).not.toBe(overview);
+      // Opening a cell re-renders the shell but must not re-derive the map
+      // (a fresh identity would re-fit the camera — the "click zooms the
+      // map out" bug).
+      mustFind(el, '[data-cell="i-1"]').dispatchEvent(click());
+      await settle(shadowRootOf(el));
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      // The camera keeps easing toward its goal after the zoomed capture;
+      // what matters is it did not jump back to the overview.
+      const scaleOf = (transform: string): number =>
+        Number(/scale\(([0-9.]+)\)/.exec(transform)?.[1] ?? 0);
+      expect(
+        Math.abs(scaleOf(world.style.transform) - scaleOf(zoomed))
+      ).toBeLessThan(0.02);
+      expect(queryDeep(el, ".detail")).not.toBeNull();
     } finally {
       restore();
     }

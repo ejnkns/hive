@@ -38,7 +38,6 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       onAction: { attribute: false },
       onSendMessage: { attribute: false },
       onPatchState: { attribute: false },
-      onSelect: { attribute: false },
       onFlowAction: { attribute: false },
       onCreate: { attribute: false },
     };
@@ -105,7 +104,6 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
     declare onAction: FlowViewProps["onAction"];
     declare onSendMessage: FlowViewProps["onSendMessage"];
     declare onPatchState: FlowViewProps["onPatchState"];
-    declare onSelect: FlowViewProps["onSelect"];
     declare onFlowAction: FlowViewProps["onFlowAction"];
     declare onCreate: FlowViewProps["onCreate"];
 
@@ -119,7 +117,6 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       const shell: CombShellElement = new Shell();
       shell.onAction = (id, actionId) => this.onAction(id, actionId);
       shell.onPatchState = (id, values) => this.onPatchState(id, values);
-      shell.onSelect = (id) => this.onSelect(id);
       shell.onCreate = (actionId) => this.onCreate(actionId);
       this.shell = shell;
       return shell;

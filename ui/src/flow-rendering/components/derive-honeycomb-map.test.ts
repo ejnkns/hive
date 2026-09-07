@@ -14,6 +14,7 @@ import {
   combBounds,
   deriveHoneycombMap,
   deriveStatusCounts,
+  hiveOverviewSize,
 } from "../../../../presets/honeycomb/ui/honeycomb-map.ts";
 
 // A minimal full WorkflowInstanceEntry for a honeycomb idea card (the fields
@@ -195,18 +196,34 @@ describe("deriveHoneycombMap", () => {
 });
 
 describe("combBounds", () => {
-  it("covers every hive plus its patch radius", () => {
+  it("covers every hive's overview hexagon (the fit-all camera target)", () => {
     const map = deriveHoneycombMap([
       idea("i-1", { title: "One", category: "A" }),
       idea("i-2", { title: "Two", category: "B" }),
     ]);
     const bounds = combBounds(map)!;
     for (const hive of map.hives) {
-      assert.ok(hive.x - hive.patchRadius >= bounds.minX);
-      assert.ok(hive.x + hive.patchRadius <= bounds.maxX);
-      assert.ok(hive.y - hive.patchRadius >= bounds.minY);
-      assert.ok(hive.y + hive.patchRadius <= bounds.maxY);
+      const reach = hiveOverviewSize(map, hive);
+      assert.ok(hive.x - reach >= bounds.minX);
+      assert.ok(hive.x + reach <= bounds.maxX);
+      assert.ok(hive.y - reach >= bounds.minY);
+      assert.ok(hive.y + reach <= bounds.maxY);
     }
+  });
+
+  it("frames the overview, not the (invisible) patches: tighter than the patch extent", () => {
+    const ideas = Array.from({ length: 25 }, (_, i) =>
+      idea(`i-${i}`, { title: `Idea ${i}`, category: "Big" })
+    );
+    const map = deriveHoneycombMap(ideas);
+    const bounds = combBounds(map)!;
+    const overviewExtent = Math.max(
+      bounds.maxX - bounds.minX,
+      bounds.maxY - bounds.minY
+    );
+    // One hive: the overview frames the representative hexagon, much
+    // smaller than the patch it stands for.
+    assert.ok(overviewExtent < map.hives[0].patchRadius * 2);
   });
 
   it("is undefined for an empty comb", () => {

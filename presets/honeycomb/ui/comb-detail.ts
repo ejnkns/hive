@@ -9,10 +9,12 @@
  * The detail face carries everything the standard card would: summary, the
  * editable fields (status/priority/effort/category via onPatchState, tags
  * as a comma list), the original notes (collapsed), the state actions
- * (Mark done / Park / Discard via onAction), and the escape hatch to the
- * standard workflow-instance page (onSelect). The scrim click and the ✕
+ * (Mark done / Park / Discard via onAction). The scrim click and the ✕
  * both close; the animation reverses by simply removing the .open class
- * (the element stays mounted until the selection clears). */
+ * (the element stays mounted until the selection clears). Routing to the
+ * standard workflow-instance page is not wired yet (the host's hive-select
+ * seam is a no-op until a dedicated instance page exists) — the affordance
+ * returns when that seam lands. */
 
 import type { FlowComponentDeps } from "workflow-engine/workflow-types";
 import type { WorldPoint } from "./hex-layout.ts";
@@ -35,7 +37,6 @@ export type CombDetailElement = HTMLElement & {
     | ((instanceId: string, values: Record<string, unknown>) => void)
     | undefined;
   onAction: ((instanceId: string, actionId: string) => void) | undefined;
-  onSelect: ((instanceId: string) => void) | undefined;
   onClose: (() => void) | undefined;
 };
 
@@ -52,7 +53,6 @@ export function createCombDetail(
       entered: { state: true },
       onPatchState: { attribute: false },
       onAction: { attribute: false },
-      onSelect: { attribute: false },
       onClose: { attribute: false },
     };
 
@@ -76,7 +76,12 @@ export function createCombDetail(
       }
       .detail {
         position: absolute;
-        pointer-events: auto;
+        /* The detail box is a square, the hexagon is clipped inside it —
+           so the container and the flip wrapper must not intercept clicks;
+           the faces (hexagon-clipped, which also shapes their hit area)
+           re-enable pointer events, and clicks in the clipped-away corners
+           fall through to the scrim and close. */
+        pointer-events: none;
         perspective: 1200px;
         transition:
           left 0.4s cubic-bezier(0.2, 0.9, 0.25, 1),
@@ -98,6 +103,7 @@ export function createCombDetail(
       .face {
         position: absolute;
         inset: 0;
+        pointer-events: auto;
         backface-visibility: hidden;
         clip-path: polygon(75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%, 25% 0%);
         display: flex;
@@ -271,20 +277,6 @@ export function createCombDetail(
       .actions button:hover {
         filter: brightness(1.15);
       }
-      .open-page {
-        display: inline-block;
-        margin-top: 10px;
-        font-size: 0.75em;
-        color: var(--tint, #e8a020);
-        cursor: pointer;
-        background: none;
-        border: none;
-        padding: 0;
-        font-family: inherit;
-      }
-      .open-page:hover {
-        text-decoration: underline;
-      }
       @media (max-width: 700px) {
         .back-scroll {
           padding: 20% 24%;
@@ -302,7 +294,6 @@ export function createCombDetail(
     declare onAction:
       | ((instanceId: string, actionId: string) => void)
       | undefined;
-    declare onSelect: ((instanceId: string) => void) | undefined;
     declare onClose: (() => void) | undefined;
 
     constructor() {
@@ -484,9 +475,6 @@ export function createCombDetail(
                     </div>`
                     : nothing
                 }
-                <button class="open-page" @click=${() => this.onSelect?.(cell.id)}>
-                  Open page →
-                </button>
                 </div>
               </div>
             </div>

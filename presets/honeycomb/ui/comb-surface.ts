@@ -12,11 +12,13 @@
  * fill element showing the edge color beneath the honey fill — a clipped
  * element cannot carry a real border or box-shadow (the corners cut it).
  *
- * The overview cross-fade is driven by the camera scale against the fit-all
- * scale: at overview distance the representative hive hexes show (the
- * cells would be unreadable specks); zooming in fades the hives out and
- * the actual member cells in. Pointer-events ride the opacity, so at
- * overview distance you click hives, zoomed in you click cells.
+ * The overview cross-fade is calibrated between the two navigation
+ * levels: fully visible hive hexagons at the fit-all overview, fully
+ * faded at the zoomed reference (the smallest patch's fit — the scale you
+ * land on clicking into a hive). Zooming out from inside a hive brings
+ * the group hexagons back before you are anywhere near fully zoomed out.
+ * Pointer-events ride the opacity, so at overview distance you click
+ * hives, zoomed in you click cells.
  *
  * The pointer/click split matters: the pointer capture that makes a drag
  * smooth is only taken once the movement exceeds the click tolerance —
@@ -39,20 +41,11 @@ import {
   zoomCombAt,
 } from "./comb-camera.ts";
 import { SQRT3, type WorldPoint } from "./hex-layout.ts";
-import { combBounds } from "./honeycomb-map.ts";
+import { combBounds, hiveOverviewSize } from "./honeycomb-map.ts";
 import type { CombCell, HoneycombMap } from "./shared.ts";
 
 // A drag of at most this many pixels still counts as a click.
 const DRAG_CLICK_TOLERANCE = 6;
-
-// The world-space size of a hive's overview hexagon: comfortably smaller
-// than the patch it stands for, never larger than the lattice spacing.
-function hiveHexWorldSize(
-  map: HoneycombMap,
-  hive: { patchRadius: number }
-): number {
-  return Math.max(90, Math.min(map.hiveScale * 0.7, hive.patchRadius * 0.55));
-}
 
 // The public surface contract the shell syncs each render: the data props,
 // the callbacks wired once at construction, and the camera control the HUD
@@ -246,12 +239,21 @@ export function createCombSurface(
       | ((instanceId: string, origin: WorldPoint) => void)
       | undefined;
 
-    // The camera and its goal; `goalKind` tracks what the goal is so a map
-    // data change re-fits only while the user is still at the overview.
+    // The camera and its goal; `goalKind` tracks what the goal is, and
+    // `userMoved` latches a manual pan/zoom so new map data never yanks
+    // the camera back while the user is navigating themselves.
     private camera = createCombCamera();
     private goal: CombCamera = createCombCamera();
     private goalKind: "fit" | "hive" = "fit";
+    private userMoved = false;
+    private focusedHiveId: string | undefined;
     private fitScale = 1;
+    // The camera scale at which the cells are fully visible: the smallest
+    // hive's patch fit — the click-into-a-hive scale — clamped within about
+    // one zoom step of the overview, so the hive→cell cross-fade plays
+    // across the band between the two navigation levels instead of hanging
+    // on the fit-all scale.
+    private cellsAtScale = 2;
     private viewportMeasured = false;
 
     // Interaction state: `dragged` latches once a gesture becomes a drag
@@ -310,9 +312,15 @@ export function createCombSurface(
       super.updated(changedProperties);
       this.cacheElements();
       if (changedProperties.has("map")) {
-        // New map data: re-fit only while the user is still at the
-        // overview; a focused hive or manual pan stays put.
-        this.applyFit(this.goalKind === "fit");
+        // New map data: re-frame only while the user has not taken over the
+        // camera — re-fit the overview, or re-frame the hive they are inside.
+        if (!this.userMoved) {
+          if (this.goalKind === "fit") {
+            this.applyFit(true);
+          } else if (this.focusedHiveId !== undefined) {
+            this.focusHive(this.focusedHiveId);
+          }
+        }
       }
       this.startLoop();
     }
@@ -349,18 +357,46 @@ export function createCombSurface(
       this.hiveEls = hives;
     }
 
-    /** Recompute the fit-all camera from the current map + viewport. When
-     * `retarget`, the goal (and, before the first measured viewport, the
-     * camera itself — snapping the initial view rather than animating from
-     * the default) moves to it; otherwise only the fade reference updates. */
+    /** Recompute the camera references from the current map + viewport:
+     * the fit-all overview (framing the representative hive hexagons) and
+     * the zoomed reference (the smallest patch fit — the scale you land on
+     * clicking into a hive). When `retarget`, the goal (and, before the
+     * first measured viewport, the camera itself — snapping the initial
+     * view rather than animating from the default) moves to the overview. */
     private applyFit(retarget: boolean): void {
       const map = this.map;
-      const bounds = map !== undefined ? combBounds(map) : undefined;
+      if (map === undefined) return;
+      const bounds = combBounds(map);
       const viewport = { width: this.clientWidth, height: this.clientHeight };
       const fit =
-        bounds !== undefined ? fitCombCamera(bounds, viewport, 40) : undefined;
+        bounds !== undefined ? fitCombCamera(bounds, viewport, 60) : undefined;
       if (fit === undefined) return;
       this.fitScale = fit.scale;
+      // The zoomed reference: the scale where the smallest patch is framed
+      // — the scale you land on clicking any hive — clamped so the fade
+      // band stays within ~2.2× of the overview even when one hive is much
+      // larger than the rest.
+      const patchFits = map.hives
+        .map(
+          (hive) =>
+            fitCombCamera(
+              {
+                minX: hive.x - hive.patchRadius,
+                minY: hive.y - hive.patchRadius,
+                maxX: hive.x + hive.patchRadius,
+                maxY: hive.y + hive.patchRadius,
+              },
+              viewport,
+              30
+            )?.scale
+        )
+        .filter((scale): scale is number => scale !== undefined);
+      const patchMin =
+        patchFits.length > 0 ? Math.min(...patchFits) : this.fitScale;
+      this.cellsAtScale = Math.max(
+        this.fitScale * 1.25,
+        Math.min(patchMin, this.fitScale * 2.2)
+      );
       if (retarget) {
         if (!this.viewportMeasured) {
           this.camera = fit;
@@ -368,6 +404,7 @@ export function createCombSurface(
         }
         this.goal = fit;
         this.goalKind = "fit";
+        this.userMoved = false;
         this.applyCameraFrame();
       }
     }
@@ -396,9 +433,12 @@ export function createCombSurface(
       world.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
       const map = this.map;
       if (map === undefined) return;
-      // The overview cross-fade: 0 at fit-all (hives), 1 by ~1.5× fit
+      // The overview cross-fade: 0 at the fit-all overview (hives), 1 at
+      // the zoomed reference — close to the scale of clicking into a hive
       // (cells).
-      const t = Math.max(0, Math.min(1, (scale / this.fitScale - 0.6) / 0.4));
+      const span = this.cellsAtScale - this.fitScale;
+      const t =
+        span > 0 ? Math.max(0, Math.min(1, (scale - this.fitScale) / span)) : 1;
       if (this.cellLayer !== undefined) {
         this.cellLayer.style.opacity = `${t}`;
         this.cellLayer.style.pointerEvents = t > 0.5 ? "auto" : "none";
@@ -418,7 +458,7 @@ export function createCombSurface(
         const screen = combWorldToScreen(this.camera, hive.x, hive.y);
         el.style.left = `${screen.x}px`;
         el.style.top = `${screen.y}px`;
-        const size = hiveHexWorldSize(map, hive) * scale;
+        const size = hiveOverviewSize(map, hive) * scale;
         el.style.width = `${size * 2}px`;
         el.style.height = `${size * SQRT3}px`;
       }
@@ -441,10 +481,13 @@ export function createCombSurface(
       if (fit === undefined) return;
       this.goal = fit;
       this.goalKind = "hive";
+      this.focusedHiveId = hiveId;
+      this.userMoved = false;
     }
 
     /** Tween the camera back to the fit-all overview. */
     resetView(): void {
+      this.userMoved = false;
       this.applyFit(true);
     }
 
@@ -465,10 +508,12 @@ export function createCombSurface(
       this.lastPointer = { x: event.clientX, y: event.clientY };
       this.dragDistance += Math.hypot(dx, dy);
       if (this.dragDistance <= DRAG_CLICK_TOLERANCE) return;
-      // Now it is a drag, not a click: latch the flag (the trailing click
-      // must be ignored) and only now take the capture that keeps the pan
-      // smooth outside the surface.
+      // Now it is a drag, not a click: latch the flags (the trailing click
+      // must be ignored, and map changes must never yank the camera back)
+      // and only now take the capture that keeps the pan smooth outside
+      // the surface.
       this.dragged = true;
+      this.userMoved = true;
       this.setAttribute("dragging", "");
       if (!this.captured && this.hasPointerCapture(event.pointerId) === false) {
         try {
@@ -509,6 +554,7 @@ export function createCombSurface(
         this.camera.scale * factor
       );
       this.goal = this.camera;
+      this.userMoved = true;
       this.applyCameraFrame();
     }
 
@@ -566,7 +612,7 @@ export function createCombSurface(
       index: number,
       map: HoneycombMap
     ) {
-      const size = hiveHexWorldSize(map, hive);
+      const size = hiveOverviewSize(map, hive);
       const hue = 36 + index * 7;
       return html`
         <div
