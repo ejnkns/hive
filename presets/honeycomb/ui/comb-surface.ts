@@ -80,9 +80,9 @@ export function createCombSurface(
         flex: 1;
         min-height: 0;
         /* Own margin (not the shell's padding) so the detail overlay —
-           a sibling positioned at inset 0 of the same parent — shares
-           exactly this box's coordinate space. */
-        margin: 0 16px 16px;
+           which carries the same --comb-inset margin — shares exactly
+           this box's coordinate space. */
+        margin: 0 var(--comb-inset, 16px) var(--comb-inset, 16px);
         display: block;
         position: relative;
         overflow: hidden;
@@ -118,14 +118,18 @@ export function createCombSurface(
       .cell {
         cursor: pointer;
       }
-      /* The hover sheen is an overlay above the honey fill and below the
-         title text — a filter on the whole cell would composite the text
-         onto its own layer and visibly jump the antialiasing on hover. */
+      /* The hover sheen sits ABOVE the title text (pointer-events none):
+         putting it beneath the text would change the text's backdrop from
+         opaque to translucent on hover, and Chrome switches subpixel text
+         antialiasing off over translucent backdrops — the text visibly
+         "jumps". A wash over the text keeps the backdrop opaque. */
       .cell::after {
         content: "";
         position: absolute;
         inset: 2px;
-        background: rgba(255, 240, 200, 0.14);
+        z-index: 2;
+        pointer-events: none;
+        background: rgba(255, 243, 214, 0.22);
         opacity: 0;
         transition: opacity 0.15s ease;
       }
@@ -206,7 +210,9 @@ export function createCombSurface(
         content: "";
         position: absolute;
         inset: 2px;
-        background: rgba(255, 240, 200, 0.14);
+        z-index: 2;
+        pointer-events: none;
+        background: rgba(255, 243, 214, 0.22);
         opacity: 0;
         transition: opacity 0.2s ease;
       }

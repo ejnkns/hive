@@ -126,12 +126,13 @@ export function createCombShell(
         border-color: var(--honey, #e8a020);
         color: var(--honey, #e8a020);
       }
-      /* No padding: the comb surface carries its own margin, so the
-         detail overlay (positioned at inset 0, the same box as the
-         surface's client area) shares the surface's coordinate space —
-         the detail flip's --from-x/--from-y offsets are surface-relative
-         screen positions. */
+      /* No padding: the comb surface and the detail overlay both carry
+         the same --comb-inset margin, so the overlay — positioned at
+         inset 0 of this box — shares exactly the surface's coordinate
+         space, and the detail flip's --from-x/--from-y offsets (surface-
+         relative screen positions) land precisely on the cells. */
       .body {
+        --comb-inset: 16px;
         flex: 1;
         min-height: 0;
         position: relative;

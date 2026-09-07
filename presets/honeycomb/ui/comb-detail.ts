@@ -75,6 +75,11 @@ export function createCombDetail(
       :host {
         position: absolute;
         inset: 0;
+        /* The same inset margin the comb surface carries, so this
+           overlay's box — and the --from-x/--from-y screen positions the
+           entrance/exit fly through — share the surface's coordinate
+           space exactly. */
+        margin: 0 var(--comb-inset, 16px) var(--comb-inset, 16px);
         pointer-events: none;
         font-family: var(--hc-font, system-ui, sans-serif);
       }
