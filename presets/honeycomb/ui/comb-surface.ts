@@ -1,0 +1,548 @@
+/** The comb surface (served component "comb-surface"): the pan/zoom
+ * honeycomb map. A camera-transformed world layer carries the idea cells;
+ * a screen-space overlay carries the overview hive hexes (fixed-size text
+ * that stays crisp at any zoom, positioned every frame by the same camera
+ * the cells ride). One pure camera (comb-camera.ts) owns every transform:
+ * drag pans, the wheel zooms around the cursor, clicking a hive tweens the
+ * camera to its patch, and the reset control returns to the fit-all
+ * overview.
+ *
+ * The overview cross-fade is driven by the camera scale against the fit-all
+ * scale: at overview distance the representative hive hexes show (the
+ * cells would be unreadable specks); zooming in fades the hives out and
+ * the actual member cells in. Pointer-events ride the opacity, so at
+ * overview distance you click hives, zoomed in you click cells.
+ *
+ * The camera loop mutates transforms, hive positions, and layer opacities
+ * directly each frame — lit re-renders only when the map data changes. */
+
+import type { PropertyValues } from "lit";
+import type { FlowComponentDeps } from "workflow-engine/workflow-types";
+import {
+  type CombCamera,
+  combCamerasMatch,
+  combWorldToScreen,
+  createCombCamera,
+  fitCombCamera,
+  panCombCamera,
+  stepCombCamera,
+  zoomCombAt,
+} from "./comb-camera.ts";
+import type { WorldPoint } from "./hex-layout.ts";
+import { combBounds } from "./honeycomb-map.ts";
+import type { CombCell, HoneycombMap } from "./shared.ts";
+
+// A drag of at most this many pixels still counts as a click.
+const DRAG_CLICK_TOLERANCE = 6;
+
+// The width/height pitch factors of a pointy-top hexagon bounding box
+// (width √3·s, height 2s), read by both the render and the camera frame.
+const SQRT3_SCALE = Math.sqrt(3);
+
+// The world-space size of a hive's overview hexagon: comfortably smaller
+// than the patch it stands for, never larger than the lattice spacing.
+function hiveHexWorldSize(
+  map: HoneycombMap,
+  hive: { patchRadius: number }
+): number {
+  return Math.max(90, Math.min(map.hiveScale * 0.7, hive.patchRadius * 0.55));
+}
+
+// The public surface contract the shell syncs each render: the data props,
+// the callbacks wired once at construction, and the camera control the HUD
+// uses. Intersected with HTMLElement so the constructor stays assignable to
+// the served ElementConstructor contract.
+export type CombSurfaceElement = HTMLElement & {
+  map: HoneycombMap | undefined;
+  onCellOpen: ((instanceId: string, origin: WorldPoint) => void) | undefined;
+  /** Tween the camera back to the fit-all overview (the HUD's control). */
+  resetView(): void;
+};
+
+export function createCombSurface(
+  lit: FlowComponentDeps
+): new () => CombSurfaceElement {
+  const { LitElement: Base, html, css, nothing } = lit;
+
+  class CombSurface extends Base {
+    static properties = {
+      map: { attribute: false },
+      onCellOpen: { attribute: false },
+    };
+
+    static styles = css`
+      :host {
+        flex: 1;
+        min-height: 0;
+        display: block;
+        position: relative;
+        overflow: hidden;
+        border: 1px solid var(--hc-edge, #3d2c14);
+        border-radius: 14px;
+        background: var(--hc-comb-backdrop, #191106);
+        font-family: var(--hc-font, system-ui, sans-serif);
+        touch-action: none;
+        cursor: grab;
+      }
+      :host([dragging]) {
+        cursor: grabbing;
+      }
+      .world,
+      .hives {
+        position: absolute;
+        inset: 0;
+      }
+      .world {
+        transform-origin: 0 0;
+        will-change: transform;
+      }
+      .hives {
+        pointer-events: none;
+      }
+      .cell {
+        position: absolute;
+        box-sizing: border-box;
+        clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        cursor: pointer;
+        transition: filter 0.15s ease;
+      }
+      .cell:hover {
+        filter: brightness(1.2);
+      }
+      .cell-title {
+        font-size: 11px;
+        line-height: 1.25;
+        color: var(--hc-ink, #f4e9d0);
+        padding: 0 16%;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        pointer-events: none;
+      }
+      /* Status → honey fill: the shared visual language. */
+      .cell.status-backlog {
+        background: var(--wax-empty);
+        box-shadow: inset 0 0 0 2px var(--wax-edge);
+      }
+      .cell.status-in-progress {
+        background: linear-gradient(
+          to top,
+          var(--honey) 0%,
+          var(--honey) 46%,
+          var(--wax-empty) 46%
+        );
+        box-shadow: inset 0 0 0 2px var(--wax-edge);
+      }
+      .cell.status-done {
+        background: var(--honey);
+        box-shadow: inset 0 0 0 2px var(--honey-edge);
+      }
+      .cell.status-blocked {
+        background: var(--honey-crystal);
+        box-shadow: inset 0 0 0 3px var(--honey-crystal-edge);
+      }
+      .cell.status-parked {
+        background: var(--wax-empty);
+        opacity: 0.35;
+        box-shadow: inset 0 0 0 2px var(--wax-edge);
+      }
+      .hive {
+        position: absolute;
+        box-sizing: border-box;
+        transform: translate(-50%, -50%);
+        clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: filter 0.2s ease;
+      }
+      .hive:hover {
+        filter: brightness(1.3);
+      }
+      .hive-inner {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        color: var(--hc-ink, #f4e9d0);
+        font-size: 15px;
+        text-align: center;
+        max-width: 84%;
+        pointer-events: none;
+      }
+      .hive-label {
+        font-weight: 650;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .hive-count {
+        opacity: 0.75;
+        font-size: 0.8em;
+      }
+      .reset {
+        position: absolute;
+        right: 14px;
+        bottom: 14px;
+        border: 1px solid var(--hc-edge, #3d2c14);
+        background: color-mix(in srgb, var(--hc-paper, #241a0c) 85%, transparent);
+        color: var(--hc-body, #b39b72);
+        font: inherit;
+        font-size: 13px;
+        padding: 6px 14px;
+        border-radius: 999px;
+        cursor: pointer;
+      }
+      .reset:hover {
+        color: var(--hc-ink, #f4e9d0);
+      }
+      .reset[hidden] {
+        display: none;
+      }
+    `;
+
+    declare map: HoneycombMap | undefined;
+    declare onCellOpen:
+      | ((instanceId: string, origin: WorldPoint) => void)
+      | undefined;
+
+    // The camera and its goal; `goalKind` tracks what the goal is so a map
+    // data change re-fits only while the user is still at the overview.
+    private camera = createCombCamera();
+    private goal: CombCamera = createCombCamera();
+    private goalKind: "fit" | "hive" = "fit";
+    private fitScale = 1;
+    private viewportMeasured = false;
+
+    // Interaction state.
+    private dragDistance = 0;
+    private lastPointer: { x: number; y: number } | undefined;
+
+    // The animation loop handle and the cached elements the loop drives.
+    private frame = 0;
+    private lastFrameTime = 0;
+    private worldEl: HTMLElement | undefined;
+    private cellLayer: HTMLElement | undefined;
+    private hiveLayer: HTMLElement | undefined;
+    private resetEl: HTMLElement | undefined;
+    private hiveEls = new Map<string, HTMLElement>();
+    private resizeObserver: ResizeObserver | undefined;
+
+    connectedCallback(): void {
+      super.connectedCallback();
+      // Bind before adding: the handlers are prototype methods.
+      this.onPointerDown = this.onPointerDown.bind(this);
+      this.onPointerMove = this.onPointerMove.bind(this);
+      this.onPointerUp = this.onPointerUp.bind(this);
+      this.onWheel = this.onWheel.bind(this);
+      this.onClick = this.onClick.bind(this);
+      // The interaction handlers live on the host surface: pointer events
+      // for pan/zoom, clicks for cell/hive selection (bubbled out of the
+      // shadow tree).
+      this.addEventListener("pointerdown", this.onPointerDown);
+      this.addEventListener("pointermove", this.onPointerMove);
+      this.addEventListener("pointerup", this.onPointerUp);
+      this.addEventListener("wheel", this.onWheel, { passive: false });
+    }
+
+    disconnectedCallback(): void {
+      super.disconnectedCallback();
+      cancelAnimationFrame(this.frame);
+      this.frame = 0;
+      this.resizeObserver?.disconnect();
+      this.resizeObserver = undefined;
+      this.removeEventListener("pointerdown", this.onPointerDown);
+      this.removeEventListener("pointermove", this.onPointerMove);
+      this.removeEventListener("pointerup", this.onPointerUp);
+      this.removeEventListener("wheel", this.onWheel);
+      const shadowRoot = this.shadowRoot;
+      if (shadowRoot !== null) {
+        shadowRoot.removeEventListener("click", this.onClick);
+      }
+    }
+
+    protected override updated(changedProperties: PropertyValues<this>): void {
+      super.updated(changedProperties);
+      this.cacheElements();
+      if (changedProperties.has("map")) {
+        // New map data: re-fit only while the user is still at the
+        // overview; a focused hive or manual pan stays put.
+        this.applyFit(this.goalKind === "fit");
+      }
+      this.startLoop();
+    }
+
+    protected firstUpdated(): void {
+      // Cell/hive clicks bubble within the shadow root (rendered children
+      // are replaced per render, so the root — not the children — carries
+      // the listener). The shadow root itself (not the Lit renderRoot
+      // union) so the typed click listener applies.
+      const shadowRoot = this.shadowRoot;
+      if (shadowRoot !== null) {
+        shadowRoot.addEventListener("click", this.onClick);
+      }
+      // jsdom (the test environment) has no ResizeObserver; the viewport
+      // re-fit then only happens on map changes.
+      if (typeof ResizeObserver === "undefined") return;
+      this.resizeObserver = new ResizeObserver(() => {
+        this.applyFit(this.goalKind === "fit");
+      });
+      this.resizeObserver.observe(this);
+    }
+
+    // Grab the elements the camera loop drives out of the fresh render.
+    private cacheElements(): void {
+      const root = this.renderRoot;
+      this.worldEl = root.querySelector<HTMLElement>(".world") ?? undefined;
+      this.cellLayer = root.querySelector<HTMLElement>(".cells") ?? undefined;
+      this.hiveLayer = root.querySelector<HTMLElement>(".hives") ?? undefined;
+      this.resetEl = root.querySelector<HTMLElement>(".reset") ?? undefined;
+      const hives = new Map<string, HTMLElement>();
+      root.querySelectorAll<HTMLElement>("[data-hive]").forEach((el) => {
+        const id = el.getAttribute("data-hive");
+        if (id !== null) hives.set(id, el);
+      });
+      this.hiveEls = hives;
+    }
+
+    /** Recompute the fit-all camera from the current map + viewport. When
+     * `retarget`, the goal (and, before the first measured viewport, the
+     * camera itself — snapping the initial view rather than animating from
+     * the default) moves to it; otherwise only the fade reference updates. */
+    private applyFit(retarget: boolean): void {
+      const map = this.map;
+      const bounds = map !== undefined ? combBounds(map) : undefined;
+      const viewport = { width: this.clientWidth, height: this.clientHeight };
+      const fit =
+        bounds !== undefined ? fitCombCamera(bounds, viewport, 40) : undefined;
+      if (fit === undefined) return;
+      this.fitScale = fit.scale;
+      if (retarget) {
+        if (!this.viewportMeasured) {
+          this.camera = fit;
+          this.viewportMeasured = true;
+        }
+        this.goal = fit;
+        this.goalKind = "fit";
+        this.applyCameraFrame();
+      }
+    }
+
+    private startLoop(): void {
+      if (this.frame !== 0) return;
+      this.lastFrameTime = performance.now();
+      const step = (now: number): void => {
+        const dt = Math.min(0.1, (now - this.lastFrameTime) / 1000);
+        this.lastFrameTime = now;
+        if (!combCamerasMatch(this.camera, this.goal)) {
+          this.camera = stepCombCamera(this.camera, this.goal, dt);
+          this.applyCameraFrame();
+        }
+        this.frame = requestAnimationFrame(step);
+      };
+      this.frame = requestAnimationFrame(step);
+    }
+
+    /** One camera frame: the world transform, the hive positions, the
+     * overview cross-fade, and the reset control all read the same camera. */
+    private applyCameraFrame(): void {
+      const world = this.worldEl;
+      if (world === undefined) return;
+      const { x, y, scale } = this.camera;
+      world.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+      const map = this.map;
+      if (map === undefined) return;
+      // The overview cross-fade: 0 at fit-all (hives), 1 by ~1.5× fit
+      // (cells).
+      const t = Math.max(0, Math.min(1, (scale / this.fitScale - 0.6) / 0.4));
+      if (this.cellLayer !== undefined) {
+        this.cellLayer.style.opacity = `${t}`;
+        this.cellLayer.style.pointerEvents = t > 0.5 ? "auto" : "none";
+      }
+      if (this.hiveLayer !== undefined) {
+        this.hiveLayer.style.opacity = `${1 - t}`;
+        this.hiveLayer.style.pointerEvents = t > 0.5 ? "none" : "auto";
+      }
+      if (this.resetEl !== undefined) {
+        // The reset control shows while the camera is meaningfully zoomed
+        // past the fit-all overview (the user is inside a hive).
+        this.resetEl.hidden = scale <= this.fitScale * 1.05;
+      }
+      for (const hive of map.hives) {
+        const el = this.hiveEls.get(hive.id);
+        if (el === undefined) continue;
+        const screen = combWorldToScreen(this.camera, hive.x, hive.y);
+        el.style.left = `${screen.x}px`;
+        el.style.top = `${screen.y}px`;
+        const size = hiveHexWorldSize(map, hive) * scale;
+        el.style.width = `${size * SQRT3_SCALE}px`;
+        el.style.height = `${size * 2}px`;
+      }
+    }
+
+    /** Tween the camera to frame one hive's patch bounds. */
+    focusHive(hiveId: string): void {
+      const hive = this.map?.hives.find((h) => h.id === hiveId);
+      if (hive === undefined) return;
+      const fit = fitCombCamera(
+        {
+          minX: hive.x - hive.patchRadius,
+          minY: hive.y - hive.patchRadius,
+          maxX: hive.x + hive.patchRadius,
+          maxY: hive.y + hive.patchRadius,
+        },
+        { width: this.clientWidth, height: this.clientHeight },
+        30
+      );
+      if (fit === undefined) return;
+      this.goal = fit;
+      this.goalKind = "hive";
+    }
+
+    /** Tween the camera back to the fit-all overview. */
+    resetView(): void {
+      this.applyFit(true);
+    }
+
+    private onPointerDown(event: PointerEvent): void {
+      if (event.button !== 0) return;
+      this.setAttribute("dragging", "");
+      this.dragDistance = 0;
+      this.lastPointer = { x: event.clientX, y: event.clientY };
+      this.setPointerCapture(event.pointerId);
+    }
+
+    private onPointerMove(event: PointerEvent): void {
+      if (this.lastPointer === undefined) return;
+      const dx = event.clientX - this.lastPointer.x;
+      const dy = event.clientY - this.lastPointer.y;
+      this.lastPointer = { x: event.clientX, y: event.clientY };
+      this.dragDistance += Math.hypot(dx, dy);
+      if (this.dragDistance > DRAG_CLICK_TOLERANCE) {
+        this.setAttribute("dragging", "");
+        this.camera = panCombCamera(this.camera, dx, dy);
+        this.goal = this.camera;
+        this.applyCameraFrame();
+      }
+    }
+
+    private onPointerUp(event: PointerEvent): void {
+      this.lastPointer = undefined;
+      this.dragDistance = 0;
+      this.removeAttribute("dragging");
+      try {
+        this.releasePointerCapture(event.pointerId);
+      } catch {
+        // The pointer may already be released; the state reset above is
+        // what matters.
+      }
+    }
+
+    private onWheel(event: Event): void {
+      if (!(event instanceof WheelEvent)) return;
+      event.preventDefault();
+      const rect = this.getBoundingClientRect();
+      const factor = Math.exp(-event.deltaY * 0.0012);
+      this.camera = zoomCombAt(
+        this.camera,
+        event.clientX - rect.left,
+        event.clientY - rect.top,
+        this.camera.scale * factor
+      );
+      this.goal = this.camera;
+      this.applyCameraFrame();
+    }
+
+    private onClick(event: Event): void {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const hiveEl = target.closest("[data-hive]");
+      if (hiveEl instanceof Element) {
+        this.focusHive(hiveEl.getAttribute("data-hive") ?? "");
+        return;
+      }
+      const cellEl = target.closest("[data-cell]");
+      if (cellEl instanceof Element) {
+        const id = cellEl.getAttribute("data-cell");
+        const opened = this.map?.hives
+          .flatMap((hive) => hive.cells)
+          .find((cell) => cell.id === id);
+        if (opened !== undefined) {
+          this.onCellOpen?.(
+            opened.id,
+            combWorldToScreen(this.camera, opened.x, opened.y)
+          );
+        }
+      }
+    }
+
+    render() {
+      const map = this.map;
+      if (map === undefined) return nothing;
+      return html`
+        <div class="world">
+          <div class="cells">
+            ${map.hives.flatMap((hive, hiveIndex) =>
+              hive.cells.map((cell) => this.renderCell(cell, hiveIndex))
+            )}
+          </div>
+        </div>
+        <div class="hives">
+          ${map.hives.map((hive, hiveIndex) =>
+            this.renderHive(hive, hiveIndex, map)
+          )}
+        </div>
+        <button class="reset" hidden @click=${() => this.resetView()}>
+          Whole hive
+        </button>
+      `;
+    }
+
+    private renderHive(
+      hive: HoneycombMap["hives"][number],
+      index: number,
+      map: HoneycombMap
+    ) {
+      const size = hiveHexWorldSize(map, hive);
+      const hue = 36 + index * 7;
+      return html`
+        <div
+          class="hive"
+          data-hive=${hive.id}
+          style="left:0;top:0;--hive-face:hsl(${hue} 55% 24%);width:${size * SQRT3_SCALE}px;height:${size * 2}px"
+        >
+          <div class="hive-inner">
+            <span class="hive-label">${hive.label}</span>
+            <span class="hive-count"
+              >${hive.cells.length}
+              ${hive.cells.length === 1 ? "idea" : "ideas"}</span
+            >
+          </div>
+        </div>
+      `;
+    }
+
+    private renderCell(cell: CombCell, hiveIndex: number) {
+      const scale = this.map?.cellScale ?? 46;
+      const width = SQRT3_SCALE * scale;
+      const hue = 36 + hiveIndex * 7;
+      return html`
+        <div
+          class="cell status-${cell.status}"
+          data-cell=${cell.id}
+          style="left:${cell.x - width / 2}px;top:${cell.y - scale}px;width:${width}px;height:${scale * 2}px;--tint:hsl(${hue} 60% 50%)"
+          title=${cell.title}
+        >
+          <span class="cell-title">${cell.title}</span>
+        </div>
+      `;
+    }
+  }
+
+  return CombSurface;
+}

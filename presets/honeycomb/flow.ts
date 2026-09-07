@@ -15,6 +15,21 @@ export const flow: FlowDefinition = {
     },
   ],
   domainDir: ".honeycomb",
+  ui: {
+    // The honey look: amber accent, the hex emblem. The whole page body is
+    // the flow-level custom view (flow-component) — the pan/zoom comb of
+    // idea hexagons; the persisted map.md rides the snapshot so the shell's
+    // Map panel can render it.
+    theme: { accent: "#e8a020", emblem: "⬡" },
+    persistedOutputs: ["map.md"],
+    flowComponent: "flow-component",
+    // The entry is the served module; its sibling modules (the shell, the
+    // surface, the detail flip, the empty state, and the pure layout/derivation
+    // modules) are served alongside it through its relative imports.
+    components: {
+      "flow-component": { ref: "./ui/flow-component.ts" },
+    },
+  },
   // The shared published taxonomy lives in flowState (E2) — one place, never
   // duplicated onto the idea cards. Per-idea classifications are instance
   // data on the cards.
