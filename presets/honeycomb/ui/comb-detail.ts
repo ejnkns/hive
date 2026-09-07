@@ -1,20 +1,23 @@
 /** The detail flip (served component "comb-detail"): click a cell and it
  * flips in place and enlarges — a hexagon that grows out of the comb into
  * its detail face, visually part of the map, never a detached modal. The
- * entrance animates three things at once: the hexagon flies from the
- * clicked cell's screen position to the viewport center, grows, and flips
- * (rotateY) from a mini honey-cell front face to the detail back face —
- * perspective 3D, backface-hidden faces.
+ * entrance is a CSS ANIMATION (not a class-toggled transition): it plays
+ * whenever the .detail element is created — every open — and a lit
+ * re-render reuses the mounted element without restarting it, so snapshot
+ * churn never replays the entrance and every open flips for real. The
+ * animation drives all three axes at once: the hexagon flies from the
+ * clicked cell's screen position (--from-x/--from-y, relative to the
+ * resting center) to the viewport center, grows, and the inner wrapper
+ * rotates (rotateY) from a mini honey-cell front face to the detail back
+ * face — perspective 3D, backface-hidden faces.
  *
  * The detail face carries everything the standard card would: summary, the
  * editable fields (status/priority/effort/category via onPatchState, tags
- * as a comma list), the original notes (collapsed), the state actions
+ * as a comma list), the original notes (collapsed), and the state actions
  * (Mark done / Park / Discard via onAction). The scrim click and the ✕
- * both close; the animation reverses by simply removing the .open class
- * (the element stays mounted until the selection clears). Routing to the
- * standard workflow-instance page is not wired yet (the host's hive-select
- * seam is a no-op until a dedicated instance page exists) — the affordance
- * returns when that seam lands. */
+ * both close. Routing to the standard workflow-instance page is not wired
+ * yet (the host's hive-select seam is a no-op until a dedicated instance
+ * page exists) — the affordance returns when that seam lands. */
 
 import type { FlowComponentDeps } from "workflow-engine/workflow-types";
 import type { WorldPoint } from "./hex-layout.ts";
@@ -50,7 +53,6 @@ export function createCombDetail(
       cell: { attribute: false },
       origin: { attribute: false },
       hiveLabels: { attribute: false },
-      entered: { state: true },
       onPatchState: { attribute: false },
       onAction: { attribute: false },
       onClose: { attribute: false },
@@ -68,14 +70,20 @@ export function createCombDetail(
         inset: 0;
         pointer-events: auto;
         background: color-mix(in srgb, #0d0800 55%, transparent);
-        opacity: 0;
-        transition: opacity 0.35s ease;
+        animation: comb-fade 0.35s ease both;
       }
-      .scrim.open {
-        opacity: 1;
+      @keyframes comb-fade {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
       }
       .detail {
         position: absolute;
+        left: 50%;
+        top: 50%;
         /* The detail box is a square, the hexagon is clipped inside it —
            so the container and the flip wrapper must not intercept clicks;
            the faces (hexagon-clipped, which also shapes their hit area)
@@ -83,22 +91,38 @@ export function createCombDetail(
            fall through to the scrim and close. */
         pointer-events: none;
         perspective: 1200px;
-        transition:
-          left 0.4s cubic-bezier(0.2, 0.9, 0.25, 1),
-          top 0.4s cubic-bezier(0.2, 0.9, 0.25, 1),
-          width 0.4s cubic-bezier(0.2, 0.9, 0.25, 1),
-          height 0.4s cubic-bezier(0.2, 0.9, 0.25, 1);
+        /* The entrance is an animation, not a class-toggled transition:
+           it plays on element creation (every open) and the fill-mode keeps
+           the resting state. The same idea arriving as a refreshed object
+           reuses the mounted element — no restart, no stutter. */
+        animation: comb-open 0.55s cubic-bezier(0.2, 0.9, 0.25, 1) both;
+      }
+      @keyframes comb-open {
+        from {
+          transform: translate(
+              calc(-50% + var(--from-x, 0px)),
+              calc(-50% + var(--from-y, 0px))
+            )
+            scale(0.18);
+        }
+        to {
+          transform: translate(-50%, -50%) scale(1);
+        }
       }
       .flip {
         width: 100%;
         height: 100%;
         position: relative;
         transform-style: preserve-3d;
-        transition: transform 0.5s cubic-bezier(0.3, 0.8, 0.3, 1);
-        transform: rotateY(0deg);
+        animation: comb-flip 0.55s cubic-bezier(0.3, 0.8, 0.3, 1) both;
       }
-      .flip.open {
-        transform: rotateY(180deg);
+      @keyframes comb-flip {
+        from {
+          transform: rotateY(0deg);
+        }
+        to {
+          transform: rotateY(180deg);
+        }
       }
       .face {
         position: absolute;
@@ -287,7 +311,6 @@ export function createCombDetail(
     declare cell: CombCell | undefined;
     declare origin: WorldPoint | undefined;
     declare hiveLabels: readonly string[];
-    declare entered: boolean;
     declare onPatchState:
       | ((instanceId: string, values: Record<string, unknown>) => void)
       | undefined;
@@ -301,20 +324,6 @@ export function createCombDetail(
       this.cell = undefined;
       this.origin = undefined;
       this.hiveLabels = [];
-      this.entered = false;
-    }
-
-    protected override updated(changedProperties: Map<string, unknown>): void {
-      super.updated(changedProperties);
-      // A newly selected cell plays the entrance: start closed (at the
-      // origin, unflipped), then flip the flag one frame later so the CSS
-      // transition runs to the entered state.
-      if (changedProperties.has("cell") && this.cell !== undefined) {
-        this.entered = false;
-        requestAnimationFrame(() => {
-          this.entered = true;
-        });
-      }
     }
 
     private patch(values: Record<string, unknown>): void {
@@ -345,27 +354,26 @@ export function createCombDetail(
       if (cell === undefined) return nothing;
       const origin = this.origin;
       // The hexagon's screen size: generous but never taller than the
-      // viewport (the flat-top bounding box is 2s wide by √3·s tall).
+      // viewport (the flat-top bounding box is 2s wide by √3·s tall). The
+      // element rests centered (left/top 50%); the entrance animation
+      // carries it from the clicked cell's screen position via the
+      // --from-x/--from-y offsets.
       const height = Math.min(this.clientHeight * 0.82, 560);
       const width = (height * 2) / Math.sqrt(3);
-      const centerLeft = (this.clientWidth - width) / 2;
-      const centerTop = (this.clientHeight - height) / 2;
-      const left = origin?.x ?? this.clientWidth / 2;
-      const top = origin?.y ?? this.clientHeight / 2;
+      const fromX = (origin?.x ?? this.clientWidth / 2) - this.clientWidth / 2;
+      const fromY =
+        (origin?.y ?? this.clientHeight / 2) - this.clientHeight / 2;
       const entry = cell.entry;
       const actions = entry.availableActions;
       const categoryOptions = [...new Set([cell.category, ...this.hiveLabels])];
       return html`
-        <div
-          class=${`scrim${this.entered ? " open" : ""}`}
-          @click=${() => this.onClose?.()}
-        ></div>
+        <div class="scrim" @click=${() => this.onClose?.()}></div>
         <div
           class="detail"
           data-cell=${cell.id}
-          style=${`left:${this.entered ? centerLeft : left - width / 2}px;top:${this.entered ? centerTop : top - height / 2}px;width:${width}px;height:${height}px`}
+          style=${`width:${width}px;height:${height}px;--from-x:${fromX}px;--from-y:${fromY}px`}
         >
-          <div class=${`flip${this.entered ? " open" : ""}`}>
+          <div class="flip">
             <div class="face front status-${cell.status}">
               <div class="face-fill"></div>
               <span class="cell-title">${cell.title}</span>

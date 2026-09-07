@@ -203,7 +203,7 @@ describe("combBounds", () => {
     ]);
     const bounds = combBounds(map)!;
     for (const hive of map.hives) {
-      const reach = hiveOverviewSize(map, hive);
+      const reach = hiveOverviewSize(hive);
       assert.ok(hive.x - reach >= bounds.minX);
       assert.ok(hive.x + reach <= bounds.maxX);
       assert.ok(hive.y - reach >= bounds.minY);
@@ -211,7 +211,7 @@ describe("combBounds", () => {
     }
   });
 
-  it("frames the overview, not the (invisible) patches: tighter than the patch extent", () => {
+  it("the overview hexagon reaches exactly to its patch's extent", () => {
     const ideas = Array.from({ length: 25 }, (_, i) =>
       idea(`i-${i}`, { title: `Idea ${i}`, category: "Big" })
     );
@@ -221,9 +221,10 @@ describe("combBounds", () => {
       bounds.maxX - bounds.minX,
       bounds.maxY - bounds.minY
     );
-    // One hive: the overview frames the representative hexagon, much
-    // smaller than the patch it stands for.
-    assert.ok(overviewExtent < map.hives[0].patchRadius * 2);
+    // The group hexagon must cover its own children at the layer handoff:
+    // its reach is the patch's reach, so the framing is exactly the patch
+    // extent for a single hive.
+    assert.ok(Math.abs(overviewExtent - map.hives[0].patchRadius * 2) < 1e-6);
   });
 
   it("is undefined for an empty comb", () => {

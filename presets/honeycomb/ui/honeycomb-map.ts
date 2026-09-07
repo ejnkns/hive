@@ -149,13 +149,13 @@ function makeCell(
   };
 }
 
-// The world-space size of a hive's overview hexagon: comfortably smaller
-// than the patch it stands for, never larger than the lattice spacing.
-export function hiveOverviewSize(
-  map: HoneycombMap,
-  hive: { patchRadius: number }
-): number {
-  return Math.max(90, Math.min(map.hiveScale * 0.7, hive.patchRadius * 0.55));
+// The world-space size of a hive's overview hexagon: the full reach of
+// the patch it stands for, so the zooming-in hexagon grows exactly into
+// the cells' extent — at the layer handoff the group hexagon covers its
+// own children completely — floored at one cell so single-idea hives
+// still read as a group hexagon.
+export function hiveOverviewSize(hive: { patchRadius: number }): number {
+  return Math.max(CELL_SCALE, hive.patchRadius);
 }
 
 // The bounds of the OVERVIEW — the representative hive hexagons, not the
@@ -168,7 +168,7 @@ export function combBounds(
 ): { minX: number; minY: number; maxX: number; maxY: number } | undefined {
   return boundsOf(
     map.hives.map((hive) => ({ x: hive.x, y: hive.y })),
-    Math.max(0, ...map.hives.map((hive) => hiveOverviewSize(map, hive)))
+    Math.max(0, ...map.hives.map((hive) => hiveOverviewSize(hive)))
   );
 }
 

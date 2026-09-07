@@ -83,6 +83,7 @@ export function createCombSurface(
         font-family: var(--hc-font, system-ui, sans-serif);
         touch-action: none;
         cursor: grab;
+        user-select: none;
       }
       :host([dragging]) {
         cursor: grabbing;
@@ -204,8 +205,10 @@ export function createCombSurface(
       .hive-label {
         font-weight: 650;
         overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow-wrap: break-word;
         max-width: 100%;
       }
       .hive-count {
@@ -433,19 +436,21 @@ export function createCombSurface(
       world.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
       const map = this.map;
       if (map === undefined) return;
-      // The overview cross-fade: 0 at the fit-all overview (hives), 1 at
-      // the zoomed reference — close to the scale of clicking into a hive
-      // (cells).
-      const span = this.cellsAtScale - this.fitScale;
-      const t =
-        span > 0 ? Math.max(0, Math.min(1, (scale - this.fitScale) / span)) : 1;
+      // The layer handoff is a hard swap at the band's midpoint, not a
+      // cross-fade: while any group hexagon is visible enough to click, the
+      // cells are not, and vice versa — there is no in-between state where
+      // both are semi-visible and clickable. The shapes themselves keep
+      // scaling continuously through the swap, so it reads as a reveal,
+      // not a cut.
+      const midpoint = (this.fitScale + this.cellsAtScale) / 2;
+      const cellsOn = scale >= midpoint;
       if (this.cellLayer !== undefined) {
-        this.cellLayer.style.opacity = `${t}`;
-        this.cellLayer.style.pointerEvents = t > 0.5 ? "auto" : "none";
+        this.cellLayer.style.opacity = cellsOn ? "1" : "0";
+        this.cellLayer.style.pointerEvents = cellsOn ? "auto" : "none";
       }
       if (this.hiveLayer !== undefined) {
-        this.hiveLayer.style.opacity = `${1 - t}`;
-        this.hiveLayer.style.pointerEvents = t > 0.5 ? "none" : "auto";
+        this.hiveLayer.style.opacity = cellsOn ? "0" : "1";
+        this.hiveLayer.style.pointerEvents = cellsOn ? "none" : "auto";
       }
       // The reset control shows while the camera is meaningfully zoomed
       // past the fit-all overview (the user is inside a hive).
@@ -458,7 +463,7 @@ export function createCombSurface(
         const screen = combWorldToScreen(this.camera, hive.x, hive.y);
         el.style.left = `${screen.x}px`;
         el.style.top = `${screen.y}px`;
-        const size = hiveOverviewSize(map, hive) * scale;
+        const size = hiveOverviewSize(hive) * scale;
         el.style.width = `${size * 2}px`;
         el.style.height = `${size * SQRT3}px`;
       }
@@ -597,9 +602,7 @@ export function createCombSurface(
           </div>
         </div>
         <div class="hives">
-          ${map.hives.map((hive, hiveIndex) =>
-            this.renderHive(hive, hiveIndex, map)
-          )}
+          ${map.hives.map((hive, hiveIndex) => this.renderHive(hive, hiveIndex))}
         </div>
         <button class="reset" hidden @click=${() => this.resetView()}>
           Whole hive
@@ -607,12 +610,8 @@ export function createCombSurface(
       `;
     }
 
-    private renderHive(
-      hive: HoneycombMap["hives"][number],
-      index: number,
-      map: HoneycombMap
-    ) {
-      const size = hiveOverviewSize(map, hive);
+    private renderHive(hive: HoneycombMap["hives"][number], index: number) {
+      const size = hiveOverviewSize(hive);
       const hue = 36 + index * 7;
       return html`
         <div
