@@ -66,7 +66,7 @@ export type CombSurfaceElement = HTMLElement & {
 export function createCombSurface(
   lit: FlowComponentDeps
 ): new () => CombSurfaceElement {
-  const { LitElement: Base, html, css, nothing } = lit;
+  const { LitElement: Base, html, css, utilities, nothing } = lit;
 
   class CombSurface extends Base {
     static properties = {
@@ -74,7 +74,9 @@ export function createCombSurface(
       onCellOpen: { attribute: false },
     };
 
-    static styles = css`
+    static styles = [
+      utilities,
+      css`
       :host {
         --hex: polygon(75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%, 25% 0%);
         flex: 1;
@@ -267,7 +269,8 @@ export function createCombSurface(
       .reset[hidden] {
         display: none;
       }
-    `;
+    `,
+    ];
 
     declare map: HoneycombMap | undefined;
     declare onCellOpen:

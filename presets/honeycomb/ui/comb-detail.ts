@@ -57,7 +57,7 @@ export type CombDetailElement = HTMLElement & {
 export function createCombDetail(
   lit: FlowComponentDeps
 ): new () => CombDetailElement {
-  const { LitElement: Base, html, css, nothing } = lit;
+  const { LitElement: Base, html, css, utilities, nothing } = lit;
 
   class CombDetail extends Base {
     static properties = {
@@ -71,7 +71,9 @@ export function createCombDetail(
       onClose: { attribute: false },
     };
 
-    static styles = css`
+    static styles = [
+      utilities,
+      css`
       :host {
         position: absolute;
         inset: 0;
@@ -87,7 +89,7 @@ export function createCombDetail(
         position: absolute;
         inset: 0;
         pointer-events: auto;
-        background: color-mix(in srgb, #0d0800 55%, transparent);
+        background: color-mix(in srgb, var(--hc-scrim, #0d0800) 55%, transparent);
         animation: comb-fade 0.35s ease both;
       }
       @keyframes comb-fade {
@@ -371,7 +373,8 @@ export function createCombDetail(
           padding: 20% 24%;
         }
       }
-    `;
+    `,
+    ];
 
     declare cell: CombCell | undefined;
     declare origin: WorldPoint | undefined;

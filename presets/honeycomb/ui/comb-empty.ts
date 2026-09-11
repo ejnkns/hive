@@ -26,7 +26,7 @@ const PLACEHOLDER_CELLS: readonly { q: number; r: number; s: number }[] = [
 export function createCombEmpty(
   lit: FlowComponentDeps
 ): new () => CombEmptyElement {
-  const { LitElement: Base, html, css } = lit;
+  const { LitElement: Base, html, css, utilities } = lit;
 
   class CombEmpty extends Base {
     static properties = {
@@ -34,7 +34,9 @@ export function createCombEmpty(
       onImport: { attribute: false },
     };
 
-    static styles = css`
+    static styles = [
+      utilities,
+      css`
       :host {
         flex: 1;
         min-height: 0;
@@ -112,7 +114,8 @@ export function createCombEmpty(
       button:hover {
         filter: brightness(1.12);
       }
-    `;
+    `,
+    ];
 
     declare flowLabel: string;
     declare onImport: (() => void) | undefined;

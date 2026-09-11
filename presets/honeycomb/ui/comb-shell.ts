@@ -41,7 +41,7 @@ export function createCombShell(
   options: CombShellDeps
 ): new () => CombShellElement {
   const { lit, Surface, Detail, Empty } = options;
-  const { LitElement: Base, html, css, nothing } = lit;
+  const { LitElement: Base, html, css, utilities, nothing } = lit;
 
   class CombShell extends Base {
     static properties = {
@@ -57,7 +57,9 @@ export function createCombShell(
       onCreate: { attribute: false },
     };
 
-    static styles = css`
+    static styles = [
+      utilities,
+      css`
       :host {
         flex: 1;
         min-height: 0;
@@ -201,7 +203,8 @@ export function createCombShell(
         color: var(--hc-body, #8a7a5c);
         font-style: italic;
       }
-    `;
+    `,
+    ];
 
     declare flow: FlowViewProps["flow"] | undefined;
     declare entries: WorkflowInstanceEntry[];

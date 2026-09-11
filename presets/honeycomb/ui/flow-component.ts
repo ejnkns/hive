@@ -19,7 +19,7 @@ import { type CombShellElement, createCombShell } from "./comb-shell.ts";
 import { createCombSurface } from "./comb-surface.ts";
 
 export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
-  const { LitElement: Base, html, css } = lit;
+  const { LitElement: Base, html, css, utilities } = lit;
   const Surface = createCombSurface(lit);
   const Detail = createCombDetail(lit);
   const Empty = createCombEmpty(lit);
@@ -42,7 +42,9 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
       onCreate: { attribute: false },
     };
 
-    static styles = css`
+    static styles = [
+      utilities,
+      css`
       :host {
         display: block;
         height: 100%;
@@ -66,6 +68,9 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
         --wax-empty: #2a1e0e;
         --wax-edge: #4a3618;
         --hc-comb-backdrop: #191106;
+        /* The detail panel's dimming layer. Deliberately mode-independent:
+           a dark scrim reads as "dimmed" over the comb in light mode too. */
+        --hc-scrim: #0d0800;
         --hc-font:
           system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
           sans-serif;
@@ -91,7 +96,8 @@ export default function (lit: FlowComponentDeps): FlowComponentRegistrations {
           height: auto;
         }
       }
-    `;
+    `,
+    ];
 
     declare flow: FlowViewProps["flow"];
     declare workflowDefs: FlowViewProps["workflowDefs"];
