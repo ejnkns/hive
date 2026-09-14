@@ -18,6 +18,7 @@ function buildCard(id: string, currentState: string, spec: string) {
   const build: WorkflowInstanceEntry = entry(id, currentState);
   build.workflowId = "build";
   build.state.workflowInstanceState = { spec };
+  build.values = build.state.workflowInstanceState;
   const card = new BuildCard();
   Object.assign(card, instanceCardProps({ def: buildDef, entry: build }));
   return card;

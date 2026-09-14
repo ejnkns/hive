@@ -48,7 +48,7 @@ For session-generated flows the validate_definition tool runs it. For hand-autho
 
 Every workflow's instances must show meaningful content: `instance: { title }` and `display: { fields }` for the fields that exist. A board groups by state; a `list`/`document`/`chat` view stacks instances. The UI renders task outputs via render hints when declared.
 
-**Completion criterion:** you can say what an instance shows for each workflow state — its title and displayed fields — and every displayed field is written somewhere.
+**Completion criterion:** you can say what an instance shows for each workflow state — its title and displayed fields — and every displayed field is written somewhere. A served component reads an instance's declared domain fields at `entry.values` (`entry.values.<field>`), never `entry.state.workflowInstanceState`.
 
 ## Failure modes (positive targets, not prohibitions)
 

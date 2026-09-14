@@ -238,6 +238,7 @@ export function ticketEntry(
   const ticket = entry(id, currentState);
   ticket.workflowId = "ticket";
   ticket.state.workflowInstanceState = { title: id, ...fields };
+  ticket.values = ticket.state.workflowInstanceState;
   ticket.dependencies = dependencies;
   ticket.availableActions = actions;
   return ticket;

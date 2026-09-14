@@ -31,6 +31,7 @@ function entry(
   return {
     id: "inst-1",
     workflowId: "wf",
+    values: {},
     state: {
       currentState,
       taskOutputs: {},

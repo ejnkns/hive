@@ -54,19 +54,23 @@ export function entry(
   currentState: string,
   overrides: Partial<WorkflowInstanceEntry["state"]> = {}
 ): WorkflowInstanceEntry {
+  const state: WorkflowInstanceEntry["state"] = {
+    currentState,
+    hasRunningTask: false,
+    runningTaskId: null,
+    runningTaskContext: null,
+    taskOutputs: {},
+    workflowInstanceState: { cardSpec: { title: `Card ${id}` } },
+    history: [],
+    ...overrides,
+  };
   return {
     id,
     workflowId: "cards",
-    state: {
-      currentState,
-      hasRunningTask: false,
-      runningTaskId: null,
-      runningTaskContext: null,
-      taskOutputs: {},
-      workflowInstanceState: { cardSpec: { title: `Card ${id}` } },
-      history: [],
-      ...overrides,
-    },
+    // The domain state flattened onto the entry (the taught read path) — the
+    // same object the runtime wrapper carries.
+    values: state.workflowInstanceState,
+    state,
     availableActions: [],
     dependencies: { blockers: [], unsatisfied: [] },
     editFields: [],

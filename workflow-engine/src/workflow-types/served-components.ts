@@ -61,6 +61,10 @@ export type FlowComponentModule = {
 // share the interface.
 export type InstanceComponentProps = {
   workflowDef: WorkflowDefResponse;
+  // The instance's declared domain state lives at `instanceEntry.values`
+  // (e.g. `instanceEntry.values.title`) — read it there, never a probed
+  // shape. `instanceEntry.state` is the runtime wrapper (currentState,
+  // taskOutputs, history), not the domain data.
   instanceEntry: WorkflowInstanceEntry;
   customKinds: readonly CustomRenderKind[];
   onAction(actionId: string, payload?: Record<string, unknown>): void;
@@ -80,7 +84,8 @@ export type InstanceComponentProps = {
 // the <workflow-board-content> element.
 export type WorkflowViewProps = {
   workflowDef: WorkflowDefResponse;
-  // Full workflow-instance state: fields, task outputs (incl. chat
+  // Full workflow-instance state: each entry's declared domain state at
+  // `entry.values`, its runtime state, task outputs (incl. chat
   // transcripts), availableActions, workflowSummary counts.
   entries: WorkflowInstanceEntry[];
   customKinds: readonly CustomRenderKind[];
@@ -154,6 +159,8 @@ export type FlowActionView = {
 export type FlowViewProps = {
   flow: FlowViewFlow;
   workflowDefs: WorkflowDefResponse[];
+  // Every workflow instance; a workflow's declared domain state is at
+  // `entry.values` (the runtime wrapper at `entry.state` is not it).
   entries: WorkflowInstanceEntry[];
   customKinds: readonly CustomRenderKind[];
   workflowCounts: WorkflowViewProps["workflowCounts"];

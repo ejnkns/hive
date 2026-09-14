@@ -723,6 +723,23 @@ describe("flow-level actions", () => {
     });
   });
 
+  it("projects the domain state onto each entry as values", () => {
+    createFlow("flow-a", "action-def", persistence);
+    const result = dispatchFlowLevelAction("flow-a", "add_item", {
+      title: "New idea",
+      count: 3,
+    });
+
+    assert.equal(result.kind, "create_instance");
+    const created = runtimeEntries("flow-a").find(
+      (entry) => entry.id === result.instance.id
+    );
+    assert.ok(created);
+    // The taught read path for a served component: the declared domain fields
+    // at the entry's top level, mirroring the runtime wrapper's own field.
+    assert.deepEqual(created.values, { title: "New idea", count: 3 });
+  });
+
   it("createInstance rejects unknown fields", () => {
     createFlow("flow-a", "action-def", persistence);
     assert.throws(

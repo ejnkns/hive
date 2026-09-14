@@ -52,6 +52,7 @@ function cardInstance(
 ): WorkflowInstanceEntry {
   const instance = entry(id, currentState);
   instance.state.workflowInstanceState = fields;
+  instance.values = instance.state.workflowInstanceState;
   instance.availableActions = actions;
   return instance;
 }

@@ -958,6 +958,20 @@ describe("FlowRuntime", () => {
     });
   });
 
+  describe("getWorkflowInstanceEntries", () => {
+    it("projects the domain state onto the entry as `values`", () => {
+      const runtime = createFlowRuntime("test", [sourceWorkflow], [], {});
+      runtime.addWorkflowInstance("source", {
+        workflowInstanceState: { title: "Probe" },
+      });
+      const [entry] = runtime.getWorkflowInstanceEntries();
+      // The taught path for a served component: the declared domain fields at
+      // the entry's top level, mirroring the runtime wrapper's own field.
+      assert.deepEqual(entry?.values, { title: "Probe" });
+      assert.deepEqual(entry?.values, entry?.state.workflowInstanceState);
+    });
+  });
+
   describe("event subscription", () => {
     it("on adds event handler", () => {
       const runtime = createFlowRuntime("test", [sourceWorkflow], [], {});

@@ -27,6 +27,7 @@ function idea(
   return {
     id,
     workflowId: "ideas",
+    values: { ...fields },
     state: {
       currentState: "classified",
       hasRunningTask: false,

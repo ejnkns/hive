@@ -52,6 +52,7 @@ function ideaCard(options: {
   const idea: WorkflowInstanceEntry = entry(options.id, options.currentState);
   idea.workflowId = "ideas";
   idea.state.workflowInstanceState = { title: options.title };
+  idea.values = idea.state.workflowInstanceState;
   if (options.elaboratedSpec !== undefined) {
     idea.state.taskOutputs.elaborate = {
       status: "success",

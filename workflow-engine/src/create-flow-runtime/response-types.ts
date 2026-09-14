@@ -60,6 +60,12 @@ export type WorkflowDefResponse = {
 export type WorkflowInstanceEntry = {
   id: string;
   workflowId: string;
+  // The instance's domain state: its declared instanceState fields with their
+  // current values. Read a served component's data here — `entry.values.title`.
+  // This is the same object as `state.workflowInstanceState`; `state` carries
+  // the runtime wrapper (currentState, taskOutputs, history) and is NOT the
+  // domain data.
+  values: Record<string, unknown>;
   state: RuntimeWorkflowInstanceState;
   availableActions: VisibleAction[];
   // The engine-evaluated dependency fact for this WorkflowItem (see

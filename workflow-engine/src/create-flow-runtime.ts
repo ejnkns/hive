@@ -421,6 +421,10 @@ export function createFlowRuntime<
       return {
         id,
         workflowId,
+        // The domain state flattened onto the entry: the same object the
+        // runtime wrapper carries, so a served component reads `entry.values`
+        // without descending a level whose field is also called `state`.
+        values: state.workflowInstanceState,
         state,
         availableActions: ctrl.getAvailableActions(),
         // The engine's own dependsOnState evaluation, projected per entry so

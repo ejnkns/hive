@@ -35,6 +35,7 @@ function instance(
   return {
     id,
     workflowId,
+    values: instanceState,
     state: {
       currentState,
       hasRunningTask: false,

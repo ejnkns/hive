@@ -46,30 +46,32 @@ const MESSAGES: ChatMessage[] = [
 function authoringEntry(
   overrides: Partial<WorkflowInstanceEntry["state"]> = {}
 ): WorkflowInstanceEntry {
+  const state: WorkflowInstanceEntry["state"] = {
+    currentState: "drafting",
+    hasRunningTask: true,
+    runningTaskId: "assistant",
+    runningTaskContext: {
+      role: "ai-chat",
+      messages: MESSAGES,
+      sessionId: "ses-1",
+      interactive: true,
+    },
+    taskOutputs: {},
+    workflowInstanceState: {
+      prompt: "Build a review flow",
+      source: 'export const flow = { id: "demo" };',
+      previewErrors: [
+        "definition.workflows[0]: state id 'x' is not a valid identifier",
+      ],
+    },
+    history: [],
+    ...overrides,
+  };
   return {
     id: "s1",
     workflowId: "session",
-    state: {
-      currentState: "drafting",
-      hasRunningTask: true,
-      runningTaskId: "assistant",
-      runningTaskContext: {
-        role: "ai-chat",
-        messages: MESSAGES,
-        sessionId: "ses-1",
-        interactive: true,
-      },
-      taskOutputs: {},
-      workflowInstanceState: {
-        prompt: "Build a review flow",
-        source: 'export const flow = { id: "demo" };',
-        previewErrors: [
-          "definition.workflows[0]: state id 'x' is not a valid identifier",
-        ],
-      },
-      history: [],
-      ...overrides,
-    },
+    values: state.workflowInstanceState,
+    state,
     availableActions: [],
     dependencies: { blockers: [], unsatisfied: [] },
     editFields: [],
