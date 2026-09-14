@@ -67,9 +67,13 @@ export function entry(
   return {
     id,
     workflowId: "cards",
-    // The domain state flattened onto the entry (the taught read path) — the
-    // same object the runtime wrapper carries.
-    values: state.workflowInstanceState,
+    // The domain-state read path (`entry.values`) tracks the runtime wrapper's
+    // bag. A getter, not a copy: fixtures reassign `state.workflowInstanceState`
+    // after construction, and a plain property would silently go stale. The
+    // production projection is rebuilt per snapshot, so it has no such window.
+    get values() {
+      return this.state.workflowInstanceState;
+    },
     state,
     availableActions: [],
     dependencies: { blockers: [], unsatisfied: [] },

@@ -32,7 +32,6 @@ function chartingCard(options: {
       : {}),
     ...(options.notes !== undefined ? { notes: options.notes } : {}),
   };
-  charting.values = charting.state.workflowInstanceState;
   if (options.runningChat === true) {
     charting.state.hasRunningTask = true;
     charting.state.runningTaskContext = {

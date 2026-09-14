@@ -167,7 +167,6 @@ function buildItemEntry(
     },
     dependsOn: [],
   };
-  item.values = item.state.workflowInstanceState;
   return item;
 }
 

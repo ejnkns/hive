@@ -29,7 +29,6 @@ function buildItemCard(
     },
     dependsOn: [],
   };
-  item.values = item.state.workflowInstanceState;
   const card = new BuildItemCard();
   Object.assign(card, instanceCardProps({ def: buildItemDef, entry: item }));
   return card;
